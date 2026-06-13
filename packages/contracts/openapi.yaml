@@ -69,6 +69,24 @@ paths:
       responses:
         "200":
           description: SSE log stream
+  /api/servers/{id}/mods:
+    get:
+      summary: List tModLoader mods
+      responses:
+        "200":
+          description: Mod list
+  /api/servers/{id}/mods/upload:
+    post:
+      summary: Upload tModLoader mod metadata or .tmod file
+      responses:
+        "201":
+          description: Uploaded mod file
+  /api/servers/{id}/mods/{modId}:
+    delete:
+      summary: Delete tModLoader mod file
+      responses:
+        "200":
+          description: Deleted mod
   /api/terraria/presets:
     get:
       summary: List Terraria server presets

@@ -17,6 +17,7 @@ import (
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -58,8 +59,66 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/backups/{id}/download", h.downloadBackup)
 	r.Post("/api/backups/{id}/restore", h.restoreBackup)
 	r.Delete("/api/backups/{id}", h.deleteBackup)
+	r.Get("/api/servers/{id}/mods", h.listMods)
+	r.Post("/api/servers/{id}/mods/upload", h.uploadMod)
+	r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
 	r.Get("/api/terraria/presets", h.presets)
 	r.Post("/api/terraria/config/preview", h.configPreview)
+}
+
+func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	mods, err := h.store.ListMods(r.Context(), server.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, mods)
+}
+
+func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.ProviderKey != domain.ProviderTerrariaTModLoader {
+		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "mod file is required")
+		return
+	}
+	defer file.Close()
+	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, header.Filename, file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	item := domain.ModFile{ID: uuid.NewString(), InstanceID: server.ID, FileName: header.Filename, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	if err := h.store.CreateMod(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	_ = os.Remove(path)
+	_ = h.store.DeleteMod(r.Context(), item.ID)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {

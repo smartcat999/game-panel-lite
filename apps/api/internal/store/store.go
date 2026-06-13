@@ -99,4 +99,26 @@ func (s *Store) DeleteBackup(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.Backup{}, "id = ?", id).Error
 }
 
+func (s *Store) CreateMod(ctx context.Context, mod *domain.ModFile) error {
+	return s.db.WithContext(ctx).Create(mod).Error
+}
+
+func (s *Store) ListMods(ctx context.Context, instanceID string) ([]domain.ModFile, error) {
+	var mods []domain.ModFile
+	return mods, s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc").Find(&mods).Error
+}
+
+func (s *Store) GetMod(ctx context.Context, id string) (domain.ModFile, error) {
+	var mod domain.ModFile
+	err := s.db.WithContext(ctx).First(&mod, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return mod, ErrNotFound
+	}
+	return mod, err
+}
+
+func (s *Store) DeleteMod(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.ModFile{}, "id = ?", id).Error
+}
+
 var ErrNotFound = errors.New("not found")

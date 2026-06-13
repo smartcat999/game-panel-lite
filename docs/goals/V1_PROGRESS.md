@@ -163,3 +163,30 @@ Known issues:
 
 Next:
 - Phase 6: implement tModLoader provider completion and mod upload/manage APIs.
+
+## Phase 6: tModLoader
+
+Status: Completed
+
+Completed:
+- Added tModLoader mod service with validation for `.tmod`, `install.txt`, and `enabled.json`.
+- Added per-instance mod storage under `data/mods/{instanceId}`.
+- Added mod store methods and HTTP routes for list, upload, and delete.
+- Upload API rejects mod uploads for Vanilla servers.
+- Existing UI keeps Mods tab visible only for tModLoader server detail and uses purple tModLoader badges.
+- Added mod validation tests.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed
+
+Known issues:
+- Mod dependency resolution and tModLoader workshop sync are outside V1.
+
+Next:
+- Phase 7: polish docs, add V1 checklist and architecture docs, add Playwright smoke coverage where available, and run final full checks.
