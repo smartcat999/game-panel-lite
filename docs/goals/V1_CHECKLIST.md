@@ -13,7 +13,7 @@
 - Server list/create/detail/start/stop/restart/delete APIs.
 - SSE logs endpoint.
 - World import/list/download/delete APIs.
-- Backup create/list/download/delete and restore acknowledgement APIs.
+- Backup create/list/download/delete and restore APIs with running-server guardrails.
 - tModLoader mod list/upload/delete APIs.
 - Next.js dashboard UI.
 - Dark gamer-friendly visual direction based on the reference image.
