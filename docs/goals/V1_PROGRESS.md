@@ -57,3 +57,30 @@ Known issues:
 
 Next:
 - Phase 2: build the dark gamer-friendly mock UI routes and reusable frontend components from the reference image.
+
+## Phase 2: V1 Mock UI
+
+Status: Completed
+
+Completed:
+- Added the full dark dashboard shell with sidebar, top search, Docker status, and create-server action.
+- Added mock data for servers, worlds, backups, activity, and logs.
+- Added reusable UI primitives and feature components for server cards, status badges, mode badges, server actions, page headers, and the create-server wizard.
+- Added routes for dashboard, servers, create server, server detail, worlds, backups, mods, activity, and settings.
+- Added TanStack Query provider and Framer Motion transitions for the wizard.
+- Vanilla mode hides the modded preset and tModLoader mode exposes mod upload copy in the wizard.
+
+Checks:
+- `go test ./...`: passed
+- `go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed after rerunning serially because a parallel `next build` temporarily rebuilt `.next/types`.
+
+Known issues:
+- Pages use mock data only in Phase 2.
+- Copy, start, stop, restart, import, backup, and upload actions are visual only until later API phases.
+
+Next:
+- Phase 3: implement Terraria config validation, presets, serverconfig rendering, OpenAPI updates, and connect the wizard preview to the API.

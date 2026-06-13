@@ -1,0 +1,45 @@
+import Link from "next/link";
+import { ServerModeBadge, ServerStatusBadge } from "./server-badges";
+import { ServerActions } from "./server-actions";
+import { Card } from "./ui";
+import type { Server } from "@/lib/types";
+
+export function ServerCard({ server, compact = false }: { server: Server; compact?: boolean }) {
+  return (
+    <Card className="p-4">
+      <div className="flex gap-4">
+        <div className="size-16 shrink-0 rounded-md border border-panel-line bg-[linear-gradient(135deg,#215a39,#19233b_60%,#4d3720)]" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={`/servers/${server.id}`} className="font-semibold text-white hover:text-panel-green">
+              {server.name}
+            </Link>
+            <ServerModeBadge mode={server.mode} />
+            <ServerStatusBadge status={server.status} />
+          </div>
+          <p className="mt-1 text-xs text-slate-400">World: {server.world}</p>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-slate-400 md:grid-cols-4">
+            <Metric label="Players" value={`${server.players} / ${server.maxPlayers}`} />
+            <Metric label="Port" value={String(server.port)} />
+            <Metric label="Version" value={server.version} />
+            <Metric label="Last backup" value={server.lastBackup} />
+          </div>
+          {!compact && (
+            <div className="mt-4">
+              <ServerActions server={server} />
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p>{label}</p>
+      <p className="mt-1 font-medium text-white">{value}</p>
+    </div>
+  );
+}

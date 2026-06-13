@@ -11,6 +11,7 @@ export default [
       "**/dist/**",
       "**/node_modules/**",
       "**/generated/**",
+      "**/next-env.d.ts",
       "pnpm-lock.yaml"
     ]
   },
@@ -45,7 +46,8 @@ export default [
     },
     rules: {
       ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs["core-web-vitals"].rules
+      ...nextPlugin.configs["core-web-vitals"].rules,
+      "@next/next/no-html-link-for-pages": "off"
     }
   }
 ];
