@@ -190,3 +190,33 @@ Known issues:
 
 Next:
 - Phase 7: polish docs, add V1 checklist and architecture docs, add Playwright smoke coverage where available, and run final full checks.
+
+## Phase 7: V1 Polish, Docs, and E2E
+
+Status: Completed
+
+Completed:
+- Expanded README with quick start, requirements, usage, Docker notes, safety notes, known limitations, and roadmap.
+- Added `docs/product/product-spec-v1.md`.
+- Added `docs/architecture/architecture-v1.md`.
+- Added `docs/goals/V1_CHECKLIST.md`.
+- Finalized `.env.example` with API base URL.
+- Checked Playwright availability; no project Playwright config or script exists yet.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed
+- Playwright: not run, no project Playwright config or script exists yet.
+
+Known issues:
+- Playwright e2e tests were not run because the project does not have Playwright configured yet.
+
+Final status:
+- FULL V1 RUN completed through Phase 7.
+- Real Docker runtime behavior still needs manual verification with Docker daemon and Terraria image pulls.
+- Backup restore extraction remains guarded as a known limitation.
