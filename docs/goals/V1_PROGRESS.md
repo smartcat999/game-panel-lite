@@ -137,3 +137,29 @@ Known issues:
 
 Next:
 - Phase 5: implement world import/management and backup create/restore/download/delete flows with path traversal protection.
+
+## Phase 5: Worlds and Backups
+
+Status: Completed
+
+Completed:
+- Added shared file safety helpers for file-name validation and root-contained path joins.
+- Added world import service with `.wld` extension validation and per-instance storage under `data/worlds/{instanceId}`.
+- Added backup service that creates zip archives under `data/backups/{instanceId}`.
+- Added world and backup store methods and HTTP routes for list/import/download/delete, backup creation, restore acknowledgement, download, and delete.
+- Added tests for traversal protection, world upload validation, and backup creation.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed
+
+Known issues:
+- Backup restore endpoint currently acknowledges the restore request; full zip extraction is intentionally deferred until restore safety checks can stop running servers.
+
+Next:
+- Phase 6: implement tModLoader provider completion and mod upload/manage APIs.

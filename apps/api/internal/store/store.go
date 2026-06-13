@@ -55,4 +55,48 @@ func (s *Store) DeleteServer(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.GameServerInstance{}, "id = ?", id).Error
 }
 
+func (s *Store) CreateWorld(ctx context.Context, world *domain.World) error {
+	return s.db.WithContext(ctx).Create(world).Error
+}
+
+func (s *Store) ListWorlds(ctx context.Context) ([]domain.World, error) {
+	var worlds []domain.World
+	return worlds, s.db.WithContext(ctx).Order("created_at desc").Find(&worlds).Error
+}
+
+func (s *Store) GetWorld(ctx context.Context, id string) (domain.World, error) {
+	var world domain.World
+	err := s.db.WithContext(ctx).First(&world, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return world, ErrNotFound
+	}
+	return world, err
+}
+
+func (s *Store) DeleteWorld(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.World{}, "id = ?", id).Error
+}
+
+func (s *Store) CreateBackup(ctx context.Context, backup *domain.Backup) error {
+	return s.db.WithContext(ctx).Create(backup).Error
+}
+
+func (s *Store) ListBackups(ctx context.Context) ([]domain.Backup, error) {
+	var backups []domain.Backup
+	return backups, s.db.WithContext(ctx).Order("created_at desc").Find(&backups).Error
+}
+
+func (s *Store) GetBackup(ctx context.Context, id string) (domain.Backup, error) {
+	var backup domain.Backup
+	err := s.db.WithContext(ctx).First(&backup, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return backup, ErrNotFound
+	}
+	return backup, err
+}
+
+func (s *Store) DeleteBackup(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.Backup{}, "id = ?", id).Error
+}
+
 var ErrNotFound = errors.New("not found")

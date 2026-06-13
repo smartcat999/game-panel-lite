@@ -14,12 +14,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+	worldsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/world"
 )
 
 type Handler struct {
@@ -47,8 +49,139 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/servers/{id}/restart", h.restartServer)
 	r.Delete("/api/servers/{id}", h.deleteServer)
 	r.Get("/api/servers/{id}/logs", h.serverLogs)
+	r.Get("/api/worlds", h.listWorlds)
+	r.Post("/api/worlds/import", h.importWorld)
+	r.Get("/api/worlds/{id}/download", h.downloadWorld)
+	r.Delete("/api/worlds/{id}", h.deleteWorld)
+	r.Get("/api/backups", h.listBackups)
+	r.Post("/api/servers/{id}/backups", h.createBackup)
+	r.Get("/api/backups/{id}/download", h.downloadBackup)
+	r.Post("/api/backups/{id}/restore", h.restoreBackup)
+	r.Delete("/api/backups/{id}", h.deleteBackup)
 	r.Get("/api/terraria/presets", h.presets)
 	r.Post("/api/terraria/config/preview", h.configPreview)
+}
+
+func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {
+	worlds, err := h.store.ListWorlds(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, worlds)
+}
+
+func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
+	instanceID := r.FormValue("instanceId")
+	if instanceID == "" {
+		instanceID = "unassigned"
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "world file is required")
+		return
+	}
+	defer file.Close()
+	_, size, err := worldsvc.NewService(h.cfg.DataDir).Import(instanceID, header.Filename, file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	item := domain.World{ID: uuid.NewString(), InstanceID: instanceID, Name: header.Filename[:len(header.Filename)-len(filepath.Ext(header.Filename))], FileName: header.Filename, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := h.store.CreateWorld(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "world not found")
+		return
+	}
+	path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
+func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "world not found")
+		return
+	}
+	path, _ := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	_ = os.Remove(path)
+	_ = h.store.DeleteWorld(r.Context(), item.ID)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
+	backups, err := h.store.ListBackups(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, backups)
+}
+
+func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, server.DataDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	item := domain.Backup{ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: server.WorldName, SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
+	if err := h.store.CreateBackup(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "backup not found")
+		return
+	}
+	path, err := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
+func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "backup not found")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "restore queued", "backupId": item.ID})
+}
+
+func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "backup not found")
+		return
+	}
+	path, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	_ = os.Remove(path)
+	_ = h.store.DeleteBackup(r.Context(), item.ID)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *Handler) cors(next http.Handler) http.Handler {
