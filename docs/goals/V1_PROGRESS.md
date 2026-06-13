@@ -84,3 +84,28 @@ Known issues:
 
 Next:
 - Phase 3: implement Terraria config validation, presets, serverconfig rendering, OpenAPI updates, and connect the wizard preview to the API.
+
+## Phase 3: Terraria Config and Presets
+
+Status: Completed
+
+Completed:
+- Terraria config validation, presets, and `serverconfig.txt` rendering are implemented in Go under the Terraria provider package.
+- Added API endpoints for listing presets and previewing rendered server config.
+- Expanded OpenAPI schema for the config preview request and response.
+- Connected the Create Server wizard Config step to the preview API with TanStack Query mutation state.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `go test ./...`: passed
+- `go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed
+
+Known issues:
+- The preview uses the Friends Casual preset payload in the UI until the full create-server form state is wired in Phase 4.
+
+Next:
+- Phase 4: implement Docker runtime adapter, server management APIs, SSE logs, and replace key frontend mock server flows with real API calls where practical.

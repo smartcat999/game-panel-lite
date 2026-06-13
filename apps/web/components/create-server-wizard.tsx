@@ -1,10 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, Gamepad2, Hammer, Package, Settings2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Card, Input } from "./ui";
 import { cn } from "@/lib/utils";
+import { previewTerrariaConfig } from "@/lib/api";
+import { getTerrariaPreset } from "@gamepanel-lite/shared";
 
 const steps = ["Game", "Mode", "Preset", "Config", "World / Mods", "Review"];
 const presets = [
@@ -119,6 +122,9 @@ function PresetStep({ mode }: { mode: "vanilla" | "tmodloader" }) {
 }
 
 function ConfigStep() {
+  const preview = useMutation({
+    mutationFn: () => previewTerrariaConfig(getTerrariaPreset("friends-casual").config)
+  });
   return (
     <div>
       <h2 className="text-lg font-semibold">Server config</h2>
@@ -128,6 +134,17 @@ function ConfigStep() {
         <Input placeholder="Port" defaultValue="7777" />
         <Input placeholder="Max players" defaultValue="8" />
       </div>
+      <div className="mt-4 flex items-center gap-3">
+        <Button variant="secondary" onClick={() => preview.mutate()} disabled={preview.isPending}>
+          {preview.isPending ? "Rendering..." : "Preview serverconfig.txt"}
+        </Button>
+        {preview.isError && <p className="text-sm text-red-200">{preview.error.message}</p>}
+      </div>
+      {preview.data && (
+        <pre className="mt-4 overflow-auto rounded-md border border-panel-line bg-slate-950 p-4 text-xs leading-6 text-slate-300">
+          {preview.data}
+        </pre>
+      )}
     </div>
   );
 }

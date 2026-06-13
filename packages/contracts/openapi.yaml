@@ -26,6 +26,61 @@ paths:
   /api/terraria/config/preview:
     post:
       summary: Render serverconfig.txt preview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config]
+              properties:
+                config:
+                  $ref: "#/components/schemas/TerrariaConfig"
       responses:
         "200":
           description: Rendered config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serverconfig:
+                    type: string
+        "400":
+          description: Invalid config
+components:
+  schemas:
+    TerrariaConfig:
+      type: object
+      required: [worldName, worldSize, difficulty, maxPlayers, port, secure, language, autoCreateWorld]
+      properties:
+        serverName:
+          type: string
+        worldName:
+          type: string
+        worldSize:
+          type: string
+          enum: [small, medium, large]
+        difficulty:
+          type: string
+          enum: [journey, classic, expert, master]
+        maxPlayers:
+          type: integer
+          minimum: 1
+          maximum: 255
+        port:
+          type: integer
+          minimum: 1024
+          maximum: 65535
+        password:
+          type: string
+        motd:
+          type: string
+        seed:
+          type: string
+        secure:
+          type: boolean
+        language:
+          type: string
+        autoCreateWorld:
+          type: boolean
