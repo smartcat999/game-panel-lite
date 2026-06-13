@@ -1,0 +1,31 @@
+openapi: 3.1.0
+info:
+  title: GamePanel Lite API
+  version: 0.1.0
+servers:
+  - url: http://localhost:4000
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: API is healthy
+  /api/version:
+    get:
+      summary: Product version
+      responses:
+        "200":
+          description: Product version
+  /api/terraria/presets:
+    get:
+      summary: List Terraria server presets
+      responses:
+        "200":
+          description: Presets
+  /api/terraria/config/preview:
+    post:
+      summary: Render serverconfig.txt preview
+      responses:
+        "200":
+          description: Rendered config

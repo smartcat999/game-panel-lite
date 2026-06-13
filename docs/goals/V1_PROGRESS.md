@@ -29,3 +29,31 @@ Known issues:
 
 Next:
 - Phase 1: create the Go API foundation, Next.js app foundation, OpenAPI contract, initial tests, and updated local development docs.
+
+## Phase 1: Monorepo Foundation
+
+Status: Completed
+
+Completed:
+- Added root Go module for the backend packages under `apps/api`.
+- Added chi HTTP server entrypoint with graceful shutdown.
+- Added config loading, domain models, provider registry, Terraria provider shells, mock runtime adapter, SQLite store initialization, migration seed file, and basic HTTP endpoints.
+- Added OpenAPI contract package with the first health/version/Terraria config endpoints.
+- Added initial `apps/web` Next.js, TypeScript, Tailwind app foundation.
+- Replaced old README Fastify/Prisma references with the required Go backend development flow.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `go test ./...`: passed
+- `go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+
+Known issues:
+- Docker runtime is still a mock adapter in Phase 1 by design.
+- Server management, worlds, backups, and mod management APIs are added in later phases.
+
+Next:
+- Phase 2: build the dark gamer-friendly mock UI routes and reusable frontend components from the reference image.

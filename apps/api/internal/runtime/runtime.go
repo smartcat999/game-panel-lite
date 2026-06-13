@@ -1,0 +1,33 @@
+package runtime
+
+import (
+	"context"
+	"io"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+)
+
+type ContainerSpec struct {
+	InstanceID string
+	Name       string
+	Image      string
+	Port       int
+	DataDir    string
+	ConfigText string
+}
+
+type DockerStatus struct {
+	Available bool   `json:"available"`
+	Message   string `json:"message"`
+}
+
+type Adapter interface {
+	Check(ctx context.Context) DockerStatus
+	Create(ctx context.Context, spec ContainerSpec) (string, error)
+	Start(ctx context.Context, instance domain.GameServerInstance) error
+	Stop(ctx context.Context, instance domain.GameServerInstance) error
+	Restart(ctx context.Context, instance domain.GameServerInstance) error
+	Remove(ctx context.Context, instance domain.GameServerInstance) error
+	Inspect(ctx context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error)
+	Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error)
+}
