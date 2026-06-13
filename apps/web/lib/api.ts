@@ -57,3 +57,45 @@ export async function getDockerStatus(): Promise<{ available: boolean; message: 
   }
   return (await response.json()) as { available: boolean; message: string };
 }
+
+export async function createServer(input: {
+  name: string;
+  providerKey: "terraria-vanilla" | "terraria-tmodloader";
+  config: TerrariaConfig;
+}): Promise<Server> {
+  const response = await fetch(`${API_BASE}/api/servers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create server");
+  }
+  const server = (await response.json()) as ApiServer;
+  return {
+    id: server.id,
+    name: server.name,
+    mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
+    status: server.status === "running" ? "running" : server.status === "errored" ? "errored" : "stopped",
+    world: server.worldName,
+    players: 0,
+    maxPlayers: server.maxPlayers,
+    port: server.port,
+    version: "1.4.4.9",
+    lastBackup: "Not yet",
+    password: server.password ?? "",
+    cpu: "0%",
+    memory: "0 MB"
+  };
+}
+
+export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete") {
+  const response = await fetch(`${API_BASE}/api/servers/${id}${action === "delete" ? "" : `/${action}`}`, {
+    method: action === "delete" ? "DELETE" : "POST"
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? `Unable to ${action} server`);
+  }
+}

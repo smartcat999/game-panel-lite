@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ServerModeBadge, ServerStatusBadge } from "./server-badges";
 import { ServerActions } from "./server-actions";
-import { Card } from "./ui";
+import { Card } from "@/components/ui";
 import type { Server } from "@/lib/types";
 
 export function ServerCard({ server, compact = false }: { server: Server; compact?: boolean }) {

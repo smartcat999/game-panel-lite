@@ -1,4 +1,4 @@
-import { Badge } from "./ui";
+import { Badge } from "@/components/ui";
 import type { ServerMode, ServerStatus } from "@/lib/types";
 
 export function ServerStatusBadge({ status }: { status: ServerStatus }) {

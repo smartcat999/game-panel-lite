@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Button, Input } from "./ui";
+import { Button, Input } from "@/components/ui";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },

@@ -31,6 +31,7 @@ The frontend lives under `apps/web` and uses:
 - React
 - TypeScript
 - Tailwind CSS
+- shadcn/ui source-component layout via `components.json` and `apps/web/components/ui`
 - lucide-react
 - TanStack Query
 - Framer Motion for subtle wizard transitions

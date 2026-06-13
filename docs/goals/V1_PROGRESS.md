@@ -146,7 +146,7 @@ Completed:
 - Added shared file safety helpers for file-name validation and root-contained path joins.
 - Added world import service with `.wld` extension validation and per-instance storage under `data/worlds/{instanceId}`.
 - Added backup service that creates zip archives under `data/backups/{instanceId}`.
-- Added world and backup store methods and HTTP routes for list/import/download/delete, backup creation, restore acknowledgement, download, and delete.
+- Added world and backup store methods and HTTP routes for list/import/assign/duplicate/download/delete, backup creation, restore, download, and delete.
 - Added tests for traversal protection, world upload validation, and backup creation.
 
 Checks:
@@ -159,7 +159,7 @@ Checks:
 - `pnpm typecheck`: passed
 
 Known issues:
-- Backup restore endpoint currently acknowledges the restore request; full zip extraction is intentionally deferred until restore safety checks can stop running servers.
+- Backup restore requires the server to be stopped before replacing files.
 
 Next:
 - Phase 6: implement tModLoader provider completion and mod upload/manage APIs.
@@ -216,7 +216,12 @@ Checks:
 Known issues:
 - Playwright e2e tests were not run because the project does not have Playwright configured yet.
 
+Post-audit gap closing:
+- Added actual backup restore extraction with zip-slip protection and running-server guardrails.
+- Added world assign and duplicate endpoints.
+- Wired the create-server wizard custom config fields to preview and `POST /api/servers`.
+- Added browser confirmations for destructive server stop and restart actions.
+
 Final status:
-- FULL V1 RUN completed through Phase 7.
+- FULL V1 RUN completed through Phase 7 plus post-audit gap closing.
 - Real Docker runtime behavior still needs manual verification with Docker daemon and Terraria image pulls.
-- Backup restore extraction remains guarded as a known limitation.

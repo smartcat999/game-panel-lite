@@ -2,9 +2,11 @@ package backup
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/safety"
@@ -76,4 +78,63 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 		return "", err
 	}
 	return safety.SafeJoin(s.dataDir, "backups", instanceID, safeName)
+}
+
+func (s *Service) Restore(instanceID string, fileName string, targetDir string) error {
+	backupPath, err := s.Path(instanceID, fileName)
+	if err != nil {
+		return err
+	}
+	reader, err := zip.OpenReader(backupPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	cleanTarget, err := filepath.Abs(targetDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(cleanTarget, 0o755); err != nil {
+		return err
+	}
+	for _, file := range reader.File {
+		if file.FileInfo().IsDir() {
+			continue
+		}
+		if strings.Contains(file.Name, "..") || filepath.IsAbs(file.Name) {
+			return fmt.Errorf("backup contains unsafe path")
+		}
+		target, err := filepath.Abs(filepath.Join(cleanTarget, file.Name))
+		if err != nil {
+			return err
+		}
+		if target != cleanTarget && !strings.HasPrefix(target, cleanTarget+string(filepath.Separator)) {
+			return fmt.Errorf("backup contains unsafe path")
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		in, err := file.Open()
+		if err != nil {
+			return err
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			_ = in.Close()
+			return err
+		}
+		_, copyErr := io.Copy(out, in)
+		closeInErr := in.Close()
+		closeOutErr := out.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeInErr != nil {
+			return closeInErr
+		}
+		if closeOutErr != nil {
+			return closeOutErr
+		}
+	}
+	return nil
 }

@@ -87,6 +87,18 @@ paths:
       responses:
         "200":
           description: Deleted mod
+  /api/worlds/{id}/assign:
+    post:
+      summary: Assign world to server
+      responses:
+        "200":
+          description: Assigned world
+  /api/worlds/{id}/duplicate:
+    post:
+      summary: Duplicate world file
+      responses:
+        "201":
+          description: Duplicated world
   /api/terraria/presets:
     get:
       summary: List Terraria server presets

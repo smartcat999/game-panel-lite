@@ -13,8 +13,8 @@ V1 supports:
 - Custom Terraria config and presets.
 - Start, stop, restart, delete, and list server flows.
 - SSE log streaming.
-- World import and download.
-- Backup creation, list, download, delete, and restore acknowledgement.
+- World import, assignment, duplication, and download.
+- Backup creation, list, download, delete, and restore with running-server guardrails.
 - tModLoader mod upload, list, and delete.
 - Modern dark dashboard UI.
 

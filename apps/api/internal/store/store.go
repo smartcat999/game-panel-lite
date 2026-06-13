@@ -73,6 +73,10 @@ func (s *Store) GetWorld(ctx context.Context, id string) (domain.World, error) {
 	return world, err
 }
 
+func (s *Store) SaveWorld(ctx context.Context, world *domain.World) error {
+	return s.db.WithContext(ctx).Save(world).Error
+}
+
 func (s *Store) DeleteWorld(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.World{}, "id = ?", id).Error
 }

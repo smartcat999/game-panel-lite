@@ -45,3 +45,31 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 	}
 	return safety.SafeJoin(s.dataDir, "worlds", instanceID, safeName)
 }
+
+func (s *Service) Duplicate(instanceID string, sourceName string, targetName string) (string, int64, error) {
+	source, err := s.Path(instanceID, sourceName)
+	if err != nil {
+		return "", 0, err
+	}
+	safeTarget, err := safety.SafeFileName(targetName, ".wld")
+	if err != nil {
+		return "", 0, err
+	}
+	targetDir, err := safety.SafeJoin(s.dataDir, "worlds", instanceID)
+	if err != nil {
+		return "", 0, err
+	}
+	target := filepath.Join(targetDir, safeTarget)
+	in, err := os.Open(source)
+	if err != nil {
+		return "", 0, err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return "", 0, err
+	}
+	defer out.Close()
+	size, err := io.Copy(out, in)
+	return target, size, err
+}

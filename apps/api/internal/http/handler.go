@@ -52,6 +52,8 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/servers/{id}/logs", h.serverLogs)
 	r.Get("/api/worlds", h.listWorlds)
 	r.Post("/api/worlds/import", h.importWorld)
+	r.Post("/api/worlds/{id}/assign", h.assignWorld)
+	r.Post("/api/worlds/{id}/duplicate", h.duplicateWorld)
 	r.Get("/api/worlds/{id}/download", h.downloadWorld)
 	r.Delete("/api/worlds/{id}", h.deleteWorld)
 	r.Get("/api/backups", h.listBackups)
@@ -168,6 +170,62 @@ func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "world not found")
+		return
+	}
+	var payload struct {
+		InstanceID string `json:"instanceId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.InstanceID == "" {
+		writeError(w, http.StatusBadRequest, "instanceId is required")
+		return
+	}
+	if _, err := h.store.GetServer(r.Context(), payload.InstanceID); err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	item.ActiveInstanceID = payload.InstanceID
+	item.UpdatedAt = time.Now()
+	if err := h.store.SaveWorld(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "world not found")
+		return
+	}
+	var payload struct {
+		FileName string `json:"fileName"`
+		Name     string `json:"name"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&payload)
+	if payload.FileName == "" {
+		payload.FileName = "copy-" + item.FileName
+	}
+	if payload.Name == "" {
+		payload.Name = item.Name + " Copy"
+	}
+	_, size, err := worldsvc.NewService(h.cfg.DataDir).Duplicate(item.InstanceID, item.FileName, payload.FileName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	copy := domain.World{ID: uuid.NewString(), InstanceID: item.InstanceID, Name: payload.Name, FileName: payload.FileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := h.store.CreateWorld(r.Context(), &copy); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, copy)
+}
+
 func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -228,7 +286,20 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "backup not found")
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"status": "restore queued", "backupId": item.ID})
+	server, err := h.store.GetServer(r.Context(), item.InstanceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before restoring a backup")
+		return
+	}
+	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, server.DataDir); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "restored", "backupId": item.ID})
 }
 
 func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {

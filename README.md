@@ -52,7 +52,7 @@ GOCACHE="$PWD/.cache/go-build" go vet ./...
 ## Workspace Layout
 
 - `apps/api` - Go, chi, SQLite, provider and runtime backend.
-- `apps/web` - Next.js, React, TypeScript, Tailwind CSS frontend.
+- `apps/web` - Next.js, React, TypeScript, Tailwind CSS frontend with local shadcn/ui-style source components.
 - `packages/contracts` - OpenAPI contract.
 - `packages/shared` - shared TypeScript schemas used by the frontend.
 
@@ -90,20 +90,20 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 
 - Uploaded world files must end in `.wld`.
 - Uploaded mod files must be `.tmod`, `install.txt`, or `enabled.json`.
-- File names and joined paths are checked to prevent path traversal.
-- UI destructive actions are represented with explicit destructive controls; production confirmation dialogs should be expanded as the API wiring deepens.
+- File names, joined paths, and restored backup archive entries are checked to prevent path traversal.
+- Stop and restart server actions require browser confirmation before the API call.
 - Secrets, tokens, and machine-specific absolute paths must stay out of committed config.
 
 ## Known Limitations
 
-- Backup restore currently acknowledges the request but does not extract archives yet; restore should stop running servers before file replacement.
+- Backup restore extracts archives into the server data directory and refuses to run while a server is running or restarting.
 - Individual server detail pages still use mock detail data for console and side panels.
 - Docker image pull and container lifecycle were compiled but not manually verified against a running daemon in this run.
 - Playwright is not configured in this project yet, so e2e browser flows were not run.
 
 ## Roadmap
 
-- Wire create-server form state fully to `POST /api/servers`.
-- Add restore extraction with running-server guardrails.
+- Wire every server detail panel to live API data instead of mixed mock data.
+- Replace browser-native confirmations with a shadcn alert dialog component.
 - Add Playwright smoke tests for dashboard, create server, copy join info, backup, and logs.
 - Add richer live log and command console behavior.
