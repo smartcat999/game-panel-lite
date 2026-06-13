@@ -109,3 +109,31 @@ Known issues:
 
 Next:
 - Phase 4: implement Docker runtime adapter, server management APIs, SSE logs, and replace key frontend mock server flows with real API calls where practical.
+
+## Phase 4: Go Docker Runtime and Server Management
+
+Status: Completed
+
+Completed:
+- Added Docker SDK runtime adapter under `internal/runtime/docker`.
+- Added runtime status, server list/create/detail/start/stop/restart/delete, and SSE log endpoints.
+- Server creation renders provider config, creates an isolated `data/instances/{instanceId}` directory, and asks the runtime adapter to create the container.
+- Docker details remain inside `RuntimeAdapter`; Terraria image/config choices remain in providers.
+- Servers page and Settings page now use TanStack Query to call the Go API with mock fallback when the API is not running.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed
+
+Known issues:
+- Docker image pull/container create requires a running Docker daemon and network access to image registries.
+- The UI still uses mock detail data for individual server detail pages until the remaining API flows are connected.
+- Go checks used a repo-local `GOCACHE` because the sandbox cannot write to the default user Go build cache.
+
+Next:
+- Phase 5: implement world import/management and backup create/restore/download/delete flows with path traversal protection.

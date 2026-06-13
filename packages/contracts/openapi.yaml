@@ -17,6 +17,58 @@ paths:
       responses:
         "200":
           description: Product version
+  /api/runtime/docker:
+    get:
+      summary: Check Docker runtime availability
+      responses:
+        "200":
+          description: Docker status
+  /api/servers:
+    get:
+      summary: List servers
+      responses:
+        "200":
+          description: Server list
+    post:
+      summary: Create server
+      responses:
+        "201":
+          description: Created server
+  /api/servers/{id}:
+    get:
+      summary: Get server
+      responses:
+        "200":
+          description: Server detail
+    delete:
+      summary: Delete server
+      responses:
+        "200":
+          description: Deleted
+  /api/servers/{id}/start:
+    post:
+      summary: Start server
+      responses:
+        "200":
+          description: Started server
+  /api/servers/{id}/stop:
+    post:
+      summary: Stop server
+      responses:
+        "200":
+          description: Stopped server
+  /api/servers/{id}/restart:
+    post:
+      summary: Restart server
+      responses:
+        "200":
+          description: Restarted server
+  /api/servers/{id}/logs:
+    get:
+      summary: Stream server logs with SSE
+      responses:
+        "200":
+          description: SSE log stream
   /api/terraria/presets:
     get:
       summary: List Terraria server presets

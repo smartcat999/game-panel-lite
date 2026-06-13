@@ -11,6 +11,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
+	dockerruntime "github.com/smartcat999/game-panel-lite/apps/api/internal/runtime/docker"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
@@ -24,7 +25,14 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, err
 	}
 	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider())
-	handler := apihttp.NewHandler(cfg, logger, db, registry, runtime.NewMockAdapter())
+	adapter, err := dockerruntime.NewAdapter()
+	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()
+	if err != nil {
+		logger.Warn("falling back to mock runtime adapter", "error", err)
+	} else {
+		runtimeAdapter = adapter
+	}
+	handler := apihttp.NewHandler(cfg, logger, db, registry, runtimeAdapter)
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
