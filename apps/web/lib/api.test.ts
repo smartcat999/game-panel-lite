@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { listBackups } from "./api";
+import { downloadWorldFile, listBackups } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -27,5 +27,16 @@ describe("api mappers", () => {
     const backups = await listBackups();
 
     expect(backups[0]?.sizeBytes).toBe(1536);
+  });
+
+  it("surfaces backend download errors before the browser navigates away", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "world file is missing" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+
+    await expect(downloadWorldFile("world-1")).rejects.toThrow("world file is missing");
   });
 });

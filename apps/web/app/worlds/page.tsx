@@ -7,7 +7,8 @@ import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { deleteWorld, duplicateWorld, importWorld, listServers, listWorlds, migrateWorld, worldDownloadUrl } from "@/lib/api";
+import { deleteWorld, downloadWorldFile, duplicateWorld, importWorld, listServers, listWorlds, migrateWorld } from "@/lib/api";
+import { saveBlob } from "@/lib/download";
 import { localizeDifficulty, localizeRelativeTime, localizeWorldSize, useI18n } from "@/lib/i18n";
 import type { World } from "@/lib/types";
 
@@ -21,6 +22,7 @@ export default function WorldsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<World | null>(null);
+  const [downloadingWorldId, setDownloadingWorldId] = useState("");
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
   const activeTargetServerId = targetServerId || servers[0]?.id || "";
@@ -75,6 +77,21 @@ export default function WorldsPage() {
       setErrorMessage(error instanceof Error ? error.message : t("unableMigrateWorld"));
     }
   });
+
+  const downloadWorld = async (world: World) => {
+    setDownloadingWorldId(world.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const blob = await downloadWorldFile(world.id);
+      saveBlob(blob, `${world.name}.wld`);
+      setSuccessMessage(t("downloadStarted"));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t("unableDownloadWorld"));
+    } finally {
+      setDownloadingWorldId("");
+    }
+  };
 
   return (
     <AppShell>
@@ -139,12 +156,10 @@ export default function WorldsPage() {
                 <Plus aria-hidden="true" />
                 {t("duplicate")}
               </Button>
-              <a href={worldDownloadUrl(world.id)}>
-                <Button variant="secondary" disabled={query.isError}>
-                  <Download aria-hidden="true" />
-                  {t("download")}
-                </Button>
-              </a>
+              <Button variant="secondary" onClick={() => void downloadWorld(world)} disabled={query.isError || downloadingWorldId === world.id}>
+                <Download aria-hidden="true" />
+                {downloadingWorldId === world.id ? t("downloading") : t("download")}
+              </Button>
               <Button
                 variant="secondary"
                 onClick={() => activeTargetServerId && migrate.mutate({ id: world.id, instanceId: activeTargetServerId })}

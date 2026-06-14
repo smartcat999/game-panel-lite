@@ -1102,3 +1102,23 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Download Interaction Completion Update
+
+Status: Completed
+
+Completed:
+- Replaced direct world and backup download links with fetch-based downloads so failed downloads stay on the current page.
+- Added inline download success and error feedback on the server detail, Worlds, and Backups pages.
+- Added per-resource downloading states to prevent repeated clicks while a download request is in flight.
+- Preserved backend error messages from failed download endpoints instead of navigating users to a raw error response page.
+- Added API helper coverage proving download failures surface the backend error.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test -- api.test.ts`: failed first because the download helper did not exist, then passed after implementation.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

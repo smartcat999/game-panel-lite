@@ -12,12 +12,13 @@ import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
 import {
-  backupDownloadUrl,
   assignWorld,
   createBackup,
   deleteBackup,
   deleteMod,
   deleteWorld,
+  downloadBackupFile,
+  downloadWorldFile,
   getServer,
   importWorld,
   listBackups,
@@ -29,8 +30,8 @@ import {
   serverLogsUrl,
   updateServerConfig,
   uploadMod,
-  worldDownloadUrl
 } from "@/lib/api";
+import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
@@ -68,6 +69,7 @@ export default function ServerDetailPage() {
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
+  const [downloadingResourceId, setDownloadingResourceId] = useState("");
   const [logStatus, setLogStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [configSaved, setConfigSaved] = useState(false);
   const successTimerRef = useRef<number | null>(null);
@@ -266,6 +268,30 @@ export default function ServerDetailPage() {
     if (!value || commandMutation.isPending) return;
     commandMutation.mutate(value);
   };
+  const downloadWorld = async (world: World) => {
+    setDownloadingResourceId(world.id);
+    try {
+      const blob = await downloadWorldFile(world.id);
+      saveBlob(blob, `${world.name}.wld`);
+      showSuccess(t("downloadStarted"));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : t("unableDownloadWorld"));
+    } finally {
+      setDownloadingResourceId("");
+    }
+  };
+  const downloadBackup = async (backup: Backup) => {
+    setDownloadingResourceId(backup.id);
+    try {
+      const blob = await downloadBackupFile(backup.id);
+      saveBlob(blob, backup.name);
+      showSuccess(t("downloadStarted"));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : t("unableDownloadBackup"));
+    } finally {
+      setDownloadingResourceId("");
+    }
+  };
 
   return (
     <AppShell>
@@ -359,9 +385,11 @@ export default function ServerDetailPage() {
               assigning={worldAssign.isPending}
               currentWorldName={server.world}
               serverStatus={server.status}
+              downloadingId={downloadingResourceId}
               uploading={worldUpload.isPending}
               onAssign={(world) => worldAssign.mutate(world.id)}
               onDelete={setPendingWorldDelete}
+              onDownload={(world) => void downloadWorld(world)}
               onUploadClick={() => worldInputRef.current?.click()}
             />
           )}
@@ -372,8 +400,10 @@ export default function ServerDetailPage() {
               isLoading={backupsQuery.isLoading}
               items={serverBackups}
               deleting={backupDelete.isPending}
+              downloadingId={downloadingResourceId}
               restoring={backupRestore.isPending}
               onDelete={setPendingBackupDelete}
+              onDownload={(backup) => void downloadBackup(backup)}
               onCreate={() => backupCreate.mutate()}
               onRestore={setPendingRestore}
             />
@@ -737,11 +767,13 @@ function WorldsTab({
   assigning,
   currentWorldName,
   deleting,
+  downloadingId,
   isError,
   isLoading,
   items,
   onAssign,
   onDelete,
+  onDownload,
   uploading,
   serverStatus,
   onUploadClick
@@ -749,11 +781,13 @@ function WorldsTab({
   assigning: boolean;
   currentWorldName: string;
   deleting: boolean;
+  downloadingId: string;
   isError: boolean;
   isLoading: boolean;
   items: World[];
   onAssign: (world: World) => void;
   onDelete: (world: World) => void;
+  onDownload: (world: World) => void;
   uploading: boolean;
   serverStatus: Server["status"];
   onUploadClick: () => void;
@@ -798,7 +832,12 @@ function WorldsTab({
                     {assigning ? t("actionWorking") : t("setCurrentWorld")}
                   </Button>
                 )}
-                <ActionLink href={worldDownloadUrl(world.id)} label={t("download")} icon={<Download aria-hidden="true" />} />
+                <ActionButton
+                  disabled={downloadingId === world.id}
+                  label={downloadingId === world.id ? t("downloading") : t("download")}
+                  icon={<Download aria-hidden="true" />}
+                  onClick={() => onDownload(world)}
+                />
                 <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(world)} disabled={deleting}>
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -814,20 +853,24 @@ function WorldsTab({
 function BackupsTab({
   creating,
   deleting,
+  downloadingId,
   isError,
   isLoading,
   items,
   onDelete,
+  onDownload,
   restoring,
   onCreate,
   onRestore
 }: {
   creating: boolean;
   deleting: boolean;
+  downloadingId: string;
   isError: boolean;
   isLoading: boolean;
   items: Backup[];
   onDelete: (backup: Backup) => void;
+  onDownload: (backup: Backup) => void;
   restoring: boolean;
   onCreate: () => void;
   onRestore: (backup: Backup) => void;
@@ -858,7 +901,12 @@ function BackupsTab({
                 <Button variant="secondary" aria-label={t("restore")} onClick={() => onRestore(backup)} disabled={restoring}>
                   <RotateCcw aria-hidden="true" />
                 </Button>
-                <ActionLink href={backupDownloadUrl(backup.id)} label={t("download")} icon={<Download aria-hidden="true" />} />
+                <ActionButton
+                  disabled={downloadingId === backup.id}
+                  label={downloadingId === backup.id ? t("downloading") : t("download")}
+                  icon={<Download aria-hidden="true" />}
+                  onClick={() => onDownload(backup)}
+                />
                 <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -988,12 +1036,27 @@ function ResourceRow({ title, meta, actions }: { title: string; meta: string; ac
   );
 }
 
-function ActionLink({ href, icon, label }: { href: string; icon: ReactNode; label: string }) {
+function ActionButton({
+  disabled,
+  icon,
+  label,
+  onClick
+}: {
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <a className="inline-flex items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800" href={href}>
+    <button
+      className="inline-flex items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    >
       {icon}
       {label}
-    </a>
+    </button>
   );
 }
 

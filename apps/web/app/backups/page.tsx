@@ -7,7 +7,8 @@ import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { backupDownloadUrl, createBackup, deleteBackup, listBackups, listServers, migrateBackup, restoreBackup } from "@/lib/api";
+import { createBackup, deleteBackup, downloadBackupFile, listBackups, listServers, migrateBackup, restoreBackup } from "@/lib/api";
+import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { Backup } from "@/lib/types";
 
@@ -22,6 +23,7 @@ export default function BackupsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Backup | null>(null);
+  const [downloadingBackupId, setDownloadingBackupId] = useState("");
   const servers = serversQuery.data ?? [];
   const backups = backupsQuery.data ?? [];
   const activeServerId = selectedServerId || servers[0]?.id || "";
@@ -78,6 +80,21 @@ export default function BackupsPage() {
       setErrorMessage(error instanceof Error ? error.message : t("unableMigrateBackup"));
     }
   });
+
+  const downloadBackup = async (backup: Backup) => {
+    setDownloadingBackupId(backup.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const blob = await downloadBackupFile(backup.id);
+      saveBlob(blob, backup.name);
+      setSuccessMessage(t("downloadStarted"));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : t("unableDownloadBackup"));
+    } finally {
+      setDownloadingBackupId("");
+    }
+  };
 
   return (
     <AppShell>
@@ -139,11 +156,14 @@ export default function BackupsPage() {
                     >
                       <RotateCcw aria-hidden="true" />
                     </Button>
-                    <a href={backupDownloadUrl(backup.id)}>
-                      <Button variant="secondary" aria-label={t("download")} disabled={backupsQuery.isError}>
-                        <Download aria-hidden="true" />
-                      </Button>
-                    </a>
+                    <Button
+                      variant="secondary"
+                      aria-label={t("download")}
+                      onClick={() => void downloadBackup(backup)}
+                      disabled={backupsQuery.isError || downloadingBackupId === backup.id}
+                    >
+                      <Download aria-hidden="true" />
+                    </Button>
                     <Button
                       variant="secondary"
                       aria-label={t("migrate")}

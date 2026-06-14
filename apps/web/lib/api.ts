@@ -433,6 +433,23 @@ export function worldDownloadUrl(id: string) {
   return `${API_BASE}/api/worlds/${id}/download`;
 }
 
+async function downloadBlob(url: string, fallbackMessage: string): Promise<Blob> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const payload = (await response.clone().json().catch(() => ({}))) as { error?: string };
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    const text = await response.text().catch(() => "");
+    throw new Error(text.trim() || fallbackMessage);
+  }
+  return response.blob();
+}
+
+export async function downloadWorldFile(id: string): Promise<Blob> {
+  return downloadBlob(worldDownloadUrl(id), "Unable to download world");
+}
+
 export async function listBackups(): Promise<Backup[]> {
   const response = await fetch(`${API_BASE}/api/backups`, { cache: "no-store" });
   if (!response.ok) {
@@ -517,6 +534,10 @@ export async function deleteBackup(id: string) {
 
 export function backupDownloadUrl(id: string) {
   return `${API_BASE}/api/backups/${id}/download`;
+}
+
+export async function downloadBackupFile(id: string): Promise<Blob> {
+  return downloadBlob(backupDownloadUrl(id), "Unable to download backup");
 }
 
 export async function listMods(serverId: string): Promise<ModFile[]> {
