@@ -193,6 +193,8 @@ export default function ServerDetailPage() {
       showSuccess(t("backupRestored"));
       setPendingRestore(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
+      await client.invalidateQueries({ queryKey: ["server", id] });
+      await client.invalidateQueries({ queryKey: ["servers"] });
     },
     onError: (error) => showError(error instanceof Error ? error.message : t("unableRestoreBackup"))
   });
@@ -201,6 +203,7 @@ export default function ServerDetailPage() {
     onSuccess: async () => {
       showSuccess(t("backupMigrated"));
       await client.invalidateQueries({ queryKey: ["backups"] });
+      await client.invalidateQueries({ queryKey: ["servers"] });
     },
     onError: (error) => showError(error instanceof Error ? error.message : t("unableMigrateBackup"))
   });

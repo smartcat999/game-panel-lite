@@ -83,8 +83,8 @@ Do not add auth, billing, cloud provisioning, OAuth, RBAC, Kubernetes, or plugin
 
 The API exposes `GET /api/runtime/docker` for daemon status. Game server records are persisted in SQLite; Docker containers are runtime instances. Starting a server creates or reuses a container mounted to that server's isolated data directory, so a missing old container can be recreated without losing world/config data. Real container creation requires Docker to be running and access to the configured Terraria images:
 
-- Vanilla: `ryshe/terraria:latest`
-- tModLoader: `radioactivehydra/tmodloader:latest`
+- Vanilla: `ryshe/terraria:<versioned tag>` selected from the provider version list.
+- tModLoader: `radioactivehydra/tmodloader:<version>` selected from the provider version list.
 
 Configure the Docker socket or host with `GAMEPANEL_DOCKER_HOST`. If it is not set, the API falls back to `DOCKER_HOST`, then `unix:///var/run/docker.sock`.
 
@@ -115,7 +115,7 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 - Server detail pages stream logs from the backend SSE endpoint when the server/container log stream is available.
 - Server detail console input sends commands to the running container stdin.
 - Vanilla Terraria was verified against a real OrbStack Docker daemon: image pull, create, start, auto-create world, clean SSE logs, TCP port probe, and delete cleanup.
-- tModLoader was verified against a real OrbStack Docker daemon with `radioactivehydra/tmodloader:latest`: image pull, create, start, auto-create world from `/data/serverconfig.txt`, clean SSE logs, TCP port probe, and delete cleanup.
+- tModLoader was verified against a real OrbStack Docker daemon with versioned `radioactivehydra/tmodloader` tags: image pull, create, start, auto-create world from `/data/serverconfig.txt`, clean SSE logs, TCP port probe, and delete cleanup.
 - Playwright E2E smoke tests cover the Chinese app shell, Docker scan feedback, game cover/avatar rendering, create-server selection states, server detail logs, copy join info, world migration, and backup restore confirmation.
 - Actual Terraria client join still needs manual verification with the desktop game client; see `docs/goals/V1_MANUAL_VERIFICATION.md`.
 - World and backup migration APIs are implemented for copying assets between server instances.

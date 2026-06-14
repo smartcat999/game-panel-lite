@@ -1271,6 +1271,20 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Instance Resource Validation Update
+
+Status: Completed
+
+Completed:
+- Validated world import targets so `instanceId` must be `unassigned` or an existing server record.
+- Added backend coverage proving imports to unknown instances are rejected without creating database records or files.
+- Refreshed server caches after server-detail backup restore and backup migration actions so adjacent UI state updates promptly.
+- Updated README Docker image notes to reflect versioned provider image tags instead of stale `latest` examples.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: passed.
+- `pnpm typecheck`: passed.
+
 ## V1 Create Wizard Uploaded World Assignment Update
 
 Status: Completed

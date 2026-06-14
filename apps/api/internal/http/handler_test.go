@@ -617,6 +617,43 @@ func TestWorldImportListDownloadDuplicateAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestWorldImportRejectsUnknownInstance(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("instanceId", "missing-server"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("file", "uploaded.wld")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("world-data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	upload := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/import", body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	router.ServeHTTP(upload, request)
+	if upload.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected unknown instance import 404, got %d: %s", upload.Code, upload.Body.String())
+	}
+	worlds, err := db.ListWorlds(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(worlds) != 0 {
+		t.Fatalf("expected no world records for unknown instance, got %+v", worlds)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "worlds", "missing-server", "uploaded.wld")); !os.IsNotExist(err) {
+		t.Fatalf("expected no file for unknown instance import, stat err=%v", err)
+	}
+}
+
 func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	world := domain.World{

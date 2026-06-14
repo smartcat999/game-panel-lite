@@ -307,6 +307,12 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 	if instanceID == "" {
 		instanceID = "unassigned"
 	}
+	if instanceID != "unassigned" {
+		if _, err := h.store.GetServer(r.Context(), instanceID); err != nil {
+			writeError(w, http.StatusNotFound, "server not found")
+			return
+		}
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "world file is required")
