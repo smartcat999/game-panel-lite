@@ -144,7 +144,10 @@ export default function ServerDetailPage() {
       setPendingWorldDelete(null);
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableDeleteWorld"))
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "";
+      showError(message.includes("active world") ? t("unableDeleteActiveWorld") : message || t("unableDeleteWorld"));
+    }
   });
   const backupCreate = useMutation({
     mutationFn: () => createBackup(id),

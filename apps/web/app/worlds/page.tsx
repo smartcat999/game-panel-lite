@@ -61,7 +61,8 @@ export default function WorldsPage() {
     },
     onError: (error) => {
       setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableDeleteWorld"));
+      const message = error instanceof Error ? error.message : "";
+      setErrorMessage(message.includes("active world") ? t("unableDeleteActiveWorld") : message || t("unableDeleteWorld"));
     }
   });
   const migrate = useMutation({

@@ -323,6 +323,13 @@ func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "world not found")
 		return
 	}
+	if item.ActiveInstanceID != "" {
+		server, err := h.store.GetServer(r.Context(), item.ActiveInstanceID)
+		if err == nil && server.WorldName == item.Name {
+			writeError(w, http.StatusConflict, "switch the server to another world before deleting the active world")
+			return
+		}
+	}
 	path, _ := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	_ = os.Remove(path)
 	_ = h.store.DeleteWorld(r.Context(), item.ID)

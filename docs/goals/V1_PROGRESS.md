@@ -1197,3 +1197,21 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Active World Delete Guard Update
+
+Status: Completed
+
+Completed:
+- Prevented deleting a world that is currently active on a server, avoiding stale server world references after resource deletion.
+- Added backend HTTP coverage proving active-world deletion returns a conflict and leaves the world record intact.
+- Added localized frontend guidance on Worlds and Server Detail when users try to delete the current world.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: failed first because active-world deletion returned 200, then passed after the guard was added.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

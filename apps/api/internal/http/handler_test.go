@@ -546,6 +546,45 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	}
 }
 
+func TestDeleteActiveWorldRequiresUnassigningFirst(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("active-world-server", cfg.DataDir)
+	server.WorldName = "active"
+	server.Config.WorldName = "active"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(server.ID, "active.wld", bytes.NewBufferString("world")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:               "active-world",
+		InstanceID:       server.ID,
+		ActiveInstanceID: server.ID,
+		Name:             "active",
+		FileName:         "active.wld",
+		SizeBytes:        5,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/worlds/active-world", nil))
+	if remove.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected active world delete conflict, got %d: %s", remove.Code, remove.Body.String())
+	}
+	stored, err := db.GetWorld(context.Background(), world.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ID != world.ID {
+		t.Fatalf("expected active world to remain stored, got %+v", stored)
+	}
+}
+
 func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("config-target", cfg.DataDir)
