@@ -720,6 +720,16 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server must be running to send commands")
 		return
 	}
+	server, recreated, err := h.ensureRuntimeContainer(r.Context(), server)
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	server, err = h.startRecreatedRunningContainer(r.Context(), server, recreated)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
 	if err := h.runtime.SendCommand(r.Context(), server, command); err != nil {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
@@ -760,23 +770,28 @@ func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (do
 	if err != nil {
 		return domain.GameServerInstance{}, errors.New("server not found")
 	}
+	server, _, err = h.ensureRuntimeContainer(ctx, server)
+	return server, err
+}
+
+func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.GameServerInstance) (domain.GameServerInstance, bool, error) {
 	if server.ContainerID != "" {
 		if _, err := h.runtime.Inspect(ctx, server); err == nil {
-			return server, nil
+			return server, false, nil
 		}
 		h.logger.Warn("runtime container missing; recreating from server data", "server", server.ID, "container", server.ContainerID)
 		server.ContainerID = ""
 	}
 	gameProvider, ok := h.provider.Get(server.ProviderKey)
 	if !ok {
-		return domain.GameServerInstance{}, fmt.Errorf("unknown provider: %s", server.ProviderKey)
+		return domain.GameServerInstance{}, false, fmt.Errorf("unknown provider: %s", server.ProviderKey)
 	}
 	configText, err := gameProvider.RenderConfig(server.Config)
 	if err != nil {
-		return domain.GameServerInstance{}, err
+		return domain.GameServerInstance{}, false, err
 	}
 	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
-		return domain.GameServerInstance{}, err
+		return domain.GameServerInstance{}, false, err
 	}
 	containerID, err := h.runtime.Create(ctx, runtime.ContainerSpec{
 		InstanceID: server.ID,
@@ -788,9 +803,24 @@ func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (do
 		Options:    gameProvider.RuntimeOptions(server.Config),
 	})
 	if err != nil {
-		return domain.GameServerInstance{}, err
+		return domain.GameServerInstance{}, false, err
 	}
 	server.ContainerID = containerID
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		return domain.GameServerInstance{}, false, err
+	}
+	return server, true, nil
+}
+
+func (h *Handler) startRecreatedRunningContainer(ctx context.Context, server domain.GameServerInstance, recreated bool) (domain.GameServerInstance, error) {
+	if !recreated || server.Status != domain.StatusRunning {
+		return server, nil
+	}
+	if err := h.runtime.Start(ctx, server); err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	server.Status = domain.StatusRunning
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(ctx, &server); err != nil {
 		return domain.GameServerInstance{}, err
@@ -919,6 +949,19 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
+	}
+	if server.Status == domain.StatusRunning {
+		var recreated bool
+		server, recreated, err = h.ensureRuntimeContainer(r.Context(), server)
+		if err != nil {
+			writeError(w, statusCodeForRuntimeError(err), err.Error())
+			return
+		}
+		server, err = h.startRecreatedRunningContainer(r.Context(), server, recreated)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -82,6 +83,48 @@ func (a inspectStatusAdapter) Logs(context.Context, domain.GameServerInstance) (
 	return io.NopCloser(strings.NewReader("")), nil
 }
 func (a inspectStatusAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+	return nil
+}
+
+type staleContainerAdapter struct {
+	created          int
+	startedContainer string
+	commandContainer string
+	logsContainer    string
+}
+
+func (a *staleContainerAdapter) Check(context.Context) runtime.DockerStatus {
+	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock"}
+}
+func (a *staleContainerAdapter) Create(context.Context, runtime.ContainerSpec) (string, error) {
+	a.created++
+	return "new-container", nil
+}
+func (a *staleContainerAdapter) Start(_ context.Context, instance domain.GameServerInstance) error {
+	a.startedContainer = instance.ContainerID
+	return nil
+}
+func (a *staleContainerAdapter) Stop(context.Context, domain.GameServerInstance) error    { return nil }
+func (a *staleContainerAdapter) Restart(context.Context, domain.GameServerInstance) error { return nil }
+func (a *staleContainerAdapter) Remove(context.Context, domain.GameServerInstance) error  { return nil }
+func (a *staleContainerAdapter) Inspect(_ context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error) {
+	if instance.ContainerID == "old-container" {
+		return domain.StatusErrored, fmt.Errorf("stale container")
+	}
+	return domain.StatusRunning, nil
+}
+func (a *staleContainerAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
+	a.logsContainer = instance.ContainerID
+	if instance.ContainerID != "new-container" {
+		return nil, fmt.Errorf("stale container used for logs")
+	}
+	return io.NopCloser(strings.NewReader("[Info] recovered log\n")), nil
+}
+func (a *staleContainerAdapter) SendCommand(_ context.Context, instance domain.GameServerInstance, _ string) error {
+	a.commandContainer = instance.ContainerID
+	if instance.ContainerID != "new-container" {
+		return fmt.Errorf("stale container used for command")
+	}
 	return nil
 }
 
@@ -189,6 +232,38 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
 	if remove.Code != stdhttp.StatusOK {
 		t.Fatalf("expected delete 200, got %d: %s", remove.Code, remove.Body.String())
+	}
+}
+
+func TestRunningServerCommandAndLogsRecreateMissingRuntimeContainer(t *testing.T) {
+	adapter := &staleContainerAdapter{}
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("stale-runtime", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "old-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	command := httptest.NewRecorder()
+	router.ServeHTTP(command, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/command", bytes.NewBufferString(`{"command":"say hello"}`)))
+	if command.Code != stdhttp.StatusOK {
+		t.Fatalf("expected command to recover stale runtime container, got %d: %s", command.Code, command.Body.String())
+	}
+	if adapter.commandContainer != "new-container" || adapter.startedContainer != "new-container" {
+		t.Fatalf("expected command path to use restarted container, got command=%q started=%q", adapter.commandContainer, adapter.startedContainer)
+	}
+
+	logs := httptest.NewRecorder()
+	router.ServeHTTP(logs, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/logs", nil))
+	if logs.Code != stdhttp.StatusOK {
+		t.Fatalf("expected logs to recover stale runtime container, got %d: %s", logs.Code, logs.Body.String())
+	}
+	if adapter.logsContainer != "new-container" {
+		t.Fatalf("expected logs path to use recreated container, got %q", adapter.logsContainer)
+	}
+	if adapter.created != 1 {
+		t.Fatalf("expected a single runtime container recreation, got %d", adapter.created)
 	}
 }
 
