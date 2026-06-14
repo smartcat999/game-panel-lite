@@ -1,11 +1,12 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { assignMod, assignWorld, createServer } from "./api";
+import { assignMod, assignWorld, createServer, migrateWorld } from "./api";
 import type { Server, World } from "./types";
 
 type CreateMode = "vanilla" | "tmodloader";
 
 type CreateServerWithWorldDeps = {
   createServer: typeof createServer;
+  migrateWorld: typeof migrateWorld;
   assignWorld: typeof assignWorld;
   assignMod: typeof assignMod;
 };
@@ -27,6 +28,7 @@ export type CreatedServerWithWorld = {
 const defaultDeps: CreateServerWithWorldDeps = {
   assignWorld,
   createServer,
+  migrateWorld,
   assignMod
 };
 
@@ -47,7 +49,8 @@ export async function createTerrariaServerWithWorld({
 
   let assignedWorld: World | undefined;
   if (worldId) {
-    assignedWorld = await deps.assignWorld(worldId, server.id);
+    const copiedWorld = await deps.migrateWorld(worldId, server.id);
+    assignedWorld = await deps.assignWorld(copiedWorld.id, server.id);
     server = {
       ...server,
       config: {

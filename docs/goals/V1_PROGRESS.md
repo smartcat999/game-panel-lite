@@ -1285,6 +1285,18 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: passed.
 - `pnpm typecheck`: passed.
 
+## V1 Create Wizard Imported World Copy Update
+
+Status: Completed
+
+Completed:
+- Fixed the create-server wizard flow for selected imported worlds.
+- The wizard now copies the selected world into the newly created server instance before assigning it as the current world.
+- Added frontend coverage proving the flow calls world migration before assignment and keeps the returned server snapshot aligned with the assigned world.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test -- create-server-flow.test.ts`: failed first because the flow assigned the original world directly, then passed after adding the copy-before-assign step.
+
 ## V1 Create Wizard Uploaded World Assignment Update
 
 Status: Completed
