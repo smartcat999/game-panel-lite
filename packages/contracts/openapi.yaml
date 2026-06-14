@@ -149,6 +149,16 @@ paths:
       responses:
         "200":
           description: SSE log stream
+  /api/servers/{id}/stats:
+    get:
+      summary: Read runtime CPU and memory stats for a running server
+      responses:
+        "200":
+          description: Runtime stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerStats"
   /api/servers/{id}/mods:
     get:
       summary: List tModLoader mods
@@ -162,11 +172,50 @@ paths:
         "201":
           description: Uploaded mod file
   /api/servers/{id}/mods/{modId}:
+    patch:
+      summary: Enable or disable a tModLoader mod
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated mod state
     delete:
       summary: Delete tModLoader mod file
       responses:
         "200":
           description: Deleted mod
+  /api/mods:
+    get:
+      summary: List unassigned global mod library files
+      responses:
+        "200":
+          description: Global mod library
+  /api/mods/upload:
+    post:
+      summary: Upload a mod to the global mod library
+      responses:
+        "201":
+          description: Uploaded global mod
+  /api/mods/{id}/assign:
+    post:
+      summary: Copy a global mod library item to a tModLoader server
+      responses:
+        "201":
+          description: Assigned mod
+  /api/mods/{id}:
+    delete:
+      summary: Delete an unassigned global mod library item
+      responses:
+        "200":
+          description: Deleted global mod
   /api/worlds:
     get:
       summary: List worlds
@@ -251,6 +300,12 @@ paths:
       responses:
         "200":
           description: Presets
+  /api/terraria/versions:
+    get:
+      summary: List supported provider versions
+      responses:
+        "200":
+          description: Version lists keyed by provider
   /api/terraria/config/preview:
     post:
       summary: Render serverconfig.txt preview
@@ -320,6 +375,16 @@ components:
         createdAt:
           type: string
           format: date-time
+    ServerStats:
+      type: object
+      required: [cpuPercent, memoryMb, memoryLimitMb]
+      properties:
+        cpuPercent:
+          type: number
+        memoryMb:
+          type: number
+        memoryLimitMb:
+          type: number
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, language, autoCreateWorld]

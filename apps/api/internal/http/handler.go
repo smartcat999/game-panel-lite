@@ -285,7 +285,21 @@ func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, worlds)
+	svc := worldsvc.NewService(h.cfg.DataDir)
+	visible := make([]domain.World, 0, len(worlds))
+	for _, world := range worlds {
+		path, err := svc.Path(world.InstanceID, world.FileName)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			h.logger.Warn("world file missing, pruning orphaned record", "worldId", world.ID, "path", path)
+			_ = h.store.DeleteWorld(r.Context(), world.ID)
+			continue
+		}
+		visible = append(visible, world)
+	}
+	writeJSON(w, http.StatusOK, visible)
 }
 
 func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
@@ -322,6 +336,10 @@ func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
 	path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := os.Stat(path); err != nil {
+		writeError(w, http.StatusNotFound, "world file not found on disk")
 		return
 	}
 	http.ServeFile(w, r, path)
@@ -434,7 +452,7 @@ func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	migrated := domain.World{ID: uuid.NewString(), InstanceID: payload.InstanceID, Name: payload.Name, FileName: payload.FileName, SizeBytes: size, ActiveInstanceID: payload.InstanceID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	migrated := domain.World{ID: uuid.NewString(), InstanceID: payload.InstanceID, Name: payload.Name, FileName: payload.FileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := h.store.CreateWorld(r.Context(), &migrated); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -605,7 +623,7 @@ func (h *Handler) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

@@ -62,6 +62,21 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 	return router, db, cfg
 }
 
+func TestCorsAllowsPatchPreflight(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	request := httptest.NewRequest(stdhttp.MethodOptions, "/api/servers/server-1/mods/mod-1", nil)
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != stdhttp.StatusNoContent {
+		t.Fatalf("expected CORS preflight 204, got %d", recorder.Code)
+	}
+	if methods := recorder.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(methods, "PATCH") {
+		t.Fatalf("expected PATCH in allowed methods, got %q", methods)
+	}
+}
+
 type inspectStatusAdapter struct {
 	status domain.ServerStatus
 }
@@ -602,6 +617,47 @@ func TestWorldImportListDownloadDuplicateAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	world := domain.World{
+		ID:         "missing-world",
+		InstanceID: "unassigned",
+		Name:       "Missing",
+		FileName:   "missing.wld",
+		SizeBytes:  5,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	download := httptest.NewRecorder()
+	router.ServeHTTP(download, httptest.NewRequest(stdhttp.MethodGet, "/api/worlds/missing-world/download", nil))
+	if download.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing world download 404, got %d: %s", download.Code, download.Body.String())
+	}
+	if !strings.Contains(download.Body.String(), "world file not found on disk") {
+		t.Fatalf("expected JSON missing file error, got %q", download.Body.String())
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/worlds", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected world list 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var worlds []domain.World
+	if err := json.Unmarshal(list.Body.Bytes(), &worlds); err != nil {
+		t.Fatal(err)
+	}
+	if len(worlds) != 0 {
+		t.Fatalf("expected missing world record to be pruned, got %+v", worlds)
+	}
+	if _, err := db.GetWorld(context.Background(), world.ID); err == nil {
+		t.Fatal("expected missing world record deleted")
+	}
+}
+
 func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("world-target", cfg.DataDir)
@@ -873,8 +929,15 @@ func TestMigrateWorldEndpointCopiesToTargetServer(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &migrated); err != nil {
 		t.Fatal(err)
 	}
-	if migrated.InstanceID != "target" || migrated.ActiveInstanceID != "target" {
-		t.Fatalf("expected migrated world target, got %+v", migrated)
+	if migrated.InstanceID != "target" || migrated.ActiveInstanceID != "" {
+		t.Fatalf("expected migrated world to be copied to target without activating it, got %+v", migrated)
+	}
+	storedTarget, err := db.GetServer(context.Background(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedTarget.WorldName != target.WorldName {
+		t.Fatalf("expected world migration to leave target server current world unchanged, got %q", storedTarget.WorldName)
 	}
 	got, err := os.ReadFile(filepath.Join(cfg.DataDir, "worlds", "target", "journey.wld"))
 	if err != nil {

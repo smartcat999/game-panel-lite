@@ -1250,6 +1250,27 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Resource Workflow Contract Hardening Update
+
+Status: Completed
+
+Completed:
+- Fixed world migration semantics so migrating a world copies it to the target server without silently making it the current world.
+- Added backend coverage proving world migration leaves the target server's current world unchanged.
+- Added JSON 404 handling for missing world downloads.
+- Pruned orphaned world records from the world list when the underlying `.wld` file no longer exists.
+- Added CORS preflight coverage for `PATCH`, ensuring browser-based Mod enable/disable requests work across the web/API ports.
+- Updated the OpenAPI contract for server stats, Mod enable/disable, global Mod library endpoints, and provider version lists.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
 ## V1 Create Wizard Uploaded World Assignment Update
 
 Status: Completed
