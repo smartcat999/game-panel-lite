@@ -258,6 +258,7 @@ Status: Completed
 
 Completed:
 - Wired Dashboard quick actions to real navigation for server creation, world import, and backup management.
+
 - Added real Servers page search and filter behavior.
 - Wired Worlds page import, duplicate, download, and delete actions to existing API endpoints.
 - Wired Backups page server selection, create, restore, download, and delete actions to existing API endpoints.
@@ -276,6 +277,55 @@ Checks:
 - `pnpm test`: passed
 - `pnpm build`: passed after stopping an old Next dev process that was concurrently writing `.next`.
 - Browser smoke: Dashboard, Servers, Worlds, Backups, and Mods rendered with dark styles loaded; Servers status filter interaction passed.
+
+## Post-V1 Server Detail Completion Update
+
+Status: Completed
+
+Completed:
+- Rebuilt the server detail page as a real tabbed workspace instead of static tab labels.
+- Added current-server Overview, Console, Logs, Config, Worlds, Backups, and tModLoader Mods tabs.
+- Connected Console command sending to the backend command API and kept SSE logs visible in Console/Logs.
+- Connected Config to the stored Terraria config and `serverconfig.txt` preview API.
+- Connected Worlds tab to import `.wld` files for the current server and download existing worlds.
+- Connected Backups tab to create current-server backups, download backups, and restore with confirmation.
+- Connected Mods tab to upload supported tModLoader files and delete mod files with confirmation.
+- Preserved backend-returned Terraria config in frontend server mapping instead of dropping it.
+- Disabled frontend TypeScript incremental build cache to avoid stale `.next/types` failures after local dev/e2e/build switching.
+- Added Playwright coverage for the detail page tab interactions and key actions.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm e2e`: passed
+- `pnpm build`: passed
+- `go test ./...`: passed
+- `go vet ./...`: passed
+
+Known issues:
+- Manual runtime verification with a real Terraria container and live player join flow is still needed.
+
+## Post-V1 Activity Events Update
+
+Status: Completed
+
+Completed:
+- Added backend activity storage methods and `GET /api/activity`.
+- Recorded activity events for server lifecycle, world import/assign/duplicate/migrate/delete, backup create/restore/migrate/delete, and mod upload/delete actions.
+- Wired Dashboard recent activity to real API data.
+- Rebuilt the Activity page as a real event list with loading, empty, and API error states.
+- Updated OpenAPI with the activity endpoint and `ActivityEvent` schema.
+- Removed the unused frontend mock data file so new UI work cannot accidentally reintroduce mock server/world/backup/activity data.
+
+Checks:
+- `gofmt -w apps/api/internal/store/store.go apps/api/internal/http/handler.go apps/api/internal/http/handler_test.go`: passed
+- `go test ./...`: passed
+- `go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm build`: passed
+- `pnpm e2e`: passed
 
 ## Post-V1 Docker Host Selection Update
 
@@ -487,6 +537,27 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
 - `pnpm build`: passed
+
+## Post-V1 Server Detail Tabs Layout Update
+
+Status: Completed
+
+Completed:
+- Fixed the server detail tab bar so active/focused tab styling is not clipped by the horizontal scroll container.
+- Added safe top/bottom padding around the tab rail.
+- Changed the focus ring to render inset and added an explicit active border/shadow, so Chinese tab labels display fully without visual cropping.
+
+Known issues:
+- The tab rail still scrolls horizontally on narrow widths by design; this keeps all V1 tabs accessible without wrapping into multiple rows.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm build`: passed after clearing stale `.next` build output from a previous dev/build conflict.
 
 ## Post-V1 Server Game Art Update
 

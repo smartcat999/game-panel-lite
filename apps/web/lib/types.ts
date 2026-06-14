@@ -1,3 +1,5 @@
+import type { TerrariaConfig } from "@gamepanel-lite/shared";
+
 export type ServerStatus = "running" | "stopped" | "errored";
 export type ServerMode = "vanilla" | "tmodloader";
 
@@ -15,6 +17,7 @@ export type Server = {
   password: string;
   cpu: string;
   memory: string;
+  config: TerrariaConfig;
 };
 
 export type World = {
@@ -44,5 +47,13 @@ export type ModFile = {
   fileName: string;
   size: string;
   enabled: boolean;
+  created: string;
+};
+
+export type ActivityEvent = {
+  id: string;
+  instanceId?: string;
+  type: string;
+  message: string;
   created: string;
 };

@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { Backup, ModFile, Server, World } from "./types";
+import type { ActivityEvent, Backup, ModFile, Server, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -57,6 +57,7 @@ type ApiServer = {
   port: number;
   maxPlayers: number;
   password?: string;
+  config?: TerrariaConfig;
 };
 
 type ApiWorld = {
@@ -89,6 +90,14 @@ type ApiModFile = {
   createdAt: string;
 };
 
+type ApiActivityEvent = {
+  id: string;
+  instanceId?: string;
+  type: string;
+  message: string;
+  createdAt: string;
+};
+
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) {
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -113,35 +122,25 @@ function formatRelative(value?: string) {
   return `${Math.floor(hours / 24)} d ago`;
 }
 
-export async function listServers(): Promise<Server[]> {
-  const response = await fetch(`${API_BASE}/api/servers`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Unable to load servers");
-  }
-  const payload = (await response.json()) as ApiServer[];
-  return payload.map((server) => ({
-    id: server.id,
-    name: server.name,
-    mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
-    status: server.status === "running" ? "running" : server.status === "errored" ? "errored" : "stopped",
-    world: server.worldName,
-    players: 0,
-    maxPlayers: server.maxPlayers,
-    port: server.port,
-    version: "1.4.4.9",
-    lastBackup: "Not yet",
-    password: server.password ?? "",
-    cpu: "0%",
-    memory: "0 MB"
-  }));
+function configFromServer(server: ApiServer): TerrariaConfig {
+  return {
+    serverName: server.config?.serverName ?? server.name,
+    worldName: server.config?.worldName ?? server.worldName,
+    worldSize: server.config?.worldSize ?? "medium",
+    difficulty: server.config?.difficulty ?? "classic",
+    maxPlayers: server.config?.maxPlayers ?? server.maxPlayers,
+    port: server.config?.port ?? server.port,
+    password: server.config?.password ?? server.password ?? "",
+    motd: server.config?.motd ?? "",
+    seed: server.config?.seed ?? "",
+    secure: server.config?.secure ?? true,
+    language: server.config?.language ?? "en-US",
+    autoCreateWorld: server.config?.autoCreateWorld ?? true
+  };
 }
 
-export async function getServer(id: string): Promise<Server> {
-  const response = await fetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Unable to load server");
-  }
-  const server = (await response.json()) as ApiServer;
+function toServer(server: ApiServer): Server {
+  const config = configFromServer(server);
   return {
     id: server.id,
     name: server.name,
@@ -155,8 +154,27 @@ export async function getServer(id: string): Promise<Server> {
     lastBackup: "Not yet",
     password: server.password ?? "",
     cpu: "0%",
-    memory: "0 MB"
+    memory: "0 MB",
+    config
   };
+}
+
+export async function listServers(): Promise<Server[]> {
+  const response = await fetch(`${API_BASE}/api/servers`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load servers");
+  }
+  const payload = (await response.json()) as ApiServer[];
+  return payload.map(toServer);
+}
+
+export async function getServer(id: string): Promise<Server> {
+  const response = await fetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load server");
+  }
+  const server = (await response.json()) as ApiServer;
+  return toServer(server);
 }
 
 export async function getDockerStatus(): Promise<DockerStatus> {
@@ -255,21 +273,7 @@ export async function createServer(input: {
     throw new Error(payload.error ?? "Unable to create server");
   }
   const server = (await response.json()) as ApiServer;
-  return {
-    id: server.id,
-    name: server.name,
-    mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
-    status: server.status === "running" ? "running" : server.status === "errored" ? "errored" : "stopped",
-    world: server.worldName,
-    players: 0,
-    maxPlayers: server.maxPlayers,
-    port: server.port,
-    version: "1.4.4.9",
-    lastBackup: "Not yet",
-    password: server.password ?? "",
-    cpu: "0%",
-    memory: "0 MB"
-  };
+  return toServer(server);
 }
 
 export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete") {
@@ -509,4 +513,19 @@ export async function deleteMod(serverId: string, modId: string) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete mod");
   }
+}
+
+export async function listActivity(): Promise<ActivityEvent[]> {
+  const response = await fetch(`${API_BASE}/api/activity`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load activity");
+  }
+  const payload = (await response.json()) as ApiActivityEvent[];
+  return payload.map((event) => ({
+    id: event.id,
+    instanceId: event.instanceId,
+    type: event.type,
+    message: event.message,
+    created: formatRelative(event.createdAt)
+  }));
 }

@@ -140,6 +140,22 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 		t.Fatalf("expected SSE log event, got %q", got)
 	}
 
+	activity := httptest.NewRecorder()
+	router.ServeHTTP(activity, httptest.NewRequest(stdhttp.MethodGet, "/api/activity", nil))
+	if activity.Code != stdhttp.StatusOK {
+		t.Fatalf("expected activity 200, got %d: %s", activity.Code, activity.Body.String())
+	}
+	var events []domain.ActivityEvent
+	if err := json.Unmarshal(activity.Body.Bytes(), &events); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected lifecycle actions to create activity events")
+	}
+	if events[0].Type == "" || events[0].Message == "" {
+		t.Fatalf("expected populated activity event, got %+v", events[0])
+	}
+
 	remove := httptest.NewRecorder()
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
 	if remove.Code != stdhttp.StatusOK {

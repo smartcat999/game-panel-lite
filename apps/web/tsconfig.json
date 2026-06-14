@@ -3,7 +3,7 @@
   "compilerOptions": {
     "allowJs": false,
     "jsx": "preserve",
-    "incremental": true,
+    "incremental": false,
     "plugins": [
       {
         "name": "next"

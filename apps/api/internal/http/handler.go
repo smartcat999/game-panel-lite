@@ -65,6 +65,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/runtime/docker/host", h.applyDockerHost)
 	r.Get("/api/settings", h.getSettings)
 	r.Put("/api/settings", h.updateSettings)
+	r.Get("/api/activity", h.listActivity)
 	r.Get("/api/servers", h.listServers)
 	r.Post("/api/servers", h.createServer)
 	r.Get("/api/servers/{id}", h.getServer)
@@ -134,6 +135,7 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "mod.uploaded", fmt.Sprintf("Uploaded mod %s to %s", item.FileName, server.Name))
 	writeJSON(w, http.StatusCreated, item)
 }
 
@@ -146,6 +148,7 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	_ = os.Remove(path)
 	_ = h.store.DeleteMod(r.Context(), item.ID)
+	h.recordActivity(r.Context(), item.InstanceID, "mod.deleted", fmt.Sprintf("Deleted mod %s", item.FileName))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -179,6 +182,7 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), instanceID, "world.imported", fmt.Sprintf("Imported world %s", item.Name))
 	writeJSON(w, http.StatusCreated, item)
 }
 
@@ -219,6 +223,7 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), payload.InstanceID, "world.assigned", fmt.Sprintf("Assigned world %s", item.Name))
 	writeJSON(w, http.StatusOK, item)
 }
 
@@ -249,6 +254,7 @@ func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.duplicated", fmt.Sprintf("Duplicated world %s", item.Name))
 	writeJSON(w, http.StatusCreated, copy)
 }
 
@@ -287,6 +293,7 @@ func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), payload.InstanceID, "world.migrated", fmt.Sprintf("Migrated world %s", migrated.Name))
 	writeJSON(w, http.StatusCreated, migrated)
 }
 
@@ -299,6 +306,7 @@ func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 	path, _ := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	_ = os.Remove(path)
 	_ = h.store.DeleteWorld(r.Context(), item.ID)
+	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.deleted", fmt.Sprintf("Deleted world %s", item.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -327,6 +335,7 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "backup.created", fmt.Sprintf("Created backup %s for %s", item.FileName, server.Name))
 	writeJSON(w, http.StatusCreated, item)
 }
 
@@ -363,6 +372,7 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "backup.restored", fmt.Sprintf("Restored backup %s for %s", item.FileName, server.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "restored", "backupId": item.ID})
 }
 
@@ -398,6 +408,7 @@ func (h *Handler) migrateBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), payload.InstanceID, "backup.migrated", fmt.Sprintf("Migrated backup %s", migrated.FileName))
 	writeJSON(w, http.StatusCreated, migrated)
 }
 
@@ -410,6 +421,7 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 	path, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	_ = os.Remove(path)
 	_ = h.store.DeleteBackup(r.Context(), item.ID)
+	h.recordActivity(r.Context(), item.InstanceID, "backup.deleted", fmt.Sprintf("Deleted backup %s", item.FileName))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -521,6 +533,15 @@ func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, servers)
 }
 
+func (h *Handler) listActivity(w http.ResponseWriter, r *http.Request) {
+	events, err := h.store.ListActivity(r.Context(), 50)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
+}
+
 func (h *Handler) getServer(w http.ResponseWriter, r *http.Request) {
 	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -572,6 +593,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "server.created", fmt.Sprintf("Created server %s", server.Name))
 	writeJSON(w, http.StatusCreated, server)
 }
 
@@ -591,6 +613,7 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "server.started", fmt.Sprintf("Started server %s", server.Name))
 	writeJSON(w, http.StatusOK, server)
 }
 
@@ -614,6 +637,7 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "server.restarted", fmt.Sprintf("Restarted server %s", server.Name))
 	writeJSON(w, http.StatusOK, server)
 }
 
@@ -668,6 +692,13 @@ func (h *Handler) transitionServer(w http.ResponseWriter, r *http.Request, statu
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	activityType := "server.updated"
+	message := fmt.Sprintf("Updated server %s", server.Name)
+	if status == domain.StatusStopped {
+		activityType = "server.stopped"
+		message = fmt.Sprintf("Stopped server %s", server.Name)
+	}
+	h.recordActivity(r.Context(), server.ID, activityType, message)
 	writeJSON(w, http.StatusOK, server)
 }
 
@@ -734,7 +765,21 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.recordActivity(r.Context(), server.ID, "server.deleted", fmt.Sprintf("Deleted server %s", server.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) recordActivity(ctx context.Context, instanceID, eventType, message string) {
+	event := domain.ActivityEvent{
+		ID:         uuid.NewString(),
+		InstanceID: instanceID,
+		Type:       eventType,
+		Message:    message,
+		CreatedAt:  time.Now(),
+	}
+	if err := h.store.CreateActivity(ctx, &event); err != nil {
+		h.logger.Warn("failed to record activity", "error", err, "type", eventType)
+	}
 }
 
 func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {

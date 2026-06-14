@@ -125,4 +125,16 @@ func (s *Store) DeleteMod(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.ModFile{}, "id = ?", id).Error
 }
 
+func (s *Store) CreateActivity(ctx context.Context, event *domain.ActivityEvent) error {
+	return s.db.WithContext(ctx).Create(event).Error
+}
+
+func (s *Store) ListActivity(ctx context.Context, limit int) ([]domain.ActivityEvent, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	var events []domain.ActivityEvent
+	return events, s.db.WithContext(ctx).Order("created_at desc").Limit(limit).Find(&events).Error
+}
+
 var ErrNotFound = errors.New("not found")

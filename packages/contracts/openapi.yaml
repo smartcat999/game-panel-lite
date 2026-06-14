@@ -54,6 +54,18 @@ paths:
       responses:
         "200":
           description: Updated local settings
+  /api/activity:
+    get:
+      summary: List recent activity events
+      responses:
+        "200":
+          description: Recent activity events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
   /api/servers:
     get:
       summary: List servers
@@ -275,6 +287,21 @@ components:
           type: string
         dockerHost:
           type: string
+    ActivityEvent:
+      type: object
+      required: [id, type, message, createdAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        type:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, difficulty, maxPlayers, port, secure, language, autoCreateWorld]

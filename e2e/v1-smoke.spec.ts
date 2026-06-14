@@ -10,7 +10,21 @@ async function mockApi(page: Page) {
       worldName: "E2E World",
       port: 17785,
       maxPlayers: 8,
-      password: "secret"
+      password: "secret",
+      config: {
+        serverName: "E2E Terraria",
+        worldName: "E2E World",
+        worldSize: "medium",
+        difficulty: "classic",
+        maxPlayers: 8,
+        port: 17785,
+        password: "secret",
+        motd: "E2E ready",
+        seed: "",
+        secure: true,
+        language: "en-US",
+        autoCreateWorld: true
+      }
     },
     {
       id: "server-target",
@@ -19,7 +33,21 @@ async function mockApi(page: Page) {
       status: "stopped",
       worldName: "Target World",
       port: 17786,
-      maxPlayers: 8
+      maxPlayers: 8,
+      config: {
+        serverName: "Target Terraria",
+        worldName: "Target World",
+        worldSize: "medium",
+        difficulty: "classic",
+        maxPlayers: 8,
+        port: 17786,
+        password: "",
+        motd: "",
+        seed: "",
+        secure: true,
+        language: "en-US",
+        autoCreateWorld: true
+      }
     }
   ];
 
@@ -60,6 +88,21 @@ async function mockApi(page: Page) {
     });
   });
 
+  await page.route("**/api/activity", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "activity-e2e",
+          instanceId: "server-e2e",
+          type: "server.started",
+          message: "Started server E2E Terraria",
+          createdAt: "2026-06-14T09:00:00.000Z"
+        }
+      ])
+    });
+  });
+
   await page.route("**/api/servers/server-e2e/logs", async (route) => {
     await route.fulfill({
       contentType: "text/event-stream",
@@ -87,6 +130,13 @@ async function mockApi(page: Page) {
           createdAt: "2026-06-14T09:00:00.000Z"
         }
       ])
+    });
+  });
+
+  await page.route("**/api/servers/server-e2e/mods/mod-e2e", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ status: "deleted" })
     });
   });
 
@@ -283,11 +333,12 @@ test("server detail and management flows expose live V1 actions", async ({ page,
   await page.goto("/servers/server-e2e");
 
   await expect(page.getByRole("heading", { name: "E2E Terraria" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "概览" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "加入服务器" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "控制台" }).click();
   await expect(page.getByText("Listening on port 17785")).toBeVisible();
   await expect(page.getByText("Server started")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "最近世界" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "最近备份" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "最近模组" })).toBeVisible();
 
   await page.getByRole("button", { name: "复制邀请文本" }).click();
   await expect(page.getByRole("button", { name: "已复制" })).toBeVisible();
@@ -298,6 +349,31 @@ test("server detail and management flows expose live V1 actions", async ({ page,
   await page.getByRole("button", { name: "发送" }).click();
   await commandRequest;
   await expect(page.getByText("> say hello")).toBeVisible();
+
+  await page.getByRole("tab", { name: "配置" }).click();
+  await expect(page.getByText("Preview serverconfig.txt")).not.toBeVisible();
+  await expect(page.getByText("world=E2E World")).toBeVisible();
+
+  await page.getByRole("tab", { name: "世界" }).click();
+  await expect(page.getByRole("heading", { name: "当前服务器世界" })).toBeVisible();
+  await expect(page.getByText("E2E World").first()).toBeVisible();
+
+  await page.getByRole("tab", { name: "备份" }).click();
+  await expect(page.getByRole("heading", { name: "当前服务器备份" })).toBeVisible();
+  const detailBackup = page.waitForRequest((request) => request.method() === "POST" && request.url().includes("/api/servers/server-e2e/backups"));
+  await page.getByRole("button", { name: "创建当前备份" }).click();
+  await detailBackup;
+  await page.getByRole("button", { name: "恢复" }).click();
+  await expect(page.getByRole("dialog", { name: /恢复备份/ })).toBeVisible();
+  const detailRestore = page.waitForRequest((request) => request.method() === "POST" && request.url().includes("/api/backups/backup-e2e/restore"));
+  await page.getByRole("dialog").getByRole("button", { name: "恢复" }).click();
+  await detailRestore;
+
+  await page.getByRole("tab", { name: "模组" }).click();
+  await expect(page.getByRole("heading", { name: "当前服务器模组" })).toBeVisible();
+  await expect(page.getByText("enabled.json")).toBeVisible();
+  await page.getByRole("button", { name: "删除" }).click();
+  await expect(page.getByRole("dialog", { name: /删除模组文件/ })).toBeVisible();
 
   await page.goto("/worlds");
   await expect(page.getByRole("heading", { name: "世界" })).toBeVisible();
