@@ -9,14 +9,15 @@ import { ServerCard } from "@/components/server-card";
 import { Button, Card } from "@/components/ui";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { formatBytes, listActivity, listBackups, listServers } from "@/lib/api";
+import { attachLatestBackupTimes } from "@/lib/server-metrics";
 
 export default function DashboardPage() {
   const { locale, t } = useI18n();
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const activityQuery = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
-  const servers = serversQuery.data ?? [];
   const backups = backupsQuery.data ?? [];
+  const servers = attachLatestBackupTimes(serversQuery.data ?? [], backups);
   const activity = activityQuery.data ?? [];
   const running = servers.filter((server) => server.status === "running");
   const players = servers.reduce((sum, server) => sum + server.players, 0);

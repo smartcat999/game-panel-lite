@@ -40,6 +40,7 @@ export type Backup = {
   size: string;
   sizeBytes: number;
   created: string;
+  createdAt: string;
 };
 
 export type ModFile = {

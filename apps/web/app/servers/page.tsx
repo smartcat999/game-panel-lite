@@ -6,8 +6,9 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Input } from "@/components/ui";
-import { listServers } from "@/lib/api";
+import { listBackups, listServers } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { attachLatestBackupTimes } from "@/lib/server-metrics";
 import { cn } from "@/lib/utils";
 
 const filters = [
@@ -21,10 +22,11 @@ type Filter = (typeof filters)[number]["key"];
 
 export default function ServersPage() {
   const query = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
+  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const { t } = useI18n();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  const servers = query.data ?? [];
+  const servers = useMemo(() => attachLatestBackupTimes(query.data ?? [], backupsQuery.data ?? []), [backupsQuery.data, query.data]);
   useEffect(() => {
     setSearch(new URLSearchParams(window.location.search).get("search") ?? "");
   }, []);
@@ -60,7 +62,7 @@ export default function ServersPage() {
           </Button>
         ))}
       </div>
-      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiServersUnavailable")}</p>}
+      {(query.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{query.isError ? t("apiServersUnavailable") : t("apiBackupsUnavailable")}</p>}
       <div className="grid gap-4 xl:grid-cols-2">
         {filteredServers.map((server) => <ServerCard key={server.id} server={server} />)}
       </div>

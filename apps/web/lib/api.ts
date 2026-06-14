@@ -448,7 +448,8 @@ export async function listBackups(): Promise<Backup[]> {
     type: backup.type,
     size: formatBytes(backup.sizeBytes),
     sizeBytes: backup.sizeBytes,
-    created: formatRelative(backup.createdAt)
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
   }));
 }
 
@@ -468,7 +469,8 @@ export async function createBackup(serverId: string): Promise<Backup> {
     type: backup.type,
     size: formatBytes(backup.sizeBytes),
     sizeBytes: backup.sizeBytes,
-    created: formatRelative(backup.createdAt)
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
   };
 }
 
@@ -500,7 +502,8 @@ export async function migrateBackup(id: string, instanceId: string): Promise<Bac
     type: backup.type,
     size: formatBytes(backup.sizeBytes),
     sizeBytes: backup.sizeBytes,
-    created: formatRelative(backup.createdAt)
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
   };
 }
 

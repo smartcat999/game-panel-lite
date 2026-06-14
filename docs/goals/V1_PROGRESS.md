@@ -1082,3 +1082,23 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Server Card Backup Accuracy Update
+
+Status: Completed
+
+Completed:
+- Preserved raw backup creation timestamps in the frontend API mapper.
+- Added a shared server metrics helper that attaches the newest backup time to each server card from real Backup API data.
+- Added unit coverage proving the newest backup is selected by timestamp, not by implicit API order.
+- Servers page now loads backups and shows real last-backup information on each server card.
+- Dashboard active-server cards now use the same backup-enriched server data as the Servers page.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test`: failed first because the helper was missing, then failed again when it relied on implicit backup order, then passed after comparing `createdAt`.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
