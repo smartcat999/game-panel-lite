@@ -28,7 +28,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [createPending, setCreatePending] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const searchRef = useRef<HTMLFormElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
   const serviceAvailable = apiHealth.data?.status === "ok";
@@ -43,6 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setCreatePending(false);
+    setProfileOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -54,6 +57,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     const handlePointerDown = (event: PointerEvent) => {
       if (!searchRef.current?.contains(event.target as Node)) {
         setSearchOpen(false);
+      }
+      if (!profileRef.current?.contains(event.target as Node)) {
+        setProfileOpen(false);
       }
     };
     window.addEventListener("pointerdown", handlePointerDown);
@@ -216,19 +222,43 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {createPending ? t("openingCreateServer") : t("createServer")}
                 </Button>
               </Link>
-              <button
-                type="button"
-                aria-label={t("userProfile")}
-                className="hidden size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-panel-line bg-slate-950/70 p-0.5 shadow-[0_0_0_1px_rgba(123,217,120,0.08)] transition hover:border-panel-green md:flex"
-              >
-                <Image
-                  src="/images/user-avatar.svg"
-                  alt={t("userAvatarAlt")}
-                  width={80}
-                  height={80}
-                  className="size-full rounded-full object-cover"
-                />
-              </button>
+              <div ref={profileRef} className="relative hidden md:block">
+                <button
+                  type="button"
+                  aria-expanded={profileOpen}
+                  aria-label={t("userProfile")}
+                  className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-panel-line bg-slate-950/70 p-0.5 shadow-[0_0_0_1px_rgba(123,217,120,0.08)] transition hover:border-panel-green focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                  onClick={() => setProfileOpen((value) => !value)}
+                >
+                  <Image
+                    src="/images/user-avatar.svg"
+                    alt={t("userAvatarAlt")}
+                    width={80}
+                    height={80}
+                    className="size-full rounded-full object-cover"
+                  />
+                </button>
+                {profileOpen && (
+                  <div className="absolute right-0 top-12 z-30 w-56 rounded-lg border border-panel-line bg-panel-card p-3 shadow-[0_12px_32px_rgba(0,0,0,0.32)]">
+                    <div className="flex items-center gap-3">
+                      <Image
+                        src="/images/user-avatar.svg"
+                        alt={t("userAvatarAlt")}
+                        width={80}
+                        height={80}
+                        className="size-10 rounded-full border border-panel-line bg-slate-950"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-white">{t("localUser")}</p>
+                        <p className="text-xs text-slate-500">{t("localProfileDescription")}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
+                      GamePanel Lite v1.0.0
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>

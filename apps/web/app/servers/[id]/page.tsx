@@ -69,7 +69,7 @@ export default function ServerDetailPage() {
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
-  const [logStatus, setLogStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [configSaved, setConfigSaved] = useState(false);
   const successTimerRef = useRef<number | null>(null);
 
@@ -196,6 +196,11 @@ export default function ServerDetailPage() {
 
   useEffect(() => {
     if (!id || (activeTab !== "console" && activeTab !== "logs")) return;
+    if (server?.status !== "running") {
+      setLogStatus("idle");
+      setLogs([]);
+      return;
+    }
     if (logServerIdRef.current !== id) {
       logServerIdRef.current = id;
       setLogs([]);
@@ -216,7 +221,7 @@ export default function ServerDetailPage() {
     });
     source.onerror = () => setLogStatus("error");
     return () => source.close();
-  }, [activeTab, id]);
+  }, [activeTab, id, server?.status]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -252,7 +257,7 @@ export default function ServerDetailPage() {
     ...(server.mode === "tmodloader" ? [{ id: "mods" as const, label: t("tabMods") }] : [])
   ];
   const invite = `Join ${server.name} at 127.0.0.1:${server.port}${server.password ? ` password: ${server.password}` : ""}`;
-  const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : t("logsConnecting");
+  const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const copy = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -341,6 +346,7 @@ export default function ServerDetailPage() {
               worldCount={serverWorlds.length}
               backupCount={serverBackups.length}
               modCount={serverMods.length}
+              onSelectTab={setActiveTab}
             />
           )}
           {activeTab === "console" && (
@@ -524,19 +530,21 @@ function OverviewTab({
   server,
   worldCount,
   backupCount,
-  modCount
+  modCount,
+  onSelectTab
 }: {
   server: Server;
   worldCount: number;
   backupCount: number;
   modCount: number;
+  onSelectTab: (tab: TabId) => void;
 }) {
   const { t } = useI18n();
   return (
     <div className="grid gap-3 md:grid-cols-3">
-      <SummaryLink href="/worlds" icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} />
-      <SummaryLink href="/backups" icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} />
-      {server.mode === "tmodloader" && <SummaryLink href="/mods" icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} />}
+      <SummaryButton icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} onClick={() => onSelectTab("worlds")} />
+      <SummaryButton icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} onClick={() => onSelectTab("backups")} />
+      {server.mode === "tmodloader" && <SummaryButton icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} onClick={() => onSelectTab("mods")} />}
     </div>
   );
 }
@@ -556,7 +564,7 @@ function ConsoleTab({
   command: string;
   commandPending: boolean;
   consoleError: string;
-  logStatus: "connecting" | "connected" | "error";
+  logStatus: "idle" | "connecting" | "connected" | "error";
   logStatusLabel: string;
   logs: string[];
   server: Server;
@@ -593,7 +601,7 @@ function LogsTab({
   viewportRef,
   onClear
 }: {
-  logStatus: "connecting" | "connected" | "error";
+  logStatus: "idle" | "connecting" | "connected" | "error";
   logStatusLabel: string;
   logs: string[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
@@ -999,7 +1007,7 @@ function ResourcePanel({ title, href, action, children }: { title: string; href:
   );
 }
 
-function LogHeader({ logStatus, logStatusLabel, title }: { logStatus: "connecting" | "connected" | "error"; logStatusLabel: string; title: string }) {
+function LogHeader({ logStatus, logStatusLabel, title }: { logStatus: "idle" | "connecting" | "connected" | "error"; logStatusLabel: string; title: string }) {
   return (
     <div className="mb-3 flex min-w-0 flex-1 items-center justify-between rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs">
       <span className="text-slate-400">{title}</span>
@@ -1016,14 +1024,14 @@ function LogViewport({
 }: {
   className?: string;
   logs: string[];
-  logStatus: "connecting" | "connected" | "error";
+  logStatus: "idle" | "connecting" | "connected" | "error";
   viewportRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const { t } = useI18n();
   return (
     <div ref={viewportRef} className={cn("h-[420px] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-300", className)}>
       {logs.length === 0 ? (
-        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : t("logsWaiting")}</p>
+        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsRequiresRunning") : t("logsWaiting")}</p>
       ) : logs.map((line, index) => (
         <p key={`${index}-${line}`}>
           <span className={line.includes("[Warn]") || line.toLowerCase().includes("error") ? "text-panel-gold" : "text-panel-green"}>
@@ -1072,15 +1080,19 @@ function ActionButton({
   );
 }
 
-function SummaryLink({ href, icon, label, value }: { href: string; icon: ReactNode; label: string; value: string }) {
+function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label: string; onClick: () => void; value: string }) {
   return (
-    <Link href={href} className="rounded-md border border-panel-line bg-slate-950/50 p-4 transition hover:border-panel-green/50">
+    <button
+      type="button"
+      className="rounded-md border border-panel-line bg-slate-950/50 p-4 text-left transition hover:border-panel-green/50 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="text-slate-400">{label}</span>
         <span className="text-panel-green">{icon}</span>
       </div>
       <p className="mt-3 text-2xl font-semibold">{value}</p>
-    </Link>
+    </button>
   );
 }
 

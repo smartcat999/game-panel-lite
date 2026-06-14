@@ -1198,6 +1198,23 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Profile Menu Completion Update
+
+Status: Completed
+
+Completed:
+- Added a clickable top-right profile avatar menu instead of a decorative-only avatar.
+- Added outside-click dismissal and focus styling for the profile menu.
+- Added localized Chinese and English labels for the local profile content.
+
+Checks:
+- `pnpm typecheck`: failed first because the profile menu referenced missing i18n keys, then passed after adding localized messages.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
 ## V1 Active World Delete Guard Update
 
 Status: Completed
@@ -1209,6 +1226,24 @@ Completed:
 
 Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: failed first because active-world deletion returned 200, then passed after the guard was added.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Server Detail Interaction Completion Update
+
+Status: Completed
+
+Completed:
+- Changed the server detail overview resource tiles from global navigation links into in-page tab actions for the current server.
+- Kept server detail context intact when jumping from Overview to Worlds, Backups, or Mods.
+- Stopped opening the SSE log stream while a server is stopped; the Logs and Console panels now show a clear stopped-state message instead of surfacing Docker log errors.
+- Closed the top-right profile menu automatically when navigating between pages.
+
+Checks:
 - `pnpm typecheck`: passed.
 - `pnpm lint`: passed.
 - `pnpm test`: passed.
