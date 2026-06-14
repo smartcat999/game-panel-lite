@@ -38,6 +38,7 @@ export type Backup = {
   world: string;
   type: "Auto" | "Manual";
   size: string;
+  sizeBytes: number;
   created: string;
 };
 

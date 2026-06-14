@@ -1062,3 +1062,23 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Dashboard Metric Accuracy Update
+
+Status: Completed
+
+Completed:
+- Preserved raw backup byte counts in the frontend API mapper so dashboard aggregate metrics can use real data.
+- Added API mapper unit coverage proving backup `sizeBytes` is retained from the Go API response.
+- Changed the dashboard player capacity metric from a hardcoded `32` to the sum of configured server `maxPlayers`.
+- Changed dashboard storage usage from latest-backup size to total backup storage across all loaded backups.
+- Updated storage hint copy to show the number of backups represented by the metric.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test`: failed first as expected because `sizeBytes` was missing, then passed after the mapper fix.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

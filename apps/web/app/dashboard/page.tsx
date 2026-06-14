@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Card } from "@/components/ui";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { listActivity, listBackups, listServers } from "@/lib/api";
+import { formatBytes, listActivity, listBackups, listServers } from "@/lib/api";
 
 export default function DashboardPage() {
   const { locale, t } = useI18n();
@@ -20,6 +20,8 @@ export default function DashboardPage() {
   const activity = activityQuery.data ?? [];
   const running = servers.filter((server) => server.status === "running");
   const players = servers.reduce((sum, server) => sum + server.players, 0);
+  const playerCapacity = servers.reduce((sum, server) => sum + server.maxPlayers, 0);
+  const totalBackupBytes = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
   const latestBackup = backups[0];
   return (
     <AppShell>
@@ -27,9 +29,9 @@ export default function DashboardPage() {
       {(serversQuery.isError || backupsQuery.isError || activityQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiDataUnavailable")}</p>}
       <div className="grid gap-4 md:grid-cols-4">
         <Stat icon={<HardDrive />} label={t("runningServers")} value={`${running.length} / ${servers.length}`} hint={t("runningHint", { count: running.length })} />
-        <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players} / 32`} hint={t("playersOnlineHint", { count: players })} />
+        <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players} / ${playerCapacity}`} hint={t("playersOnlineHint", { count: players })} />
         <Stat icon={<Archive />} label={t("latestBackup")} value={latestBackup ? localizeRelativeTime(latestBackup.created, locale) : t("none")} hint={latestBackup?.world ?? t("none")} />
-        <Stat icon={<HardDrive />} label={t("storageUsed")} value={latestBackup?.size ?? "0 MB"} hint={t("storageHint")} />
+        <Stat icon={<HardDrive />} label={t("storageUsed")} value={formatBytes(totalBackupBytes)} hint={t("storageHint", { count: backups.length })} />
       </div>
       <section className="mt-6">
         <h2 className="mb-3 text-base font-semibold">{t("activeServers")}</h2>
