@@ -1871,3 +1871,23 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Missing Source Mutation Cleanup Update
+
+Status: Completed
+
+Completed:
+- World duplicate and migrate now prune the world record when the source `.wld` file is missing and return a clear 404 instead of leaking a low-level file-open error.
+- Backup restore and migrate now prune the backup record when the source archive is missing and return a clear 404.
+- This keeps stale cached resource rows from remaining actionable after any mutation path discovers the underlying file is gone.
+- Added backend HTTP coverage for missing world duplicate/migrate and missing backup restore/migrate cleanup.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(WorldSourceMutationsPruneMissingFiles|BackupSourceMutationsPruneMissingFiles)' -count=1`: failed first because missing source records remained or returned raw open errors, then passed after cleanup was implemented.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(WorldImportListDownloadDuplicateAndDeleteEndpoints|MigrateWorldEndpointCopiesToTargetServer|WorldSourceMutationsPruneMissingFiles|BackupCreateListDownloadRestoreAndDeleteEndpoints|RestoreBackupSynchronizesServerMetadataFromRestoredConfig|MigrateBackupEndpointCopiesToTargetServer|BackupSourceMutationsPruneMissingFiles)' -count=1`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

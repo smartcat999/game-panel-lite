@@ -660,6 +660,15 @@ func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {
 	if payload.Name == "" {
 		payload.Name = item.Name + " Copy"
 	}
+	missing, err := h.pruneMissingWorldSource(r.Context(), item)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if missing {
+		writeError(w, http.StatusNotFound, "world file not found on disk")
+		return
+	}
 	_, size, err := worldsvc.NewService(h.cfg.DataDir).Duplicate(item.InstanceID, item.FileName, payload.FileName)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -703,6 +712,15 @@ func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
 	if payload.Name == "" {
 		payload.Name = item.Name
 	}
+	missing, err := h.pruneMissingWorldSource(r.Context(), item)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if missing {
+		writeError(w, http.StatusNotFound, "world file not found on disk")
+		return
+	}
 	_, size, err := worldsvc.NewService(h.cfg.DataDir).Migrate(item.InstanceID, item.FileName, payload.InstanceID, payload.FileName)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -732,6 +750,21 @@ func (h *Handler) upsertWorldRecord(ctx context.Context, instanceID string, name
 	}
 	item := domain.World{ID: uuid.NewString(), InstanceID: instanceID, Name: name, FileName: fileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	return item, true, h.store.CreateWorld(ctx, &item)
+}
+
+func (h *Handler) pruneMissingWorldSource(ctx context.Context, item domain.World) (bool, error) {
+	path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			h.logger.Warn("world file missing during mutation, pruning orphaned record", "worldId", item.ID, "path", path)
+			return true, h.store.DeleteWorld(ctx, item.ID)
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
@@ -838,8 +871,12 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "stop the server before restoring a backup")
 		return
 	}
-	restorePath, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	if _, err := os.Stat(restorePath); err != nil {
+	missing, err := h.pruneMissingBackupSource(r.Context(), item)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if missing {
 		writeError(w, http.StatusNotFound, "backup file not found on disk")
 		return
 	}
@@ -908,6 +945,15 @@ func (h *Handler) migrateBackup(w http.ResponseWriter, r *http.Request) {
 	if payload.FileName == "" {
 		payload.FileName = item.FileName
 	}
+	missing, err := h.pruneMissingBackupSource(r.Context(), item)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if missing {
+		writeError(w, http.StatusNotFound, "backup file not found on disk")
+		return
+	}
 	_, size, err := backupsvc.NewService(h.cfg.DataDir).Migrate(item.InstanceID, item.FileName, payload.InstanceID, payload.FileName)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -937,6 +983,21 @@ func (h *Handler) upsertBackupRecord(ctx context.Context, instanceID string, fil
 	}
 	item := domain.Backup{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, WorldName: worldName, SizeBytes: size, Type: backupType, CreatedAt: time.Now()}
 	return item, true, h.store.CreateBackup(ctx, &item)
+}
+
+func (h *Handler) pruneMissingBackupSource(ctx context.Context, item domain.Backup) (bool, error) {
+	path, err := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			h.logger.Warn("backup file missing during mutation, pruning orphaned record", "backupId", item.ID, "path", path)
+			return true, h.store.DeleteBackup(ctx, item.ID)
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {

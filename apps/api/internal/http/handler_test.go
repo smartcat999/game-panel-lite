@@ -1835,6 +1835,43 @@ func TestMigrateWorldEndpointCopiesToTargetServer(t *testing.T) {
 	}
 }
 
+func TestWorldSourceMutationsPruneMissingFiles(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	source := testServer("source", cfg.DataDir)
+	target := testServer("target", cfg.DataDir)
+	if err := db.CreateServer(context.Background(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &target); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{ID: "missing-world-source", InstanceID: "source", Name: "Missing", FileName: "missing.wld", SizeBytes: 5, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	duplicate := httptest.NewRecorder()
+	router.ServeHTTP(duplicate, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/missing-world-source/duplicate", bytes.NewBufferString(`{"name":"Copy"}`)))
+	if duplicate.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing world duplicate 404, got %d: %s", duplicate.Code, duplicate.Body.String())
+	}
+	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing world record pruned after duplicate miss, got err=%v", err)
+	}
+
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+	migrate := httptest.NewRecorder()
+	router.ServeHTTP(migrate, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/missing-world-source/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
+	if migrate.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing world migrate 404, got %d: %s", migrate.Code, migrate.Body.String())
+	}
+	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing world record pruned after migrate miss, got err=%v", err)
+	}
+}
+
 func TestMigrateBackupEndpointCopiesToTargetServer(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	source := testServer("source", cfg.DataDir)
@@ -1887,6 +1924,43 @@ func TestMigrateBackupEndpointCopiesToTargetServer(t *testing.T) {
 	}
 	if repeated.ID != migrated.ID {
 		t.Fatalf("expected repeated backup migration to update existing target backup, got first=%+v second=%+v", migrated, repeated)
+	}
+}
+
+func TestBackupSourceMutationsPruneMissingFiles(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	source := testServer("source", cfg.DataDir)
+	target := testServer("target", cfg.DataDir)
+	if err := db.CreateServer(context.Background(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &target); err != nil {
+		t.Fatal(err)
+	}
+	backup := domain.Backup{ID: "missing-backup-source", InstanceID: "source", FileName: "missing.zip", WorldName: "Source World", SizeBytes: 5, Type: "Manual", CreatedAt: time.Now()}
+	if err := db.CreateBackup(context.Background(), &backup); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := httptest.NewRecorder()
+	router.ServeHTTP(restore, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/missing-backup-source/restore", nil))
+	if restore.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing backup restore 404, got %d: %s", restore.Code, restore.Body.String())
+	}
+	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing backup record pruned after restore miss, got err=%v", err)
+	}
+
+	if err := db.CreateBackup(context.Background(), &backup); err != nil {
+		t.Fatal(err)
+	}
+	migrate := httptest.NewRecorder()
+	router.ServeHTTP(migrate, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/missing-backup-source/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
+	if migrate.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing backup migrate 404, got %d: %s", migrate.Code, migrate.Body.String())
+	}
+	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing backup record pruned after migrate miss, got err=%v", err)
 	}
 }
 
