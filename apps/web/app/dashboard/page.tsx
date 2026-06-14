@@ -8,6 +8,7 @@ import { ServerCard } from "@/components/server-card";
 import { Button, Card } from "@/components/ui";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { formatBytes, listActivity, listBackups, listServers } from "@/lib/api";
+import { dashboardQuickActionHrefs } from "@/lib/dashboard-quick-actions";
 import { attachLatestBackupTimes } from "@/lib/server-metrics";
 
 export default function DashboardPage() {
@@ -64,9 +65,9 @@ export default function DashboardPage() {
         <Card className="p-4">
           <h2 className="font-semibold">{t("quickActions")}</h2>
           <div className="mt-4 flex flex-col gap-3">
-            <Link href="/servers/new"><Button className="w-full"><Plus aria-hidden="true" />{t("createServer")}</Button></Link>
-            <Link href="/worlds"><Button variant="secondary" className="w-full">{t("importWorld")}</Button></Link>
-            <Link href="/backups"><Button variant="gold" className="w-full">{t("createBackup")}</Button></Link>
+            <Link href={dashboardQuickActionHrefs.createServer}><Button className="w-full"><Plus aria-hidden="true" />{t("createServer")}</Button></Link>
+            <Link href={dashboardQuickActionHrefs.importWorld}><Button variant="secondary" className="w-full">{t("importWorld")}</Button></Link>
+            <Link href={dashboardQuickActionHrefs.createBackup}><Button variant="gold" className="w-full">{t("createBackup")}</Button></Link>
           </div>
         </Card>
       </div>

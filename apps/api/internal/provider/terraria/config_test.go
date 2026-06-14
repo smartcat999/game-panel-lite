@@ -20,7 +20,7 @@ func TestPresetsValidate(t *testing.T) {
 
 func TestRenderServerConfig(t *testing.T) {
 	rendered, err := RenderServerConfig(domain.TerrariaConfig{
-		WorldName: "Moon Garden", WorldSize: "large", Difficulty: "master",
+		WorldName: "Moon Garden", WorldSize: "large", WorldEvil: "corruption", Difficulty: "master",
 		MaxPlayers: 12, Port: 7778, Password: "stars", MOTD: "Mind the wyverns",
 		Seed: "05162020", Secure: true, Language: "en-US",
 	})
@@ -28,7 +28,7 @@ func TestRenderServerConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"world=worlds/Moon Garden.wld", "autocreate=3", "difficulty=3",
+		"world=worlds/Moon Garden.wld", "autocreate=3", "worldevil=1", "difficulty=3",
 		"maxplayers=12", "port=7778", "password=stars", "secure=1",
 	} {
 		if !strings.Contains(rendered, expected) {

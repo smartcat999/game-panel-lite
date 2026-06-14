@@ -79,6 +79,9 @@ func (a inspectStatusAdapter) Remove(context.Context, domain.GameServerInstance)
 func (a inspectStatusAdapter) Inspect(context.Context, domain.GameServerInstance) (domain.ServerStatus, error) {
 	return a.status, nil
 }
+func (a inspectStatusAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
+	return runtime.ContainerStats{}, nil
+}
 func (a inspectStatusAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
@@ -119,6 +122,9 @@ func (a *staleContainerAdapter) Inspect(_ context.Context, instance domain.GameS
 		return domain.StatusErrored, fmt.Errorf("stale container")
 	}
 	return domain.StatusRunning, nil
+}
+func (a *staleContainerAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
+	return runtime.ContainerStats{}, nil
 }
 func (a *staleContainerAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	a.logsContainer = instance.ContainerID
@@ -239,6 +245,31 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
 	if remove.Code != stdhttp.StatusOK {
 		t.Fatalf("expected delete 200, got %d: %s", remove.Code, remove.Body.String())
+	}
+}
+
+func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	payload := `{
+		"name":"Unsupported Version",
+		"providerKey":"terraria-vanilla",
+		"version":"0.0.0",
+		"config":{
+			"serverName":"Unsupported Version",
+			"worldName":"VersionWorld",
+			"worldSize":"medium",
+			"difficulty":"classic",
+			"maxPlayers":8,
+			"port":7777,
+			"secure":true,
+			"language":"en-US",
+			"autoCreateWorld":true
+		}
+	}`
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
+	if recorder.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected unsupported version 400, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -410,6 +441,78 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "mods", "tmod", "example.tmod")); !os.IsNotExist(err) {
 		t.Fatalf("expected mod file deleted, stat err=%v", err)
+	}
+}
+
+func TestTModLoaderModEnabledEndpoint(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	mod := domain.ModFile{
+		ID:         "mod-1",
+		InstanceID: server.ID,
+		FileName:   "example.tmod",
+		SizeBytes:  3,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &mod); err != nil {
+		t.Fatal(err)
+	}
+
+	body := strings.NewReader(`{"enabled":false}`)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPatch, "/api/servers/tmod/mods/mod-1", body)
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected mod enabled update 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Enabled {
+		t.Fatalf("expected disabled mod, got %+v", got)
+	}
+	persisted, err := db.GetMod(context.Background(), mod.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Enabled {
+		t.Fatalf("expected persisted disabled mod, got %+v", persisted)
+	}
+}
+
+func TestGlobalModDeleteRejectsServerMod(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	mod := domain.ModFile{
+		ID:         "server-mod",
+		InstanceID: server.ID,
+		FileName:   "example.tmod",
+		SizeBytes:  3,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &mod); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodDelete, "/api/mods/server-mod", nil))
+	if recorder.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected global delete to reject server mod, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := db.GetMod(context.Background(), mod.ID); err != nil {
+		t.Fatalf("expected server mod record to remain, got %v", err)
 	}
 }
 

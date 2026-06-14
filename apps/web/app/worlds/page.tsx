@@ -2,7 +2,7 @@
 
 import { Download, MoveRight, Plus, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
@@ -22,6 +22,7 @@ export default function WorldsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<World | null>(null);
   const [downloadingWorldId, setDownloadingWorldId] = useState("");
+  const quickImportHandledRef = useRef(false);
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
   const activeTargetServerId = targetServerId || servers[0]?.id || "";
@@ -92,6 +93,17 @@ export default function WorldsPage() {
       setDownloadingWorldId("");
     }
   };
+
+  useEffect(() => {
+    if (quickImportHandledRef.current || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("action") !== "import") return;
+    quickImportHandledRef.current = true;
+    url.searchParams.delete("action");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    setSuccessMessage(t("chooseWorldFileToImport"));
+    window.setTimeout(() => inputRef.current?.click(), 0);
+  }, [t]);
 
   return (
     <>

@@ -9,6 +9,8 @@ type GameProvider interface {
 	Key() domain.ProviderKey
 	Name() string
 	Image() string
+	Versions() []string
+	ImageFor(version string) string
 	DefaultConfig() domain.TerrariaConfig
 	ValidateConfig(domain.TerrariaConfig) error
 	RenderConfig(domain.TerrariaConfig) (string, error)

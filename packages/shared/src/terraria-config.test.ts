@@ -31,6 +31,7 @@ describe("Terraria config renderer", () => {
       serverName: "Moon Base",
       worldName: "Lunar Outpost",
       worldSize: "large",
+      worldEvil: "corruption",
       difficulty: "master",
       maxPlayers: 12,
       port: 7778,
@@ -46,6 +47,7 @@ describe("Terraria config renderer", () => {
       "world=worlds/Lunar Outpost.wld
       autocreate=3
       difficulty=3
+      worldevil=1
       maxplayers=12
       port=7778
       password=stars

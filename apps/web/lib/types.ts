@@ -12,6 +12,7 @@ export type Server = {
   players: number;
   maxPlayers: number;
   port: number;
+  hostPort: number;
   version: string;
   lastBackup: string;
   password: string;

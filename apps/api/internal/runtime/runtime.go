@@ -13,6 +13,7 @@ type ContainerSpec struct {
 	Name       string
 	Image      string
 	Port       int
+	HostPort   int
 	DataDir    string
 	ConfigText string
 	Options    ContainerOptions
@@ -32,6 +33,12 @@ type DockerStatus struct {
 	LastCheckedAt time.Time `json:"lastCheckedAt"`
 }
 
+type ContainerStats struct {
+	CPUPercent    float64 `json:"cpuPercent"`
+	MemoryMB      int64   `json:"memoryMb"`
+	MemoryLimitMB int64   `json:"memoryLimitMb"`
+}
+
 type Adapter interface {
 	Check(ctx context.Context) DockerStatus
 	Create(ctx context.Context, spec ContainerSpec) (string, error)
@@ -40,6 +47,7 @@ type Adapter interface {
 	Restart(ctx context.Context, instance domain.GameServerInstance) error
 	Remove(ctx context.Context, instance domain.GameServerInstance) error
 	Inspect(ctx context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error)
+	Stats(ctx context.Context, instance domain.GameServerInstance) (ContainerStats, error)
 	Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error)
 	SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error
 }

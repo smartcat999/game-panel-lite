@@ -17,6 +17,8 @@ export const serverStatusSchema = z.enum([
 
 export const worldSizeSchema = z.enum(["small", "medium", "large"]);
 
+export const worldEvilSchema = z.enum(["random", "corruption", "crimson"]);
+
 export const terrariaDifficultySchema = z.enum([
   "journey",
   "classic",
@@ -34,6 +36,7 @@ export const terrariaConfigSchema = z.object({
   serverName: z.string().min(1).max(80).optional(),
   worldName: z.string().min(1).max(80),
   worldSize: worldSizeSchema,
+  worldEvil: worldEvilSchema.default("random"),
   difficulty: terrariaDifficultySchema,
   maxPlayers: z
     .number()
@@ -79,6 +82,7 @@ export const terrariaPresets = [
       serverName: "Friends Server",
       worldName: "Friends World",
       worldSize: "medium",
+      worldEvil: "random",
       difficulty: "classic",
       maxPlayers: 8,
       port: 7777,
@@ -98,6 +102,7 @@ export const terrariaPresets = [
       serverName: "Expert Adventure",
       worldName: "Expert Adventure",
       worldSize: "large",
+      worldEvil: "random",
       difficulty: "expert",
       maxPlayers: 8,
       port: 7778,
@@ -117,6 +122,7 @@ export const terrariaPresets = [
       serverName: "Master Challenge",
       worldName: "Master Challenge",
       worldSize: "large",
+      worldEvil: "random",
       difficulty: "master",
       maxPlayers: 6,
       port: 7779,
@@ -136,6 +142,7 @@ export const terrariaPresets = [
       serverName: "Building World",
       worldName: "Builder Base",
       worldSize: "large",
+      worldEvil: "random",
       difficulty: "classic",
       maxPlayers: 12,
       port: 7780,
@@ -155,6 +162,7 @@ export const terrariaPresets = [
       serverName: "Modded Starter",
       worldName: "Modded Starter",
       worldSize: "medium",
+      worldEvil: "random",
       difficulty: "classic",
       maxPlayers: 8,
       port: 7781,
@@ -180,6 +188,25 @@ export function getTerrariaPreset(
   return preset;
 }
 
+export const terrariaSecretSeeds = [
+  { key: "05162020", label: "Drunk World", description: "融合两个世界布局，NPC 和物品混搭" },
+  { key: "for the worthy", label: "For the Worthy", description: "大幅增加难度，敌人更强、掉落更丰厚" },
+  { key: "not the bees", label: "Not the Bees", description: "世界主要由蜂巢块和幼虫组成" },
+  { key: "celebrationmk10", label: "CelebrationMK10", description: "派对世界，稀有物品和烟花" },
+  { key: "dontdigup", label: "Don't Dig Up", description: "世界反转，出生点在地下深处" },
+  { key: "getfixedboi", label: "Get Fixed Boi (天顶)", description: "所有彩蛋种子效果的终极组合" }
+] as const;
+
+export function secretSeedKeyFor(seed: string | undefined): string {
+  return terrariaSecretSeeds.find((item) => item.key === (seed ?? "").toLowerCase())?.key ?? "";
+}
+
+const worldEvilConfigValues = {
+  random: 0,
+  corruption: 1,
+  crimson: 2
+} satisfies Record<z.infer<typeof worldEvilSchema>, number>;
+
 const worldSizeConfigValues = {
   small: 1,
   medium: 2,
@@ -198,6 +225,7 @@ export function renderTerrariaServerConfig(config: TerrariaConfig): string {
     `world=worlds/${config.worldName}.wld`,
     `autocreate=${worldSizeConfigValues[config.worldSize]}`,
     `difficulty=${difficultyConfigValues[config.difficulty]}`,
+    `worldevil=${worldEvilConfigValues[config.worldEvil]}`,
     `maxplayers=${config.maxPlayers}`,
     `port=${config.port}`,
     `password=${config.password ?? ""}`,

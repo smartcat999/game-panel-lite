@@ -322,7 +322,7 @@ components:
           format: date-time
     TerrariaConfig:
       type: object
-      required: [worldName, worldSize, difficulty, maxPlayers, port, secure, language, autoCreateWorld]
+      required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, language, autoCreateWorld]
       properties:
         serverName:
           type: string
@@ -331,6 +331,9 @@ components:
         worldSize:
           type: string
           enum: [small, medium, large]
+        worldEvil:
+          type: string
+          enum: [random, corruption, crimson]
         difficulty:
           type: string
           enum: [journey, classic, expert, master]

@@ -6,6 +6,7 @@ import { ServerActions } from "./server-actions";
 import { ServerGameArt } from "./server-game-art";
 import { Card } from "@/components/ui";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { serverJoinPort } from "@/lib/server-join";
 import type { Server } from "@/lib/types";
 
 export function ServerCard({ server, compact = false }: { server: Server; compact?: boolean }) {
@@ -25,7 +26,7 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
           <p className="mt-1 text-xs text-slate-400">{t("world")}: {server.world}</p>
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-slate-400 md:grid-cols-4">
             <Metric label={t("players")} value={`${server.players} / ${server.maxPlayers}`} />
-            <Metric label={t("port")} value={String(server.port)} />
+            <Metric label={t("port")} value={String(serverJoinPort(server))} />
             <Metric label={t("version")} value={server.version} />
             <Metric label={t("lastBackup")} value={localizeRelativeTime(server.lastBackup, locale)} />
           </div>

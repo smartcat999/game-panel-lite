@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, CheckCircle2, Copy, Download, FileText, MoveRight, Package, Plus, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Copy, Cpu, Download, FileText, MemoryStick, MoveRight, Package, Plus, Power, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
+import { secretSeedKeyFor, terrariaSecretSeeds } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
@@ -20,6 +21,7 @@ import {
   downloadWorldFile,
   duplicateWorld,
   getServer,
+  getServerStats,
   importWorld,
   listBackups,
   listServers,
@@ -30,6 +32,7 @@ import {
   previewTerrariaConfig,
   restoreBackup,
   sendServerCommand,
+  setModEnabled,
   serverLogsUrl,
   updateServerConfig,
   uploadMod,
@@ -37,6 +40,7 @@ import {
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { getDetailTargetServers, nextWorldCopyName } from "@/lib/server-detail-resources";
+import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
 
@@ -54,6 +58,7 @@ export default function ServerDetailPage() {
 
   const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
   const server = query.data;
+  const statsQuery = useQuery({ queryKey: ["server-stats", id], queryFn: () => getServerStats(id), enabled: server?.status === "running", refetchInterval: 3000, retry: false });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, enabled: Boolean(server), retry: false });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server), retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server), retry: false });
@@ -76,7 +81,8 @@ export default function ServerDetailPage() {
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
   const [targetServerId, setTargetServerId] = useState("");
-  const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
+  const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
+  const [logStreamPaused, setLogStreamPaused] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const successTimerRef = useRef<number | null>(null);
 
@@ -216,6 +222,14 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(error instanceof Error ? error.message : t("unableUploadMod"))
   });
+  const modEnabled = useMutation({
+    mutationFn: ({ modId, enabled }: { modId: string; enabled: boolean }) => setModEnabled(id, modId, enabled),
+    onSuccess: async (updatedMod) => {
+      showSuccess(updatedMod.enabled ? t("modEnabled") : t("modDisabled"));
+      await client.invalidateQueries({ queryKey: ["mods", id] });
+    },
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableUpdateMod"))
+  });
   const modDelete = useMutation({
     mutationFn: (modId: string) => deleteMod(id, modId),
     onSuccess: async () => {
@@ -231,6 +245,10 @@ export default function ServerDetailPage() {
     if (server?.status !== "running") {
       setLogStatus("idle");
       setLogs([]);
+      return;
+    }
+    if (logStreamPaused) {
+      setLogStatus("paused");
       return;
     }
     if (logServerIdRef.current !== id) {
@@ -253,7 +271,7 @@ export default function ServerDetailPage() {
     });
     source.onerror = () => setLogStatus("error");
     return () => source.close();
-  }, [activeTab, id, server?.status]);
+  }, [activeTab, id, server?.status, logStreamPaused]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -290,8 +308,8 @@ export default function ServerDetailPage() {
     { id: "backups", label: t("tabBackups") },
     ...(server.mode === "tmodloader" ? [{ id: "mods" as const, label: t("tabMods") }] : [])
   ];
-  const invite = `Join ${server.name} at 127.0.0.1:${server.port}${server.password ? ` password: ${server.password}` : ""}`;
-  const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
+  const invite = serverInviteText(server);
+  const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const copy = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -390,6 +408,7 @@ export default function ServerDetailPage() {
               consoleError={consoleError}
               logStatus={logStatus}
               logStatusLabel={logStatusLabel}
+              logStreamPaused={logStreamPaused}
               logs={logs}
               server={server}
               viewportRef={logViewportRef}
@@ -397,6 +416,7 @@ export default function ServerDetailPage() {
                 setCommand(value);
                 setConsoleError("");
               }}
+              onTogglePause={() => setLogStreamPaused((current) => !current)}
               onSubmit={submitCommand}
             />
           )}
@@ -404,9 +424,11 @@ export default function ServerDetailPage() {
             <LogsTab
               logStatus={logStatus}
               logStatusLabel={logStatusLabel}
+              logStreamPaused={logStreamPaused}
               logs={logs}
               viewportRef={logViewportRef}
               onClear={() => setLogs([])}
+              onTogglePause={() => setLogStreamPaused((current) => !current)}
             />
           )}
           {activeTab === "config" && (
@@ -469,8 +491,10 @@ export default function ServerDetailPage() {
               isError={modsQuery.isError}
               isLoading={modsQuery.isLoading}
               items={serverMods}
+              toggling={modEnabled.isPending}
               uploading={modUpload.isPending}
               onDelete={setPendingModDelete}
+              onToggle={(mod) => modEnabled.mutate({ modId: mod.id, enabled: !mod.enabled })}
               onUploadClick={() => modInputRef.current?.click()}
             />
           )}
@@ -480,7 +504,7 @@ export default function ServerDetailPage() {
           <Card className="p-4">
             <h2 className="font-semibold">{t("joinServer")}</h2>
             <CopyRow label={t("ipAddress")} value="127.0.0.1" copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <CopyRow label={t("port")} value={String(server.port)} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
+            <CopyRow label={t("port")} value={String(serverJoinPort(server))} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <CopyRow label={t("password")} value={server.password || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <Button className="mt-4 w-full" onClick={() => void copy("Invite", invite)}>
               <Copy aria-hidden="true" />
@@ -494,7 +518,19 @@ export default function ServerDetailPage() {
             <Info label={t("worldSize")} value={worldSizeLabel(server.config.worldSize, t)} />
             <Info label={t("maxPlayers")} value={String(server.maxPlayers)} />
             <Info label={t("version")} value={server.version} />
+            {server.hostPort > 0 && server.hostPort !== server.port && (
+              <Info label={t("hostPort")} value={String(server.hostPort)} />
+            )}
           </Card>
+          {server.status === "running" && (
+            <Card className="p-4">
+              <h2 className="font-semibold">{t("resourceUsage")}</h2>
+              <div className="mt-3 flex flex-col gap-3">
+                <ResourceBar icon={<Cpu aria-hidden="true" className="size-4 text-panel-green" />} label={t("cpu")} value={statsQuery.data?.cpuPercent ?? 0} suffix="%" />
+                <ResourceBar icon={<MemoryStick aria-hidden="true" className="size-4 text-panel-purple" />} label={t("memory")} value={memoryPercent(statsQuery.data)} suffix="" displayText={memoryDisplay(statsQuery.data)} />
+              </div>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -601,27 +637,36 @@ function ConsoleTab({
   consoleError,
   logStatus,
   logStatusLabel,
+  logStreamPaused,
   logs,
   server,
   viewportRef,
   onChangeCommand,
+  onTogglePause,
   onSubmit
 }: {
   command: string;
   commandPending: boolean;
   consoleError: string;
-  logStatus: "idle" | "connecting" | "connected" | "error";
+  logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   logStatusLabel: string;
+  logStreamPaused: boolean;
   logs: string[];
   server: Server;
   viewportRef: React.RefObject<HTMLDivElement | null>;
   onChangeCommand: (value: string) => void;
+  onTogglePause: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t } = useI18n();
   return (
     <div>
-      <LogHeader logStatus={logStatus} logStatusLabel={logStatusLabel} title={t("liveLogs")} />
+      <LogHeader
+        action={<Button variant="secondary" className="px-2 py-1 text-xs" onClick={onTogglePause} disabled={logStatus !== "connected" && logStatus !== "paused"}>{logStreamPaused ? t("resumeLogs") : t("pauseLogs")}</Button>}
+        logStatus={logStatus}
+        logStatusLabel={logStatusLabel}
+        title={t("liveLogs")}
+      />
       <LogViewport logs={logs} logStatus={logStatus} viewportRef={viewportRef} />
       {consoleError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{consoleError}</p>}
       <form className="mt-3 flex gap-2" onSubmit={onSubmit}>
@@ -643,23 +688,34 @@ function ConsoleTab({
 function LogsTab({
   logStatus,
   logStatusLabel,
+  logStreamPaused,
   logs,
   viewportRef,
-  onClear
+  onClear,
+  onTogglePause
 }: {
-  logStatus: "idle" | "connecting" | "connected" | "error";
+  logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   logStatusLabel: string;
+  logStreamPaused: boolean;
   logs: string[];
   viewportRef: React.RefObject<HTMLDivElement | null>;
   onClear: () => void;
+  onTogglePause: () => void;
 }) {
   const { t } = useI18n();
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <LogHeader logStatus={logStatus} logStatusLabel={logStatusLabel} title={t("liveLogs")} />
-        <Button variant="secondary" onClick={onClear} disabled={logs.length === 0}>{t("clearLogs")}</Button>
-      </div>
+      <LogHeader
+        action={(
+          <>
+            <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onTogglePause} disabled={logStatus !== "connected" && logStatus !== "paused"}>{logStreamPaused ? t("resumeLogs") : t("pauseLogs")}</Button>
+            <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onClear} disabled={logs.length === 0}>{t("clearLogs")}</Button>
+          </>
+        )}
+        logStatus={logStatus}
+        logStatusLabel={logStatusLabel}
+        title={t("liveLogs")}
+      />
       <LogViewport className="h-[520px]" logs={logs} logStatus={logStatus} viewportRef={viewportRef} />
     </div>
   );
@@ -689,74 +745,76 @@ function ConfigTab({
   const dirty = JSON.stringify(draft) !== JSON.stringify(server.config);
   const disabled = server.status === "running" || savePending;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  const secretSeed = secretSeedKeyFor(draft.seed);
+  const worldEvilLabel = draft.worldEvil === "corruption" ? t("tagCorruption") : draft.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
+  const difficultyLabel = draft.difficulty === "journey" ? t("tagJourney") : draft.difficulty === "classic" ? t("tagClassic") : draft.difficulty === "expert" ? t("tagExpert") : t("tagMaster");
+  const worldSizeLabel = draft.worldSize === "small" ? t("tagSmallWorld") : draft.worldSize === "medium" ? t("tagMediumWorld") : t("tagLargeWorld");
+  const seedLabel = secretSeed
+    ? terrariaSecretSeeds.find((s) => s.key === secretSeed)?.label ?? draft.seed ?? ""
+    : (draft.seed || t("tagRandom"));
   return (
-    <form className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]" onSubmit={(event) => {
+    <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault();
       if (!disabled && dirty) onSave(draft);
     }}>
-      <div className="min-w-0">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold">{t("serverConfig")}</h2>
-          {server.status === "running" && <span className="rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configRequiresStopped")}</span>}
-        </div>
-        <div className="grid gap-3">
-          <Field label={t("serverName")}>
-            <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
-          </Field>
-          <Field label={t("worldName")}>
-            <Input value={draft.worldName} onChange={(event) => update("worldName", event.target.value)} disabled={disabled} />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t("worldSize")}>
-              <Select value={draft.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])} disabled={disabled}>
-                <option value="small">{t("tagSmallWorld")}</option>
-                <option value="medium">{t("tagMediumWorld")}</option>
-                <option value="large">{t("tagLargeWorld")}</option>
-              </Select>
+      <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
+        <h2 className="font-semibold">{t("serverConfig")}</h2>
+        {server.status === "running" && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configRequiresStopped")}</span>}
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <Field label={t("serverName")}>
+              <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
             </Field>
-            <Field label={t("difficulty")}>
-              <Select value={draft.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])} disabled={disabled}>
-                <option value="journey">{t("tagJourney")}</option>
-                <option value="classic">{t("tagClassic")}</option>
-                <option value="expert">{t("tagExpert")}</option>
-                <option value="master">{t("tagMaster")}</option>
-              </Select>
+            <Field label={t("password")}>
+              <Input value={draft.password ?? ""} onChange={(event) => update("password", event.target.value)} disabled={disabled} />
+            </Field>
+            <Field label={t("motd")}>
+              <Input value={draft.motd ?? ""} onChange={(event) => update("motd", event.target.value)} disabled={disabled} />
             </Field>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-3">
             <Field label={t("port")}>
               <Input type="number" min={1024} max={65535} value={draft.port} onChange={(event) => update("port", Number(event.target.value))} disabled={disabled} />
             </Field>
             <Field label={t("maxPlayers")}>
               <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
             </Field>
-          </div>
-          <Field label={t("password")}>
-            <Input value={draft.password ?? ""} onChange={(event) => update("password", event.target.value)} disabled={disabled} />
-          </Field>
-          <Field label={t("motd")}>
-            <Input value={draft.motd ?? ""} onChange={(event) => update("motd", event.target.value)} disabled={disabled} />
-          </Field>
-          <Field label={t("languageSetting")}>
-            <Input value={draft.language ?? ""} onChange={(event) => update("language", event.target.value)} disabled={disabled} />
-          </Field>
-          <div className="grid gap-2 rounded-md border border-panel-line bg-slate-950/50 p-3">
-            <Checkbox label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
-            <Checkbox label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
+            <Field label={t("languageSetting")}>
+              <Input value={draft.language ?? ""} onChange={(event) => update("language", event.target.value)} disabled={disabled} />
+            </Field>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button disabled={disabled || !dirty}>
-            {savePending ? t("savingConfig") : t("saveConfig")}
-          </Button>
-          <Button type="button" variant="secondary" disabled={savePending || !dirty} onClick={() => setDraft(server.config)}>
-            {t("resetChanges")}
-          </Button>
-          {saveSuccess && <span className="text-sm text-panel-green">{t("configSaved")}</span>}
+        <div className="mt-3 grid gap-2 rounded-md border border-panel-line bg-slate-950/50 p-3">
+          <Checkbox label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
+          <Checkbox label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
         </div>
-        {saveError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
       </div>
-      <div className="min-w-0 rounded-md border border-panel-line bg-slate-950 p-4">
+
+      <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
+        <h2 className="font-semibold">{t("worldCreationSettings")}</h2>
+        <p className="mt-1 text-xs text-slate-500">{t("worldCreationReadonlyHint")}</p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ReadOnlyField label={t("worldName")} value={draft.worldName} />
+          <ReadOnlyField label={t("gameVersion")} value={server.version || "1.4.5.6"} />
+          <ReadOnlyField label={t("worldSize")} value={worldSizeLabel} />
+          <ReadOnlyField label={t("worldEvil")} value={worldEvilLabel} />
+          <ReadOnlyField label={t("difficulty")} value={difficultyLabel} />
+          <ReadOnlyField label={t("customSeed")} value={seedLabel} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button disabled={disabled || !dirty}>
+          {savePending ? t("savingConfig") : t("saveConfig")}
+        </Button>
+        <Button type="button" variant="secondary" disabled={savePending || !dirty} onClick={() => setDraft(server.config)}>
+          {t("resetChanges")}
+        </Button>
+        {saveSuccess && <span className="text-sm text-panel-green">{t("configSaved")}</span>}
+      </div>
+      {saveError && <p className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
+
+      <div className="rounded-md border border-panel-line bg-slate-950 p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
           <FileText aria-hidden="true" className="size-4 text-panel-green" />
           {t("previewServerConfig")}
@@ -773,35 +831,21 @@ function ConfigTab({
   );
 }
 
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <div className="flex h-10 items-center rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-400">{value}</div>
+    </div>
+  );
+}
+
 function Field({ children, label }: { children: ReactNode; label: string }) {
   return (
     <label className="grid gap-1.5">
       <span className="text-xs font-medium text-slate-500">{label}</span>
       {children}
     </label>
-  );
-}
-
-function Select({
-  children,
-  disabled,
-  onChange,
-  value
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <select
-      className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
-      disabled={disabled}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      {children}
-    </select>
   );
 }
 
@@ -1045,16 +1089,20 @@ function ModsTab({
   isError,
   isLoading,
   items,
+  toggling,
   uploading,
   onDelete,
+  onToggle,
   onUploadClick
 }: {
   deleting: boolean;
   isError: boolean;
   isLoading: boolean;
   items: ModFile[];
+  toggling: boolean;
   uploading: boolean;
   onDelete: (mod: ModFile) => void;
+  onToggle: (mod: ModFile) => void;
   onUploadClick: () => void;
 }) {
   const { locale, t } = useI18n();
@@ -1079,9 +1127,15 @@ function ModsTab({
             title={mod.fileName}
             meta={`${mod.size} · ${mod.enabled ? t("enabled") : t("disabled")} · ${localizeRelativeTime(mod.created, locale)}`}
             actions={
-              <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting}>
-                <Trash2 aria-hidden="true" />
-              </Button>
+              <>
+                <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling}>
+                  <Power aria-hidden="true" />
+                  {mod.enabled ? t("disable") : t("enable")}
+                </Button>
+                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting}>
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </>
             }
           />
         ))}
@@ -1151,11 +1205,14 @@ function TargetServerSelect({
   );
 }
 
-function LogHeader({ logStatus, logStatusLabel, title }: { logStatus: "idle" | "connecting" | "connected" | "error"; logStatusLabel: string; title: string }) {
+function LogHeader({ action, logStatus, logStatusLabel, title }: { action?: ReactNode; logStatus: "idle" | "connecting" | "connected" | "error" | "paused"; logStatusLabel: string; title: string }) {
   return (
-    <div className="mb-3 flex min-w-0 flex-1 items-center justify-between rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs">
+    <div className="mb-3 flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs">
       <span className="text-slate-400">{title}</span>
-      <span className={logStatus === "connected" ? "text-panel-green" : logStatus === "error" ? "text-panel-gold" : "text-slate-400"}>{logStatusLabel}</span>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className={logStatus === "connected" ? "text-panel-green" : logStatus === "error" ? "text-panel-gold" : "text-slate-400"}>{logStatusLabel}</span>
+        {action}
+      </div>
     </div>
   );
 }
@@ -1168,14 +1225,14 @@ function LogViewport({
 }: {
   className?: string;
   logs: string[];
-  logStatus: "idle" | "connecting" | "connected" | "error";
+  logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   viewportRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const { t } = useI18n();
   return (
     <div ref={viewportRef} className={cn("h-[420px] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-300", className)}>
       {logs.length === 0 ? (
-        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsRequiresRunning") : t("logsWaiting")}</p>
+        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsRequiresRunning") : logStatus === "paused" ? t("logsPaused") : t("logsWaiting")}</p>
       ) : logs.map((line, index) => (
         <p key={`${index}-${line}`}>
           <span className={line.includes("[Warn]") || line.toLowerCase().includes("error") ? "text-panel-gold" : "text-panel-green"}>
@@ -1283,6 +1340,30 @@ function DetailLine({ label, value }: { label: string; value: string }) {
       <span className="text-slate-500">{label}: </span>
       <span className="font-medium text-white">{value}</span>
     </>
+  );
+}
+
+function memoryPercent(stats?: { memoryMb: number; memoryLimitMb: number }): number {
+  if (!stats || stats.memoryLimitMb <= 0) return 0;
+  return Math.min(100, (stats.memoryMb / stats.memoryLimitMb) * 100);
+}
+
+function memoryDisplay(stats?: { memoryMb: number; memoryLimitMb: number }): string {
+  if (!stats) return "—";
+  return `${stats.memoryMb} MB / ${stats.memoryLimitMb} MB`;
+}
+
+function ResourceBar({ icon, label, value, suffix, displayText }: { icon: ReactNode; label: string; value: number; suffix: string; displayText?: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="flex items-center gap-2 text-slate-400">{icon}{label}</span>
+        <span className="font-mono text-slate-300">{displayText ?? `${value.toFixed(1)}${suffix}`}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+        <div className="h-full rounded-full bg-panel-green transition-all" style={{ width: `${Math.min(100, value)}%` }} />
+      </div>
+    </div>
   );
 }
 

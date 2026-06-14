@@ -57,6 +57,8 @@ type ApiServer = {
   port: number;
   maxPlayers: number;
   password?: string;
+  version?: string;
+  hostPort?: number;
   config?: TerrariaConfig;
 };
 
@@ -127,6 +129,7 @@ function configFromServer(server: ApiServer): TerrariaConfig {
     serverName: server.config?.serverName ?? server.name,
     worldName: server.config?.worldName ?? server.worldName,
     worldSize: server.config?.worldSize ?? "medium",
+    worldEvil: server.config?.worldEvil ?? "random",
     difficulty: server.config?.difficulty ?? "classic",
     maxPlayers: server.config?.maxPlayers ?? server.maxPlayers,
     port: server.config?.port ?? server.port,
@@ -150,7 +153,8 @@ function toServer(server: ApiServer): Server {
     players: 0,
     maxPlayers: server.maxPlayers,
     port: server.port,
-    version: "1.4.4.9",
+    version: server.version ?? "1.4.5.6",
+    hostPort: server.hostPort ?? 0,
     lastBackup: "Not yet",
     password: server.password ?? "",
     cpu: "0%",
@@ -222,6 +226,20 @@ export type AppSettings = {
   dockerHost: string;
 };
 
+export type ServerStats = {
+  cpuPercent: number;
+  memoryMb: number;
+  memoryLimitMb: number;
+};
+
+export async function getServerStats(id: string): Promise<ServerStats> {
+  const response = await fetch(`${API_BASE}/api/servers/${id}/stats`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load server stats");
+  }
+  return (await response.json()) as ServerStats;
+}
+
 export function serverLogsUrl(id: string) {
   return `${API_BASE}/api/servers/${id}/logs`;
 }
@@ -272,10 +290,19 @@ export async function applyDockerHost(host: string): Promise<{ available: boolea
   };
 }
 
+export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
+  const response = await fetch(`${API_BASE}/api/terraria/versions`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load versions");
+  }
+  return (await response.json()) as Record<string, string[]>;
+}
+
 export async function createServer(input: {
   name: string;
   providerKey: "terraria-vanilla" | "terraria-tmodloader";
   config: TerrariaConfig;
+  version?: string;
 }): Promise<Server> {
   const response = await fetch(`${API_BASE}/api/servers`, {
     method: "POST",
@@ -547,14 +574,18 @@ export async function listMods(serverId: string): Promise<ModFile[]> {
     throw new Error(payload.error ?? "Unable to load mods");
   }
   const payload = (await response.json()) as ApiModFile[];
-  return payload.map((file) => ({
+  return payload.map(toModFile);
+}
+
+function toModFile(file: ApiModFile): ModFile {
+  return {
     id: file.id,
     instanceId: file.instanceId,
     fileName: file.fileName,
     size: formatBytes(file.sizeBytes),
     enabled: file.enabled,
     created: formatRelative(file.createdAt)
-  }));
+  };
 }
 
 export async function uploadMod(serverId: string, file: File): Promise<ModFile> {
@@ -566,18 +597,68 @@ export async function uploadMod(serverId: string, file: File): Promise<ModFile> 
     throw new Error(payload.error ?? "Unable to upload mod");
   }
   const item = (await response.json()) as ApiModFile;
-  return {
-    id: item.id,
-    instanceId: item.instanceId,
-    fileName: item.fileName,
-    size: formatBytes(item.sizeBytes),
-    enabled: item.enabled,
-    created: formatRelative(item.createdAt)
-  };
+  return toModFile(item);
+}
+
+export async function setModEnabled(serverId: string, modId: string, enabled: boolean): Promise<ModFile> {
+  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to update mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
 }
 
 export async function deleteMod(serverId: string, modId: string) {
   const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod");
+  }
+}
+
+export async function listGlobalMods(): Promise<ModFile[]> {
+  const response = await fetch(`${API_BASE}/api/mods`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load mod library");
+  }
+  const payload = (await response.json()) as ApiModFile[];
+  return payload.map(toModFile);
+}
+
+export async function uploadGlobalMod(file: File): Promise<ModFile> {
+  const body = new FormData();
+  body.set("file", file);
+  const response = await fetch(`${API_BASE}/api/mods/upload`, { method: "POST", body });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to upload mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function assignMod(modId: string, instanceId: string): Promise<ModFile> {
+  const response = await fetch(`${API_BASE}/api/mods/${modId}/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to assign mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function deleteGlobalMod(modId: string) {
+  const response = await fetch(`${API_BASE}/api/mods/${modId}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete mod");

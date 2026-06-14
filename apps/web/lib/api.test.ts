@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadWorldFile, listBackups } from "./api";
+import { downloadWorldFile, listBackups, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -38,5 +38,32 @@ describe("api mappers", () => {
     );
 
     await expect(downloadWorldFile("world-1")).rejects.toThrow("world file is missing");
+  });
+
+  it("updates mod enabled state through the server-scoped endpoint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "mod-1",
+          instanceId: "server-1",
+          fileName: "example.tmod",
+          sizeBytes: 128,
+          enabled: false,
+          createdAt: new Date().toISOString()
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const mod = await setModEnabled("server-1", "mod-1", false);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/api/servers/server-1/mods/mod-1"),
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ enabled: false })
+      })
+    );
+    expect(mod.enabled).toBe(false);
   });
 });

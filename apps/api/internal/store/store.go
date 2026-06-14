@@ -121,6 +121,10 @@ func (s *Store) GetMod(ctx context.Context, id string) (domain.ModFile, error) {
 	return mod, err
 }
 
+func (s *Store) SaveMod(ctx context.Context, mod *domain.ModFile) error {
+	return s.db.WithContext(ctx).Save(mod).Error
+}
+
 func (s *Store) DeleteMod(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.ModFile{}, "id = ?", id).Error
 }

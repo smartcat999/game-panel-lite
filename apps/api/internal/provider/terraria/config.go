@@ -17,11 +17,11 @@ type Preset struct {
 }
 
 var Presets = []Preset{
-	{"friends-casual", "Friends Casual", "Relaxed co-op defaults for a small friend group.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Journey Friends", WorldName: "Moon Garden", WorldSize: "medium", Difficulty: "classic", MaxPlayers: 8, Port: 7777, MOTD: "Welcome to GamePanel Lite", Secure: true, Language: "en-US", AutoCreateWorld: true}},
-	{"expert-adventure", "Expert Adventure", "A tougher cooperative world for experienced players.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Expert Adventure", WorldName: "Adventure", WorldSize: "large", Difficulty: "expert", MaxPlayers: 8, Port: 7778, MOTD: "Bring potions", Secure: true, Language: "en-US", AutoCreateWorld: true}},
-	{"master-challenge", "Master Challenge", "High-intensity defaults for veteran players.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Master Challenge", WorldName: "Master Challenge", WorldSize: "large", Difficulty: "master", MaxPlayers: 6, Port: 7779, MOTD: "Good luck", Secure: true, Language: "en-US", AutoCreateWorld: true}},
-	{"building-world", "Building World", "Roomy, calm defaults for builders and decorators.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Building Server", WorldName: "Builder's Heaven", WorldSize: "large", Difficulty: "classic", MaxPlayers: 12, Port: 7780, MOTD: "Build something sharp", Secure: true, Language: "en-US", AutoCreateWorld: true}},
-	{"modded-starter", "Modded Starter", "A conservative starting point for tModLoader servers.", domain.ProviderTerrariaTModLoader, domain.TerrariaConfig{ServerName: "Modded Adventure", WorldName: "Adventure", WorldSize: "medium", Difficulty: "classic", MaxPlayers: 10, Port: 7781, MOTD: "Mods enabled", Secure: true, Language: "en-US", AutoCreateWorld: true}},
+	{"friends-casual", "Friends Casual", "Relaxed co-op defaults for a small friend group.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Friends Server", WorldName: "Friends World", WorldSize: "medium", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 8, Port: 7777, MOTD: "Welcome to GamePanel Lite", Secure: true, Language: "en-US", AutoCreateWorld: true}},
+	{"expert-adventure", "Expert Adventure", "A tougher cooperative world for experienced players.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Expert Adventure", WorldName: "Expert Adventure", WorldSize: "large", WorldEvil: "random", Difficulty: "expert", MaxPlayers: 8, Port: 7778, MOTD: "Bring potions", Secure: true, Language: "en-US", AutoCreateWorld: true}},
+	{"master-challenge", "Master Challenge", "High-intensity defaults for players who want pressure.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Master Challenge", WorldName: "Master Challenge", WorldSize: "large", WorldEvil: "random", Difficulty: "master", MaxPlayers: 6, Port: 7779, MOTD: "Good luck", Secure: true, Language: "en-US", AutoCreateWorld: true}},
+	{"building-world", "Building World", "Roomy, calm defaults for builders and decorators.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Building World", WorldName: "Builder Base", WorldSize: "large", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 12, Port: 7780, MOTD: "Build something sharp", Secure: true, Language: "en-US", AutoCreateWorld: true}},
+	{"modded-starter", "Modded Starter", "A conservative starting point for tModLoader servers.", domain.ProviderTerrariaTModLoader, domain.TerrariaConfig{ServerName: "Modded Starter", WorldName: "Modded Starter", WorldSize: "medium", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 8, Port: 7781, MOTD: "Mods enabled", Secure: true, Language: "en-US", AutoCreateWorld: true}},
 }
 
 func ValidateConfig(config domain.TerrariaConfig) error {
@@ -42,6 +42,11 @@ func ValidateConfig(config domain.TerrariaConfig) error {
 	default:
 		return fmt.Errorf("world size must be small, medium, or large")
 	}
+	switch config.WorldEvil {
+	case "", "random", "corruption", "crimson":
+	default:
+		return fmt.Errorf("world evil must be random, corruption, or crimson")
+	}
 	switch config.Difficulty {
 	case "journey", "classic", "expert", "master":
 	default:
@@ -55,10 +60,12 @@ func RenderServerConfig(config domain.TerrariaConfig) (string, error) {
 		return "", err
 	}
 	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
+	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
 	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
 	lines := []string{
 		fmt.Sprintf("world=worlds/%s.wld", config.WorldName),
 		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),
+		fmt.Sprintf("worldevil=%d", worldEvils[config.WorldEvil]),
 		fmt.Sprintf("difficulty=%d", difficulties[config.Difficulty]),
 		fmt.Sprintf("maxplayers=%d", config.MaxPlayers),
 		fmt.Sprintf("port=%d", config.Port),

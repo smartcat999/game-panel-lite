@@ -1123,6 +1123,78 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Mod Enable Toggle Update
+
+Status: Completed
+
+Completed:
+- Added a backend server-scoped mod update endpoint for toggling the stored enabled state of uploaded tModLoader mod files.
+- Added mod enable/disable actions to both the global Mods page and the Server Detail Mods tab.
+- Added localized success and error feedback for mod enable/disable operations.
+- Added backend and frontend API tests for mod enabled-state updates.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestTModLoaderModEnabledEndpoint`: failed first with 405, then passed after the route and handler were added.
+- `pnpm --filter @gamepanel-lite/web test -- api.test.ts`: failed first because `setModEnabled` did not exist, then passed after the API wrapper was added.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm build`: failed once with a transient Next.js `/_document` page module cache error, then passed on immediate rerun with the existing Next.js ESLint plugin warning.
+
+## V1 Dashboard Quick Actions Update
+
+Status: Completed
+
+Completed:
+- Changed dashboard quick actions to preserve intent when navigating to resource pages.
+- `Import World` now opens Worlds with an import action prompt and file picker.
+- `Create Backup` now opens Backups with a create action and starts a backup for the active server.
+- Added a focused frontend test for dashboard quick action hrefs.
+
+Checks:
+- `pnpm test`: passed.
+- `pnpm lint`: passed.
+- `pnpm build`: passed on rerun with the existing Next.js ESLint plugin warning.
+
+## V1 Dashboard Quick Actions Completion Update
+
+Status: Completed
+
+Completed:
+- Dashboard quick actions now preserve intent when navigating to resource pages.
+- Import World opens the Worlds page with an import action, shows guidance, clears the action query, and opens the file picker.
+- Create Backup opens the Backups page with a create action, waits for the active server, clears the action query, and starts a backup.
+- Replaced the placeholder dashboard unit test with coverage for the quick action href contract.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: failed first because the dashboard test used an alias unsupported by the current Vitest config, then passed after switching to a relative import.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Join Port And Mod Library Guard Update
+
+Status: Completed
+
+Completed:
+- Added shared frontend join helpers so server cards, search results, detail copy rows, and invite text consistently use Docker's external host port when available.
+- Added unit coverage for join port fallback and invite text generation.
+- Guarded the global mod delete API so it only deletes unassigned mod library files and cannot delete a server-scoped mod record through the library endpoint.
+- Added backend HTTP coverage proving global mod deletion rejects server-scoped mod records.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: failed first because the guard was applied to the server mod delete path instead of the global mod delete path, then passed after moving it.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
 ## V1 Server Runtime Recovery Update
 
 Status: Completed
@@ -1152,6 +1224,23 @@ Completed:
 - Disabled restore buttons on the server detail page while the source server is running.
 - Disabled restore buttons on the Backups page for backups whose source server is currently running.
 - Added localized restore guidance so users know to stop the server before restoring a backup instead of discovering it through a failed API call.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Provider Version Guard Update
+
+Status: Completed
+
+Completed:
+- Normalized the create-server wizard so the selected version always belongs to the currently selected Terraria provider mode.
+- Added backend create-server validation that rejects unsupported provider versions instead of silently starting an invalid image tag.
+- Added backend HTTP coverage for unsupported version rejection.
 
 Checks:
 - `pnpm typecheck`: passed.

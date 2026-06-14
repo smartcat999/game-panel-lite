@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
+import { serverInviteText } from "@/lib/server-join";
 import type { Server } from "@/lib/types";
 import { serverAction } from "@/lib/api";
 
@@ -74,7 +75,7 @@ export function ServerActions({ server }: { server: Server }) {
     setErrorMessage("");
     setSuccessMessage("");
     try {
-      await navigator.clipboard.writeText(`Join ${server.name} at 127.0.0.1:${server.port}${server.password ? ` password: ${server.password}` : ""}`);
+      await navigator.clipboard.writeText(serverInviteText(server));
       setCopiedInvite(true);
       window.setTimeout(() => setCopiedInvite(false), 1500);
     } catch (error) {

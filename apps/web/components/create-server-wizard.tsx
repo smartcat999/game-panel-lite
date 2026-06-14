@@ -3,24 +3,24 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, FileArchive, FileUp, Gamepad2, Hammer, Package, Settings2, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { previewTerrariaConfig } from "@/lib/api";
-import { createTerrariaServerWithAssets } from "@/lib/create-server-flow";
-import { getTerrariaPreset, type TerrariaConfig } from "@gamepanel-lite/shared";
+import { getTerrariaVersions, listGlobalMods, listWorlds, previewTerrariaConfig } from "@/lib/api";
+import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
+import { getTerrariaPreset, secretSeedKeyFor, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepWorldMods", "stepReview"] as const;
 const presets = [
   { key: "friends-casual", labelKey: "presetFriendsCasual", descriptionKey: "presetFriendsCasualDescription", tags: ["tagClassic", "tagMediumWorld", "8"] },
-  { key: "building-world", labelKey: "presetBuildingWorld", descriptionKey: "presetBuildingWorldDescription", tags: ["tagClassic", "tagLargeWorld", "8"] },
-  { key: "expert-adventure", labelKey: "presetExpertAdventure", descriptionKey: "presetExpertAdventureDescription", tags: ["tagExpert", "tagMediumWorld", "8"] },
-  { key: "modded-starter", labelKey: "presetModdedStarter", descriptionKey: "presetModdedStarterDescription", tags: ["tModLoader", "tagMediumWorld", "10"] },
-  { key: "master-challenge", labelKey: "presetMasterChallenge", descriptionKey: "presetMasterChallengeDescription", tags: ["tagMaster", "tagMediumWorld", "6"] }
+  { key: "building-world", labelKey: "presetBuildingWorld", descriptionKey: "presetBuildingWorldDescription", tags: ["tagClassic", "tagLargeWorld", "12"] },
+  { key: "expert-adventure", labelKey: "presetExpertAdventure", descriptionKey: "presetExpertAdventureDescription", tags: ["tagExpert", "tagLargeWorld", "8"] },
+  { key: "modded-starter", labelKey: "presetModdedStarter", descriptionKey: "presetModdedStarterDescription", tags: ["tModLoader", "tagMediumWorld", "8"] },
+  { key: "master-challenge", labelKey: "presetMasterChallenge", descriptionKey: "presetMasterChallengeDescription", tags: ["tagMaster", "tagLargeWorld", "6"] }
 ] as const;
 
 type PresetKey = (typeof presets)[number]["key"];
@@ -29,20 +29,29 @@ export function CreateServerWizard() {
   const { t } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState(2);
+  const [step, setStep] = useState(0);
   const [mode, setMode] = useState<"vanilla" | "tmodloader">("tmodloader");
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>("modded-starter");
   const [config, setConfig] = useState<TerrariaConfig>(getTerrariaPreset("modded-starter").config);
-  const [worldFile, setWorldFile] = useState<File | null>(null);
-  const [modFiles, setModFiles] = useState<File[]>([]);
-  const worldFileName = worldFile?.name ?? "";
-  const modFileNames = modFiles.map((file) => file.name);
+  const [version, setVersion] = useState("");
+  const [selectedWorldId, setSelectedWorldId] = useState("");
+  const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
+  const versionsQuery = useQuery({ queryKey: ["terraria-versions"], queryFn: getTerrariaVersions, staleTime: 5 * 60 * 1000 });
+  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
+  const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
+  const providerKey = mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla";
+  const availableVersions = versionsQuery.data?.[providerKey] ?? [];
+  const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
+  const availableWorlds = worldsQuery.data ?? [];
+  const selectedWorld = availableWorlds.find((w) => w.id === selectedWorldId);
+  const availableMods = modsQuery.data ?? [];
+  const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => m.fileName);
   const fallbackStepKey: (typeof stepKeys)[number] = "stepReview";
   const currentStepKey = stepKeys[step] ?? fallbackStepKey;
   const nextStepKey = stepKeys[Math.min(stepKeys.length - 1, step + 1)] ?? fallbackStepKey;
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
   const create = useMutation({
-    mutationFn: () => createTerrariaServerWithAssets({ config, mode, modFiles, worldFile }),
+    mutationFn: () => createTerrariaServerWithWorld({ config, mode, worldId: selectedWorldId || undefined, modIds: selectedModIds, version: selectedVersion }),
     onSuccess: async ({ server }) => {
       await queryClient.invalidateQueries({ queryKey: ["servers"] });
       await queryClient.invalidateQueries({ queryKey: ["worlds"] });
@@ -58,9 +67,6 @@ export function CreateServerWizard() {
     setMode(nextMode);
     setSelectedPreset(nextPreset);
     setConfig(getTerrariaPreset(nextPreset).config);
-    if (nextMode === "vanilla") {
-      setModFiles([]);
-    }
   };
   const choosePreset = (preset: PresetKey) => {
     setSelectedPreset(preset);
@@ -70,14 +76,14 @@ export function CreateServerWizard() {
   return (
     <Card className="overflow-hidden">
       <div className="grid min-h-[640px] lg:grid-cols-[280px_1fr]">
-        <aside className="hidden border-r border-panel-line bg-[linear-gradient(180deg,#111827,#07111b)] p-6 lg:flex lg:flex-col lg:justify-end">
+        <aside className="hidden border-r border-panel-line bg-[linear-gradient(180deg,#111827,#07111b)] p-6 lg:block">
           <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950 shadow-[0_0_0_1px_rgba(123,217,120,0.08)]">
             <Image
               src="/images/terraria-official-cover.jpg"
               alt={t("terrariaCoverAlt")}
               width={1200}
               height={1800}
-              className="h-72 w-full object-cover"
+              className="aspect-[2/3] w-full object-cover"
               priority
             />
           </div>
@@ -109,17 +115,19 @@ export function CreateServerWizard() {
             {step === 0 && <Choice title={t("chooseGame")} icon={<Gamepad2 />} options={["Terraria"]} />}
             {step === 1 && <ModeStep mode={mode} setMode={chooseMode} />}
             {step === 2 && <PresetStep mode={mode} selectedPreset={selectedPreset} setPreset={choosePreset} />}
-            {step === 3 && <ConfigStep config={config} setConfig={setConfig} />}
+            {step === 3 && <ConfigStep config={config} setConfig={setConfig} versions={availableVersions} version={selectedVersion} setVersion={setVersion} />}
             {step === 4 && (
               <WorldModsStep
                 mode={mode}
-                worldFileName={worldFileName}
-                modFileNames={modFileNames}
-                setWorldFile={setWorldFile}
-                setModFiles={setModFiles}
+                worlds={availableWorlds}
+                selectedWorldId={selectedWorldId}
+                onSelectWorld={setSelectedWorldId}
+                mods={availableMods}
+                selectedModIds={selectedModIds}
+                onToggleMod={(modId) => setSelectedModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId])}
               />
             )}
-            {step === 5 && <ReviewStep mode={mode} config={config} worldFileName={worldFileName} modFileNames={modFileNames} />}
+            {step === 5 && <ReviewStep mode={mode} config={config} version={selectedVersion} selectedWorldName={selectedWorld?.name} selectedModNames={selectedModNames} />}
           </motion.div>
           <div className="mt-8 flex justify-between">
             <Button variant="secondary" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
@@ -218,7 +226,7 @@ function PresetStep({
   const { t } = useI18n();
   const renderTag = (tag: (typeof presets)[number]["tags"][number]) => {
     if (tag === "tModLoader") return tag;
-    if (tag === "6" || tag === "8" || tag === "10") return t("tagPlayers", { count: tag });
+    if (tag === "6" || tag === "8" || tag === "12") return t("tagPlayers", { count: tag });
     return t(tag);
   };
   return (
@@ -265,12 +273,13 @@ function PresetStep({
   );
 }
 
-function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: (config: TerrariaConfig) => void }) {
+function ConfigStep({ config, setConfig, versions, version, setVersion }: { config: TerrariaConfig; setConfig: (config: TerrariaConfig) => void; versions: string[]; version: string; setVersion: (version: string) => void }) {
   const { t } = useI18n();
   const preview = useMutation({
     mutationFn: () => previewTerrariaConfig(config)
   });
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setConfig({ ...config, [key]: value });
+  const secretSeed = secretSeedKeyFor(config.seed);
   return (
     <div>
       <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
@@ -288,6 +297,13 @@ function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: 
             <option value="large">{t("tagLargeWorld")}</option>
           </WizardSelect>
         </WizardField>
+        <WizardField label={t("worldEvil")}>
+          <WizardSelect value={config.worldEvil} onChange={(value) => update("worldEvil", value as TerrariaConfig["worldEvil"])}>
+            <option value="random">{t("tagRandom")}</option>
+            <option value="corruption">{t("tagCorruption")}</option>
+            <option value="crimson">{t("tagCrimson")}</option>
+          </WizardSelect>
+        </WizardField>
         <WizardField label={t("difficulty")}>
           <WizardSelect value={config.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])}>
             <option value="journey">{t("tagJourney")}</option>
@@ -296,18 +312,43 @@ function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: 
             <option value="master">{t("tagMaster")}</option>
           </WizardSelect>
         </WizardField>
+        <WizardField label={t("gameVersion")}>
+          <WizardSelect value={version} onChange={(value) => setVersion(value)}>
+            {versions.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
+          </WizardSelect>
+        </WizardField>
         <WizardField label={t("port")}>
           <Input type="number" min={1024} max={65535} value={config.port} onChange={(event) => update("port", Number(event.target.value))} />
         </WizardField>
         <WizardField label={t("maxPlayersInput")}>
           <Input type="number" min={1} max={255} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
         </WizardField>
-        <WizardField label={t("motd")}>
-          <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
-        </WizardField>
         <WizardField label={t("password")}>
           <Input value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
         </WizardField>
+        <WizardField label={t("motd")}>
+          <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
+        </WizardField>
+        <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
+          <WizardField label={t("secretSeed")}>
+            <WizardSelect value={secretSeed} onChange={(value) => update("seed", value)}>
+              <option value="">{t("noSecretSeed")}</option>
+              {terrariaSecretSeeds.map((seed) => (
+                <option key={seed.key} value={seed.key}>{seed.label} — {seed.description}</option>
+              ))}
+            </WizardSelect>
+          </WizardField>
+          <WizardField label={t("customSeed")}>
+            <Input
+              value={secretSeed ? "" : (config.seed ?? "")}
+              placeholder={secretSeed ? t("customSeedDisabledHint") : t("customSeedPlaceholder")}
+              onChange={(event) => update("seed", event.target.value)}
+              disabled={Boolean(secretSeed)}
+            />
+          </WizardField>
+        </div>
         <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
           <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
           <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
@@ -365,61 +406,118 @@ function WizardCheckbox({ checked, label, onChange }: { checked: boolean; label:
 
 function WorldModsStep({
   mode,
-  worldFileName,
-  modFileNames,
-  setWorldFile,
-  setModFiles
+  worlds,
+  selectedWorldId,
+  onSelectWorld,
+  mods,
+  selectedModIds,
+  onToggleMod
 }: {
   mode: "vanilla" | "tmodloader";
-  worldFileName: string;
-  modFileNames: string[];
-  setWorldFile: (file: File | null) => void;
-  setModFiles: (files: File[]) => void;
+  worlds: { id: string; name: string; modified: string; bytes: string }[];
+  selectedWorldId: string;
+  onSelectWorld: (id: string) => void;
+  mods: { id: string; fileName: string; size: string }[];
+  selectedModIds: string[];
+  onToggleMod: (modId: string) => void;
 }) {
   const { t } = useI18n();
   return (
     <div>
-      <h2 className="text-lg font-semibold">{mode === "tmodloader" ? t("worldAndMods") : t("worldOnly")}</h2>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="cursor-pointer rounded-lg border border-panel-line bg-slate-950/40 p-4 text-left transition hover:border-panel-green focus-within:border-panel-green">
-          <input
-            className="sr-only"
-            type="file"
-            accept=".wld"
-            onChange={(event) => setWorldFile(event.target.files?.[0] ?? null)}
-          />
-          <span className="flex items-center gap-3 font-medium text-white">
-            <FileUp aria-hidden="true" className="text-panel-green" />
-            {t("importWldFile")}
+      <h2 className="text-lg font-semibold">{t("selectWorld")}</h2>
+      <p className="mt-1 text-sm text-slate-400">{t("selectWorldHint")}</p>
+      <div className="mt-4 space-y-3">
+        <button
+          type="button"
+          onClick={() => onSelectWorld("")}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+            selectedWorldId === ""
+              ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+              : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
+          )}
+        >
+          <span className={cn("flex size-5 items-center justify-center rounded-full border", selectedWorldId === "" ? "border-panel-green bg-panel-green" : "border-slate-600")}>
+            {selectedWorldId === "" && <Check aria-hidden="true" className="size-3 text-slate-950" />}
           </span>
-          <span className={cn("mt-3 block truncate text-sm", worldFileName ? "text-panel-green" : "text-slate-400")}>
-            {worldFileName ? t("selectedFile", { name: worldFileName }) : t("clickToChooseFile")}
-          </span>
-        </label>
-        {mode === "tmodloader" && (
-          <label className="cursor-pointer rounded-lg border border-panel-purple bg-slate-950/40 p-4 text-left transition hover:border-panel-purple/80 focus-within:border-panel-purple">
-            <input
-              className="sr-only"
-              type="file"
-              accept=".tmod,.txt,.json"
-              multiple
-              onChange={(event) => setModFiles(Array.from(event.target.files ?? []))}
-            />
-            <span className="flex items-center gap-3 font-medium text-white">
-              <FileArchive aria-hidden="true" className="text-panel-purple" />
-              {t("uploadModFiles")}
-            </span>
-            <span className={cn("mt-3 block truncate text-sm", modFileNames.length ? "text-panel-purple" : "text-slate-400")}>
-              {modFileNames.length ? t("selectedFiles", { count: modFileNames.length }) : t("clickToChooseFile")}
-            </span>
-            {modFileNames.length > 0 && (
-              <span className="mt-2 block truncate text-xs text-slate-500">{modFileNames.join(", ")}</span>
-            )}
-          </label>
+          <Globe aria-hidden="true" className="text-panel-green" />
+          <div>
+            <p className="font-medium">{t("autoCreateWorld")}</p>
+            <p className="mt-0.5 text-sm text-slate-400">{t("autoCreateWorldHint")}</p>
+          </div>
+        </button>
+        {worlds.length > 0 && (
+          <div className="space-y-2">
+            <p className="px-1 text-xs font-medium text-slate-500">{t("importedWorlds")}</p>
+            {worlds.map((world) => (
+              <button
+                key={world.id}
+                type="button"
+                onClick={() => onSelectWorld(world.id)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+                  selectedWorldId === world.id
+                    ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+                    : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
+                )}
+              >
+                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border", selectedWorldId === world.id ? "border-panel-green bg-panel-green" : "border-slate-600")}>
+                  {selectedWorldId === world.id && <Check aria-hidden="true" className="size-3 text-slate-950" />}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{world.name}</p>
+                  <p className="mt-0.5 text-sm text-slate-400">{world.modified} · {world.bytes}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         )}
+        <Link href="/worlds" className="inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
+          <FileArchive aria-hidden="true" className="size-4" />
+          {t("goToWorldsPage")}
+        </Link>
       </div>
-      {(worldFileName || modFileNames.length > 0) && (
-        <p className="mt-3 text-xs text-slate-500">{t("wizardUploadDeferredNote")}</p>
+      {mode === "tmodloader" && (
+        <div className="mt-6 border-t border-panel-line pt-6">
+          <h2 className="text-lg font-semibold">{t("selectMods")}</h2>
+          <p className="mt-1 text-sm text-slate-400">{t("selectModsHint")}</p>
+          <div className="mt-4 space-y-2">
+            {mods.length === 0 ? (
+              <Link href="/mods" className="inline-flex items-center gap-2 text-sm text-panel-purple hover:underline">
+                <Package aria-hidden="true" className="size-4" />
+                {t("goToModsPage")}
+              </Link>
+            ) : (
+              <>
+                {mods.map((mod) => (
+                  <button
+                    key={mod.id}
+                    type="button"
+                    onClick={() => onToggleMod(mod.id)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-purple/50",
+                      selectedModIds.includes(mod.id)
+                        ? "border-panel-purple bg-panel-purple/10 ring-1 ring-panel-purple/40"
+                        : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
+                    )}
+                  >
+                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", selectedModIds.includes(mod.id) ? "border-panel-purple bg-panel-purple text-white" : "border-slate-600")}>
+                      {selectedModIds.includes(mod.id) && <Check aria-hidden="true" className="size-3" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{mod.fileName}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{mod.size}</p>
+                    </div>
+                  </button>
+                ))}
+                <Link href="/mods" className="inline-flex items-center gap-2 pt-1 text-sm text-panel-purple hover:underline">
+                  <Package aria-hidden="true" className="size-4" />
+                  {t("goToModsPage")}
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -428,13 +526,15 @@ function WorldModsStep({
 function ReviewStep({
   mode,
   config,
-  worldFileName,
-  modFileNames
+  version,
+  selectedWorldName,
+  selectedModNames
 }: {
   mode: "vanilla" | "tmodloader";
   config: TerrariaConfig;
-  worldFileName: string;
-  modFileNames: string[];
+  version: string;
+  selectedWorldName?: string;
+  selectedModNames: string[];
 }) {
   const { t } = useI18n();
   return (
@@ -443,10 +543,15 @@ function ReviewStep({
       <Card className="mt-4 p-4">
         <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { mode: mode === "tmodloader" ? "tModLoader" : t("modeVanilla"), port: config.port })}</div>
         <p className="mt-3 text-sm text-slate-400">{t("reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
-        {(worldFileName || modFileNames.length > 0) && (
+        {version && <p className="mt-2 text-sm text-slate-400">{t("gameVersion")}: <span className="text-slate-200">{version}</span></p>}
+        {selectedWorldName && (
           <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
-            {worldFileName && <p>{t("selectedWorldFile")}: <span className="text-panel-green">{worldFileName}</span></p>}
-            {modFileNames.length > 0 && <p className="mt-1">{t("selectedModFiles")}: <span className="text-panel-purple">{modFileNames.join(", ")}</span></p>}
+            <p>{t("selectedWorldFile")}: <span className="text-panel-green">{selectedWorldName}</span></p>
+          </div>
+        )}
+        {mode === "tmodloader" && selectedModNames.length > 0 && (
+          <div className="mt-2 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
+            <p>{t("selectedModFiles")}: <span className="text-panel-purple">{selectedModNames.join(", ")}</span></p>
           </div>
         )}
       </Card>

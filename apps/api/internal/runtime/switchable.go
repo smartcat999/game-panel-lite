@@ -57,6 +57,10 @@ func (s *SwitchableAdapter) Inspect(ctx context.Context, instance domain.GameSer
 	return s.current().Inspect(ctx, instance)
 }
 
+func (s *SwitchableAdapter) Stats(ctx context.Context, instance domain.GameServerInstance) (ContainerStats, error) {
+	return s.current().Stats(ctx, instance)
+}
+
 func (s *SwitchableAdapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	return s.current().Logs(ctx, instance)
 }

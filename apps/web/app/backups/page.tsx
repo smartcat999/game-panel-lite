@@ -2,7 +2,7 @@
 
 import { Archive, Download, MoveRight, RotateCcw, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
@@ -23,6 +23,7 @@ export default function BackupsPage() {
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Backup | null>(null);
   const [downloadingBackupId, setDownloadingBackupId] = useState("");
+  const quickCreateHandledRef = useRef(false);
   const servers = serversQuery.data ?? [];
   const backups = backupsQuery.data ?? [];
   const activeServerId = selectedServerId || servers[0]?.id || "";
@@ -95,6 +96,16 @@ export default function BackupsPage() {
       setDownloadingBackupId("");
     }
   };
+
+  useEffect(() => {
+    if (quickCreateHandledRef.current || typeof window === "undefined" || !activeServerId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("action") !== "create") return;
+    quickCreateHandledRef.current = true;
+    url.searchParams.delete("action");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    create.mutate(activeServerId);
+  }, [activeServerId, create]);
 
   return (
     <>

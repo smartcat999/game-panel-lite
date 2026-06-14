@@ -1,53 +1,53 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { assignWorld, createServer, importWorld, uploadMod } from "./api";
+import { assignMod, assignWorld, createServer } from "./api";
 import type { Server, World } from "./types";
 
 type CreateMode = "vanilla" | "tmodloader";
 
-type CreateServerWithAssetsDeps = {
+type CreateServerWithWorldDeps = {
   createServer: typeof createServer;
-  importWorld: typeof importWorld;
   assignWorld: typeof assignWorld;
-  uploadMod: typeof uploadMod;
+  assignMod: typeof assignMod;
 };
 
-export type CreateServerWithAssetsInput = {
+export type CreateServerWithWorldInput = {
   config: TerrariaConfig;
-  deps?: CreateServerWithAssetsDeps;
+  deps?: CreateServerWithWorldDeps;
   mode: CreateMode;
-  modFiles: File[];
-  worldFile: File | null;
+  worldId?: string;
+  modIds?: string[];
+  version?: string;
 };
 
-export type CreatedServerWithAssets = {
+export type CreatedServerWithWorld = {
   assignedWorld?: World;
   server: Server;
 };
 
-const defaultDeps: CreateServerWithAssetsDeps = {
+const defaultDeps: CreateServerWithWorldDeps = {
   assignWorld,
   createServer,
-  importWorld,
-  uploadMod
+  assignMod
 };
 
-export async function createTerrariaServerWithAssets({
+export async function createTerrariaServerWithWorld({
   config,
   deps = defaultDeps,
   mode,
-  modFiles,
-  worldFile
-}: CreateServerWithAssetsInput): Promise<CreatedServerWithAssets> {
+  worldId,
+  modIds = [],
+  version
+}: CreateServerWithWorldInput): Promise<CreatedServerWithWorld> {
   let server = await deps.createServer({
     name: config.serverName || "Terraria Server",
     providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
-    config
+    config,
+    version
   });
 
   let assignedWorld: World | undefined;
-  if (worldFile) {
-    const importedWorld = await deps.importWorld(worldFile, server.id);
-    assignedWorld = await deps.assignWorld(importedWorld.id, server.id);
+  if (worldId) {
+    assignedWorld = await deps.assignWorld(worldId, server.id);
     server = {
       ...server,
       config: {
@@ -58,8 +58,8 @@ export async function createTerrariaServerWithAssets({
     };
   }
 
-  if (mode === "tmodloader" && modFiles.length > 0) {
-    await Promise.all(modFiles.map((file) => deps.uploadMod(server.id, file)));
+  if (mode === "tmodloader" && modIds.length > 0) {
+    await Promise.all(modIds.map((modId) => deps.assignMod(modId, server.id)));
   }
 
   return { assignedWorld, server };

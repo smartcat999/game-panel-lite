@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -82,7 +83,7 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 		},
 	}, &container.HostConfig{
 		Binds:        dataBinds(dataDir, spec.Options.DataMounts),
-		PortBindings: natPortMap(spec.Port),
+		PortBindings: natPortMap(spec.Port, spec.HostPort),
 	}, nil, nil, "gamepanel-"+spec.InstanceID)
 	if err != nil {
 		return "", err
@@ -137,6 +138,37 @@ func (a *Adapter) Inspect(ctx context.Context, instance domain.GameServerInstanc
 		return domain.StatusRunning, nil
 	}
 	return domain.StatusStopped, nil
+}
+
+func (a *Adapter) Stats(ctx context.Context, instance domain.GameServerInstance) (runtime.ContainerStats, error) {
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return runtime.ContainerStats{}, err
+	}
+	resp, err := a.client.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		return runtime.ContainerStats{}, err
+	}
+	defer resp.Body.Close()
+	var data types.StatsJSON
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return runtime.ContainerStats{}, err
+	}
+	cpuPercent := 0.0
+	cpuDelta := float64(data.CPUStats.CPUUsage.TotalUsage - data.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(data.CPUStats.SystemUsage - data.PreCPUStats.SystemUsage)
+	onlineCPUs := float64(data.CPUStats.OnlineCPUs)
+	if onlineCPUs == 0 {
+		onlineCPUs = float64(len(data.CPUStats.CPUUsage.PercpuUsage))
+	}
+	if systemDelta > 0 && onlineCPUs > 0 {
+		cpuPercent = (cpuDelta / systemDelta) * onlineCPUs * 100
+	}
+	return runtime.ContainerStats{
+		CPUPercent:    cpuPercent,
+		MemoryMB:      int64(data.MemoryStats.Usage) / 1024 / 1024,
+		MemoryLimitMB: int64(data.MemoryStats.Limit) / 1024 / 1024,
+	}, nil
 }
 
 func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
@@ -222,7 +254,7 @@ func dataBinds(dataDir string, mounts []string) []string {
 	return binds
 }
 
-func natPortMap(port int) nat.PortMap {
-	p := nat.Port(fmt.Sprintf("%d/tcp", port))
-	return nat.PortMap{p: []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port)}}}
+func natPortMap(containerPort int, hostPort int) nat.PortMap {
+	p := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
+	return nat.PortMap{p: []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", hostPort)}}}
 }

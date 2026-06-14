@@ -76,6 +76,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/servers/{id}/command", h.sendServerCommand)
 	r.Delete("/api/servers/{id}", h.deleteServer)
 	r.Get("/api/servers/{id}/logs", h.serverLogs)
+	r.Get("/api/servers/{id}/stats", h.serverStats)
 	r.Get("/api/worlds", h.listWorlds)
 	r.Post("/api/worlds/import", h.importWorld)
 	r.Post("/api/worlds/{id}/assign", h.assignWorld)
@@ -91,8 +92,14 @@ func (h *Handler) Register(r chi.Router) {
 	r.Delete("/api/backups/{id}", h.deleteBackup)
 	r.Get("/api/servers/{id}/mods", h.listMods)
 	r.Post("/api/servers/{id}/mods/upload", h.uploadMod)
+	r.Patch("/api/servers/{id}/mods/{modId}", h.updateMod)
 	r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
+	r.Get("/api/mods", h.listGlobalMods)
+	r.Post("/api/mods/upload", h.uploadGlobalMod)
+	r.Post("/api/mods/{id}/assign", h.assignMod)
+	r.Delete("/api/mods/{id}", h.deleteGlobalMod)
 	r.Get("/api/terraria/presets", h.presets)
+	r.Get("/api/terraria/versions", h.versions)
 	r.Post("/api/terraria/config/preview", h.configPreview)
 }
 
@@ -140,6 +147,37 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, item)
 }
 
+func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
+	if err != nil || item.InstanceID != server.ID {
+		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	var payload struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if payload.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "enabled is required")
+		return
+	}
+	item.Enabled = *payload.Enabled
+	if err := h.store.SaveMod(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "mod.updated", fmt.Sprintf("Updated mod %s", item.FileName))
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
 	if err != nil {
@@ -150,6 +188,94 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 	_ = os.Remove(path)
 	_ = h.store.DeleteMod(r.Context(), item.ID)
 	h.recordActivity(r.Context(), item.InstanceID, "mod.deleted", fmt.Sprintf("Deleted mod %s", item.FileName))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) listGlobalMods(w http.ResponseWriter, r *http.Request) {
+	mods, err := h.store.ListMods(r.Context(), "unassigned")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, mods)
+}
+
+func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "mod file is required")
+		return
+	}
+	defer file.Close()
+	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", header.Filename, file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	item := domain.ModFile{ID: uuid.NewString(), InstanceID: "unassigned", FileName: header.Filename, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	if err := h.store.CreateMod(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	var payload struct {
+		InstanceID string `json:"instanceId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.InstanceID == "" {
+		writeError(w, http.StatusBadRequest, "instanceId is required")
+		return
+	}
+	targetServer, err := h.store.GetServer(r.Context(), payload.InstanceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if targetServer.ProviderKey != domain.ProviderTerrariaTModLoader {
+		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+		return
+	}
+	sourcePath, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	src, err := os.Open(sourcePath)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "mod file not found")
+		return
+	}
+	defer src.Close()
+	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(targetServer.ID, item.FileName, src)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	assigned := domain.ModFile{ID: uuid.NewString(), InstanceID: targetServer.ID, FileName: item.FileName, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	if err := h.store.CreateMod(r.Context(), &assigned); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Assigned mod %s to %s", item.FileName, targetServer.Name))
+	writeJSON(w, http.StatusCreated, assigned)
+}
+
+func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	if item.InstanceID != "unassigned" {
+		writeError(w, http.StatusBadRequest, "global mod delete only supports unassigned library mods")
+		return
+	}
+	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	_ = os.Remove(path)
+	_ = h.store.DeleteMod(r.Context(), item.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -343,7 +469,21 @@ func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, backups)
+	svc := backupsvc.NewService(h.cfg.DataDir)
+	visible := make([]domain.Backup, 0, len(backups))
+	for _, b := range backups {
+		path, err := svc.Path(b.InstanceID, b.FileName)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			h.logger.Warn("backup file missing, pruning orphaned record", "backupId", b.ID, "path", path)
+			_ = h.store.DeleteBackup(r.Context(), b.ID)
+			continue
+		}
+		visible = append(visible, b)
+	}
+	writeJSON(w, http.StatusOK, visible)
 }
 
 func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
@@ -377,6 +517,10 @@ func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if _, err := os.Stat(path); err != nil {
+		writeError(w, http.StatusNotFound, "backup file not found on disk")
+		return
+	}
 	http.ServeFile(w, r, path)
 }
 
@@ -393,6 +537,11 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
 		writeError(w, http.StatusConflict, "stop the server before restoring a backup")
+		return
+	}
+	restorePath, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if _, err := os.Stat(restorePath); err != nil {
+		writeError(w, http.StatusNotFound, "backup file not found on disk")
 		return
 	}
 	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, server.DataDir); err != nil {
@@ -445,9 +594,9 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "backup not found")
 		return
 	}
+	_ = h.store.DeleteBackup(r.Context(), item.ID)
 	path, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	_ = os.Remove(path)
-	_ = h.store.DeleteBackup(r.Context(), item.ID)
 	h.recordActivity(r.Context(), item.InstanceID, "backup.deleted", fmt.Sprintf("Deleted backup %s", item.FileName))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -620,6 +769,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		Name        string                `json:"name"`
 		ProviderKey domain.ProviderKey    `json:"providerKey"`
 		Config      domain.TerrariaConfig `json:"config"`
+		Version     string                `json:"version"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -632,6 +782,13 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if payload.Name == "" {
 		payload.Name = payload.Config.ServerName
+	}
+	if payload.Version == "" {
+		payload.Version = gameProvider.Versions()[0]
+	}
+	if !providerSupportsVersion(gameProvider, payload.Version) {
+		writeError(w, http.StatusBadRequest, "unsupported provider version")
+		return
 	}
 	if err := gameProvider.ValidateConfig(payload.Config); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -647,7 +804,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		ID: id, Name: payload.Name, GameKey: "terraria", ProviderKey: payload.ProviderKey,
 		Status: domain.StatusStopped, WorldName: payload.Config.WorldName, Port: payload.Config.Port,
 		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir,
-		Config: payload.Config, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		Config: payload.Config, Version: payload.Version, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	if err := h.store.CreateServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -805,11 +962,18 @@ func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.Game
 	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
 		return domain.GameServerInstance{}, false, err
 	}
+	if server.HostPort == 0 {
+		server.HostPort, err = h.allocateHostPort(ctx, server.ID)
+		if err != nil {
+			return domain.GameServerInstance{}, false, err
+		}
+	}
 	containerID, err := h.runtime.Create(ctx, runtime.ContainerSpec{
 		InstanceID: server.ID,
 		Name:       server.Name,
-		Image:      gameProvider.Image(),
+		Image:      gameProvider.ImageFor(server.Version),
 		Port:       server.Port,
+		HostPort:   server.HostPort,
 		DataDir:    server.DataDir,
 		ConfigText: configText,
 		Options:    gameProvider.RuntimeOptions(server.Config),
@@ -943,6 +1107,46 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+func (h *Handler) serverStats(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeJSON(w, http.StatusOK, runtime.ContainerStats{})
+		return
+	}
+	stats, err := h.runtime.Stats(r.Context(), server)
+	if err != nil {
+		h.logger.Warn("failed to get container stats", "server", server.ID, "error", err)
+		writeJSON(w, http.StatusOK, runtime.ContainerStats{})
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string) (int, error) {
+	servers, err := h.store.ListServers(ctx)
+	if err != nil {
+		return 0, err
+	}
+	used := map[int]bool{}
+	for _, s := range servers {
+		if s.ID != excludeInstanceID && s.HostPort > 0 {
+			used[s.HostPort] = true
+		}
+	}
+	port := 7777
+	for port < 65535 {
+		if !used[port] {
+			return port, nil
+		}
+		port++
+	}
+	return 0, fmt.Errorf("no available host port in range 7777-65535")
+}
+
 func (h *Handler) recordActivity(ctx context.Context, instanceID, eventType, message string) {
 	event := domain.ActivityEvent{
 		ID:         uuid.NewString(),
@@ -994,6 +1198,23 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) presets(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, terraria.Presets)
+}
+
+func (h *Handler) versions(w http.ResponseWriter, r *http.Request) {
+	out := map[string][]string{}
+	for _, provider := range h.provider.List() {
+		out[string(provider.Key())] = provider.Versions()
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func providerSupportsVersion(gameProvider provider.GameProvider, version string) bool {
+	for _, supported := range gameProvider.Versions() {
+		if supported == version {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) configPreview(w http.ResponseWriter, r *http.Request) {

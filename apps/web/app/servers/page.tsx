@@ -7,6 +7,7 @@ import { ServerCard } from "@/components/server-card";
 import { Button, Input } from "@/components/ui";
 import { listBackups, listServers } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { serverJoinPort } from "@/lib/server-join";
 import { attachLatestBackupTimes } from "@/lib/server-metrics";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +33,7 @@ export default function ServersPage() {
   const filteredServers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return servers.filter((server) => {
-      const matchesSearch = !term || [server.name, server.world, String(server.port)].some((value) => value.toLowerCase().includes(term));
+      const matchesSearch = !term || [server.name, server.world, String(serverJoinPort(server)), String(server.port)].some((value) => value.toLowerCase().includes(term));
       const matchesFilter =
         filter === "all" ||
         (filter === "running" && server.status === "running") ||

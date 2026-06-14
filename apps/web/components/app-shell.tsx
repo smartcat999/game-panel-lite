@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
 import { getApiHealth, listServers } from "@/lib/api";
+import { serverJoinPort } from "@/lib/server-join";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
@@ -39,7 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];
     return (serversQuery.data ?? [])
-      .filter((server) => [server.name, server.world, String(server.port), server.mode].some((value) => value.toLowerCase().includes(searchTerm)))
+      .filter((server) => [server.name, server.world, String(serverJoinPort(server)), String(server.port), server.mode].some((value) => value.toLowerCase().includes(searchTerm)))
       .slice(0, 5);
   }, [searchTerm, serversQuery.data]);
 
@@ -164,7 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         >
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-medium text-white">{server.name}</span>
-                            <span className="block truncate text-xs text-slate-500">{server.world} · {server.port}</span>
+                            <span className="block truncate text-xs text-slate-500">{server.world} · {serverJoinPort(server)}</span>
                           </span>
                           <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{server.mode === "tmodloader" ? "tModLoader" : "Vanilla"}</span>
                         </button>
