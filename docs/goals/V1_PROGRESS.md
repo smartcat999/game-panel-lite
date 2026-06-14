@@ -1812,3 +1812,24 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Server Delete Resource Cleanup Update
+
+Status: Completed
+
+Completed:
+- Fixed server deletion so it removes server-owned world, backup, and mod records instead of leaving orphaned resources that still appear on management pages.
+- Server deletion now removes the managed world, backup, and mod files for the deleted instance before deleting the server record.
+- Worlds owned by another instance but marked active on the deleted server are preserved and have their stale active marker cleared.
+- Instance data directory cleanup uses the existing safe path join helper to avoid deleting outside the configured GamePanel data root.
+- Added backend HTTP coverage proving server deletion cleans up owned resources and files.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestDeleteServerRemovesOwnedResources -count=1`: failed first because owned world records survived server deletion, then passed after resource cleanup was implemented.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(DeleteServerRemovesOwnedResources|ServerLifecycleAndLogEndpoints|InvalidDockerHostDoesNotDeleteExistingContainerRecord)' -count=1`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

@@ -24,6 +24,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/safety"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 	worldsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/world"
 )
@@ -1471,12 +1472,90 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 			h.logger.Warn("runtime container missing during server delete; deleting stale record", "server", server.ID, "container", server.ContainerID, "error", err)
 		}
 	}
+	if err := h.cleanupOwnedServerResources(r.Context(), server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := h.store.DeleteServer(r.Context(), server.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.deleted", fmt.Sprintf("Deleted server %s", server.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) cleanupOwnedServerResources(ctx context.Context, server domain.GameServerInstance) error {
+	worlds, err := h.store.ListWorlds(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range worlds {
+		if item.InstanceID == server.ID {
+			path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+			if err != nil {
+				return err
+			}
+			if err := removeStoredFile(path); err != nil {
+				return err
+			}
+			if err := h.store.DeleteWorld(ctx, item.ID); err != nil {
+				return err
+			}
+			continue
+		}
+		if item.ActiveInstanceID == server.ID {
+			item.ActiveInstanceID = ""
+			if err := h.store.SaveWorld(ctx, &item); err != nil {
+				return err
+			}
+		}
+	}
+
+	backups, err := h.store.ListBackups(ctx)
+	if err != nil {
+		return err
+	}
+	for _, item := range backups {
+		if item.InstanceID != server.ID {
+			continue
+		}
+		path, err := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+		if err != nil {
+			return err
+		}
+		if err := removeStoredFile(path); err != nil {
+			return err
+		}
+		if err := h.store.DeleteBackup(ctx, item.ID); err != nil {
+			return err
+		}
+	}
+
+	mods, err := h.store.ListMods(ctx, server.ID)
+	if err != nil {
+		return err
+	}
+	for _, item := range mods {
+		path, err := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+		if err != nil {
+			return err
+		}
+		if err := removeStoredFile(path); err != nil {
+			return err
+		}
+		if err := h.store.DeleteMod(ctx, item.ID); err != nil {
+			return err
+		}
+	}
+
+	instanceDir, err := safety.SafeJoin(h.cfg.DataDir, "instances", server.ID)
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(instanceDir); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (h *Handler) serverStats(w http.ResponseWriter, r *http.Request) {

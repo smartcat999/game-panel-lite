@@ -369,6 +369,94 @@ func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
 	}
 }
 
+func TestDeleteServerRemovesOwnedResources(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("owned-resources", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(server.ID, "owned.wld", bytes.NewBufferString("world")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:               "world-1",
+		InstanceID:       server.ID,
+		ActiveInstanceID: server.ID,
+		Name:             "owned",
+		FileName:         "owned.wld",
+		SizeBytes:        5,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte("world"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backupPath, backupSize, err := backupsvc.NewService(cfg.DataDir).Create(server.ID, server.DataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backup := domain.Backup{
+		ID:         "backup-1",
+		InstanceID: server.ID,
+		FileName:   filepath.Base(backupPath),
+		WorldName:  server.WorldName,
+		SizeBytes:  backupSize,
+		Type:       "manual",
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateBackup(context.Background(), &backup); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, "owned.tmod", bytes.NewBufferString("mod")); err != nil {
+		t.Fatal(err)
+	}
+	mod := domain.ModFile{
+		ID:         "mod-1",
+		InstanceID: server.ID,
+		FileName:   "owned.tmod",
+		SizeBytes:  3,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &mod); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected delete server 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := db.GetServer(context.Background(), server.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected server record deleted, got err=%v", err)
+	}
+	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected owned world record deleted, got err=%v", err)
+	}
+	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected owned backup record deleted, got err=%v", err)
+	}
+	if _, err := db.GetMod(context.Background(), mod.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected owned mod record deleted, got err=%v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(cfg.DataDir, "worlds", server.ID, "owned.wld"),
+		filepath.Join(cfg.DataDir, "backups", server.ID, backup.FileName),
+		filepath.Join(cfg.DataDir, "mods", server.ID, "owned.tmod"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected owned resource file removed at %s, stat err=%v", path, err)
+		}
+	}
+}
+
 func TestRunningServerCommandAndLogsRecreateMissingRuntimeContainer(t *testing.T) {
 	adapter := &staleContainerAdapter{}
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
