@@ -1043,3 +1043,22 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Create Wizard Config Completion Update
+
+Status: Completed
+
+Completed:
+- Expanded the Create Server wizard config step from basic text inputs to the full V1 Terraria configuration surface.
+- Added world size and difficulty selectors during server creation.
+- Added numeric constraints for port and max players during server creation.
+- Added secure mode and auto-create-world toggles during server creation.
+- Replaced placeholder-only config inputs with labeled fields for clearer Chinese and English UI.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

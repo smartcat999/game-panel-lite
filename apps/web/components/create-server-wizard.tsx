@@ -285,12 +285,43 @@ function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: 
     <div>
       <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <Input placeholder={t("serverName")} value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
-        <Input placeholder={t("worldName")} value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
-        <Input placeholder={t("port")} value={config.port} onChange={(event) => update("port", Number(event.target.value))} />
-        <Input placeholder={t("maxPlayersInput")} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
-        <Input placeholder={t("motd")} value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
-        <Input placeholder={t("password")} value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
+        <WizardField label={t("serverName")}>
+          <Input value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
+        </WizardField>
+        <WizardField label={t("worldName")}>
+          <Input value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
+        </WizardField>
+        <WizardField label={t("worldSize")}>
+          <WizardSelect value={config.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])}>
+            <option value="small">{t("tagSmallWorld")}</option>
+            <option value="medium">{t("tagMediumWorld")}</option>
+            <option value="large">{t("tagLargeWorld")}</option>
+          </WizardSelect>
+        </WizardField>
+        <WizardField label={t("difficulty")}>
+          <WizardSelect value={config.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])}>
+            <option value="journey">{t("tagJourney")}</option>
+            <option value="classic">{t("tagClassic")}</option>
+            <option value="expert">{t("tagExpert")}</option>
+            <option value="master">{t("tagMaster")}</option>
+          </WizardSelect>
+        </WizardField>
+        <WizardField label={t("port")}>
+          <Input type="number" min={1024} max={65535} value={config.port} onChange={(event) => update("port", Number(event.target.value))} />
+        </WizardField>
+        <WizardField label={t("maxPlayersInput")}>
+          <Input type="number" min={1} max={255} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
+        </WizardField>
+        <WizardField label={t("motd")}>
+          <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
+        </WizardField>
+        <WizardField label={t("password")}>
+          <Input value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
+        </WizardField>
+        <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
+          <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
+          <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
+        </div>
       </div>
       <div className="mt-4 flex items-center gap-3">
         <Button variant="secondary" onClick={() => preview.mutate()} disabled={preview.isPending}>
@@ -304,6 +335,41 @@ function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: 
         </pre>
       )}
     </div>
+  );
+}
+
+function WizardField({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function WizardSelect({ children, onChange, value }: { children: React.ReactNode; onChange: (value: string) => void; value: string }) {
+  return (
+    <select
+      className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {children}
+    </select>
+  );
+}
+
+function WizardCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm text-slate-300">
+      <span>{label}</span>
+      <input
+        className="size-4 accent-panel-green"
+        checked={checked}
+        type="checkbox"
+        onChange={(event) => onChange(event.target.checked)}
+      />
+    </label>
   );
 }
 
