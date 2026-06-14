@@ -69,6 +69,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/servers", h.listServers)
 	r.Post("/api/servers", h.createServer)
 	r.Get("/api/servers/{id}", h.getServer)
+	r.Put("/api/servers/{id}/config", h.updateServerConfig)
 	r.Post("/api/servers/{id}/start", h.startServer)
 	r.Post("/api/servers/{id}/stop", h.stopServer)
 	r.Post("/api/servers/{id}/restart", h.restartServer)
@@ -226,42 +227,12 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "world must be imported or migrated to this server before assignment")
 		return
 	}
-	gameProvider, ok := h.provider.Get(server.ProviderKey)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unknown provider")
+	nextConfig := server.Config
+	nextConfig.WorldName = item.Name
+	if err := h.applyServerConfig(r.Context(), &server, nextConfig); err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
-	server.WorldName = item.Name
-	server.Config.WorldName = item.Name
-	configText, err := gameProvider.RenderConfig(server.Config)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(configText), 0o600); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	for name, content := range gameProvider.RuntimeOptions(server.Config).Files {
-		if err := writeInstanceDataFile(server.DataDir, name, content); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
-	if server.ContainerID != "" {
-		if _, err := h.runtime.Inspect(r.Context(), server); err == nil {
-			if err := h.runtime.Remove(r.Context(), server); err != nil {
-				writeError(w, http.StatusServiceUnavailable, err.Error())
-				return
-			}
-		}
-		server.ContainerID = ""
-	}
-	server.UpdatedAt = time.Now()
 	item.ActiveInstanceID = payload.InstanceID
 	item.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
@@ -604,6 +575,35 @@ func (h *Handler) getServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, server)
 }
 
+func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before updating config")
+		return
+	}
+	var payload struct {
+		Config domain.TerrariaConfig `json:"config"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := h.applyServerConfig(r.Context(), &server, payload.Config); err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	if err := h.store.SaveServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "server.config.updated", fmt.Sprintf("Updated config for %s", server.Name))
+	writeJSON(w, http.StatusOK, server)
+}
+
 func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		Name        string                `json:"name"`
@@ -794,9 +794,68 @@ func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (do
 	return server, nil
 }
 
+func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig) error {
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		return fmt.Errorf("stop the server before updating config")
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return fmt.Errorf("unknown provider: %s", server.ProviderKey)
+	}
+	if nextConfig.ServerName == "" {
+		nextConfig.ServerName = server.Name
+	}
+	if err := gameProvider.ValidateConfig(nextConfig); err != nil {
+		return err
+	}
+	configText, err := gameProvider.RenderConfig(nextConfig)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(configText), 0o600); err != nil {
+		return err
+	}
+	for name, content := range gameProvider.RuntimeOptions(nextConfig).Files {
+		if err := writeInstanceDataFile(server.DataDir, name, content); err != nil {
+			return err
+		}
+	}
+	if server.ContainerID != "" {
+		if _, err := h.runtime.Inspect(ctx, *server); err == nil {
+			if err := h.runtime.Remove(ctx, *server); err != nil {
+				return err
+			}
+		}
+		server.ContainerID = ""
+	}
+	server.Name = nextConfig.ServerName
+	server.WorldName = nextConfig.WorldName
+	server.Port = nextConfig.Port
+	server.MaxPlayers = nextConfig.MaxPlayers
+	server.Password = nextConfig.Password
+	server.Config = nextConfig
+	server.UpdatedAt = time.Now()
+	return nil
+}
+
 func statusCodeForRuntimeError(err error) int {
 	if err != nil && err.Error() == "server not found" {
 		return http.StatusNotFound
+	}
+	if err != nil && (strings.Contains(err.Error(), "required") ||
+		strings.Contains(err.Error(), "must be") ||
+		strings.Contains(err.Error(), "cannot contain") ||
+		strings.Contains(err.Error(), "invalid")) {
+		return http.StatusBadRequest
+	}
+	if err != nil && strings.Contains(err.Error(), "stop the server") {
+		return http.StatusConflict
+	}
+	if err != nil && strings.Contains(err.Error(), "unknown provider") {
+		return http.StatusBadRequest
 	}
 	return http.StatusServiceUnavailable
 }

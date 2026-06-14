@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, CheckCircle2, Copy, Download, FileText, Package, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ServerActions } from "@/components/server-actions";
@@ -26,6 +27,7 @@ import {
   restoreBackup,
   sendServerCommand,
   serverLogsUrl,
+  updateServerConfig,
   uploadMod,
   worldDownloadUrl
 } from "@/lib/api";
@@ -55,16 +57,6 @@ export default function ServerDetailPage() {
     enabled: Boolean(server && server.mode === "tmodloader"),
     retry: false
   });
-  const previewQuery = useQuery({
-    queryKey: ["server-config-preview", id, server?.config],
-    queryFn: () => {
-      if (!server) throw new Error(t("serverNotFound"));
-      return previewTerrariaConfig(server.config);
-    },
-    enabled: Boolean(server),
-    retry: false
-  });
-
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -76,6 +68,7 @@ export default function ServerDetailPage() {
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [logStatus, setLogStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [configSaved, setConfigSaved] = useState(false);
 
   const commandMutation = useMutation({
     mutationFn: (value: string) => sendServerCommand(id, value),
@@ -94,6 +87,20 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
     onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"))
+  });
+  const configSave = useMutation({
+    mutationFn: (nextConfig: TerrariaConfig) => updateServerConfig(id, nextConfig),
+    onSuccess: async (updatedServer) => {
+      setErrorMessage("");
+      setConfigSaved(true);
+      client.setQueryData(["server", id], updatedServer);
+      await client.invalidateQueries({ queryKey: ["servers"] });
+      window.setTimeout(() => setConfigSaved(false), 1800);
+    },
+    onError: (error) => {
+      setConfigSaved(false);
+      setErrorMessage(error instanceof Error ? error.message : t("unableUpdateConfig"));
+    }
   });
   const worldAssign = useMutation({
     mutationFn: (worldId: string) => assignWorld(worldId, id),
@@ -305,10 +312,11 @@ export default function ServerDetailPage() {
           )}
           {activeTab === "config" && (
             <ConfigTab
-              preview={previewQuery.data}
-              previewError={previewQuery.isError}
-              previewLoading={previewQuery.isLoading}
+              saveError={configSave.error instanceof Error ? configSave.error.message : ""}
+              savePending={configSave.isPending}
+              saveSuccess={configSaved}
               server={server}
+              onSave={(nextConfig) => configSave.mutate(nextConfig)}
             />
           )}
           {activeTab === "worlds" && (
@@ -540,50 +548,157 @@ function LogsTab({
 }
 
 function ConfigTab({
-  preview,
-  previewError,
-  previewLoading,
+  onSave,
+  saveError,
+  savePending,
+  saveSuccess,
   server
 }: {
-  preview?: string;
-  previewError: boolean;
-  previewLoading: boolean;
+  onSave: (config: TerrariaConfig) => void;
+  saveError: string;
+  savePending: boolean;
+  saveSuccess: boolean;
   server: Server;
 }) {
   const { t } = useI18n();
-  const config = server.config;
-  const rows: [string, string][] = [
-    [t("serverName"), config.serverName || server.name],
-    [t("worldName"), config.worldName || server.world],
-    [t("worldSize"), worldSizeLabel(config.worldSize, t)],
-    [t("difficulty"), difficultyLabel(config.difficulty, t)],
-    [t("maxPlayers"), String(config.maxPlayers)],
-    [t("port"), String(config.port)],
-    [t("password"), config.password || t("none")],
-    [t("motd"), config.motd || t("none")],
-    [t("secureMode"), config.secure ? t("enabled") : t("disabled")],
-    [t("languageSetting"), config.language],
-    [t("autoCreateWorld"), config.autoCreateWorld ? t("enabled") : t("disabled")]
-  ];
+  const [draft, setDraft] = useState<TerrariaConfig>(server.config);
+  useEffect(() => setDraft(server.config), [server.config, server.id]);
+  const preview = useQuery({
+    queryKey: ["server-config-preview", server.id, draft],
+    queryFn: () => previewTerrariaConfig(draft),
+    retry: false
+  });
+  const dirty = JSON.stringify(draft) !== JSON.stringify(server.config);
+  const disabled = server.status === "running" || savePending;
+  const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
   return (
-    <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-      <div className="grid gap-2">
-        {rows.map(([label, value]) => <Info key={label} label={label} value={value} />)}
+    <form className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]" onSubmit={(event) => {
+      event.preventDefault();
+      if (!disabled && dirty) onSave(draft);
+    }}>
+      <div className="min-w-0">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">{t("serverConfig")}</h2>
+          {server.status === "running" && <span className="rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configRequiresStopped")}</span>}
+        </div>
+        <div className="grid gap-3">
+          <Field label={t("serverName")}>
+            <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
+          </Field>
+          <Field label={t("worldName")}>
+            <Input value={draft.worldName} onChange={(event) => update("worldName", event.target.value)} disabled={disabled} />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("worldSize")}>
+              <Select value={draft.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])} disabled={disabled}>
+                <option value="small">{t("tagSmallWorld")}</option>
+                <option value="medium">{t("tagMediumWorld")}</option>
+                <option value="large">{t("tagLargeWorld")}</option>
+              </Select>
+            </Field>
+            <Field label={t("difficulty")}>
+              <Select value={draft.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])} disabled={disabled}>
+                <option value="journey">{t("tagJourney")}</option>
+                <option value="classic">{t("tagClassic")}</option>
+                <option value="expert">{t("tagExpert")}</option>
+                <option value="master">{t("tagMaster")}</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t("port")}>
+              <Input type="number" min={1024} max={65535} value={draft.port} onChange={(event) => update("port", Number(event.target.value))} disabled={disabled} />
+            </Field>
+            <Field label={t("maxPlayers")}>
+              <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
+            </Field>
+          </div>
+          <Field label={t("password")}>
+            <Input value={draft.password ?? ""} onChange={(event) => update("password", event.target.value)} disabled={disabled} />
+          </Field>
+          <Field label={t("motd")}>
+            <Input value={draft.motd ?? ""} onChange={(event) => update("motd", event.target.value)} disabled={disabled} />
+          </Field>
+          <Field label={t("languageSetting")}>
+            <Input value={draft.language ?? ""} onChange={(event) => update("language", event.target.value)} disabled={disabled} />
+          </Field>
+          <div className="grid gap-2 rounded-md border border-panel-line bg-slate-950/50 p-3">
+            <Checkbox label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
+            <Checkbox label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button disabled={disabled || !dirty}>
+            {savePending ? t("savingConfig") : t("saveConfig")}
+          </Button>
+          <Button type="button" variant="secondary" disabled={savePending || !dirty} onClick={() => setDraft(server.config)}>
+            {t("resetChanges")}
+          </Button>
+          {saveSuccess && <span className="text-sm text-panel-green">{t("configSaved")}</span>}
+        </div>
+        {saveError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
       </div>
       <div className="min-w-0 rounded-md border border-panel-line bg-slate-950 p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
           <FileText aria-hidden="true" className="size-4 text-panel-green" />
           {t("previewServerConfig")}
         </div>
-        {previewLoading ? (
+        {preview.isLoading ? (
           <p className="text-sm text-slate-400">{t("rendering")}</p>
-        ) : previewError ? (
+        ) : preview.isError ? (
           <p className="text-sm text-panel-gold">{t("configPreviewUnavailable")}</p>
         ) : (
-          <pre className="overflow-auto whitespace-pre-wrap font-mono text-xs leading-6 text-slate-300">{preview}</pre>
+          <pre className="max-h-[560px] overflow-auto whitespace-pre-wrap font-mono text-xs leading-6 text-slate-300">{preview.data}</pre>
         )}
       </div>
-    </div>
+    </form>
+  );
+}
+
+function Field({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Select({
+  children,
+  disabled,
+  onChange,
+  value
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <select
+      className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {children}
+    </select>
+  );
+}
+
+function Checkbox({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-3 text-sm text-slate-300">
+      <span>{label}</span>
+      <input
+        className="size-4 accent-panel-green disabled:cursor-not-allowed"
+        checked={checked}
+        disabled={disabled}
+        type="checkbox"
+        onChange={(event) => onChange(event.target.checked)}
+      />
+    </label>
   );
 }
 

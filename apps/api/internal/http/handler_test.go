@@ -355,6 +355,59 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	}
 }
 
+func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("config-target", cfg.DataDir)
+	server.ContainerID = "old-container"
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := `{
+		"config":{
+			"serverName":"Edited Server",
+			"worldName":"EditedWorld",
+			"worldSize":"large",
+			"difficulty":"expert",
+			"maxPlayers":12,
+			"port":17777,
+			"password":"secret",
+			"motd":"Updated from detail page",
+			"secure":true,
+			"language":"en-US",
+			"autoCreateWorld":true
+		}
+	}`
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/config-target/config", bytes.NewBufferString(payload)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected config update 200, got %d: %s", update.Code, update.Body.String())
+	}
+	updated, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "Edited Server" || updated.WorldName != "EditedWorld" || updated.Port != 17777 || updated.MaxPlayers != 12 || updated.Password != "secret" {
+		t.Fatalf("expected server fields synchronized from config, got %+v", updated)
+	}
+	if updated.Config.Difficulty != domain.Difficulty("expert") || updated.Config.WorldSize != domain.WorldSize("large") {
+		t.Fatalf("expected persisted config update, got %+v", updated.Config)
+	}
+	if updated.ContainerID != "" {
+		t.Fatalf("expected stale container id cleared after config update, got %q", updated.ContainerID)
+	}
+	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(configBytes, []byte("world=worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) {
+		t.Fatalf("expected rewritten serverconfig, got %q", string(configBytes))
+	}
+}
+
 func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("backup-source", cfg.DataDir)

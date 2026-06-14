@@ -177,6 +177,20 @@ export async function getServer(id: string): Promise<Server> {
   return toServer(server);
 }
 
+export async function updateServerConfig(id: string, config: TerrariaConfig): Promise<Server> {
+  const response = await fetch(`${API_BASE}/api/servers/${id}/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to update server config");
+  }
+  const server = (await response.json()) as ApiServer;
+  return toServer(server);
+}
+
 export async function getDockerStatus(): Promise<DockerStatus> {
   const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker`, { cache: "no-store" });
   if (!response.ok) {

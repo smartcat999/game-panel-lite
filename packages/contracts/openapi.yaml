@@ -88,6 +88,24 @@ paths:
       responses:
         "200":
           description: Deleted
+  /api/servers/{id}/config:
+    put:
+      summary: Update persisted Terraria server config while the server is stopped
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config]
+              properties:
+                config:
+                  $ref: "#/components/schemas/TerrariaConfig"
+      responses:
+        "200":
+          description: Updated server config
+        "409":
+          description: Server must be stopped before config changes
   /api/servers/{id}/start:
     post:
       summary: Start server, creating a runtime container from persisted config and data when needed

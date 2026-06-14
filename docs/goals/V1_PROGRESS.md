@@ -929,3 +929,23 @@ Checks:
 - `pnpm build`: passed.
 - `go test ./...`: passed.
 - `go vet ./...`: passed.
+
+## V1 Server Detail Config Editing Update
+
+Status: Completed
+
+Completed:
+- Added `PUT /api/servers/{id}/config` to update persisted Terraria config while the server is stopped.
+- Config updates validate through the provider, synchronize server name/world/port/player/password fields, rewrite `serverconfig.txt` and provider runtime files, and clear stale container IDs so the next start recreates the runtime container against the existing data directory.
+- Added Server Detail Config tab editing with compact fields, select controls, toggles, reset, save feedback, and live serverconfig preview.
+- Running servers show a stopped-required hint and disable config edits to avoid changing a live runtime container underneath the process.
+- Updated frontend API client and OpenAPI contract for the config update endpoint.
+- Added HTTP coverage proving config updates rewrite runtime config and clear stale container state.
+
+Checks:
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
