@@ -349,3 +349,26 @@ Checks:
 - `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
 - Runtime verification: `GET /api/runtime/docker/hosts` returned Docker Desktop and OrbStack candidates; `POST /api/runtime/docker/host` hot-applied the selected Docker host and returned runtime status.
 - Browser verification: Settings rendered with dark styles, compact Docker Host controls, no copy-restart command, and a Docker badge that showed unavailable when the daemon could not be reached.
+
+## Post-V1 Settings Docker Consolidation Update
+
+Status: Completed
+
+Completed:
+- Consolidated Settings Docker information from separate runtime, socket, and scanner cards into one Docker Runtime card.
+- Kept the Docker status, current host, candidate scan, custom host input, and reconnect action in a single compact workflow.
+- Left Data Directories as the only separate Settings card so the page no longer repeats Docker-specific blocks.
+- Verified the merged card renders without the old `Docker Socket / Host` or `Docker Host Scanner` headings.
+
+Known issues:
+- The selected Docker host can still be a long socket path; it is wrapped in the summary line to prevent horizontal page overflow.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `go build ./...`: passed
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
+- Browser verification: Settings rendered one Docker Runtime card plus one Data Directories card; old `Docker Socket / Host` and `Docker Host Scanner` headings were absent.

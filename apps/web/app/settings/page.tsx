@@ -48,92 +48,89 @@ export default function SettingsPage() {
   return (
     <AppShell>
       <PageHeader title={t("settingsTitle")} description={t("settingsDescription")} />
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.6fr)]">
         <Card className="p-5">
-          <div className="flex items-center gap-3 text-panel-green">
-            <ShieldCheck aria-hidden="true" />
-            <h2 className="font-semibold text-white">{t("dockerRuntime")}</h2>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex items-center gap-3">
+                <ShieldCheck className={docker.data?.available ? "text-panel-green" : "text-panel-gold"} aria-hidden="true" />
+                <div>
+                  <h2 className="font-semibold text-white">{t("dockerRuntime")}</h2>
+                  <p className="mt-1 text-sm text-slate-400">{t("dockerHostScannerDescription")}</p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm text-slate-400">
+                {docker.data ? docker.data.message : docker.isError ? t("dockerApiUnavailable") : t("dockerChecking")}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {docker.data && (
+                <span className={docker.data.available ? "rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green" : "rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold"}>
+                  {docker.data.available ? t("available") : t("unavailable")}
+                </span>
+              )}
+              <Button className="shrink-0" variant="secondary" onClick={() => void dockerHosts.refetch()} disabled={dockerHosts.isFetching}>
+                {dockerHosts.isFetching ? t("scanning") : t("scanDockerHosts")}
+              </Button>
+            </div>
           </div>
-          <p className="mt-3 text-sm text-slate-400">
-            {docker.data ? docker.data.message : docker.isError ? t("dockerApiUnavailable") : t("dockerChecking")}
-          </p>
-          {docker.data && (
-            <p className={docker.data.available ? "mt-2 text-sm text-panel-green" : "mt-2 text-sm text-panel-gold"}>
-              {docker.data.available ? t("available") : t("unavailable")}
-            </p>
-          )}
-        </Card>
-        <Card className="p-5">
-          <h2 className="font-semibold">{t("dockerSockTitle")}</h2>
-          <p className="mt-3 text-sm text-slate-400">{t("dockerSockDescription")}</p>
           <div className="mt-4 break-all rounded-md border border-panel-line bg-slate-950/70 px-3 py-2 font-mono text-xs text-slate-300">
             {t("configuredValue")}: {docker.data?.host ?? "GAMEPANEL_DOCKER_HOST"}
           </div>
+          {dockerHosts.isError && <p className="mt-3 text-sm text-panel-gold">{t("dockerHostsUnavailable")}</p>}
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <label className="grid gap-1 text-xs font-medium text-slate-400">
+              {t("dockerHostSelectLabel")}
+              <select
+                className={cn(
+                  "h-11 rounded-md border border-panel-line bg-slate-950/70 px-3 text-sm text-white outline-none transition focus:border-panel-green",
+                  !candidates.length && "text-slate-500"
+                )}
+                value={candidates.some((candidate) => candidate.host === selectedHost) ? selectedHost : ""}
+                onChange={(event) => updateSelectedHost(event.target.value)}
+                disabled={!candidates.length}
+              >
+                <option value="">{t("customDockerHost")}</option>
+                {candidates.map((candidate) => (
+                  <option key={`${candidate.source}-${candidate.host}`} value={candidate.host}>
+                    {candidate.exists ? t("socketFound") : t("notDetected")} - {candidate.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-slate-400">
+              {t("customDockerHost")}
+              <Input
+                value={selectedHost}
+                onChange={(event) => updateSelectedHost(event.target.value)}
+                placeholder="unix:///Users/you/.docker/run/docker.sock"
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p className="break-all">
+              {t("selectedDockerHost")}: <span className="font-mono text-slate-300">{selectedHostTrimmed || t("none")}</span>
+            </p>
+            <Button
+              className="h-11 shrink-0"
+              variant="secondary"
+              onClick={() => dockerHostMutation.mutate(selectedHostTrimmed)}
+              disabled={!selectedHostTrimmed || dockerHostMutation.isPending}
+            >
+              <RefreshCw aria-hidden="true" className={dockerHostMutation.isPending ? "animate-spin" : undefined} />
+              {dockerHostMutation.isPending ? t("applyingDockerHost") : t("applyDockerHost")}
+            </Button>
+          </div>
+          {applyMessage && (
+            <p className={dockerHostMutation.isError ? "mt-2 text-xs text-panel-gold" : "mt-2 text-xs text-panel-green"}>{applyMessage}</p>
+          )}
+          <p className="mt-2 text-xs text-slate-500">{t("dockerHostReconnectNote")}</p>
         </Card>
         <Card className="p-5">
           <h2 className="font-semibold">{t("dataDirectories")}</h2>
           <p className="mt-3 text-sm text-slate-400">{t("dataDirectoriesDescription")}</p>
         </Card>
       </div>
-      <Card className="mt-4 p-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="font-semibold">{t("dockerHostScannerTitle")}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-400">{t("dockerHostScannerDescription")}</p>
-          </div>
-          <Button className="shrink-0" variant="secondary" onClick={() => void dockerHosts.refetch()} disabled={dockerHosts.isFetching}>
-            {dockerHosts.isFetching ? t("scanning") : t("scanDockerHosts")}
-          </Button>
-        </div>
-        {dockerHosts.isError && <p className="mt-3 text-sm text-panel-gold">{t("dockerHostsUnavailable")}</p>}
-        <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(240px,320px)_1fr_auto]">
-          <label className="grid gap-1 text-xs font-medium text-slate-400">
-            {t("dockerHostSelectLabel")}
-            <select
-              className={cn(
-                "h-11 rounded-md border border-panel-line bg-slate-950/70 px-3 text-sm text-white outline-none transition focus:border-panel-green",
-                !candidates.length && "text-slate-500"
-              )}
-              value={candidates.some((candidate) => candidate.host === selectedHost) ? selectedHost : ""}
-              onChange={(event) => updateSelectedHost(event.target.value)}
-              disabled={!candidates.length}
-            >
-              <option value="">{t("customDockerHost")}</option>
-              {candidates.map((candidate) => (
-                <option key={`${candidate.source}-${candidate.host}`} value={candidate.host}>
-                  {candidate.exists ? t("socketFound") : t("notDetected")} - {candidate.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-medium text-slate-400">
-            {t("customDockerHost")}
-            <Input
-              value={selectedHost}
-              onChange={(event) => updateSelectedHost(event.target.value)}
-              placeholder="unix:///Users/you/.docker/run/docker.sock"
-            />
-          </label>
-          <Button
-            className="mt-auto h-11 shrink-0"
-            variant="secondary"
-            onClick={() => dockerHostMutation.mutate(selectedHostTrimmed)}
-            disabled={!selectedHostTrimmed || dockerHostMutation.isPending}
-          >
-            <RefreshCw aria-hidden="true" className={dockerHostMutation.isPending ? "animate-spin" : undefined} />
-            {dockerHostMutation.isPending ? t("applyingDockerHost") : t("applyDockerHost")}
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-col gap-1 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
-          <p className="break-all">
-            {t("selectedDockerHost")}: <span className="font-mono text-slate-300">{selectedHostTrimmed || t("none")}</span>
-          </p>
-          {applyMessage && (
-            <p className={dockerHostMutation.isError ? "text-panel-gold" : "text-panel-green"}>{applyMessage}</p>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-slate-500">{t("dockerHostReconnectNote")}</p>
-      </Card>
     </AppShell>
   );
 }
