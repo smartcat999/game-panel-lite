@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { backups as mockBackups } from "@/lib/mock-data";
 import { backupDownloadUrl, createBackup, deleteBackup, listBackups, listServers, restoreBackup } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 
@@ -17,7 +16,7 @@ export default function BackupsPage() {
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const [selectedServerId, setSelectedServerId] = useState("");
   const servers = serversQuery.data ?? [];
-  const backups = backupsQuery.data && backupsQuery.data.length > 0 ? backupsQuery.data : mockBackups;
+  const backups = backupsQuery.data ?? [];
   const activeServerId = selectedServerId || servers[0]?.id || "";
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
 
@@ -59,7 +58,7 @@ export default function BackupsPage() {
           </div>
         }
       />
-      {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiMockBackups")}</p>}
+      {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
       <Card className="overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-950/50 text-xs text-slate-400">
@@ -103,6 +102,11 @@ export default function BackupsPage() {
                 </td>
               </tr>
             ))}
+            {!backupsQuery.isLoading && backups.length === 0 && (
+              <tr>
+                <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>{t("noBackupsYet")}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Card>

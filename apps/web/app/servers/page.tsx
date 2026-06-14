@@ -8,7 +8,6 @@ import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Input } from "@/components/ui";
-import { servers as mockServers } from "@/lib/mock-data";
 import { listServers } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -27,7 +26,7 @@ export default function ServersPage() {
   const { t } = useI18n();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  const servers = query.data && query.data.length > 0 ? query.data : mockServers;
+  const servers = query.data ?? [];
   const filteredServers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return servers.filter((server) => {
@@ -61,11 +60,11 @@ export default function ServersPage() {
           </Button>
         ))}
       </div>
-      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiMockServers")}</p>}
+      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiServersUnavailable")}</p>}
       <div className="grid gap-4 xl:grid-cols-2">
         {filteredServers.map((server) => <ServerCard key={server.id} server={server} />)}
       </div>
-      {filteredServers.length === 0 && <p className="mt-6 text-sm text-slate-400">{t("noServersMatch")}</p>}
+      {filteredServers.length === 0 && <p className="mt-6 text-sm text-slate-400">{query.isLoading ? t("loading") : t("noServersMatch")}</p>}
     </AppShell>
   );
 }

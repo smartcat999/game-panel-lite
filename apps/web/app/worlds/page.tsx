@@ -6,7 +6,6 @@ import { useRef } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { worlds as mockWorlds } from "@/lib/mock-data";
 import { deleteWorld, duplicateWorld, importWorld, listWorlds, worldDownloadUrl } from "@/lib/api";
 import { localizeDifficulty, localizeRelativeTime, localizeWorldSize, useI18n } from "@/lib/i18n";
 
@@ -15,7 +14,7 @@ export default function WorldsPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
-  const worlds = query.data && query.data.length > 0 ? query.data : mockWorlds;
+  const worlds = query.data ?? [];
 
   const upload = useMutation({
     mutationFn: (file: File) => importWorld(file),
@@ -60,7 +59,7 @@ export default function WorldsPage() {
           </>
         }
       />
-      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiMockWorlds")}</p>}
+      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {worlds.map((world) => (
           <Card key={world.id} className="p-4">
@@ -112,6 +111,7 @@ export default function WorldsPage() {
           </button>
         </Card>
       </div>
+      {!query.isLoading && worlds.length === 0 && <p className="mt-4 text-sm text-slate-400">{t("noWorldsYet")}</p>}
     </AppShell>
   );
 }

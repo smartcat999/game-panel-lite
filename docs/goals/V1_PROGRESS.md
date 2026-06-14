@@ -299,3 +299,27 @@ Checks:
 - `pnpm test`: passed
 - `pnpm build`: passed
 - Runtime verification: `GET /api/runtime/docker/hosts` returned Docker Desktop and OrbStack candidates; Settings page rendered scanner controls.
+
+## Post-V1 Mock Data Removal Update
+
+Status: Completed
+
+Completed:
+- Removed frontend fallback from API data pages to mock data when the API returns an empty list.
+- Dashboard now uses real server and backup queries for stats and active server cards.
+- Servers, Worlds, and Backups now show real API data, API errors, loading, or empty states instead of simulated rows.
+- Activity and server detail logs now show explicit V1 data-source limitations instead of simulated activity/log lines.
+- Removed stale `apiMock*` copy keys so new UI code cannot accidentally reintroduce mock fallback messaging.
+
+Known issues:
+- Activity list and server detail logs still need real API/SSE UI wiring in a later pass.
+
+Checks:
+- `rg -n "mock-data|apiMock|showing mock|模拟|mock" apps/web`: no matches
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed after stopping the 3004 dev server to avoid `.next` conflicts.
+- Browser verification: Dashboard, Servers, Worlds, Backups, and Activity rendered real empty states with no mock names or mock text.
