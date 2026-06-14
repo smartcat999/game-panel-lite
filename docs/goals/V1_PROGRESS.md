@@ -1719,3 +1719,20 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
 - `pnpm --filter @gamepanel-lite/web typecheck`: initially failed when run in parallel with `next build` while `.next/types` was being regenerated, then passed when rerun serially after build completed.
+
+## V1 Assigned World Runtime Materialization Update
+
+Status: Completed
+
+Completed:
+- Fixed world assignment so the selected `.wld` is copied from managed world storage into the server instance data directory before the world is marked active.
+- Kept runtime world path decisions inside the Terraria provider, with Vanilla using `worlds/{name}.wld` and tModLoader using `Worlds/{name}.wld`.
+- Added backend HTTP coverage proving assigned worlds are available inside the runtime data directory used by Docker containers.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

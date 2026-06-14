@@ -2,6 +2,7 @@ package terraria
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -65,6 +66,15 @@ func (TModLoaderProvider) RenderConfig(config domain.TerrariaConfig) (string, er
 }
 func (TModLoaderProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return tModLoaderRuntimeOptions(config)
+}
+
+func RuntimeWorldFiles(providerKey domain.ProviderKey, config domain.TerrariaConfig) []string {
+	switch providerKey {
+	case domain.ProviderTerrariaTModLoader:
+		return []string{filepath.Join("Worlds", config.WorldName+".wld")}
+	default:
+		return []string{filepath.Join("worlds", config.WorldName+".wld")}
+	}
 }
 
 func vanillaRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {

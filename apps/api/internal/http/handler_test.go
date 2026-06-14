@@ -1160,6 +1160,13 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	if !bytes.Contains(configBytes, []byte("world=worlds/new-home.wld")) {
 		t.Fatalf("expected serverconfig to point at assigned world, got %q", string(configBytes))
 	}
+	runtimeWorld, err := os.ReadFile(filepath.Join(server.DataDir, "worlds", "new-home.wld"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeWorld) != "world" {
+		t.Fatalf("expected assigned world copied into runtime data dir, got %q", string(runtimeWorld))
+	}
 	previous, err := db.GetWorld(context.Background(), oldWorld.ID)
 	if err != nil {
 		t.Fatal(err)

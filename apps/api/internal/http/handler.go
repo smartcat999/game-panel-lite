@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -430,6 +431,10 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
+	if err := h.materializeWorldForRuntime(item, server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := h.clearActiveWorlds(r.Context(), payload.InstanceID, item.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -446,6 +451,40 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), payload.InstanceID, "world.assigned", fmt.Sprintf("Assigned world %s to %s", item.Name, server.Name))
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) materializeWorldForRuntime(world domain.World, server domain.GameServerInstance) error {
+	sourcePath, err := worldsvc.NewService(h.cfg.DataDir).Path(world.InstanceID, world.FileName)
+	if err != nil {
+		return err
+	}
+	for _, relPath := range terraria.RuntimeWorldFiles(server.ProviderKey, server.Config) {
+		targetPath := filepath.Join(server.DataDir, relPath)
+		if err := copyStoredFile(sourcePath, targetPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyStoredFile(sourcePath string, targetPath string) error {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return err
+	}
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	target, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(target, source); err != nil {
+		_ = target.Close()
+		return err
+	}
+	return target.Close()
 }
 
 func (h *Handler) clearActiveWorlds(ctx context.Context, instanceID string, keepWorldID string) error {
