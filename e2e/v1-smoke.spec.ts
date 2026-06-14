@@ -67,6 +67,13 @@ async function mockApi(page: Page) {
     });
   });
 
+  await page.route("**/api/servers/server-e2e/command", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ status: "sent" })
+    });
+  });
+
   await page.route("**/api/servers/server-e2e/mods", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -285,6 +292,12 @@ test("server detail and management flows expose live V1 actions", async ({ page,
   await page.getByRole("button", { name: "复制邀请文本" }).click();
   await expect(page.getByRole("button", { name: "已复制" })).toBeVisible();
   await expect(page.evaluate(() => navigator.clipboard.readText())).resolves.toContain("127.0.0.1:17785");
+
+  const commandRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().includes("/api/servers/server-e2e/command"));
+  await page.getByPlaceholder("输入命令...").fill("say hello");
+  await page.getByRole("button", { name: "发送" }).click();
+  await commandRequest;
+  await expect(page.getByText("> say hello")).toBeVisible();
 
   await page.goto("/worlds");
   await expect(page.getByRole("heading", { name: "世界" })).toBeVisible();

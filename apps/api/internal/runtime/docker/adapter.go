@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -47,14 +48,18 @@ func (a *Adapter) Check(ctx context.Context) runtime.DockerStatus {
 }
 
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
-	if err := os.MkdirAll(spec.DataDir, 0o755); err != nil {
+	dataDir, err := filepath.Abs(spec.DataDir)
+	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(spec.DataDir, "serverconfig.txt"), []byte(spec.ConfigText), 0o600); err != nil {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "serverconfig.txt"), []byte(spec.ConfigText), 0o600); err != nil {
 		return "", err
 	}
 	for name, content := range spec.Options.Files {
-		if err := writeDataFile(spec.DataDir, name, content); err != nil {
+		if err := writeDataFile(dataDir, name, content); err != nil {
 			return "", err
 		}
 	}
@@ -67,14 +72,16 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 		return "", err
 	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
-		Image: spec.Image,
-		Env:   spec.Options.Env,
-		Cmd:   spec.Options.Cmd,
+		Image:       spec.Image,
+		Env:         spec.Options.Env,
+		Cmd:         spec.Options.Cmd,
+		OpenStdin:   true,
+		AttachStdin: true,
 		Labels: map[string]string{
 			"gamepanel.instance": spec.InstanceID,
 		},
 	}, &container.HostConfig{
-		Binds:        dataBinds(spec.DataDir, spec.Options.DataMounts),
+		Binds:        dataBinds(dataDir, spec.Options.DataMounts),
 		PortBindings: natPortMap(spec.Port),
 	}, nil, nil, "gamepanel-"+spec.InstanceID)
 	if err != nil {
@@ -84,25 +91,45 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 }
 
 func (a *Adapter) Start(ctx context.Context, instance domain.GameServerInstance) error {
-	return a.client.ContainerStart(ctx, instance.ContainerID, types.ContainerStartOptions{})
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return err
+	}
+	return a.client.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
 }
 
 func (a *Adapter) Stop(ctx context.Context, instance domain.GameServerInstance) error {
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return err
+	}
 	timeout := 15
-	return a.client.ContainerStop(ctx, instance.ContainerID, container.StopOptions{Timeout: &timeout})
+	return a.client.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
 }
 
 func (a *Adapter) Restart(ctx context.Context, instance domain.GameServerInstance) error {
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return err
+	}
 	timeout := 15
-	return a.client.ContainerRestart(ctx, instance.ContainerID, container.StopOptions{Timeout: &timeout})
+	return a.client.ContainerRestart(ctx, containerID, container.StopOptions{Timeout: &timeout})
 }
 
 func (a *Adapter) Remove(ctx context.Context, instance domain.GameServerInstance) error {
-	return a.client.ContainerRemove(ctx, instance.ContainerID, types.ContainerRemoveOptions{Force: true})
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return err
+	}
+	return a.client.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{Force: true})
 }
 
 func (a *Adapter) Inspect(ctx context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error) {
-	got, err := a.client.ContainerInspect(ctx, instance.ContainerID)
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return domain.StatusErrored, err
+	}
+	got, err := a.client.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return domain.StatusErrored, err
 	}
@@ -113,7 +140,11 @@ func (a *Adapter) Inspect(ctx context.Context, instance domain.GameServerInstanc
 }
 
 func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
-	stream, err := a.client.ContainerLogs(ctx, instance.ContainerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "120"})
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := a.client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "120"})
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +155,42 @@ func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) 
 		_ = writer.CloseWithError(copyErr)
 	}()
 	return reader, nil
+}
+
+func (a *Adapter) SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error {
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return err
+	}
+	conn, err := a.client.ContainerAttach(ctx, containerID, types.ContainerAttachOptions{
+		Stream: true,
+		Stdin:  true,
+	})
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.Conn.Write([]byte(command + "\n"))
+	return err
+}
+
+func (a *Adapter) resolveContainerID(ctx context.Context, instance domain.GameServerInstance) (string, error) {
+	if id := strings.TrimSpace(instance.ContainerID); id != "" {
+		if _, err := a.client.ContainerInspect(ctx, id); err == nil {
+			return id, nil
+		}
+	}
+	matches, err := a.client.ContainerList(ctx, types.ContainerListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("label", "gamepanel.instance="+instance.ID)),
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no Docker container found for server %s", instance.ID)
+	}
+	return matches[0].ID, nil
 }
 
 func writeDataFile(dataDir string, name string, content string) error {
@@ -139,6 +206,9 @@ func writeDataFile(dataDir string, name string, content string) error {
 }
 
 func dataBinds(dataDir string, mounts []string) []string {
+	if abs, err := filepath.Abs(dataDir); err == nil {
+		dataDir = abs
+	}
 	if len(mounts) == 0 {
 		mounts = []string{"/data"}
 	}

@@ -20,14 +20,16 @@ cp .env.example .env
 Run the Go API:
 
 ```bash
-go run ./apps/api/cmd/server
+pnpm dev:api
 ```
 
 Run the web app:
 
 ```bash
-pnpm --filter @gamepanel-lite/web dev
+pnpm dev:web
 ```
+
+The top-bar service badge checks the Go API `GET /healthz` endpoint. If only the web app is running, the badge will show unavailable until `pnpm dev:api` is started.
 
 Useful checks:
 
@@ -69,17 +71,17 @@ Do not add auth, billing, cloud provisioning, OAuth, RBAC, Kubernetes, or plugin
 
 ## V1 Usage
 
-1. Start the API with `go run ./apps/api/cmd/server`.
-2. Start the web UI with `pnpm --filter @gamepanel-lite/web dev`.
+1. Start the API with `pnpm dev:api`.
+2. Start the web UI with `pnpm dev:web`.
 3. Open `http://localhost:3000/dashboard`.
 4. Use **Create Server** to choose Terraria, Vanilla or tModLoader, a preset, and config values.
 5. Use **Preview serverconfig.txt** to render the Go backend config output.
-6. Use the Servers page to view API-backed servers when the Go backend is running.
+6. Start a server from the Servers page. The API will reuse an existing runtime container when it is present, or create a new container from the persisted server config and data directory when it is missing.
 7. Use Worlds to import `.wld` files, Backups to manage zip backups, and Mods for tModLoader-only `.tmod`, `install.txt`, and `enabled.json` files.
 
 ## Docker Runtime
 
-The API exposes `GET /api/runtime/docker` for daemon status. Real container creation requires Docker to be running and access to the configured Terraria images:
+The API exposes `GET /api/runtime/docker` for daemon status. Game server records are persisted in SQLite; Docker containers are runtime instances. Starting a server creates or reuses a container mounted to that server's isolated data directory, so a missing old container can be recreated without losing world/config data. Real container creation requires Docker to be running and access to the configured Terraria images:
 
 - Vanilla: `ryshe/terraria:latest`
 - tModLoader: `radioactivehydra/tmodloader:latest`
@@ -111,14 +113,14 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 
 - Backup restore extracts archives into the server data directory and refuses to run while a server is running or restarting.
 - Server detail pages stream logs from the backend SSE endpoint when the server/container log stream is available.
+- Server detail console input sends commands to the running container stdin.
 - Vanilla Terraria was verified against a real OrbStack Docker daemon: image pull, create, start, auto-create world, clean SSE logs, TCP port probe, and delete cleanup.
 - tModLoader was verified against a real OrbStack Docker daemon with `radioactivehydra/tmodloader:latest`: image pull, create, start, auto-create world from `/data/serverconfig.txt`, clean SSE logs, TCP port probe, and delete cleanup.
 - Playwright E2E smoke tests cover the Chinese app shell, Docker scan feedback, game cover/avatar rendering, create-server selection states, server detail logs, copy join info, world migration, and backup restore confirmation.
 - Actual Terraria client join still needs manual verification with the desktop game client; see `docs/goals/V1_MANUAL_VERIFICATION.md`.
-- Console command submission is intentionally not implemented in V1 because the backend does not expose a command endpoint.
 - World and backup migration APIs are implemented for copying assets between server instances.
 
 ## Roadmap
 
 - Add an optional Playwright suite that runs against a live local Go API and Docker daemon instead of mocked API responses.
-- Add richer live log and command console behavior.
+- Add richer live log search, filtering, and history.

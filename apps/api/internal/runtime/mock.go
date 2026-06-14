@@ -32,3 +32,7 @@ func (m *MockAdapter) Inspect(context.Context, domain.GameServerInstance) (domai
 func (m *MockAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("[Info] Mock Terraria log stream for " + instance.Name + "\n")), nil
 }
+
+func (m *MockAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+	return nil
+}

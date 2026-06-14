@@ -262,11 +262,11 @@ Completed:
 - Wired Worlds page import, duplicate, download, and delete actions to existing API endpoints.
 - Wired Backups page server selection, create, restore, download, and delete actions to existing API endpoints.
 - Wired Mods page tModLoader server selection, upload, list, and delete actions to existing API endpoints.
-- Updated server detail copy buttons to write to the clipboard and disabled console command input because V1 only exposes SSE logs, not command submission.
+- Updated server detail copy buttons to write to the clipboard and temporarily disabled console command input because V1 only exposed SSE logs at that point. Superseded by the later Runtime Container Lifecycle And Console update.
 
 Known issues:
 - Server detail logs remain mock-rendered in the UI even though the backend exposes an SSE logs endpoint.
-- Console command submission is intentionally not implemented because there is no V1 backend command endpoint.
+- Console command submission was not implemented at that point because there was no backend command endpoint. Superseded by the later Runtime Container Lifecycle And Console update.
 
 Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
@@ -755,12 +755,42 @@ Completed:
 - Removed the visible `Docker` label from the top bar; Docker status remains available in the Settings Docker Runtime card.
 - Updated Settings copy so Docker status request failures are described as Docker status issues, not API availability issues.
 - Added Playwright route coverage for `/healthz` and a top-bar online-state assertion.
+- Added root `pnpm dev:api` and `pnpm dev:web` scripts so local API/Web startup is explicit.
+- Updated README to explain that the top-bar service badge depends on the Go API process.
 
 Known issues:
-- The top bar will show unavailable until the Go API is started. Start it with `go run ./apps/api/cmd/server`.
+- The top bar will show unavailable until the Go API is started. Start it with `pnpm dev:api`.
 
 Checks:
 - `pnpm --filter @gamepanel-lite/web lint`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed after clearing a `.next` cache corrupted by an accidental concurrent build/E2E run.
+- `pnpm e2e`: passed, 3 Playwright tests.
+
+## V1 Runtime Container Lifecycle And Console Update
+
+Status: In Progress
+
+Completed:
+- Changed the server lifecycle model so a GamePanel server record is the persistent backend object and Docker containers are runtime instances.
+- `POST /api/servers` now creates the server record and isolated data directory without requiring an immediate Docker image pull/container create.
+- `POST /api/servers/{id}/start` and restart now ensure a runtime container exists; if the previous container is missing, the API recreates it from the persisted provider config and the existing server data directory before starting.
+- Docker runtime operations now resolve containers by the `gamepanel.instance=<serverId>` label when the stored container ID is stale.
+- Docker runtime bind mounts now normalize relative data directories to absolute host paths before calling Docker, avoiding invalid local volume-name errors with the default `./data` directory.
+- New Docker containers are created with stdin open for console command support.
+- Added `POST /api/servers/{id}/command` to send commands to a running server container.
+- Server Detail console input now sends commands to the API and shows a local command echo on success.
+- SSE runtime errors are shown as console errors instead of being rendered as normal game log lines.
+- Updated OpenAPI, README, and V1 checklist for the runtime-container lifecycle and console command behavior.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http ./apps/api/internal/runtime ./apps/api/internal/runtime/docker`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/runtime/docker ./apps/api/internal/http ./apps/api/internal/runtime`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm test`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed after clearing stale `.next` output.
 - `pnpm e2e`: passed, 3 Playwright tests.

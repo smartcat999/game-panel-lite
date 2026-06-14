@@ -282,6 +282,18 @@ export async function serverAction(id: string, action: "start" | "stop" | "resta
   }
 }
 
+export async function sendServerCommand(id: string, command: string) {
+  const response = await fetch(`${API_BASE}/api/servers/${id}/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to send command");
+  }
+}
+
 export async function listWorlds(): Promise<World[]> {
   const response = await fetch(`${API_BASE}/api/worlds`, { cache: "no-store" });
   if (!response.ok) {

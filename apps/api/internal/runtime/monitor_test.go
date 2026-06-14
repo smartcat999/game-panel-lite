@@ -32,6 +32,9 @@ func (a *countingAdapter) Inspect(context.Context, domain.GameServerInstance) (d
 func (a *countingAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
+func (a *countingAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+	return nil
+}
 
 func TestDockerMonitorStatusReturnsCachedStatus(t *testing.T) {
 	adapter := &countingAdapter{

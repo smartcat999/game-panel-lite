@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
-import { getServer, listBackups, listMods, listWorlds, serverLogsUrl } from "@/lib/api";
+import { getServer, listBackups, listMods, listWorlds, sendServerCommand, serverLogsUrl } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { Backup, ModFile, World } from "@/lib/types";
 
@@ -29,8 +29,21 @@ export default function ServerDetailPage() {
   });
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
+  const [command, setCommand] = useState("");
+  const [consoleError, setConsoleError] = useState("");
   const [logStatus, setLogStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const logViewportRef = useRef<HTMLDivElement>(null);
+  const commandMutation = useMutation({
+    mutationFn: (value: string) => sendServerCommand(id, value),
+    onSuccess: (_, value) => {
+      setLogs((current) => [...current, `> ${value}`].slice(-200));
+      setCommand("");
+      setConsoleError("");
+    },
+    onError: (error) => {
+      setConsoleError(error instanceof Error ? error.message : t("commandSendFailed"));
+    }
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -45,7 +58,7 @@ export default function ServerDetailPage() {
       setLogStatus("error");
       const data = "data" in event && typeof event.data === "string" ? event.data : "";
       if (data) {
-        setLogs((current) => [...current, data].slice(-200));
+        setConsoleError(data);
       }
     });
     source.onerror = () => setLogStatus("error");
@@ -98,6 +111,12 @@ export default function ServerDetailPage() {
     setCopied(label);
     window.setTimeout(() => setCopied(""), 1500);
   };
+  const submitCommand = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const value = command.trim();
+    if (!value || commandMutation.isPending) return;
+    commandMutation.mutate(value);
+  };
 
   return (
     <AppShell>
@@ -139,10 +158,21 @@ export default function ServerDetailPage() {
               </p>
             ))}
           </div>
-          <div className="mt-3 flex gap-2">
-            <Input placeholder={t("consoleCommandUnsupported")} disabled />
-            <Button disabled title={t("consoleCommandTitle")}>{t("send")}</Button>
-          </div>
+          {consoleError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{consoleError}</p>}
+          <form className="mt-3 flex gap-2" onSubmit={submitCommand}>
+            <Input
+              placeholder={server.status === "running" ? t("enterCommand") : t("consoleRequiresRunning")}
+              value={command}
+              onChange={(event) => {
+                setCommand(event.target.value);
+                setConsoleError("");
+              }}
+              disabled={server.status !== "running" || commandMutation.isPending}
+            />
+            <Button disabled={server.status !== "running" || command.trim() === "" || commandMutation.isPending}>
+              {commandMutation.isPending ? t("sending") : t("send")}
+            </Button>
+          </form>
         </Card>
         <div className="flex flex-col gap-4">
           <Card className="p-4">

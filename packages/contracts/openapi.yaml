@@ -78,7 +78,7 @@ paths:
           description: Deleted
   /api/servers/{id}/start:
     post:
-      summary: Start server
+      summary: Start server, creating a runtime container from persisted config and data when needed
       responses:
         "200":
           description: Started server
@@ -90,10 +90,29 @@ paths:
           description: Stopped server
   /api/servers/{id}/restart:
     post:
-      summary: Restart server
+      summary: Restart server, creating a runtime container from persisted config and data when needed
       responses:
         "200":
           description: Restarted server
+  /api/servers/{id}/command:
+    post:
+      summary: Send a console command to a running server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  maxLength: 200
+      responses:
+        "200":
+          description: Command sent
+        "409":
+          description: Server is not running
   /api/servers/{id}/logs:
     get:
       summary: Stream server logs with SSE

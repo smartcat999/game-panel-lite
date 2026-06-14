@@ -60,3 +60,7 @@ func (s *SwitchableAdapter) Inspect(ctx context.Context, instance domain.GameSer
 func (s *SwitchableAdapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	return s.current().Logs(ctx, instance)
 }
+
+func (s *SwitchableAdapter) SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error {
+	return s.current().SendCommand(ctx, instance, command)
+}

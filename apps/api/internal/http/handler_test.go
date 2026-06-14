@@ -82,30 +82,53 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	if err := json.Unmarshal(create.Body.Bytes(), &server); err != nil {
 		t.Fatal(err)
 	}
-	if server.ID == "" || server.ContainerID == "" || server.ProviderKey != domain.ProviderTerrariaVanilla {
-		t.Fatalf("expected created vanilla server with container, got %+v", server)
+	if server.ID == "" || server.ContainerID != "" || server.ProviderKey != domain.ProviderTerrariaVanilla {
+		t.Fatalf("expected created vanilla server record without fixed container, got %+v", server)
 	}
 
-	for _, item := range []struct {
-		action string
-		want   domain.ServerStatus
-	}{
-		{action: "start", want: domain.StatusRunning},
-		{action: "restart", want: domain.StatusRunning},
-		{action: "stop", want: domain.StatusStopped},
-	} {
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/"+item.action, nil))
-		if recorder.Code != stdhttp.StatusOK {
-			t.Fatalf("expected %s 200, got %d: %s", item.action, recorder.Code, recorder.Body.String())
-		}
-		var updated domain.GameServerInstance
-		if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
-			t.Fatal(err)
-		}
-		if updated.Status != item.want {
-			t.Fatalf("expected %s status %s, got %s", item.action, item.want, updated.Status)
-		}
+	start := httptest.NewRecorder()
+	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if start.Code != stdhttp.StatusOK {
+		t.Fatalf("expected start 200, got %d: %s", start.Code, start.Body.String())
+	}
+	var started domain.GameServerInstance
+	if err := json.Unmarshal(start.Body.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+	if started.Status != domain.StatusRunning || started.ContainerID == "" {
+		t.Fatalf("expected start to create runtime container and mark running, got %+v", started)
+	}
+
+	command := httptest.NewRecorder()
+	router.ServeHTTP(command, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/command", bytes.NewBufferString(`{"command":"say hello"}`)))
+	if command.Code != stdhttp.StatusOK {
+		t.Fatalf("expected command 200, got %d: %s", command.Code, command.Body.String())
+	}
+
+	restart := httptest.NewRecorder()
+	router.ServeHTTP(restart, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/restart", nil))
+	if restart.Code != stdhttp.StatusOK {
+		t.Fatalf("expected restart 200, got %d: %s", restart.Code, restart.Body.String())
+	}
+	var restarted domain.GameServerInstance
+	if err := json.Unmarshal(restart.Body.Bytes(), &restarted); err != nil {
+		t.Fatal(err)
+	}
+	if restarted.Status != domain.StatusRunning {
+		t.Fatalf("expected restart running, got %+v", restarted)
+	}
+
+	stop := httptest.NewRecorder()
+	router.ServeHTTP(stop, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/stop", nil))
+	if stop.Code != stdhttp.StatusOK {
+		t.Fatalf("expected stop 200, got %d: %s", stop.Code, stop.Body.String())
+	}
+	var stopped domain.GameServerInstance
+	if err := json.Unmarshal(stop.Body.Bytes(), &stopped); err != nil {
+		t.Fatal(err)
+	}
+	if stopped.Status != domain.StatusStopped {
+		t.Fatalf("expected stop status stopped, got %+v", stopped)
 	}
 
 	logs := httptest.NewRecorder()

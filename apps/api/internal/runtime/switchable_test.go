@@ -27,6 +27,9 @@ func (a testAdapter) Inspect(context.Context, domain.GameServerInstance) (domain
 func (a testAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
+func (a testAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+	return nil
+}
 
 func TestSwitchableAdapterSetChangesDelegatedRuntime(t *testing.T) {
 	switchable := NewSwitchableAdapter(testAdapter{

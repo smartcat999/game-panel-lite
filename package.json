@@ -6,6 +6,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
+    "dev:api": "go run ./apps/api/cmd/server",
+    "dev:web": "pnpm --filter @gamepanel-lite/web dev",
     "e2e": "playwright test",
     "lint": "eslint . --max-warnings=0",
     "test": "pnpm -r test",

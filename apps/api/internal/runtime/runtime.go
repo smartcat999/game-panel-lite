@@ -41,4 +41,5 @@ type Adapter interface {
 	Remove(ctx context.Context, instance domain.GameServerInstance) error
 	Inspect(ctx context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error)
 	Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error)
+	SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error
 }

@@ -71,6 +71,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/servers/{id}/start", h.startServer)
 	r.Post("/api/servers/{id}/stop", h.stopServer)
 	r.Post("/api/servers/{id}/restart", h.restartServer)
+	r.Post("/api/servers/{id}/command", h.sendServerCommand)
 	r.Delete("/api/servers/{id}", h.deleteServer)
 	r.Get("/api/servers/{id}/logs", h.serverLogs)
 	r.Get("/api/worlds", h.listWorlds)
@@ -551,8 +552,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	if payload.Name == "" {
 		payload.Name = payload.Config.ServerName
 	}
-	configText, err := gameProvider.RenderConfig(payload.Config)
-	if err != nil {
+	if err := gameProvider.ValidateConfig(payload.Config); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -568,20 +568,6 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir,
 		Config: payload.Config, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	containerID, err := h.runtime.Create(r.Context(), runtime.ContainerSpec{
-		InstanceID: id,
-		Name:       payload.Name,
-		Image:      gameProvider.Image(),
-		Port:       payload.Config.Port,
-		DataDir:    dataDir,
-		ConfigText: configText,
-		Options:    gameProvider.RuntimeOptions(payload.Config),
-	})
-	if err != nil {
-		h.logger.Warn("container create failed; keeping server record stopped", "error", err)
-	} else {
-		server.ContainerID = containerID
-	}
 	if err := h.store.CreateServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -590,7 +576,22 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
-	h.transitionServer(w, r, domain.StatusRunning, h.runtime.Start)
+	server, err := h.serverWithRuntimeContainer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	if err := h.runtime.Start(r.Context(), server); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	server.Status = domain.StatusRunning
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, server)
 }
 
 func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
@@ -598,7 +599,55 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
-	h.transitionServer(w, r, domain.StatusRunning, h.runtime.Restart)
+	server, err := h.serverWithRuntimeContainer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	if err := h.runtime.Restart(r.Context(), server); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	server.Status = domain.StatusRunning
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, server)
+}
+
+func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	var payload struct {
+		Command string `json:"command"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	command := strings.TrimSpace(payload.Command)
+	if command == "" {
+		writeError(w, http.StatusBadRequest, "command is required")
+		return
+	}
+	if len(command) > 200 {
+		writeError(w, http.StatusBadRequest, "command is too long")
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeError(w, http.StatusConflict, "server must be running to send commands")
+		return
+	}
+	if err := h.runtime.SendCommand(r.Context(), server, command); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
 }
 
 func (h *Handler) transitionServer(w http.ResponseWriter, r *http.Request, status domain.ServerStatus, action func(context.Context, domain.GameServerInstance) error) {
@@ -620,6 +669,56 @@ func (h *Handler) transitionServer(w http.ResponseWriter, r *http.Request, statu
 		return
 	}
 	writeJSON(w, http.StatusOK, server)
+}
+
+func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (domain.GameServerInstance, error) {
+	server, err := h.store.GetServer(ctx, id)
+	if err != nil {
+		return domain.GameServerInstance{}, errors.New("server not found")
+	}
+	if server.ContainerID != "" {
+		if _, err := h.runtime.Inspect(ctx, server); err == nil {
+			return server, nil
+		}
+		h.logger.Warn("runtime container missing; recreating from server data", "server", server.ID, "container", server.ContainerID)
+		server.ContainerID = ""
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return domain.GameServerInstance{}, fmt.Errorf("unknown provider: %s", server.ProviderKey)
+	}
+	configText, err := gameProvider.RenderConfig(server.Config)
+	if err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	containerID, err := h.runtime.Create(ctx, runtime.ContainerSpec{
+		InstanceID: server.ID,
+		Name:       server.Name,
+		Image:      gameProvider.Image(),
+		Port:       server.Port,
+		DataDir:    server.DataDir,
+		ConfigText: configText,
+		Options:    gameProvider.RuntimeOptions(server.Config),
+	})
+	if err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	server.ContainerID = containerID
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	return server, nil
+}
+
+func statusCodeForRuntimeError(err error) int {
+	if err != nil && err.Error() == "server not found" {
+		return http.StatusNotFound
+	}
+	return http.StatusServiceUnavailable
 }
 
 func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,8 @@
 - Server list/create/detail/start/stop/restart/delete APIs.
 - SSE logs endpoint.
 - Server detail live log UI wired to the SSE endpoint.
+- Server detail console command submission wired to a running runtime container.
+- Start/restart recreates a missing runtime container from persisted server config and the existing data directory.
 - World import/list/download/delete/migrate APIs.
 - Backup create/list/download/delete and restore APIs with running-server guardrails.
 - Backup migrate API.
