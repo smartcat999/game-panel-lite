@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ServerModeBadge, ServerStatusBadge } from "./server-badges";
 import { ServerActions } from "./server-actions";
+import { ServerGameArt } from "./server-game-art";
 import { Card } from "@/components/ui";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { Server } from "@/lib/types";
@@ -12,7 +13,7 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
   return (
     <Card className="p-4">
       <div className="flex gap-4">
-        <div className="size-16 shrink-0 rounded-md border border-panel-line bg-[linear-gradient(135deg,#215a39,#19233b_60%,#4d3720)]" />
+        <ServerGameArt mode={server.mode} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link href={`/servers/${server.id}`} className="font-semibold text-white hover:text-panel-green">
