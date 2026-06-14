@@ -1123,6 +1123,22 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Server Detail Action Feedback Update
+
+Status: Completed
+
+Completed:
+- Added a tested frontend helper for server detail operation feedback.
+- Translated raw Docker/runtime errors such as unavailable Docker hosts, missing containers, and daemon `page not found` responses into actionable localized messages.
+- Applied the normalized feedback to console commands, logs, config saves, world actions, backup actions, mod actions, and downloads on the server detail page.
+- Added explicit disabled-state guidance for world assignment, backup restore, and resource migration when the server is running or no migration target exists.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test -- server-detail-actions.test.ts`: failed first because the helper did not exist, then passed after implementation.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+
 ## V1 Server Detail Reliability Update
 
 Status: Completed

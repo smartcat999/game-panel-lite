@@ -40,6 +40,7 @@ import {
 } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { describeResourceAction, formatServerDetailError } from "@/lib/server-detail-actions";
 import { getDetailTargetServers, nextWorldCopyName } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,10 @@ export default function ServerDetailPage() {
   const [logStreamPaused, setLogStreamPaused] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const successTimerRef = useRef<number | null>(null);
+  const formatActionError = (error: unknown, fallback: string) => formatServerDetailError(error, {
+    dockerUnavailable: t("detailDockerUnavailable"),
+    containerUnavailable: t("detailContainerUnavailable")
+  }) || fallback;
 
   const showSuccess = (message: string) => {
     setErrorMessage("");
@@ -115,7 +120,7 @@ export default function ServerDetailPage() {
     },
     onError: (error) => {
       setSuccessMessage("");
-      setConsoleError(error instanceof Error ? error.message : t("commandSendFailed"));
+      setConsoleError(formatActionError(error, t("commandSendFailed")));
     }
   });
   const worldUpload = useMutation({
@@ -125,7 +130,7 @@ export default function ServerDetailPage() {
       if (worldInputRef.current) worldInputRef.current.value = "";
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableImportWorld"))
+    onError: (error) => showError(formatActionError(error, t("unableImportWorld")))
   });
   const configSave = useMutation({
     mutationFn: (nextConfig: TerrariaConfig) => updateServerConfig(id, nextConfig),
@@ -138,7 +143,7 @@ export default function ServerDetailPage() {
     },
     onError: (error) => {
       setConfigSaved(false);
-      showError(error instanceof Error ? error.message : t("unableUpdateConfig"));
+      showError(formatActionError(error, t("unableUpdateConfig")));
     }
   });
   const worldAssign = useMutation({
@@ -149,7 +154,7 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["server", id] });
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableAssignWorld"))
+    onError: (error) => showError(formatActionError(error, t("unableAssignWorld")))
   });
   const worldDuplicate = useMutation({
     mutationFn: (world: World) => duplicateWorld(world.id, nextWorldCopyName(world.name, t("duplicateSuffix"))),
@@ -157,7 +162,7 @@ export default function ServerDetailPage() {
       showSuccess(t("worldDuplicated"));
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableDuplicateWorld"))
+    onError: (error) => showError(formatActionError(error, t("unableDuplicateWorld")))
   });
   const worldMigrate = useMutation({
     mutationFn: ({ id: worldId, instanceId }: { id: string; instanceId: string }) => migrateWorld(worldId, instanceId),
@@ -166,7 +171,7 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["worlds"] });
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableMigrateWorld"))
+    onError: (error) => showError(formatActionError(error, t("unableMigrateWorld")))
   });
   const worldDelete = useMutation({
     mutationFn: deleteWorld,
@@ -177,7 +182,7 @@ export default function ServerDetailPage() {
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : "";
-      showError(message.includes("active world") ? t("unableDeleteActiveWorld") : message || t("unableDeleteWorld"));
+      showError(message.includes("active world") ? t("unableDeleteActiveWorld") : formatActionError(error, t("unableDeleteWorld")));
     }
   });
   const backupCreate = useMutation({
@@ -186,7 +191,7 @@ export default function ServerDetailPage() {
       showSuccess(t("backupCreated"));
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableCreateBackup"))
+    onError: (error) => showError(formatActionError(error, t("unableCreateBackup")))
   });
   const backupRestore = useMutation({
     mutationFn: restoreBackup,
@@ -197,7 +202,7 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["server", id] });
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableRestoreBackup"))
+    onError: (error) => showError(formatActionError(error, t("unableRestoreBackup")))
   });
   const backupMigrate = useMutation({
     mutationFn: ({ id: backupId, instanceId }: { id: string; instanceId: string }) => migrateBackup(backupId, instanceId),
@@ -206,7 +211,7 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["backups"] });
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableMigrateBackup"))
+    onError: (error) => showError(formatActionError(error, t("unableMigrateBackup")))
   });
   const backupDelete = useMutation({
     mutationFn: deleteBackup,
@@ -215,7 +220,7 @@ export default function ServerDetailPage() {
       setPendingBackupDelete(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableDeleteBackup"))
+    onError: (error) => showError(formatActionError(error, t("unableDeleteBackup")))
   });
   const modUpload = useMutation({
     mutationFn: (file: File) => uploadMod(id, file),
@@ -224,7 +229,7 @@ export default function ServerDetailPage() {
       if (modInputRef.current) modInputRef.current.value = "";
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableUploadMod"))
+    onError: (error) => showError(formatActionError(error, t("unableUploadMod")))
   });
   const modEnabled = useMutation({
     mutationFn: ({ modId, enabled }: { modId: string; enabled: boolean }) => setModEnabled(id, modId, enabled),
@@ -232,7 +237,7 @@ export default function ServerDetailPage() {
       showSuccess(updatedMod.enabled ? t("modEnabled") : t("modDisabled"));
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableUpdateMod"))
+    onError: (error) => showError(formatActionError(error, t("unableUpdateMod")))
   });
   const modDelete = useMutation({
     mutationFn: (modId: string) => deleteMod(id, modId),
@@ -241,7 +246,7 @@ export default function ServerDetailPage() {
       setPendingModDelete(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
-    onError: (error) => showError(error instanceof Error ? error.message : t("unableDeleteMod"))
+    onError: (error) => showError(formatActionError(error, t("unableDeleteMod")))
   });
 
   useEffect(() => {
@@ -267,7 +272,7 @@ export default function ServerDetailPage() {
         .catch((error) => {
           if (!alive) return;
           setLogStatus("error");
-          setConsoleError(error instanceof Error ? error.message : t("logsUnavailable"));
+          setConsoleError(formatActionError(error, t("logsUnavailable")));
         });
       return () => {
         alive = false;
@@ -355,7 +360,7 @@ export default function ServerDetailPage() {
       saveBlob(blob, `${world.name}.wld`);
       showSuccess(t("downloadStarted"));
     } catch (error) {
-      showError(error instanceof Error ? error.message : t("unableDownloadWorld"));
+      showError(formatActionError(error, t("unableDownloadWorld")));
     } finally {
       setDownloadingResourceId("");
     }
@@ -367,7 +372,7 @@ export default function ServerDetailPage() {
       saveBlob(blob, backup.name);
       showSuccess(t("downloadStarted"));
     } catch (error) {
-      showError(error instanceof Error ? error.message : t("unableDownloadBackup"));
+      showError(formatActionError(error, t("unableDownloadBackup")));
     } finally {
       setDownloadingResourceId("");
     }
@@ -929,7 +934,9 @@ function WorldsTab({
   onUploadClick: () => void;
 }) {
   const { locale, t } = useI18n();
-  const canAssignWorld = serverStatus !== "running";
+  const assignAction = describeResourceAction({ kind: "assignWorld", serverStatus });
+  const migrateAction = describeResourceAction({ kind: "migrate", targetCount: targetServers.length });
+  const actionHint = assignAction.reasonKey ? t(assignAction.reasonKey) : migrateAction.reasonKey ? t(migrateAction.reasonKey) : "";
   return (
     <ResourcePanel
       title={t("detailWorldActions")}
@@ -952,6 +959,7 @@ function WorldsTab({
       }
     >
       {isError ? <p className="text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p> : null}
+      {!isError && actionHint ? <p className="mb-3 text-sm text-slate-500">{actionHint}</p> : null}
       {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
       {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noWorldsYet")}</p> : null}
       <div className="grid gap-2">
@@ -971,8 +979,8 @@ function WorldsTab({
                   <Button
                     variant="secondary"
                     onClick={() => onAssign(world)}
-                    disabled={!canAssignWorld || assigning}
-                    title={!canAssignWorld ? t("assignWorldRequiresStopped") : undefined}
+                    disabled={assignAction.disabled || assigning}
+                    title={assignAction.reasonKey ? t(assignAction.reasonKey) : undefined}
                   >
                     <CheckCircle2 aria-hidden="true" />
                     {assigning ? t("actionWorking") : t("setCurrentWorld")}
@@ -982,7 +990,7 @@ function WorldsTab({
                   <Plus aria-hidden="true" />
                   {duplicating ? t("actionWorking") : t("duplicate")}
                 </Button>
-                <Button variant="secondary" onClick={() => onMigrate(world)} disabled={targetServers.length === 0 || migrating}>
+                <Button variant="secondary" onClick={() => onMigrate(world)} disabled={migrateAction.disabled || migrating} title={migrateAction.reasonKey ? t(migrateAction.reasonKey) : undefined}>
                   <MoveRight aria-hidden="true" />
                   {migrating ? t("actionWorking") : t("migrate")}
                 </Button>
@@ -1042,7 +1050,9 @@ function BackupsTab({
   onTargetServerChange: (value: string) => void;
 }) {
   const { locale, t } = useI18n();
-  const canRestore = serverStatus !== "running";
+  const restoreAction = describeResourceAction({ kind: "restoreBackup", serverStatus });
+  const migrateAction = describeResourceAction({ kind: "migrate", targetCount: targetServers.length });
+  const actionHint = restoreAction.reasonKey ? t(restoreAction.reasonKey) : migrateAction.reasonKey ? t(migrateAction.reasonKey) : "";
   return (
     <ResourcePanel
       title={t("detailBackupActions")}
@@ -1065,6 +1075,7 @@ function BackupsTab({
       }
     >
       {isError ? <p className="text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p> : null}
+      {!isError && actionHint ? <p className="mb-3 text-sm text-slate-500">{actionHint}</p> : null}
       {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
       {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noBackupsYet")}</p> : null}
       <div className="grid gap-2">
@@ -1079,8 +1090,8 @@ function BackupsTab({
                   variant="secondary"
                   aria-label={t("restore")}
                   onClick={() => onRestore(backup)}
-                  disabled={!canRestore || restoring}
-                  title={!canRestore ? t("restoreRequiresStopped") : undefined}
+                  disabled={restoreAction.disabled || restoring}
+                  title={restoreAction.reasonKey ? t(restoreAction.reasonKey) : undefined}
                 >
                   <RotateCcw aria-hidden="true" />
                 </Button>
@@ -1090,7 +1101,7 @@ function BackupsTab({
                   icon={<Download aria-hidden="true" />}
                   onClick={() => onDownload(backup)}
                 />
-                <Button variant="secondary" aria-label={t("migrate")} onClick={() => onMigrate(backup)} disabled={targetServers.length === 0 || migrating}>
+                <Button variant="secondary" aria-label={t("migrate")} onClick={() => onMigrate(backup)} disabled={migrateAction.disabled || migrating} title={migrateAction.reasonKey ? t(migrateAction.reasonKey) : undefined}>
                   <MoveRight aria-hidden="true" />
                 </Button>
                 <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>

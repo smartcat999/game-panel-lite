@@ -153,6 +153,8 @@ const messages = {
     logsRequiresRunning: "启动服务器后显示实时日志。",
     logsNoHistory: "暂无历史日志；启动服务器后会显示实时日志。",
     logsUnavailable: "日志流不可用，请确认服务器已创建并且后端可访问容器日志。",
+    detailDockerUnavailable: "Docker 未连接，请先在设置页完成 Docker Host 配置。",
+    detailContainerUnavailable: "Docker 容器不可用或已被外部删除，请重新启动服务器让面板恢复运行容器。",
     send: "发送",
     sending: "发送中...",
     joinServer: "加入服务器",
@@ -208,6 +210,7 @@ const messages = {
     modDeleted: "模组文件已删除。",
     setCurrentWorld: "设为当前",
     assignWorldRequiresStopped: "请先停止服务器再切换当前世界。",
+    noMigrationTargetHint: "需要至少另一台服务器作为迁移目标。",
     openFullManager: "打开完整管理",
     createWizardTitle: "创建 Terraria 服务器",
     cancelCreateServer: "取消创建",
@@ -531,6 +534,8 @@ const messages = {
     logsRequiresRunning: "Start the server to stream live logs.",
     logsNoHistory: "No saved logs yet. Start the server to stream live logs.",
     logsUnavailable: "Log stream unavailable. Make sure the server exists and the backend can read container logs.",
+    detailDockerUnavailable: "Docker is not connected. Configure Docker Host in Settings first.",
+    detailContainerUnavailable: "The Docker container is unavailable or was removed outside the panel. Start the server again so GamePanel can recreate it.",
     send: "Send",
     sending: "Sending...",
     joinServer: "Join Server",
@@ -586,6 +591,7 @@ const messages = {
     modDeleted: "Mod file deleted.",
     setCurrentWorld: "Set Current",
     assignWorldRequiresStopped: "Stop the server before switching the current world.",
+    noMigrationTargetHint: "Add at least one other server to use as a migration target.",
     openFullManager: "Open Full Manager",
     createWizardTitle: "Create Terraria Server",
     cancelCreateServer: "Cancel",
@@ -760,7 +766,7 @@ const messages = {
   }
 } as const;
 
-type MessageKey = keyof typeof messages.zh;
+export type MessageKey = keyof typeof messages.zh;
 
 type I18nContextValue = {
   locale: Locale;
