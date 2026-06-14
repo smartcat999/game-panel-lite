@@ -118,7 +118,12 @@ func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, mods)
+	visible, err := h.visibleMods(r.Context(), mods)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, visible)
 }
 
 func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +253,12 @@ func (h *Handler) listGlobalMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, mods)
+	visible, err := h.visibleMods(r.Context(), mods)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, visible)
 }
 
 func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
@@ -405,6 +415,26 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 
 func isTModPackage(fileName string) bool {
 	return strings.EqualFold(filepath.Ext(fileName), ".tmod")
+}
+
+func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]domain.ModFile, error) {
+	svc := modsvc.NewService(h.cfg.DataDir)
+	visible := make([]domain.ModFile, 0, len(mods))
+	for _, item := range mods {
+		path, err := svc.Path(item.InstanceID, item.FileName)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			h.logger.Warn("mod file missing, pruning orphaned record", "modId", item.ID, "path", path)
+			if err := h.store.DeleteMod(ctx, item.ID); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		visible = append(visible, item)
+	}
+	return visible, nil
 }
 
 func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {

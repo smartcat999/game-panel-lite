@@ -698,6 +698,69 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestModListsPruneMissingFiles(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	serverMod := domain.ModFile{
+		ID:         "server-missing-mod",
+		InstanceID: server.ID,
+		FileName:   "missing.tmod",
+		SizeBytes:  10,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	globalMod := domain.ModFile{
+		ID:         "global-missing-mod",
+		InstanceID: "unassigned",
+		FileName:   "library.tmod",
+		SizeBytes:  10,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &serverMod); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateMod(context.Background(), &globalMod); err != nil {
+		t.Fatal(err)
+	}
+
+	serverList := httptest.NewRecorder()
+	router.ServeHTTP(serverList, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/tmod/mods", nil))
+	if serverList.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server mod list 200, got %d: %s", serverList.Code, serverList.Body.String())
+	}
+	var serverMods []domain.ModFile
+	if err := json.Unmarshal(serverList.Body.Bytes(), &serverMods); err != nil {
+		t.Fatal(err)
+	}
+	if len(serverMods) != 0 {
+		t.Fatalf("expected missing server mod pruned from response, got %+v", serverMods)
+	}
+	if _, err := db.GetMod(context.Background(), serverMod.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing server mod record pruned, got err=%v", err)
+	}
+
+	globalList := httptest.NewRecorder()
+	router.ServeHTTP(globalList, httptest.NewRequest(stdhttp.MethodGet, "/api/mods", nil))
+	if globalList.Code != stdhttp.StatusOK {
+		t.Fatalf("expected global mod list 200, got %d: %s", globalList.Code, globalList.Body.String())
+	}
+	var globalMods []domain.ModFile
+	if err := json.Unmarshal(globalList.Body.Bytes(), &globalMods); err != nil {
+		t.Fatal(err)
+	}
+	if len(globalMods) != 0 {
+		t.Fatalf("expected missing global mod pruned from response, got %+v", globalMods)
+	}
+	if _, err := db.GetMod(context.Background(), globalMod.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing global mod record pruned, got err=%v", err)
+	}
+}
+
 func TestTModLoaderModUploadIsIdempotentForSameFile(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

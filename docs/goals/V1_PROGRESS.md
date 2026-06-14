@@ -1833,3 +1833,22 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Mod List Orphan Pruning Update
+
+Status: Completed
+
+Completed:
+- Added orphan pruning to server-scoped and global mod list APIs so missing files no longer appear as usable rows on the Mods page or Server Detail Mods tab.
+- The mod list behavior now matches the existing world and backup list behavior for missing managed files.
+- Added backend HTTP coverage proving missing server mod and global mod records are removed from both the response and database.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestModListsPruneMissingFiles -count=1`: failed first because missing mod records were still returned, then passed after pruning was added.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(ModListsPruneMissingFiles|TModLoaderModUploadListAndDeleteEndpoints|GlobalModUploadIsIdempotentForSameFile|AssignModIsIdempotentForSameServerFile)' -count=1`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
