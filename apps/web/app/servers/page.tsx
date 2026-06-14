@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
@@ -45,7 +43,6 @@ export default function ServersPage() {
       <PageHeader
         title={t("serversTitle")}
         description={t("serversDescription")}
-        action={<Link href="/servers/new"><Button><Plus aria-hidden="true" />{t("createServer")}</Button></Link>}
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Input className="max-w-sm" placeholder={t("searchServers")} value={search} onChange={(event) => setSearch(event.target.value)} />

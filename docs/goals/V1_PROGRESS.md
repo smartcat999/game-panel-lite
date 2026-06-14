@@ -372,3 +372,23 @@ Checks:
 - `pnpm test`: passed
 - `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
 - Browser verification: Settings rendered one Docker Runtime card plus one Data Directories card; old `Docker Socket / Host` and `Docker Host Scanner` headings were absent.
+
+## Post-V1 Servers CTA Cleanup Update
+
+Status: Completed
+
+Completed:
+- Removed the duplicate page-level Create Server action from the Servers page.
+- Kept the global top-bar Create Server button as the single primary creation entry point.
+
+Known issues:
+- None for this UI cleanup.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `go build ./...`: passed
+- `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
