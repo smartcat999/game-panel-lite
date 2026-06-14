@@ -10,7 +10,8 @@ import { useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { createServer, importWorld, previewTerrariaConfig, uploadMod } from "@/lib/api";
+import { previewTerrariaConfig } from "@/lib/api";
+import { createTerrariaServerWithAssets } from "@/lib/create-server-flow";
 import { getTerrariaPreset, type TerrariaConfig } from "@gamepanel-lite/shared";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepWorldMods", "stepReview"] as const;
@@ -41,24 +42,13 @@ export function CreateServerWizard() {
   const nextStepKey = stepKeys[Math.min(stepKeys.length - 1, step + 1)] ?? fallbackStepKey;
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
   const create = useMutation({
-    mutationFn: async () => {
-      const server = await createServer({
-        name: config.serverName || "Terraria Server",
-        providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
-        config
-      });
-      if (worldFile) {
-        await importWorld(worldFile, server.id);
-      }
-      if (mode === "tmodloader" && modFiles.length > 0) {
-        await Promise.all(modFiles.map((file) => uploadMod(server.id, file)));
-      }
-      return server;
-    },
-    onSuccess: async (server) => {
+    mutationFn: () => createTerrariaServerWithAssets({ config, mode, modFiles, worldFile }),
+    onSuccess: async ({ server }) => {
       await queryClient.invalidateQueries({ queryKey: ["servers"] });
       await queryClient.invalidateQueries({ queryKey: ["worlds"] });
+      await queryClient.invalidateQueries({ queryKey: ["backups"] });
       await queryClient.invalidateQueries({ queryKey: ["mods", server.id] });
+      await queryClient.invalidateQueries({ queryKey: ["server", server.id] });
       queryClient.setQueryData(["server", server.id], server);
       router.push(`/servers/${server.id}`);
     }
@@ -142,7 +132,7 @@ export function CreateServerWizard() {
             </Button>
           </div>
           {create.isError && <p className="mt-4 text-sm text-red-200">{create.error.message}</p>}
-          {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.name })}</p>}
+          {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.server.name })}</p>}
           <p className="mt-4 text-xs text-slate-500">{t("currentStep", { step: selectedTitle })}</p>
         </div>
       </div>
