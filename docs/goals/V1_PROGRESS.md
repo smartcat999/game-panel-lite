@@ -1202,6 +1202,27 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `git diff --check`: passed.
 
+## V1 Runtime Unavailable Guard Update
+
+Status: Completed
+
+Completed:
+- Kept the Go API available when the configured Docker host is invalid or unavailable.
+- Prevented server start from succeeding through the mock runtime when Docker is unavailable.
+- Prevented stop/status-transition actions for existing runtime containers from being marked successful when Docker is unavailable.
+- Runtime actions now return a clear `Docker runtime unavailable` API error instead of leaking low-level Docker SDK connection errors or faking success.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/app -run TestInvalidDockerHostKeepsAPIAvailableButStartFails -count=1`: failed first because the API leaked a low-level Docker connect error, then passed after gating runtime creation on Docker availability.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/app -run TestInvalidDockerHostDoesNotMockStopExistingContainer -count=1`: failed first because stop was mocked as successful, then passed after runtime transitions required Docker availability.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `git diff --check`: passed.
+
 ## V1 Mod Enable Toggle Update
 
 Status: Completed

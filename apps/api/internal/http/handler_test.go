@@ -29,7 +29,7 @@ import (
 )
 
 func newTestRouter(t *testing.T) (stdhttp.Handler, *store.Store, config.Config) {
-	return newTestRouterWithAdapter(t, runtime.NewMockAdapter())
+	return newTestRouterWithAdapter(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()})
 }
 
 func newMultipartFileRequest(t *testing.T, method string, target string, field string, fileName string, content []byte) *stdhttp.Request {
@@ -80,6 +80,14 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 	router := chi.NewRouter()
 	handler.Register(router)
 	return router, db, cfg
+}
+
+type availableMockAdapter struct {
+	*runtime.MockAdapter
+}
+
+func (a availableMockAdapter) Check(context.Context) runtime.DockerStatus {
+	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock"}
 }
 
 func TestCorsAllowsPatchPreflight(t *testing.T) {

@@ -1022,6 +1022,10 @@ func (h *Handler) transitionServer(w http.ResponseWriter, r *http.Request, statu
 		return
 	}
 	if server.ContainerID != "" {
+		if err := h.requireRuntimeAvailable(r.Context()); err != nil {
+			writeError(w, statusCodeForRuntimeError(err), err.Error())
+			return
+		}
 		if _, err := h.runtime.Inspect(r.Context(), server); err != nil {
 			h.logger.Warn("runtime container missing during state transition; clearing stale container", "server", server.ID, "container", server.ContainerID, "error", err)
 			server.ContainerID = ""
@@ -1058,6 +1062,9 @@ func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (do
 }
 
 func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.GameServerInstance) (domain.GameServerInstance, bool, error) {
+	if err := h.requireRuntimeAvailable(ctx); err != nil {
+		return domain.GameServerInstance{}, false, err
+	}
 	if server.ContainerID != "" {
 		if _, err := h.runtime.Inspect(ctx, server); err == nil {
 			return server, false, nil
@@ -1101,6 +1108,21 @@ func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.Game
 		return domain.GameServerInstance{}, false, err
 	}
 	return server, true, nil
+}
+
+func (h *Handler) requireRuntimeAvailable(ctx context.Context) error {
+	if h.dockerMonitor == nil {
+		return nil
+	}
+	status := h.dockerMonitor.Refresh(ctx)
+	if status.Available {
+		return nil
+	}
+	message := strings.TrimSpace(status.Message)
+	if message == "" {
+		message = "Docker daemon is not available"
+	}
+	return fmt.Errorf("Docker runtime unavailable: %s", message)
 }
 
 func (h *Handler) startRecreatedRunningContainer(ctx context.Context, server domain.GameServerInstance, recreated bool) (domain.GameServerInstance, error) {
