@@ -392,3 +392,25 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
 - `go build ./...`: passed
 - `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
+
+## Post-V1 Create Server Navigation Update
+
+Status: Completed
+
+Completed:
+- Prefetched the create-server route from the app shell and on hover of the global create button.
+- Added immediate button feedback (`Opening...` / `打开中...`) after clicking Create Server so slow first-load compiles are visible to the user.
+- Added a Cancel action to the create-server wizard header that returns to the Servers page.
+
+Known issues:
+- In local Next.js dev mode, the first visit to `/servers/new` can still take longer while the route compiles. The button now provides immediate feedback during that delay.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `go build ./...`: passed
+- `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
+- Browser verification: Create Server link count was 1, click showed immediate `打开中...`, `/servers/new` rendered `取消创建`, and Cancel returned to `/servers`.

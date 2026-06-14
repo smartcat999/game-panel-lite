@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
@@ -23,10 +23,25 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { locale, setLocale, t } = useI18n();
-  const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false });
+  const [optimisticPath, setOptimisticPath] = useState("");
+  const [createPending, setCreatePending] = useState(false);
+  const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
   const dockerAvailable = Boolean(docker.data?.available);
-  const dockerLabel = docker.isLoading ? t("dockerCheckingShort") : dockerAvailable ? t("available") : t("unavailable");
+  const dockerLabel = dockerAvailable ? t("available") : t("unavailable");
+
+  useEffect(() => {
+    setOptimisticPath("");
+    setCreatePending(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    nav.forEach((item) => router.prefetch(item.href));
+    router.prefetch("/servers/new");
+  }, [router]);
+
+  const visiblePath = optimisticPath || pathname;
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-panel-line bg-panel-sidebar lg:flex lg:flex-col">
@@ -38,12 +53,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
           {nav.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = visiblePath === item.href || visiblePath.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setOptimisticPath(item.href)}
+                onMouseEnter={() => router.prefetch(item.href)}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white",
                   active && "bg-slate-800/80 text-white"
@@ -77,49 +94,69 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Search className="pointer-events-none absolute left-3 top-2.5 text-slate-500" aria-hidden="true" />
               <Input className="w-full pl-10" placeholder={t("searchServers")} />
             </div>
-            <div className="hidden w-36 shrink-0 items-center justify-end gap-2 text-xs text-slate-300 sm:flex">
-              <span className="w-12 text-right">{t("docker")}</span>
-              <span
-                className={cn(
-                  "inline-flex min-w-16 items-center justify-center gap-1 rounded px-2 py-1",
-                  dockerAvailable ? "bg-panel-green/15 text-panel-green" : "bg-panel-gold/15 text-panel-gold"
-                )}
+            <div className="ml-auto flex shrink-0 items-center gap-3">
+              <div className="hidden w-36 shrink-0 items-center justify-end gap-2 text-xs text-slate-300 sm:flex">
+                <span className="w-12 text-right">{t("docker")}</span>
+                <span
+                  className={cn(
+                    "inline-flex min-w-16 items-center justify-center gap-1 rounded px-2 py-1",
+                    dockerAvailable ? "bg-panel-green/15 text-panel-green" : "bg-panel-gold/15 text-panel-gold"
+                  )}
+                >
+                  <ShieldCheck aria-hidden="true" />
+                  {dockerLabel}
+                </span>
+              </div>
+              <div
+                className="hidden w-[104px] shrink-0 items-center gap-1 rounded-md border border-panel-line bg-slate-950/60 p-1 text-xs md:flex"
+                aria-label={t("language")}
               >
-                <ShieldCheck aria-hidden="true" />
-                {dockerLabel}
-              </span>
-            </div>
-            <div
-              className="hidden w-[104px] shrink-0 items-center gap-1 rounded-md border border-panel-line bg-slate-950/60 p-1 text-xs md:flex"
-              aria-label={t("language")}
-            >
+                <button
+                  className={cn(
+                    "w-12 rounded px-2 py-1 text-center text-slate-300 transition-colors",
+                    locale === "zh" && "bg-panel-green text-slate-950"
+                  )}
+                  type="button"
+                  onClick={() => setLocale("zh")}
+                >
+                  {t("chinese")}
+                </button>
+                <button
+                  className={cn(
+                    "w-9 rounded px-2 py-1 text-center text-slate-300 transition-colors",
+                    locale === "en" && "bg-panel-green text-slate-950"
+                  )}
+                  type="button"
+                  onClick={() => setLocale("en")}
+                >
+                  {t("english")}
+                </button>
+              </div>
+              <Link
+                href="/servers/new"
+                className="shrink-0"
+                onClick={() => setCreatePending(true)}
+                onMouseEnter={() => router.prefetch("/servers/new")}
+              >
+                <Button className="h-12 w-44 shrink-0 whitespace-nowrap">
+                  <Plus aria-hidden="true" />
+                  {createPending ? t("openingCreateServer") : t("createServer")}
+                </Button>
+              </Link>
               <button
-                className={cn(
-                  "w-12 rounded px-2 py-1 text-center text-slate-300 transition-colors",
-                  locale === "zh" && "bg-panel-green text-slate-950"
-                )}
                 type="button"
-                onClick={() => setLocale("zh")}
+                aria-label={t("userProfile")}
+                className="hidden size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-panel-line bg-slate-950/70 p-0.5 shadow-[0_0_0_1px_rgba(123,217,120,0.08)] transition hover:border-panel-green md:flex"
               >
-                {t("chinese")}
-              </button>
-              <button
-                className={cn(
-                  "w-9 rounded px-2 py-1 text-center text-slate-300 transition-colors",
-                  locale === "en" && "bg-panel-green text-slate-950"
-                )}
-                type="button"
-                onClick={() => setLocale("en")}
-              >
-                {t("english")}
+                <Image
+                  src="/images/user-avatar.svg"
+                  alt={t("userAvatarAlt")}
+                  width={80}
+                  height={80}
+                  className="size-full rounded-full object-cover"
+                />
               </button>
             </div>
-            <Link href="/servers/new" className="shrink-0">
-              <Button className="h-12 w-44 shrink-0 whitespace-nowrap">
-                <Plus aria-hidden="true" />
-                {t("createServer")}
-              </Button>
-            </Link>
           </div>
         </header>
         <main className="px-4 py-6 md:px-8">{children}</main>
