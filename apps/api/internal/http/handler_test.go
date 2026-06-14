@@ -132,6 +132,42 @@ func (a inspectStatusAdapter) SendCommand(context.Context, domain.GameServerInst
 	return nil
 }
 
+type unavailableInspectAdapter struct {
+	inspectCalls int
+}
+
+func (a *unavailableInspectAdapter) Check(context.Context) runtime.DockerStatus {
+	return runtime.DockerStatus{Available: false, Message: "docker unavailable", Host: "mock"}
+}
+func (a *unavailableInspectAdapter) Create(context.Context, runtime.ContainerSpec) (string, error) {
+	return "", fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Start(context.Context, domain.GameServerInstance) error {
+	return fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Stop(context.Context, domain.GameServerInstance) error {
+	return fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Restart(context.Context, domain.GameServerInstance) error {
+	return fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Remove(context.Context, domain.GameServerInstance) error {
+	return fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Inspect(context.Context, domain.GameServerInstance) (domain.ServerStatus, error) {
+	a.inspectCalls++
+	return domain.StatusErrored, fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
+	return runtime.ContainerStats{}, fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+	return fmt.Errorf("docker unavailable")
+}
+
 type staleContainerAdapter struct {
 	created          int
 	startedContainer string
@@ -473,6 +509,33 @@ func TestListServersRefreshesStoredStatusFromRuntime(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Status != domain.StatusRunning {
 		t.Fatalf("expected list status refreshed from runtime, got %+v", got)
+	}
+}
+
+func TestListServersSkipsRuntimeInspectWhenDockerUnavailable(t *testing.T) {
+	adapter := &unavailableInspectAdapter{}
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("unavailable-runtime-list", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "runtime-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/servers", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server list to remain available, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if adapter.inspectCalls != 0 {
+		t.Fatalf("expected list not to inspect runtime while Docker monitor is unavailable, got %d inspect calls", adapter.inspectCalls)
+	}
+	var got []domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Status != domain.StatusRunning {
+		t.Fatalf("expected stored status without runtime refresh, got %+v", got)
 	}
 }
 

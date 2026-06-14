@@ -1191,6 +1191,9 @@ func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameSer
 	if server.ContainerID == "" {
 		return server
 	}
+	if !h.runtimeStatusAvailable() {
+		return server
+	}
 	status, err := h.runtime.Inspect(ctx, server)
 	if err != nil {
 		h.logger.Warn("failed to refresh runtime server status", "server", server.ID, "container", server.ContainerID, "error", err)
@@ -1205,6 +1208,13 @@ func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameSer
 		h.logger.Warn("failed to persist refreshed runtime server status", "server", server.ID, "status", status, "error", err)
 	}
 	return server
+}
+
+func (h *Handler) runtimeStatusAvailable() bool {
+	if h.dockerMonitor == nil {
+		return true
+	}
+	return h.dockerMonitor.Status().Available
 }
 
 func statusCodeForRuntimeError(err error) int {
@@ -1249,7 +1259,7 @@ func (h *Handler) serverStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.Status != domain.StatusRunning {
+	if server.Status != domain.StatusRunning || !h.runtimeStatusAvailable() {
 		writeJSON(w, http.StatusOK, runtime.ContainerStats{})
 		return
 	}
@@ -1336,6 +1346,10 @@ func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
 	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.Status != domain.StatusRunning && !h.runtimeStatusAvailable() {
+		writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{}})
 		return
 	}
 	if server.Status != domain.StatusRunning && server.ContainerID != "" {

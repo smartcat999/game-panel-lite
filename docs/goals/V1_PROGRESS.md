@@ -1166,6 +1166,28 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Runtime Read Path Responsiveness Update
+
+Status: Completed
+
+Completed:
+- Changed server list/detail status refresh to respect the cached Docker monitor state instead of inspecting containers while Docker is known unavailable.
+- Kept lifecycle actions strict: start, stop, restart, command, and runtime container creation still force a Docker availability refresh before mutating runtime state.
+- Made stats and stopped-server log snapshots return fast empty values when the cached Docker state is unavailable, so ordinary page reads do not hang behind Docker calls.
+- Added backend coverage proving server list remains available and does not inspect runtime containers when Docker monitor state is unavailable.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestListServersSkipsRuntimeInspectWhenDockerUnavailable -count=1`: failed first, then passed after status refresh started using cached monitor state.
+- `gofmt -w apps/api/internal/http/handler.go apps/api/internal/http/handler_test.go`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(ListServersSkipsRuntimeInspectWhenDockerUnavailable|GetServerRefreshesStoredStatusFromRuntime|ListServersRefreshesStoredStatusFromRuntime)' -count=1`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+- `pnpm --filter @gamepanel-lite/web typecheck`: failed when run in parallel with `pnpm build` because `.next/types` was being regenerated, then passed when rerun after build completed.
+- `git diff --check`: passed.
+
 ## V1 Server Detail Logs and Mod Idempotency Update
 
 Status: Completed
