@@ -6,18 +6,20 @@ import (
 )
 
 type Config struct {
-	Host    string
-	Port    string
-	DataDir string
-	DBPath  string
+	Host       string
+	Port       string
+	DataDir    string
+	DBPath     string
+	DockerHost string
 }
 
 func Load() Config {
 	return Config{
-		Host:    value("GAMEPANEL_HOST", "0.0.0.0"),
-		Port:    value("GAMEPANEL_PORT", "4000"),
-		DataDir: value("GAMEPANEL_DATA_DIR", "./data"),
-		DBPath:  value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
+		Host:       value("GAMEPANEL_HOST", "0.0.0.0"),
+		Port:       value("GAMEPANEL_PORT", "4000"),
+		DataDir:    value("GAMEPANEL_DATA_DIR", "./data"),
+		DBPath:     value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
+		DockerHost: value("GAMEPANEL_DOCKER_HOST", value("DOCKER_HOST", "unix:///var/run/docker.sock")),
 	}
 }
 

@@ -25,7 +25,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, err
 	}
 	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider())
-	adapter, err := dockerruntime.NewAdapter()
+	adapter, err := dockerruntime.NewAdapter(cfg.DockerHost)
 	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()
 	if err != nil {
 		logger.Warn("falling back to mock runtime adapter", "error", err)

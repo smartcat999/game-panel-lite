@@ -18,23 +18,30 @@ import (
 
 type Adapter struct {
 	client *client.Client
+	host   string
 }
 
-func NewAdapter() (*Adapter, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+func NewAdapter(host string) (*Adapter, error) {
+	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if host != "" {
+		opts = append(opts, client.WithHost(host))
+	} else {
+		opts = append(opts, client.FromEnv)
+	}
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, err
 	}
-	return &Adapter{client: cli}, nil
+	return &Adapter{client: cli, host: cli.DaemonHost()}, nil
 }
 
 func (a *Adapter) Check(ctx context.Context) runtime.DockerStatus {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if _, err := a.client.Ping(ctx); err != nil {
-		return runtime.DockerStatus{Available: false, Message: err.Error()}
+		return runtime.DockerStatus{Available: false, Message: err.Error(), Host: a.host}
 	}
-	return runtime.DockerStatus{Available: true, Message: "Docker daemon is available"}
+	return runtime.DockerStatus{Available: true, Message: "Docker daemon is available", Host: a.host}
 }
 
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {

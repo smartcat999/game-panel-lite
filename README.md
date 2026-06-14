@@ -84,6 +84,16 @@ The API exposes `GET /api/runtime/docker` for daemon status. Real container crea
 - Vanilla: `ryshe/terraria:latest`
 - tModLoader: `jacobsmile/tmodloader1.4:latest`
 
+Configure the Docker socket or host with `GAMEPANEL_DOCKER_HOST`. If it is not set, the API falls back to `DOCKER_HOST`, then `unix:///var/run/docker.sock`.
+
+Common examples:
+
+```bash
+GAMEPANEL_DOCKER_HOST="unix:///var/run/docker.sock"
+GAMEPANEL_DOCKER_HOST="unix:///Users/<you>/.docker/run/docker.sock"
+GAMEPANEL_DOCKER_HOST="tcp://127.0.0.1:2375"
+```
+
 Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instances/{instanceId}`. World, backup, and mod files use separate per-instance directories.
 
 ## Safety
@@ -93,6 +103,7 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 - File names, joined paths, and restored backup archive entries are checked to prevent path traversal.
 - Stop and restart server actions require browser confirmation before the API call.
 - Secrets, tokens, and machine-specific absolute paths must stay out of committed config.
+- Keep machine-specific Docker socket paths in local `.env` or shell environment only.
 
 ## Known Limitations
 
@@ -100,6 +111,7 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 - Individual server detail pages still use mock detail data for console and side panels.
 - Docker image pull and container lifecycle were compiled but not manually verified against a running daemon in this run.
 - Playwright is not configured in this project yet, so e2e browser flows were not run.
+- The UI currently provides lightweight Chinese/English copy support in the app shell and Settings page; deeper per-form localization can be expanded later.
 
 ## Roadmap
 

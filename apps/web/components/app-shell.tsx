@@ -4,21 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
 
 const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/servers", label: "Servers", icon: HardDrive },
-  { href: "/worlds", label: "Worlds", icon: Globe2 },
-  { href: "/backups", label: "Backups", icon: Archive },
-  { href: "/mods", label: "Mods", icon: Box },
-  { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/settings", label: "Settings", icon: Settings }
-];
+  { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
+  { href: "/servers", labelKey: "navServers", icon: HardDrive },
+  { href: "/worlds", labelKey: "navWorlds", icon: Globe2 },
+  { href: "/backups", labelKey: "navBackups", icon: Archive },
+  { href: "/mods", labelKey: "navMods", icon: Box },
+  { href: "/activity", labelKey: "navActivity", icon: Activity },
+  { href: "/settings", labelKey: "navSettings", icon: Settings }
+] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { locale, setLocale, t } = useI18n();
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-panel-line bg-panel-sidebar lg:flex lg:flex-col">
@@ -42,14 +44,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 )}
               >
                 <Icon aria-hidden="true" />
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             );
           })}
         </nav>
         <div className="m-4 rounded-lg border border-panel-line bg-slate-950/40 p-4">
           <div className="h-20 rounded-md bg-[linear-gradient(180deg,#12351d,#25190f)]" />
-          <p className="mt-3 text-sm font-medium">Terraria Ready</p>
+          <p className="mt-3 text-sm font-medium">{t("terrariaReady")}</p>
           <p className="text-xs text-slate-500">v1.0.0</p>
         </div>
       </aside>
@@ -58,19 +60,44 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-4">
             <div className="relative max-w-md flex-1">
               <Search className="pointer-events-none absolute left-3 top-2.5 text-slate-500" aria-hidden="true" />
-              <Input className="w-full pl-10" placeholder="Search servers..." />
+              <Input className="w-full pl-10" placeholder={t("searchServers")} />
             </div>
-            <div className="hidden items-center gap-2 text-xs text-slate-300 sm:flex">
-              Docker
+            <div className="hidden w-36 shrink-0 items-center justify-end gap-2 text-xs text-slate-300 sm:flex">
+              <span className="w-12 text-right">{t("docker")}</span>
               <span className="inline-flex items-center gap-1 rounded bg-panel-green/15 px-2 py-1 text-panel-green">
                 <ShieldCheck aria-hidden="true" />
-                Online
+                {t("online")}
               </span>
             </div>
+            <div
+              className="hidden w-[104px] shrink-0 items-center gap-1 rounded-md border border-panel-line bg-slate-950/60 p-1 text-xs md:flex"
+              aria-label={t("language")}
+            >
+              <button
+                className={cn(
+                  "w-12 rounded px-2 py-1 text-center text-slate-300 transition-colors",
+                  locale === "zh" && "bg-panel-green text-slate-950"
+                )}
+                type="button"
+                onClick={() => setLocale("zh")}
+              >
+                {t("chinese")}
+              </button>
+              <button
+                className={cn(
+                  "w-9 rounded px-2 py-1 text-center text-slate-300 transition-colors",
+                  locale === "en" && "bg-panel-green text-slate-950"
+                )}
+                type="button"
+                onClick={() => setLocale("en")}
+              >
+                {t("english")}
+              </button>
+            </div>
             <Link href="/servers/new">
-              <Button>
+              <Button className="w-36 shrink-0">
                 <Plus aria-hidden="true" />
-                Create Server
+                {t("createServer")}
               </Button>
             </Link>
           </div>

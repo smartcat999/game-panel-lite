@@ -19,6 +19,7 @@ type ContainerSpec struct {
 type DockerStatus struct {
 	Available bool   `json:"available"`
 	Message   string `json:"message"`
+	Host      string `json:"host"`
 }
 
 type Adapter interface {

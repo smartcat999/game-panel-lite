@@ -50,12 +50,12 @@ export async function listServers(): Promise<Server[]> {
   }));
 }
 
-export async function getDockerStatus(): Promise<{ available: boolean; message: string }> {
+export async function getDockerStatus(): Promise<{ available: boolean; message: string; host: string }> {
   const response = await fetch(`${API_BASE}/api/runtime/docker`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load Docker status");
   }
-  return (await response.json()) as { available: boolean; message: string };
+  return (await response.json()) as { available: boolean; message: string; host: string };
 }
 
 export async function createServer(input: {

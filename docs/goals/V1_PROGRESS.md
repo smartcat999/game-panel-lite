@@ -225,3 +225,28 @@ Post-audit gap closing:
 Final status:
 - FULL V1 RUN completed through Phase 7 plus post-audit gap closing.
 - Real Docker runtime behavior still needs manual verification with Docker daemon and Terraria image pulls.
+
+## Post-V1 Local Testing Update: Chinese UI and Docker Socket
+
+Status: Completed
+
+Completed:
+- Added lightweight Chinese/English frontend copy support for the app shell and Settings page.
+- Defaulted the frontend locale to Chinese and added a header language toggle.
+- Stabilized header control widths so Chinese/English switching does not shift the surrounding layout.
+- Added `GAMEPANEL_DOCKER_HOST` backend config for Docker socket/host selection.
+- Docker status responses now include the configured host so Settings can show the active value.
+- Documented common Docker socket examples in README and `.env.example`.
+
+Known issues:
+- Docker availability depends on the local daemon and the socket configured in `GAMEPANEL_DOCKER_HOST`.
+- Full app-wide localization is not complete yet; this update covers the main shell and runtime settings needed for local testing.
+
+Checks:
+- `gofmt -w apps/api`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- `pnpm typecheck`: passed after rerunning serially because a parallel `next build` temporarily regenerated `.next/types`.

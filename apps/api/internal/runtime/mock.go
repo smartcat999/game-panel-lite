@@ -13,7 +13,7 @@ type MockAdapter struct{}
 func NewMockAdapter() *MockAdapter { return &MockAdapter{} }
 
 func (m *MockAdapter) Check(context.Context) DockerStatus {
-	return DockerStatus{Available: false, Message: "Docker runtime not connected in mock adapter"}
+	return DockerStatus{Available: false, Message: "Docker runtime not connected in mock adapter", Host: "mock"}
 }
 
 func (m *MockAdapter) Create(_ context.Context, spec ContainerSpec) (string, error) {
