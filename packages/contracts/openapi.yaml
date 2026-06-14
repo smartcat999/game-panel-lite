@@ -149,6 +149,16 @@ paths:
       responses:
         "200":
           description: SSE log stream
+  /api/servers/{id}/logs/snapshot:
+    get:
+      summary: Read recent server log lines without following the live stream
+      responses:
+        "200":
+          description: Recent log lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogSnapshot"
   /api/servers/{id}/stats:
     get:
       summary: Read runtime CPU and memory stats for a running server
@@ -169,6 +179,8 @@ paths:
     post:
       summary: Upload tModLoader mod metadata or .tmod file
       responses:
+        "200":
+          description: Updated existing mod file record
         "201":
           description: Uploaded mod file
   /api/servers/{id}/mods/{modId}:
@@ -202,12 +214,16 @@ paths:
     post:
       summary: Upload a mod to the global mod library
       responses:
+        "200":
+          description: Updated existing global mod file record
         "201":
           description: Uploaded global mod
   /api/mods/{id}/assign:
     post:
       summary: Copy a global mod library item to a tModLoader server
       responses:
+        "200":
+          description: Updated existing assigned mod file record
         "201":
           description: Assigned mod
   /api/mods/{id}:
@@ -385,6 +401,14 @@ components:
           type: number
         memoryLimitMb:
           type: number
+    LogSnapshot:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          items:
+            type: string
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, language, autoCreateWorld]
