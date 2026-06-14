@@ -1204,6 +1204,24 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Activity Localization Update
+
+Status: Completed
+
+Completed:
+- Added frontend activity display formatting so Activity page messages and type badges are localized instead of showing raw backend English event strings in Chinese mode.
+- Covered server and resource activity message formatting, English fallback behavior, and unknown event fallback with focused unit tests.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test -- activity-display.test.ts`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `git diff --check`: passed.
+
 ## V1 Server Detail Logs and Mod Idempotency Update
 
 Status: Completed
