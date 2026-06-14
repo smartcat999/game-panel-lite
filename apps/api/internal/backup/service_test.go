@@ -25,6 +25,29 @@ func TestCreateBackupZip(t *testing.T) {
 	}
 }
 
+func TestCreateBackupUsesUniqueNamesForRapidBackups(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "instance")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "serverconfig.txt"), []byte("config"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(root)
+	first, _, err := service.Create("srv", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := service.Create("srv", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatalf("expected rapid backups to use unique paths, got %q", first)
+	}
+}
+
 func TestRestoreBackupExtractsFiles(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "instance")

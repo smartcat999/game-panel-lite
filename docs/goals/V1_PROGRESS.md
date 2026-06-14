@@ -1183,6 +1183,25 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `git diff --check`: passed.
 
+## V1 Backup Creation Collision Update
+
+Status: Completed
+
+Completed:
+- Changed manual backup archive names from second-level timestamps to nanosecond timestamps.
+- Rapid repeated backups from Server Detail no longer overwrite the same zip path before separate database records are created.
+- Added backup service coverage proving two immediate backup creations produce unique archive paths.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/backup -run TestCreateBackupUsesUniqueNamesForRapidBackups -count=1`: failed first because both calls used the same second-level path, then passed after adding nanosecond precision.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `git diff --check`: passed.
+
 ## V1 Mod Enable Toggle Update
 
 Status: Completed

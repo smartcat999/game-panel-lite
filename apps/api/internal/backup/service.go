@@ -28,7 +28,7 @@ func (s *Service) Create(instanceID string, sourceDir string) (string, int64, er
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", 0, err
 	}
-	target := filepath.Join(dir, "backup-"+time.Now().UTC().Format("20060102-150405")+".zip")
+	target := filepath.Join(dir, "backup-"+time.Now().UTC().Format("20060102-150405.000000000")+".zip")
 	out, err := os.Create(target)
 	if err != nil {
 		return "", 0, err
