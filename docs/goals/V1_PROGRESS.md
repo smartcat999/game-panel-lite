@@ -1250,3 +1250,21 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Server Detail Resource Actions Update
+
+Status: Completed
+
+Completed:
+- Added current-server world duplication and migration actions directly inside the Server Detail Worlds tab.
+- Added current-server backup migration directly inside the Server Detail Backups tab.
+- Added a compact migration target selector that excludes the current server from valid targets.
+- Added focused tests for detail resource helpers so migration targets do not offer the current server and localized duplicate names stay predictable.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

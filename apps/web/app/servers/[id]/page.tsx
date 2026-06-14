@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, CheckCircle2, Copy, Download, FileText, Package, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Copy, Download, FileText, MoveRight, Package, Plus, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -18,11 +18,15 @@ import {
   deleteWorld,
   downloadBackupFile,
   downloadWorldFile,
+  duplicateWorld,
   getServer,
   importWorld,
   listBackups,
+  listServers,
   listMods,
   listWorlds,
+  migrateBackup,
+  migrateWorld,
   previewTerrariaConfig,
   restoreBackup,
   sendServerCommand,
@@ -32,6 +36,7 @@ import {
 } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { getDetailTargetServers, nextWorldCopyName } from "@/lib/server-detail-resources";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
 
@@ -49,6 +54,7 @@ export default function ServerDetailPage() {
 
   const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
   const server = query.data;
+  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, enabled: Boolean(server), retry: false });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server), retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server), retry: false });
   const modsQuery = useQuery({
@@ -69,6 +75,7 @@ export default function ServerDetailPage() {
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
+  const [targetServerId, setTargetServerId] = useState("");
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error">("idle");
   const [configSaved, setConfigSaved] = useState(false);
   const successTimerRef = useRef<number | null>(null);
@@ -137,6 +144,23 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(error instanceof Error ? error.message : t("unableAssignWorld"))
   });
+  const worldDuplicate = useMutation({
+    mutationFn: (world: World) => duplicateWorld(world.id, nextWorldCopyName(world.name, t("duplicateSuffix"))),
+    onSuccess: async () => {
+      showSuccess(t("worldDuplicated"));
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+    },
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableDuplicateWorld"))
+  });
+  const worldMigrate = useMutation({
+    mutationFn: ({ id: worldId, instanceId }: { id: string; instanceId: string }) => migrateWorld(worldId, instanceId),
+    onSuccess: async () => {
+      showSuccess(t("worldMigrated"));
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+      await client.invalidateQueries({ queryKey: ["servers"] });
+    },
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableMigrateWorld"))
+  });
   const worldDelete = useMutation({
     mutationFn: deleteWorld,
     onSuccess: async () => {
@@ -165,6 +189,14 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
     onError: (error) => showError(error instanceof Error ? error.message : t("unableRestoreBackup"))
+  });
+  const backupMigrate = useMutation({
+    mutationFn: ({ id: backupId, instanceId }: { id: string; instanceId: string }) => migrateBackup(backupId, instanceId),
+    onSuccess: async () => {
+      showSuccess(t("backupMigrated"));
+      await client.invalidateQueries({ queryKey: ["backups"] });
+    },
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableMigrateBackup"))
   });
   const backupDelete = useMutation({
     mutationFn: deleteBackup,
@@ -237,6 +269,8 @@ export default function ServerDetailPage() {
     [backupsQuery.data, server]
   );
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
+  const targetServers = useMemo(() => (server ? getDetailTargetServers(serversQuery.data ?? [], server.id) : []), [server, serversQuery.data]);
+  const activeTargetServerId = targetServerId || targetServers[0]?.id || "";
 
   if (!server) {
     return (
@@ -391,13 +425,20 @@ export default function ServerDetailPage() {
               items={serverWorlds}
               deleting={worldDelete.isPending}
               assigning={worldAssign.isPending}
+              duplicating={worldDuplicate.isPending}
               currentWorldName={server.world}
               serverStatus={server.status}
               downloadingId={downloadingResourceId}
+              migrating={worldMigrate.isPending}
+              targetServerId={activeTargetServerId}
+              targetServers={targetServers}
               uploading={worldUpload.isPending}
               onAssign={(world) => worldAssign.mutate(world.id)}
               onDelete={setPendingWorldDelete}
               onDownload={(world) => void downloadWorld(world)}
+              onDuplicate={(world) => worldDuplicate.mutate(world)}
+              onMigrate={(world) => activeTargetServerId && worldMigrate.mutate({ id: world.id, instanceId: activeTargetServerId })}
+              onTargetServerChange={setTargetServerId}
               onUploadClick={() => worldInputRef.current?.click()}
             />
           )}
@@ -409,12 +450,17 @@ export default function ServerDetailPage() {
               items={serverBackups}
               deleting={backupDelete.isPending}
               downloadingId={downloadingResourceId}
+              migrating={backupMigrate.isPending}
               restoring={backupRestore.isPending}
               serverStatus={server.status}
+              targetServerId={activeTargetServerId}
+              targetServers={targetServers}
               onDelete={setPendingBackupDelete}
               onDownload={(backup) => void downloadBackup(backup)}
               onCreate={() => backupCreate.mutate()}
+              onMigrate={(backup) => activeTargetServerId && backupMigrate.mutate({ id: backup.id, instanceId: activeTargetServerId })}
               onRestore={setPendingRestore}
+              onTargetServerChange={setTargetServerId}
             />
           )}
           {activeTab === "mods" && server.mode === "tmodloader" && (
@@ -778,6 +824,7 @@ function WorldsTab({
   assigning,
   currentWorldName,
   deleting,
+  duplicating,
   downloadingId,
   isError,
   isLoading,
@@ -785,13 +832,20 @@ function WorldsTab({
   onAssign,
   onDelete,
   onDownload,
+  onDuplicate,
+  onMigrate,
+  onTargetServerChange,
+  migrating,
   uploading,
   serverStatus,
+  targetServerId,
+  targetServers,
   onUploadClick
 }: {
   assigning: boolean;
   currentWorldName: string;
   deleting: boolean;
+  duplicating: boolean;
   downloadingId: string;
   isError: boolean;
   isLoading: boolean;
@@ -799,8 +853,14 @@ function WorldsTab({
   onAssign: (world: World) => void;
   onDelete: (world: World) => void;
   onDownload: (world: World) => void;
+  onDuplicate: (world: World) => void;
+  onMigrate: (world: World) => void;
+  onTargetServerChange: (value: string) => void;
+  migrating: boolean;
   uploading: boolean;
   serverStatus: Server["status"];
+  targetServerId: string;
+  targetServers: Server[];
   onUploadClick: () => void;
 }) {
   const { locale, t } = useI18n();
@@ -814,6 +874,16 @@ function WorldsTab({
           <Upload aria-hidden="true" />
           {uploading ? t("importing") : t("importWorldForServer")}
         </Button>
+      }
+      target={
+        <TargetServerSelect
+          disabled={targetServers.length === 0}
+          label={t("migrationTarget")}
+          noTargetLabel={t("noOtherServers")}
+          onChange={onTargetServerChange}
+          servers={targetServers}
+          value={targetServerId}
+        />
       }
     >
       {isError ? <p className="text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p> : null}
@@ -843,6 +913,14 @@ function WorldsTab({
                     {assigning ? t("actionWorking") : t("setCurrentWorld")}
                   </Button>
                 )}
+                <Button variant="secondary" onClick={() => onDuplicate(world)} disabled={duplicating}>
+                  <Plus aria-hidden="true" />
+                  {duplicating ? t("actionWorking") : t("duplicate")}
+                </Button>
+                <Button variant="secondary" onClick={() => onMigrate(world)} disabled={targetServers.length === 0 || migrating}>
+                  <MoveRight aria-hidden="true" />
+                  {migrating ? t("actionWorking") : t("migrate")}
+                </Button>
                 <ActionButton
                   disabled={downloadingId === world.id}
                   label={downloadingId === world.id ? t("downloading") : t("download")}
@@ -870,10 +948,15 @@ function BackupsTab({
   items,
   onDelete,
   onDownload,
+  onMigrate,
   restoring,
+  migrating,
   serverStatus,
+  targetServerId,
+  targetServers,
   onCreate,
-  onRestore
+  onRestore,
+  onTargetServerChange
 }: {
   creating: boolean;
   deleting: boolean;
@@ -883,10 +966,15 @@ function BackupsTab({
   items: Backup[];
   onDelete: (backup: Backup) => void;
   onDownload: (backup: Backup) => void;
+  onMigrate: (backup: Backup) => void;
   restoring: boolean;
+  migrating: boolean;
   serverStatus: Server["status"];
+  targetServerId: string;
+  targetServers: Server[];
   onCreate: () => void;
   onRestore: (backup: Backup) => void;
+  onTargetServerChange: (value: string) => void;
 }) {
   const { locale, t } = useI18n();
   const canRestore = serverStatus !== "running";
@@ -899,6 +987,16 @@ function BackupsTab({
           <Archive aria-hidden="true" />
           {creating ? t("backingUp") : t("createBackupNow")}
         </Button>
+      }
+      target={
+        <TargetServerSelect
+          disabled={targetServers.length === 0}
+          label={t("migrationTarget")}
+          noTargetLabel={t("noOtherServers")}
+          onChange={onTargetServerChange}
+          servers={targetServers}
+          value={targetServerId}
+        />
       }
     >
       {isError ? <p className="text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p> : null}
@@ -927,6 +1025,9 @@ function BackupsTab({
                   icon={<Download aria-hidden="true" />}
                   onClick={() => onDownload(backup)}
                 />
+                <Button variant="secondary" aria-label={t("migrate")} onClick={() => onMigrate(backup)} disabled={targetServers.length === 0 || migrating}>
+                  <MoveRight aria-hidden="true" />
+                </Button>
                 <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -989,13 +1090,26 @@ function ModsTab({
   );
 }
 
-function ResourcePanel({ title, href, action, children }: { title: string; href: string; action: ReactNode; children: ReactNode }) {
+function ResourcePanel({
+  title,
+  href,
+  action,
+  children,
+  target
+}: {
+  title: string;
+  href: string;
+  action: ReactNode;
+  children: ReactNode;
+  target?: ReactNode;
+}) {
   const { t } = useI18n();
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold">{title}</h2>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {target}
           {action}
           <Link href={href} className="inline-flex items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800">
             {t("openFullManager")}
@@ -1004,6 +1118,36 @@ function ResourcePanel({ title, href, action, children }: { title: string; href:
       </div>
       {children}
     </div>
+  );
+}
+
+function TargetServerSelect({
+  disabled,
+  label,
+  noTargetLabel,
+  onChange,
+  servers,
+  value
+}: {
+  disabled: boolean;
+  label: string;
+  noTargetLabel: string;
+  onChange: (value: string) => void;
+  servers: Server[];
+  value: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-slate-500">
+      <span className="hidden sm:inline">{label}</span>
+      <select
+        className="h-9 min-w-36 rounded-md border border-panel-line bg-slate-950/60 px-2 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {servers.length === 0 ? <option value="">{noTargetLabel}</option> : servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+      </select>
+    </label>
   );
 }
 
