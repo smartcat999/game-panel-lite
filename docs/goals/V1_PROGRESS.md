@@ -1144,6 +1144,25 @@ Checks:
 - `git diff --check`: passed.
 - `pnpm typecheck`: first failed while running in parallel with `pnpm build` because `.next/types` was being regenerated, then passed when rerun after build.
 
+## V1 Server Detail World Assignment State Update
+
+Status: Completed
+
+Completed:
+- Fixed world assignment so only one world remains active for a server after switching the current world.
+- Clearing the previous active world prevents Server Detail and Worlds pages from showing stale "in use" state for old worlds.
+- Added backend HTTP coverage for switching the current world and clearing the previous active marker.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestAssignWorldUpdatesServerConfigAndClearsContainer -count=1`: failed first because the previous active world stayed marked, then passed after clearing old active markers.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `git diff --check`: passed.
+
 ## V1 Mod Enable Toggle Update
 
 Status: Completed

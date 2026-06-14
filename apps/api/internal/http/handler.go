@@ -409,6 +409,10 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
+	if err := h.clearActiveWorlds(r.Context(), payload.InstanceID, item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	item.ActiveInstanceID = payload.InstanceID
 	item.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
@@ -421,6 +425,24 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), payload.InstanceID, "world.assigned", fmt.Sprintf("Assigned world %s to %s", item.Name, server.Name))
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) clearActiveWorlds(ctx context.Context, instanceID string, keepWorldID string) error {
+	worlds, err := h.store.ListWorlds(ctx)
+	if err != nil {
+		return err
+	}
+	for _, world := range worlds {
+		if world.ID == keepWorldID || world.ActiveInstanceID != instanceID {
+			continue
+		}
+		world.ActiveInstanceID = ""
+		world.UpdatedAt = time.Now()
+		if err := h.store.SaveWorld(ctx, &world); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {

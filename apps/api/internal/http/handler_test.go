@@ -869,6 +869,19 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	if err := db.CreateServer(context.Background(), &server); err != nil {
 		t.Fatal(err)
 	}
+	oldWorld := domain.World{
+		ID:               "old-world",
+		InstanceID:       server.ID,
+		ActiveInstanceID: server.ID,
+		Name:             server.WorldName,
+		FileName:         server.WorldName + ".wld",
+		SizeBytes:        5,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &oldWorld); err != nil {
+		t.Fatal(err)
+	}
 	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(server.ID, "new-home.wld", bytes.NewBufferString("world")); err != nil {
 		t.Fatal(err)
 	}
@@ -903,6 +916,20 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	}
 	if !bytes.Contains(configBytes, []byte("world=worlds/new-home.wld")) {
 		t.Fatalf("expected serverconfig to point at assigned world, got %q", string(configBytes))
+	}
+	previous, err := db.GetWorld(context.Background(), oldWorld.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous.ActiveInstanceID != "" {
+		t.Fatalf("expected previous active world to be cleared, got %+v", previous)
+	}
+	assigned, err := db.GetWorld(context.Background(), world.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if assigned.ActiveInstanceID != server.ID {
+		t.Fatalf("expected assigned world to be active, got %+v", assigned)
 	}
 }
 
