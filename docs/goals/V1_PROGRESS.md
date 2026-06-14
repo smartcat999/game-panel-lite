@@ -234,6 +234,7 @@ Completed:
 - Added lightweight Chinese/English frontend copy support for the app shell and Settings page.
 - Defaulted the frontend locale to Chinese and added a header language toggle.
 - Stabilized header control widths so Chinese/English switching does not shift the surrounding layout.
+- Reserved the browser scrollbar gutter and prevented the primary create-server CTA from wrapping between locales.
 - Added `GAMEPANEL_DOCKER_HOST` backend config for Docker socket/host selection.
 - Docker status responses now include the configured host so Settings can show the active value.
 - Documented common Docker socket examples in README and `.env.example`.

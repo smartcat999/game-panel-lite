@@ -5,6 +5,11 @@
 :root {
   color-scheme: dark;
   background: #070a0f;
+  scrollbar-gutter: stable;
+}
+
+html {
+  overflow-y: scroll;
 }
 
 body {

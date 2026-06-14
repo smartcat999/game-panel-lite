@@ -94,8 +94,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {t("english")}
               </button>
             </div>
-            <Link href="/servers/new">
-              <Button className="w-36 shrink-0">
+            <Link href="/servers/new" className="shrink-0">
+              <Button className="h-12 w-44 shrink-0 whitespace-nowrap">
                 <Plus aria-hidden="true" />
                 {t("createServer")}
               </Button>
