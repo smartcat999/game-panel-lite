@@ -19,6 +19,7 @@ export default function BackupsPage() {
   const [selectedServerId, setSelectedServerId] = useState("");
   const [targetServerId, setTargetServerId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Backup | null>(null);
   const servers = serversQuery.data ?? [];
@@ -31,35 +32,51 @@ export default function BackupsPage() {
     mutationFn: createBackup,
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("backupCreated"));
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableCreateBackup"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableCreateBackup"));
+    }
   });
   const restore = useMutation({
     mutationFn: restoreBackup,
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("backupRestored"));
       setPendingRestore(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableRestoreBackup"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableRestoreBackup"));
+    }
   });
   const remove = useMutation({
     mutationFn: deleteBackup,
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("backupDeleted"));
       setPendingDelete(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteBackup"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableDeleteBackup"));
+    }
   });
   const migrate = useMutation({
     mutationFn: ({ id, instanceId }: { id: string; instanceId: string }) => migrateBackup(id, instanceId),
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("backupMigrated"));
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableMigrateBackup"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableMigrateBackup"));
+    }
   });
 
   return (
@@ -86,6 +103,7 @@ export default function BackupsPage() {
       />
       {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
+      {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
         <span>{t("migrationTarget")}</span>
         <select

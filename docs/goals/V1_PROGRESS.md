@@ -1024,3 +1024,22 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Resource Page Feedback Update
+
+Status: Completed
+
+Completed:
+- Added success feedback to the Worlds page for import, duplicate, migrate, and delete actions.
+- Added success feedback to the Backups page for create, restore, migrate, and delete actions.
+- Added success feedback to the Mods page for upload and delete actions.
+- Cleared success messages whenever a resource action fails so users do not see stale positive feedback next to an error.
+- Removed stale activity copy that said the V1 backend did not expose activity events after the activity API had already been implemented.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

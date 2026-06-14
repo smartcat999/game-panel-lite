@@ -19,6 +19,7 @@ export default function WorldsPage() {
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const [targetServerId, setTargetServerId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<World | null>(null);
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
@@ -28,35 +29,51 @@ export default function WorldsPage() {
     mutationFn: (file: File) => importWorld(file),
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("worldImported"));
       await client.invalidateQueries({ queryKey: ["worlds"] });
       if (inputRef.current) inputRef.current.value = "";
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"));
+    }
   });
   const duplicate = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => duplicateWorld(id, name),
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("worldDuplicated"));
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDuplicateWorld"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableDuplicateWorld"));
+    }
   });
   const remove = useMutation({
     mutationFn: deleteWorld,
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("worldDeleted"));
       setPendingDelete(null);
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteWorld"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableDeleteWorld"));
+    }
   });
   const migrate = useMutation({
     mutationFn: ({ id, instanceId }: { id: string; instanceId: string }) => migrateWorld(id, instanceId),
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("worldMigrated"));
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableMigrateWorld"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableMigrateWorld"));
+    }
   });
 
   return (
@@ -85,6 +102,7 @@ export default function WorldsPage() {
       />
       {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
+      {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
         <span>{t("migrationTarget")}</span>
         <select

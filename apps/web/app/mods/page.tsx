@@ -19,6 +19,7 @@ export default function ModsPage() {
   const moddedServers = useMemo(() => (serversQuery.data ?? []).filter((server) => server.mode === "tmodloader"), [serversQuery.data]);
   const [selectedServerId, setSelectedServerId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const activeServerId = selectedServerId || moddedServers[0]?.id || "";
   const modsQuery = useQuery({ queryKey: ["mods", activeServerId], queryFn: () => listMods(activeServerId), enabled: Boolean(activeServerId), retry: false });
@@ -27,19 +28,27 @@ export default function ModsPage() {
     mutationFn: (file: File) => uploadMod(activeServerId, file),
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("modUploaded"));
       await client.invalidateQueries({ queryKey: ["mods", activeServerId] });
       if (inputRef.current) inputRef.current.value = "";
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableUploadMod"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableUploadMod"));
+    }
   });
   const remove = useMutation({
     mutationFn: (modId: string) => deleteMod(activeServerId, modId),
     onSuccess: async () => {
       setErrorMessage("");
+      setSuccessMessage(t("modDeleted"));
       setPendingDelete(null);
       await client.invalidateQueries({ queryKey: ["mods", activeServerId] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteMod"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableDeleteMod"));
+    }
   });
 
   return (
@@ -76,6 +85,7 @@ export default function ModsPage() {
       />
       {serversQuery.isError && <p className="mb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
+      {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <Card className="p-6 text-sm text-slate-400">
         {t("supportedModFiles")}
       </Card>
