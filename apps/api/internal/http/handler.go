@@ -130,6 +130,10 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
 		return
 	}
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before changing mods")
+		return
+	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "mod file is required")
@@ -173,6 +177,10 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before changing mods")
+		return
+	}
 	var payload struct {
 		Enabled *bool `json:"enabled"`
 	}
@@ -206,6 +214,10 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
 	if err != nil || item.InstanceID != server.ID {
 		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before changing mods")
 		return
 	}
 	if err := h.removeRuntimeMod(item, server); err != nil {
@@ -282,6 +294,10 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 	}
 	if targetServer.ProviderKey != domain.ProviderTerrariaTModLoader {
 		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+		return
+	}
+	if targetServer.Status == domain.StatusRunning || targetServer.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before changing mods")
 		return
 	}
 	sourcePath, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)

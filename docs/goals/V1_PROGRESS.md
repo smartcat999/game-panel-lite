@@ -1794,3 +1794,21 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 tModLoader Runtime Mutation API Guard Update
+
+Status: Completed
+
+Completed:
+- Added backend guards so tModLoader server-scoped mod upload, enable/disable, delete, and library assignment reject requests while the target server is running or restarting.
+- The API now matches the UI rule that server mod changes require stopping the server first.
+- Added backend HTTP coverage proving running-server mod update, upload, delete, and assignment return conflict responses and preserve existing records.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestRunningTModLoaderServerRejectsModMutation -count=1`: failed first because mod update returned 200 for a running server, then passed after API guards were added and the test covered upload/delete/assign too.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
