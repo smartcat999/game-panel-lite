@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -26,15 +27,30 @@ import (
 )
 
 type Handler struct {
-	cfg      config.Config
-	logger   *slog.Logger
-	store    *store.Store
-	provider *provider.Registry
-	runtime  runtime.Adapter
+	cfg            config.Config
+	logger         *slog.Logger
+	store          *store.Store
+	provider       *provider.Registry
+	runtime        *runtime.SwitchableAdapter
+	runtimeFactory func(string) (runtime.Adapter, error)
 }
 
-func NewHandler(cfg config.Config, logger *slog.Logger, store *store.Store, providers *provider.Registry, adapter runtime.Adapter) *Handler {
-	return &Handler{cfg: cfg, logger: logger, store: store, provider: providers, runtime: adapter}
+func NewHandler(
+	cfg config.Config,
+	logger *slog.Logger,
+	store *store.Store,
+	providers *provider.Registry,
+	adapter *runtime.SwitchableAdapter,
+	runtimeFactory func(string) (runtime.Adapter, error),
+) *Handler {
+	return &Handler{
+		cfg:            cfg,
+		logger:         logger,
+		store:          store,
+		provider:       providers,
+		runtime:        adapter,
+		runtimeFactory: runtimeFactory,
+	}
 }
 
 func (h *Handler) Register(r chi.Router) {
@@ -43,6 +59,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/version", h.version)
 	r.Get("/api/runtime/docker", h.dockerStatus)
 	r.Get("/api/runtime/docker/hosts", h.dockerHosts)
+	r.Post("/api/runtime/docker/host", h.applyDockerHost)
 	r.Get("/api/servers", h.listServers)
 	r.Post("/api/servers", h.createServer)
 	r.Get("/api/servers/{id}", h.getServer)
@@ -345,6 +362,35 @@ func (h *Handler) dockerHosts(w http.ResponseWriter, r *http.Request) {
 		"currentHost": h.cfg.DockerHost,
 		"candidates":  config.DockerHostCandidates(h.cfg.DockerHost),
 	})
+}
+
+func (h *Handler) applyDockerHost(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Host string `json:"host"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	host := strings.TrimSpace(payload.Host)
+	if !isAllowedDockerHost(host) {
+		writeError(w, http.StatusBadRequest, "docker host must start with unix://, tcp://, or npipe://")
+		return
+	}
+	adapter, err := h.runtimeFactory(host)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	h.runtime.Set(adapter)
+	h.cfg.DockerHost = host
+	writeJSON(w, http.StatusOK, h.runtime.Check(r.Context()))
+}
+
+func isAllowedDockerHost(host string) bool {
+	return strings.HasPrefix(host, "unix://") ||
+		strings.HasPrefix(host, "tcp://") ||
+		strings.HasPrefix(host, "npipe://")
 }
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {

@@ -32,7 +32,11 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	} else {
 		runtimeAdapter = adapter
 	}
-	handler := apihttp.NewHandler(cfg, logger, db, registry, runtimeAdapter)
+	switchableRuntime := runtime.NewSwitchableAdapter(runtimeAdapter)
+	dockerFactory := func(host string) (runtime.Adapter, error) {
+		return dockerruntime.NewAdapter(host)
+	}
+	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerFactory)
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)

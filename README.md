@@ -94,7 +94,7 @@ GAMEPANEL_DOCKER_HOST="unix:///Users/<you>/.docker/run/docker.sock"
 GAMEPANEL_DOCKER_HOST="tcp://127.0.0.1:2375"
 ```
 
-The Settings page also calls `GET /api/runtime/docker/hosts` to scan common local Docker sockets and show environment-derived candidates. Selecting a candidate or typing a custom host in the browser generates a restart command; the Go API must be restarted for a new `GAMEPANEL_DOCKER_HOST` value to take effect.
+The Settings page also calls `GET /api/runtime/docker/hosts` to scan common local Docker sockets and show environment-derived candidates. Selecting a candidate or typing a custom host can call `POST /api/runtime/docker/host` to hot-swap the backend Docker RuntimeAdapter without leaving the page. After a backend process restart, `GAMEPANEL_DOCKER_HOST` is still the source of truth.
 
 Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instances/{instanceId}`. World, backup, and mod files use separate per-instance directories.
 

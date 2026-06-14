@@ -151,6 +151,23 @@ export async function getDockerHosts(): Promise<{ currentHost: string; candidate
   return (await response.json()) as { currentHost: string; candidates: DockerHostCandidate[] };
 }
 
+export async function applyDockerHost(host: string): Promise<{ available: boolean; message: string; host: string }> {
+  const response = await fetch(`${API_BASE}/api/runtime/docker/host`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ host })
+  });
+  const payload = (await response.json().catch(() => ({}))) as { available?: boolean; message?: string; host?: string; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to apply Docker host");
+  }
+  return {
+    available: Boolean(payload.available),
+    message: payload.message ?? "",
+    host: payload.host ?? host
+  };
+}
+
 export async function createServer(input: {
   name: string;
   providerKey: "terraria-vanilla" | "terraria-tmodloader";

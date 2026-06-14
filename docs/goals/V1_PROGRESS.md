@@ -323,3 +323,29 @@ Checks:
 - `pnpm test`: passed
 - `pnpm build`: passed after stopping the 3004 dev server to avoid `.next` conflicts.
 - Browser verification: Dashboard, Servers, Worlds, Backups, and Activity rendered real empty states with no mock names or mock text.
+
+## Post-V1 Docker Host Reconnect Update
+
+Status: Completed
+
+Completed:
+- Added a switchable Go RuntimeAdapter so the Docker SDK host can be changed from the running API process.
+- Added `POST /api/runtime/docker/host` with Docker host scheme validation for `unix://`, `tcp://`, and `npipe://`.
+- Reworked Settings from a large candidate-card scanner into a compact candidate select, custom host input, and `Apply and reconnect` action.
+- Updated the top-bar Docker badge to reflect real runtime availability instead of showing a hardcoded online state.
+- Removed the copy-restart-command workflow from the Settings page; process restarts still use `GAMEPANEL_DOCKER_HOST` as the persisted source of truth.
+
+Known issues:
+- The hot-applied Docker host is in-memory only. To keep it after restarting the Go API, set `GAMEPANEL_DOCKER_HOST` in the shell or local environment.
+
+Checks:
+- `gofmt -w apps/api/internal/app/app.go apps/api/internal/http/handler.go apps/api/internal/runtime/switchable.go apps/api/internal/runtime/switchable_test.go`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `go build ./...`: passed after rerunning outside the sandbox so Go could write its module/build cache.
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
+- Runtime verification: `GET /api/runtime/docker/hosts` returned Docker Desktop and OrbStack candidates; `POST /api/runtime/docker/host` hot-applied the selected Docker host and returned runtime status.
+- Browser verification: Settings rendered with dark styles, compact Docker Host controls, no copy-restart command, and a Docker badge that showed unavailable when the daemon could not be reached.

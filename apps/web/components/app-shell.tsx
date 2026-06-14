@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, Plus, Search, Settings, ShieldCheck } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
+import { getDockerStatus } from "@/lib/api";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
@@ -21,6 +24,9 @@ const nav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { locale, setLocale, t } = useI18n();
+  const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false });
+  const dockerAvailable = Boolean(docker.data?.available);
+  const dockerLabel = docker.isLoading ? t("dockerCheckingShort") : dockerAvailable ? t("available") : t("unavailable");
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-panel-line bg-panel-sidebar lg:flex lg:flex-col">
@@ -50,7 +56,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="m-4 rounded-lg border border-panel-line bg-slate-950/40 p-4">
-          <div className="h-20 rounded-md bg-[linear-gradient(180deg,#12351d,#25190f)]" />
+          <div className="h-20 overflow-hidden rounded-md border border-panel-line bg-slate-950">
+            <Image
+              src="/images/terraria-official-cover.jpg"
+              alt={t("terrariaCoverAlt")}
+              width={1200}
+              height={1800}
+              className="h-full w-full object-cover object-[50%_42%]"
+              priority
+            />
+          </div>
           <p className="mt-3 text-sm font-medium">{t("terrariaReady")}</p>
           <p className="text-xs text-slate-500">v1.0.0</p>
         </div>
@@ -64,9 +79,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
             <div className="hidden w-36 shrink-0 items-center justify-end gap-2 text-xs text-slate-300 sm:flex">
               <span className="w-12 text-right">{t("docker")}</span>
-              <span className="inline-flex items-center gap-1 rounded bg-panel-green/15 px-2 py-1 text-panel-green">
+              <span
+                className={cn(
+                  "inline-flex min-w-16 items-center justify-center gap-1 rounded px-2 py-1",
+                  dockerAvailable ? "bg-panel-green/15 text-panel-green" : "bg-panel-gold/15 text-panel-gold"
+                )}
+              >
                 <ShieldCheck aria-hidden="true" />
-                {t("online")}
+                {dockerLabel}
               </span>
             </div>
             <div
