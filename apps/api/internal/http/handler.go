@@ -42,6 +42,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/healthz", h.health)
 	r.Get("/api/version", h.version)
 	r.Get("/api/runtime/docker", h.dockerStatus)
+	r.Get("/api/runtime/docker/hosts", h.dockerHosts)
 	r.Get("/api/servers", h.listServers)
 	r.Post("/api/servers", h.createServer)
 	r.Get("/api/servers/{id}", h.getServer)
@@ -337,6 +338,13 @@ func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) dockerStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.runtime.Check(r.Context()))
+}
+
+func (h *Handler) dockerHosts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"currentHost": h.cfg.DockerHost,
+		"candidates":  config.DockerHostCandidates(h.cfg.DockerHost),
+	})
 }
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {

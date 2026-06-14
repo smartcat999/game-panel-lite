@@ -135,6 +135,22 @@ export async function getDockerStatus(): Promise<{ available: boolean; message: 
   return (await response.json()) as { available: boolean; message: string; host: string };
 }
 
+export type DockerHostCandidate = {
+  host: string;
+  label: string;
+  source: string;
+  exists: boolean;
+  active: boolean;
+};
+
+export async function getDockerHosts(): Promise<{ currentHost: string; candidates: DockerHostCandidate[] }> {
+  const response = await fetch(`${API_BASE}/api/runtime/docker/hosts`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load Docker host candidates");
+  }
+  return (await response.json()) as { currentHost: string; candidates: DockerHostCandidate[] };
+}
+
 export async function createServer(input: {
   name: string;
   providerKey: "terraria-vanilla" | "terraria-tmodloader";

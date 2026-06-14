@@ -276,3 +276,26 @@ Checks:
 - `pnpm test`: passed
 - `pnpm build`: passed after stopping an old Next dev process that was concurrently writing `.next`.
 - Browser smoke: Dashboard, Servers, Worlds, Backups, and Mods rendered with dark styles loaded; Servers status filter interaction passed.
+
+## Post-V1 Docker Host Selection Update
+
+Status: Completed
+
+Completed:
+- Added `GET /api/runtime/docker/hosts` to return the current Docker host and common local candidates.
+- Candidate scanning includes `GAMEPANEL_DOCKER_HOST`, `DOCKER_HOST`, Docker Engine default, Docker Desktop user socket, Colima, Rancher Desktop, OrbStack, and local TCP daemon examples.
+- Settings page now supports scanning candidates, selecting a detected host, entering a custom host, and copying a backend restart command.
+- Documented that applying a new Docker host requires restarting the Go backend with `GAMEPANEL_DOCKER_HOST`.
+
+Known issues:
+- Docker host selection is not hot-applied to the running backend process; this is intentional because the Docker SDK client is created from backend process configuration.
+
+Checks:
+- `gofmt -w apps/api/internal/config/config.go apps/api/internal/config/config_test.go apps/api/internal/http/handler.go`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed
+- Runtime verification: `GET /api/runtime/docker/hosts` returned Docker Desktop and OrbStack candidates; Settings page rendered scanner controls.
