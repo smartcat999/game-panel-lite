@@ -414,3 +414,25 @@ Checks:
 - `go build ./...`: passed
 - `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
 - Browser verification: Create Server link count was 1, click showed immediate `打开中...`, `/servers/new` rendered `取消创建`, and Cancel returned to `/servers`.
+
+## Post-V1 Create Success Redirect Update
+
+Status: Completed
+
+Completed:
+- Changed the create-server mutation to invalidate the server list cache after success.
+- Seeded the new server detail query cache with the created server response.
+- Redirected successful creates from the wizard review step to `/servers/{id}`.
+
+Known issues:
+- None for this flow cleanup.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `go build ./...`: passed
+- `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
+- Verification note: did not create another real server/container during this check; redirect is implemented in the create mutation success handler with cache invalidation and `router.push(/servers/{id})`.

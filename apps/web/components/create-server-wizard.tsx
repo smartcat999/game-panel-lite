@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, FileArchive, FileUp, Gamepad2, Hammer, Package, Settings2, X } from "lucide-react";
 import Image from "next/image";
 import { useMemo, useState } from "react";
@@ -26,6 +27,8 @@ type PresetKey = (typeof presets)[number]["key"];
 
 export function CreateServerWizard() {
   const { t } = useI18n();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(2);
   const [mode, setMode] = useState<"vanilla" | "tmodloader">("tmodloader");
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>("modded-starter");
@@ -41,7 +44,12 @@ export function CreateServerWizard() {
       name: config.serverName || "Terraria Server",
       providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
       config
-    })
+    }),
+    onSuccess: async (server) => {
+      await queryClient.invalidateQueries({ queryKey: ["servers"] });
+      queryClient.setQueryData(["server", server.id], server);
+      router.push(`/servers/${server.id}`);
+    }
   });
   const chooseMode = (nextMode: "vanilla" | "tmodloader") => {
     const nextPreset = nextMode === "tmodloader" ? "modded-starter" : "friends-casual";
