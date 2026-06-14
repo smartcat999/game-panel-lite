@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, Copy, Download, FileText, Package, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Copy, Download, FileText, Package, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -12,8 +12,11 @@ import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
 import {
   backupDownloadUrl,
+  assignWorld,
   createBackup,
+  deleteBackup,
   deleteMod,
+  deleteWorld,
   getServer,
   importWorld,
   listBackups,
@@ -40,6 +43,7 @@ export default function ServerDetailPage() {
   const worldInputRef = useRef<HTMLInputElement>(null);
   const modInputRef = useRef<HTMLInputElement>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
+  const logServerIdRef = useRef("");
 
   const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false });
   const server = query.data;
@@ -67,7 +71,9 @@ export default function ServerDetailPage() {
   const [command, setCommand] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
+  const [pendingWorldDelete, setPendingWorldDelete] = useState<World | null>(null);
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
+  const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [logStatus, setLogStatus] = useState<"connecting" | "connected" | "error">("connecting");
 
@@ -89,6 +95,25 @@ export default function ServerDetailPage() {
     },
     onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"))
   });
+  const worldAssign = useMutation({
+    mutationFn: (worldId: string) => assignWorld(worldId, id),
+    onSuccess: async () => {
+      setErrorMessage("");
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+      await client.invalidateQueries({ queryKey: ["server", id] });
+      await client.invalidateQueries({ queryKey: ["servers"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableAssignWorld"))
+  });
+  const worldDelete = useMutation({
+    mutationFn: deleteWorld,
+    onSuccess: async () => {
+      setErrorMessage("");
+      setPendingWorldDelete(null);
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteWorld"))
+  });
   const backupCreate = useMutation({
     mutationFn: () => createBackup(id),
     onSuccess: async () => {
@@ -105,6 +130,15 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
     onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableRestoreBackup"))
+  });
+  const backupDelete = useMutation({
+    mutationFn: deleteBackup,
+    onSuccess: async () => {
+      setErrorMessage("");
+      setPendingBackupDelete(null);
+      await client.invalidateQueries({ queryKey: ["backups"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteBackup"))
   });
   const modUpload = useMutation({
     mutationFn: (file: File) => uploadMod(id, file),
@@ -126,8 +160,11 @@ export default function ServerDetailPage() {
   });
 
   useEffect(() => {
-    if (!id) return;
-    setLogs([]);
+    if (!id || (activeTab !== "console" && activeTab !== "logs")) return;
+    if (logServerIdRef.current !== id) {
+      logServerIdRef.current = id;
+      setLogs([]);
+    }
     setLogStatus("connecting");
     const source = new EventSource(serverLogsUrl(id));
     source.onopen = () => setLogStatus("connected");
@@ -144,7 +181,7 @@ export default function ServerDetailPage() {
     });
     source.onerror = () => setLogStatus("error");
     return () => source.close();
-  }, [id]);
+  }, [activeTab, id]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -279,7 +316,13 @@ export default function ServerDetailPage() {
               isError={worldsQuery.isError}
               isLoading={worldsQuery.isLoading}
               items={serverWorlds}
+              deleting={worldDelete.isPending}
+              assigning={worldAssign.isPending}
+              currentWorldName={server.world}
+              serverStatus={server.status}
               uploading={worldUpload.isPending}
+              onAssign={(world) => worldAssign.mutate(world.id)}
+              onDelete={setPendingWorldDelete}
               onUploadClick={() => worldInputRef.current?.click()}
             />
           )}
@@ -289,7 +332,9 @@ export default function ServerDetailPage() {
               isError={backupsQuery.isError}
               isLoading={backupsQuery.isLoading}
               items={serverBackups}
+              deleting={backupDelete.isPending}
               restoring={backupRestore.isPending}
+              onDelete={setPendingBackupDelete}
               onCreate={() => backupCreate.mutate()}
               onRestore={setPendingRestore}
             />
@@ -351,6 +396,18 @@ export default function ServerDetailPage() {
       />
 
       <ConfirmDialog
+        open={Boolean(pendingWorldDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteWorldConfirm", { name: pendingWorldDelete?.name ?? "" })}
+        description={t("confirmDeleteWorldDescription", { name: pendingWorldDelete?.name ?? "" })}
+        detail={pendingWorldDelete ? <DetailLine label={t("world")} value={pendingWorldDelete.name} /> : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={worldDelete.isPending ? t("actionWorking") : t("delete")}
+        busy={worldDelete.isPending}
+        onCancel={() => setPendingWorldDelete(null)}
+        onConfirm={() => pendingWorldDelete && worldDelete.mutate(pendingWorldDelete.id)}
+      />
+      <ConfirmDialog
         open={Boolean(pendingRestore)}
         eyebrow={t("destructiveAction")}
         title={t("restoreBackupConfirm", { name: pendingRestore?.name ?? "" })}
@@ -362,6 +419,18 @@ export default function ServerDetailPage() {
         busy={backupRestore.isPending}
         onCancel={() => setPendingRestore(null)}
         onConfirm={() => pendingRestore && backupRestore.mutate(pendingRestore.id)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingBackupDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteBackupConfirm", { name: pendingBackupDelete?.name ?? "" })}
+        description={t("confirmDeleteBackupDescription", { name: pendingBackupDelete?.name ?? "" })}
+        detail={pendingBackupDelete ? <DetailLine label={t("backupName")} value={pendingBackupDelete.name} /> : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={backupDelete.isPending ? t("actionWorking") : t("delete")}
+        busy={backupDelete.isPending}
+        onCancel={() => setPendingBackupDelete(null)}
+        onConfirm={() => pendingBackupDelete && backupDelete.mutate(pendingBackupDelete.id)}
       />
       <ConfirmDialog
         open={Boolean(pendingModDelete)}
@@ -519,19 +588,32 @@ function ConfigTab({
 }
 
 function WorldsTab({
+  assigning,
+  currentWorldName,
+  deleting,
   isError,
   isLoading,
   items,
+  onAssign,
+  onDelete,
   uploading,
+  serverStatus,
   onUploadClick
 }: {
+  assigning: boolean;
+  currentWorldName: string;
+  deleting: boolean;
   isError: boolean;
   isLoading: boolean;
   items: World[];
+  onAssign: (world: World) => void;
+  onDelete: (world: World) => void;
   uploading: boolean;
+  serverStatus: Server["status"];
   onUploadClick: () => void;
 }) {
   const { locale, t } = useI18n();
+  const canAssignWorld = serverStatus !== "running";
   return (
     <ResourcePanel
       title={t("detailWorldActions")}
@@ -552,7 +634,30 @@ function WorldsTab({
             key={world.id}
             title={world.name}
             meta={`${world.bytes} · ${localizeRelativeTime(world.modified, locale)}`}
-            actions={<ActionLink href={worldDownloadUrl(world.id)} label={t("download")} icon={<Download aria-hidden="true" />} />}
+            actions={
+              <>
+                {world.name === currentWorldName ? (
+                  <span className="inline-flex items-center gap-2 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm font-medium text-panel-green">
+                    <CheckCircle2 aria-hidden="true" className="size-4" />
+                    {t("currentWorld")}
+                  </span>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    onClick={() => onAssign(world)}
+                    disabled={!canAssignWorld || assigning}
+                    title={!canAssignWorld ? t("assignWorldRequiresStopped") : undefined}
+                  >
+                    <CheckCircle2 aria-hidden="true" />
+                    {assigning ? t("actionWorking") : t("setCurrentWorld")}
+                  </Button>
+                )}
+                <ActionLink href={worldDownloadUrl(world.id)} label={t("download")} icon={<Download aria-hidden="true" />} />
+                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(world)} disabled={deleting}>
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </>
+            }
           />
         ))}
       </div>
@@ -562,17 +667,21 @@ function WorldsTab({
 
 function BackupsTab({
   creating,
+  deleting,
   isError,
   isLoading,
   items,
+  onDelete,
   restoring,
   onCreate,
   onRestore
 }: {
   creating: boolean;
+  deleting: boolean;
   isError: boolean;
   isLoading: boolean;
   items: Backup[];
+  onDelete: (backup: Backup) => void;
   restoring: boolean;
   onCreate: () => void;
   onRestore: (backup: Backup) => void;
@@ -604,6 +713,9 @@ function BackupsTab({
                   <RotateCcw aria-hidden="true" />
                 </Button>
                 <ActionLink href={backupDownloadUrl(backup.id)} label={t("download")} icon={<Download aria-hidden="true" />} />
+                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>
+                  <Trash2 aria-hidden="true" />
+                </Button>
               </>
             }
           />

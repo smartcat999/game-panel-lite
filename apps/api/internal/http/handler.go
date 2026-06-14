@@ -213,17 +213,66 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "instanceId is required")
 		return
 	}
-	if _, err := h.store.GetServer(r.Context(), payload.InstanceID); err != nil {
+	server, err := h.store.GetServer(r.Context(), payload.InstanceID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+		writeError(w, http.StatusConflict, "stop the server before assigning a world")
+		return
+	}
+	if item.InstanceID != payload.InstanceID {
+		writeError(w, http.StatusConflict, "world must be imported or migrated to this server before assignment")
+		return
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unknown provider")
+		return
+	}
+	server.WorldName = item.Name
+	server.Config.WorldName = item.Name
+	configText, err := gameProvider.RenderConfig(server.Config)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(configText), 0o600); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for name, content := range gameProvider.RuntimeOptions(server.Config).Files {
+		if err := writeInstanceDataFile(server.DataDir, name, content); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if server.ContainerID != "" {
+		if _, err := h.runtime.Inspect(r.Context(), server); err == nil {
+			if err := h.runtime.Remove(r.Context(), server); err != nil {
+				writeError(w, http.StatusServiceUnavailable, err.Error())
+				return
+			}
+		}
+		server.ContainerID = ""
+	}
+	server.UpdatedAt = time.Now()
 	item.ActiveInstanceID = payload.InstanceID
 	item.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := h.store.SaveWorld(r.Context(), &item); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.recordActivity(r.Context(), payload.InstanceID, "world.assigned", fmt.Sprintf("Assigned world %s", item.Name))
+	h.recordActivity(r.Context(), payload.InstanceID, "world.assigned", fmt.Sprintf("Assigned world %s to %s", item.Name, server.Name))
 	writeJSON(w, http.StatusOK, item)
 }
 
@@ -429,7 +478,7 @@ func (h *Handler) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -833,4 +882,16 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func writeInstanceDataFile(dataDir string, name string, content string) error {
+	clean := filepath.Clean(name)
+	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean == ".." {
+		return fmt.Errorf("invalid instance data file path: %s", name)
+	}
+	target := filepath.Join(dataDir, clean)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(target, []byte(content), 0o600)
 }

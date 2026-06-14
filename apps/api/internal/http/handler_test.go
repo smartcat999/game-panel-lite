@@ -308,6 +308,53 @@ func TestWorldImportListDownloadDuplicateAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("world-target", cfg.DataDir)
+	server.ContainerID = "old-container"
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(server.ID, "new-home.wld", bytes.NewBufferString("world")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:         "assign-world",
+		InstanceID: server.ID,
+		Name:       "new-home",
+		FileName:   "new-home.wld",
+		SizeBytes:  5,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	assign := httptest.NewRecorder()
+	router.ServeHTTP(assign, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/assign-world/assign", bytes.NewBufferString(`{"instanceId":"world-target"}`)))
+	if assign.Code != stdhttp.StatusOK {
+		t.Fatalf("expected assign world 200, got %d: %s", assign.Code, assign.Body.String())
+	}
+	updated, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.WorldName != "new-home" || updated.Config.WorldName != "new-home" || updated.ContainerID != "" {
+		t.Fatalf("expected server world/config update and cleared container, got %+v", updated)
+	}
+	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(configBytes, []byte("world=worlds/new-home.wld")) {
+		t.Fatalf("expected serverconfig to point at assigned world, got %q", string(configBytes))
+	}
+}
+
 func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("backup-source", cfg.DataDir)

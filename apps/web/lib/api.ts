@@ -330,6 +330,29 @@ export async function importWorld(file: File, instanceId = "unassigned"): Promis
     name: world.name,
     size: world.fileName,
     difficulty: "Imported",
+    server: world.activeInstanceId || (world.instanceId !== "unassigned" ? world.instanceId : undefined),
+    modified: formatRelative(world.updatedAt ?? world.createdAt),
+    bytes: formatBytes(world.sizeBytes)
+  };
+}
+
+export async function assignWorld(id: string, instanceId: string): Promise<World> {
+  const response = await fetch(`${API_BASE}/api/worlds/${id}/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to assign world");
+  }
+  const world = (await response.json()) as ApiWorld;
+  return {
+    id: world.id,
+    name: world.name,
+    size: world.fileName,
+    difficulty: "Imported",
+    server: world.activeInstanceId || world.instanceId,
     modified: formatRelative(world.updatedAt ?? world.createdAt),
     bytes: formatBytes(world.sizeBytes)
   };

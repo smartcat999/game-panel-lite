@@ -908,3 +908,24 @@ Checks:
 - `pnpm test`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed after clearing stale `.next` output.
 - `pnpm e2e`: passed, 3 Playwright tests.
+
+## V1 Server Detail Resource Actions Update
+
+Status: Completed
+
+Completed:
+- Added real Server Detail world actions for importing, setting the current world, downloading, and deleting current-server worlds.
+- Setting the current world now goes through the Go API, requires the server to be stopped, updates the persisted server world/config, rewrites runtime config files, and clears any old container ID so the next start recreates the runtime container against the same data directory.
+- Added real Server Detail backup deletion alongside create, restore, and download.
+- Changed Server Detail log streaming to connect only while the Console or Logs tab is open, reducing noisy unavailable states when the user is managing other tabs.
+- Added frontend API support for `POST /api/worlds/{id}/assign` and fixed imported world mapping so current-server uploads immediately show as attached to the server.
+- Allowed `PUT` in the API CORS method list so cross-port Settings updates can complete preflight.
+- Added HTTP coverage for assigning a world and verifying server config/container state updates.
+
+Checks:
+- `pnpm lint`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `go test ./...`: passed.
+- `go vet ./...`: passed.
