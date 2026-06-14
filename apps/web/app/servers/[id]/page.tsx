@@ -402,6 +402,7 @@ export default function ServerDetailPage() {
               deleting={backupDelete.isPending}
               downloadingId={downloadingResourceId}
               restoring={backupRestore.isPending}
+              serverStatus={server.status}
               onDelete={setPendingBackupDelete}
               onDownload={(backup) => void downloadBackup(backup)}
               onCreate={() => backupCreate.mutate()}
@@ -860,6 +861,7 @@ function BackupsTab({
   onDelete,
   onDownload,
   restoring,
+  serverStatus,
   onCreate,
   onRestore
 }: {
@@ -872,10 +874,12 @@ function BackupsTab({
   onDelete: (backup: Backup) => void;
   onDownload: (backup: Backup) => void;
   restoring: boolean;
+  serverStatus: Server["status"];
   onCreate: () => void;
   onRestore: (backup: Backup) => void;
 }) {
   const { locale, t } = useI18n();
+  const canRestore = serverStatus !== "running";
   return (
     <ResourcePanel
       title={t("detailBackupActions")}
@@ -898,7 +902,13 @@ function BackupsTab({
             meta={`${backup.world} · ${backup.size} · ${localizeRelativeTime(backup.created, locale)}`}
             actions={
               <>
-                <Button variant="secondary" aria-label={t("restore")} onClick={() => onRestore(backup)} disabled={restoring}>
+                <Button
+                  variant="secondary"
+                  aria-label={t("restore")}
+                  onClick={() => onRestore(backup)}
+                  disabled={!canRestore || restoring}
+                  title={!canRestore ? t("restoreRequiresStopped") : undefined}
+                >
                   <RotateCcw aria-hidden="true" />
                 </Button>
                 <ActionButton

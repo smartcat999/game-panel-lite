@@ -29,6 +29,7 @@ export default function BackupsPage() {
   const activeServerId = selectedServerId || servers[0]?.id || "";
   const activeTargetServerId = targetServerId || servers[0]?.id || "";
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
+  const runningServerIds = useMemo(() => new Set(servers.filter((server) => server.status === "running").map((server) => server.id)), [servers]);
 
   const create = useMutation({
     mutationFn: createBackup,
@@ -152,7 +153,8 @@ export default function BackupsPage() {
                       variant="secondary"
                       aria-label={t("restore")}
                       onClick={() => setPendingRestore(backup)}
-                      disabled={restore.isPending || backupsQuery.isError}
+                      disabled={restore.isPending || backupsQuery.isError || Boolean(backup.instanceId && runningServerIds.has(backup.instanceId))}
+                      title={backup.instanceId && runningServerIds.has(backup.instanceId) ? t("restoreRequiresStopped") : undefined}
                     >
                       <RotateCcw aria-hidden="true" />
                     </Button>
