@@ -206,7 +206,7 @@ export default function ServerDetailPage() {
             <ServerStatusBadge status={server.status} />
           </div>
           <p className="mt-2 text-sm text-slate-400">
-            {t("serverDetailSummary", { players: server.players, maxPlayers: server.maxPlayers, port: server.port, version: server.version })}
+            {t("world")}: {server.world}
           </p>
         </div>
         <ServerActions server={server} />
@@ -238,8 +238,6 @@ export default function ServerDetailPage() {
               worldCount={serverWorlds.length}
               backupCount={serverBackups.length}
               modCount={serverMods.length}
-              difficultyLabel={difficultyLabel(server.config.difficulty, t)}
-              worldSizeLabel={worldSizeLabel(server.config.worldSize, t)}
             />
           )}
           {activeTab === "console" && (
@@ -326,6 +324,7 @@ export default function ServerDetailPage() {
             <Info label={t("difficulty")} value={difficultyLabel(server.config.difficulty, t)} />
             <Info label={t("worldSize")} value={worldSizeLabel(server.config.worldSize, t)} />
             <Info label={t("maxPlayers")} value={String(server.maxPlayers)} />
+            <Info label={t("version")} value={server.version} />
           </Card>
         </div>
       </div>
@@ -384,31 +383,19 @@ function OverviewTab({
   server,
   worldCount,
   backupCount,
-  modCount,
-  difficultyLabel,
-  worldSizeLabel
+  modCount
 }: {
   server: Server;
   worldCount: number;
   backupCount: number;
   modCount: number;
-  difficultyLabel: string;
-  worldSizeLabel: string;
 }) {
   const { t } = useI18n();
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Metric label={t("players")} value={`${server.players} / ${server.maxPlayers}`} />
-        <Metric label={t("port")} value={String(server.port)} />
-        <Metric label={t("worldSize")} value={worldSizeLabel} />
-        <Metric label={t("difficulty")} value={difficultyLabel} />
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <SummaryLink href="/worlds" icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} />
-        <SummaryLink href="/backups" icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} />
-        {server.mode === "tmodloader" && <SummaryLink href="/mods" icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} />}
-      </div>
+    <div className="grid gap-3 md:grid-cols-3">
+      <SummaryLink href="/worlds" icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} />
+      <SummaryLink href="/backups" icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} />
+      {server.mode === "tmodloader" && <SummaryLink href="/mods" icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} />}
     </div>
   );
 }
@@ -761,15 +748,6 @@ function SummaryLink({ href, icon, label, value }: { href: string; icon: ReactNo
       </div>
       <p className="mt-3 text-2xl font-semibold">{value}</p>
     </Link>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-panel-line bg-slate-950/50 p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-2 truncate text-lg font-semibold">{value}</p>
-    </div>
   );
 }
 

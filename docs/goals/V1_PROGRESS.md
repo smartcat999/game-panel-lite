@@ -559,6 +559,28 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
 - `pnpm build`: passed after clearing stale `.next` build output from a previous dev/build conflict.
 
+## Post-V1 Server Detail Information Deduplication Update
+
+Status: Completed
+
+Completed:
+- Reduced repeated information on the server detail page.
+- Changed the page header summary to show the world name instead of repeating player, port, and version metrics already available elsewhere.
+- Changed the Overview tab to focus on resource entry points (worlds, backups, mods) instead of repeating connection and configuration values.
+- Kept connection values in the Join Server card and moved version into Server Info with the rest of the configuration details.
+
+Known issues:
+- The Overview tab remains intentionally lightweight; detailed management is still split into the dedicated Console, Logs, Config, Worlds, Backups, and Mods tabs.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm build`: passed
+
 ## Post-V1 Server Game Art Update
 
 Status: Completed
