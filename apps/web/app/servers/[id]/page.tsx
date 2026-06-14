@@ -62,6 +62,7 @@ export default function ServerDetailPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
   const [pendingWorldDelete, setPendingWorldDelete] = useState<World | null>(null);
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
@@ -69,6 +70,25 @@ export default function ServerDetailPage() {
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [logStatus, setLogStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [configSaved, setConfigSaved] = useState(false);
+  const successTimerRef = useRef<number | null>(null);
+
+  const showSuccess = (message: string) => {
+    setErrorMessage("");
+    setSuccessMessage(message);
+    if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+    successTimerRef.current = window.setTimeout(() => setSuccessMessage(""), 2200);
+  };
+
+  const showError = (message: string) => {
+    setSuccessMessage("");
+    setErrorMessage(message);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   const commandMutation = useMutation({
     mutationFn: (value: string) => sendServerCommand(id, value),
@@ -76,22 +96,26 @@ export default function ServerDetailPage() {
       setLogs((current) => [...current, `> ${value}`].slice(-300));
       setCommand("");
       setConsoleError("");
+      showSuccess(t("commandSent"));
     },
-    onError: (error) => setConsoleError(error instanceof Error ? error.message : t("commandSendFailed"))
+    onError: (error) => {
+      setSuccessMessage("");
+      setConsoleError(error instanceof Error ? error.message : t("commandSendFailed"));
+    }
   });
   const worldUpload = useMutation({
     mutationFn: (file: File) => importWorld(file, id),
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("worldImported"));
       if (worldInputRef.current) worldInputRef.current.value = "";
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableImportWorld"))
   });
   const configSave = useMutation({
     mutationFn: (nextConfig: TerrariaConfig) => updateServerConfig(id, nextConfig),
     onSuccess: async (updatedServer) => {
-      setErrorMessage("");
+      showSuccess(t("configSaved"));
       setConfigSaved(true);
       client.setQueryData(["server", id], updatedServer);
       await client.invalidateQueries({ queryKey: ["servers"] });
@@ -99,71 +123,71 @@ export default function ServerDetailPage() {
     },
     onError: (error) => {
       setConfigSaved(false);
-      setErrorMessage(error instanceof Error ? error.message : t("unableUpdateConfig"));
+      showError(error instanceof Error ? error.message : t("unableUpdateConfig"));
     }
   });
   const worldAssign = useMutation({
     mutationFn: (worldId: string) => assignWorld(worldId, id),
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("worldAssigned"));
       await client.invalidateQueries({ queryKey: ["worlds"] });
       await client.invalidateQueries({ queryKey: ["server", id] });
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableAssignWorld"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableAssignWorld"))
   });
   const worldDelete = useMutation({
     mutationFn: deleteWorld,
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("worldDeleted"));
       setPendingWorldDelete(null);
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteWorld"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableDeleteWorld"))
   });
   const backupCreate = useMutation({
     mutationFn: () => createBackup(id),
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("backupCreated"));
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableCreateBackup"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableCreateBackup"))
   });
   const backupRestore = useMutation({
     mutationFn: restoreBackup,
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("backupRestored"));
       setPendingRestore(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableRestoreBackup"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableRestoreBackup"))
   });
   const backupDelete = useMutation({
     mutationFn: deleteBackup,
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("backupDeleted"));
       setPendingBackupDelete(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteBackup"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableDeleteBackup"))
   });
   const modUpload = useMutation({
     mutationFn: (file: File) => uploadMod(id, file),
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("modUploaded"));
       if (modInputRef.current) modInputRef.current.value = "";
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableUploadMod"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableUploadMod"))
   });
   const modDelete = useMutation({
     mutationFn: (modId: string) => deleteMod(id, modId),
     onSuccess: async () => {
-      setErrorMessage("");
+      showSuccess(t("modDeleted"));
       setPendingModDelete(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
-    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteMod"))
+    onError: (error) => showError(error instanceof Error ? error.message : t("unableDeleteMod"))
   });
 
   useEffect(() => {
@@ -226,9 +250,15 @@ export default function ServerDetailPage() {
   const invite = `Join ${server.name} at 127.0.0.1:${server.port}${server.password ? ` password: ${server.password}` : ""}`;
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : t("logsConnecting");
   const copy = async (label: string, value: string) => {
-    await navigator.clipboard.writeText(value);
-    setCopied(label);
-    window.setTimeout(() => setCopied(""), 1500);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      setErrorMessage("");
+      window.setTimeout(() => setCopied(""), 1500);
+    } catch (error) {
+      setCopied("");
+      showError(error instanceof Error ? error.message : t("copyInviteFailed"));
+    }
   };
   const submitCommand = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -242,6 +272,7 @@ export default function ServerDetailPage() {
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
       {errorMessage && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{errorMessage}</p>}
+      {successMessage && <p className="mt-3 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm text-panel-green">{successMessage}</p>}
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">

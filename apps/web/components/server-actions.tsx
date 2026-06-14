@@ -15,6 +15,7 @@ export function ServerActions({ server }: { server: Server }) {
   const { t } = useI18n();
   const [pendingAction, setPendingAction] = useState<"stop" | "restart" | "delete" | null>(null);
   const [busyAction, setBusyAction] = useState<"start" | "stop" | "restart" | "delete" | null>(null);
+  const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
@@ -55,6 +56,18 @@ export function ServerActions({ server }: { server: Server }) {
     void executeAction(action);
   };
 
+  const copyInvite = async () => {
+    setErrorMessage("");
+    try {
+      await navigator.clipboard.writeText(`Join ${server.name} at 127.0.0.1:${server.port}${server.password ? ` password: ${server.password}` : ""}`);
+      setCopiedInvite(true);
+      window.setTimeout(() => setCopiedInvite(false), 1500);
+    } catch (error) {
+      setCopiedInvite(false);
+      setErrorMessage(error instanceof Error ? error.message : t("copyInviteFailed"));
+    }
+  };
+
   const pendingLabel = pendingAction ? actionLabel(pendingAction) : "";
 
   return (
@@ -75,9 +88,9 @@ export function ServerActions({ server }: { server: Server }) {
           <RotateCcw aria-hidden="true" />
           {busyAction === "restart" ? t("actionWorking") : t("actionRestart")}
         </Button>
-        <Button variant="primary" onClick={() => void navigator.clipboard.writeText(`Join ${server.name} at 127.0.0.1:${server.port}`)}>
+        <Button variant="primary" onClick={() => void copyInvite()}>
           <Copy aria-hidden="true" />
-          {t("actionCopyInvite")}
+          {copiedInvite ? t("copied") : t("actionCopyInvite")}
         </Button>
       </div>
       {errorMessage && <p className="mt-2 text-sm text-panel-gold">{errorMessage}</p>}

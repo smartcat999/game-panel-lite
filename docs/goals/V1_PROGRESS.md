@@ -987,3 +987,21 @@ Checks:
 - `pnpm test`: passed.
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Server Detail Action Feedback Update
+
+Status: Completed
+
+Completed:
+- Added consistent success feedback on the server detail page for console commands, world import/assignment/deletion, backup creation/restoration/deletion, and mod upload/deletion.
+- Added clipboard failure handling for the join info copy controls instead of letting failed browser clipboard writes look like no-op clicks.
+- Added copied-state feedback to the shared server action copy-invite button and included the server password in the copied invite text when configured.
+- Added Chinese and English localization for the new detail action feedback messages.
+
+Checks:
+- `pnpm test`: passed.
+- `pnpm typecheck`: passed after fixing the browser timer ref type.
+- `pnpm lint`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
