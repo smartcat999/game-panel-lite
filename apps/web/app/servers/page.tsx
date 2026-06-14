@@ -20,7 +20,7 @@ const filters = [
 type Filter = (typeof filters)[number]["key"];
 
 export default function ServersPage() {
-  const query = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const query = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
   const { t } = useI18n();
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,10 @@ import (
 )
 
 func newTestRouter(t *testing.T) (stdhttp.Handler, *store.Store, config.Config) {
+	return newTestRouterWithAdapter(t, runtime.NewMockAdapter())
+}
+
+func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Handler, *store.Store, config.Config) {
 	t.Helper()
 	root := t.TempDir()
 	cfg := config.Config{
@@ -39,7 +44,7 @@ func newTestRouter(t *testing.T) (stdhttp.Handler, *store.Store, config.Config) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtimeAdapter := runtime.NewSwitchableAdapter(runtime.NewMockAdapter())
+	runtimeAdapter := runtime.NewSwitchableAdapter(adapter)
 	monitor := runtime.NewDockerMonitor(runtimeAdapter)
 	monitor.Refresh(context.Background())
 	handler := NewHandler(
@@ -54,6 +59,30 @@ func newTestRouter(t *testing.T) (stdhttp.Handler, *store.Store, config.Config) 
 	router := chi.NewRouter()
 	handler.Register(router)
 	return router, db, cfg
+}
+
+type inspectStatusAdapter struct {
+	status domain.ServerStatus
+}
+
+func (a inspectStatusAdapter) Check(context.Context) runtime.DockerStatus {
+	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock"}
+}
+func (a inspectStatusAdapter) Create(context.Context, runtime.ContainerSpec) (string, error) {
+	return "created-container", nil
+}
+func (a inspectStatusAdapter) Start(context.Context, domain.GameServerInstance) error   { return nil }
+func (a inspectStatusAdapter) Stop(context.Context, domain.GameServerInstance) error    { return nil }
+func (a inspectStatusAdapter) Restart(context.Context, domain.GameServerInstance) error { return nil }
+func (a inspectStatusAdapter) Remove(context.Context, domain.GameServerInstance) error  { return nil }
+func (a inspectStatusAdapter) Inspect(context.Context, domain.GameServerInstance) (domain.ServerStatus, error) {
+	return a.status, nil
+}
+func (a inspectStatusAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+func (a inspectStatusAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+	return nil
 }
 
 func TestServerLifecycleAndLogEndpoints(t *testing.T) {
@@ -160,6 +189,59 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
 	if remove.Code != stdhttp.StatusOK {
 		t.Fatalf("expected delete 200, got %d: %s", remove.Code, remove.Body.String())
+	}
+}
+
+func TestGetServerRefreshesStoredStatusFromRuntime(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, inspectStatusAdapter{status: domain.StatusStopped})
+	server := testServer("status-detail", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "runtime-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/status-detail", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server detail 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusStopped {
+		t.Fatalf("expected detail status refreshed from runtime, got %+v", got)
+	}
+	stored, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != domain.StatusStopped {
+		t.Fatalf("expected refreshed status persisted, got %+v", stored)
+	}
+}
+
+func TestListServersRefreshesStoredStatusFromRuntime(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, inspectStatusAdapter{status: domain.StatusRunning})
+	server := testServer("status-list", cfg.DataDir)
+	server.Status = domain.StatusStopped
+	server.ContainerID = "runtime-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/servers", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server list 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got []domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Status != domain.StatusRunning {
+		t.Fatalf("expected list status refreshed from runtime, got %+v", got)
 	}
 }
 

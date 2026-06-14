@@ -47,7 +47,7 @@ export default function ServerDetailPage() {
   const logViewportRef = useRef<HTMLDivElement>(null);
   const logServerIdRef = useRef("");
 
-  const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false });
+  const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
   const server = query.data;
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server), retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server), retry: false });

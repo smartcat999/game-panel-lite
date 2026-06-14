@@ -968,3 +968,22 @@ Checks:
 - `pnpm build`: passed after replacing `useSearchParams` with a client-side URL read to avoid a Next.js Suspense build error.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Runtime Status Synchronization Update
+
+Status: Completed
+
+Completed:
+- `GET /api/servers` and `GET /api/servers/{id}` now refresh stored server status from the runtime adapter when a server has a container ID.
+- Runtime status refresh persists changes back to SQLite so list and detail views converge on the actual container state.
+- Refresh failures are logged but do not make list/detail reads fail, keeping the UI usable if Docker is temporarily unavailable.
+- Servers list and server detail pages now refetch every 5 seconds so start/stop/restart or external container state changes become visible without a manual refresh.
+- Added HTTP coverage proving server list and detail responses synchronize stale database status from runtime `Inspect`.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

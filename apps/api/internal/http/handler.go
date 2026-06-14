@@ -550,6 +550,9 @@ func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	for index := range servers {
+		servers[index] = h.refreshServerStatus(r.Context(), servers[index])
+	}
 	writeJSON(w, http.StatusOK, servers)
 }
 
@@ -572,6 +575,7 @@ func (h *Handler) getServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, err.Error())
 		return
 	}
+	server = h.refreshServerStatus(r.Context(), server)
 	writeJSON(w, http.StatusOK, server)
 }
 
@@ -839,6 +843,26 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	server.Config = nextConfig
 	server.UpdatedAt = time.Now()
 	return nil
+}
+
+func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameServerInstance) domain.GameServerInstance {
+	if server.ContainerID == "" {
+		return server
+	}
+	status, err := h.runtime.Inspect(ctx, server)
+	if err != nil {
+		h.logger.Warn("failed to refresh runtime server status", "server", server.ID, "container", server.ContainerID, "error", err)
+		return server
+	}
+	if status == server.Status {
+		return server
+	}
+	server.Status = status
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		h.logger.Warn("failed to persist refreshed runtime server status", "server", server.ID, "status", status, "error", err)
+	}
+	return server
 }
 
 func statusCodeForRuntimeError(err error) int {
