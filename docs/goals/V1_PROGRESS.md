@@ -436,3 +436,311 @@ Checks:
 - `go build ./...`: passed
 - `pnpm build`: passed after clearing stale `.next` output from dev/build switching.
 - Verification note: did not create another real server/container during this check; redirect is implemented in the create mutation success handler with cache invalidation and `router.push(/servers/{id})`.
+
+## V1 Completion Gap Closure Update
+
+Status: Completed
+
+Completed:
+- Wired the Server Detail log panel to the backend `GET /api/servers/{id}/logs` SSE stream with connection, waiting, and unavailable states.
+- Kept console command input disabled because V1 has no backend command endpoint.
+- Added `GET /api/settings` and `PUT /api/settings` for safe local settings access; updates are limited to Docker Host and reuse the RuntimeAdapter hot-swap path.
+- Added dedicated world and backup migration APIs plus Worlds/Backups page controls for copying assets to a selected server instance.
+- Updated the OpenAPI contract for Docker status/hosts/hot-apply, Settings, Worlds, Backups, Mods, server logs, and Terraria config preview.
+- Updated README and V1 checklist to reflect live SSE logs and the remaining manual verification boundaries.
+
+Known issues:
+- Docker image pull, container lifecycle, and Terraria client join still require manual verification against a running Docker daemon and real Terraria images.
+- Playwright is not installed in the current workspace, so E2E browser test execution still requires adding the dependency and browser binaries.
+
+Checks:
+- `gofmt -w apps/api/internal/world/service.go apps/api/internal/world/service_test.go apps/api/internal/backup/service.go apps/api/internal/backup/service_test.go apps/api/internal/http/handler.go`: passed
+- `go test ./...`: passed
+- `go vet ./...`: passed
+- `go build ./...`: passed
+- `pnpm --filter @gamepanel-lite/web lint`: passed
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed
+- `pnpm --filter @gamepanel-lite/web build`: passed
+- `pnpm test`: passed
+- Browser/API verification: pending in this environment because binding the Go API to port 4000 was blocked by sandbox permissions, and the escalation request was rejected by the current usage limit.
+
+## Post-V1 Server Action Dialog Update
+
+Status: Completed
+
+Completed:
+- Replaced native browser `confirm`/`alert` flows for server stop, restart, and delete actions with an in-app dark confirmation dialog.
+- Added action-specific confirmation copy, cancel/close controls, Escape and backdrop dismissal, and disabled controls while an action is running.
+- Kept server start as a direct action and moved action failures into inline panel-styled error text instead of browser alerts.
+- Added Chinese and English i18n strings for the new confirmation dialog and working state.
+
+Known issues:
+- The destructive stop/restart/delete action itself was not executed during UI verification to avoid changing a running local server without explicit confirmation.
+- Browser validation was partially blocked after production build cleanup because the local Next.js dev server needed a restart, and the desktop escalation request to stop the stale 3004 process was rejected by the environment usage limit. The code-level checks and production build passed.
+- The repository still has unrelated local API/runtime/settings changes in the working tree; they were left untouched.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm build`: passed
+
+## Post-V1 Server Game Art Update
+
+Status: Completed
+
+Completed:
+- Replaced the blank gradient server-card thumbnail with a reusable `ServerGameArt` component.
+- Server cards now show the existing Terraria cover image for V1 Terraria servers.
+- tModLoader servers receive a small purple modded badge overlay, while vanilla servers keep the clean Terraria cover.
+- Kept the mapping in the frontend presentation layer so future game support can extend the visual map without changing runtime logic.
+
+Known issues:
+- Browser visual verification was limited because the current Chrome tab intermittently stayed on a stale route while the Next dev server returned 200 responses. The implementation was still validated by lint, typecheck, tests, and production build.
+- The frontend could not load real server data during the visual pass until the Go API was restarted; after restart, Chrome still showed stale dashboard content in that tab. No backend code was changed for this update.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm build`: passed
+
+## V1 HTTP Integration Coverage Update
+
+Status: Completed
+
+Completed:
+- Added HTTP integration coverage for `GET /api/settings` and `PUT /api/settings` using the real chi router, temporary SQLite store, provider registry, Docker monitor, and mock runtime adapter.
+- Added HTTP integration coverage for `POST /api/worlds/{id}/migrate`, proving the route creates a target-server world record and copies the `.wld` file into the target instance directory.
+- Added HTTP integration coverage for `POST /api/backups/{id}/migrate`, proving the route creates a target-server backup record and copies the backup archive into the target instance directory.
+
+Known issues:
+- Playwright remains unavailable in the current workspace; browser E2E still needs dependency/browser installation.
+- Real Docker image pulls, container lifecycle, SSE against real container logs, and Terraria client join remain manual verification items for a Docker-enabled environment.
+
+Checks:
+- `gofmt -w apps/api/internal/http/handler_test.go`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http ./apps/api/internal/world ./apps/api/internal/backup`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm --filter @gamepanel-lite/web lint`: passed
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed
+- `pnpm --filter @gamepanel-lite/web build`: passed
+- `pnpm test`: passed
+
+## V1 Server Runtime HTTP Smoke Update
+
+Status: Completed
+
+Completed:
+- Added HTTP smoke coverage for `POST /api/servers`, `POST /api/servers/{id}/start`, `POST /api/servers/{id}/restart`, `POST /api/servers/{id}/stop`, `GET /api/servers/{id}/logs`, and `DELETE /api/servers/{id}`.
+- The server lifecycle smoke test uses the real chi router and mock runtime adapter, proving the V1 server APIs create records, transition statuses, return SSE log events, and delete records through the HTTP layer.
+- Added HTTP smoke coverage for tModLoader mod upload/list/delete using multipart `.tmod` upload and the real mod storage path.
+
+Known issues:
+- These smoke tests prove the API layer and mock runtime contract. Real Docker image pulls, real container logs, and Terraria client join still require a Docker-enabled manual verification environment.
+- Playwright remains unavailable in the current workspace; browser E2E still needs dependency/browser installation.
+
+Checks:
+- `gofmt -w apps/api/internal/http/handler_test.go`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm --filter @gamepanel-lite/web lint`: passed
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed
+- `pnpm --filter @gamepanel-lite/web build`: passed
+- `pnpm test`: passed
+
+## V1 World And Backup HTTP Smoke Update
+
+Status: Completed
+
+Completed:
+- Added HTTP smoke coverage for `POST /api/worlds/import`, `GET /api/worlds`, `GET /api/worlds/{id}/download`, `POST /api/worlds/{id}/duplicate`, and `DELETE /api/worlds/{id}`.
+- The world smoke test uses multipart `.wld` upload, verifies the stored file, downloads the file content, duplicates it, and verifies deletion removes the copied file.
+- Added HTTP smoke coverage for `POST /api/servers/{id}/backups`, `GET /api/backups`, `GET /api/backups/{id}/download`, `POST /api/backups/{id}/restore`, and `DELETE /api/backups/{id}`.
+- The backup smoke test creates a stopped server with data, creates an archive, verifies listing and download, mutates server data, restores the backup, and verifies deletion removes the archive.
+
+Known issues:
+- HTTP smoke coverage still uses the mock runtime adapter where Docker is involved. Real Docker image pulls, container lifecycle, real container logs, and Terraria client join remain manual verification items.
+- Playwright remains unavailable in the current workspace; browser E2E still needs dependency/browser installation and test specs before it can be reported as complete.
+- `go build ./...` exits successfully, but the sandbox still reports a non-fatal warning when Go tries to write the global module stat cache outside the workspace.
+
+Checks:
+- `gofmt -w apps/api/internal/http/handler_test.go`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm --filter @gamepanel-lite/web lint`: passed
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed
+- `pnpm --filter @gamepanel-lite/web build`: passed
+- `pnpm test`: passed
+
+## V1 Playwright And Real Docker Verification Update
+
+Status: Partially Completed
+
+Completed:
+- Added `@playwright/test`, root `pnpm e2e` script, `playwright.config.ts`, and `e2e/v1-smoke.spec.ts`.
+- Playwright smoke coverage verifies the Chinese app shell, Terraria official cover rendering, user avatar rendering, Docker scan feedback, and create-server wizard mode/preset selected states.
+- Fixed Docker image pulls by reading and closing the pull stream before `ContainerCreate`.
+- Fixed real Docker SSE logs by demultiplexing Docker stdout/stderr streams before scanning and emitting SSE lines.
+- Added provider-owned runtime options so Terraria providers can supply image-specific env, command args, mounts, and small data files without moving Terraria logic into `RuntimeAdapter`.
+- Verified real Vanilla Terraria on OrbStack Docker through the Go API:
+  - `GET /healthz`: returned 200.
+  - `GET /api/runtime/docker`: returned available with the OrbStack Docker socket.
+  - `POST /api/servers`: pulled/created `ryshe/terraria:latest` and returned a non-empty container ID.
+  - `POST /api/servers/{id}/start`: returned running.
+  - Docker logs showed world generation, `Listening on port 17777`, and `Server started`.
+  - `GET /api/servers/{id}/logs`: returned clean text/event-stream log lines without Docker multiplex control bytes.
+  - `nc -vz 127.0.0.1 17777`: succeeded.
+  - `DELETE /api/servers/{id}` removed the temporary container; follow-up `docker ps -a` showed no leftover `gamepanel-` container.
+- Verified real tModLoader image pull/create/start path enough to prove V1 config propagation:
+  - `POST /api/servers` created `jacobsmile/tmodloader1.4:latest` with a non-empty container ID.
+  - `POST /api/servers/{id}/start` returned running.
+  - Container logs showed `TMOD_WORLDNAME=V1TmodWorld`, `TMOD_MAXPLAYERS=4`, `TMOD_WORLDSIZE=1`, `TMOD_SECURE=1`, and automatic world creation intent.
+  - Temporary tModLoader container was deleted after verification.
+
+Known issues:
+- tModLoader real listening remains incomplete in the local arm64/OrbStack environment. The `jacobsmile/tmodloader1.4:latest` amd64 image accepted the generated env config and downloaded .NET, then exited before opening the configured TCP port.
+- Actual Terraria client join still requires manual verification with a Terraria desktop client.
+- `go build ./...` exits successfully, but this sandbox still reports a non-fatal warning when Go attempts to write its global module stat cache outside the workspace.
+- Running `next build` concurrently with Playwright's dev server can corrupt `.next`; rerun production build after E2E or keep those commands sequential.
+
+Checks:
+- `pnpm e2e`: passed, 2 Playwright tests.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed after rerunning sequentially after E2E.
+- `pnpm test`: passed.
+
+## V1 tModLoader Real Docker Listening Update
+
+Status: Completed
+
+Completed:
+- Investigated the `radioactivehydra/tmodloader:latest` image and confirmed it ships an arm64-capable tModLoader runtime with the official `start-tModLoaderServer.sh` script.
+- Verified the root cause of the previous tModLoader hang: the old env-only `jacobsmile/tmodloader1.4:latest` path applied values but did not produce a listening server in the local arm64/OrbStack environment.
+- Switched the tModLoader provider to `radioactivehydra/tmodloader:latest`.
+- Changed tModLoader runtime options to write a provider-owned `/data/serverconfig.txt` with `/data/Worlds` persistence and start the image with `-config /data/serverconfig.txt`, avoiding the interactive `Choose World` prompt.
+- Added provider test coverage proving the tModLoader image, command, and generated runtime config are non-interactive.
+- Verified direct Docker smoke:
+  - `docker run -d --name gamepanel-tmod-config-smoke -p 17784:7777 -v /private/tmp/gamepanel-tmod-smoke:/data radioactivehydra/tmodloader:latest sh -c '${TMOD_HOMEDIR}/start-tModLoaderServer.sh -config /data/serverconfig.txt'`.
+  - Logs showed automatic world generation, `Listening on port 7777`, and `Server started`.
+  - `nc -vz 127.0.0.1 17784` succeeded.
+  - Temporary container was removed.
+- Verified full Go API and Docker RuntimeAdapter path:
+  - Temporary API started on port `4012` with OrbStack Docker host.
+  - `GET /healthz`: returned 200.
+  - `GET /api/runtime/docker`: returned available with `unix:///Users/pengwu/.orbstack/run/docker.sock`.
+  - `POST /api/servers`: created a tModLoader server with a non-empty container ID.
+  - `POST /api/servers/{id}/start`: returned running.
+  - Docker logs showed automatic world generation, `Listening on port 17785`, and `Server started`.
+  - `GET /api/servers/{id}/logs`: returned clean text/event-stream log lines including `Listening on port 17785`.
+  - `nc -vz 127.0.0.1 17785`: succeeded.
+  - `DELETE /api/servers/{id}` removed the temporary server and container; follow-up `docker ps -a` showed no leftover `gamepanel-` container.
+
+Known issues:
+- Actual Terraria client join still requires manual verification with a Terraria desktop client.
+- Remaining UI polish includes replacing browser-native confirmations on world, backup, and mod management pages and expanding Playwright coverage for the live API flows.
+
+Checks:
+- `gofmt -w apps/api/internal/provider/terraria/provider.go apps/api/internal/provider/terraria/config_test.go`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/provider/terraria`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed.
+- `pnpm test`: passed.
+- `pnpm e2e`: passed, 2 Playwright tests.
+
+## V1 Sidebar Navigation And E2E Stability Update
+
+Status: Completed
+
+Completed:
+- Removed the sidebar optimistic active-path state after Playwright showed it could make the selected nav item change before the route actually changed.
+- Sidebar active styling now follows the real `pathname`, so the UI no longer suggests a page switch until navigation actually completes.
+- Set Playwright smoke tests to one worker and disabled dev server reuse so E2E does not accidentally run against a stale Next.js dev server.
+- Increased the Settings URL assertion timeout to account for first-time Next.js route compilation in local dev mode.
+
+Checks:
+- `pnpm exec playwright test e2e/v1-smoke.spec.ts:70 --workers=1`: passed.
+- `pnpm e2e`: passed, 2 Playwright tests.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm test`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed.
+
+## V1 Server Detail Resource Panels Update
+
+Status: Completed
+
+Completed:
+- Connected the Server Detail page resource panels to real API-backed world, backup, and tModLoader mod queries.
+- Server Detail now filters recent worlds and backups for the current server instance and shows recent mod files for tModLoader servers.
+- Added compact empty, error, and management-link states for Worlds, Backups, and Mods instead of static placeholder copy.
+- Kept the main console/log area focused on SSE logs and left command submission disabled because V1 has no backend command endpoint.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm test`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed.
+- `pnpm e2e`: passed, 2 Playwright tests.
+
+## V1 Management Confirmation Dialog Update
+
+Status: Completed
+
+Completed:
+- Added a reusable dark `ConfirmDialog` component for management pages.
+- Replaced browser-native `confirm` and `alert` flows on Worlds, Backups, and Mods with in-app confirmation dialogs and inline error feedback.
+- World deletion, backup restore, backup deletion, and mod deletion now use consistent modal confirmation with Escape/backdrop dismissal.
+- Upload, duplicate, migrate, restore, delete, and mod upload errors now render as panel-styled page feedback instead of browser alerts.
+- Removed the README roadmap item for replacing remaining browser-native confirmations.
+
+Checks:
+- `rg -n "window\\.confirm|window\\.alert|confirm\\(|alert\\(" apps/web`: no matches.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm test`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed.
+- `pnpm e2e`: passed, 2 Playwright tests.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+
+## V1 Expanded Playwright Flow Coverage Update
+
+Status: Completed
+
+Completed:
+- Expanded Playwright API mocks to include server detail, SSE log events, worlds, backups, mods, world migration, backup restore, and backup migration responses.
+- Added a server detail E2E flow that verifies live log rendering, recent world/backup/mod panels, copy join info, and clipboard content.
+- Added management flow coverage for world migration and backup restore confirmation, including assertions that the expected POST requests are made.
+- Updated README to describe the broader E2E smoke coverage and narrowed the roadmap to optional live-API/Docker E2E coverage.
+
+Checks:
+- `pnpm e2e`: passed, 3 Playwright tests.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm test`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.

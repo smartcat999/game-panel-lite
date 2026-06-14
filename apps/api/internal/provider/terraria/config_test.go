@@ -50,3 +50,36 @@ func TestValidateConfigRejectsUnsafeValues(t *testing.T) {
 		}
 	}
 }
+
+func TestTModLoaderRuntimeOptionsUseNonInteractiveConfig(t *testing.T) {
+	config := domain.TerrariaConfig{
+		WorldName: "Modded Smoke", WorldSize: "small", Difficulty: "classic",
+		MaxPlayers: 4, Port: 17784, MOTD: "Mods online", Secure: true, Language: "zh-Hans",
+	}
+	provider := NewTModLoaderProvider()
+	options := provider.RuntimeOptions(config)
+
+	if provider.Image() != "radioactivehydra/tmodloader:latest" {
+		t.Fatalf("unexpected tModLoader image: %s", provider.Image())
+	}
+	if got := strings.Join(options.Cmd, " "); !strings.Contains(got, "-config /data/serverconfig.txt") {
+		t.Fatalf("expected non-interactive config command, got %q", got)
+	}
+	rendered := options.Files["serverconfig.txt"]
+	for _, expected := range []string{
+		"world=/data/Worlds/Modded Smoke.wld",
+		"autocreate=1",
+		"worldname=Modded Smoke",
+		"maxplayers=4",
+		"port=17784",
+		"motd=Mods online",
+		"worldpath=/data/Worlds",
+		"secure=1",
+		"language=zh-Hans",
+		"upnp=0",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected tModLoader runtime config to contain %q, got:\n%s", expected, rendered)
+		}
+	}
+}

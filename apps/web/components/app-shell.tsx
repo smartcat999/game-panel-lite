@@ -25,14 +25,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { locale, setLocale, t } = useI18n();
-  const [optimisticPath, setOptimisticPath] = useState("");
   const [createPending, setCreatePending] = useState(false);
   const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
   const dockerAvailable = Boolean(docker.data?.available);
   const dockerLabel = dockerAvailable ? t("available") : t("unavailable");
 
   useEffect(() => {
-    setOptimisticPath("");
     setCreatePending(false);
   }, [pathname]);
 
@@ -41,7 +39,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.prefetch("/servers/new");
   }, [router]);
 
-  const visiblePath = optimisticPath || pathname;
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-panel-line bg-panel-sidebar lg:flex lg:flex-col">
@@ -53,13 +50,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
           {nav.map((item) => {
-            const active = visiblePath === item.href || visiblePath.startsWith(`${item.href}/`);
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setOptimisticPath(item.href)}
                 onMouseEnter={() => router.prefetch(item.href)}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white",

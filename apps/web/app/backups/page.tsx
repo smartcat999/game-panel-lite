@@ -1,13 +1,15 @@
 "use client";
 
-import { Archive, Download, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Download, MoveRight, RotateCcw, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { backupDownloadUrl, createBackup, deleteBackup, listBackups, listServers, restoreBackup } from "@/lib/api";
+import { backupDownloadUrl, createBackup, deleteBackup, listBackups, listServers, migrateBackup, restoreBackup } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import type { Backup } from "@/lib/types";
 
 export default function BackupsPage() {
   const { locale, t } = useI18n();
@@ -15,25 +17,49 @@ export default function BackupsPage() {
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const [selectedServerId, setSelectedServerId] = useState("");
+  const [targetServerId, setTargetServerId] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Backup | null>(null);
   const servers = serversQuery.data ?? [];
   const backups = backupsQuery.data ?? [];
   const activeServerId = selectedServerId || servers[0]?.id || "";
+  const activeTargetServerId = targetServerId || servers[0]?.id || "";
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
 
   const create = useMutation({
     mutationFn: createBackup,
-    onSuccess: async () => client.invalidateQueries({ queryKey: ["backups"] }),
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableCreateBackup"))
+    onSuccess: async () => {
+      setErrorMessage("");
+      await client.invalidateQueries({ queryKey: ["backups"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableCreateBackup"))
   });
   const restore = useMutation({
     mutationFn: restoreBackup,
-    onSuccess: async () => client.invalidateQueries({ queryKey: ["backups"] }),
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableRestoreBackup"))
+    onSuccess: async () => {
+      setErrorMessage("");
+      setPendingRestore(null);
+      await client.invalidateQueries({ queryKey: ["backups"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableRestoreBackup"))
   });
   const remove = useMutation({
     mutationFn: deleteBackup,
-    onSuccess: async () => client.invalidateQueries({ queryKey: ["backups"] }),
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableDeleteBackup"))
+    onSuccess: async () => {
+      setErrorMessage("");
+      setPendingDelete(null);
+      await client.invalidateQueries({ queryKey: ["backups"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteBackup"))
+  });
+  const migrate = useMutation({
+    mutationFn: ({ id, instanceId }: { id: string; instanceId: string }) => migrateBackup(id, instanceId),
+    onSuccess: async () => {
+      setErrorMessage("");
+      await client.invalidateQueries({ queryKey: ["backups"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableMigrateBackup"))
   });
 
   return (
@@ -59,6 +85,18 @@ export default function BackupsPage() {
         }
       />
       {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
+      {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+        <span>{t("migrationTarget")}</span>
+        <select
+          className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
+          value={activeTargetServerId}
+          onChange={(event) => setTargetServerId(event.target.value)}
+          disabled={servers.length === 0}
+        >
+          {servers.length === 0 ? <option>{t("noApiServers")}</option> : servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+        </select>
+      </div>
       <Card className="overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-950/50 text-xs text-slate-400">
@@ -77,23 +115,29 @@ export default function BackupsPage() {
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"
-                      onClick={() => {
-                        if (window.confirm(t("restoreBackupConfirm", { name: backup.name }))) restore.mutate(backup.id);
-                      }}
+                      aria-label={t("restore")}
+                      onClick={() => setPendingRestore(backup)}
                       disabled={restore.isPending || backupsQuery.isError}
                     >
                       <RotateCcw aria-hidden="true" />
                     </Button>
                     <a href={backupDownloadUrl(backup.id)}>
-                      <Button variant="secondary" disabled={backupsQuery.isError}>
+                      <Button variant="secondary" aria-label={t("download")} disabled={backupsQuery.isError}>
                         <Download aria-hidden="true" />
                       </Button>
                     </a>
                     <Button
+                      variant="secondary"
+                      aria-label={t("migrate")}
+                      onClick={() => activeTargetServerId && migrate.mutate({ id: backup.id, instanceId: activeTargetServerId })}
+                      disabled={!activeTargetServerId || migrate.isPending || backupsQuery.isError || serversQuery.isError}
+                    >
+                      <MoveRight aria-hidden="true" />
+                    </Button>
+                    <Button
                       variant="danger"
-                      onClick={() => {
-                        if (window.confirm(t("deleteBackupConfirm", { name: backup.name }))) remove.mutate(backup.id);
-                      }}
+                      aria-label={t("delete")}
+                      onClick={() => setPendingDelete(backup)}
                       disabled={remove.isPending || backupsQuery.isError}
                     >
                       <Trash2 aria-hidden="true" />
@@ -110,6 +154,41 @@ export default function BackupsPage() {
           </tbody>
         </table>
       </Card>
+      <ConfirmDialog
+        open={Boolean(pendingRestore)}
+        eyebrow={t("destructiveAction")}
+        title={t("restoreBackupConfirm", { name: pendingRestore?.name ?? "" })}
+        description={t("confirmRestoreBackupDescription", { name: pendingRestore?.name ?? "" })}
+        detail={pendingRestore ? (
+          <>
+            <span className="text-slate-500">{t("backupName")}: </span>
+            <span className="font-medium text-white">{pendingRestore.name}</span>
+          </>
+        ) : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={restore.isPending ? t("actionWorking") : t("restore")}
+        confirmVariant="gold"
+        busy={restore.isPending}
+        onCancel={() => setPendingRestore(null)}
+        onConfirm={() => pendingRestore && restore.mutate(pendingRestore.id)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteBackupConfirm", { name: pendingDelete?.name ?? "" })}
+        description={t("confirmDeleteBackupDescription", { name: pendingDelete?.name ?? "" })}
+        detail={pendingDelete ? (
+          <>
+            <span className="text-slate-500">{t("backupName")}: </span>
+            <span className="font-medium text-white">{pendingDelete.name}</span>
+          </>
+        ) : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={remove.isPending ? t("actionWorking") : t("delete")}
+        busy={remove.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
+      />
     </AppShell>
   );
 }

@@ -1,38 +1,62 @@
 "use client";
 
-import { Download, Plus, Trash2, Upload } from "lucide-react";
+import { Download, MoveRight, Plus, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { deleteWorld, duplicateWorld, importWorld, listWorlds, worldDownloadUrl } from "@/lib/api";
+import { deleteWorld, duplicateWorld, importWorld, listServers, listWorlds, migrateWorld, worldDownloadUrl } from "@/lib/api";
 import { localizeDifficulty, localizeRelativeTime, localizeWorldSize, useI18n } from "@/lib/i18n";
+import type { World } from "@/lib/types";
 
 export default function WorldsPage() {
   const { locale, t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
+  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const [targetServerId, setTargetServerId] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<World | null>(null);
   const worlds = query.data ?? [];
+  const servers = serversQuery.data ?? [];
+  const activeTargetServerId = targetServerId || servers[0]?.id || "";
 
   const upload = useMutation({
     mutationFn: (file: File) => importWorld(file),
     onSuccess: async () => {
+      setErrorMessage("");
       await client.invalidateQueries({ queryKey: ["worlds"] });
-      inputRef.current!.value = "";
+      if (inputRef.current) inputRef.current.value = "";
     },
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableImportWorld"))
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"))
   });
   const duplicate = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => duplicateWorld(id, name),
-    onSuccess: async () => client.invalidateQueries({ queryKey: ["worlds"] }),
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableDuplicateWorld"))
+    onSuccess: async () => {
+      setErrorMessage("");
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDuplicateWorld"))
   });
   const remove = useMutation({
     mutationFn: deleteWorld,
-    onSuccess: async () => client.invalidateQueries({ queryKey: ["worlds"] }),
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableDeleteWorld"))
+    onSuccess: async () => {
+      setErrorMessage("");
+      setPendingDelete(null);
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteWorld"))
+  });
+  const migrate = useMutation({
+    mutationFn: ({ id, instanceId }: { id: string; instanceId: string }) => migrateWorld(id, instanceId),
+    onSuccess: async () => {
+      setErrorMessage("");
+      await client.invalidateQueries({ queryKey: ["worlds"] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableMigrateWorld"))
   });
 
   return (
@@ -60,6 +84,18 @@ export default function WorldsPage() {
         }
       />
       {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p>}
+      {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+        <span>{t("migrationTarget")}</span>
+        <select
+          className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
+          value={activeTargetServerId}
+          onChange={(event) => setTargetServerId(event.target.value)}
+          disabled={servers.length === 0}
+        >
+          {servers.length === 0 ? <option>{t("noApiServers")}</option> : servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+        </select>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {worlds.map((world) => (
           <Card key={world.id} className="p-4">
@@ -92,10 +128,16 @@ export default function WorldsPage() {
                 </Button>
               </a>
               <Button
+                variant="secondary"
+                onClick={() => activeTargetServerId && migrate.mutate({ id: world.id, instanceId: activeTargetServerId })}
+                disabled={!activeTargetServerId || migrate.isPending || query.isError || serversQuery.isError}
+              >
+                <MoveRight aria-hidden="true" />
+                {t("migrate")}
+              </Button>
+              <Button
                 variant="danger"
-                onClick={() => {
-                  if (window.confirm(t("deleteWorldConfirm", { name: world.name }))) remove.mutate(world.id);
-                }}
+                onClick={() => setPendingDelete(world)}
                 disabled={remove.isPending || query.isError}
               >
                 <Trash2 aria-hidden="true" />
@@ -112,6 +154,23 @@ export default function WorldsPage() {
         </Card>
       </div>
       {!query.isLoading && worlds.length === 0 && <p className="mt-4 text-sm text-slate-400">{t("noWorldsYet")}</p>}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteWorldConfirm", { name: pendingDelete?.name ?? "" })}
+        description={t("confirmDeleteWorldDescription", { name: pendingDelete?.name ?? "" })}
+        detail={pendingDelete ? (
+          <>
+            <span className="text-slate-500">{t("world")}: </span>
+            <span className="font-medium text-white">{pendingDelete.name}</span>
+          </>
+        ) : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={remove.isPending ? t("actionWorking") : t("delete")}
+        busy={remove.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
+      />
     </AppShell>
   );
 }

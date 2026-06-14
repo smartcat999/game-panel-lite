@@ -4,10 +4,12 @@ import { Package, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
 import { deleteMod, listMods, listServers, uploadMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import type { ModFile } from "@/lib/types";
 
 export default function ModsPage() {
   const { locale, t } = useI18n();
@@ -16,21 +18,28 @@ export default function ModsPage() {
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const moddedServers = useMemo(() => (serversQuery.data ?? []).filter((server) => server.mode === "tmodloader"), [serversQuery.data]);
   const [selectedServerId, setSelectedServerId] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const activeServerId = selectedServerId || moddedServers[0]?.id || "";
   const modsQuery = useQuery({ queryKey: ["mods", activeServerId], queryFn: () => listMods(activeServerId), enabled: Boolean(activeServerId), retry: false });
 
   const upload = useMutation({
     mutationFn: (file: File) => uploadMod(activeServerId, file),
     onSuccess: async () => {
+      setErrorMessage("");
       await client.invalidateQueries({ queryKey: ["mods", activeServerId] });
-      inputRef.current!.value = "";
+      if (inputRef.current) inputRef.current.value = "";
     },
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableUploadMod"))
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableUploadMod"))
   });
   const remove = useMutation({
     mutationFn: (modId: string) => deleteMod(activeServerId, modId),
-    onSuccess: async () => client.invalidateQueries({ queryKey: ["mods", activeServerId] }),
-    onError: (error) => window.alert(error instanceof Error ? error.message : t("unableDeleteMod"))
+    onSuccess: async () => {
+      setErrorMessage("");
+      setPendingDelete(null);
+      await client.invalidateQueries({ queryKey: ["mods", activeServerId] });
+    },
+    onError: (error) => setErrorMessage(error instanceof Error ? error.message : t("unableDeleteMod"))
   });
 
   return (
@@ -66,6 +75,7 @@ export default function ModsPage() {
         }
       />
       {serversQuery.isError && <p className="mb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p>}
+      {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       <Card className="p-6 text-sm text-slate-400">
         {t("supportedModFiles")}
       </Card>
@@ -78,9 +88,7 @@ export default function ModsPage() {
             </div>
             <Button
               variant="danger"
-              onClick={() => {
-                if (window.confirm(t("deleteModConfirm", { name: item.fileName }))) remove.mutate(item.id);
-              }}
+              onClick={() => setPendingDelete(item)}
               disabled={remove.isPending}
             >
               <Trash2 aria-hidden="true" />
@@ -97,6 +105,23 @@ export default function ModsPage() {
           </Card>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteModConfirm", { name: pendingDelete?.fileName ?? "" })}
+        description={t("confirmDeleteModDescription", { name: pendingDelete?.fileName ?? "" })}
+        detail={pendingDelete ? (
+          <>
+            <span className="text-slate-500">{t("modsTitle")}: </span>
+            <span className="font-medium text-white">{pendingDelete.fileName}</span>
+          </>
+        ) : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={remove.isPending ? t("actionWorking") : t("delete")}
+        busy={remove.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
+      />
     </AppShell>
   );
 }

@@ -36,7 +36,7 @@ The frontend lives under `apps/web` and uses:
 - TanStack Query
 - Framer Motion for subtle wizard transitions
 
-The UI is a product dashboard, not a landing page. API-backed pages use mock fallback when the Go API is unavailable.
+The UI is a product dashboard, not a landing page. API-backed pages show loading, empty, and error states from real API calls instead of falling back to mock data.
 
 ## Data Layout
 

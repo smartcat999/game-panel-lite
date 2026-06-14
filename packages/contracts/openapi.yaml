@@ -19,10 +19,41 @@ paths:
           description: Product version
   /api/runtime/docker:
     get:
-      summary: Check Docker runtime availability
+      summary: Read cached Docker runtime availability
       responses:
         "200":
           description: Docker status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DockerStatus"
+  /api/runtime/docker/hosts:
+    get:
+      summary: List Docker host candidates
+      responses:
+        "200":
+          description: Docker host candidates
+  /api/runtime/docker/host:
+    post:
+      summary: Hot-apply Docker host
+      responses:
+        "200":
+          description: Docker status after reconnect
+  /api/settings:
+    get:
+      summary: Read local API settings
+      responses:
+        "200":
+          description: Local settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+    put:
+      summary: Update allowed local API settings
+      responses:
+        "200":
+          description: Updated local settings
   /api/servers:
     get:
       summary: List servers
@@ -87,18 +118,84 @@ paths:
       responses:
         "200":
           description: Deleted mod
+  /api/worlds:
+    get:
+      summary: List worlds
+      responses:
+        "200":
+          description: World list
+  /api/worlds/import:
+    post:
+      summary: Import .wld world file
+      responses:
+        "201":
+          description: Imported world
   /api/worlds/{id}/assign:
     post:
       summary: Assign world to server
       responses:
         "200":
           description: Assigned world
+  /api/worlds/{id}/download:
+    get:
+      summary: Download world file
+      responses:
+        "200":
+          description: World file
   /api/worlds/{id}/duplicate:
     post:
       summary: Duplicate world file
       responses:
         "201":
           description: Duplicated world
+  /api/worlds/{id}/migrate:
+    post:
+      summary: Migrate world file to another server instance
+      responses:
+        "201":
+          description: Migrated world
+  /api/worlds/{id}:
+    delete:
+      summary: Delete world file
+      responses:
+        "200":
+          description: Deleted world
+  /api/backups:
+    get:
+      summary: List backups
+      responses:
+        "200":
+          description: Backup list
+  /api/servers/{id}/backups:
+    post:
+      summary: Create manual backup
+      responses:
+        "201":
+          description: Created backup
+  /api/backups/{id}/restore:
+    post:
+      summary: Restore backup
+      responses:
+        "200":
+          description: Restored backup
+  /api/backups/{id}/migrate:
+    post:
+      summary: Migrate backup archive to another server instance
+      responses:
+        "201":
+          description: Migrated backup
+  /api/backups/{id}/download:
+    get:
+      summary: Download backup archive
+      responses:
+        "200":
+          description: Backup archive
+  /api/backups/{id}:
+    delete:
+      summary: Delete backup
+      responses:
+        "200":
+          description: Deleted backup
   /api/terraria/presets:
     get:
       summary: List Terraria server presets
@@ -132,6 +229,33 @@ paths:
           description: Invalid config
 components:
   schemas:
+    DockerStatus:
+      type: object
+      required: [available, message, host, lastCheckedAt]
+      properties:
+        available:
+          type: boolean
+        message:
+          type: string
+        host:
+          type: string
+        lastCheckedAt:
+          type: string
+          format: date-time
+    AppSettings:
+      type: object
+      required: [host, port, dataDir, dbPath, dockerHost]
+      properties:
+        host:
+          type: string
+        port:
+          type: string
+        dataDir:
+          type: string
+        dbPath:
+          type: string
+        dockerHost:
+          type: string
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, difficulty, maxPlayers, port, secure, language, autoCreateWorld]

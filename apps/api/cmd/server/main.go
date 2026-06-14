@@ -22,6 +22,7 @@ func main() {
 		logger.Error("failed to initialize app", "error", err)
 		os.Exit(1)
 	}
+	defer application.Close()
 
 	server := &http.Server{
 		Addr:              cfg.Addr(),

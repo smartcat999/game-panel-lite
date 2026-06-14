@@ -38,3 +38,28 @@ func TestDuplicateWorldCopiesWithinInstance(t *testing.T) {
 		t.Fatalf("expected copied content, got %q", string(got))
 	}
 }
+
+func TestMigrateWorldCopiesToTargetInstance(t *testing.T) {
+	root := t.TempDir()
+	service := NewService(root)
+	if _, _, err := service.Import("source", "good.wld", strings.NewReader("world")); err != nil {
+		t.Fatal(err)
+	}
+	path, size, err := service.Migrate("source", "good.wld", "target", "good.wld")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != 5 || filepath.Base(path) != "good.wld" {
+		t.Fatalf("expected migrated world, path=%s size=%d", path, size)
+	}
+	if gotDir := filepath.Base(filepath.Dir(path)); gotDir != "target" {
+		t.Fatalf("expected target instance directory, got %s", gotDir)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "world" {
+		t.Fatalf("expected migrated content, got %q", string(got))
+	}
+}

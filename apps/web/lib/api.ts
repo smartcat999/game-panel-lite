@@ -2,6 +2,25 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import type { Backup, ModFile, Server, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const DOCKER_CHECK_TIMEOUT_MS = 5000;
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = DOCKER_CHECK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error("Docker check timed out"));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([fetch(input, { ...init, signal: controller.signal }), timeoutPromise]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
 
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
   const response = await fetch(`${API_BASE}/api/terraria/config/preview`, {
@@ -127,12 +146,12 @@ export async function getServer(id: string): Promise<Server> {
   };
 }
 
-export async function getDockerStatus(): Promise<{ available: boolean; message: string; host: string }> {
-  const response = await fetch(`${API_BASE}/api/runtime/docker`, { cache: "no-store" });
+export async function getDockerStatus(): Promise<DockerStatus> {
+  const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load Docker status");
   }
-  return (await response.json()) as { available: boolean; message: string; host: string };
+  return (await response.json()) as DockerStatus;
 }
 
 export type DockerHostCandidate = {
@@ -143,8 +162,48 @@ export type DockerHostCandidate = {
   active: boolean;
 };
 
+export type DockerStatus = {
+  available: boolean;
+  message: string;
+  host: string;
+  lastCheckedAt?: string;
+};
+
+export type AppSettings = {
+  host: string;
+  port: string;
+  dataDir: string;
+  dbPath: string;
+  dockerHost: string;
+};
+
+export function serverLogsUrl(id: string) {
+  return `${API_BASE}/api/servers/${id}/logs`;
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const response = await fetch(`${API_BASE}/api/settings`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load settings");
+  }
+  return (await response.json()) as AppSettings;
+}
+
+export async function updateSettings(settings: Partial<Pick<AppSettings, "dockerHost">>): Promise<AppSettings> {
+  const response = await fetch(`${API_BASE}/api/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+  const payload = (await response.json().catch(() => ({}))) as AppSettings & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to update settings");
+  }
+  return payload;
+}
+
 export async function getDockerHosts(): Promise<{ currentHost: string; candidates: DockerHostCandidate[] }> {
-  const response = await fetch(`${API_BASE}/api/runtime/docker/hosts`, { cache: "no-store" });
+  const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker/hosts`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load Docker host candidates");
   }
@@ -152,7 +211,7 @@ export async function getDockerHosts(): Promise<{ currentHost: string; candidate
 }
 
 export async function applyDockerHost(host: string): Promise<{ available: boolean; message: string; host: string }> {
-  const response = await fetch(`${API_BASE}/api/runtime/docker/host`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker/host`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ host })
@@ -269,6 +328,28 @@ export async function duplicateWorld(id: string, name: string): Promise<World> {
   };
 }
 
+export async function migrateWorld(id: string, instanceId: string): Promise<World> {
+  const response = await fetch(`${API_BASE}/api/worlds/${id}/migrate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to migrate world");
+  }
+  const world = (await response.json()) as ApiWorld;
+  return {
+    id: world.id,
+    name: world.name,
+    size: world.fileName,
+    difficulty: "Imported",
+    server: world.activeInstanceId || world.instanceId,
+    modified: formatRelative(world.updatedAt ?? world.createdAt),
+    bytes: formatBytes(world.sizeBytes)
+  };
+}
+
 export async function deleteWorld(id: string) {
   const response = await fetch(`${API_BASE}/api/worlds/${id}`, { method: "DELETE" });
   if (!response.ok) {
@@ -324,6 +405,29 @@ export async function restoreBackup(id: string) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to restore backup");
   }
+}
+
+export async function migrateBackup(id: string, instanceId: string): Promise<Backup> {
+  const response = await fetch(`${API_BASE}/api/backups/${id}/migrate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to migrate backup");
+  }
+  const backup = (await response.json()) as ApiBackup;
+  return {
+    id: backup.id,
+    instanceId: backup.instanceId,
+    name: backup.fileName,
+    server: backup.instanceId,
+    world: backup.worldName,
+    type: backup.type,
+    size: formatBytes(backup.sizeBytes),
+    created: formatRelative(backup.createdAt)
+  };
 }
 
 export async function deleteBackup(id: string) {

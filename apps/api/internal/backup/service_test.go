@@ -84,3 +84,26 @@ func TestRestoreRejectsZipSlip(t *testing.T) {
 		t.Fatal("expected zip slip restore to fail")
 	}
 }
+
+func TestMigrateBackupCopiesToTargetInstance(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "instance")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "serverconfig.txt"), []byte("config"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(root)
+	backupPath, _, err := service.Create("source", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, size, err := service.Migrate("source", filepath.Base(backupPath), "target", filepath.Base(backupPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size == 0 || filepath.Base(filepath.Dir(path)) != "target" {
+		t.Fatalf("expected migrated backup in target dir, path=%s size=%d", path, size)
+	}
+}

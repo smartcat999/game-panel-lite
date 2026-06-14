@@ -12,20 +12,25 @@
 - Docker SDK runtime adapter.
 - Server list/create/detail/start/stop/restart/delete APIs.
 - SSE logs endpoint.
-- World import/list/download/delete APIs.
+- Server detail live log UI wired to the SSE endpoint.
+- World import/list/download/delete/migrate APIs.
 - Backup create/list/download/delete and restore APIs with running-server guardrails.
+- Backup migrate API.
 - tModLoader mod list/upload/delete APIs.
+- Local settings read/update API for safe Docker Host settings.
+- OpenAPI contract updated for runtime, settings, server, world, backup, mod, and config endpoints.
 - Next.js dashboard UI.
 - Dark gamer-friendly visual direction based on the reference image.
 - TanStack Query and Framer Motion usage in the frontend.
+- Playwright E2E smoke coverage for the Chinese app shell, Docker scan feedback, game cover/avatar rendering, and create-server wizard selection states.
+- Real Docker daemon status verification on OrbStack.
+- Real Vanilla Terraria Docker lifecycle verification through the Go API: create, start, clean SSE logs, auto-create world, listen on the configured port, TCP port probe, and delete cleanup.
+- Real tModLoader Docker lifecycle verification through the Go API: create, start, clean SSE logs, auto-create world from `/data/serverconfig.txt`, listen on the configured port, TCP port probe, and delete cleanup.
 - README, product spec, architecture doc, and progress log.
 
 ## Needs Manual Verification
 
-- Docker daemon lifecycle against real Terraria images.
-- Actual server join behavior from a Terraria client.
-- Backup restore extraction after running-server guardrails are added.
-- Playwright e2e flows after Playwright is configured.
+- Actual server join behavior from a Terraria client. Follow `docs/goals/V1_MANUAL_VERIFICATION.md`.
 
 ## Out of Scope for V1
 

@@ -1,6 +1,9 @@
 package provider
 
-import "github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+import (
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
+)
 
 type GameProvider interface {
 	Key() domain.ProviderKey
@@ -9,6 +12,7 @@ type GameProvider interface {
 	DefaultConfig() domain.TerrariaConfig
 	ValidateConfig(domain.TerrariaConfig) error
 	RenderConfig(domain.TerrariaConfig) (string, error)
+	RuntimeOptions(domain.TerrariaConfig) runtime.ContainerOptions
 }
 
 type Registry struct {

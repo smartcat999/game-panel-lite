@@ -47,7 +47,15 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 }
 
 func (s *Service) Duplicate(instanceID string, sourceName string, targetName string) (string, int64, error) {
-	source, err := s.Path(instanceID, sourceName)
+	return s.copy(instanceID, sourceName, instanceID, targetName)
+}
+
+func (s *Service) Migrate(sourceInstanceID string, sourceName string, targetInstanceID string, targetName string) (string, int64, error) {
+	return s.copy(sourceInstanceID, sourceName, targetInstanceID, targetName)
+}
+
+func (s *Service) copy(sourceInstanceID string, sourceName string, targetInstanceID string, targetName string) (string, int64, error) {
+	source, err := s.Path(sourceInstanceID, sourceName)
 	if err != nil {
 		return "", 0, err
 	}
@@ -55,8 +63,11 @@ func (s *Service) Duplicate(instanceID string, sourceName string, targetName str
 	if err != nil {
 		return "", 0, err
 	}
-	targetDir, err := safety.SafeJoin(s.dataDir, "worlds", instanceID)
+	targetDir, err := safety.SafeJoin(s.dataDir, "worlds", targetInstanceID)
 	if err != nil {
+		return "", 0, err
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return "", 0, err
 	}
 	target := filepath.Join(targetDir, safeTarget)

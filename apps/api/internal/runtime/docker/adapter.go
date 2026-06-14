@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -51,14 +53,28 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 	if err := os.WriteFile(filepath.Join(spec.DataDir, "serverconfig.txt"), []byte(spec.ConfigText), 0o600); err != nil {
 		return "", err
 	}
-	_, _ = a.client.ImagePull(ctx, spec.Image, types.ImagePullOptions{})
+	for name, content := range spec.Options.Files {
+		if err := writeDataFile(spec.DataDir, name, content); err != nil {
+			return "", err
+		}
+	}
+	pull, err := a.client.ImagePull(ctx, spec.Image, types.ImagePullOptions{})
+	if err != nil {
+		return "", err
+	}
+	defer pull.Close()
+	if _, err := io.Copy(io.Discard, pull); err != nil {
+		return "", err
+	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image: spec.Image,
+		Env:   spec.Options.Env,
+		Cmd:   spec.Options.Cmd,
 		Labels: map[string]string{
 			"gamepanel.instance": spec.InstanceID,
 		},
 	}, &container.HostConfig{
-		Binds:        []string{fmt.Sprintf("%s:/data", spec.DataDir)},
+		Binds:        dataBinds(spec.DataDir, spec.Options.DataMounts),
 		PortBindings: natPortMap(spec.Port),
 	}, nil, nil, "gamepanel-"+spec.InstanceID)
 	if err != nil {
@@ -97,7 +113,43 @@ func (a *Adapter) Inspect(ctx context.Context, instance domain.GameServerInstanc
 }
 
 func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
-	return a.client.ContainerLogs(ctx, instance.ContainerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "120"})
+	stream, err := a.client.ContainerLogs(ctx, instance.ContainerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "120"})
+	if err != nil {
+		return nil, err
+	}
+	reader, writer := io.Pipe()
+	go func() {
+		defer stream.Close()
+		_, copyErr := stdcopy.StdCopy(writer, writer, stream)
+		_ = writer.CloseWithError(copyErr)
+	}()
+	return reader, nil
+}
+
+func writeDataFile(dataDir string, name string, content string) error {
+	clean := filepath.Clean(name)
+	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean == ".." {
+		return fmt.Errorf("invalid container data file path: %s", name)
+	}
+	target := filepath.Join(dataDir, clean)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(target, []byte(content), 0o600)
+}
+
+func dataBinds(dataDir string, mounts []string) []string {
+	if len(mounts) == 0 {
+		mounts = []string{"/data"}
+	}
+	binds := make([]string, 0, len(mounts))
+	for _, mount := range mounts {
+		if mount == "" {
+			continue
+		}
+		binds = append(binds, fmt.Sprintf("%s:%s", dataDir, mount))
+	}
+	return binds
 }
 
 func natPortMap(port int) nat.PortMap {

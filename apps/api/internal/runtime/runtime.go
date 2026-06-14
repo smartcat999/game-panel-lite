@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
@@ -14,12 +15,21 @@ type ContainerSpec struct {
 	Port       int
 	DataDir    string
 	ConfigText string
+	Options    ContainerOptions
+}
+
+type ContainerOptions struct {
+	Env        []string
+	Cmd        []string
+	DataMounts []string
+	Files      map[string]string
 }
 
 type DockerStatus struct {
-	Available bool   `json:"available"`
-	Message   string `json:"message"`
-	Host      string `json:"host"`
+	Available     bool      `json:"available"`
+	Message       string    `json:"message"`
+	Host          string    `json:"host"`
+	LastCheckedAt time.Time `json:"lastCheckedAt"`
 }
 
 type Adapter interface {

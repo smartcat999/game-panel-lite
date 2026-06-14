@@ -32,6 +32,7 @@ type Handler struct {
 	store          *store.Store
 	provider       *provider.Registry
 	runtime        *runtime.SwitchableAdapter
+	dockerMonitor  *runtime.DockerMonitor
 	runtimeFactory func(string) (runtime.Adapter, error)
 }
 
@@ -41,6 +42,7 @@ func NewHandler(
 	store *store.Store,
 	providers *provider.Registry,
 	adapter *runtime.SwitchableAdapter,
+	dockerMonitor *runtime.DockerMonitor,
 	runtimeFactory func(string) (runtime.Adapter, error),
 ) *Handler {
 	return &Handler{
@@ -49,6 +51,7 @@ func NewHandler(
 		store:          store,
 		provider:       providers,
 		runtime:        adapter,
+		dockerMonitor:  dockerMonitor,
 		runtimeFactory: runtimeFactory,
 	}
 }
@@ -60,6 +63,8 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/runtime/docker", h.dockerStatus)
 	r.Get("/api/runtime/docker/hosts", h.dockerHosts)
 	r.Post("/api/runtime/docker/host", h.applyDockerHost)
+	r.Get("/api/settings", h.getSettings)
+	r.Put("/api/settings", h.updateSettings)
 	r.Get("/api/servers", h.listServers)
 	r.Post("/api/servers", h.createServer)
 	r.Get("/api/servers/{id}", h.getServer)
@@ -72,11 +77,13 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/worlds/import", h.importWorld)
 	r.Post("/api/worlds/{id}/assign", h.assignWorld)
 	r.Post("/api/worlds/{id}/duplicate", h.duplicateWorld)
+	r.Post("/api/worlds/{id}/migrate", h.migrateWorld)
 	r.Get("/api/worlds/{id}/download", h.downloadWorld)
 	r.Delete("/api/worlds/{id}", h.deleteWorld)
 	r.Get("/api/backups", h.listBackups)
 	r.Post("/api/servers/{id}/backups", h.createBackup)
 	r.Get("/api/backups/{id}/download", h.downloadBackup)
+	r.Post("/api/backups/{id}/migrate", h.migrateBackup)
 	r.Post("/api/backups/{id}/restore", h.restoreBackup)
 	r.Delete("/api/backups/{id}", h.deleteBackup)
 	r.Get("/api/servers/{id}/mods", h.listMods)
@@ -244,6 +251,44 @@ func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, copy)
 }
 
+func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "world not found")
+		return
+	}
+	var payload struct {
+		InstanceID string `json:"instanceId"`
+		FileName   string `json:"fileName"`
+		Name       string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.InstanceID == "" {
+		writeError(w, http.StatusBadRequest, "instanceId is required")
+		return
+	}
+	if _, err := h.store.GetServer(r.Context(), payload.InstanceID); err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if payload.FileName == "" {
+		payload.FileName = item.FileName
+	}
+	if payload.Name == "" {
+		payload.Name = item.Name
+	}
+	_, size, err := worldsvc.NewService(h.cfg.DataDir).Migrate(item.InstanceID, item.FileName, payload.InstanceID, payload.FileName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	migrated := domain.World{ID: uuid.NewString(), InstanceID: payload.InstanceID, Name: payload.Name, FileName: payload.FileName, SizeBytes: size, ActiveInstanceID: payload.InstanceID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := h.store.CreateWorld(r.Context(), &migrated); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, migrated)
+}
+
 func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -320,6 +365,41 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "restored", "backupId": item.ID})
 }
 
+func (h *Handler) migrateBackup(w http.ResponseWriter, r *http.Request) {
+	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "backup not found")
+		return
+	}
+	var payload struct {
+		InstanceID string `json:"instanceId"`
+		FileName   string `json:"fileName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.InstanceID == "" {
+		writeError(w, http.StatusBadRequest, "instanceId is required")
+		return
+	}
+	targetServer, err := h.store.GetServer(r.Context(), payload.InstanceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if payload.FileName == "" {
+		payload.FileName = item.FileName
+	}
+	_, size, err := backupsvc.NewService(h.cfg.DataDir).Migrate(item.InstanceID, item.FileName, payload.InstanceID, payload.FileName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	migrated := domain.Backup{ID: uuid.NewString(), InstanceID: payload.InstanceID, FileName: payload.FileName, WorldName: targetServer.WorldName, SizeBytes: size, Type: item.Type, CreatedAt: time.Now()}
+	if err := h.store.CreateBackup(r.Context(), &migrated); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, migrated)
+}
+
 func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -354,7 +434,7 @@ func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) dockerStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.runtime.Check(r.Context()))
+	writeJSON(w, http.StatusOK, h.dockerMonitor.Status())
 }
 
 func (h *Handler) dockerHosts(w http.ResponseWriter, r *http.Request) {
@@ -384,7 +464,45 @@ func (h *Handler) applyDockerHost(w http.ResponseWriter, r *http.Request) {
 	}
 	h.runtime.Set(adapter)
 	h.cfg.DockerHost = host
-	writeJSON(w, http.StatusOK, h.runtime.Check(r.Context()))
+	writeJSON(w, http.StatusOK, h.dockerMonitor.Refresh(r.Context()))
+}
+
+func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"host":       h.cfg.Host,
+		"port":       h.cfg.Port,
+		"dataDir":    h.cfg.DataDir,
+		"dbPath":     h.cfg.DBPath,
+		"dockerHost": h.cfg.DockerHost,
+	})
+}
+
+func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		DockerHost string `json:"dockerHost"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	host := strings.TrimSpace(payload.DockerHost)
+	if host == "" {
+		writeError(w, http.StatusBadRequest, "dockerHost is required")
+		return
+	}
+	if !isAllowedDockerHost(host) {
+		writeError(w, http.StatusBadRequest, "docker host must start with unix://, tcp://, or npipe://")
+		return
+	}
+	adapter, err := h.runtimeFactory(host)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	h.runtime.Set(adapter)
+	h.cfg.DockerHost = host
+	h.dockerMonitor.Refresh(r.Context())
+	h.getSettings(w, r)
 }
 
 func isAllowedDockerHost(host string) bool {
@@ -450,7 +568,15 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir,
 		Config: payload.Config, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
-	containerID, err := h.runtime.Create(r.Context(), runtime.ContainerSpec{InstanceID: id, Name: payload.Name, Image: gameProvider.Image(), Port: payload.Config.Port, DataDir: dataDir, ConfigText: configText})
+	containerID, err := h.runtime.Create(r.Context(), runtime.ContainerSpec{
+		InstanceID: id,
+		Name:       payload.Name,
+		Image:      gameProvider.Image(),
+		Port:       payload.Config.Port,
+		DataDir:    dataDir,
+		ConfigText: configText,
+		Options:    gameProvider.RuntimeOptions(payload.Config),
+	})
 	if err != nil {
 		h.logger.Warn("container create failed; keeping server record stopped", "error", err)
 	} else {
