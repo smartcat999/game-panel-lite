@@ -9,6 +9,7 @@ import { Button, Card } from "@/components/ui";
 import { createBackup, deleteBackup, downloadBackupFile, listBackups, listServers, migrateBackup, restoreBackup } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { getMigrationTargetServers, resolveMigrationTargetId } from "@/lib/server-detail-resources";
 import type { Backup } from "@/lib/types";
 
 export default function BackupsPage() {
@@ -17,7 +18,7 @@ export default function BackupsPage() {
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const [selectedServerId, setSelectedServerId] = useState("");
-  const [targetServerId, setTargetServerId] = useState("");
+  const [targetServerIds, setTargetServerIds] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
@@ -27,7 +28,6 @@ export default function BackupsPage() {
   const servers = serversQuery.data ?? [];
   const backups = backupsQuery.data ?? [];
   const activeServerId = selectedServerId || servers[0]?.id || "";
-  const activeTargetServerId = targetServerId || servers[0]?.id || "";
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
   const runningServerIds = useMemo(() => new Set(servers.filter((server) => server.status === "running").map((server) => server.id)), [servers]);
 
@@ -132,70 +132,72 @@ export default function BackupsPage() {
       {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
-      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-        <span>{t("migrationTarget")}</span>
-        <select
-          className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
-          value={activeTargetServerId}
-          onChange={(event) => setTargetServerId(event.target.value)}
-          disabled={servers.length === 0}
-        >
-          {servers.length === 0 ? <option>{t("noApiServers")}</option> : servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-        </select>
-      </div>
-      <Card className="overflow-hidden">
-        <table className="w-full text-left text-sm">
+      <Card className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="bg-slate-950/50 text-xs text-slate-400">
             <tr>{[t("backupName"), t("server"), t("world"), t("type"), t("size"), t("created"), t("actions")].map((head) => <th key={head} className="px-4 py-3 font-medium">{head}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-panel-line">
-            {backups.map((backup) => (
-              <tr key={backup.id}>
-                <td className="px-4 py-4">{backup.name}</td>
-                <td className="px-4 py-4 text-slate-300">{backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server}</td>
-                <td className="px-4 py-4 text-slate-300">{backup.world}</td>
-                <td className="px-4 py-4 text-slate-300">{backup.type === "Auto" ? t("typeAuto") : t("typeManual")}</td>
-                <td className="px-4 py-4 text-slate-300">{backup.size}</td>
-                <td className="px-4 py-4 text-slate-300">{localizeRelativeTime(backup.created, locale)}</td>
-                <td className="px-4 py-4">
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      aria-label={t("restore")}
-                      onClick={() => setPendingRestore(backup)}
-                      disabled={restore.isPending || backupsQuery.isError || Boolean(backup.instanceId && runningServerIds.has(backup.instanceId))}
-                      title={backup.instanceId && runningServerIds.has(backup.instanceId) ? t("restoreRequiresStopped") : undefined}
-                    >
-                      <RotateCcw aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      aria-label={t("download")}
-                      onClick={() => void downloadBackup(backup)}
-                      disabled={backupsQuery.isError || downloadingBackupId === backup.id}
-                    >
-                      <Download aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      aria-label={t("migrate")}
-                      onClick={() => activeTargetServerId && migrate.mutate({ id: backup.id, instanceId: activeTargetServerId })}
-                      disabled={!activeTargetServerId || migrate.isPending || backupsQuery.isError || serversQuery.isError}
-                    >
-                      <MoveRight aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      aria-label={t("delete")}
-                      onClick={() => setPendingDelete(backup)}
-                      disabled={remove.isPending || backupsQuery.isError}
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {backups.map((backup) => {
+              const targetServers = getMigrationTargetServers(servers, backup.instanceId);
+              const targetServerId = resolveMigrationTargetId(servers, targetServerIds[backup.id] ?? "", backup.instanceId);
+              return (
+                <tr key={backup.id}>
+                  <td className="px-4 py-4">{backup.name}</td>
+                  <td className="px-4 py-4 text-slate-300">{backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server}</td>
+                  <td className="px-4 py-4 text-slate-300">{backup.world}</td>
+                  <td className="px-4 py-4 text-slate-300">{backup.type === "Auto" ? t("typeAuto") : t("typeManual")}</td>
+                  <td className="px-4 py-4 text-slate-300">{backup.size}</td>
+                  <td className="px-4 py-4 text-slate-300">{localizeRelativeTime(backup.created, locale)}</td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        aria-label={t("restore")}
+                        onClick={() => setPendingRestore(backup)}
+                        disabled={restore.isPending || backupsQuery.isError || Boolean(backup.instanceId && runningServerIds.has(backup.instanceId))}
+                        title={backup.instanceId && runningServerIds.has(backup.instanceId) ? t("restoreRequiresStopped") : undefined}
+                      >
+                        <RotateCcw aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        aria-label={t("download")}
+                        onClick={() => void downloadBackup(backup)}
+                        disabled={backupsQuery.isError || downloadingBackupId === backup.id}
+                      >
+                        <Download aria-hidden="true" />
+                      </Button>
+                      <select
+                        aria-label={t("migrationTarget")}
+                        className="h-10 max-w-48 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
+                        value={targetServerId}
+                        onChange={(event) => setTargetServerIds((current) => ({ ...current, [backup.id]: event.target.value }))}
+                        disabled={targetServers.length === 0 || serversQuery.isError}
+                      >
+                        {targetServers.length === 0 ? <option value="">{t("noOtherServers")}</option> : targetServers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+                      </select>
+                      <Button
+                        variant="secondary"
+                        aria-label={t("migrate")}
+                        onClick={() => targetServerId && migrate.mutate({ id: backup.id, instanceId: targetServerId })}
+                        disabled={!targetServerId || migrate.isPending || backupsQuery.isError || serversQuery.isError}
+                      >
+                        <MoveRight aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="danger"
+                        aria-label={t("delete")}
+                        onClick={() => setPendingDelete(backup)}
+                        disabled={remove.isPending || backupsQuery.isError}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {!backupsQuery.isLoading && backups.length === 0 && (
               <tr>
                 <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>{t("noBackupsYet")}</td>

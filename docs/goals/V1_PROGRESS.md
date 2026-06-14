@@ -1146,6 +1146,26 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
 - `git diff --check`: passed.
 
+## V1 Resource Page Action Targeting Update
+
+Status: Completed
+
+Completed:
+- Changed Worlds and Backups migration controls from a single page-level target to per-row target selectors.
+- Migration target options now exclude the resource's source server, so clicking migrate no longer silently copies a world or backup back to the same server.
+- Added frontend helper coverage for resolving valid migration targets and falling back away from invalid same-source selections.
+- Made Mods page toggle/delete actions use each mod file's own `instanceId` instead of the currently selected server, preventing stale selection state from sending actions to the wrong server endpoint.
+- Made the Backups table horizontally scroll on narrow layouts after adding per-row target controls.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test -- server-detail-resources.test.ts`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
 ## V1 Server Detail Logs and Mod Idempotency Update
 
 Status: Completed

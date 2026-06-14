@@ -52,7 +52,7 @@ export default function ModsPage() {
     }
   });
   const remove = useMutation({
-    mutationFn: (modId: string) => deleteMod(activeServerId, modId),
+    mutationFn: ({ serverId, modId }: { serverId: string; modId: string }) => deleteMod(serverId, modId),
     onSuccess: async () => {
       setErrorMessage("");
       setSuccessMessage(t("modDeleted"));
@@ -78,7 +78,7 @@ export default function ModsPage() {
     }
   });
   const toggle = useMutation({
-    mutationFn: ({ modId, enabled }: { modId: string; enabled: boolean }) => setModEnabled(activeServerId, modId, enabled),
+    mutationFn: ({ serverId, modId, enabled }: { serverId: string; modId: string; enabled: boolean }) => setModEnabled(serverId, modId, enabled),
     onSuccess: async (mod) => {
       setErrorMessage("");
       setSuccessMessage(mod.enabled ? t("modEnabled") : t("modDisabled"));
@@ -201,7 +201,7 @@ export default function ModsPage() {
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => toggle.mutate({ modId: item.id, enabled: !item.enabled })}
+                    onClick={() => toggle.mutate({ serverId: item.instanceId, modId: item.id, enabled: !item.enabled })}
                     disabled={toggle.isPending}
                   >
                     <Power aria-hidden="true" />
@@ -250,7 +250,14 @@ export default function ModsPage() {
         confirmLabel={(pendingDelete?.instanceId === "unassigned" ? removeGlobal : remove).isPending ? t("actionWorking") : t("delete")}
         busy={(pendingDelete?.instanceId === "unassigned" ? removeGlobal : remove).isPending}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => pendingDelete && (pendingDelete.instanceId === "unassigned" ? removeGlobal : remove).mutate(pendingDelete.id)}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          if (pendingDelete.instanceId === "unassigned") {
+            removeGlobal.mutate(pendingDelete.id);
+            return;
+          }
+          remove.mutate({ serverId: pendingDelete.instanceId, modId: pendingDelete.id });
+        }}
       />
     </>
   );

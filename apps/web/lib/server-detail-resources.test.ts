@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDetailTargetServers, nextWorldCopyName } from "./server-detail-resources";
+import { getDetailTargetServers, getMigrationTargetServers, nextWorldCopyName, resolveMigrationTargetId } from "./server-detail-resources";
 import type { Server } from "./types";
 
 const baseServer: Server = {
@@ -50,5 +50,29 @@ describe("server detail resource helpers", () => {
 
   it("creates a localized default world copy name", () => {
     expect(nextWorldCopyName("Home", "副本")).toBe("Home 副本");
+  });
+
+  it("removes the source server from per-resource migration targets", () => {
+    const targets = getMigrationTargetServers(
+      [
+        baseServer,
+        { ...baseServer, id: "server-2", name: "Builder Server" }
+      ],
+      "server-1"
+    );
+
+    expect(targets.map((server) => server.id)).toEqual(["server-2"]);
+  });
+
+  it("falls back to the first valid migration target when the selected target is the source server", () => {
+    const servers = [
+      baseServer,
+      { ...baseServer, id: "server-2", name: "Builder Server" },
+      { ...baseServer, id: "server-3", name: "Expert Server" }
+    ];
+
+    expect(resolveMigrationTargetId(servers, "server-1", "server-1")).toBe("server-2");
+    expect(resolveMigrationTargetId(servers, "server-3", "server-1")).toBe("server-3");
+    expect(resolveMigrationTargetId([baseServer], "server-1", "server-1")).toBe("");
   });
 });
