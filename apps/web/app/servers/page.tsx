@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
@@ -25,6 +25,9 @@ export default function ServersPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const servers = query.data ?? [];
+  useEffect(() => {
+    setSearch(new URLSearchParams(window.location.search).get("search") ?? "");
+  }, []);
   const filteredServers = useMemo(() => {
     const term = search.trim().toLowerCase();
     return servers.filter((server) => {

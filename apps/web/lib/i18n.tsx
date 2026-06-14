@@ -7,6 +7,7 @@ type Locale = "zh" | "en";
 const messages = {
   zh: {
     searchServers: "搜索服务器...",
+    noSearchResults: "没有匹配的服务器",
     docker: "Docker",
     online: "在线",
     dockerCheckingShort: "检查中",
@@ -311,6 +312,7 @@ const messages = {
   },
   en: {
     searchServers: "Search servers...",
+    noSearchResults: "No matching servers",
     docker: "Docker",
     online: "Online",
     dockerCheckingShort: "Checking",

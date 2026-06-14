@@ -5,11 +5,11 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { getApiHealth } from "@/lib/api";
+import { getApiHealth, listServers } from "@/lib/api";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
@@ -26,9 +26,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { locale, setLocale, t } = useI18n();
   const [createPending, setCreatePending] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLFormElement>(null);
   const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
+  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
   const serviceAvailable = apiHealth.data?.status === "ok";
   const serviceLabel = serviceAvailable ? t("online") : apiHealth.isLoading ? t("dockerCheckingShort") : t("unavailable");
+  const searchTerm = search.trim().toLowerCase();
+  const searchResults = useMemo(() => {
+    if (!searchTerm) return [];
+    return (serversQuery.data ?? [])
+      .filter((server) => [server.name, server.world, String(server.port), server.mode].some((value) => value.toLowerCase().includes(searchTerm)))
+      .slice(0, 5);
+  }, [searchTerm, serversQuery.data]);
 
   useEffect(() => {
     setCreatePending(false);
@@ -38,6 +49,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     nav.forEach((item) => router.prefetch(item.href));
     router.prefetch("/servers/new");
   }, [router]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!searchRef.current?.contains(event.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  const openServer = (id: string) => {
+    setSearchOpen(false);
+    setSearch("");
+    router.push(`/servers/${id}`);
+  };
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (searchResults[0]) {
+      openServer(searchResults[0].id);
+      return;
+    }
+    if (searchTerm) {
+      router.push(`/servers?search=${encodeURIComponent(search.trim())}`);
+      setSearchOpen(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
@@ -86,10 +125,49 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 border-b border-panel-line bg-panel-bg/95 px-4 py-3 backdrop-blur md:px-8">
           <div className="flex items-center gap-4">
-            <div className="relative max-w-md flex-1">
+            <form ref={searchRef} className="relative max-w-md flex-1" onSubmit={submitSearch}>
               <Search className="pointer-events-none absolute left-3 top-2.5 text-slate-500" aria-hidden="true" />
-              <Input className="w-full pl-10" placeholder={t("searchServers")} />
-            </div>
+              <Input
+                aria-label={t("searchServers")}
+                autoComplete="off"
+                className="w-full pl-10"
+                placeholder={t("searchServers")}
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+              />
+              {searchOpen && search.trim().length > 0 && (
+                <div className="absolute left-0 right-0 top-12 z-30 overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_12px_32px_rgba(0,0,0,0.32)]">
+                  {serversQuery.isLoading ? (
+                    <p className="px-3 py-3 text-sm text-slate-400">{t("loading")}</p>
+                  ) : serversQuery.isError ? (
+                    <p className="px-3 py-3 text-sm text-panel-gold">{t("apiServersUnavailable")}</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-slate-400">{t("noSearchResults")}</p>
+                  ) : (
+                    <div className="py-1">
+                      {searchResults.map((server) => (
+                        <button
+                          key={server.id}
+                          type="button"
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-slate-800/80"
+                          onClick={() => openServer(server.id)}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-white">{server.name}</span>
+                            <span className="block truncate text-xs text-slate-500">{server.world} · {server.port}</span>
+                          </span>
+                          <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{server.mode === "tmodloader" ? "tModLoader" : "Vanilla"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </form>
             <div className="ml-auto flex shrink-0 items-center gap-3">
               <div className="hidden shrink-0 items-center gap-2 text-xs text-slate-300 sm:flex">
                 <span

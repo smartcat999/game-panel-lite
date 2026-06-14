@@ -949,3 +949,22 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Top-Bar Search Interaction Update
+
+Status: Completed
+
+Completed:
+- Turned the top-bar server search field into a real quick-jump interaction backed by the server API.
+- Search results show matching server name, world, port, and mode; clicking a result navigates directly to that server detail page.
+- Pressing Enter opens the first match, or falls back to the Servers page with the search term applied.
+- The Servers page now reads a `search` query parameter on the client and applies it to the existing local filter.
+- Removed the unused legacy `ServerDetailView` static component so stale mock-like detail UI cannot be accidentally reintroduced.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed after replacing `useSearchParams` with a client-side URL read to avoid a Next.js Suspense build error.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
