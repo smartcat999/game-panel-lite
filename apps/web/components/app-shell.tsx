@@ -50,6 +50,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    if (!createPending) return;
+    const timeout = window.setTimeout(() => setCreatePending(false), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [createPending]);
+
+  useEffect(() => {
     nav.forEach((item) => router.prefetch(item.href));
     router.prefetch("/servers/new");
   }, [router]);
@@ -167,7 +173,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                             <span className="block truncate text-sm font-medium text-white">{server.name}</span>
                             <span className="block truncate text-xs text-slate-500">{server.world} · {serverJoinPort(server)}</span>
                           </span>
-                          <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{server.mode === "tmodloader" ? "tModLoader" : "Vanilla"}</span>
+                          <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{server.mode === "tmodloader" ? "tModLoader" : t("modeVanilla")}</span>
                         </button>
                       ))}
                     </div>

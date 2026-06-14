@@ -1188,6 +1188,22 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web typecheck`: failed when run in parallel with `pnpm build` because `.next/types` was being regenerated, then passed when rerun after build completed.
 - `git diff --check`: passed.
 
+## V1 App Shell Interaction Polish Update
+
+Status: Completed
+
+Completed:
+- Added a timeout fallback for the top-bar create-server pending state so the button cannot stay stuck on "opening" if navigation does not complete or the user is already on the create route.
+- Localized the server search result mode label instead of hardcoding the Vanilla label in the app shell.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
 ## V1 Server Detail Logs and Mod Idempotency Update
 
 Status: Completed
