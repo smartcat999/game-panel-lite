@@ -529,6 +529,8 @@ func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := os.Stat(path); err != nil {
+		h.logger.Warn("world file missing during download, pruning orphaned record", "worldId", item.ID, "path", path)
+		_ = h.store.DeleteWorld(r.Context(), item.ID)
 		writeError(w, http.StatusNotFound, "world file not found on disk")
 		return
 	}
@@ -813,6 +815,8 @@ func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := os.Stat(path); err != nil {
+		h.logger.Warn("backup file missing during download, pruning orphaned record", "backupId", item.ID, "path", path)
+		_ = h.store.DeleteBackup(r.Context(), item.ID)
 		writeError(w, http.StatusNotFound, "backup file not found on disk")
 		return
 	}

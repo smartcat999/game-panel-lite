@@ -1357,6 +1357,9 @@ func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
 	if !strings.Contains(download.Body.String(), "world file not found on disk") {
 		t.Fatalf("expected JSON missing file error, got %q", download.Body.String())
 	}
+	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing world record deleted after download miss, got err=%v", err)
+	}
 
 	list := httptest.NewRecorder()
 	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/worlds", nil))
@@ -1369,9 +1372,6 @@ func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
 	}
 	if len(worlds) != 0 {
 		t.Fatalf("expected missing world record to be pruned, got %+v", worlds)
-	}
-	if _, err := db.GetWorld(context.Background(), world.ID); err == nil {
-		t.Fatal("expected missing world record deleted")
 	}
 }
 
@@ -1620,6 +1620,34 @@ func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "backups", "backup-source", backup.FileName)); !os.IsNotExist(err) {
 		t.Fatalf("expected backup archive deleted, stat err=%v", err)
+	}
+}
+
+func TestDownloadBackupPrunesMissingFileRecord(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	backup := domain.Backup{
+		ID:         "missing-backup",
+		InstanceID: "backup-source",
+		FileName:   "missing.zip",
+		WorldName:  "Missing",
+		SizeBytes:  5,
+		Type:       "Manual",
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateBackup(context.Background(), &backup); err != nil {
+		t.Fatal(err)
+	}
+
+	download := httptest.NewRecorder()
+	router.ServeHTTP(download, httptest.NewRequest(stdhttp.MethodGet, "/api/backups/missing-backup/download", nil))
+	if download.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing backup download 404, got %d: %s", download.Code, download.Body.String())
+	}
+	if !strings.Contains(download.Body.String(), "backup file not found on disk") {
+		t.Fatalf("expected JSON missing file error, got %q", download.Body.String())
+	}
+	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected missing backup record deleted after download miss, got err=%v", err)
 	}
 }
 

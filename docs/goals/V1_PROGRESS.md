@@ -1852,3 +1852,22 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Missing Download Record Cleanup Update
+
+Status: Completed
+
+Completed:
+- World and backup download endpoints now prune orphaned database records when the managed file is missing on disk.
+- This prevents stale cached rows from continuing to appear as actionable resources after a failed download reveals the file is gone.
+- Added backend HTTP coverage for missing world and backup download cleanup.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(WorldListPrunesMissingFilesAndDownloadReturnsJSONError|DownloadBackupPrunesMissingFileRecord)' -count=1`: failed first because missing download records remained in the database, then passed after pruning was added.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(WorldImportListDownloadDuplicateAndDeleteEndpoints|WorldListPrunesMissingFilesAndDownloadReturnsJSONError|BackupCreateListDownloadRestoreAndDeleteEndpoints|DownloadBackupPrunesMissingFileRecord|DeleteBackupKeepsRecordWhenFileRemovalFails)' -count=1`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
