@@ -1123,6 +1123,29 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Server Detail Reliability Update
+
+Status: Completed
+
+Completed:
+- Made stopped-server log snapshots resilient when the old runtime container is missing; the API now clears the stale container id and returns an empty log history instead of breaking the detail page with a Docker error.
+- Added backend coverage for stopped servers whose persisted container id no longer exists.
+- Removed the route-level refresh after start, stop, and restart actions; server detail now relies on TanStack Query cache updates/invalidation so lifecycle actions feel immediate and do not shake the page.
+- Added frontend coverage proving lifecycle actions stay on the current route while delete from the current detail page still returns to the server list.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestStoppedServerLogSnapshotToleratesMissingRuntimeContainer -count=1`: failed first, then passed after the log snapshot fallback was added.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'Test(ServerLifecycleAndLogEndpoints|RunningServerCommandAndLogsRecreateMissingRuntimeContainer|StopServerClearsMissingRuntimeContainer)' -count=1`: passed.
+- `pnpm --filter @gamepanel-lite/web test -- server-action-flow.test.ts`: passed.
+- `gofmt -w apps/api/internal/http/handler.go apps/api/internal/http/handler_test.go`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+- `git diff --check`: passed.
+
 ## V1 Server Detail Logs and Mod Idempotency Update
 
 Status: Completed

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
+import { serverActionRedirectPath } from "@/lib/server-action-flow";
 import { useI18n } from "@/lib/i18n";
 import { serverInviteText } from "@/lib/server-join";
 import type { Server } from "@/lib/types";
@@ -49,10 +50,9 @@ export function ServerActions({ server }: { server: Server }) {
       await client.invalidateQueries({ queryKey: ["servers"] });
       await client.invalidateQueries({ queryKey: ["server", server.id] });
       setSuccessMessage(successLabel(action));
-      if (action === "delete" && pathname === `/servers/${server.id}`) {
-        router.push("/servers");
-      } else {
-        router.refresh();
+      const redirectPath = serverActionRedirectPath(action, pathname, server.id);
+      if (redirectPath) {
+        router.push(redirectPath);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : t("unableAction", { action: actionLabel(action) }));

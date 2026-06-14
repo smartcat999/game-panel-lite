@@ -1338,9 +1338,27 @@ func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	if server.Status != domain.StatusRunning && server.ContainerID != "" {
+		if _, err := h.runtime.Inspect(r.Context(), server); err != nil {
+			h.logger.Warn("stopped server log snapshot found stale runtime container; clearing container id", "server", server.ID, "container", server.ContainerID, "error", err)
+			server.ContainerID = ""
+			server.UpdatedAt = time.Now()
+			if saveErr := h.store.SaveServer(r.Context(), &server); saveErr != nil {
+				writeError(w, http.StatusInternalServerError, saveErr.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{}})
+			return
+		}
+	}
 	server.Status = domain.StatusStopped
 	stream, err := h.runtime.Logs(r.Context(), server)
 	if err != nil {
+		if server.Status != domain.StatusRunning {
+			h.logger.Warn("stopped server log snapshot unavailable; returning empty history", "server", server.ID, "error", err)
+			writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{}})
+			return
+		}
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}

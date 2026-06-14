@@ -363,6 +363,39 @@ func TestRunningServerCommandAndLogsRecreateMissingRuntimeContainer(t *testing.T
 	}
 }
 
+func TestStoppedServerLogSnapshotToleratesMissingRuntimeContainer(t *testing.T) {
+	adapter := &staleContainerAdapter{}
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("stopped-missing-runtime", cfg.DataDir)
+	server.Status = domain.StatusStopped
+	server.ContainerID = "old-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := httptest.NewRecorder()
+	router.ServeHTTP(snapshot, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/logs/snapshot", nil))
+	if snapshot.Code != stdhttp.StatusOK {
+		t.Fatalf("expected stopped missing runtime log snapshot to stay readable, got %d: %s", snapshot.Code, snapshot.Body.String())
+	}
+	var payload struct {
+		Lines []string `json:"lines"`
+	}
+	if err := json.Unmarshal(snapshot.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Lines == nil || len(payload.Lines) != 0 {
+		t.Fatalf("expected empty log history for missing stopped container, got %+v", payload)
+	}
+	stored, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ContainerID != "" {
+		t.Fatalf("expected stale stopped container id to be cleared, got %+v", stored)
+	}
+}
+
 func TestStopServerClearsMissingRuntimeContainer(t *testing.T) {
 	adapter := &staleContainerAdapter{}
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
