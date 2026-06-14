@@ -190,8 +190,14 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	_ = os.Remove(path)
-	_ = h.store.DeleteMod(r.Context(), item.ID)
+	if err := removeStoredFile(path); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.DeleteMod(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), item.InstanceID, "mod.deleted", fmt.Sprintf("Deleted mod %s", item.FileName))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -300,8 +306,14 @@ func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	_ = os.Remove(path)
-	_ = h.store.DeleteMod(r.Context(), item.ID)
+	if err := removeStoredFile(path); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.DeleteMod(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
@@ -554,8 +566,14 @@ func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	path, _ := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	_ = os.Remove(path)
-	_ = h.store.DeleteWorld(r.Context(), item.ID)
+	if err := removeStoredFile(path); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.DeleteWorld(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.deleted", fmt.Sprintf("Deleted world %s", item.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -708,11 +726,24 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "backup not found")
 		return
 	}
-	_ = h.store.DeleteBackup(r.Context(), item.ID)
 	path, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	_ = os.Remove(path)
+	if err := removeStoredFile(path); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.DeleteBackup(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), item.InstanceID, "backup.deleted", fmt.Sprintf("Deleted backup %s", item.FileName))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func removeStoredFile(path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func (h *Handler) cors(next http.Handler) http.Handler {

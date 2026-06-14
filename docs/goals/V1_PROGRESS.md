@@ -1140,6 +1140,25 @@ Checks:
 - `git diff --check`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
 
+## V1 Resource Delete Consistency Update
+
+Status: Completed
+
+Completed:
+- Changed world, backup, server mod, and global mod deletion to remove the stored file first and delete the database record only after file cleanup succeeds.
+- Missing files are treated as already cleaned up, while real filesystem removal errors now return an API error and preserve the database record.
+- Added backend regression coverage for world and backup deletion failures so UI success cannot hide leftover disk data.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'TestDelete(World|Backup)KeepsRecordWhenFileRemovalFails' -count=1`: failed first because delete returned 200 and removed records, then passed after the delete order and error handling were fixed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `git diff --check`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
 ## V1 Server Detail Action Feedback Update
 
 Status: Completed

@@ -922,6 +922,35 @@ func TestWorldImportIsIdempotentForSameInstanceFile(t *testing.T) {
 	}
 }
 
+func TestDeleteWorldKeepsRecordWhenFileRemovalFails(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	worldDir := filepath.Join(cfg.DataDir, "worlds", "unassigned", "blocked.wld")
+	if err := os.MkdirAll(filepath.Join(worldDir, "child"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	item := domain.World{
+		ID:         "blocked-world",
+		InstanceID: "unassigned",
+		Name:       "Blocked",
+		FileName:   "blocked.wld",
+		SizeBytes:  1,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &item); err != nil {
+		t.Fatal(err)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/worlds/blocked-world", nil))
+	if remove.Code != stdhttp.StatusInternalServerError {
+		t.Fatalf("expected world delete to fail when file removal fails, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if _, err := db.GetWorld(context.Background(), "blocked-world"); err != nil {
+		t.Fatalf("expected world record to remain after failed file removal, got %v", err)
+	}
+}
+
 func TestWorldImportRejectsUnknownInstance(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	body := &bytes.Buffer{}
@@ -1238,6 +1267,35 @@ func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "backups", "backup-source", backup.FileName)); !os.IsNotExist(err) {
 		t.Fatalf("expected backup archive deleted, stat err=%v", err)
+	}
+}
+
+func TestDeleteBackupKeepsRecordWhenFileRemovalFails(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	backupDir := filepath.Join(cfg.DataDir, "backups", "backup-source", "blocked.zip")
+	if err := os.MkdirAll(filepath.Join(backupDir, "child"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	item := domain.Backup{
+		ID:         "blocked-backup",
+		InstanceID: "backup-source",
+		FileName:   "blocked.zip",
+		WorldName:  "Blocked",
+		SizeBytes:  1,
+		Type:       "Manual",
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateBackup(context.Background(), &item); err != nil {
+		t.Fatal(err)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/backups/blocked-backup", nil))
+	if remove.Code != stdhttp.StatusInternalServerError {
+		t.Fatalf("expected backup delete to fail when file removal fails, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if _, err := db.GetBackup(context.Background(), "blocked-backup"); err != nil {
+		t.Fatalf("expected backup record to remain after failed file removal, got %v", err)
 	}
 }
 
