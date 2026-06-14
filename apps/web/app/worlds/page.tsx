@@ -2,14 +2,14 @@
 
 import { Download, MoveRight, Plus, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
 import { deleteWorld, downloadWorldFile, duplicateWorld, importWorld, listServers, listWorlds, migrateWorld } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeDifficulty, localizeRelativeTime, localizeWorldSize, useI18n } from "@/lib/i18n";
-import { getMigrationTargetServers, resolveMigrationTargetId } from "@/lib/server-detail-resources";
+import { getMigrationTargetServers, getWorldSourceServerId, isWorldActiveOnServer, resolveMigrationTargetId } from "@/lib/server-detail-resources";
 import type { World } from "@/lib/types";
 
 export default function WorldsPage() {
@@ -26,6 +26,7 @@ export default function WorldsPage() {
   const quickImportHandledRef = useRef(false);
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
+  const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
 
   const upload = useMutation({
     mutationFn: (file: File) => importWorld(file),
@@ -134,8 +135,11 @@ export default function WorldsPage() {
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {worlds.map((world) => {
-          const targetServers = getMigrationTargetServers(servers, world.server);
-          const targetServerId = resolveMigrationTargetId(servers, targetServerIds[world.id] ?? "", world.server);
+          const sourceServerId = getWorldSourceServerId(world);
+          const activeServerId = world.activeInstanceId || "";
+          const activeServerName = activeServerId ? serverNameById.get(activeServerId) ?? activeServerId : "";
+          const targetServers = getMigrationTargetServers(servers, sourceServerId);
+          const targetServerId = resolveMigrationTargetId(servers, targetServerIds[world.id] ?? "", sourceServerId);
           return (
             <Card key={world.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
@@ -146,10 +150,10 @@ export default function WorldsPage() {
                     <span className="rounded bg-slate-800 px-2 py-1">{localizeDifficulty(world.difficulty, locale)}</span>
                   </div>
                 </div>
-                {world.server && <span className="shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("inUse")}</span>}
+                {isWorldActiveOnServer(world) && <span className="shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("inUse")}</span>}
               </div>
               <p className="mt-4 text-sm text-slate-400">{t("modified")}: {localizeRelativeTime(world.modified, locale)}</p>
-              <p className="text-sm text-slate-400">{t("usedBy")}: {world.server || t("notInUse")}</p>
+              <p className="text-sm text-slate-400">{t("usedBy")}: {activeServerName || t("notInUse")}</p>
               <p className="text-sm text-slate-400">{t("size")}: {world.bytes}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button

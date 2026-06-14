@@ -41,7 +41,7 @@ import {
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { describeResourceAction, formatServerDetailError } from "@/lib/server-detail-actions";
-import { getDetailTargetServers, nextWorldCopyName } from "@/lib/server-detail-resources";
+import { getDetailTargetServers, isWorldActiveOnServer, nextWorldCopyName } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
@@ -474,7 +474,7 @@ export default function ServerDetailPage() {
               deleting={worldDelete.isPending}
               assigning={worldAssign.isPending}
               duplicating={worldDuplicate.isPending}
-              currentWorldName={server.world}
+              currentServerId={server.id}
               serverStatus={server.status}
               downloadingId={downloadingResourceId}
               migrating={worldMigrate.isPending}
@@ -892,7 +892,7 @@ function Checkbox({ checked, disabled, label, onChange }: { checked: boolean; di
 
 function WorldsTab({
   assigning,
-  currentWorldName,
+  currentServerId,
   deleting,
   duplicating,
   downloadingId,
@@ -913,7 +913,7 @@ function WorldsTab({
   onUploadClick
 }: {
   assigning: boolean;
-  currentWorldName: string;
+  currentServerId: string;
   deleting: boolean;
   duplicating: boolean;
   downloadingId: string;
@@ -970,7 +970,7 @@ function WorldsTab({
             meta={`${world.bytes} · ${localizeRelativeTime(world.modified, locale)}`}
             actions={
               <>
-                {world.name === currentWorldName ? (
+                {isWorldActiveOnServer(world, currentServerId) ? (
                   <span className="inline-flex items-center gap-2 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm font-medium text-panel-green">
                     <CheckCircle2 aria-hidden="true" className="size-4" />
                     {t("currentWorld")}

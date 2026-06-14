@@ -1,4 +1,4 @@
-import type { Server } from "./types";
+import type { Server, World } from "./types";
 
 export function getDetailTargetServers(servers: Server[], currentServerId: string): Server[] {
   return servers.filter((server) => server.id !== currentServerId);
@@ -19,4 +19,13 @@ export function resolveMigrationTargetId(servers: Server[], selectedTargetId: st
 
 export function nextWorldCopyName(worldName: string, suffix: string): string {
   return `${worldName} ${suffix}`.trim();
+}
+
+export function getWorldSourceServerId(world: World): string | undefined {
+  return world.instanceId && world.instanceId !== "unassigned" ? world.instanceId : undefined;
+}
+
+export function isWorldActiveOnServer(world: World, serverId?: string): boolean {
+  if (!serverId) return Boolean(world.activeInstanceId);
+  return world.activeInstanceId === serverId;
 }

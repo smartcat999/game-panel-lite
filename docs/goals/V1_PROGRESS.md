@@ -1683,3 +1683,21 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 World Active State Semantics Update
+
+Status: Completed
+
+Completed:
+- Split frontend world source ownership from active-world state in reusable helpers.
+- Server Detail now marks a world as current only when its `activeInstanceId` matches the current server, not when another world happens to share the same name.
+- Worlds page now shows the `in use` badge and `used by` value only for actually active worlds.
+- Worlds page still uses the source owner for migration target exclusion, so migrating a non-active server-owned world no longer treats active usage as the source.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

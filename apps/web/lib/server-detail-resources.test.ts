@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { getDetailTargetServers, getMigrationTargetServers, nextWorldCopyName, resolveMigrationTargetId } from "./server-detail-resources";
-import type { Server } from "./types";
+import {
+  getDetailTargetServers,
+  getMigrationTargetServers,
+  getWorldSourceServerId,
+  isWorldActiveOnServer,
+  nextWorldCopyName,
+  resolveMigrationTargetId
+} from "./server-detail-resources";
+import type { Server, World } from "./types";
 
 const baseServer: Server = {
   id: "server-1",
@@ -74,5 +81,23 @@ describe("server detail resource helpers", () => {
     expect(resolveMigrationTargetId(servers, "server-1", "server-1")).toBe("server-2");
     expect(resolveMigrationTargetId(servers, "server-3", "server-1")).toBe("server-3");
     expect(resolveMigrationTargetId([baseServer], "server-1", "server-1")).toBe("");
+  });
+
+  it("keeps world ownership separate from active world state", () => {
+    const world: World = {
+      id: "world-1",
+      instanceId: "server-1",
+      activeInstanceId: "",
+      name: "Home",
+      size: "Home.wld",
+      difficulty: "Imported",
+      server: "server-1",
+      modified: "Just now",
+      bytes: "1 KB"
+    };
+
+    expect(getWorldSourceServerId(world)).toBe("server-1");
+    expect(isWorldActiveOnServer(world, "server-1")).toBe(false);
+    expect(isWorldActiveOnServer({ ...world, activeInstanceId: "server-1" }, "server-1")).toBe(true);
   });
 });
