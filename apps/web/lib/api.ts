@@ -163,6 +163,20 @@ function toServer(server: ApiServer): Server {
   };
 }
 
+function toWorld(world: ApiWorld): World {
+  return {
+    id: world.id,
+    instanceId: world.instanceId,
+    activeInstanceId: world.activeInstanceId,
+    name: world.name,
+    size: world.fileName,
+    difficulty: "Imported",
+    server: world.activeInstanceId || (world.instanceId !== "unassigned" ? world.instanceId : undefined),
+    modified: formatRelative(world.updatedAt ?? world.createdAt),
+    bytes: formatBytes(world.sizeBytes)
+  };
+}
+
 export async function listServers(): Promise<Server[]> {
   const response = await fetch(`${API_BASE}/api/servers`, { cache: "no-store" });
   if (!response.ok) {
@@ -359,15 +373,7 @@ export async function listWorlds(): Promise<World[]> {
     throw new Error("Unable to load worlds");
   }
   const payload = (await response.json()) as ApiWorld[];
-  return payload.map((world) => ({
-    id: world.id,
-    name: world.name,
-    size: world.fileName,
-    difficulty: "Imported",
-    server: world.activeInstanceId || (world.instanceId !== "unassigned" ? world.instanceId : undefined),
-    modified: formatRelative(world.updatedAt ?? world.createdAt),
-    bytes: formatBytes(world.sizeBytes)
-  }));
+  return payload.map(toWorld);
 }
 
 export async function importWorld(file: File, instanceId = "unassigned"): Promise<World> {
@@ -380,15 +386,7 @@ export async function importWorld(file: File, instanceId = "unassigned"): Promis
     throw new Error(payload.error ?? "Unable to import world");
   }
   const world = (await response.json()) as ApiWorld;
-  return {
-    id: world.id,
-    name: world.name,
-    size: world.fileName,
-    difficulty: "Imported",
-    server: world.activeInstanceId || (world.instanceId !== "unassigned" ? world.instanceId : undefined),
-    modified: formatRelative(world.updatedAt ?? world.createdAt),
-    bytes: formatBytes(world.sizeBytes)
-  };
+  return toWorld(world);
 }
 
 export async function assignWorld(id: string, instanceId: string): Promise<World> {
@@ -402,15 +400,7 @@ export async function assignWorld(id: string, instanceId: string): Promise<World
     throw new Error(payload.error ?? "Unable to assign world");
   }
   const world = (await response.json()) as ApiWorld;
-  return {
-    id: world.id,
-    name: world.name,
-    size: world.fileName,
-    difficulty: "Imported",
-    server: world.activeInstanceId || world.instanceId,
-    modified: formatRelative(world.updatedAt ?? world.createdAt),
-    bytes: formatBytes(world.sizeBytes)
-  };
+  return toWorld(world);
 }
 
 export async function duplicateWorld(id: string, name: string): Promise<World> {
@@ -425,14 +415,7 @@ export async function duplicateWorld(id: string, name: string): Promise<World> {
     throw new Error(payload.error ?? "Unable to duplicate world");
   }
   const world = (await response.json()) as ApiWorld;
-  return {
-    id: world.id,
-    name: world.name,
-    size: world.fileName,
-    difficulty: "Imported",
-    modified: formatRelative(world.updatedAt ?? world.createdAt),
-    bytes: formatBytes(world.sizeBytes)
-  };
+  return toWorld(world);
 }
 
 export async function migrateWorld(id: string, instanceId: string): Promise<World> {
@@ -446,15 +429,7 @@ export async function migrateWorld(id: string, instanceId: string): Promise<Worl
     throw new Error(payload.error ?? "Unable to migrate world");
   }
   const world = (await response.json()) as ApiWorld;
-  return {
-    id: world.id,
-    name: world.name,
-    size: world.fileName,
-    difficulty: "Imported",
-    server: world.activeInstanceId || world.instanceId,
-    modified: formatRelative(world.updatedAt ?? world.createdAt),
-    bytes: formatBytes(world.sizeBytes)
-  };
+  return toWorld(world);
 }
 
 export async function deleteWorld(id: string) {

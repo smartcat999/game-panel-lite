@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { serverActionRedirectPath } from "@/lib/server-action-flow";
 import { useI18n } from "@/lib/i18n";
+import { formatServerDetailError } from "@/lib/server-detail-actions";
 import { serverInviteText } from "@/lib/server-join";
 import type { Server } from "@/lib/types";
 import { serverAction } from "@/lib/api";
@@ -55,7 +56,11 @@ export function ServerActions({ server }: { server: Server }) {
         router.push(redirectPath);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t("unableAction", { action: actionLabel(action) }));
+      const message = formatServerDetailError(error, {
+        dockerUnavailable: t("detailDockerUnavailable"),
+        containerUnavailable: t("detailContainerUnavailable")
+      });
+      setErrorMessage(message || t("unableAction", { action: actionLabel(action) }));
     } finally {
       setBusyAction(null);
     }

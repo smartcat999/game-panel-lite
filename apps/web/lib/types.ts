@@ -23,6 +23,8 @@ export type Server = {
 
 export type World = {
   id: string;
+  instanceId?: string;
+  activeInstanceId?: string;
   name: string;
   size: string;
   difficulty: string;

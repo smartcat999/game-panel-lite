@@ -683,6 +683,79 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	}
 }
 
+func TestTModLoaderModDeleteRejectsDifferentServerMod(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	source := testServer("source-tmod", cfg.DataDir)
+	source.ProviderKey = domain.ProviderTerrariaTModLoader
+	target := testServer("target-tmod", cfg.DataDir)
+	target.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &target); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(target.ID, "example.tmod", bytes.NewBufferString("mod")); err != nil {
+		t.Fatal(err)
+	}
+	mod := domain.ModFile{
+		ID:         "target-mod",
+		InstanceID: target.ID,
+		FileName:   "example.tmod",
+		SizeBytes:  3,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &mod); err != nil {
+		t.Fatal(err)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/source-tmod/mods/target-mod", nil))
+	if remove.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected cross-server mod delete 404, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if _, err := db.GetMod(context.Background(), mod.ID); err != nil {
+		t.Fatalf("expected target mod record to remain, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "mods", target.ID, "example.tmod")); err != nil {
+		t.Fatalf("expected target mod file to remain, stat err=%v", err)
+	}
+}
+
+func TestTModLoaderModDeleteKeepsRecordWhenFileRemovalFails(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	blockedPath := filepath.Join(cfg.DataDir, "mods", server.ID, "blocked.tmod")
+	if err := os.MkdirAll(filepath.Join(blockedPath, "child"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mod := domain.ModFile{
+		ID:         "blocked-mod",
+		InstanceID: server.ID,
+		FileName:   "blocked.tmod",
+		SizeBytes:  3,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &mod); err != nil {
+		t.Fatal(err)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/tmod/mods/blocked-mod", nil))
+	if remove.Code != stdhttp.StatusInternalServerError {
+		t.Fatalf("expected mod delete to fail when file removal fails, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if _, err := db.GetMod(context.Background(), mod.ID); err != nil {
+		t.Fatalf("expected mod record to remain after failed file removal, got %v", err)
+	}
+}
+
 func TestGlobalModUploadIsIdempotentForSameFile(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 

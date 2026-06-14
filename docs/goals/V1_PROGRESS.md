@@ -306,6 +306,21 @@ Checks:
 Known issues:
 - Manual runtime verification with a real Terraria container and live player join flow is still needed.
 
+## Post-V1 Server Detail Reliability Update
+
+Status: Completed
+
+Completed:
+- Added backend coverage that server-scoped mod delete cannot delete a mod that belongs to a different server.
+- Added backend coverage that failed mod file removal keeps the database record instead of silently losing metadata.
+- Updated server-scoped mod delete to validate the URL server id before touching the stored mod file.
+- Preserved frontend world `instanceId` and `activeInstanceId` separately from display-only server usage.
+- Updated server detail world filtering to show only worlds owned by or active on the current server, instead of guessing by matching world names.
+- Reused localized Docker/container action feedback for server start, stop, restart, and delete actions.
+
+Known issues:
+- Full real-container validation still depends on a running Docker daemon and Terraria/tModLoader images.
+
 ## Post-V1 Activity Events Update
 
 Status: Completed

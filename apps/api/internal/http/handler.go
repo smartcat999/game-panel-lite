@@ -184,8 +184,13 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
+	if err != nil || item.InstanceID != server.ID {
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}

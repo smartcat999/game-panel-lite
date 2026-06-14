@@ -305,7 +305,7 @@ export default function ServerDetailPage() {
   }, [logs, activeTab]);
 
   const serverWorlds = useMemo(
-    () => (server ? (worldsQuery.data ?? []).filter((world) => world.server === server.id || world.name === server.world) : []),
+    () => (server ? (worldsQuery.data ?? []).filter((world) => world.instanceId === server.id || world.activeInstanceId === server.id) : []),
     [server, worldsQuery.data]
   );
   const serverBackups = useMemo(

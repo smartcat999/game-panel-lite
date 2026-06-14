@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadWorldFile, listBackups, setModEnabled } from "./api";
+import { downloadWorldFile, listBackups, listWorlds, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -27,6 +27,33 @@ describe("api mappers", () => {
     const backups = await listBackups();
 
     expect(backups[0]?.sizeBytes).toBe(1536);
+  });
+
+  it("preserves world file ownership separately from active server usage", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          {
+            id: "world-1",
+            instanceId: "source-server",
+            activeInstanceId: "active-server",
+            name: "SharedName",
+            fileName: "SharedName.wld",
+            sizeBytes: 2048,
+            createdAt: new Date().toISOString()
+          }
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const worlds = await listWorlds();
+
+    expect(worlds[0]).toMatchObject({
+      instanceId: "source-server",
+      activeInstanceId: "active-server",
+      server: "active-server"
+    });
   });
 
   it("surfaces backend download errors before the browser navigates away", async () => {
