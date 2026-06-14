@@ -6,6 +6,7 @@ import { Activity, Archive, HardDrive, Plus, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Card } from "@/components/ui";
+import { formatActivityEvent } from "@/lib/activity-display";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { formatBytes, listActivity, listBackups, listServers } from "@/lib/api";
 import { dashboardQuickActionHrefs } from "@/lib/dashboard-quick-actions";
@@ -48,17 +49,20 @@ export default function DashboardPage() {
             <p className="mt-3 text-sm text-slate-400">{activityQuery.isLoading ? t("loading") : t("noActivityYet")}</p>
           ) : (
             <div className="mt-3 space-y-2">
-              {activity.slice(0, 5).map((event) => (
-                <div key={event.id} className="flex items-start gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
-                  <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded bg-panel-green/15 text-panel-green">
-                    <Activity aria-hidden="true" className="size-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-slate-100">{event.message}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{localizeRelativeTime(event.created, locale)}</p>
+              {activity.slice(0, 5).map((event) => {
+                const display = formatActivityEvent(event, locale);
+                return (
+                  <div key={event.id} className="flex items-start gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded bg-panel-green/15 text-panel-green">
+                      <Activity aria-hidden="true" className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-slate-100">{display.message}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{display.typeLabel} · {localizeRelativeTime(event.created, locale)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>

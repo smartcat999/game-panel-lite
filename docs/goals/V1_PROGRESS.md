@@ -1123,6 +1123,23 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
+## V1 Page Feedback Consistency Update
+
+Status: Completed
+
+Completed:
+- Reused the Activity page display formatter in the Dashboard recent activity panel so backend activity messages and type labels are localized consistently in Chinese and English.
+- Added an explicit Mods page API unavailable message when server, global mod, or selected-server mod loading fails instead of falling through to an empty-state-only view.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `git diff --check`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
 ## V1 Server Detail Action Feedback Update
 
 Status: Completed

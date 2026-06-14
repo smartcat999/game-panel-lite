@@ -128,6 +128,9 @@ export default function ModsPage() {
           </div>
         }
       />
+      {(serversQuery.isError || globalModsQuery.isError || modsQuery.isError) && (
+        <p className="mb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p>
+      )}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <Card className="p-6 text-sm text-slate-400">
