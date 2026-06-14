@@ -1243,7 +1243,18 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if server.ContainerID != "" {
-		_ = h.runtime.Remove(r.Context(), server)
+		if err := h.requireRuntimeAvailable(r.Context()); err != nil {
+			writeError(w, statusCodeForRuntimeError(err), err.Error())
+			return
+		}
+		if _, err := h.runtime.Inspect(r.Context(), server); err == nil {
+			if err := h.runtime.Remove(r.Context(), server); err != nil {
+				writeError(w, http.StatusServiceUnavailable, err.Error())
+				return
+			}
+		} else {
+			h.logger.Warn("runtime container missing during server delete; deleting stale record", "server", server.ID, "container", server.ContainerID, "error", err)
+		}
 	}
 	if err := h.store.DeleteServer(r.Context(), server.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

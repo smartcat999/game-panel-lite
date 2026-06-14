@@ -1139,6 +1139,19 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web lint`: passed.
 
+## V1 Server Delete Runtime Guard Update
+
+Status: Completed
+
+Completed:
+- Changed server deletion to require a reachable Docker runtime when the server still has a tracked container.
+- Server deletion now removes the runtime container first and only deletes the database record after runtime cleanup succeeds.
+- If Docker reports the tracked container is already gone, the stale record can still be cleaned up.
+- Added a regression test proving an unavailable Docker host does not delete the server record for an existing runtime container.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/app -run TestInvalidDockerHostDoesNotDeleteExistingContainerRecord -count=1`: failed first because delete returned 200 and removed the record, then passed after the runtime guard was added.
+
 ## V1 Server Detail Reliability Update
 
 Status: Completed

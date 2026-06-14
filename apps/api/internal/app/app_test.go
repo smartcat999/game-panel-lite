@@ -114,3 +114,53 @@ func TestInvalidDockerHostDoesNotMockStopExistingContainer(t *testing.T) {
 		t.Fatalf("expected Docker runtime unavailable message, got %q", stop.Body.String())
 	}
 }
+
+func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
+	root := t.TempDir()
+	cfg := config.Config{
+		Host:       "127.0.0.1",
+		Port:       "4000",
+		DataDir:    filepath.Join(root, "data"),
+		DBPath:     filepath.Join(root, "gamepanel.db"),
+		DockerHost: "bad://daemon",
+	}
+	db, err := store.Open(cfg.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := domain.GameServerInstance{
+		ID:          "existing-delete",
+		Name:        "Existing Delete",
+		GameKey:     "terraria",
+		ProviderKey: domain.ProviderTerrariaVanilla,
+		Status:      domain.StatusRunning,
+		ContainerID: "real-container",
+		WorldName:   "ExistingWorld",
+		Port:        7777,
+		MaxPlayers:  8,
+		DataDir:     filepath.Join(cfg.DataDir, "instances", "existing-delete"),
+		Config:      terraria.Presets[0].Config,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := db.CreateServer(t.Context(), &server); err != nil {
+		t.Fatal(err)
+	}
+	api, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer api.Close()
+
+	remove := httptest.NewRecorder()
+	api.Routes().ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/servers/existing-delete", nil))
+	if remove.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected delete to fail without Docker runtime, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if !strings.Contains(remove.Body.String(), "Docker runtime unavailable") {
+		t.Fatalf("expected Docker runtime unavailable message, got %q", remove.Body.String())
+	}
+	if _, err := db.GetServer(t.Context(), "existing-delete"); err != nil {
+		t.Fatalf("expected server record to remain after failed delete, got %v", err)
+	}
+}
