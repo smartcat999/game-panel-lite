@@ -1755,3 +1755,22 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 tModLoader Enabled State Runtime Sync Update
+
+Status: Completed
+
+Completed:
+- Fixed tModLoader enable/disable actions so they update the runtime `Mods/enabled.json` file instead of only changing the database row.
+- The generated `enabled.json` contains the sorted package names for currently enabled `.tmod` files and ignores support files such as `install.txt`.
+- Upload, assignment, deletion, and enable/disable actions now keep the runtime enabled-mod list aligned with the managed mod records.
+- Added backend HTTP coverage proving disabling a mod rewrites `Mods/enabled.json` with only the still-enabled package names.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run TestTModLoaderModEnabledEndpoint -count=1`: failed first because `Mods/enabled.json` was not created, then passed after runtime sync was implemented.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

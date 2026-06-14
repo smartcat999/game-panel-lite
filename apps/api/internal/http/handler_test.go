@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -668,6 +669,17 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	if err := db.CreateMod(context.Background(), &mod); err != nil {
 		t.Fatal(err)
 	}
+	other := domain.ModFile{
+		ID:         "mod-2",
+		InstanceID: server.ID,
+		FileName:   "other.tmod",
+		SizeBytes:  3,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &other); err != nil {
+		t.Fatal(err)
+	}
 
 	body := strings.NewReader(`{"enabled":false}`)
 	recorder := httptest.NewRecorder()
@@ -690,6 +702,17 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	}
 	if persisted.Enabled {
 		t.Fatalf("expected persisted disabled mod, got %+v", persisted)
+	}
+	runtimeEnabled, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "enabled.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var enabledMods []string
+	if err := json.Unmarshal(runtimeEnabled, &enabledMods); err != nil {
+		t.Fatalf("expected runtime enabled.json to be JSON list, got %q: %v", string(runtimeEnabled), err)
+	}
+	if !reflect.DeepEqual(enabledMods, []string{"other"}) {
+		t.Fatalf("expected runtime enabled.json to contain only the enabled tmod package names, got %v", enabledMods)
 	}
 }
 

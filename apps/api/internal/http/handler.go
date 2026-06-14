@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -149,6 +150,10 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), server.ID, "mod.uploaded", fmt.Sprintf("Uploaded mod %s to %s", item.FileName, server.Name))
 	status := http.StatusOK
 	if created {
@@ -184,6 +189,10 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), server.ID, "mod.updated", fmt.Sprintf("Updated mod %s", item.FileName))
 	writeJSON(w, http.StatusOK, item)
 }
@@ -209,6 +218,10 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.DeleteMod(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -292,6 +305,10 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if !created {
 		h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name))
 		writeJSON(w, http.StatusOK, assigned)
@@ -334,6 +351,43 @@ func (h *Handler) removeRuntimeMod(item domain.ModFile, server domain.GameServer
 		}
 	}
 	return nil
+}
+
+func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.GameServerInstance) error {
+	if server.ProviderKey != domain.ProviderTerrariaTModLoader {
+		return nil
+	}
+	mods, err := h.store.ListMods(ctx, server.ID)
+	if err != nil {
+		return err
+	}
+	enabled := make([]string, 0, len(mods))
+	for _, item := range mods {
+		if !item.Enabled || !isTModPackage(item.FileName) {
+			continue
+		}
+		enabled = append(enabled, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName)))
+	}
+	sort.Strings(enabled)
+	payload, err := json.MarshalIndent(enabled, "", "  ")
+	if err != nil {
+		return err
+	}
+	payload = append(payload, '\n')
+	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, "enabled.json") {
+		targetPath := filepath.Join(server.DataDir, relPath)
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(targetPath, payload, 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isTModPackage(fileName string) bool {
+	return strings.EqualFold(filepath.Ext(fileName), ".tmod")
 }
 
 func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
