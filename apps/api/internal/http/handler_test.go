@@ -574,6 +574,13 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	if mod.FileName != "example.tmod" || !mod.Enabled {
 		t.Fatalf("expected uploaded enabled mod, got %+v", mod)
 	}
+	runtimeMod, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "example.tmod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeMod) != "mod" {
+		t.Fatalf("expected uploaded mod copied into runtime data dir, got %q", string(runtimeMod))
+	}
 
 	list := httptest.NewRecorder()
 	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/tmod/mods", nil))
@@ -595,6 +602,9 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "mods", "tmod", "example.tmod")); !os.IsNotExist(err) {
 		t.Fatalf("expected mod file deleted, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(server.DataDir, "Mods", "example.tmod")); !os.IsNotExist(err) {
+		t.Fatalf("expected runtime mod file deleted, stat err=%v", err)
 	}
 }
 
@@ -840,6 +850,13 @@ func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
 	}
 	if len(mods) != 1 {
 		t.Fatalf("expected one server mod record after repeated assign, got %+v", mods)
+	}
+	runtimeMod, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "example.tmod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeMod) != "mod-v1" {
+		t.Fatalf("expected assigned mod copied into runtime data dir, got %q", string(runtimeMod))
 	}
 }
 

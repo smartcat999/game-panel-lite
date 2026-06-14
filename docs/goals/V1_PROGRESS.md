@@ -1736,3 +1736,22 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 tModLoader Runtime Mod Materialization Update
+
+Status: Completed
+
+Completed:
+- Fixed tModLoader mod upload and assignment so `.tmod`, `install.txt`, and `enabled.json` files are copied from managed mod storage into the server instance `Mods/` directory used by the runtime container.
+- Server-scoped mod deletion now removes the runtime `Mods/` copy as well as the managed mod storage file and database record.
+- Kept tModLoader runtime mod path decisions inside the Terraria provider instead of hardcoding them in Docker runtime code.
+- Added backend HTTP coverage proving uploaded and assigned mods are materialized into the runtime data directory and removed from it on delete.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'TestTModLoaderModUploadListAndDeleteEndpoints|TestAssignModIsIdempotentForSameServerFile'`: failed first because runtime `Mods/example.tmod` was not created, then passed after materialization was implemented.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

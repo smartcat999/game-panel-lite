@@ -145,6 +145,10 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.materializeModForRuntime(item, server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), server.ID, "mod.uploaded", fmt.Sprintf("Uploaded mod %s to %s", item.FileName, server.Name))
 	status := http.StatusOK
 	if created {
@@ -193,6 +197,10 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
 	if err != nil || item.InstanceID != server.ID {
 		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	if err := h.removeRuntimeMod(item, server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
@@ -280,6 +288,10 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if err := h.materializeModForRuntime(assigned, targetServer); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if !created {
 		h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name))
 		writeJSON(w, http.StatusOK, assigned)
@@ -299,6 +311,29 @@ func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileNa
 	}
 	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
 	return item, true, h.store.CreateMod(ctx, &item)
+}
+
+func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.GameServerInstance) error {
+	sourcePath, err := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if err != nil {
+		return err
+	}
+	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, item.FileName) {
+		targetPath := filepath.Join(server.DataDir, relPath)
+		if err := copyStoredFile(sourcePath, targetPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *Handler) removeRuntimeMod(item domain.ModFile, server domain.GameServerInstance) error {
+	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, item.FileName) {
+		if err := removeStoredFile(filepath.Join(server.DataDir, relPath)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {

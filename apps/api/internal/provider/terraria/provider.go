@@ -77,6 +77,13 @@ func RuntimeWorldFiles(providerKey domain.ProviderKey, config domain.TerrariaCon
 	}
 }
 
+func RuntimeModFiles(providerKey domain.ProviderKey, fileName string) []string {
+	if providerKey != domain.ProviderTerrariaTModLoader {
+		return nil
+	}
+	return []string{filepath.Join("Mods", fileName)}
+}
+
 func vanillaRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	cmd := []string{
