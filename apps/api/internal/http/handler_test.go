@@ -781,6 +781,43 @@ func TestWorldImportListDownloadDuplicateAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestWorldImportIsIdempotentForSameInstanceFile(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/worlds/import", "file", "uploaded.wld", []byte("world-v1")))
+	if first.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected first world import 201, got %d: %s", first.Code, first.Body.String())
+	}
+	var firstWorld domain.World
+	if err := json.Unmarshal(first.Body.Bytes(), &firstWorld); err != nil {
+		t.Fatal(err)
+	}
+
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/worlds/import", "file", "uploaded.wld", []byte("world-v2")))
+	if second.Code != stdhttp.StatusOK {
+		t.Fatalf("expected repeated world import 200, got %d: %s", second.Code, second.Body.String())
+	}
+	var secondWorld domain.World
+	if err := json.Unmarshal(second.Body.Bytes(), &secondWorld); err != nil {
+		t.Fatal(err)
+	}
+	if secondWorld.ID != firstWorld.ID {
+		t.Fatalf("expected repeated world import to update existing world, got first=%+v second=%+v", firstWorld, secondWorld)
+	}
+	if secondWorld.SizeBytes != int64(len("world-v2")) {
+		t.Fatalf("expected updated world size, got %+v", secondWorld)
+	}
+	worlds, err := db.ListWorlds(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(worlds) != 1 {
+		t.Fatalf("expected one world record after repeated import, got %+v", worlds)
+	}
+}
+
 func TestWorldImportRejectsUnknownInstance(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	body := &bytes.Buffer{}
@@ -1174,6 +1211,19 @@ func TestMigrateWorldEndpointCopiesToTargetServer(t *testing.T) {
 	if string(got) != "world" {
 		t.Fatalf("expected migrated world content, got %q", string(got))
 	}
+
+	again := httptest.NewRecorder()
+	router.ServeHTTP(again, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/world-1/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
+	if again.Code != stdhttp.StatusOK {
+		t.Fatalf("expected repeated migrate world 200, got %d: %s", again.Code, again.Body.String())
+	}
+	var repeated domain.World
+	if err := json.Unmarshal(again.Body.Bytes(), &repeated); err != nil {
+		t.Fatal(err)
+	}
+	if repeated.ID != migrated.ID {
+		t.Fatalf("expected repeated migration to update existing target world, got first=%+v second=%+v", migrated, repeated)
+	}
 }
 
 func TestMigrateBackupEndpointCopiesToTargetServer(t *testing.T) {
@@ -1215,6 +1265,19 @@ func TestMigrateBackupEndpointCopiesToTargetServer(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "backups", "target", filepath.Base(backupPath))); err != nil {
 		t.Fatal(err)
+	}
+
+	again := httptest.NewRecorder()
+	router.ServeHTTP(again, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/backup-1/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
+	if again.Code != stdhttp.StatusOK {
+		t.Fatalf("expected repeated migrate backup 200, got %d: %s", again.Code, again.Body.String())
+	}
+	var repeated domain.Backup
+	if err := json.Unmarshal(again.Body.Bytes(), &repeated); err != nil {
+		t.Fatal(err)
+	}
+	if repeated.ID != migrated.ID {
+		t.Fatalf("expected repeated backup migration to update existing target backup, got first=%+v second=%+v", migrated, repeated)
 	}
 }
 

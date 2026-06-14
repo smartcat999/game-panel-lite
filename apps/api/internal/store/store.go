@@ -73,6 +73,15 @@ func (s *Store) GetWorld(ctx context.Context, id string) (domain.World, error) {
 	return world, err
 }
 
+func (s *Store) GetWorldByInstanceAndFile(ctx context.Context, instanceID string, fileName string) (domain.World, error) {
+	var world domain.World
+	err := s.db.WithContext(ctx).First(&world, "instance_id = ? AND file_name = ?", instanceID, fileName).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return world, ErrNotFound
+	}
+	return world, err
+}
+
 func (s *Store) SaveWorld(ctx context.Context, world *domain.World) error {
 	return s.db.WithContext(ctx).Save(world).Error
 }
@@ -97,6 +106,19 @@ func (s *Store) GetBackup(ctx context.Context, id string) (domain.Backup, error)
 		return backup, ErrNotFound
 	}
 	return backup, err
+}
+
+func (s *Store) GetBackupByInstanceAndFile(ctx context.Context, instanceID string, fileName string) (domain.Backup, error) {
+	var backup domain.Backup
+	err := s.db.WithContext(ctx).First(&backup, "instance_id = ? AND file_name = ?", instanceID, fileName).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return backup, ErrNotFound
+	}
+	return backup, err
+}
+
+func (s *Store) SaveBackup(ctx context.Context, backup *domain.Backup) error {
+	return s.db.WithContext(ctx).Save(backup).Error
 }
 
 func (s *Store) DeleteBackup(ctx context.Context, id string) error {

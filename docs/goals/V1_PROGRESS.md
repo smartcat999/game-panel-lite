@@ -1163,6 +1163,26 @@ Checks:
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
 - `git diff --check`: passed.
 
+## V1 World and Backup Resource Idempotency Update
+
+Status: Completed
+
+Completed:
+- Made repeated world import for the same instance and file update the existing world record instead of creating duplicate rows.
+- Made repeated world duplication/migration to the same instance and file update the existing target world record.
+- Made repeated backup migration to the same target instance and file update the existing backup record.
+- Updated the OpenAPI contract to document the 200 update responses for idempotent world and backup resource operations.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http -run 'TestWorldImportIsIdempotentForSameInstanceFile|TestMigrateWorldEndpointCopiesToTargetServer|TestMigrateBackupEndpointCopiesToTargetServer|TestWorldImportListDownloadDuplicateAndDeleteEndpoints' -count=1`: failed first on duplicate rows/201 responses, then passed after upserting by instance/file.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `git diff --check`: passed.
+
 ## V1 Mod Enable Toggle Update
 
 Status: Completed

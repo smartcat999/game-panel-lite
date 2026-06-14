@@ -350,13 +350,17 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	item := domain.World{ID: uuid.NewString(), InstanceID: instanceID, Name: header.Filename[:len(header.Filename)-len(filepath.Ext(header.Filename))], FileName: header.Filename, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := h.store.CreateWorld(r.Context(), &item); err != nil {
+	item, created, err := h.upsertWorldRecord(r.Context(), instanceID, header.Filename[:len(header.Filename)-len(filepath.Ext(header.Filename))], header.Filename, size)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), instanceID, "world.imported", fmt.Sprintf("Imported world %s", item.Name))
-	writeJSON(w, http.StatusCreated, item)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, item)
 }
 
 func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
@@ -467,13 +471,17 @@ func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	copy := domain.World{ID: uuid.NewString(), InstanceID: item.InstanceID, Name: payload.Name, FileName: payload.FileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := h.store.CreateWorld(r.Context(), &copy); err != nil {
+	copy, created, err := h.upsertWorldRecord(r.Context(), item.InstanceID, payload.Name, payload.FileName, size)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.duplicated", fmt.Sprintf("Duplicated world %s", item.Name))
-	writeJSON(w, http.StatusCreated, copy)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, copy)
 }
 
 func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
@@ -506,13 +514,30 @@ func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	migrated := domain.World{ID: uuid.NewString(), InstanceID: payload.InstanceID, Name: payload.Name, FileName: payload.FileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := h.store.CreateWorld(r.Context(), &migrated); err != nil {
+	migrated, created, err := h.upsertWorldRecord(r.Context(), payload.InstanceID, payload.Name, payload.FileName, size)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), payload.InstanceID, "world.migrated", fmt.Sprintf("Migrated world %s", migrated.Name))
-	writeJSON(w, http.StatusCreated, migrated)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, migrated)
+}
+
+func (h *Handler) upsertWorldRecord(ctx context.Context, instanceID string, name string, fileName string, size int64) (domain.World, bool, error) {
+	if existing, err := h.store.GetWorldByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+		existing.Name = name
+		existing.SizeBytes = size
+		existing.UpdatedAt = time.Now()
+		return existing, false, h.store.SaveWorld(ctx, &existing)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.World{}, false, err
+	}
+	item := domain.World{ID: uuid.NewString(), InstanceID: instanceID, Name: name, FileName: fileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	return item, true, h.store.CreateWorld(ctx, &item)
 }
 
 func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
@@ -651,13 +676,30 @@ func (h *Handler) migrateBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	migrated := domain.Backup{ID: uuid.NewString(), InstanceID: payload.InstanceID, FileName: payload.FileName, WorldName: targetServer.WorldName, SizeBytes: size, Type: item.Type, CreatedAt: time.Now()}
-	if err := h.store.CreateBackup(r.Context(), &migrated); err != nil {
+	migrated, created, err := h.upsertBackupRecord(r.Context(), payload.InstanceID, payload.FileName, targetServer.WorldName, size, item.Type)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), payload.InstanceID, "backup.migrated", fmt.Sprintf("Migrated backup %s", migrated.FileName))
-	writeJSON(w, http.StatusCreated, migrated)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, migrated)
+}
+
+func (h *Handler) upsertBackupRecord(ctx context.Context, instanceID string, fileName string, worldName string, size int64, backupType string) (domain.Backup, bool, error) {
+	if existing, err := h.store.GetBackupByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+		existing.WorldName = worldName
+		existing.SizeBytes = size
+		existing.Type = backupType
+		return existing, false, h.store.SaveBackup(ctx, &existing)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.Backup{}, false, err
+	}
+	item := domain.Backup{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, WorldName: worldName, SizeBytes: size, Type: backupType, CreatedAt: time.Now()}
+	return item, true, h.store.CreateBackup(ctx, &item)
 }
 
 func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {

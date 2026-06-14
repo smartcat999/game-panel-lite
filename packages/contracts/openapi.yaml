@@ -242,6 +242,8 @@ paths:
     post:
       summary: Import .wld world file
       responses:
+        "200":
+          description: Updated existing world file record
         "201":
           description: Imported world
   /api/worlds/{id}/assign:
@@ -260,12 +262,16 @@ paths:
     post:
       summary: Duplicate world file
       responses:
+        "200":
+          description: Updated existing duplicate world file record
         "201":
           description: Duplicated world
   /api/worlds/{id}/migrate:
     post:
       summary: Migrate world file to another server instance
       responses:
+        "200":
+          description: Updated existing migrated world file record
         "201":
           description: Migrated world
   /api/worlds/{id}:
@@ -296,6 +302,8 @@ paths:
     post:
       summary: Migrate backup archive to another server instance
       responses:
+        "200":
+          description: Updated existing migrated backup archive record
         "201":
           description: Migrated backup
   /api/backups/{id}/download:
