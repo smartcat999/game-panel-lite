@@ -21,6 +21,7 @@ import {
   downloadWorldFile,
   duplicateWorld,
   getServer,
+  getServerLogSnapshot,
   getServerStats,
   importWorld,
   listBackups,
@@ -245,11 +246,6 @@ export default function ServerDetailPage() {
 
   useEffect(() => {
     if (!id || (activeTab !== "console" && activeTab !== "logs")) return;
-    if (server?.status !== "running") {
-      setLogStatus("idle");
-      setLogs([]);
-      return;
-    }
     if (logStreamPaused) {
       setLogStatus("paused");
       return;
@@ -258,9 +254,31 @@ export default function ServerDetailPage() {
       logServerIdRef.current = id;
       setLogs([]);
     }
+    if (server?.status !== "running") {
+      let alive = true;
+      setLogStatus("connecting");
+      getServerLogSnapshot(id)
+        .then((lines) => {
+          if (!alive) return;
+          setLogs(lines.slice(-300));
+          setConsoleError("");
+          setLogStatus("idle");
+        })
+        .catch((error) => {
+          if (!alive) return;
+          setLogStatus("error");
+          setConsoleError(error instanceof Error ? error.message : t("logsUnavailable"));
+        });
+      return () => {
+        alive = false;
+      };
+    }
     setLogStatus("connecting");
     const source = new EventSource(serverLogsUrl(id));
-    source.onopen = () => setLogStatus("connected");
+    source.onopen = () => {
+      setConsoleError("");
+      setLogStatus("connected");
+    };
     source.addEventListener("log", (event) => {
       setLogs((current) => [...current, event.data].slice(-300));
     });
@@ -274,7 +292,7 @@ export default function ServerDetailPage() {
     });
     source.onerror = () => setLogStatus("error");
     return () => source.close();
-  }, [activeTab, id, server?.status, logStreamPaused]);
+  }, [activeTab, id, server?.status, logStreamPaused, t]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -1235,7 +1253,7 @@ function LogViewport({
   return (
     <div ref={viewportRef} className={cn("h-[420px] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-300", className)}>
       {logs.length === 0 ? (
-        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsRequiresRunning") : logStatus === "paused" ? t("logsPaused") : t("logsWaiting")}</p>
+        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsNoHistory") : logStatus === "paused" ? t("logsPaused") : t("logsWaiting")}</p>
       ) : logs.map((line, index) => (
         <p key={`${index}-${line}`}>
           <span className={line.includes("[Warn]") || line.toLowerCase().includes("error") ? "text-panel-gold" : "text-panel-green"}>

@@ -176,7 +176,7 @@ func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) 
 	if err != nil {
 		return nil, err
 	}
-	stream, err := a.client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: true, Tail: "120"})
+	stream, err := a.client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: instance.Status == domain.StatusRunning, Tail: "120"})
 	if err != nil {
 		return nil, err
 	}

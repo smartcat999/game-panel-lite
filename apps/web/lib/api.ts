@@ -244,6 +244,15 @@ export function serverLogsUrl(id: string) {
   return `${API_BASE}/api/servers/${id}/logs`;
 }
 
+export async function getServerLogSnapshot(id: string): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/api/servers/${id}/logs/snapshot`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { lines?: string[]; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to load server logs");
+  }
+  return payload.lines ?? [];
+}
+
 export async function getSettings(): Promise<AppSettings> {
   const response = await fetch(`${API_BASE}/api/settings`, { cache: "no-store" });
   if (!response.ok) {

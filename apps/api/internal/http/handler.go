@@ -76,6 +76,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/servers/{id}/command", h.sendServerCommand)
 	r.Delete("/api/servers/{id}", h.deleteServer)
 	r.Get("/api/servers/{id}/logs", h.serverLogs)
+	r.Get("/api/servers/{id}/logs/snapshot", h.serverLogSnapshot)
 	r.Get("/api/servers/{id}/stats", h.serverStats)
 	r.Get("/api/worlds", h.listWorlds)
 	r.Post("/api/worlds/import", h.importWorld)
@@ -138,13 +139,17 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	item := domain.ModFile{ID: uuid.NewString(), InstanceID: server.ID, FileName: header.Filename, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
-	if err := h.store.CreateMod(r.Context(), &item); err != nil {
+	item, created, err := h.upsertModRecord(r.Context(), server.ID, header.Filename, size)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "mod.uploaded", fmt.Sprintf("Uploaded mod %s to %s", item.FileName, server.Name))
-	writeJSON(w, http.StatusCreated, item)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, item)
 }
 
 func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
@@ -212,12 +217,16 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	item := domain.ModFile{ID: uuid.NewString(), InstanceID: "unassigned", FileName: header.Filename, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
-	if err := h.store.CreateMod(r.Context(), &item); err != nil {
+	item, created, err := h.upsertModRecord(r.Context(), "unassigned", header.Filename, size)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, item)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, item)
 }
 
 func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
@@ -254,13 +263,30 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	assigned := domain.ModFile{ID: uuid.NewString(), InstanceID: targetServer.ID, FileName: item.FileName, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
-	if err := h.store.CreateMod(r.Context(), &assigned); err != nil {
+	assigned, created, err := h.upsertModRecord(r.Context(), targetServer.ID, item.FileName, size)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !created {
+		h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name))
+		writeJSON(w, http.StatusOK, assigned)
 		return
 	}
 	h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Assigned mod %s to %s", item.FileName, targetServer.Name))
 	writeJSON(w, http.StatusCreated, assigned)
+}
+
+func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileName string, size int64) (domain.ModFile, bool, error) {
+	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+		existing.SizeBytes = size
+		existing.Enabled = true
+		return existing, false, h.store.SaveMod(ctx, &existing)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.ModFile{}, false, err
+	}
+	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	return item, true, h.store.CreateMod(ctx, &item)
 }
 
 func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
@@ -1218,6 +1244,34 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	server.Status = domain.StatusStopped
+	stream, err := h.runtime.Logs(r.Context(), server)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	defer stream.Close()
+	lines := make([]string, 0, 120)
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+		if len(lines) > 300 {
+			lines = lines[len(lines)-300:]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string][]string{"lines": lines})
 }
 
 func (h *Handler) presets(w http.ResponseWriter, r *http.Request) {

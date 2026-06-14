@@ -20,6 +20,7 @@ import (
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -29,6 +30,25 @@ import (
 
 func newTestRouter(t *testing.T) (stdhttp.Handler, *store.Store, config.Config) {
 	return newTestRouterWithAdapter(t, runtime.NewMockAdapter())
+}
+
+func newMultipartFileRequest(t *testing.T, method string, target string, field string, fileName string, content []byte) *stdhttp.Request {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile(field, fileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(method, target, body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	return request
 }
 
 func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Handler, *store.Store, config.Config) {
@@ -238,6 +258,21 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	}
 	if got := logs.Body.String(); !bytes.Contains([]byte(got), []byte("event: log")) || !bytes.Contains([]byte(got), []byte("Mock Terraria log stream")) {
 		t.Fatalf("expected SSE log event, got %q", got)
+	}
+
+	snapshot := httptest.NewRecorder()
+	router.ServeHTTP(snapshot, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/logs/snapshot", nil))
+	if snapshot.Code != stdhttp.StatusOK {
+		t.Fatalf("expected log snapshot 200, got %d: %s", snapshot.Code, snapshot.Body.String())
+	}
+	var logSnapshot struct {
+		Lines []string `json:"lines"`
+	}
+	if err := json.Unmarshal(snapshot.Body.Bytes(), &logSnapshot); err != nil {
+		t.Fatal(err)
+	}
+	if len(logSnapshot.Lines) == 0 || !strings.Contains(logSnapshot.Lines[0], "Mock Terraria log stream") {
+		t.Fatalf("expected snapshot log lines, got %+v", logSnapshot)
 	}
 
 	activity := httptest.NewRecorder()
@@ -459,6 +494,48 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestTModLoaderModUploadIsIdempotentForSameFile(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/servers/tmod/mods/upload", "file", "example.tmod", []byte("mod-v1")))
+	if first.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected first upload 201, got %d: %s", first.Code, first.Body.String())
+	}
+	var firstMod domain.ModFile
+	if err := json.Unmarshal(first.Body.Bytes(), &firstMod); err != nil {
+		t.Fatal(err)
+	}
+
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/servers/tmod/mods/upload", "file", "example.tmod", []byte("mod-v2")))
+	if second.Code != stdhttp.StatusOK {
+		t.Fatalf("expected repeated upload 200, got %d: %s", second.Code, second.Body.String())
+	}
+	var secondMod domain.ModFile
+	if err := json.Unmarshal(second.Body.Bytes(), &secondMod); err != nil {
+		t.Fatal(err)
+	}
+	if secondMod.ID != firstMod.ID {
+		t.Fatalf("expected repeated upload to update existing mod, got first=%+v second=%+v", firstMod, secondMod)
+	}
+	if secondMod.SizeBytes != int64(len("mod-v2")) {
+		t.Fatalf("expected updated size, got %+v", secondMod)
+	}
+	mods, err := db.ListMods(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 {
+		t.Fatalf("expected one server mod record after repeated upload, got %+v", mods)
+	}
+}
+
 func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)
@@ -499,6 +576,93 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	}
 	if persisted.Enabled {
 		t.Fatalf("expected persisted disabled mod, got %+v", persisted)
+	}
+}
+
+func TestGlobalModUploadIsIdempotentForSameFile(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/mods/upload", "file", "example.tmod", []byte("mod-v1")))
+	if first.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected first global upload 201, got %d: %s", first.Code, first.Body.String())
+	}
+	var firstMod domain.ModFile
+	if err := json.Unmarshal(first.Body.Bytes(), &firstMod); err != nil {
+		t.Fatal(err)
+	}
+
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/mods/upload", "file", "example.tmod", []byte("mod-v2")))
+	if second.Code != stdhttp.StatusOK {
+		t.Fatalf("expected repeated global upload 200, got %d: %s", second.Code, second.Body.String())
+	}
+	var secondMod domain.ModFile
+	if err := json.Unmarshal(second.Body.Bytes(), &secondMod); err != nil {
+		t.Fatal(err)
+	}
+	if secondMod.ID != firstMod.ID {
+		t.Fatalf("expected repeated global upload to update existing mod, got first=%+v second=%+v", firstMod, secondMod)
+	}
+	mods, err := db.ListMods(context.Background(), "unassigned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 {
+		t.Fatalf("expected one global mod record after repeated upload, got %+v", mods)
+	}
+}
+
+func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "example.tmod", bytes.NewBufferString("mod-v1")); err != nil {
+		t.Fatal(err)
+	}
+	globalMod := domain.ModFile{
+		ID:         "global-mod",
+		InstanceID: "unassigned",
+		FileName:   "example.tmod",
+		SizeBytes:  6,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &globalMod); err != nil {
+		t.Fatal(err)
+	}
+
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, httptest.NewRequest(stdhttp.MethodPost, "/api/mods/global-mod/assign", bytes.NewBufferString(`{"instanceId":"tmod"}`)))
+	if first.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected first assign 201, got %d: %s", first.Code, first.Body.String())
+	}
+	var firstAssigned domain.ModFile
+	if err := json.Unmarshal(first.Body.Bytes(), &firstAssigned); err != nil {
+		t.Fatal(err)
+	}
+
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, httptest.NewRequest(stdhttp.MethodPost, "/api/mods/global-mod/assign", bytes.NewBufferString(`{"instanceId":"tmod"}`)))
+	if second.Code != stdhttp.StatusOK {
+		t.Fatalf("expected repeated assign 200, got %d: %s", second.Code, second.Body.String())
+	}
+	var secondAssigned domain.ModFile
+	if err := json.Unmarshal(second.Body.Bytes(), &secondAssigned); err != nil {
+		t.Fatal(err)
+	}
+	if secondAssigned.ID != firstAssigned.ID {
+		t.Fatalf("expected repeated assign to update existing mod, got first=%+v second=%+v", firstAssigned, secondAssigned)
+	}
+	mods, err := db.ListMods(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 {
+		t.Fatalf("expected one server mod record after repeated assign, got %+v", mods)
 	}
 }
 
