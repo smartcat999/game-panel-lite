@@ -1,7 +1,7 @@
 import type { Server } from "./types";
 import type { MessageKey } from "./i18n";
 
-type ResourceActionKind = "assignWorld" | "restoreBackup" | "migrate";
+type ResourceActionKind = "assignWorld" | "restoreBackup" | "migrate" | "modifyMods";
 
 export function formatServerDetailError(
   error: unknown,
@@ -35,6 +35,9 @@ export function describeResourceAction({
 }): { disabled: boolean; reasonKey?: MessageKey } {
   if ((kind === "assignWorld" || kind === "restoreBackup") && serverStatus === "running") {
     return { disabled: true, reasonKey: kind === "assignWorld" ? "assignWorldRequiresStopped" : "restoreRequiresStopped" };
+  }
+  if (kind === "modifyMods" && serverStatus === "running") {
+    return { disabled: true, reasonKey: "modChangesRequireStopped" };
   }
   if (kind === "migrate" && (targetCount ?? 0) === 0) {
     return { disabled: true, reasonKey: "noMigrationTargetHint" };

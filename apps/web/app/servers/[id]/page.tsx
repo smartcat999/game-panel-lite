@@ -517,6 +517,7 @@ export default function ServerDetailPage() {
               isError={modsQuery.isError}
               isLoading={modsQuery.isLoading}
               items={serverMods}
+              serverStatus={server.status}
               toggling={modEnabled.isPending}
               uploading={modUpload.isPending}
               onDelete={setPendingModDelete}
@@ -1121,6 +1122,7 @@ function ModsTab({
   isError,
   isLoading,
   items,
+  serverStatus,
   toggling,
   uploading,
   onDelete,
@@ -1131,6 +1133,7 @@ function ModsTab({
   isError: boolean;
   isLoading: boolean;
   items: ModFile[];
+  serverStatus: Server["status"];
   toggling: boolean;
   uploading: boolean;
   onDelete: (mod: ModFile) => void;
@@ -1138,17 +1141,19 @@ function ModsTab({
   onUploadClick: () => void;
 }) {
   const { locale, t } = useI18n();
+  const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
   return (
     <ResourcePanel
       title={t("detailModActions")}
       href="/mods"
       action={
-        <Button variant="secondary" onClick={onUploadClick} disabled={uploading}>
+        <Button variant="secondary" onClick={onUploadClick} disabled={uploading || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
           <Upload aria-hidden="true" />
           {uploading ? t("uploading") : t("uploadMod")}
         </Button>
       }
     >
+      {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
       {isError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
       {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
       {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
@@ -1160,11 +1165,11 @@ function ModsTab({
             meta={`${mod.size} · ${mod.enabled ? t("enabled") : t("disabled")} · ${localizeRelativeTime(mod.created, locale)}`}
             actions={
               <>
-                <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling}>
+                <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
                   <Power aria-hidden="true" />
                   {mod.enabled ? t("disable") : t("enable")}
                 </Button>
-                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting}>
+                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
                   <Trash2 aria-hidden="true" />
                 </Button>
               </>

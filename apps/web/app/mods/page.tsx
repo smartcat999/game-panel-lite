@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
 import { assignMod, deleteGlobalMod, deleteMod, listGlobalMods, listMods, listServers, setModEnabled, uploadGlobalMod, uploadMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { describeResourceAction } from "@/lib/server-detail-actions";
 import type { ModFile } from "@/lib/types";
 
 export default function ModsPage() {
@@ -22,6 +23,8 @@ export default function ModsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const activeServerId = selectedServerId || moddedServers[0]?.id || "";
+  const activeServer = useMemo(() => moddedServers.find((server) => server.id === activeServerId), [activeServerId, moddedServers]);
+  const modAction = describeResourceAction({ kind: "modifyMods", serverStatus: activeServer?.status });
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modsQuery = useQuery({ queryKey: ["mods", activeServerId], queryFn: () => listMods(activeServerId), enabled: Boolean(activeServerId), retry: false });
 
@@ -152,7 +155,8 @@ export default function ModsPage() {
                     <Button
                       variant="secondary"
                       onClick={() => assign.mutate({ modId: item.id })}
-                      disabled={assign.isPending || !activeServerId}
+                      disabled={assign.isPending || !activeServerId || modAction.disabled}
+                      title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
                     >
                       {t("assignToServer")}
                     </Button>
@@ -189,11 +193,17 @@ export default function ModsPage() {
                 if (file) serverUpload.mutate(file);
               }}
             />
-            <Button variant="secondary" onClick={() => serverInputRef.current?.click()} disabled={!activeServerId || serverUpload.isPending}>
+            <Button
+              variant="secondary"
+              onClick={() => serverInputRef.current?.click()}
+              disabled={!activeServerId || serverUpload.isPending || modAction.disabled}
+              title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+            >
               <Upload aria-hidden="true" />
               {serverUpload.isPending ? t("uploading") : t("uploadMod")}
             </Button>
           </div>
+          {modAction.reasonKey ? <p className="mb-3 text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
           <div className="grid gap-3">
             {serverMods.map((item) => (
               <Card key={item.id} className="flex items-center justify-between gap-4 p-4">
@@ -205,12 +215,13 @@ export default function ModsPage() {
                   <Button
                     variant="secondary"
                     onClick={() => toggle.mutate({ serverId: item.instanceId, modId: item.id, enabled: !item.enabled })}
-                    disabled={toggle.isPending}
+                    disabled={toggle.isPending || modAction.disabled}
+                    title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
                   >
                     <Power aria-hidden="true" />
                     {item.enabled ? t("disable") : t("enable")}
                   </Button>
-                  <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={remove.isPending}>
+                  <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={remove.isPending || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
                     <Trash2 aria-hidden="true" />
                     {t("delete")}
                   </Button>

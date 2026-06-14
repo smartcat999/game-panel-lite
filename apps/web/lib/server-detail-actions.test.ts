@@ -25,4 +25,15 @@ describe("server detail action feedback", () => {
       reasonKey: undefined
     });
   });
+
+  it("requires stopped servers before modifying runtime mod files", () => {
+    expect(describeResourceAction({ kind: "modifyMods", serverStatus: "running" })).toEqual({
+      disabled: true,
+      reasonKey: "modChangesRequireStopped"
+    });
+    expect(describeResourceAction({ kind: "modifyMods", serverStatus: "stopped" })).toEqual({
+      disabled: false,
+      reasonKey: undefined
+    });
+  });
 });

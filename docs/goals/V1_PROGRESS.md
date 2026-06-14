@@ -1774,3 +1774,23 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 tModLoader Running-State Interaction Guard Update
+
+Status: Completed
+
+Completed:
+- Added a shared frontend resource-action rule that treats tModLoader mod changes as stopped-server operations.
+- Server Detail now disables current-server mod upload, enable/disable, and delete actions while the server is running and shows a clear stopped-required hint.
+- The global Mods page now disables assigning library mods, uploading server mods, toggling server mods, and deleting server-scoped mods when the selected tModLoader server is running.
+- Global library upload/delete remains available because it does not mutate a running server instance.
+- Added frontend helper coverage proving mod changes require a stopped server.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web test -- server-detail-actions.test.ts`: failed first because running mod changes were still allowed, then passed after adding the shared guard.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
