@@ -1174,7 +1174,11 @@ Completed:
 Checks:
 - `pnpm --filter @gamepanel-lite/web test -- create-server-flow.test.ts`: failed first because the helper did not exist, then failed because the returned server kept the preset world, then passed after assignment and cache snapshot handling were added.
 - `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
 - `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
 ## V1 Persistent App Shell Update
 
@@ -1188,12 +1192,6 @@ Completed:
 
 Checks:
 - `pnpm typecheck`: initially failed because it was run in parallel with `pnpm build` while `.next/types` was being regenerated, then passed when rerun after build.
-- `pnpm lint`: passed.
-- `pnpm test`: passed.
-- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
-- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
-- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
-- `pnpm typecheck`: passed.
 - `pnpm lint`: passed.
 - `pnpm test`: passed.
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.
