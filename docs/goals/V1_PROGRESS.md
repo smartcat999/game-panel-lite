@@ -744,3 +744,23 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
+
+## V1 Top-Bar Service Status Update
+
+Status: Completed
+
+Completed:
+- Replaced the top-bar Docker status badge with a backend service status badge.
+- The top-bar status now checks the Go API `GET /healthz` endpoint and no longer depends on Docker runtime availability.
+- Removed the visible `Docker` label from the top bar; Docker status remains available in the Settings Docker Runtime card.
+- Updated Settings copy so Docker status request failures are described as Docker status issues, not API availability issues.
+- Added Playwright route coverage for `/healthz` and a top-bar online-state assertion.
+
+Known issues:
+- The top bar will show unavailable until the Go API is started. Start it with `go run ./apps/api/cmd/server`.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed after clearing a `.next` cache corrupted by an accidental concurrent build/E2E run.
+- `pnpm e2e`: passed, 3 Playwright tests.

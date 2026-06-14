@@ -9,7 +9,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { getDockerStatus } from "@/lib/api";
+import { getApiHealth } from "@/lib/api";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
@@ -26,9 +26,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { locale, setLocale, t } = useI18n();
   const [createPending, setCreatePending] = useState(false);
-  const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
-  const dockerAvailable = Boolean(docker.data?.available);
-  const dockerLabel = dockerAvailable ? t("available") : t("unavailable");
+  const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
+  const serviceAvailable = apiHealth.data?.status === "ok";
+  const serviceLabel = serviceAvailable ? t("online") : apiHealth.isLoading ? t("dockerCheckingShort") : t("unavailable");
 
   useEffect(() => {
     setCreatePending(false);
@@ -91,16 +91,15 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Input className="w-full pl-10" placeholder={t("searchServers")} />
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-3">
-              <div className="hidden w-36 shrink-0 items-center justify-end gap-2 text-xs text-slate-300 sm:flex">
-                <span className="w-12 text-right">{t("docker")}</span>
+              <div className="hidden shrink-0 items-center gap-2 text-xs text-slate-300 sm:flex">
                 <span
                   className={cn(
-                    "inline-flex min-w-16 items-center justify-center gap-1 rounded px-2 py-1",
-                    dockerAvailable ? "bg-panel-green/15 text-panel-green" : "bg-panel-gold/15 text-panel-gold"
+                    "inline-flex items-center gap-1 whitespace-nowrap rounded border border-panel-line bg-slate-950/45 px-2 py-1",
+                    serviceAvailable ? "text-panel-green" : "text-panel-gold"
                   )}
                 >
-                  <ShieldCheck aria-hidden="true" />
-                  {dockerLabel}
+                  <ShieldCheck aria-hidden="true" className="size-4" />
+                  <span>{serviceLabel}</span>
                 </span>
               </div>
               <div

@@ -88,7 +88,7 @@ export default function SettingsPage() {
                 <p className="mt-1 text-sm text-slate-400">
                   {docker.data
                     ? docker.data.available ? t("dockerRuntimeReady") : t("dockerRuntimeUnavailable")
-                    : docker.isError ? t("dockerApiUnavailable")
+                    : docker.isError ? t("dockerStatusUnavailable")
                     : t("dockerStatusLoading")}
                 </p>
               </div>

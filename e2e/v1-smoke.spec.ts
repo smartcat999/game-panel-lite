@@ -23,6 +23,13 @@ async function mockApi(page: Page) {
     }
   ];
 
+  await page.route("**/healthz", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok" })
+    });
+  });
+
   await page.route("**/api/runtime/docker/hosts", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -220,6 +227,7 @@ test("app shell renders Chinese UI, game art, avatar, and Docker scan feedback",
   await expect(page.getByRole("link", { name: /GamePanel Lite/ })).toBeVisible();
   await expect(page.getByAltText("Terraria 官方游戏封面").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "用户资料" })).toBeVisible();
+  await expect(page.getByRole("banner")).toContainText("在线");
   await expect(page.getByRole("banner").getByRole("link", { name: "创建服务器" })).toBeVisible();
 
   await page.getByRole("link", { name: "设置" }).click();

@@ -4,13 +4,18 @@ import type { Backup, ModFile, Server, World } from "./types";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
 
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = DOCKER_CHECK_TIMEOUT_MS) {
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = DOCKER_CHECK_TIMEOUT_MS,
+  timeoutMessage = "Request timed out"
+) {
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       controller.abort();
-      reject(new Error("Docker check timed out"));
+      reject(new Error(timeoutMessage));
     }, timeoutMs);
   });
   try {
@@ -20,6 +25,14 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
       clearTimeout(timeout);
     }
   }
+}
+
+export async function getApiHealth(): Promise<{ status: string }> {
+  const response = await fetchWithTimeout(`${API_BASE}/healthz`, { cache: "no-store" }, 3000, "API health check timed out");
+  if (!response.ok) {
+    throw new Error("Unable to load API health");
+  }
+  return (await response.json()) as { status: string };
 }
 
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
