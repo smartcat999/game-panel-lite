@@ -1005,3 +1005,22 @@ Checks:
 - `pnpm build`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+
+## V1 Server Lifecycle UI Completion Update
+
+Status: Completed
+
+Completed:
+- Exposed the existing server delete API through the shared server action UI with the existing in-app destructive confirmation dialog.
+- Server start, stop, and restart now consume the returned API server payload and immediately update the server detail query cache instead of waiting for the next poll.
+- Server lifecycle actions now show inline success feedback for start, stop, restart, and delete.
+- Deleting a server from its detail page now returns the user to the Servers page after the API call succeeds.
+- Added Chinese and English localization for lifecycle success messages.
+
+Checks:
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.

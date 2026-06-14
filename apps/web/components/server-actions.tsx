@@ -1,8 +1,8 @@
 "use client";
 
-import { Copy, Play, RotateCcw, Square, X } from "lucide-react";
+import { Copy, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
@@ -12,13 +12,17 @@ import { serverAction } from "@/lib/api";
 export function ServerActions({ server }: { server: Server }) {
   const client = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useI18n();
   const [pendingAction, setPendingAction] = useState<"stop" | "restart" | "delete" | null>(null);
   const [busyAction, setBusyAction] = useState<"start" | "stop" | "restart" | "delete" | null>(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
+  const successLabel = (action: "start" | "stop" | "restart" | "delete") =>
+    action === "start" ? t("serverStarted") : action === "stop" ? t("serverStopped") : action === "restart" ? t("serverRestarted") : t("serverDeleted");
 
   useEffect(() => {
     if (!pendingAction) return;
@@ -34,12 +38,21 @@ export function ServerActions({ server }: { server: Server }) {
   const executeAction = async (action: "start" | "stop" | "restart" | "delete") => {
     setBusyAction(action);
     setErrorMessage("");
+    setSuccessMessage("");
     try {
-      await serverAction(server.id, action);
+      const updatedServer = await serverAction(server.id, action);
       setPendingAction(null);
+      if (updatedServer) {
+        client.setQueryData(["server", server.id], updatedServer);
+      }
       await client.invalidateQueries({ queryKey: ["servers"] });
       await client.invalidateQueries({ queryKey: ["server", server.id] });
-      router.refresh();
+      setSuccessMessage(successLabel(action));
+      if (action === "delete" && pathname === `/servers/${server.id}`) {
+        router.push("/servers");
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : t("unableAction", { action: actionLabel(action) }));
     } finally {
@@ -50,6 +63,7 @@ export function ServerActions({ server }: { server: Server }) {
   const runAction = (action: "start" | "stop" | "restart" | "delete") => {
     if (action === "stop" || action === "restart" || action === "delete") {
       setErrorMessage("");
+      setSuccessMessage("");
       setPendingAction(action);
       return;
     }
@@ -58,6 +72,7 @@ export function ServerActions({ server }: { server: Server }) {
 
   const copyInvite = async () => {
     setErrorMessage("");
+    setSuccessMessage("");
     try {
       await navigator.clipboard.writeText(`Join ${server.name} at 127.0.0.1:${server.port}${server.password ? ` password: ${server.password}` : ""}`);
       setCopiedInvite(true);
@@ -92,8 +107,13 @@ export function ServerActions({ server }: { server: Server }) {
           <Copy aria-hidden="true" />
           {copiedInvite ? t("copied") : t("actionCopyInvite")}
         </Button>
+        <Button variant="danger" onClick={() => runAction("delete")} disabled={Boolean(busyAction)}>
+          <Trash2 aria-hidden="true" />
+          {busyAction === "delete" ? t("actionWorking") : t("delete")}
+        </Button>
       </div>
       {errorMessage && <p className="mt-2 text-sm text-panel-gold">{errorMessage}</p>}
+      {successMessage && <p className="mt-2 text-sm text-panel-green">{successMessage}</p>}
       {pendingAction && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"

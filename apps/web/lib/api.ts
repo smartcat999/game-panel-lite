@@ -290,7 +290,7 @@ export async function createServer(input: {
   return toServer(server);
 }
 
-export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete") {
+export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<Server | null> {
   const response = await fetch(`${API_BASE}/api/servers/${id}${action === "delete" ? "" : `/${action}`}`, {
     method: action === "delete" ? "DELETE" : "POST"
   });
@@ -298,6 +298,11 @@ export async function serverAction(id: string, action: "start" | "stop" | "resta
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? `Unable to ${action} server`);
   }
+  if (action === "delete") {
+    return null;
+  }
+  const server = (await response.json()) as ApiServer;
+  return toServer(server);
 }
 
 export async function sendServerCommand(id: string, command: string) {
