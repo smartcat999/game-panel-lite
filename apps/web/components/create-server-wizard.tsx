@@ -5,27 +5,29 @@ import { useMutation } from "@tanstack/react-query";
 import { Check, ChevronLeft, ChevronRight, Gamepad2, Hammer, Package, Settings2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { previewTerrariaConfig } from "@/lib/api";
 import { createServer } from "@/lib/api";
 import { getTerrariaPreset, type TerrariaConfig } from "@gamepanel-lite/shared";
 
-const steps = ["Game", "Mode", "Preset", "Config", "World / Mods", "Review"];
+const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepWorldMods", "stepReview"] as const;
 const presets = [
-  { key: "friends-casual", label: "Friends Casual", description: "Perfect for casual play with friends.", tags: ["Classic", "Medium World", "8 Players"] },
-  { key: "building-world", label: "Building World", description: "Great for building and creativity.", tags: ["Classic", "Large World", "8 Players"] },
-  { key: "expert-adventure", label: "Expert Adventure", description: "For experienced players looking for a challenge.", tags: ["Expert", "Medium World", "8 Players"] },
-  { key: "modded-starter", label: "Modded Starter", description: "Start your modded adventure.", tags: ["tModLoader", "Medium World", "10 Players"] },
-  { key: "master-challenge", label: "Master Challenge", description: "The ultimate challenge for veteran players.", tags: ["Master", "Medium World", "6 Players"] }
+  { key: "friends-casual", labelKey: "presetFriendsCasual", descriptionKey: "presetFriendsCasualDescription", tags: ["tagClassic", "tagMediumWorld", "8"] },
+  { key: "building-world", labelKey: "presetBuildingWorld", descriptionKey: "presetBuildingWorldDescription", tags: ["tagClassic", "tagLargeWorld", "8"] },
+  { key: "expert-adventure", labelKey: "presetExpertAdventure", descriptionKey: "presetExpertAdventureDescription", tags: ["tagExpert", "tagMediumWorld", "8"] },
+  { key: "modded-starter", labelKey: "presetModdedStarter", descriptionKey: "presetModdedStarterDescription", tags: ["tModLoader", "tagMediumWorld", "10"] },
+  { key: "master-challenge", labelKey: "presetMasterChallenge", descriptionKey: "presetMasterChallengeDescription", tags: ["tagMaster", "tagMediumWorld", "6"] }
 ] as const;
 
 type PresetKey = (typeof presets)[number]["key"];
 
 export function CreateServerWizard() {
+  const { t } = useI18n();
   const [step, setStep] = useState(2);
   const [mode, setMode] = useState<"vanilla" | "tmodloader">("tmodloader");
   const [config, setConfig] = useState<TerrariaConfig>(getTerrariaPreset("modded-starter").config);
-  const selectedTitle = useMemo(() => steps[step], [step]);
+  const selectedTitle = useMemo(() => t(stepKeys[step]), [step, t]);
   const create = useMutation({
     mutationFn: () => createServer({
       name: config.serverName || "Terraria Server",
@@ -45,19 +47,19 @@ export function CreateServerWizard() {
           <div className="h-72 rounded-lg bg-[linear-gradient(180deg,#17365d,#102217_60%,#3a2818)]" />
         </aside>
         <div className="p-6">
-          <h1 className="text-2xl font-semibold">Create Terraria Server</h1>
+          <h1 className="text-2xl font-semibold">{t("createWizardTitle")}</h1>
           <div className="mt-7 grid grid-cols-3 gap-3 md:grid-cols-6">
-            {steps.map((label, index) => (
-              <button key={label} className="flex flex-col items-center gap-2 text-xs text-slate-400" onClick={() => setStep(index)}>
+            {stepKeys.map((labelKey, index) => (
+              <button key={labelKey} className="flex flex-col items-center gap-2 text-xs text-slate-400" onClick={() => setStep(index)}>
                 <span className={cn("flex size-8 items-center justify-center rounded-full border border-panel-line", index <= step && "border-panel-green bg-panel-green text-slate-950")}>
                   {index < step ? <Check aria-hidden="true" /> : index + 1}
                 </span>
-                {label}
+                {t(labelKey)}
               </button>
             ))}
           </div>
           <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
-            {step === 0 && <Choice title="Choose a Game" icon={<Gamepad2 />} options={["Terraria"]} />}
+            {step === 0 && <Choice title={t("chooseGame")} icon={<Gamepad2 />} options={["Terraria"]} />}
             {step === 1 && <ModeStep mode={mode} setMode={chooseMode} />}
             {step === 2 && <PresetStep mode={mode} setConfig={setConfig} />}
             {step === 3 && <ConfigStep config={config} setConfig={setConfig} />}
@@ -67,16 +69,16 @@ export function CreateServerWizard() {
           <div className="mt-8 flex justify-between">
             <Button variant="secondary" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
               <ChevronLeft aria-hidden="true" />
-              Back
+              {t("back")}
             </Button>
-            <Button onClick={() => step === steps.length - 1 ? create.mutate() : setStep((value) => Math.min(steps.length - 1, value + 1))} disabled={create.isPending}>
-              {step === steps.length - 1 ? create.isPending ? "Creating..." : "Create server" : `Next: ${steps[Math.min(steps.length - 1, step + 1)]}`}
+            <Button onClick={() => step === stepKeys.length - 1 ? create.mutate() : setStep((value) => Math.min(stepKeys.length - 1, value + 1))} disabled={create.isPending}>
+              {step === stepKeys.length - 1 ? create.isPending ? t("creating") : t("createServerLower") : t("nextStep", { step: t(stepKeys[Math.min(stepKeys.length - 1, step + 1)]) })}
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
           {create.isError && <p className="mt-4 text-sm text-red-200">{create.error.message}</p>}
-          {create.data && <p className="mt-4 text-sm text-panel-green">Created {create.data.name}. Open Servers to manage it.</p>}
-          <p className="mt-4 text-xs text-slate-500">Current step: {selectedTitle}</p>
+          {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.name })}</p>}
+          <p className="mt-4 text-xs text-slate-500">{t("currentStep", { step: selectedTitle })}</p>
         </div>
       </div>
     </Card>
@@ -99,19 +101,20 @@ function Choice({ title, icon, options }: { title: string; icon: React.ReactNode
 }
 
 function ModeStep({ mode, setMode }: { mode: "vanilla" | "tmodloader"; setMode: (mode: "vanilla" | "tmodloader") => void }) {
+  const { t } = useI18n();
   return (
     <div>
-      <h2 className="text-lg font-semibold">Choose server mode</h2>
+      <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <button onClick={() => setMode("vanilla")} className={cn("rounded-lg border border-panel-line bg-slate-950/40 p-4 text-left", mode === "vanilla" && "border-panel-green")}>
           <Hammer aria-hidden="true" className="text-panel-green" />
-          <p className="mt-3 font-medium">Vanilla Terraria</p>
-          <p className="mt-1 text-sm text-slate-400">Official server flow with clean world setup.</p>
+          <p className="mt-3 font-medium">{t("vanillaTerraria")}</p>
+          <p className="mt-1 text-sm text-slate-400">{t("vanillaTerrariaDescription")}</p>
         </button>
         <button onClick={() => setMode("tmodloader")} className={cn("rounded-lg border border-panel-line bg-slate-950/40 p-4 text-left", mode === "tmodloader" && "border-panel-purple")}>
           <Package aria-hidden="true" className="text-panel-purple" />
           <p className="mt-3 font-medium">tModLoader</p>
-          <p className="mt-1 text-sm text-slate-400">Modded Terraria with uploads enabled.</p>
+          <p className="mt-1 text-sm text-slate-400">{t("tmodLoaderDescription")}</p>
         </button>
       </div>
     </div>
@@ -119,17 +122,22 @@ function ModeStep({ mode, setMode }: { mode: "vanilla" | "tmodloader"; setMode: 
 }
 
 function PresetStep({ mode, setConfig }: { mode: "vanilla" | "tmodloader"; setConfig: (config: TerrariaConfig) => void }) {
+  const { t } = useI18n();
   return (
     <div>
-      <h2 className="text-lg font-semibold">Choose a Preset</h2>
-      <p className="mt-1 text-sm text-slate-400">Start with a template and customize it later.</p>
+      <h2 className="text-lg font-semibold">{t("choosePreset")}</h2>
+      <p className="mt-1 text-sm text-slate-400">{t("presetDescription")}</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         {presets.filter((preset) => mode === "tmodloader" || preset.key !== "modded-starter").map((preset) => (
           <button key={preset.key} onClick={() => setConfig(getTerrariaPreset(preset.key as PresetKey).config)} className={cn("rounded-lg border border-panel-line bg-slate-950/40 p-4 text-left hover:border-panel-green", preset.key === "modded-starter" && "border-panel-green")}>
-            <p className="font-medium">{preset.label}</p>
-            <p className="mt-1 text-sm text-slate-400">{preset.description}</p>
+            <p className="font-medium">{t(preset.labelKey)}</p>
+            <p className="mt-1 text-sm text-slate-400">{t(preset.descriptionKey)}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              {preset.tags.map((tag) => <span key={tag} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{tag}</span>)}
+              {preset.tags.map((tag) => (
+                <span key={tag} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
+                  {tag === "tModLoader" ? tag : /^\d+$/.test(tag) ? t("tagPlayers", { count: tag }) : t(tag)}
+                </span>
+              ))}
             </div>
           </button>
         ))}
@@ -139,24 +147,25 @@ function PresetStep({ mode, setConfig }: { mode: "vanilla" | "tmodloader"; setCo
 }
 
 function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: (config: TerrariaConfig) => void }) {
+  const { t } = useI18n();
   const preview = useMutation({
     mutationFn: () => previewTerrariaConfig(config)
   });
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setConfig({ ...config, [key]: value });
   return (
     <div>
-      <h2 className="text-lg font-semibold">Server config</h2>
+      <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <Input placeholder="Server name" value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
-        <Input placeholder="World name" value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
-        <Input placeholder="Port" value={config.port} onChange={(event) => update("port", Number(event.target.value))} />
-        <Input placeholder="Max players" value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
-        <Input placeholder="MOTD" value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
-        <Input placeholder="Password" value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
+        <Input placeholder={t("serverName")} value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
+        <Input placeholder={t("worldName")} value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
+        <Input placeholder={t("port")} value={config.port} onChange={(event) => update("port", Number(event.target.value))} />
+        <Input placeholder={t("maxPlayersInput")} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
+        <Input placeholder={t("motd")} value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
+        <Input placeholder={t("password")} value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
       </div>
       <div className="mt-4 flex items-center gap-3">
         <Button variant="secondary" onClick={() => preview.mutate()} disabled={preview.isPending}>
-          {preview.isPending ? "Rendering..." : "Preview serverconfig.txt"}
+          {preview.isPending ? t("rendering") : t("previewServerConfig")}
         </Button>
         {preview.isError && <p className="text-sm text-red-200">{preview.error.message}</p>}
       </div>
@@ -170,24 +179,26 @@ function ConfigStep({ config, setConfig }: { config: TerrariaConfig; setConfig: 
 }
 
 function WorldModsStep({ mode }: { mode: "vanilla" | "tmodloader" }) {
+  const { t } = useI18n();
   return (
     <div>
-      <h2 className="text-lg font-semibold">World {mode === "tmodloader" ? "and mods" : ""}</h2>
+      <h2 className="text-lg font-semibold">{mode === "tmodloader" ? t("worldAndMods") : t("worldOnly")}</h2>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <Card className="p-4">Import `.wld` world file</Card>
-        {mode === "tmodloader" && <Card className="border-panel-purple p-4">Upload `.tmod`, `install.txt`, or `enabled.json`</Card>}
+        <Card className="p-4">{t("importWldFile")}</Card>
+        {mode === "tmodloader" && <Card className="border-panel-purple p-4">{t("uploadModFiles")}</Card>}
       </div>
     </div>
   );
 }
 
 function ReviewStep({ mode, config }: { mode: "vanilla" | "tmodloader"; config: TerrariaConfig }) {
+  const { t } = useI18n();
   return (
     <div>
-      <h2 className="text-lg font-semibold">Review</h2>
+      <h2 className="text-lg font-semibold">{t("review")}</h2>
       <Card className="mt-4 p-4">
-        <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> Terraria {mode === "tmodloader" ? "tModLoader" : "Vanilla"} server on port {config.port}</div>
-        <p className="mt-3 text-sm text-slate-400">World: {config.worldName} · Players: {config.maxPlayers}</p>
+        <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { mode: mode === "tmodloader" ? "tModLoader" : t("modeVanilla"), port: config.port })}</div>
+        <p className="mt-3 text-sm text-slate-400">{t("reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
       </Card>
     </div>
   );

@@ -251,3 +251,28 @@ Checks:
 - `pnpm test`: passed
 - `pnpm build`: passed
 - `pnpm typecheck`: passed after rerunning serially because a parallel `next build` temporarily regenerated `.next/types`.
+
+## Post-V1 UI Action Wiring Update
+
+Status: Completed
+
+Completed:
+- Wired Dashboard quick actions to real navigation for server creation, world import, and backup management.
+- Added real Servers page search and filter behavior.
+- Wired Worlds page import, duplicate, download, and delete actions to existing API endpoints.
+- Wired Backups page server selection, create, restore, download, and delete actions to existing API endpoints.
+- Wired Mods page tModLoader server selection, upload, list, and delete actions to existing API endpoints.
+- Updated server detail copy buttons to write to the clipboard and disabled console command input because V1 only exposes SSE logs, not command submission.
+
+Known issues:
+- Server detail logs remain mock-rendered in the UI even though the backend exposes an SSE logs endpoint.
+- Console command submission is intentionally not implemented because there is no V1 backend command endpoint.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm build`: passed after stopping an old Next dev process that was concurrently writing `.next`.
+- Browser smoke: Dashboard, Servers, Worlds, Backups, and Mods rendered with dark styles loaded; Servers status filter interaction passed.

@@ -1,10 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { ServerModeBadge, ServerStatusBadge } from "./server-badges";
 import { ServerActions } from "./server-actions";
 import { Card } from "@/components/ui";
+import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { Server } from "@/lib/types";
 
 export function ServerCard({ server, compact = false }: { server: Server; compact?: boolean }) {
+  const { locale, t } = useI18n();
   return (
     <Card className="p-4">
       <div className="flex gap-4">
@@ -17,12 +21,12 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
             <ServerModeBadge mode={server.mode} />
             <ServerStatusBadge status={server.status} />
           </div>
-          <p className="mt-1 text-xs text-slate-400">World: {server.world}</p>
+          <p className="mt-1 text-xs text-slate-400">{t("world")}: {server.world}</p>
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-slate-400 md:grid-cols-4">
-            <Metric label="Players" value={`${server.players} / ${server.maxPlayers}`} />
-            <Metric label="Port" value={String(server.port)} />
-            <Metric label="Version" value={server.version} />
-            <Metric label="Last backup" value={server.lastBackup} />
+            <Metric label={t("players")} value={`${server.players} / ${server.maxPlayers}`} />
+            <Metric label={t("port")} value={String(server.port)} />
+            <Metric label={t("version")} value={server.version} />
+            <Metric label={t("lastBackup")} value={localizeRelativeTime(server.lastBackup, locale)} />
           </div>
           {!compact && (
             <div className="mt-4">

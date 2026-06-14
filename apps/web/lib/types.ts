@@ -30,9 +30,19 @@ export type World = {
 export type Backup = {
   id: string;
   name: string;
+  instanceId?: string;
   server: string;
   world: string;
   type: "Auto" | "Manual";
   size: string;
+  created: string;
+};
+
+export type ModFile = {
+  id: string;
+  instanceId: string;
+  fileName: string;
+  size: string;
+  enabled: boolean;
   created: string;
 };
