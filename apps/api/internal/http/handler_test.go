@@ -89,6 +89,7 @@ func (a inspectStatusAdapter) SendCommand(context.Context, domain.GameServerInst
 type staleContainerAdapter struct {
 	created          int
 	startedContainer string
+	stoppedContainer string
 	commandContainer string
 	logsContainer    string
 }
@@ -104,7 +105,13 @@ func (a *staleContainerAdapter) Start(_ context.Context, instance domain.GameSer
 	a.startedContainer = instance.ContainerID
 	return nil
 }
-func (a *staleContainerAdapter) Stop(context.Context, domain.GameServerInstance) error    { return nil }
+func (a *staleContainerAdapter) Stop(_ context.Context, instance domain.GameServerInstance) error {
+	a.stoppedContainer = instance.ContainerID
+	if instance.ContainerID == "old-container" {
+		return fmt.Errorf("stale container used for stop")
+	}
+	return nil
+}
 func (a *staleContainerAdapter) Restart(context.Context, domain.GameServerInstance) error { return nil }
 func (a *staleContainerAdapter) Remove(context.Context, domain.GameServerInstance) error  { return nil }
 func (a *staleContainerAdapter) Inspect(_ context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error) {
@@ -264,6 +271,33 @@ func TestRunningServerCommandAndLogsRecreateMissingRuntimeContainer(t *testing.T
 	}
 	if adapter.created != 1 {
 		t.Fatalf("expected a single runtime container recreation, got %d", adapter.created)
+	}
+}
+
+func TestStopServerClearsMissingRuntimeContainer(t *testing.T) {
+	adapter := &staleContainerAdapter{}
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("stale-stop", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "old-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	stop := httptest.NewRecorder()
+	router.ServeHTTP(stop, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/stop", nil))
+	if stop.Code != stdhttp.StatusOK {
+		t.Fatalf("expected stop to clear stale runtime container, got %d: %s", stop.Code, stop.Body.String())
+	}
+	var stopped domain.GameServerInstance
+	if err := json.Unmarshal(stop.Body.Bytes(), &stopped); err != nil {
+		t.Fatal(err)
+	}
+	if stopped.Status != domain.StatusStopped || stopped.ContainerID != "" {
+		t.Fatalf("expected stopped server with cleared container, got %+v", stopped)
+	}
+	if adapter.stoppedContainer != "" {
+		t.Fatalf("expected stale stop to skip runtime stop call, got %q", adapter.stoppedContainer)
 	}
 }
 

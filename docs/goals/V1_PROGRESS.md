@@ -1130,11 +1130,13 @@ Status: Completed
 Completed:
 - Updated the command endpoint to recover a missing or stale runtime container for running servers before sending commands.
 - Updated the server log SSE endpoint to recover and start a recreated runtime container before streaming logs for running servers.
+- Updated the stop endpoint to clear stale container IDs and mark the server stopped when Docker no longer has the old runtime container.
 - Reused the existing provider/runtime creation path so recovered containers mount the same isolated instance data directory and keep existing world/config data.
 - Added backend coverage for the stale-container case that previously made server detail logs and console commands fail with Docker errors.
 
 Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: failed first because commands used the stale container ID, then passed after runtime recovery was added.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: failed first because stop still called the stale container, then passed after stale IDs were cleared during stop.
 - `pnpm typecheck`: passed.
 - `pnpm lint`: passed.
 - `pnpm test`: passed.

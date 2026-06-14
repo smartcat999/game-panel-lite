@@ -744,9 +744,14 @@ func (h *Handler) transitionServer(w http.ResponseWriter, r *http.Request, statu
 		return
 	}
 	if server.ContainerID != "" {
-		if err := action(r.Context(), server); err != nil {
-			writeError(w, http.StatusServiceUnavailable, err.Error())
-			return
+		if _, err := h.runtime.Inspect(r.Context(), server); err != nil {
+			h.logger.Warn("runtime container missing during state transition; clearing stale container", "server", server.ID, "container", server.ContainerID, "error", err)
+			server.ContainerID = ""
+		} else {
+			if err := action(r.Context(), server); err != nil {
+				writeError(w, http.StatusServiceUnavailable, err.Error())
+				return
+			}
 		}
 	}
 	server.Status = status
