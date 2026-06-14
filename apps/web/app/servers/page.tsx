@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Input } from "@/components/ui";
@@ -44,7 +43,7 @@ export default function ServersPage() {
     });
   }, [filter, search, servers]);
   return (
-    <AppShell>
+    <>
       <PageHeader
         title={t("serversTitle")}
         description={t("serversDescription")}
@@ -67,6 +66,6 @@ export default function ServersPage() {
         {filteredServers.map((server) => <ServerCard key={server.id} server={server} />)}
       </div>
       {filteredServers.length === 0 && <p className="mt-6 text-sm text-slate-400">{query.isLoading ? t("loading") : t("noServersMatch")}</p>}
-    </AppShell>
+    </>
   );
 }

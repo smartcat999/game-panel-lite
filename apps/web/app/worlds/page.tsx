@@ -3,7 +3,6 @@
 import { Download, MoveRight, Plus, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
@@ -94,7 +93,7 @@ export default function WorldsPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title={t("worldsTitle")}
         description={t("worldsDescription")}
@@ -204,6 +203,6 @@ export default function WorldsPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
       />
-    </AppShell>
+    </>
   );
 }

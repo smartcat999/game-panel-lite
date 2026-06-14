@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, CheckCircle2, Copy, Download, FileText, Package, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
@@ -233,10 +232,10 @@ export default function ServerDetailPage() {
 
   if (!server) {
     return (
-      <AppShell>
+      <>
         <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
         <Card className="mt-4 p-6 text-sm text-slate-400">{query.isLoading ? t("loading") : t("serverNotFound")}</Card>
-      </AppShell>
+      </>
     );
   }
 
@@ -294,7 +293,7 @@ export default function ServerDetailPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
       {errorMessage && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{errorMessage}</p>}
@@ -514,7 +513,7 @@ export default function ServerDetailPage() {
         onCancel={() => setPendingModDelete(null)}
         onConfirm={() => pendingModDelete && modDelete.mutate(pendingModDelete.id)}
       />
-    </AppShell>
+    </>
   );
 }
 

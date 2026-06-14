@@ -3,7 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
 import { applyDockerHost, getDockerHosts, getDockerStatus } from "@/lib/api";
@@ -66,7 +65,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <PageHeader title={t("settingsTitle")} description={t("settingsDescription")} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.6fr)]">
         <Card className="p-5">
@@ -194,6 +193,6 @@ export default function SettingsPage() {
           <p className="mt-3 text-sm text-slate-400">{t("dataDirectoriesDescription")}</p>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }

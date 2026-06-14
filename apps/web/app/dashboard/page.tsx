@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Archive, HardDrive, Plus, Users } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Card } from "@/components/ui";
@@ -25,7 +24,7 @@ export default function DashboardPage() {
   const totalBackupBytes = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
   const latestBackup = backups[0];
   return (
-    <AppShell>
+    <>
       <PageHeader title={t("dashboardTitle")} description={t("dashboardDescription")} />
       {(serversQuery.isError || backupsQuery.isError || activityQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiDataUnavailable")}</p>}
       <div className="grid gap-4 md:grid-cols-4">
@@ -71,7 +70,7 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
-    </AppShell>
+    </>
   );
 }
 

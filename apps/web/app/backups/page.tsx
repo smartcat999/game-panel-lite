@@ -3,7 +3,6 @@
 import { Archive, Download, MoveRight, RotateCcw, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
@@ -98,7 +97,7 @@ export default function BackupsPage() {
   };
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title={t("backupsTitle")}
         description={t("backupsDescription")}
@@ -229,6 +228,6 @@ export default function BackupsPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
       />
-    </AppShell>
+    </>
   );
 }

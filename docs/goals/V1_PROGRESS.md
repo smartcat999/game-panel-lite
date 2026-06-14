@@ -1174,6 +1174,26 @@ Completed:
 Checks:
 - `pnpm --filter @gamepanel-lite/web test -- create-server-flow.test.ts`: failed first because the helper did not exist, then failed because the returned server kept the preset world, then passed after assignment and cache snapshot handling were added.
 - `pnpm typecheck`: passed.
+- `pnpm test`: passed.
+
+## V1 Persistent App Shell Update
+
+Status: Completed
+
+Completed:
+- Moved `AppShell` from each individual page into the root app layout so the sidebar and top bar persist across route changes.
+- Removed duplicate page-level `AppShell` wrappers from Dashboard, Servers, Server Detail, Create Server, Worlds, Backups, Mods, Activity, and Settings.
+- Kept the same main content spacing and visual structure while avoiding sidebar/topbar remounts on every left-nav click.
+- This reduces repeated shell state resets, repeated nav prefetch setup, and perceived left-side navigation latency.
+
+Checks:
+- `pnpm typecheck`: initially failed because it was run in parallel with `pnpm build` while `.next/types` was being regenerated, then passed when rerun after build.
+- `pnpm lint`: passed.
+- `pnpm test`: passed.
+- `pnpm build`: passed with the existing Next.js ESLint plugin warning.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm typecheck`: passed.
 - `pnpm lint`: passed.
 - `pnpm test`: passed.
 - `pnpm build`: passed with the existing Next.js ESLint plugin warning.

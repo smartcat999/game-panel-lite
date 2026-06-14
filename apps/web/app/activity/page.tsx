@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Activity as ActivityIcon } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import { listActivity } from "@/lib/api";
@@ -13,7 +12,7 @@ export default function ActivityPage() {
   const query = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
   const events = query.data ?? [];
   return (
-    <AppShell>
+    <>
       <PageHeader title={t("activityTitle")} description={t("activityDescription")} />
       {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiActivityUnavailable")}</p>}
       <Card className="overflow-hidden">
@@ -43,6 +42,6 @@ export default function ActivityPage() {
           </div>
         )}
       </Card>
-    </AppShell>
+    </>
   );
 }

@@ -3,7 +3,6 @@
 import { Package, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
@@ -52,7 +51,7 @@ export default function ModsPage() {
   });
 
   return (
-    <AppShell>
+    <>
       <PageHeader
         title={t("modsTitle")}
         description={t("modsDescription")}
@@ -132,6 +131,6 @@ export default function ModsPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
       />
-    </AppShell>
+    </>
   );
 }
