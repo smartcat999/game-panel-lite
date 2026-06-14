@@ -133,6 +133,21 @@ async function mockApi(page: Page) {
     });
   });
 
+  await page.route("**/api/servers/server-e2e/mods/upload", async (route) => {
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "mod-upload-e2e",
+        instanceId: "server-e2e",
+        fileName: "example.tmod",
+        sizeBytes: 256,
+        enabled: true,
+        createdAt: "2026-06-14T09:00:00.000Z"
+      })
+    });
+  });
+
   await page.route("**/api/servers/server-e2e/mods/mod-e2e", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -203,6 +218,22 @@ async function mockApi(page: Page) {
         sizeBytes: 2048,
         activeInstanceId: "server-target",
         createdAt: "2026-06-14T09:01:00.000Z"
+      })
+    });
+  });
+
+  await page.route("**/api/worlds/import", async (route) => {
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "world-upload-e2e",
+        instanceId: "server-e2e",
+        name: "upload",
+        fileName: "upload.wld",
+        sizeBytes: 1024,
+        activeInstanceId: "server-e2e",
+        createdAt: "2026-06-14T09:00:00.000Z"
       })
     });
   });
@@ -325,6 +356,32 @@ test("create server wizard keeps clicked mode and preset selected", async ({ pag
   await building.hover();
   await expect(expert).toHaveAttribute("aria-pressed", "true");
   await expect(building).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("button", { name: /模式/ }).click();
+  await tmod.click();
+  await expect(tmod).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "5 世界 / 模组" }).click();
+  await page.getByText("导入 `.wld` 世界文件").locator("..").setInputFiles({
+    name: "upload.wld",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("world")
+  });
+  await page.getByText("上传 `.tmod`、`install.txt` 或 `enabled.json`").locator("..").setInputFiles({
+    name: "example.tmod",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("mod")
+  });
+  await expect(page.getByText("创建服务器后会自动导入世界文件并上传模组文件。")).toBeVisible();
+
+  await page.getByRole("button", { name: "6 检查" }).click();
+  const createRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/servers"));
+  const worldUploadRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/worlds/import"));
+  const modUploadRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/servers/server-e2e/mods/upload"));
+  await page.getByRole("main").getByRole("button", { name: "创建服务器" }).click();
+  await createRequest;
+  await worldUploadRequest;
+  await modUploadRequest;
 });
 
 test("server detail and management flows expose live V1 actions", async ({ page, context }) => {

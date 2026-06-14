@@ -10,8 +10,7 @@ import { useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { previewTerrariaConfig } from "@/lib/api";
-import { createServer } from "@/lib/api";
+import { createServer, importWorld, previewTerrariaConfig, uploadMod } from "@/lib/api";
 import { getTerrariaPreset, type TerrariaConfig } from "@gamepanel-lite/shared";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepWorldMods", "stepReview"] as const;
@@ -33,20 +32,33 @@ export function CreateServerWizard() {
   const [mode, setMode] = useState<"vanilla" | "tmodloader">("tmodloader");
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>("modded-starter");
   const [config, setConfig] = useState<TerrariaConfig>(getTerrariaPreset("modded-starter").config);
-  const [worldFileName, setWorldFileName] = useState("");
-  const [modFileNames, setModFileNames] = useState<string[]>([]);
+  const [worldFile, setWorldFile] = useState<File | null>(null);
+  const [modFiles, setModFiles] = useState<File[]>([]);
+  const worldFileName = worldFile?.name ?? "";
+  const modFileNames = modFiles.map((file) => file.name);
   const fallbackStepKey: (typeof stepKeys)[number] = "stepReview";
   const currentStepKey = stepKeys[step] ?? fallbackStepKey;
   const nextStepKey = stepKeys[Math.min(stepKeys.length - 1, step + 1)] ?? fallbackStepKey;
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
   const create = useMutation({
-    mutationFn: () => createServer({
-      name: config.serverName || "Terraria Server",
-      providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
-      config
-    }),
+    mutationFn: async () => {
+      const server = await createServer({
+        name: config.serverName || "Terraria Server",
+        providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
+        config
+      });
+      if (worldFile) {
+        await importWorld(worldFile, server.id);
+      }
+      if (mode === "tmodloader" && modFiles.length > 0) {
+        await Promise.all(modFiles.map((file) => uploadMod(server.id, file)));
+      }
+      return server;
+    },
     onSuccess: async (server) => {
       await queryClient.invalidateQueries({ queryKey: ["servers"] });
+      await queryClient.invalidateQueries({ queryKey: ["worlds"] });
+      await queryClient.invalidateQueries({ queryKey: ["mods", server.id] });
       queryClient.setQueryData(["server", server.id], server);
       router.push(`/servers/${server.id}`);
     }
@@ -56,6 +68,9 @@ export function CreateServerWizard() {
     setMode(nextMode);
     setSelectedPreset(nextPreset);
     setConfig(getTerrariaPreset(nextPreset).config);
+    if (nextMode === "vanilla") {
+      setModFiles([]);
+    }
   };
   const choosePreset = (preset: PresetKey) => {
     setSelectedPreset(preset);
@@ -110,8 +125,8 @@ export function CreateServerWizard() {
                 mode={mode}
                 worldFileName={worldFileName}
                 modFileNames={modFileNames}
-                setWorldFileName={setWorldFileName}
-                setModFileNames={setModFileNames}
+                setWorldFile={setWorldFile}
+                setModFiles={setModFiles}
               />
             )}
             {step === 5 && <ReviewStep mode={mode} config={config} worldFileName={worldFileName} modFileNames={modFileNames} />}
@@ -296,14 +311,14 @@ function WorldModsStep({
   mode,
   worldFileName,
   modFileNames,
-  setWorldFileName,
-  setModFileNames
+  setWorldFile,
+  setModFiles
 }: {
   mode: "vanilla" | "tmodloader";
   worldFileName: string;
   modFileNames: string[];
-  setWorldFileName: (name: string) => void;
-  setModFileNames: (names: string[]) => void;
+  setWorldFile: (file: File | null) => void;
+  setModFiles: (files: File[]) => void;
 }) {
   const { t } = useI18n();
   return (
@@ -315,7 +330,7 @@ function WorldModsStep({
             className="sr-only"
             type="file"
             accept=".wld"
-            onChange={(event) => setWorldFileName(event.target.files?.[0]?.name ?? "")}
+            onChange={(event) => setWorldFile(event.target.files?.[0] ?? null)}
           />
           <span className="flex items-center gap-3 font-medium text-white">
             <FileUp aria-hidden="true" className="text-panel-green" />
@@ -332,7 +347,7 @@ function WorldModsStep({
               type="file"
               accept=".tmod,.txt,.json"
               multiple
-              onChange={(event) => setModFileNames(Array.from(event.target.files ?? []).map((file) => file.name))}
+              onChange={(event) => setModFiles(Array.from(event.target.files ?? []))}
             />
             <span className="flex items-center gap-3 font-medium text-white">
               <FileArchive aria-hidden="true" className="text-panel-purple" />

@@ -581,6 +581,27 @@ Checks:
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go build ./...`: passed with a non-fatal sandbox warning when Go attempted to write its global module stat cache.
 - `pnpm build`: passed
 
+## Post-V1 Create Wizard Upload Execution Update
+
+Status: Completed
+
+Completed:
+- Changed the Create Server wizard World / Mods step to retain the selected `File` objects, not just display file names.
+- After creating a server, the wizard now imports the selected `.wld` world file into that new server.
+- For tModLoader servers, the wizard now uploads selected `.tmod`, `install.txt`, or `enabled.json` files into the new server.
+- The wizard invalidates server, world, and mod query caches before redirecting to the new server detail page.
+- Updated the upload note copy to reflect that imports/uploads happen automatically after creation.
+- Added Playwright coverage proving create-server, world import, and mod upload requests all fire from the wizard flow.
+
+Checks:
+- `pnpm lint`: passed
+- `pnpm typecheck`: passed
+- `pnpm test`: passed
+- `pnpm e2e`: passed
+- `pnpm build`: passed
+- `go test ./...`: passed
+- `go vet ./...`: passed
+
 ## Post-V1 Server Game Art Update
 
 Status: Completed
