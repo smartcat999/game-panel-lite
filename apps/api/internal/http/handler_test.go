@@ -1343,6 +1343,72 @@ func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestRestoreBackupSynchronizesServerMetadataFromRestoredConfig(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("restore-sync", cfg.DataDir)
+	server.Name = "Restore Sync"
+	server.WorldName = "BackedUpWorld"
+	server.Config.WorldName = "BackedUpWorld"
+	server.Config.MaxPlayers = 14
+	server.Config.Port = 17777
+	server.MaxPlayers = 14
+	server.Port = 17777
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configText, err := terraria.RenderServerConfig(server.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(configText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/restore-sync/backups", nil))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected backup create 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var backup domain.Backup
+	if err := json.Unmarshal(create.Body.Bytes(), &backup); err != nil {
+		t.Fatal(err)
+	}
+
+	stale := server
+	stale.WorldName = "StaleWorld"
+	stale.Config.WorldName = "StaleWorld"
+	stale.Config.MaxPlayers = 4
+	stale.Config.Port = 18888
+	stale.MaxPlayers = 4
+	stale.Port = 18888
+	if err := db.SaveServer(context.Background(), &stale); err != nil {
+		t.Fatal(err)
+	}
+	staleConfig, err := terraria.RenderServerConfig(stale.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(staleConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := httptest.NewRecorder()
+	router.ServeHTTP(restore, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/"+backup.ID+"/restore", nil))
+	if restore.Code != stdhttp.StatusOK {
+		t.Fatalf("expected backup restore 200, got %d: %s", restore.Code, restore.Body.String())
+	}
+	restored, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.WorldName != "BackedUpWorld" || restored.Config.WorldName != "BackedUpWorld" || restored.MaxPlayers != 14 || restored.Port != 17777 {
+		t.Fatalf("expected restored server metadata synchronized from backup config, got %+v", restored)
+	}
+}
+
 func TestDeleteBackupKeepsRecordWhenFileRemovalFails(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	backupDir := filepath.Join(cfg.DataDir, "backups", "backup-source", "blocked.zip")

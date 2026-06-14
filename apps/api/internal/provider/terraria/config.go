@@ -3,6 +3,7 @@ package terraria
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -76,6 +77,89 @@ func RenderServerConfig(config domain.TerrariaConfig) (string, error) {
 		fmt.Sprintf("language=%s", value(config.Language, "en-US")),
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+func ParseServerConfig(base domain.TerrariaConfig, input string) (domain.TerrariaConfig, error) {
+	next := base
+	for _, rawLine := range strings.Split(input, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		value = strings.TrimSpace(value)
+		switch key {
+		case "world":
+			if value != "" {
+				world := strings.TrimSuffix(filepath.Base(value), filepath.Ext(value))
+				if world != "" {
+					next.WorldName = world
+				}
+			}
+		case "worldname":
+			if value != "" {
+				next.WorldName = value
+			}
+		case "autocreate":
+			switch value {
+			case "1":
+				next.WorldSize = "small"
+			case "2":
+				next.WorldSize = "medium"
+			case "3":
+				next.WorldSize = "large"
+			}
+		case "worldevil":
+			switch value {
+			case "0":
+				next.WorldEvil = "random"
+			case "1":
+				next.WorldEvil = "corruption"
+			case "2":
+				next.WorldEvil = "crimson"
+			}
+		case "difficulty":
+			switch value {
+			case "0":
+				next.Difficulty = "journey"
+			case "1":
+				next.Difficulty = "classic"
+			case "2":
+				next.Difficulty = "expert"
+			case "3":
+				next.Difficulty = "master"
+			}
+		case "maxplayers":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				next.MaxPlayers = parsed
+			}
+		case "port":
+			if parsed, err := strconv.Atoi(value); err == nil {
+				next.Port = parsed
+			}
+		case "password":
+			next.Password = value
+		case "motd":
+			next.MOTD = value
+		case "seed":
+			next.Seed = value
+		case "secure":
+			next.Secure = value == "1" || strings.EqualFold(value, "true")
+		case "language":
+			next.Language = value
+		}
+	}
+	if next.ServerName == "" {
+		next.ServerName = base.ServerName
+	}
+	if next.Language == "" {
+		next.Language = value(next.Language, "en-US")
+	}
+	return next, ValidateConfig(next)
 }
 
 func boolInt(value bool) int {

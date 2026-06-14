@@ -668,8 +668,43 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := h.syncRestoredServerConfig(r.Context(), &server); err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
 	h.recordActivity(r.Context(), server.ID, "backup.restored", fmt.Sprintf("Restored backup %s for %s", item.FileName, server.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "restored", "backupId": item.ID})
+}
+
+func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.GameServerInstance) error {
+	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	nextConfig, err := terraria.ParseServerConfig(server.Config, string(configBytes))
+	if err != nil {
+		return err
+	}
+	server.WorldName = nextConfig.WorldName
+	server.Port = nextConfig.Port
+	server.MaxPlayers = nextConfig.MaxPlayers
+	server.Password = nextConfig.Password
+	server.Config = nextConfig
+	server.UpdatedAt = time.Now()
+	if server.ContainerID != "" {
+		if h.runtimeStatusAvailable() {
+			if _, err := h.runtime.Inspect(ctx, *server); err == nil {
+				if err := h.runtime.Remove(ctx, *server); err != nil {
+					return err
+				}
+			}
+		}
+		server.ContainerID = ""
+	}
+	return h.store.SaveServer(ctx, server)
 }
 
 func (h *Handler) migrateBackup(w http.ResponseWriter, r *http.Request) {
