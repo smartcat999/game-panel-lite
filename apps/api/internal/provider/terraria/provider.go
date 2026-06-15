@@ -3,6 +3,8 @@ package terraria
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -37,6 +39,10 @@ func (VanillaProvider) RenderConfig(config domain.TerrariaConfig) (string, error
 func (VanillaProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return vanillaRuntimeOptions(config)
 }
+func (VanillaProvider) PlayerListCommand() string { return "playing" }
+func (VanillaProvider) ParsePlayerListOutput(lines []string) []domain.Player {
+	return parsePlayingCommandOutput(lines)
+}
 
 func (TModLoaderProvider) Key() domain.ProviderKey { return domain.ProviderTerrariaTModLoader }
 func (TModLoaderProvider) Name() string            { return "Terraria tModLoader" }
@@ -56,6 +62,10 @@ func (TModLoaderProvider) RenderConfig(config domain.TerrariaConfig) (string, er
 }
 func (TModLoaderProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return tModLoaderRuntimeOptions(config)
+}
+func (TModLoaderProvider) PlayerListCommand() string { return "playing" }
+func (TModLoaderProvider) ParsePlayerListOutput(lines []string) []domain.Player {
+	return parsePlayingCommandOutput(lines)
 }
 
 func RuntimeWorldFiles(providerKey domain.ProviderKey, config domain.TerrariaConfig) []string {
@@ -139,6 +149,77 @@ func VanillaImageForVersion(version string) string {
 		version = vanillaVersions[0]
 	}
 	return "smartcat99999/terraria-vanilla:" + version
+}
+
+func parsePlayingCommandOutput(lines []string) []domain.Player {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "no players") {
+			return []domain.Player{}
+		}
+		if players, ok := parseNamedPlayerLine(line); ok {
+			return players
+		}
+		if count, ok := parsePlayerCountLine(line); ok {
+			return unnamedPlayers(count)
+		}
+	}
+	return nil
+}
+
+func parseNamedPlayerLine(line string) ([]domain.Player, bool) {
+	index := strings.LastIndex(line, ":")
+	if index < 0 {
+		return nil, false
+	}
+	label := strings.ToLower(strings.TrimSpace(line[:index]))
+	if !strings.Contains(label, "player") {
+		return nil, false
+	}
+	namesText := strings.TrimSpace(line[index+1:])
+	if namesText == "" {
+		return []domain.Player{}, true
+	}
+	names := strings.FieldsFunc(namesText, func(r rune) bool {
+		return r == ',' || r == ';'
+	})
+	players := make([]domain.Player, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		players = append(players, domain.Player{Name: name})
+	}
+	return players, true
+}
+
+func parsePlayerCountLine(line string) (int, bool) {
+	lower := strings.ToLower(line)
+	if !strings.Contains(lower, "player") || !strings.Contains(lower, "connected") {
+		return 0, false
+	}
+	match := regexp.MustCompile(`(?i)(\d+)\s+players?\s+connected`).FindStringSubmatch(line)
+	if len(match) != 2 {
+		return 0, false
+	}
+	count, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0, false
+	}
+	return count, true
+}
+
+func unnamedPlayers(count int) []domain.Player {
+	if count <= 0 {
+		return []domain.Player{}
+	}
+	players := make([]domain.Player, count)
+	return players
 }
 
 func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {

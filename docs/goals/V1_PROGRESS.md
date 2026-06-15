@@ -1,5 +1,26 @@
 # GamePanel Lite V1 Progress
 
+## V1 Player Count Sync Update
+
+Status: Completed
+
+Completed:
+- Added a provider-level player list capability for Terraria servers.
+- Vanilla and tModLoader both use the native `playing` console command.
+- Added Terraria log output parsing for named player lists, count-only output, and empty player lists.
+- Added a backend player syncer that periodically sends `playing` to running servers, reads recent log output, and stores `playersOnline`.
+- Non-running servers now reset their online player count to zero.
+- The frontend server mapper now uses `playersOnline` for server cards, detail summaries, and dashboard totals.
+
+Checks:
+- `GOCACHE=/tmp/game-panel-lite-go-build go test ./apps/api/internal/provider/terraria ./apps/api/internal/player`: passed.
+- `GOCACHE=/tmp/game-panel-lite-go-build go test ./...`: passed.
+- `GOCACHE=/tmp/game-panel-lite-go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
 ## V1 Runtime Container Recreate Update
 
 Status: Completed

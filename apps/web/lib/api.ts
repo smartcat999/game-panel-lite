@@ -54,6 +54,7 @@ type ApiServer = {
   providerKey: "terraria-vanilla" | "terraria-tmodloader";
   status: Server["status"];
   worldName: string;
+  playersOnline?: number;
   port: number;
   maxPlayers: number;
   password?: string;
@@ -160,7 +161,7 @@ function toServer(server: ApiServer): Server {
     mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
     status: server.status,
     world: server.worldName,
-    players: 0,
+    players: server.playersOnline ?? 0,
     maxPlayers: server.maxPlayers,
     port: server.port,
     version: server.version ?? "1.4.5.6",

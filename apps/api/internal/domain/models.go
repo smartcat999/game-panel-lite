@@ -12,6 +12,10 @@ type WorldEvil string
 
 type Difficulty string
 
+type Player struct {
+	Name string `json:"name,omitempty"`
+}
+
 const (
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
@@ -33,6 +37,7 @@ type GameServerInstance struct {
 	ProviderKey           ProviderKey    `json:"providerKey"`
 	Status                ServerStatus   `json:"status"`
 	WorldName             string         `json:"worldName"`
+	PlayersOnline         int            `json:"playersOnline"`
 	Port                  int            `json:"port"`
 	MaxPlayers            int            `json:"maxPlayers"`
 	Password              string         `json:"password,omitempty"`

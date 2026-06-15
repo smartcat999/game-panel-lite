@@ -17,6 +17,11 @@ type GameProvider interface {
 	RuntimeOptions(domain.TerrariaConfig) runtime.ContainerOptions
 }
 
+type PlayerListProvider interface {
+	PlayerListCommand() string
+	ParsePlayerListOutput([]string) []domain.Player
+}
+
 type Registry struct {
 	providers map[domain.ProviderKey]GameProvider
 }

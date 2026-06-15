@@ -80,6 +80,30 @@ describe("api mappers", () => {
     expect(server.lastError).toBe("container exited (exit code 1)");
   });
 
+  it("maps backend online player count onto server cards", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "server-1",
+          name: "Friends Server",
+          providerKey: "terraria-vanilla",
+          status: "running",
+          worldName: "Friends World",
+          playersOnline: 2,
+          port: 7777,
+          maxPlayers: 8,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const server = await getServer("server-1");
+
+    expect(server.players).toBe(2);
+  });
+
   it("surfaces backend download errors before the browser navigates away", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ error: "world file is missing" }), {
