@@ -32,7 +32,8 @@ RUN apt-get update \
             libmono-system-data4.0-cil \
             libmono-system-drawing4.0-cil \
             libmono-system-runtime-serialization4.0-cil \
-            libmono-system-windows-forms4.0-cil; \
+            libmono-system-windows-forms4.0-cil \
+            libmono-windowsbase4.0-cil; \
     fi \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /home/container/server /home/container/Worlds /home/container/logs \

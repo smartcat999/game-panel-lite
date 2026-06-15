@@ -20,4 +20,4 @@ Known version mappings:
 
 The image is built from the official Terraria dedicated server archive. GamePanel Lite starts this prebuilt image directly; server startup does not download or update Terraria files.
 
-On `linux/amd64`, the image starts the official `TerrariaServer.bin.x86_64` binary. On other Linux architectures, it starts `TerrariaServer.exe` through the system Mono runtime and removes the archive's bundled x86-oriented Mono class libraries to avoid runtime/library mismatches.
+On `linux/amd64`, the image starts the official `TerrariaServer.bin.x86_64` binary. On other Linux architectures, it starts `TerrariaServer.exe` through the system Mono runtime and removes the archive's bundled x86-oriented Mono class libraries to avoid runtime/library mismatches. The arm64 image includes the Mono assemblies Terraria loads while resolving world paths, including `WindowsBase`.
