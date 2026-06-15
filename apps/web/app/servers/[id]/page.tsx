@@ -1327,14 +1327,24 @@ function BackupsTab({
       {!isError && restoreAction.reasonKey ? <p className="mb-3 text-sm text-slate-500">{t(restoreAction.reasonKey)}</p> : null}
       {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
       {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noBackupsYet")}</p> : null}
-      <div className="grid gap-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         {items.map((backup) => (
-          <ResourceRow
-            key={backup.id}
-            title={backup.name}
-            meta={`${backup.world} · ${backup.size} · ${localizeRelativeTime(backup.created, locale)}`}
-            actions={
-              <>
+          <div key={backup.id} className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate font-medium text-white">{backup.name}</p>
+                  <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
+                    {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-sm text-slate-500">{backup.world}</p>
+              </div>
+              <span className="shrink-0 text-xs text-slate-500">{localizeRelativeTime(backup.created, locale)}</span>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-panel-line pt-3">
+              <span className="text-sm font-medium text-slate-300">{backup.size}</span>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
                   aria-label={t("restore")}
@@ -1353,9 +1363,9 @@ function BackupsTab({
                 <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>
                   <Trash2 aria-hidden="true" />
                 </Button>
-              </>
-            }
-          />
+              </div>
+            </div>
+          </div>
         ))}
       </div>
     </ResourcePanel>
