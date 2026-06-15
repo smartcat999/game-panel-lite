@@ -183,6 +183,24 @@ paths:
           description: Updated existing mod file record
         "201":
           description: Uploaded mod file
+  /api/servers/{id}/mods/workshop:
+    post:
+      summary: Import tModLoader Workshop IDs by writing install.txt for the server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workshopIds]
+              properties:
+                workshopIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Updated install.txt mod support file
   /api/servers/{id}/mods/{modId}:
     patch:
       summary: Enable or disable a tModLoader mod

@@ -599,6 +599,20 @@ export async function uploadMod(serverId: string, file: File): Promise<ModFile> 
   return toModFile(item);
 }
 
+export async function importWorkshopMods(serverId: string, workshopIds: string[]): Promise<ModFile> {
+  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/workshop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workshopIds })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import workshop mods");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
 export async function setModEnabled(serverId: string, modId: string, enabled: boolean): Promise<ModFile> {
   const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, {
     method: "PATCH",

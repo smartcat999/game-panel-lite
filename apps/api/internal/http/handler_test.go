@@ -1212,6 +1212,45 @@ func TestTModLoaderModUploadIsIdempotentForSameFile(t *testing.T) {
 	}
 }
 
+func TestTModLoaderWorkshopImportWritesInstallFile(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/servers/tmod/mods/workshop", bytes.NewBufferString(`{"workshopIds":["2563309347","2824688072","2563309347"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected workshop import 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var item domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &item); err != nil {
+		t.Fatal(err)
+	}
+	if item.FileName != "install.txt" {
+		t.Fatalf("expected install.txt record, got %+v", item)
+	}
+	expected := "2563309347\n2824688072\n"
+	stored, err := os.ReadFile(filepath.Join(cfg.DataDir, "mods", server.ID, "install.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(stored) != expected {
+		t.Fatalf("expected stored install.txt %q, got %q", expected, string(stored))
+	}
+	runtimeInstall, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "install.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeInstall) != expected {
+		t.Fatalf("expected runtime install.txt %q, got %q", expected, string(runtimeInstall))
+	}
+}
+
 func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

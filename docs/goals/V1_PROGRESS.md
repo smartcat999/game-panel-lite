@@ -2008,3 +2008,24 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 tModLoader Workshop ID Import Update
+
+Status: Completed
+
+Completed:
+- Added a server-scoped Workshop ID import endpoint for tModLoader servers.
+- The endpoint validates stopped-server state, accepts numeric Workshop IDs, de-duplicates them, and writes `Mods/install.txt` into both managed mod storage and the runtime data directory.
+- Added Mods page UI for importing Workshop IDs into the selected tModLoader server.
+- Removed `-nosteam` from the tModLoader runtime command and image default command so Workshop sync can run through the tModLoader/Steam path.
+- Updated OpenAPI and tModLoader image documentation for the Workshop ID import flow.
+- Added backend HTTP coverage proving Workshop ID import writes `install.txt`.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http ./apps/api/internal/provider/terraria`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

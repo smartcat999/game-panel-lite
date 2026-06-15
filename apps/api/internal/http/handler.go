@@ -95,6 +95,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Delete("/api/backups/{id}", h.deleteBackup)
 	r.Get("/api/servers/{id}/mods", h.listMods)
 	r.Post("/api/servers/{id}/mods/upload", h.uploadMod)
+	r.Post("/api/servers/{id}/mods/workshop", h.importWorkshopMods)
 	r.Patch("/api/servers/{id}/mods/{modId}", h.updateMod)
 	r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
 	r.Get("/api/mods", h.listGlobalMods)
@@ -172,6 +173,61 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusCreated
 	}
 	writeJSON(w, status, item)
+}
+
+func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.ProviderKey != domain.ProviderTerrariaTModLoader {
+		writeError(w, http.StatusBadRequest, "workshop mods are only supported for tModLoader servers")
+		return
+	}
+	if isServerLockedForMutation(server.Status) {
+		writeError(w, http.StatusConflict, "stop the server before changing mods")
+		return
+	}
+	var payload struct {
+		WorkshopIDs []string `json:"workshopIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
+	if len(workshopIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "select at least one workshop item")
+		return
+	}
+	for _, id := range workshopIDs {
+		if !isDigitsOnly(id) {
+			writeError(w, http.StatusBadRequest, "workshop IDs must contain digits only")
+			return
+		}
+	}
+	content := strings.Join(workshopIDs, "\n") + "\n"
+	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, "install.txt", strings.NewReader(content))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	item, _, err := h.upsertModRecord(r.Context(), server.ID, "install.txt", size)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.materializeModForRuntime(item, server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "mod.workshop_imported", fmt.Sprintf("Imported %d workshop mod IDs for %s", len(workshopIDs), server.Name))
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
@@ -613,6 +669,18 @@ func uniqueNonEmptyStrings(values []string) []string {
 		result = append(result, value)
 	}
 	return result
+}
+
+func isDigitsOnly(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {

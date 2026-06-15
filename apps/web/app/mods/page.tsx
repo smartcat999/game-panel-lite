@@ -6,7 +6,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { assignMod, createModPack, deleteGlobalMod, deleteMod, deleteModPack, listGlobalMods, listModPacks, listMods, listServers, setModEnabled, uploadGlobalMod, uploadMod } from "@/lib/api";
+import { assignMod, createModPack, deleteGlobalMod, deleteMod, deleteModPack, importWorkshopMods, listGlobalMods, listModPacks, listMods, listServers, setModEnabled, uploadGlobalMod, uploadMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { describeResourceAction } from "@/lib/server-detail-actions";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export default function ModsPage() {
   const [packName, setPackName] = useState("");
   const [packDescription, setPackDescription] = useState("");
   const [selectedPackModIds, setSelectedPackModIds] = useState<string[]>([]);
+  const [workshopIdsText, setWorkshopIdsText] = useState("");
   const activeServerId = selectedServerId || moddedServers[0]?.id || "";
   const activeServer = useMemo(() => moddedServers.find((server) => server.id === activeServerId), [activeServerId, moddedServers]);
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus: activeServer?.status });
@@ -110,6 +111,19 @@ export default function ModsPage() {
       setErrorMessage(error instanceof Error ? error.message : t("unableAssignMod"));
     }
   });
+  const workshopImport = useMutation({
+    mutationFn: () => importWorkshopMods(activeServerId, parseWorkshopIds(workshopIdsText)),
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage(t("workshopModsImported"));
+      setWorkshopIdsText("");
+      await client.invalidateQueries({ queryKey: ["mods", activeServerId] });
+    },
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableImportWorkshopMods"));
+    }
+  });
   const createPack = useMutation({
     mutationFn: () => createModPack({ name: packName, description: packDescription, modIds: selectedPackModIds }),
     onSuccess: async () => {
@@ -142,6 +156,7 @@ export default function ModsPage() {
   const modPacks = modPacksQuery.data ?? [];
   const serverMods = modsQuery.data ?? [];
   const selectedPackModCount = selectedPackModIds.length;
+  const workshopIds = parseWorkshopIds(workshopIdsText);
   const togglePackMod = (modId: string) => {
     setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
   };
@@ -318,6 +333,24 @@ export default function ModsPage() {
             />
           </div>
           {modAction.reasonKey ? <p className="mb-3 text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
+          <Card className="mb-3 p-4">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-slate-500">{t("workshopIds")}</span>
+                <Input value={workshopIdsText} onChange={(event) => setWorkshopIdsText(event.target.value)} placeholder={t("workshopIdsPlaceholder")} />
+              </label>
+              <Button
+                variant="secondary"
+                onClick={() => workshopImport.mutate()}
+                disabled={!activeServerId || workshopImport.isPending || modAction.disabled || workshopIds.length === 0}
+                title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+              >
+                <Upload aria-hidden="true" />
+                {workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">{t("workshopImportHint")}</p>
+          </Card>
           <div className="grid gap-3 xl:grid-cols-2">
             {serverMods.map((item) => (
               <Card key={item.id} className={cn("p-4 transition", item.enabled ? "border-panel-purple/35" : "opacity-75")}>
@@ -444,4 +477,16 @@ function ModIdentity({ detail, item }: { detail: string; item: ModFile }) {
       </div>
     </div>
   );
+}
+
+function parseWorkshopIds(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split(/[\s,，]+/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
 }

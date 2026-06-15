@@ -36,4 +36,4 @@ USER container
 WORKDIR /home/container
 COPY --from=installer --chown=container:container /opt/tmodloader/ /home/container/
 
-CMD ["sh", "-c", "exec ./server/start-tModLoaderServer.sh -nosteam -config /home/container/serverconfig.txt -tmlsavedirectory /home/container -noupnp"]
+CMD ["sh", "-c", "exec ./server/start-tModLoaderServer.sh -config /home/container/serverconfig.txt -tmlsavedirectory /home/container -noupnp"]
