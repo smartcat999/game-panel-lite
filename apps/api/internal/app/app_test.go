@@ -60,11 +60,12 @@ func TestInvalidDockerHostKeepsAPIAvailableButStartFails(t *testing.T) {
 
 	start := httptest.NewRecorder()
 	api.Routes().ServeHTTP(start, httptest.NewRequest(http.MethodPost, "/api/servers/"+server.ID+"/start", nil))
-	if start.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected start to fail without Docker runtime, got %d: %s", start.Code, start.Body.String())
+	if start.Code != http.StatusAccepted {
+		t.Fatalf("expected async start to be accepted without blocking on Docker runtime, got %d: %s", start.Code, start.Body.String())
 	}
-	if !strings.Contains(start.Body.String(), "Docker runtime unavailable") {
-		t.Fatalf("expected Docker runtime unavailable message, got %q", start.Body.String())
+	failed := waitForAPIServerStatus(t, api, server.ID, domain.StatusErrored)
+	if failed.ContainerID != "" {
+		t.Fatalf("expected failed start to keep an empty container id, got %+v", failed)
 	}
 }
 
@@ -154,13 +155,37 @@ func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
 
 	remove := httptest.NewRecorder()
 	api.Routes().ServeHTTP(remove, httptest.NewRequest(http.MethodDelete, "/api/servers/existing-delete", nil))
-	if remove.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected delete to fail without Docker runtime, got %d: %s", remove.Code, remove.Body.String())
+	if remove.Code != http.StatusAccepted {
+		t.Fatalf("expected async delete to be accepted without blocking on Docker runtime, got %d: %s", remove.Code, remove.Body.String())
 	}
-	if !strings.Contains(remove.Body.String(), "Docker runtime unavailable") {
-		t.Fatalf("expected Docker runtime unavailable message, got %q", remove.Body.String())
+	server = waitForAPIServerStatus(t, api, "existing-delete", domain.StatusErrored)
+	if server.ContainerID != "real-container" {
+		t.Fatalf("expected failed delete to preserve existing container id, got %+v", server)
 	}
 	if _, err := db.GetServer(t.Context(), "existing-delete"); err != nil {
 		t.Fatalf("expected server record to remain after failed delete, got %v", err)
 	}
+}
+
+func waitForAPIServerStatus(t *testing.T, api *App, id string, status domain.ServerStatus) domain.GameServerInstance {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		recorder := httptest.NewRecorder()
+		api.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/servers/"+id, nil))
+		if recorder.Code == http.StatusOK {
+			var server domain.GameServerInstance
+			if err := json.Unmarshal(recorder.Body.Bytes(), &server); err != nil {
+				t.Fatal(err)
+			}
+			if server.Status == status {
+				return server
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	recorder := httptest.NewRecorder()
+	api.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/servers/"+id, nil))
+	t.Fatalf("expected server %s to reach %s, got %d: %s", id, status, recorder.Code, recorder.Body.String())
+	return domain.GameServerInstance{}
 }

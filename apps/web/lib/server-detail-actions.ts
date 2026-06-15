@@ -3,6 +3,14 @@ import type { MessageKey } from "./i18n";
 
 type ResourceActionKind = "assignWorld" | "restoreBackup" | "migrate" | "modifyMods";
 
+export function isServerLifecyclePending(status?: Server["status"]) {
+  return status === "creating" || status === "starting" || status === "restarting" || status === "deleting";
+}
+
+export function isServerLockedForResourceChanges(status?: Server["status"]) {
+  return status === "running" || isServerLifecyclePending(status);
+}
+
 export function formatServerDetailError(
   error: unknown,
   copy: {
@@ -33,10 +41,10 @@ export function describeResourceAction({
   serverStatus?: Server["status"];
   targetCount?: number;
 }): { disabled: boolean; reasonKey?: MessageKey } {
-  if ((kind === "assignWorld" || kind === "restoreBackup") && serverStatus === "running") {
+  if ((kind === "assignWorld" || kind === "restoreBackup") && isServerLockedForResourceChanges(serverStatus)) {
     return { disabled: true, reasonKey: kind === "assignWorld" ? "assignWorldRequiresStopped" : "restoreRequiresStopped" };
   }
-  if (kind === "modifyMods" && serverStatus === "running") {
+  if (kind === "modifyMods" && isServerLockedForResourceChanges(serverStatus)) {
     return { disabled: true, reasonKey: "modChangesRequireStopped" };
   }
   if (kind === "migrate" && (targetCount ?? 0) === 0) {

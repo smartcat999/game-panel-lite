@@ -1,6 +1,6 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 
-export type ServerStatus = "running" | "stopped" | "errored";
+export type ServerStatus = "creating" | "starting" | "running" | "stopped" | "restarting" | "deleting" | "errored";
 export type ServerMode = "vanilla" | "tmodloader";
 
 export type Server = {

@@ -17,9 +17,11 @@ const (
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
 
 	StatusCreating   ServerStatus = "creating"
+	StatusStarting   ServerStatus = "starting"
 	StatusRunning    ServerStatus = "running"
 	StatusStopped    ServerStatus = "stopped"
 	StatusRestarting ServerStatus = "restarting"
+	StatusDeleting   ServerStatus = "deleting"
 	StatusErrored    ServerStatus = "errored"
 )
 

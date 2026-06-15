@@ -61,6 +61,10 @@ func (s *SwitchableAdapter) Stats(ctx context.Context, instance domain.GameServe
 	return s.current().Stats(ctx, instance)
 }
 
+func (s *SwitchableAdapter) HostStats(ctx context.Context) (HostStats, error) {
+	return s.current().HostStats(ctx)
+}
+
 func (s *SwitchableAdapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	return s.current().Logs(ctx, instance)
 }

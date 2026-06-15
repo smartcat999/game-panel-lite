@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeResourceAction, formatServerDetailError } from "./server-detail-actions";
+import { describeResourceAction, formatServerDetailError, isServerLockedForResourceChanges } from "./server-detail-actions";
+import type { ServerStatus } from "./types";
 
 describe("server detail action feedback", () => {
   it("turns raw Docker runtime errors into user-facing guidance", () => {
@@ -35,5 +36,11 @@ describe("server detail action feedback", () => {
       disabled: false,
       reasonKey: undefined
     });
+  });
+
+  it("locks resource changes while lifecycle commands are still running", () => {
+    const pendingStatuses: ServerStatus[] = ["creating", "starting", "restarting", "deleting"];
+    expect(pendingStatuses.map((status) => isServerLockedForResourceChanges(status))).toEqual([true, true, true, true]);
+    expect(isServerLockedForResourceChanges("stopped")).toBe(false);
   });
 });

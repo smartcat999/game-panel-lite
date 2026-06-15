@@ -64,6 +64,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/healthz", h.health)
 	r.Get("/api/version", h.version)
 	r.Get("/api/runtime/docker", h.dockerStatus)
+	r.Get("/api/runtime/stats", h.runtimeStats)
 	r.Get("/api/runtime/docker/hosts", h.dockerHosts)
 	r.Post("/api/runtime/docker/host", h.applyDockerHost)
 	r.Get("/api/settings", h.getSettings)
@@ -136,7 +137,7 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
 		return
 	}
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		writeError(w, http.StatusConflict, "stop the server before changing mods")
 		return
 	}
@@ -183,7 +184,7 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		writeError(w, http.StatusConflict, "stop the server before changing mods")
 		return
 	}
@@ -222,7 +223,7 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		writeError(w, http.StatusConflict, "stop the server before changing mods")
 		return
 	}
@@ -307,7 +308,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
 		return
 	}
-	if targetServer.Status == domain.StatusRunning || targetServer.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(targetServer.Status) {
 		writeError(w, http.StatusConflict, "stop the server before changing mods")
 		return
 	}
@@ -555,7 +556,7 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		writeError(w, http.StatusConflict, "stop the server before assigning a world")
 		return
 	}
@@ -867,7 +868,7 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		writeError(w, http.StatusConflict, "stop the server before restoring a backup")
 		return
 	}
@@ -1051,6 +1052,15 @@ func (h *Handler) dockerStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.dockerMonitor.Status())
 }
 
+func (h *Handler) runtimeStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.runtime.HostStats(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusOK, runtime.HostStats{})
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
 func (h *Handler) dockerHosts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"currentHost": h.cfg.DockerHost,
@@ -1078,6 +1088,9 @@ func (h *Handler) applyDockerHost(w http.ResponseWriter, r *http.Request) {
 	}
 	h.runtime.Set(adapter)
 	h.cfg.DockerHost = host
+	if err := config.PersistDockerHost(host); err != nil {
+		h.logger.Warn("failed to persist docker host", "error", err)
+	}
 	writeJSON(w, http.StatusOK, h.dockerMonitor.Refresh(r.Context()))
 }
 
@@ -1115,6 +1128,9 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	h.runtime.Set(adapter)
 	h.cfg.DockerHost = host
+	if err := config.PersistDockerHost(host); err != nil {
+		h.logger.Warn("failed to persist docker host", "error", err)
+	}
 	h.dockerMonitor.Refresh(r.Context())
 	h.getSettings(w, r)
 }
@@ -1166,7 +1182,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		writeError(w, http.StatusConflict, "stop the server before updating config")
 		return
 	}
@@ -1240,23 +1256,24 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
-	server, err := h.serverWithRuntimeContainer(r.Context(), chi.URLParam(r, "id"))
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if err := h.runtime.Start(r.Context(), server); err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+	if isLifecyclePending(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
-	server.Status = domain.StatusRunning
+	server.Status = domain.StatusStarting
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.recordActivity(r.Context(), server.ID, "server.started", fmt.Sprintf("Started server %s", server.Name))
-	writeJSON(w, http.StatusOK, server)
+	h.recordActivity(r.Context(), server.ID, "server.start.queued", fmt.Sprintf("Queued start for server %s", server.Name))
+	go h.runStartServer(context.Background(), server.ID)
+	writeJSON(w, http.StatusAccepted, server)
 }
 
 func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
@@ -1264,23 +1281,77 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
-	server, err := h.serverWithRuntimeContainer(r.Context(), chi.URLParam(r, "id"))
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if err := h.runtime.Restart(r.Context(), server); err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+	if isLifecyclePending(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
-	server.Status = domain.StatusRunning
+	server.Status = domain.StatusRestarting
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.recordActivity(r.Context(), server.ID, "server.restarted", fmt.Sprintf("Restarted server %s", server.Name))
-	writeJSON(w, http.StatusOK, server)
+	h.recordActivity(r.Context(), server.ID, "server.restart.queued", fmt.Sprintf("Queued restart for server %s", server.Name))
+	go h.runRestartServer(context.Background(), server.ID)
+	writeJSON(w, http.StatusAccepted, server)
+}
+
+func (h *Handler) runStartServer(ctx context.Context, id string) {
+	server, err := h.serverWithRuntimeContainer(ctx, id)
+	if err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.start.failed", err)
+		return
+	}
+	if err := h.runtime.Start(ctx, server); err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.start.failed", err)
+		return
+	}
+	server.Status = domain.StatusRunning
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		h.logger.Warn("failed to persist async server start", "server", id, "error", err)
+		return
+	}
+	h.recordActivity(ctx, server.ID, "server.started", fmt.Sprintf("Started server %s", server.Name))
+}
+
+func (h *Handler) runRestartServer(ctx context.Context, id string) {
+	server, err := h.serverWithRuntimeContainer(ctx, id)
+	if err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
+		return
+	}
+	if err := h.runtime.Restart(ctx, server); err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
+		return
+	}
+	server.Status = domain.StatusRunning
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		h.logger.Warn("failed to persist async server restart", "server", id, "error", err)
+		return
+	}
+	h.recordActivity(ctx, server.ID, "server.restarted", fmt.Sprintf("Restarted server %s", server.Name))
+}
+
+func (h *Handler) markServerLifecycleFailed(ctx context.Context, id string, activityType string, cause error) {
+	server, err := h.store.GetServer(ctx, id)
+	if err != nil {
+		h.logger.Warn("failed to load server after lifecycle failure", "server", id, "error", err, "cause", cause)
+		return
+	}
+	server.Status = domain.StatusErrored
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		h.logger.Warn("failed to persist lifecycle failure", "server", id, "error", err, "cause", cause)
+		return
+	}
+	h.recordActivity(ctx, server.ID, activityType, fmt.Sprintf("%s: %v", server.Name, cause))
 }
 
 func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
@@ -1452,7 +1523,7 @@ func (h *Handler) startRecreatedRunningContainer(ctx context.Context, server dom
 }
 
 func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig) error {
-	if server.Status == domain.StatusRunning || server.Status == domain.StatusRestarting {
+	if isServerLockedForMutation(server.Status) {
 		return fmt.Errorf("stop the server before updating config")
 	}
 	gameProvider, ok := h.provider.Get(server.ProviderKey)
@@ -1499,6 +1570,9 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 }
 
 func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameServerInstance) domain.GameServerInstance {
+	if isLifecyclePending(server.Status) {
+		return server
+	}
 	if server.ContainerID == "" {
 		return server
 	}
@@ -1547,36 +1621,64 @@ func statusCodeForRuntimeError(err error) int {
 	return http.StatusServiceUnavailable
 }
 
+func isLifecyclePending(status domain.ServerStatus) bool {
+	return status == domain.StatusStarting || status == domain.StatusRestarting || status == domain.StatusDeleting
+}
+
+func isServerLockedForMutation(status domain.ServerStatus) bool {
+	return status == domain.StatusRunning || isLifecyclePending(status)
+}
+
 func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	if isLifecyclePending(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
+		return
+	}
+	server.Status = domain.StatusDeleting
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "server.delete.queued", fmt.Sprintf("Queued delete for server %s", server.Name))
+	go h.runDeleteServer(context.Background(), server.ID)
+	writeJSON(w, http.StatusAccepted, server)
+}
+
+func (h *Handler) runDeleteServer(ctx context.Context, id string) {
+	server, err := h.store.GetServer(ctx, id)
+	if err != nil {
+		h.logger.Warn("failed to load server for async delete", "server", id, "error", err)
+		return
+	}
 	if server.ContainerID != "" {
-		if err := h.requireRuntimeAvailable(r.Context()); err != nil {
-			writeError(w, statusCodeForRuntimeError(err), err.Error())
+		if err := h.requireRuntimeAvailable(ctx); err != nil {
+			h.markServerLifecycleFailed(ctx, server.ID, "server.delete.failed", err)
 			return
 		}
-		if _, err := h.runtime.Inspect(r.Context(), server); err == nil {
-			if err := h.runtime.Remove(r.Context(), server); err != nil {
-				writeError(w, http.StatusServiceUnavailable, err.Error())
+		if _, err := h.runtime.Inspect(ctx, server); err == nil {
+			if err := h.runtime.Remove(ctx, server); err != nil {
+				h.markServerLifecycleFailed(ctx, server.ID, "server.delete.failed", err)
 				return
 			}
 		} else {
 			h.logger.Warn("runtime container missing during server delete; deleting stale record", "server", server.ID, "container", server.ContainerID, "error", err)
 		}
 	}
-	if err := h.cleanupOwnedServerResources(r.Context(), server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.cleanupOwnedServerResources(ctx, server); err != nil {
+		h.markServerLifecycleFailed(ctx, server.ID, "server.delete.failed", err)
 		return
 	}
-	if err := h.store.DeleteServer(r.Context(), server.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.store.DeleteServer(ctx, server.ID); err != nil {
+		h.markServerLifecycleFailed(ctx, server.ID, "server.delete.failed", err)
 		return
 	}
-	h.recordActivity(r.Context(), server.ID, "server.deleted", fmt.Sprintf("Deleted server %s", server.Name))
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	h.recordActivity(ctx, server.ID, "server.deleted", fmt.Sprintf("Deleted server %s", server.Name))
 }
 
 func (h *Handler) cleanupOwnedServerResources(ctx context.Context, server domain.GameServerInstance) error {

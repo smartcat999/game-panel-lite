@@ -52,7 +52,7 @@ type ApiServer = {
   id: string;
   name: string;
   providerKey: "terraria-vanilla" | "terraria-tmodloader";
-  status: "running" | "stopped" | "errored" | "creating" | "restarting";
+  status: Server["status"];
   worldName: string;
   port: number;
   maxPlayers: number;
@@ -148,7 +148,7 @@ function toServer(server: ApiServer): Server {
     id: server.id,
     name: server.name,
     mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
-    status: server.status === "running" ? "running" : server.status === "errored" ? "errored" : "stopped",
+    status: server.status,
     world: server.worldName,
     players: 0,
     maxPlayers: server.maxPlayers,
@@ -256,6 +256,21 @@ export async function getServerStats(id: string): Promise<ServerStats> {
 
 export function serverLogsUrl(id: string) {
   return `${API_BASE}/api/servers/${id}/logs`;
+}
+
+export type HostStats = {
+  runningContainers: number;
+  totalCpuPercent: number;
+  totalMemoryMb: number;
+  memoryLimitMb: number;
+};
+
+export async function getRuntimeStats(): Promise<HostStats> {
+  const response = await fetch(`${API_BASE}/api/runtime/stats`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load runtime stats");
+  }
+  return (await response.json()) as HostStats;
 }
 
 export async function getServerLogSnapshot(id: string): Promise<string[]> {

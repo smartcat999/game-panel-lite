@@ -22,10 +22,15 @@ export function ServerActions({ server }: { server: Server }) {
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const lifecycleBusy = server.status === "creating" || server.status === "starting" || server.status === "restarting" || server.status === "deleting";
+  const controlsDisabled = Boolean(busyAction) || lifecycleBusy;
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
   const successLabel = (action: "start" | "stop" | "restart" | "delete") =>
-    action === "start" ? t("serverStarted") : action === "stop" ? t("serverStopped") : action === "restart" ? t("serverRestarted") : t("serverDeleted");
+    action === "start" ? t("serverStartQueued") : action === "stop" ? t("serverStopped") : action === "restart" ? t("serverRestartQueued") : t("serverDeleteQueued");
+  const startLabel = busyAction === "start" || server.status === "starting" || server.status === "creating" ? t("actionStarting") : t("actionStart");
+  const restartLabel = busyAction === "restart" || server.status === "restarting" ? t("actionRestarting") : t("actionRestart");
+  const deleteLabel = busyAction === "delete" || server.status === "deleting" ? t("actionDeleting") : t("delete");
 
   useEffect(() => {
     if (!pendingAction) return;
@@ -95,27 +100,27 @@ export function ServerActions({ server }: { server: Server }) {
     <>
       <div className="flex flex-wrap gap-2">
         {server.status === "running" ? (
-          <Button variant="danger" onClick={() => runAction("stop")} disabled={Boolean(busyAction)}>
+          <Button variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
             <Square aria-hidden="true" />
             {busyAction === "stop" ? t("actionWorking") : t("actionStop")}
           </Button>
         ) : (
-          <Button onClick={() => runAction("start")} disabled={Boolean(busyAction)}>
+          <Button onClick={() => runAction("start")} disabled={controlsDisabled}>
             <Play aria-hidden="true" />
-            {busyAction === "start" ? t("actionWorking") : t("actionStart")}
+            {startLabel}
           </Button>
         )}
-        <Button variant="secondary" onClick={() => runAction("restart")} disabled={Boolean(busyAction)}>
+        <Button variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
           <RotateCcw aria-hidden="true" />
-          {busyAction === "restart" ? t("actionWorking") : t("actionRestart")}
+          {restartLabel}
         </Button>
-        <Button variant="primary" onClick={() => void copyInvite()}>
+        <Button variant="primary" onClick={() => void copyInvite()} disabled={server.status === "deleting"}>
           <Copy aria-hidden="true" />
           {copiedInvite ? t("copied") : t("actionCopyInvite")}
         </Button>
-        <Button variant="danger" onClick={() => runAction("delete")} disabled={Boolean(busyAction)}>
+        <Button variant="danger" onClick={() => runAction("delete")} disabled={controlsDisabled}>
           <Trash2 aria-hidden="true" />
-          {busyAction === "delete" ? t("actionWorking") : t("delete")}
+          {deleteLabel}
         </Button>
       </div>
       {errorMessage && <p className="mt-2 text-sm text-panel-gold">{errorMessage}</p>}

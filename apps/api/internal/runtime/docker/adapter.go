@@ -171,6 +171,42 @@ func (a *Adapter) Stats(ctx context.Context, instance domain.GameServerInstance)
 	}, nil
 }
 
+func (a *Adapter) HostStats(ctx context.Context) (runtime.HostStats, error) {
+	containers, err := a.client.ContainerList(ctx, types.ContainerListOptions{
+		Filters: filters.NewArgs(filters.Arg("label", "gamepanel.instance")),
+	})
+	if err != nil {
+		return runtime.HostStats{}, err
+	}
+	result := runtime.HostStats{RunningContainers: len(containers)}
+	for _, c := range containers {
+		resp, err := a.client.ContainerStats(ctx, c.ID, false)
+		if err != nil {
+			continue
+		}
+		var data types.StatsJSON
+		decodeErr := json.NewDecoder(resp.Body).Decode(&data)
+		resp.Body.Close()
+		if decodeErr != nil {
+			continue
+		}
+		cpuDelta := float64(data.CPUStats.CPUUsage.TotalUsage - data.PreCPUStats.CPUUsage.TotalUsage)
+		systemDelta := float64(data.CPUStats.SystemUsage - data.PreCPUStats.SystemUsage)
+		onlineCPUs := float64(data.CPUStats.OnlineCPUs)
+		if onlineCPUs == 0 {
+			onlineCPUs = float64(len(data.CPUStats.CPUUsage.PercpuUsage))
+		}
+		if systemDelta > 0 && onlineCPUs > 0 {
+			result.TotalCPUPercent += (cpuDelta / systemDelta) * onlineCPUs * 100
+		}
+		result.TotalMemoryMB += int64(data.MemoryStats.Usage) / 1024 / 1024
+		if int64(data.MemoryStats.Limit)/1024/1024 > result.MemoryLimitMB {
+			result.MemoryLimitMB = int64(data.MemoryStats.Limit) / 1024 / 1024
+		}
+	}
+	return result, nil
+}
+
 func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	containerID, err := a.resolveContainerID(ctx, instance)
 	if err != nil {

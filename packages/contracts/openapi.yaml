@@ -84,10 +84,10 @@ paths:
         "200":
           description: Server detail
     delete:
-      summary: Delete server
+      summary: Queue async server deletion; backend removes runtime/container resources in the background
       responses:
-        "200":
-          description: Deleted
+        "202":
+          description: Delete accepted; returned server is marked deleting until the background task completes
   /api/servers/{id}/config:
     put:
       summary: Update persisted Terraria server config while the server is stopped
@@ -108,10 +108,10 @@ paths:
           description: Server must be stopped before config changes
   /api/servers/{id}/start:
     post:
-      summary: Start server, creating a runtime container from persisted config and data when needed
+      summary: Queue async server start, creating a runtime container from persisted config and data when needed
       responses:
-        "200":
-          description: Started server
+        "202":
+          description: Start accepted; returned server is marked starting until the background task completes
   /api/servers/{id}/stop:
     post:
       summary: Stop server
@@ -120,10 +120,10 @@ paths:
           description: Stopped server
   /api/servers/{id}/restart:
     post:
-      summary: Restart server, creating a runtime container from persisted config and data when needed
+      summary: Queue async server restart, creating a runtime container from persisted config and data when needed
       responses:
-        "200":
-          description: Restarted server
+        "202":
+          description: Restart accepted; returned server is marked restarting until the background task completes
   /api/servers/{id}/command:
     post:
       summary: Send a console command to a running server

@@ -27,6 +27,9 @@ func (a testAdapter) Inspect(context.Context, domain.GameServerInstance) (domain
 func (a testAdapter) Stats(context.Context, domain.GameServerInstance) (ContainerStats, error) {
 	return ContainerStats{}, nil
 }
+func (a testAdapter) HostStats(context.Context) (HostStats, error) {
+	return HostStats{}, nil
+}
 func (a testAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }

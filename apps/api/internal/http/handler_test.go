@@ -127,6 +127,9 @@ func (a inspectStatusAdapter) Inspect(context.Context, domain.GameServerInstance
 func (a inspectStatusAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
 	return runtime.ContainerStats{}, nil
 }
+func (a inspectStatusAdapter) HostStats(context.Context) (runtime.HostStats, error) {
+	return runtime.HostStats{}, nil
+}
 func (a inspectStatusAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
@@ -162,6 +165,9 @@ func (a *unavailableInspectAdapter) Inspect(context.Context, domain.GameServerIn
 }
 func (a *unavailableInspectAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
 	return runtime.ContainerStats{}, fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) HostStats(context.Context) (runtime.HostStats, error) {
+	return runtime.HostStats{}, fmt.Errorf("docker unavailable")
 }
 func (a *unavailableInspectAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("docker unavailable")
@@ -207,6 +213,9 @@ func (a *staleContainerAdapter) Inspect(_ context.Context, instance domain.GameS
 func (a *staleContainerAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
 	return runtime.ContainerStats{}, nil
 }
+func (a *staleContainerAdapter) HostStats(context.Context) (runtime.HostStats, error) {
+	return runtime.HostStats{}, nil
+}
 func (a *staleContainerAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	a.logsContainer = instance.ContainerID
 	if instance.ContainerID != "new-container" {
@@ -222,8 +231,153 @@ func (a *staleContainerAdapter) SendCommand(_ context.Context, instance domain.G
 	return nil
 }
 
+type blockingRuntimeAdapter struct {
+	availableMockAdapter
+	createStarted chan struct{}
+	createRelease chan struct{}
+	removeStarted chan struct{}
+	removeRelease chan struct{}
+}
+
+func newBlockingRuntimeAdapter() *blockingRuntimeAdapter {
+	return &blockingRuntimeAdapter{
+		availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()},
+		createStarted:        make(chan struct{}),
+		createRelease:        make(chan struct{}),
+		removeStarted:        make(chan struct{}),
+		removeRelease:        make(chan struct{}),
+	}
+}
+
+func (a *blockingRuntimeAdapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
+	close(a.createStarted)
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-a.createRelease:
+		return a.availableMockAdapter.Create(ctx, spec)
+	}
+}
+
+func (a *blockingRuntimeAdapter) Remove(ctx context.Context, instance domain.GameServerInstance) error {
+	close(a.removeStarted)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-a.removeRelease:
+		return nil
+	}
+}
+
+func TestStartServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
+	adapter := newBlockingRuntimeAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("async-start", cfg.DataDir)
+	server.ContainerID = ""
+	server.Status = domain.StatusStopped
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+		response <- recorder
+	}()
+
+	select {
+	case <-adapter.createStarted:
+	case <-time.After(time.Second):
+		t.Fatal("expected async start worker to begin creating a runtime container")
+	}
+
+	select {
+	case recorder := <-response:
+		if recorder.Code != stdhttp.StatusAccepted {
+			t.Fatalf("expected start 202, got %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var queued domain.GameServerInstance
+		if err := json.Unmarshal(recorder.Body.Bytes(), &queued); err != nil {
+			t.Fatal(err)
+		}
+		if queued.Status != domain.StatusStarting {
+			t.Fatalf("expected queued start status starting, got %+v", queued)
+		}
+	case <-time.After(100 * time.Millisecond):
+		close(adapter.createRelease)
+		recorder := <-response
+		t.Fatalf("start request blocked until runtime completed; got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	close(adapter.createRelease)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		updated, err := db.GetServer(context.Background(), server.ID)
+		if err == nil && updated.Status == domain.StatusRunning && updated.ContainerID != "" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	updated, _ := db.GetServer(context.Background(), server.ID)
+	t.Fatalf("expected async start worker to mark server running, got %+v", updated)
+}
+
+func TestDeleteServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
+	adapter := newBlockingRuntimeAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("async-delete", cfg.DataDir)
+	server.ContainerID = "existing-container"
+	server.Status = domain.StatusStopped
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
+		response <- recorder
+	}()
+
+	select {
+	case <-adapter.removeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("expected async delete worker to begin removing the runtime container")
+	}
+
+	select {
+	case recorder := <-response:
+		if recorder.Code != stdhttp.StatusAccepted {
+			t.Fatalf("expected delete 202, got %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var queued domain.GameServerInstance
+		if err := json.Unmarshal(recorder.Body.Bytes(), &queued); err != nil {
+			t.Fatal(err)
+		}
+		if queued.Status != domain.StatusDeleting {
+			t.Fatalf("expected queued delete status deleting, got %+v", queued)
+		}
+	case <-time.After(100 * time.Millisecond):
+		close(adapter.removeRelease)
+		recorder := <-response
+		t.Fatalf("delete request blocked until runtime completed; got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	close(adapter.removeRelease)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := db.GetServer(context.Background(), server.ID); errors.Is(err, store.ErrNotFound) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	updated, err := db.GetServer(context.Background(), server.ID)
+	t.Fatalf("expected async delete worker to remove server record, got server=%+v err=%v", updated, err)
+}
+
 func TestServerLifecycleAndLogEndpoints(t *testing.T) {
-	router, _, _ := newTestRouter(t)
+	router, db, _ := newTestRouter(t)
 	createPayload := `{
 		"name":"Vanilla Test",
 		"providerKey":"terraria-vanilla",
@@ -254,15 +408,19 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 
 	start := httptest.NewRecorder()
 	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
-	if start.Code != stdhttp.StatusOK {
-		t.Fatalf("expected start 200, got %d: %s", start.Code, start.Body.String())
+	if start.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", start.Code, start.Body.String())
 	}
 	var started domain.GameServerInstance
 	if err := json.Unmarshal(start.Body.Bytes(), &started); err != nil {
 		t.Fatal(err)
 	}
-	if started.Status != domain.StatusRunning || started.ContainerID == "" {
-		t.Fatalf("expected start to create runtime container and mark running, got %+v", started)
+	if started.Status != domain.StatusStarting {
+		t.Fatalf("expected start to queue a starting status, got %+v", started)
+	}
+	server = waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+	if server.ContainerID == "" {
+		t.Fatalf("expected async start to create runtime container, got %+v", server)
 	}
 
 	command := httptest.NewRecorder()
@@ -273,16 +431,17 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 
 	restart := httptest.NewRecorder()
 	router.ServeHTTP(restart, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/restart", nil))
-	if restart.Code != stdhttp.StatusOK {
-		t.Fatalf("expected restart 200, got %d: %s", restart.Code, restart.Body.String())
+	if restart.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected restart 202, got %d: %s", restart.Code, restart.Body.String())
 	}
 	var restarted domain.GameServerInstance
 	if err := json.Unmarshal(restart.Body.Bytes(), &restarted); err != nil {
 		t.Fatal(err)
 	}
-	if restarted.Status != domain.StatusRunning {
-		t.Fatalf("expected restart running, got %+v", restarted)
+	if restarted.Status != domain.StatusRestarting {
+		t.Fatalf("expected restart to queue a restarting status, got %+v", restarted)
 	}
+	server = waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 
 	stop := httptest.NewRecorder()
 	router.ServeHTTP(stop, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/stop", nil))
@@ -339,9 +498,38 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 
 	remove := httptest.NewRecorder()
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
-	if remove.Code != stdhttp.StatusOK {
-		t.Fatalf("expected delete 200, got %d: %s", remove.Code, remove.Body.String())
+	if remove.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected delete 202, got %d: %s", remove.Code, remove.Body.String())
 	}
+	waitForServerDeleted(t, db, server.ID)
+}
+
+func waitForServerStatus(t *testing.T, db *store.Store, id string, status domain.ServerStatus) domain.GameServerInstance {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		server, err := db.GetServer(context.Background(), id)
+		if err == nil && server.Status == status {
+			return server
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	server, err := db.GetServer(context.Background(), id)
+	t.Fatalf("expected server %s to reach status %s, got server=%+v err=%v", id, status, server, err)
+	return domain.GameServerInstance{}
+}
+
+func waitForServerDeleted(t *testing.T, db *store.Store, id string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := db.GetServer(context.Background(), id); errors.Is(err, store.ErrNotFound) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	server, err := db.GetServer(context.Background(), id)
+	t.Fatalf("expected server %s to be deleted, got server=%+v err=%v", id, server, err)
 }
 
 func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
@@ -431,8 +619,15 @@ func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/"+server.ID, nil))
-	if recorder.Code != stdhttp.StatusOK {
-		t.Fatalf("expected delete server 200, got %d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected delete server 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := db.GetServer(context.Background(), server.ID); errors.Is(err, store.ErrNotFound) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if _, err := db.GetServer(context.Background(), server.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("expected server record deleted, got err=%v", err)

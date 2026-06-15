@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,13 +24,54 @@ type DockerHostCandidate struct {
 	Active bool   `json:"active"`
 }
 
+type persistedSettings struct {
+	DockerHost string `json:"dockerHost"`
+}
+
+func settingsPath() string {
+	dataDir := value("GAMEPANEL_DATA_DIR", "./data")
+	return filepath.Join(dataDir, "settings.json")
+}
+
+func loadPersistedDockerHost() string {
+	data, err := os.ReadFile(settingsPath())
+	if err != nil {
+		return ""
+	}
+	var s persistedSettings
+	if err := json.Unmarshal(data, &s); err != nil {
+		return ""
+	}
+	return s.DockerHost
+}
+
+func PersistDockerHost(host string) error {
+	s := persistedSettings{DockerHost: host}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(settingsPath())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(settingsPath(), data, 0o600)
+}
+
 func Load() Config {
+	dockerHost := value("GAMEPANEL_DOCKER_HOST", value("DOCKER_HOST", ""))
+	if dockerHost == "" {
+		dockerHost = loadPersistedDockerHost()
+	}
+	if dockerHost == "" {
+		dockerHost = "unix:///var/run/docker.sock"
+	}
 	return Config{
 		Host:       value("GAMEPANEL_HOST", "0.0.0.0"),
 		Port:       value("GAMEPANEL_PORT", "4000"),
 		DataDir:    value("GAMEPANEL_DATA_DIR", "./data"),
 		DBPath:     value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
-		DockerHost: value("GAMEPANEL_DOCKER_HOST", value("DOCKER_HOST", "unix:///var/run/docker.sock")),
+		DockerHost: dockerHost,
 	}
 }
 
@@ -53,6 +95,7 @@ func DockerHostCandidates(currentHost string) []DockerHostCandidate {
 	add(currentHost, "Current configured host", "current")
 	add(os.Getenv("GAMEPANEL_DOCKER_HOST"), "GAMEPANEL_DOCKER_HOST", "env")
 	add(os.Getenv("DOCKER_HOST"), "DOCKER_HOST", "env")
+	add(loadPersistedDockerHost(), "Saved setting", "persisted")
 	add("unix:///var/run/docker.sock", "Docker Engine default", "common")
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		add("unix://"+filepath.Join(home, ".docker", "run", "docker.sock"), "Docker Desktop user socket", "common")

@@ -40,8 +40,9 @@ import {
 } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { describeResourceAction, formatServerDetailError } from "@/lib/server-detail-actions";
+import { describeResourceAction, formatServerDetailError, isServerLockedForResourceChanges } from "@/lib/server-detail-actions";
 import { getDetailTargetServers, isWorldActiveOnServer, nextWorldCopyName } from "@/lib/server-detail-resources";
+import { Sparkline, useTimeSeries } from "@/lib/sparkline";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
@@ -70,6 +71,8 @@ export default function ServerDetailPage() {
     enabled: Boolean(server && server.mode === "tmodloader"),
     retry: false
   });
+  const serverCpuSeries = useTimeSeries(statsQuery.data?.cpuPercent);
+  const serverMemSeries = useTimeSeries(statsQuery.data?.memoryMb, 60);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -398,6 +401,23 @@ export default function ServerDetailPage() {
         <ServerActions server={server} />
       </div>
 
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <MonitorCard
+          icon={<Cpu aria-hidden="true" className={`size-4 ${server.status === "running" ? "" : "text-slate-600"}`} />}
+          label={t("serverCpu")}
+          value={server.status === "running" ? `${(statsQuery.data?.cpuPercent ?? 0).toFixed(1)}%` : "—"}
+          sparkline={server.status === "running" ? <Sparkline data={serverCpuSeries} color="#7bd978" max={400} width={140} /> : undefined}
+          color="#7bd978"
+        />
+        <MonitorCard
+          icon={<MemoryStick aria-hidden="true" className={`size-4 ${server.status === "running" ? "" : "text-slate-600"}`} />}
+          label={t("serverMemory")}
+          value={server.status === "running" && statsQuery.data ? `${statsQuery.data.memoryMb} MB` : "—"}
+          sparkline={server.status === "running" ? <Sparkline data={serverMemSeries} color="#a78bfa" max={Math.max(1024, statsQuery.data?.memoryLimitMb ?? 1024)} width={140} /> : undefined}
+          color="#a78bfa"
+        />
+      </div>
+
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="min-w-0 p-4">
           <div className="mb-4 flex gap-2 overflow-x-auto border-b border-panel-line px-1 pb-4 pt-1" role="tablist" aria-label={server.name}>
@@ -549,15 +569,6 @@ export default function ServerDetailPage() {
               <Info label={t("hostPort")} value={String(server.hostPort)} />
             )}
           </Card>
-          {server.status === "running" && (
-            <Card className="p-4">
-              <h2 className="font-semibold">{t("resourceUsage")}</h2>
-              <div className="mt-3 flex flex-col gap-3">
-                <ResourceBar icon={<Cpu aria-hidden="true" className="size-4 text-panel-green" />} label={t("cpu")} value={statsQuery.data?.cpuPercent ?? 0} suffix="%" />
-                <ResourceBar icon={<MemoryStick aria-hidden="true" className="size-4 text-panel-purple" />} label={t("memory")} value={memoryPercent(statsQuery.data)} suffix="" displayText={memoryDisplay(statsQuery.data)} />
-              </div>
-            </Card>
-          )}
         </div>
       </div>
 
@@ -770,7 +781,8 @@ function ConfigTab({
     retry: false
   });
   const dirty = JSON.stringify(draft) !== JSON.stringify(server.config);
-  const disabled = server.status === "running" || savePending;
+  const lockedForChanges = isServerLockedForResourceChanges(server.status);
+  const disabled = lockedForChanges || savePending;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const secretSeed = secretSeedKeyFor(draft.seed);
   const worldEvilLabel = draft.worldEvil === "corruption" ? t("tagCorruption") : draft.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
@@ -786,7 +798,7 @@ function ConfigTab({
     }}>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <h2 className="font-semibold">{t("serverConfig")}</h2>
-        {server.status === "running" && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configRequiresStopped")}</span>}
+        {lockedForChanges && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configRequiresStopped")}</span>}
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="space-y-3">
             <Field label={t("serverName")}>
@@ -1380,25 +1392,16 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function memoryPercent(stats?: { memoryMb: number; memoryLimitMb: number }): number {
-  if (!stats || stats.memoryLimitMb <= 0) return 0;
-  return Math.min(100, (stats.memoryMb / stats.memoryLimitMb) * 100);
-}
-
-function memoryDisplay(stats?: { memoryMb: number; memoryLimitMb: number }): string {
-  if (!stats) return "—";
-  return `${stats.memoryMb} MB / ${stats.memoryLimitMb} MB`;
-}
-
-function ResourceBar({ icon, label, value, suffix, displayText }: { icon: ReactNode; label: string; value: number; suffix: string; displayText?: string }) {
+function MonitorCard({ icon, label, value, sparkline, color = "#7bd978" }: { icon: ReactNode; label: string; value: string; sparkline?: ReactNode; color?: string }) {
   return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="flex items-center gap-2 text-slate-400">{icon}{label}</span>
-        <span className="font-mono text-slate-300">{displayText ?? `${value.toFixed(1)}${suffix}`}</span>
+    <div className="rounded-lg border border-panel-line bg-panel-card px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded text-slate-300" style={{ color }}>{icon}</span>
+        <p className="text-xs text-slate-500">{label}</p>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full rounded-full bg-panel-green transition-all" style={{ width: `${Math.min(100, value)}%` }} />
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <p className="font-mono text-xl font-semibold text-white">{value}</p>
+        {sparkline && <div className="shrink-0">{sparkline}</div>}
       </div>
     </div>
   );

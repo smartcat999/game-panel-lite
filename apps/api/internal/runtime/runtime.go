@@ -39,6 +39,13 @@ type ContainerStats struct {
 	MemoryLimitMB int64   `json:"memoryLimitMb"`
 }
 
+type HostStats struct {
+	RunningContainers int     `json:"runningContainers"`
+	TotalCPUPercent   float64 `json:"totalCpuPercent"`
+	TotalMemoryMB     int64   `json:"totalMemoryMb"`
+	MemoryLimitMB     int64   `json:"memoryLimitMb"`
+}
+
 type Adapter interface {
 	Check(ctx context.Context) DockerStatus
 	Create(ctx context.Context, spec ContainerSpec) (string, error)
@@ -48,6 +55,7 @@ type Adapter interface {
 	Remove(ctx context.Context, instance domain.GameServerInstance) error
 	Inspect(ctx context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error)
 	Stats(ctx context.Context, instance domain.GameServerInstance) (ContainerStats, error)
+	HostStats(ctx context.Context) (HostStats, error)
 	Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error)
 	SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error
 }

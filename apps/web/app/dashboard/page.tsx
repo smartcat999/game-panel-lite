@@ -2,21 +2,25 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Archive, HardDrive, Plus, Users } from "lucide-react";
+import { Activity, Archive, Cpu, HardDrive, MemoryStick, Plus, Server, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Card } from "@/components/ui";
 import { formatActivityEvent } from "@/lib/activity-display";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { formatBytes, listActivity, listBackups, listServers } from "@/lib/api";
+import { formatBytes, getRuntimeStats, listActivity, listBackups, listServers } from "@/lib/api";
 import { dashboardQuickActionHrefs } from "@/lib/dashboard-quick-actions";
 import { attachLatestBackupTimes } from "@/lib/server-metrics";
+import { Sparkline, useTimeSeries } from "@/lib/sparkline";
 
 export default function DashboardPage() {
   const { locale, t } = useI18n();
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const activityQuery = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
+  const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, refetchInterval: 5000, retry: false });
+  const runtimeCpuSeries = useTimeSeries(runtimeStatsQuery.data?.totalCpuPercent);
+  const runtimeMemSeries = useTimeSeries(runtimeStatsQuery.data?.totalMemoryMb, 60);
   const backups = backupsQuery.data ?? [];
   const servers = attachLatestBackupTimes(serversQuery.data ?? [], backups);
   const activity = activityQuery.data ?? [];
@@ -25,6 +29,7 @@ export default function DashboardPage() {
   const playerCapacity = servers.reduce((sum, server) => sum + server.maxPlayers, 0);
   const totalBackupBytes = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
   const latestBackup = backups[0];
+  const memMax = Math.max(1024, runtimeStatsQuery.data?.memoryLimitMb ?? 1024);
   return (
     <>
       <PageHeader title={t("dashboardTitle")} description={t("dashboardDescription")} />
@@ -34,6 +39,29 @@ export default function DashboardPage() {
         <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players} / ${playerCapacity}`} hint={t("playersOnlineHint", { count: players })} />
         <Stat icon={<Archive />} label={t("latestBackup")} value={latestBackup ? localizeRelativeTime(latestBackup.created, locale) : t("none")} hint={latestBackup?.world ?? t("none")} />
         <Stat icon={<HardDrive />} label={t("storageUsed")} value={formatBytes(totalBackupBytes)} hint={t("storageHint", { count: backups.length })} />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <RuntimeCard
+          icon={<Server aria-hidden="true" className="size-4" />}
+          label={t("runningContainers")}
+          value={String(runtimeStatsQuery.data?.runningContainers ?? 0)}
+          color="#7bd978"
+        />
+        <RuntimeCard
+          icon={<Cpu aria-hidden="true" className="size-4" />}
+          label={t("runtimeCpu")}
+          value={`${(runtimeStatsQuery.data?.totalCpuPercent ?? 0).toFixed(1)}%`}
+          sparkline={<Sparkline data={runtimeCpuSeries} color="#7bd978" max={400} />}
+          color="#7bd978"
+        />
+        <RuntimeCard
+          icon={<MemoryStick aria-hidden="true" className="size-4" />}
+          label={t("runtimeMemory")}
+          value={runtimeStatsQuery.data ? `${runtimeStatsQuery.data.totalMemoryMb} MB` : "—"}
+          sparkline={<Sparkline data={runtimeMemSeries} color="#a78bfa" max={memMax} />}
+          color="#a78bfa"
+        />
       </div>
       <section className="mt-6">
         <h2 className="mb-3 text-base font-semibold">{t("activeServers")}</h2>
@@ -91,5 +119,20 @@ function Stat({ icon, label, value, hint }: { icon: React.ReactNode; label: stri
         </div>
       </div>
     </Card>
+  );
+}
+
+function RuntimeCard({ icon, label, value, sparkline, color = "#7bd978" }: { icon: React.ReactNode; label: string; value: string; sparkline?: React.ReactNode; color?: string }) {
+  return (
+    <div className="rounded-lg border border-panel-line bg-panel-card px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="shrink-0" style={{ color }}>{icon}</span>
+        <p className="text-xs text-slate-500">{label}</p>
+      </div>
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <p className="font-mono text-xl font-semibold text-white">{value}</p>
+        {sparkline && <div className="shrink-0">{sparkline}</div>}
+      </div>
+    </div>
   );
 }

@@ -1891,3 +1891,28 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Async Server Lifecycle Update
+
+Status: Completed
+
+Completed:
+- Redesigned server start, restart, and delete HTTP handlers as asynchronous commands.
+- `POST /api/servers/{id}/start` now immediately returns `202` with status `starting`; a background worker ensures/creates the runtime container, starts it, and persists `running` or `errored`.
+- `POST /api/servers/{id}/restart` now immediately returns `202` with status `restarting`; a background worker recreates missing runtime state if needed, restarts the container, and persists the final status.
+- `DELETE /api/servers/{id}` now immediately returns `202` with status `deleting`; a background worker removes runtime resources, cleans up owned worlds/backups/mods/data, and deletes the server record.
+- Runtime status refresh now preserves lifecycle transitional states so polling cannot overwrite `starting`, `restarting`, or `deleting` while a command is still executing.
+- Backend resource mutation guards now lock changes while servers are running or lifecycle commands are pending.
+- Frontend server status types, badges, action buttons, and resource-action disabled states now understand `creating`, `starting`, `restarting`, and `deleting`.
+- OpenAPI contract summaries now describe lifecycle command endpoints as `202 Accepted` asynchronous commands.
+- Added backend tests proving start/delete requests return before blocking runtime work completes.
+- Added frontend tests proving resource changes are locked during lifecycle transitions.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

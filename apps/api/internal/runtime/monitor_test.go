@@ -32,6 +32,9 @@ func (a *countingAdapter) Inspect(context.Context, domain.GameServerInstance) (d
 func (a *countingAdapter) Stats(context.Context, domain.GameServerInstance) (ContainerStats, error) {
 	return ContainerStats{}, nil
 }
+func (a *countingAdapter) HostStats(context.Context) (HostStats, error) {
+	return HostStats{}, nil
+}
 func (a *countingAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
