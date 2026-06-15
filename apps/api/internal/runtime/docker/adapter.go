@@ -64,12 +64,10 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 			return "", err
 		}
 	}
-	pull, err := a.client.ImagePull(ctx, spec.Image, types.ImagePullOptions{})
-	if err != nil {
+	if err := prepareDataMounts(dataDir, spec.Options.DataMounts); err != nil {
 		return "", err
 	}
-	defer pull.Close()
-	if _, err := io.Copy(io.Discard, pull); err != nil {
+	if err := a.ensureImage(ctx, spec.Image); err != nil {
 		return "", err
 	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
@@ -89,6 +87,21 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 		return "", err
 	}
 	return resp.ID, nil
+}
+
+func (a *Adapter) ensureImage(ctx context.Context, image string) error {
+	if _, _, err := a.client.ImageInspectWithRaw(ctx, image); err == nil {
+		return nil
+	}
+	pull, err := a.client.ImagePull(ctx, image, types.ImagePullOptions{})
+	if err != nil {
+		return err
+	}
+	defer pull.Close()
+	if _, err := io.Copy(io.Discard, pull); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *Adapter) Start(ctx context.Context, instance domain.GameServerInstance) error {
@@ -136,6 +149,16 @@ func (a *Adapter) Inspect(ctx context.Context, instance domain.GameServerInstanc
 	}
 	if got.State != nil && got.State.Running {
 		return domain.StatusRunning, nil
+	}
+	if got.State != nil && got.State.ExitCode != 0 {
+		detail := strings.TrimSpace(got.State.Error)
+		if detail == "" {
+			detail = strings.TrimSpace(got.State.Status)
+		}
+		if detail == "" {
+			detail = "container exited"
+		}
+		return domain.StatusErrored, fmt.Errorf("%s (exit code %d)", detail, got.State.ExitCode)
 	}
 	return domain.StatusStopped, nil
 }
@@ -285,9 +308,52 @@ func dataBinds(dataDir string, mounts []string) []string {
 		if mount == "" {
 			continue
 		}
-		binds = append(binds, fmt.Sprintf("%s:%s", dataDir, mount))
+		hostPath, containerPath := dataBindPaths(dataDir, mount)
+		binds = append(binds, fmt.Sprintf("%s:%s", hostPath, containerPath))
 	}
 	return binds
+}
+
+func prepareDataMounts(dataDir string, mounts []string) error {
+	if len(mounts) == 0 {
+		return nil
+	}
+	for _, mount := range mounts {
+		if mount == "" {
+			continue
+		}
+		hostPath, _ := dataBindPaths(dataDir, mount)
+		if _, err := os.Stat(hostPath); err == nil {
+			continue
+		}
+		if filepath.Ext(hostPath) != "" {
+			if err := os.MkdirAll(filepath.Dir(hostPath), 0o755); err != nil {
+				return err
+			}
+			file, err := os.OpenFile(hostPath, os.O_CREATE, 0o600)
+			if err != nil {
+				return err
+			}
+			if err := file.Close(); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(hostPath, 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dataBindPaths(dataDir string, mount string) (string, string) {
+	hostPath := dataDir
+	containerPath := mount
+	if host, container, ok := strings.Cut(mount, ":"); ok {
+		hostPath = filepath.Join(dataDir, filepath.Clean(host))
+		containerPath = container
+	}
+	return hostPath, containerPath
 }
 
 func natPortMap(containerPort int, hostPort int) nat.PortMap {

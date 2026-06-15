@@ -80,43 +80,6 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 	return safety.SafeJoin(s.dataDir, "backups", instanceID, safeName)
 }
 
-func (s *Service) Migrate(sourceInstanceID string, sourceName string, targetInstanceID string, targetName string) (string, int64, error) {
-	source, err := s.Path(sourceInstanceID, sourceName)
-	if err != nil {
-		return "", 0, err
-	}
-	safeTarget, err := safety.SafeFileName(targetName, ".zip")
-	if err != nil {
-		return "", 0, err
-	}
-	targetDir, err := safety.SafeJoin(s.dataDir, "backups", targetInstanceID)
-	if err != nil {
-		return "", 0, err
-	}
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return "", 0, err
-	}
-	target := filepath.Join(targetDir, safeTarget)
-	in, err := os.Open(source)
-	if err != nil {
-		return "", 0, err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return "", 0, err
-	}
-	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
-		return "", 0, err
-	}
-	info, err := os.Stat(target)
-	if err != nil {
-		return "", 0, err
-	}
-	return target, info.Size(), nil
-}
-
 func (s *Service) Restore(instanceID string, fileName string, targetDir string) error {
 	backupPath, err := s.Path(instanceID, fileName)
 	if err != nil {

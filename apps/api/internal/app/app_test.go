@@ -67,6 +67,9 @@ func TestInvalidDockerHostKeepsAPIAvailableButStartFails(t *testing.T) {
 	if failed.ContainerID != "" {
 		t.Fatalf("expected failed start to keep an empty container id, got %+v", failed)
 	}
+	if failed.LastError == "" || !strings.Contains(failed.LastError, "Docker runtime unavailable") {
+		t.Fatalf("expected failed start to persist runtime error, got %+v", failed)
+	}
 }
 
 func TestInvalidDockerHostDoesNotMockStopExistingContainer(t *testing.T) {

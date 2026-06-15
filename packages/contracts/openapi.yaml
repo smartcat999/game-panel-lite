@@ -258,22 +258,6 @@ paths:
       responses:
         "200":
           description: World file
-  /api/worlds/{id}/duplicate:
-    post:
-      summary: Duplicate world file
-      responses:
-        "200":
-          description: Updated existing duplicate world file record
-        "201":
-          description: Duplicated world
-  /api/worlds/{id}/migrate:
-    post:
-      summary: Migrate world file to another server instance
-      responses:
-        "200":
-          description: Updated existing migrated world file record
-        "201":
-          description: Migrated world
   /api/worlds/{id}:
     delete:
       summary: Delete world file
@@ -298,14 +282,6 @@ paths:
       responses:
         "200":
           description: Restored backup
-  /api/backups/{id}/migrate:
-    post:
-      summary: Migrate backup archive to another server instance
-      responses:
-        "200":
-          description: Updated existing migrated backup archive record
-        "201":
-          description: Migrated backup
   /api/backups/{id}/download:
     get:
       summary: Download backup archive

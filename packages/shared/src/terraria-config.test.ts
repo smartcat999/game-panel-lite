@@ -23,6 +23,10 @@ describe("Terraria presets", () => {
       "Expert Adventure"
     );
   });
+
+  it("uses Chinese as the default language for presets", () => {
+    expect(getTerrariaPreset("friends-casual").config.language).toBe("zh-Hans");
+  });
 });
 
 describe("Terraria config renderer", () => {

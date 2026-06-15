@@ -85,14 +85,12 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/worlds", h.listWorlds)
 	r.Post("/api/worlds/import", h.importWorld)
 	r.Post("/api/worlds/{id}/assign", h.assignWorld)
-	r.Post("/api/worlds/{id}/duplicate", h.duplicateWorld)
-	r.Post("/api/worlds/{id}/migrate", h.migrateWorld)
 	r.Get("/api/worlds/{id}/download", h.downloadWorld)
 	r.Delete("/api/worlds/{id}", h.deleteWorld)
 	r.Get("/api/backups", h.listBackups)
+	r.Post("/api/servers/{id}/world-snapshots", h.createWorldSnapshot)
 	r.Post("/api/servers/{id}/backups", h.createBackup)
 	r.Get("/api/backups/{id}/download", h.downloadBackup)
-	r.Post("/api/backups/{id}/migrate", h.migrateBackup)
 	r.Post("/api/backups/{id}/restore", h.restoreBackup)
 	r.Delete("/api/backups/{id}", h.deleteBackup)
 	r.Get("/api/servers/{id}/mods", h.listMods)
@@ -488,11 +486,14 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 	if instanceID == "" {
 		instanceID = "unassigned"
 	}
+	var providerKey domain.ProviderKey
 	if instanceID != "unassigned" {
-		if _, err := h.store.GetServer(r.Context(), instanceID); err != nil {
+		server, err := h.store.GetServer(r.Context(), instanceID)
+		if err != nil {
 			writeError(w, http.StatusNotFound, "server not found")
 			return
 		}
+		providerKey = server.ProviderKey
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -507,6 +508,11 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 	}
 	item, created, err := h.upsertWorldRecord(r.Context(), instanceID, header.Filename[:len(header.Filename)-len(filepath.Ext(header.Filename))], header.Filename, size)
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	item.ProviderKey = providerKey
+	if err := h.store.SaveWorld(r.Context(), &item); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -538,6 +544,50 @@ func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, path)
 }
 
+func (h *Handler) createWorldSnapshot(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	var payload struct {
+		Name string `json:"name"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&payload)
+	name := strings.TrimSpace(payload.Name)
+	if name == "" {
+		name = server.WorldName
+	}
+	fileName := safeWorldSnapshotFileName(name)
+	sourcePath, err := h.currentRuntimeWorldPath(server)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "world file not found on disk")
+		return
+	}
+	defer source.Close()
+	_, size, err := worldsvc.NewService(h.cfg.DataDir).Import(server.ID, fileName, source)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	item, created, err := h.upsertWorldSnapshotRecord(r.Context(), server, name, fileName, size)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "world.snapshot.created", fmt.Sprintf("Saved world snapshot %s from %s", item.Name, server.Name))
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, item)
+}
+
 func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -560,13 +610,12 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "stop the server before assigning a world")
 		return
 	}
-	if item.InstanceID != payload.InstanceID {
-		writeError(w, http.StatusConflict, "world must be imported or migrated to this server before assignment")
+	if !worldCompatibleWithServer(item, server) {
+		writeError(w, http.StatusConflict, "world snapshot is not compatible with this server type")
 		return
 	}
 	nextConfig := server.Config
-	nextConfig.WorldName = item.Name
-	if err := h.applyServerConfig(r.Context(), &server, nextConfig); err != nil {
+	if err := h.applyServerConfig(r.Context(), &server, nextConfig, nil); err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
@@ -580,6 +629,10 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 	}
 	item.ActiveInstanceID = payload.InstanceID
 	item.UpdatedAt = time.Now()
+	if server.SourceWorldID == "" {
+		server.SourceWorldID = item.ID
+		server.SourceWorldName = item.Name
+	}
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -644,102 +697,6 @@ func (h *Handler) clearActiveWorlds(ctx context.Context, instanceID string, keep
 	return nil
 }
 
-func (h *Handler) duplicateWorld(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "world not found")
-		return
-	}
-	var payload struct {
-		FileName string `json:"fileName"`
-		Name     string `json:"name"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&payload)
-	if payload.FileName == "" {
-		payload.FileName = "copy-" + item.FileName
-	}
-	if payload.Name == "" {
-		payload.Name = item.Name + " Copy"
-	}
-	missing, err := h.pruneMissingWorldSource(r.Context(), item)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if missing {
-		writeError(w, http.StatusNotFound, "world file not found on disk")
-		return
-	}
-	_, size, err := worldsvc.NewService(h.cfg.DataDir).Duplicate(item.InstanceID, item.FileName, payload.FileName)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	copy, created, err := h.upsertWorldRecord(r.Context(), item.InstanceID, payload.Name, payload.FileName, size)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.duplicated", fmt.Sprintf("Duplicated world %s", item.Name))
-	status := http.StatusOK
-	if created {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, copy)
-}
-
-func (h *Handler) migrateWorld(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "world not found")
-		return
-	}
-	var payload struct {
-		InstanceID string `json:"instanceId"`
-		FileName   string `json:"fileName"`
-		Name       string `json:"name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.InstanceID == "" {
-		writeError(w, http.StatusBadRequest, "instanceId is required")
-		return
-	}
-	if _, err := h.store.GetServer(r.Context(), payload.InstanceID); err != nil {
-		writeError(w, http.StatusNotFound, "server not found")
-		return
-	}
-	if payload.FileName == "" {
-		payload.FileName = item.FileName
-	}
-	if payload.Name == "" {
-		payload.Name = item.Name
-	}
-	missing, err := h.pruneMissingWorldSource(r.Context(), item)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if missing {
-		writeError(w, http.StatusNotFound, "world file not found on disk")
-		return
-	}
-	_, size, err := worldsvc.NewService(h.cfg.DataDir).Migrate(item.InstanceID, item.FileName, payload.InstanceID, payload.FileName)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	migrated, created, err := h.upsertWorldRecord(r.Context(), payload.InstanceID, payload.Name, payload.FileName, size)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	h.recordActivity(r.Context(), payload.InstanceID, "world.migrated", fmt.Sprintf("Migrated world %s", migrated.Name))
-	status := http.StatusOK
-	if created {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, migrated)
-}
-
 func (h *Handler) upsertWorldRecord(ctx context.Context, instanceID string, name string, fileName string, size int64) (domain.World, bool, error) {
 	if existing, err := h.store.GetWorldByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.Name = name
@@ -753,25 +710,94 @@ func (h *Handler) upsertWorldRecord(ctx context.Context, instanceID string, name
 	return item, true, h.store.CreateWorld(ctx, &item)
 }
 
-func (h *Handler) pruneMissingWorldSource(ctx context.Context, item domain.World) (bool, error) {
-	path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	if err != nil {
-		return false, err
-	}
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			h.logger.Warn("world file missing during mutation, pruning orphaned record", "worldId", item.ID, "path", path)
-			return true, h.store.DeleteWorld(ctx, item.ID)
+func worldCompatibleWithServer(world domain.World, server domain.GameServerInstance) bool {
+	return world.ProviderKey == "" || world.ProviderKey == server.ProviderKey
+}
+
+func (h *Handler) upsertWorldSnapshotRecord(ctx context.Context, server domain.GameServerInstance, name string, fileName string, size int64) (domain.World, bool, error) {
+	if existing, err := h.store.GetWorldByInstanceAndFile(ctx, server.ID, fileName); err == nil {
+		existing.Name = name
+		existing.SizeBytes = size
+		existing.ProviderKey = server.ProviderKey
+		existing.Source = "server_snapshot"
+		existing.Config = server.Config
+		if existing.ActiveInstanceID == server.ID {
+			existing.ActiveInstanceID = ""
 		}
-		return false, err
+		existing.UpdatedAt = time.Now()
+		return existing, false, h.store.SaveWorld(ctx, &existing)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.World{}, false, err
 	}
-	return false, nil
+	item := domain.World{
+		ID:          uuid.NewString(),
+		InstanceID:  server.ID,
+		ProviderKey: server.ProviderKey,
+		Name:        name,
+		FileName:    fileName,
+		SizeBytes:   size,
+		Source:      "server_snapshot",
+		Config:      server.Config,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	return item, true, h.store.CreateWorld(ctx, &item)
+}
+
+func (h *Handler) currentRuntimeWorldPath(server domain.GameServerInstance) (string, error) {
+	for _, relPath := range runtimeWorldPathCandidates(server) {
+		path := filepath.Join(server.DataDir, relPath)
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("current world file has not been created yet")
+}
+
+func runtimeWorldPathCandidates(server domain.GameServerInstance) []string {
+	worldFile := server.Config.WorldName + ".wld"
+	candidates := append([]string{}, terraria.RuntimeWorldFiles(server.ProviderKey, server.Config)...)
+	candidates = append(candidates, worldFile, filepath.Join("Worlds", worldFile), filepath.Join("worlds", worldFile))
+	seen := map[string]bool{}
+	result := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		clean := filepath.Clean(candidate)
+		if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean == ".." || seen[clean] {
+			continue
+		}
+		seen[clean] = true
+		result = append(result, clean)
+	}
+	return result
+}
+
+func safeWorldSnapshotFileName(name string) string {
+	clean := strings.Trim(strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			return r
+		}
+		return '-'
+	}, name), "-.")
+	if clean == "" {
+		clean = "world-snapshot"
+	}
+	if !strings.HasSuffix(strings.ToLower(clean), ".wld") {
+		clean += ".wld"
+	}
+	return clean
 }
 
 func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "world not found")
+		return
+	}
+	if inUse, err := h.worldTemplateInUse(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	} else if inUse {
+		writeError(w, http.StatusConflict, "world template is used by one or more servers")
 		return
 	}
 	if item.ActiveInstanceID != "" {
@@ -792,6 +818,19 @@ func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.deleted", fmt.Sprintf("Deleted world %s", item.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) worldTemplateInUse(ctx context.Context, worldID string) (bool, error) {
+	servers, err := h.store.ListServers(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, server := range servers {
+		if server.SourceWorldID == worldID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
@@ -905,6 +944,7 @@ func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.G
 	if err != nil {
 		return err
 	}
+	nextConfig = normalizeTerrariaRuntimeConfig(nextConfig)
 	server.WorldName = nextConfig.WorldName
 	server.Port = nextConfig.Port
 	server.MaxPlayers = nextConfig.MaxPlayers
@@ -922,55 +962,6 @@ func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.G
 		server.ContainerID = ""
 	}
 	return h.store.SaveServer(ctx, server)
-}
-
-func (h *Handler) migrateBackup(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "backup not found")
-		return
-	}
-	var payload struct {
-		InstanceID string `json:"instanceId"`
-		FileName   string `json:"fileName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.InstanceID == "" {
-		writeError(w, http.StatusBadRequest, "instanceId is required")
-		return
-	}
-	targetServer, err := h.store.GetServer(r.Context(), payload.InstanceID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "server not found")
-		return
-	}
-	if payload.FileName == "" {
-		payload.FileName = item.FileName
-	}
-	missing, err := h.pruneMissingBackupSource(r.Context(), item)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if missing {
-		writeError(w, http.StatusNotFound, "backup file not found on disk")
-		return
-	}
-	_, size, err := backupsvc.NewService(h.cfg.DataDir).Migrate(item.InstanceID, item.FileName, payload.InstanceID, payload.FileName)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	migrated, created, err := h.upsertBackupRecord(r.Context(), payload.InstanceID, payload.FileName, targetServer.WorldName, size, item.Type)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	h.recordActivity(r.Context(), payload.InstanceID, "backup.migrated", fmt.Sprintf("Migrated backup %s", migrated.FileName))
-	status := http.StatusOK
-	if created {
-		status = http.StatusCreated
-	}
-	writeJSON(w, status, migrated)
 }
 
 func (h *Handler) upsertBackupRecord(ctx context.Context, instanceID string, fileName string, worldName string, size int64, backupType string) (domain.Backup, bool, error) {
@@ -1182,18 +1173,19 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if isServerLockedForMutation(server.Status) {
-		writeError(w, http.StatusConflict, "stop the server before updating config")
+	if isLifecyclePending(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
 	var payload struct {
-		Config domain.TerrariaConfig `json:"config"`
+		Config   domain.TerrariaConfig `json:"config"`
+		HostPort *int                  `json:"hostPort,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if err := h.applyServerConfig(r.Context(), &server, payload.Config); err != nil {
+	if err := h.applyServerConfig(r.Context(), &server, payload.Config, payload.HostPort); err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
@@ -1210,12 +1202,14 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		Name        string                `json:"name"`
 		ProviderKey domain.ProviderKey    `json:"providerKey"`
 		Config      domain.TerrariaConfig `json:"config"`
+		HostPort    int                   `json:"hostPort,omitempty"`
 		Version     string                `json:"version"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	payload.Config = normalizeTerrariaRuntimeConfig(payload.Config)
 	gameProvider, ok := h.provider.Get(payload.ProviderKey)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unknown provider")
@@ -1241,11 +1235,17 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	hostPort, err := h.resolveHostPort(r.Context(), payload.HostPort, "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	server := domain.GameServerInstance{
 		ID: id, Name: payload.Name, GameKey: "terraria", ProviderKey: payload.ProviderKey,
 		Status: domain.StatusStopped, WorldName: payload.Config.WorldName, Port: payload.Config.Port,
-		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir,
-		Config: payload.Config, Version: payload.Version, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir, HostPort: hostPort,
+		Config: payload.Config, Version: payload.Version, ConfigRevision: 1, AppliedConfigRevision: 1,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	if err := h.store.CreateServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1266,6 +1266,7 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server.Status = domain.StatusStarting
+	server.LastError = ""
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1291,6 +1292,7 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server.Status = domain.StatusRestarting
+	server.LastError = ""
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1312,6 +1314,8 @@ func (h *Handler) runStartServer(ctx context.Context, id string) {
 		return
 	}
 	server.Status = domain.StatusRunning
+	server.LastError = ""
+	server.AppliedConfigRevision = server.ConfigRevision
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(ctx, &server); err != nil {
 		h.logger.Warn("failed to persist async server start", "server", id, "error", err)
@@ -1321,7 +1325,29 @@ func (h *Handler) runStartServer(ctx context.Context, id string) {
 }
 
 func (h *Handler) runRestartServer(ctx context.Context, id string) {
-	server, err := h.serverWithRuntimeContainer(ctx, id)
+	server, err := h.store.GetServer(ctx, id)
+	if err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", errors.New("server not found"))
+		return
+	}
+	if server.ContainerID != "" && server.AppliedConfigRevision < server.ConfigRevision {
+		if err := h.requireRuntimeAvailable(ctx); err != nil {
+			h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
+			return
+		}
+		if _, err := h.runtime.Inspect(ctx, server); err == nil {
+			if err := h.runtime.Remove(ctx, server); err != nil {
+				h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
+				return
+			}
+		}
+		server.ContainerID = ""
+		if err := h.store.SaveServer(ctx, &server); err != nil {
+			h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
+			return
+		}
+	}
+	server, _, err = h.ensureRuntimeContainer(ctx, server)
 	if err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
 		return
@@ -1331,6 +1357,8 @@ func (h *Handler) runRestartServer(ctx context.Context, id string) {
 		return
 	}
 	server.Status = domain.StatusRunning
+	server.LastError = ""
+	server.AppliedConfigRevision = server.ConfigRevision
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(ctx, &server); err != nil {
 		h.logger.Warn("failed to persist async server restart", "server", id, "error", err)
@@ -1346,6 +1374,7 @@ func (h *Handler) markServerLifecycleFailed(ctx context.Context, id string, acti
 		return
 	}
 	server.Status = domain.StatusErrored
+	server.LastError = cause.Error()
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(ctx, &server); err != nil {
 		h.logger.Warn("failed to persist lifecycle failure", "server", id, "error", err, "cause", cause)
@@ -1465,6 +1494,7 @@ func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.Game
 	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
 		return domain.GameServerInstance{}, false, err
 	}
+	server.Version = normalizeStoredProviderVersion(gameProvider, server.Version)
 	if server.HostPort == 0 {
 		server.HostPort, err = h.allocateHostPort(ctx, server.ID)
 		if err != nil {
@@ -1485,6 +1515,7 @@ func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.Game
 		return domain.GameServerInstance{}, false, err
 	}
 	server.ContainerID = containerID
+	server.AppliedConfigRevision = server.ConfigRevision
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(ctx, &server); err != nil {
 		return domain.GameServerInstance{}, false, err
@@ -1522,9 +1553,9 @@ func (h *Handler) startRecreatedRunningContainer(ctx context.Context, server dom
 	return server, nil
 }
 
-func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig) error {
-	if isServerLockedForMutation(server.Status) {
-		return fmt.Errorf("stop the server before updating config")
+func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig, hostPort *int) error {
+	if isLifecyclePending(server.Status) {
+		return fmt.Errorf("server lifecycle action already in progress")
 	}
 	gameProvider, ok := h.provider.Get(server.ProviderKey)
 	if !ok {
@@ -1532,6 +1563,16 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	}
 	if nextConfig.ServerName == "" {
 		nextConfig.ServerName = server.Name
+	}
+	nextConfig = normalizeTerrariaRuntimeConfig(nextConfig)
+	nextHostPort := server.HostPort
+	if hostPort != nil {
+		nextHostPort = *hostPort
+	}
+	var err error
+	nextHostPort, err = h.resolveHostPort(ctx, nextHostPort, server.ID)
+	if err != nil {
+		return err
 	}
 	if err := gameProvider.ValidateConfig(nextConfig); err != nil {
 		return err
@@ -1551,7 +1592,7 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 			return err
 		}
 	}
-	if server.ContainerID != "" {
+	if server.Status != domain.StatusRunning && server.ContainerID != "" {
 		if _, err := h.runtime.Inspect(ctx, *server); err == nil {
 			if err := h.runtime.Remove(ctx, *server); err != nil {
 				return err
@@ -1562,9 +1603,17 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	server.Name = nextConfig.ServerName
 	server.WorldName = nextConfig.WorldName
 	server.Port = nextConfig.Port
+	server.HostPort = nextHostPort
 	server.MaxPlayers = nextConfig.MaxPlayers
 	server.Password = nextConfig.Password
 	server.Config = nextConfig
+	server.ConfigRevision++
+	if server.ConfigRevision <= 0 {
+		server.ConfigRevision = 1
+	}
+	if server.Status != domain.StatusRunning {
+		server.AppliedConfigRevision = server.ConfigRevision
+	}
 	server.UpdatedAt = time.Now()
 	return nil
 }
@@ -1581,13 +1630,25 @@ func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameSer
 	}
 	status, err := h.runtime.Inspect(ctx, server)
 	if err != nil {
-		h.logger.Warn("failed to refresh runtime server status", "server", server.ID, "container", server.ContainerID, "error", err)
+		if status == domain.StatusErrored {
+			server.Status = domain.StatusErrored
+			server.LastError = err.Error()
+			server.UpdatedAt = time.Now()
+			if saveErr := h.store.SaveServer(ctx, &server); saveErr != nil {
+				h.logger.Warn("failed to persist refreshed runtime server error", "server", server.ID, "error", saveErr, "cause", err)
+			}
+		} else {
+			h.logger.Warn("failed to refresh runtime server status", "server", server.ID, "container", server.ContainerID, "error", err)
+		}
 		return server
 	}
 	if status == server.Status {
 		return server
 	}
 	server.Status = status
+	if status != domain.StatusErrored {
+		server.LastError = ""
+	}
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveServer(ctx, &server); err != nil {
 		h.logger.Warn("failed to persist refreshed runtime server status", "server", server.ID, "status", status, "error", err)
@@ -1688,6 +1749,15 @@ func (h *Handler) cleanupOwnedServerResources(ctx context.Context, server domain
 	}
 	for _, item := range worlds {
 		if item.InstanceID == server.ID {
+			if item.Source == "server_snapshot" {
+				if item.ActiveInstanceID == server.ID {
+					item.ActiveInstanceID = ""
+					if err := h.store.SaveWorld(ctx, &item); err != nil {
+						return err
+					}
+				}
+				continue
+			}
 			path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 			if err != nil {
 				return err
@@ -1793,6 +1863,37 @@ func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string
 		port++
 	}
 	return 0, fmt.Errorf("no available host port in range 7777-65535")
+}
+
+func normalizeTerrariaRuntimeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
+	config.Port = terraria.DefaultInternalPort
+	return config
+}
+
+func (h *Handler) resolveHostPort(ctx context.Context, requested int, excludeInstanceID string) (int, error) {
+	if requested == 0 {
+		return h.allocateHostPort(ctx, excludeInstanceID)
+	}
+	if requested < 1024 || requested > 65535 {
+		return 0, fmt.Errorf("external port must be between 1024 and 65535")
+	}
+	if err := h.ensureHostPortAvailable(ctx, requested, excludeInstanceID); err != nil {
+		return 0, err
+	}
+	return requested, nil
+}
+
+func (h *Handler) ensureHostPortAvailable(ctx context.Context, hostPort int, excludeInstanceID string) error {
+	servers, err := h.store.ListServers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, server := range servers {
+		if server.ID != excludeInstanceID && server.HostPort == hostPort {
+			return fmt.Errorf("external port %d is already used", hostPort)
+		}
+	}
+	return nil
 }
 
 func (h *Handler) recordActivity(ctx context.Context, instanceID, eventType, message string) {
@@ -1913,6 +2014,18 @@ func providerSupportsVersion(gameProvider provider.GameProvider, version string)
 		}
 	}
 	return false
+}
+
+func normalizeStoredProviderVersion(gameProvider provider.GameProvider, version string) string {
+	version = strings.TrimSpace(version)
+	if providerSupportsVersion(gameProvider, version) {
+		return version
+	}
+	versions := gameProvider.Versions()
+	if len(versions) == 0 {
+		return version
+	}
+	return versions[0]
 }
 
 func (h *Handler) configPreview(w http.ResponseWriter, r *http.Request) {

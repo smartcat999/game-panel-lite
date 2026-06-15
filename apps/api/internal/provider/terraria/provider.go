@@ -17,7 +17,7 @@ var vanillaImageTags = map[string]string{
 	"1.4.5.6": "tshock-1.4.5.6-6.1.0",
 	"1.4.4.9": "tshock-1.4.4.9-5.2.4",
 }
-var tmodloaderVersions = []string{"2024.10", "2024.08", "2024.05", "2023.12"}
+var tmodloaderVersions = []string{"v2026.04.3.0", "v2026.02.3.1"}
 
 func NewVanillaProvider() VanillaProvider       { return VanillaProvider{} }
 func NewTModLoaderProvider() TModLoaderProvider { return TModLoaderProvider{} }
@@ -47,13 +47,10 @@ func (VanillaProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.Cont
 
 func (TModLoaderProvider) Key() domain.ProviderKey { return domain.ProviderTerrariaTModLoader }
 func (TModLoaderProvider) Name() string            { return "Terraria tModLoader" }
-func (TModLoaderProvider) Image() string           { return "radioactivehydra/tmodloader:latest" }
+func (TModLoaderProvider) Image() string           { return TModLoaderImageForVersion(tmodloaderVersions[0]) }
 func (TModLoaderProvider) Versions() []string      { return tmodloaderVersions }
 func (TModLoaderProvider) ImageFor(version string) string {
-	if version == "" {
-		version = tmodloaderVersions[0]
-	}
-	return "radioactivehydra/tmodloader:" + version
+	return TModLoaderImageForVersion(version)
 }
 func (TModLoaderProvider) DefaultConfig() domain.TerrariaConfig {
 	return Presets[4].Config
@@ -110,20 +107,38 @@ func vanillaRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOption
 }
 
 func tModLoaderRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
+	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	return runtime.ContainerOptions{
 		Env: []string{
-			"TMOD_HOMEDIR=/tmodserver",
+			"HOME=/home/container",
+			"TMOD_HOME=/home/container",
+			"WORLD_NAME=" + config.WorldName,
+			fmt.Sprintf("WORLD_SIZE=%d", worldSizes[config.WorldSize]),
 		},
 		Cmd: []string{
 			"sh",
 			"-c",
-			"${TMOD_HOMEDIR}/start-tModLoaderServer.sh -nosteam -config /data/serverconfig.txt",
+			"cd /home/container && exec ./server/start-tModLoaderServer.sh -nosteam -config /home/container/serverconfig.txt -tmlsavedirectory /home/container -world \"/home/container/Worlds/${WORLD_NAME}.wld\" -autocreate \"${WORLD_SIZE}\" -noupnp",
 		},
-		DataMounts: []string{"/data"},
+		DataMounts: []string{
+			"Worlds:/home/container/Worlds",
+			"Mods:/home/container/Mods",
+			"logs:/home/container/logs",
+			"steamapps:/home/container/steamapps",
+			"serverconfig.txt:/home/container/serverconfig.txt",
+		},
 		Files: map[string]string{
 			"serverconfig.txt": renderTModLoaderRuntimeConfig(config),
 		},
 	}
+}
+
+func TModLoaderImageForVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		version = tmodloaderVersions[0]
+	}
+	return "smartcat99999/tmodloader:" + version
 }
 
 func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
@@ -131,7 +146,7 @@ func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
 	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
 	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
 	lines := []string{
-		fmt.Sprintf("world=/data/Worlds/%s.wld", config.WorldName),
+		fmt.Sprintf("world=/home/container/Worlds/%s.wld", config.WorldName),
 		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),
 		fmt.Sprintf("worldname=%s", config.WorldName),
 		fmt.Sprintf("worldevil=%d", worldEvils[config.WorldEvil]),
@@ -141,9 +156,9 @@ func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
 		fmt.Sprintf("password=%s", config.Password),
 		fmt.Sprintf("motd=%s", value(config.MOTD, "Welcome to GamePanel Lite")),
 		fmt.Sprintf("seed=%s", config.Seed),
-		fmt.Sprintf("worldpath=%s", "/data/Worlds"),
+		fmt.Sprintf("worldpath=%s", "/home/container/Worlds"),
 		fmt.Sprintf("secure=%d", boolInt(config.Secure)),
-		fmt.Sprintf("language=%s", value(config.Language, "en-US")),
+		fmt.Sprintf("language=%s", value(config.Language, "zh-Hans")),
 		"upnp=0",
 		"priority=1",
 	}

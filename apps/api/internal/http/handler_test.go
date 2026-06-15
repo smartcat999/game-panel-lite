@@ -92,6 +92,23 @@ func (a availableMockAdapter) Check(context.Context) runtime.DockerStatus {
 	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock"}
 }
 
+type captureCreateAdapter struct {
+	availableMockAdapter
+	created chan runtime.ContainerSpec
+}
+
+func newCaptureCreateAdapter() *captureCreateAdapter {
+	return &captureCreateAdapter{
+		availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()},
+		created:              make(chan runtime.ContainerSpec, 1),
+	}
+}
+
+func (a *captureCreateAdapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
+	a.created <- spec
+	return a.availableMockAdapter.Create(ctx, spec)
+}
+
 func TestCorsAllowsPatchPreflight(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 	request := httptest.NewRequest(stdhttp.MethodOptions, "/api/servers/server-1/mods/mod-1", nil)
@@ -323,6 +340,41 @@ func TestStartServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
 	t.Fatalf("expected async start worker to mark server running, got %+v", updated)
 }
 
+func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("old-tmod-version", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	server.Config = terraria.Presets[4].Config
+	server.Version = "2024.10"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if recorder.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected runtime container to be created")
+	}
+	if spec.Image != "smartcat99999/tmodloader:v2026.04.3.0" {
+		t.Fatalf("expected versioned tModLoader runtime image, got %q", spec.Image)
+	}
+	if strings.Contains(spec.Image, "radioactivehydra") || strings.Contains(spec.Image, "2024.10") {
+		t.Fatalf("expected old Docker tag not to be used, got image %q", spec.Image)
+	}
+	updated := waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+	if updated.Version != "v2026.04.3.0" {
+		t.Fatalf("expected stored version to be normalized, got %q", updated.Version)
+	}
+}
+
 func TestDeleteServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
 	adapter := newBlockingRuntimeAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
@@ -381,6 +433,7 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	createPayload := `{
 		"name":"Vanilla Test",
 		"providerKey":"terraria-vanilla",
+		"hostPort":17777,
 		"config":{
 			"serverName":"Vanilla Test",
 			"worldName":"TestWorld",
@@ -404,6 +457,9 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	}
 	if server.ID == "" || server.ContainerID != "" || server.ProviderKey != domain.ProviderTerrariaVanilla {
 		t.Fatalf("expected created vanilla server record without fixed container, got %+v", server)
+	}
+	if server.Port != 7777 || server.HostPort != 17777 {
+		t.Fatalf("expected fixed internal port and requested external port, got internal=%d external=%d", server.Port, server.HostPort)
 	}
 
 	start := httptest.NewRecorder()
@@ -1396,33 +1452,13 @@ func TestWorldImportListDownloadDuplicateAndDeleteEndpoints(t *testing.T) {
 		t.Fatalf("expected downloaded world content, got %q", download.Body.String())
 	}
 
-	duplicate := httptest.NewRecorder()
-	router.ServeHTTP(duplicate, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/"+imported.ID+"/duplicate", bytes.NewBufferString(`{"name":"Copy","fileName":"copy.wld"}`)))
-	if duplicate.Code != stdhttp.StatusCreated {
-		t.Fatalf("expected world duplicate 201, got %d: %s", duplicate.Code, duplicate.Body.String())
-	}
-	var copied domain.World
-	if err := json.Unmarshal(duplicate.Body.Bytes(), &copied); err != nil {
-		t.Fatal(err)
-	}
-	if copied.Name != "Copy" || copied.FileName != "copy.wld" {
-		t.Fatalf("expected copied world metadata, got %+v", copied)
-	}
-	copiedBytes, err := os.ReadFile(filepath.Join(cfg.DataDir, "worlds", "unassigned", "copy.wld"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(copiedBytes) != "world-data" {
-		t.Fatalf("expected copied world content, got %q", string(copiedBytes))
-	}
-
 	remove := httptest.NewRecorder()
-	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/worlds/"+copied.ID, nil))
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/worlds/"+imported.ID, nil))
 	if remove.Code != stdhttp.StatusOK {
 		t.Fatalf("expected world delete 200, got %d: %s", remove.Code, remove.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(cfg.DataDir, "worlds", "unassigned", "copy.wld")); !os.IsNotExist(err) {
-		t.Fatalf("expected copied world file deleted, stat err=%v", err)
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "worlds", "unassigned", "uploaded.wld")); !os.IsNotExist(err) {
+		t.Fatalf("expected imported world file deleted, stat err=%v", err)
 	}
 }
 
@@ -1574,6 +1610,7 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("world-target", cfg.DataDir)
 	server.ContainerID = "old-container"
+	expectedWorldName := server.Config.WorldName
 	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1618,17 +1655,21 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.WorldName != "new-home" || updated.Config.WorldName != "new-home" || updated.ContainerID != "" {
-		t.Fatalf("expected server world/config update and cleared container, got %+v", updated)
+	if updated.WorldName != expectedWorldName || updated.Config.WorldName != expectedWorldName || updated.ContainerID != "" {
+		t.Fatalf("expected server world/config name to stay unchanged and cleared container, got %+v", updated)
+	}
+	if updated.SourceWorldID != world.ID || updated.SourceWorldName != world.Name {
+		t.Fatalf("expected server source world to be recorded, got %+v", updated)
 	}
 	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(configBytes, []byte("world=worlds/new-home.wld")) {
+	expectedConfigLine := "world=worlds/" + expectedWorldName + ".wld"
+	if !bytes.Contains(configBytes, []byte(expectedConfigLine)) {
 		t.Fatalf("expected serverconfig to point at assigned world, got %q", string(configBytes))
 	}
-	runtimeWorld, err := os.ReadFile(filepath.Join(server.DataDir, "worlds", "new-home.wld"))
+	runtimeWorld, err := os.ReadFile(filepath.Join(server.DataDir, "worlds", expectedWorldName+".wld"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1648,6 +1689,96 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	}
 	if assigned.ActiveInstanceID != server.ID {
 		t.Fatalf("expected assigned world to be active, got %+v", assigned)
+	}
+}
+
+func TestAssignWorldAllowsReusableSnapshotForSameProvider(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	source := testServer("snapshot-source", cfg.DataDir)
+	target := testServer("snapshot-target", cfg.DataDir)
+	expectedWorldName := target.Config.WorldName
+	if err := db.CreateServer(context.Background(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &target); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(source.ID, "shared.wld", bytes.NewBufferString("shared-world")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:          "shared-world",
+		InstanceID:  source.ID,
+		ProviderKey: source.ProviderKey,
+		Name:        "shared",
+		FileName:    "shared.wld",
+		SizeBytes:   12,
+		Source:      "server_snapshot",
+		Config:      source.Config,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	assign := httptest.NewRecorder()
+	router.ServeHTTP(assign, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/shared-world/assign", bytes.NewBufferString(`{"instanceId":"snapshot-target"}`)))
+	if assign.Code != stdhttp.StatusOK {
+		t.Fatalf("expected same-provider snapshot assign 200, got %d: %s", assign.Code, assign.Body.String())
+	}
+	updated, err := db.GetServer(context.Background(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.WorldName != expectedWorldName || updated.Config.WorldName != expectedWorldName {
+		t.Fatalf("expected target server world name to stay unchanged, got %+v", updated)
+	}
+	if updated.SourceWorldID != world.ID || updated.SourceWorldName != world.Name {
+		t.Fatalf("expected target server source world to be recorded, got %+v", updated)
+	}
+	got, err := os.ReadFile(filepath.Join(target.DataDir, "worlds", expectedWorldName+".wld"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "shared-world" {
+		t.Fatalf("expected snapshot materialized into target runtime, got %q", string(got))
+	}
+}
+
+func TestAssignWorldRejectsSnapshotForDifferentProvider(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	source := testServer("snapshot-source", cfg.DataDir)
+	target := testServer("snapshot-tmod", cfg.DataDir)
+	target.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &target); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(source.ID, "vanilla.wld", bytes.NewBufferString("vanilla-world")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:          "vanilla-world",
+		InstanceID:  source.ID,
+		ProviderKey: source.ProviderKey,
+		Name:        "vanilla",
+		FileName:    "vanilla.wld",
+		SizeBytes:   13,
+		Source:      "server_snapshot",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	assign := httptest.NewRecorder()
+	router.ServeHTTP(assign, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/vanilla-world/assign", bytes.NewBufferString(`{"instanceId":"snapshot-tmod"}`)))
+	if assign.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected different-provider snapshot assign 409, got %d: %s", assign.Code, assign.Body.String())
 	}
 }
 
@@ -1690,6 +1821,123 @@ func TestDeleteActiveWorldRequiresUnassigningFirst(t *testing.T) {
 	}
 }
 
+func TestDeleteWorldRejectsTemplateUsedByServer(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	source := testServer("template-source", cfg.DataDir)
+	target := testServer("template-target", cfg.DataDir)
+	target.SourceWorldID = "template-world"
+	target.SourceWorldName = "Template World"
+	if err := db.CreateServer(context.Background(), &source); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &target); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(source.ID, "template.wld", bytes.NewBufferString("template-world")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:          "template-world",
+		InstanceID:  source.ID,
+		ProviderKey: source.ProviderKey,
+		Name:        "Template World",
+		FileName:    "template.wld",
+		SizeBytes:   14,
+		Source:      "server_snapshot",
+		Config:      source.Config,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/worlds/template-world", nil))
+	if remove.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected template delete 409 while in use, got %d: %s", remove.Code, remove.Body.String())
+	}
+}
+
+func TestCreateWorldSnapshotFromServerRuntimeWorld(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("snapshot-source", cfg.DataDir)
+	server.Name = "Snapshot Source"
+	server.WorldName = server.Config.WorldName
+	if err := os.MkdirAll(filepath.Join(server.DataDir, "worlds"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "worlds", server.Config.WorldName+".wld"), []byte("world-data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/snapshot-source/world-snapshots", bytes.NewBufferString(`{"name":"Reusable Snapshot"}`)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected world snapshot 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var world domain.World
+	if err := json.Unmarshal(create.Body.Bytes(), &world); err != nil {
+		t.Fatal(err)
+	}
+	if world.Name != "Reusable Snapshot" || world.Source != "server_snapshot" || world.ActiveInstanceID != "" || world.ProviderKey != server.ProviderKey {
+		t.Fatalf("expected server snapshot world record, got %+v", world)
+	}
+	if world.Config.WorldName != server.Config.WorldName || world.Config.MaxPlayers != server.Config.MaxPlayers {
+		t.Fatalf("expected config snapshot, got %+v", world.Config)
+	}
+	path, err := worldsvc.NewService(cfg.DataDir).Path(server.ID, world.FileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "world-data" {
+		t.Fatalf("expected copied runtime world data, got %q", string(got))
+	}
+}
+
+func TestCreateWorldSnapshotFindsVanillaRootWorldFile(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("snapshot-root-world", cfg.DataDir)
+	server.WorldName = server.Config.WorldName
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, server.Config.WorldName+".wld"), []byte("root-world-data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/snapshot-root-world/world-snapshots", nil))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected world snapshot 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var world domain.World
+	if err := json.Unmarshal(create.Body.Bytes(), &world); err != nil {
+		t.Fatal(err)
+	}
+	path, err := worldsvc.NewService(cfg.DataDir).Path(server.ID, world.FileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "root-world-data" {
+		t.Fatalf("expected copied root world data, got %q", string(got))
+	}
+}
+
 func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("config-target", cfg.DataDir)
@@ -1702,13 +1950,14 @@ func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T)
 	}
 
 	payload := `{
+		"hostPort":17777,
 		"config":{
 			"serverName":"Edited Server",
 			"worldName":"EditedWorld",
 			"worldSize":"large",
 			"difficulty":"expert",
 			"maxPlayers":12,
-			"port":17777,
+			"port":18888,
 			"password":"secret",
 			"motd":"Updated from detail page",
 			"secure":true,
@@ -1725,7 +1974,7 @@ func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Name != "Edited Server" || updated.WorldName != "EditedWorld" || updated.Port != 17777 || updated.MaxPlayers != 12 || updated.Password != "secret" {
+	if updated.Name != "Edited Server" || updated.WorldName != "EditedWorld" || updated.Port != 7777 || updated.HostPort != 17777 || updated.MaxPlayers != 12 || updated.Password != "secret" {
 		t.Fatalf("expected server fields synchronized from config, got %+v", updated)
 	}
 	if updated.Config.Difficulty != domain.Difficulty("expert") || updated.Config.WorldSize != domain.WorldSize("large") {
@@ -1734,12 +1983,83 @@ func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T)
 	if updated.ContainerID != "" {
 		t.Fatalf("expected stale container id cleared after config update, got %q", updated.ContainerID)
 	}
+	if updated.ConfigRevision == 0 || updated.AppliedConfigRevision != updated.ConfigRevision {
+		t.Fatalf("expected stopped config update to be considered applied, got config=%d applied=%d", updated.ConfigRevision, updated.AppliedConfigRevision)
+	}
 	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(configBytes, []byte("world=worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) {
+	if !bytes.Contains(configBytes, []byte("world=worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) || !bytes.Contains(configBytes, []byte("port=7777")) {
 		t.Fatalf("expected rewritten serverconfig, got %q", string(configBytes))
+	}
+}
+
+func TestUpdateRunningServerConfigPreservesLiveContainer(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("running-config-target", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "live-container"
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := `{
+		"hostPort":17778,
+		"config":{
+			"serverName":"Edited While Running",
+			"worldName":"EditedWorld",
+			"worldSize":"large",
+			"difficulty":"expert",
+			"maxPlayers":10,
+			"port":18888,
+			"password":"secret",
+			"motd":"Restart to apply",
+			"secure":true,
+			"language":"en-US",
+			"autoCreateWorld":true
+		}
+	}`
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/running-config-target/config", bytes.NewBufferString(payload)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected running config update 200, got %d: %s", update.Code, update.Body.String())
+	}
+	updated, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != domain.StatusRunning || updated.ContainerID != "live-container" {
+		t.Fatalf("expected running container to stay attached, got %+v", updated)
+	}
+	if updated.ConfigRevision == 0 || updated.AppliedConfigRevision >= updated.ConfigRevision {
+		t.Fatalf("expected running config update to require restart, got config=%d applied=%d", updated.ConfigRevision, updated.AppliedConfigRevision)
+	}
+	if updated.Name != "Edited While Running" || updated.Config.MOTD != "Restart to apply" {
+		t.Fatalf("expected persisted config metadata, got %+v", updated)
+	}
+	if updated.Port != 7777 || updated.HostPort != 17778 {
+		t.Fatalf("expected fixed internal port and updated external port, got internal=%d external=%d", updated.Port, updated.HostPort)
+	}
+	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(configBytes, []byte("motd=Restart to apply")) {
+		t.Fatalf("expected rewritten serverconfig, got %q", string(configBytes))
+	}
+
+	restart := httptest.NewRecorder()
+	router.ServeHTTP(restart, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/running-config-target/restart", nil))
+	if restart.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected restart 202, got %d: %s", restart.Code, restart.Body.String())
+	}
+	restarted := waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+	if restarted.AppliedConfigRevision != restarted.ConfigRevision {
+		t.Fatalf("expected restart to apply config revision, got config=%d applied=%d", restarted.ConfigRevision, restarted.AppliedConfigRevision)
 	}
 }
 
@@ -1907,7 +2227,7 @@ func TestRestoreBackupSynchronizesServerMetadataFromRestoredConfig(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored.WorldName != "BackedUpWorld" || restored.Config.WorldName != "BackedUpWorld" || restored.MaxPlayers != 14 || restored.Port != 17777 {
+	if restored.WorldName != "BackedUpWorld" || restored.Config.WorldName != "BackedUpWorld" || restored.MaxPlayers != 14 || restored.Port != 7777 {
 		t.Fatalf("expected restored server metadata synchronized from backup config, got %+v", restored)
 	}
 }
@@ -1971,165 +2291,10 @@ func TestSettingsEndpointsReadAndUpdateDockerHost(t *testing.T) {
 	}
 }
 
-func TestMigrateWorldEndpointCopiesToTargetServer(t *testing.T) {
-	router, db, cfg := newTestRouter(t)
-	source := testServer("source", cfg.DataDir)
-	target := testServer("target", cfg.DataDir)
-	if err := db.CreateServer(context.Background(), &source); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.CreateServer(context.Background(), &target); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := worldsvc.NewService(cfg.DataDir).Import("source", "journey.wld", bytes.NewBufferString("world")); err != nil {
-		t.Fatal(err)
-	}
-	world := domain.World{ID: "world-1", InstanceID: "source", Name: "Journey", FileName: "journey.wld", SizeBytes: 5, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db.CreateWorld(context.Background(), &world); err != nil {
-		t.Fatal(err)
-	}
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/world-1/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
-	if recorder.Code != stdhttp.StatusCreated {
-		t.Fatalf("expected migrate world 201, got %d: %s", recorder.Code, recorder.Body.String())
-	}
-	var migrated domain.World
-	if err := json.Unmarshal(recorder.Body.Bytes(), &migrated); err != nil {
-		t.Fatal(err)
-	}
-	if migrated.InstanceID != "target" || migrated.ActiveInstanceID != "" {
-		t.Fatalf("expected migrated world to be copied to target without activating it, got %+v", migrated)
-	}
-	storedTarget, err := db.GetServer(context.Background(), target.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if storedTarget.WorldName != target.WorldName {
-		t.Fatalf("expected world migration to leave target server current world unchanged, got %q", storedTarget.WorldName)
-	}
-	got, err := os.ReadFile(filepath.Join(cfg.DataDir, "worlds", "target", "journey.wld"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != "world" {
-		t.Fatalf("expected migrated world content, got %q", string(got))
-	}
-
-	again := httptest.NewRecorder()
-	router.ServeHTTP(again, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/world-1/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
-	if again.Code != stdhttp.StatusOK {
-		t.Fatalf("expected repeated migrate world 200, got %d: %s", again.Code, again.Body.String())
-	}
-	var repeated domain.World
-	if err := json.Unmarshal(again.Body.Bytes(), &repeated); err != nil {
-		t.Fatal(err)
-	}
-	if repeated.ID != migrated.ID {
-		t.Fatalf("expected repeated migration to update existing target world, got first=%+v second=%+v", migrated, repeated)
-	}
-}
-
-func TestWorldSourceMutationsPruneMissingFiles(t *testing.T) {
-	router, db, cfg := newTestRouter(t)
-	source := testServer("source", cfg.DataDir)
-	target := testServer("target", cfg.DataDir)
-	if err := db.CreateServer(context.Background(), &source); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.CreateServer(context.Background(), &target); err != nil {
-		t.Fatal(err)
-	}
-	world := domain.World{ID: "missing-world-source", InstanceID: "source", Name: "Missing", FileName: "missing.wld", SizeBytes: 5, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := db.CreateWorld(context.Background(), &world); err != nil {
-		t.Fatal(err)
-	}
-
-	duplicate := httptest.NewRecorder()
-	router.ServeHTTP(duplicate, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/missing-world-source/duplicate", bytes.NewBufferString(`{"name":"Copy"}`)))
-	if duplicate.Code != stdhttp.StatusNotFound {
-		t.Fatalf("expected missing world duplicate 404, got %d: %s", duplicate.Code, duplicate.Body.String())
-	}
-	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected missing world record pruned after duplicate miss, got err=%v", err)
-	}
-
-	if err := db.CreateWorld(context.Background(), &world); err != nil {
-		t.Fatal(err)
-	}
-	migrate := httptest.NewRecorder()
-	router.ServeHTTP(migrate, httptest.NewRequest(stdhttp.MethodPost, "/api/worlds/missing-world-source/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
-	if migrate.Code != stdhttp.StatusNotFound {
-		t.Fatalf("expected missing world migrate 404, got %d: %s", migrate.Code, migrate.Body.String())
-	}
-	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected missing world record pruned after migrate miss, got err=%v", err)
-	}
-}
-
-func TestMigrateBackupEndpointCopiesToTargetServer(t *testing.T) {
-	router, db, cfg := newTestRouter(t)
-	source := testServer("source", cfg.DataDir)
-	target := testServer("target", cfg.DataDir)
-	if err := os.MkdirAll(source.DataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(source.DataDir, "serverconfig.txt"), []byte("config"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.CreateServer(context.Background(), &source); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.CreateServer(context.Background(), &target); err != nil {
-		t.Fatal(err)
-	}
-	backupPath, size, err := backupsvc.NewService(cfg.DataDir).Create("source", source.DataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	backup := domain.Backup{ID: "backup-1", InstanceID: "source", FileName: filepath.Base(backupPath), WorldName: "Source World", SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
-	if err := db.CreateBackup(context.Background(), &backup); err != nil {
-		t.Fatal(err)
-	}
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/backup-1/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
-	if recorder.Code != stdhttp.StatusCreated {
-		t.Fatalf("expected migrate backup 201, got %d: %s", recorder.Code, recorder.Body.String())
-	}
-	var migrated domain.Backup
-	if err := json.Unmarshal(recorder.Body.Bytes(), &migrated); err != nil {
-		t.Fatal(err)
-	}
-	if migrated.InstanceID != "target" || migrated.WorldName != target.WorldName {
-		t.Fatalf("expected migrated backup target, got %+v", migrated)
-	}
-	if _, err := os.Stat(filepath.Join(cfg.DataDir, "backups", "target", filepath.Base(backupPath))); err != nil {
-		t.Fatal(err)
-	}
-
-	again := httptest.NewRecorder()
-	router.ServeHTTP(again, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/backup-1/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
-	if again.Code != stdhttp.StatusOK {
-		t.Fatalf("expected repeated migrate backup 200, got %d: %s", again.Code, again.Body.String())
-	}
-	var repeated domain.Backup
-	if err := json.Unmarshal(again.Body.Bytes(), &repeated); err != nil {
-		t.Fatal(err)
-	}
-	if repeated.ID != migrated.ID {
-		t.Fatalf("expected repeated backup migration to update existing target backup, got first=%+v second=%+v", migrated, repeated)
-	}
-}
-
 func TestBackupSourceMutationsPruneMissingFiles(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	source := testServer("source", cfg.DataDir)
-	target := testServer("target", cfg.DataDir)
 	if err := db.CreateServer(context.Background(), &source); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.CreateServer(context.Background(), &target); err != nil {
 		t.Fatal(err)
 	}
 	backup := domain.Backup{ID: "missing-backup-source", InstanceID: "source", FileName: "missing.zip", WorldName: "Source World", SizeBytes: 5, Type: "Manual", CreatedAt: time.Now()}
@@ -2144,18 +2309,6 @@ func TestBackupSourceMutationsPruneMissingFiles(t *testing.T) {
 	}
 	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("expected missing backup record pruned after restore miss, got err=%v", err)
-	}
-
-	if err := db.CreateBackup(context.Background(), &backup); err != nil {
-		t.Fatal(err)
-	}
-	migrate := httptest.NewRecorder()
-	router.ServeHTTP(migrate, httptest.NewRequest(stdhttp.MethodPost, "/api/backups/missing-backup-source/migrate", bytes.NewBufferString(`{"instanceId":"target"}`)))
-	if migrate.Code != stdhttp.StatusNotFound {
-		t.Fatalf("expected missing backup migrate 404, got %d: %s", migrate.Code, migrate.Body.String())
-	}
-	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected missing backup record pruned after migrate miss, got err=%v", err)
 	}
 }
 

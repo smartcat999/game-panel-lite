@@ -32,6 +32,8 @@ export const serverPortSchema = z
   .min(1024, "Port must be between 1024 and 65535")
   .max(65535, "Port must be between 1024 and 65535");
 
+export const terrariaInternalPort = 7777;
+
 export const terrariaConfigSchema = z.object({
   serverName: z.string().min(1).max(80).optional(),
   worldName: z.string().min(1).max(80),
@@ -48,7 +50,7 @@ export const terrariaConfigSchema = z.object({
   motd: z.string().max(256).optional(),
   seed: z.string().max(128).optional(),
   secure: z.boolean().default(true),
-  language: z.string().min(2).max(12).default("en-US"),
+  language: z.string().min(2).max(12).default("zh-Hans"),
   autoCreateWorld: z.boolean().default(true)
 }).superRefine((config, context) => {
   if (config.worldName.includes("..") || /[/\\]/.test(config.worldName)) {
@@ -85,12 +87,12 @@ export const terrariaPresets = [
       worldEvil: "random",
       difficulty: "classic",
       maxPlayers: 8,
-      port: 7777,
+      port: terrariaInternalPort,
       password: "",
       motd: "Welcome to GamePanel Lite",
       seed: "",
       secure: true,
-      language: "en-US",
+      language: "zh-Hans",
       autoCreateWorld: true
     }
   },
@@ -105,12 +107,12 @@ export const terrariaPresets = [
       worldEvil: "random",
       difficulty: "expert",
       maxPlayers: 8,
-      port: 7778,
+      port: terrariaInternalPort,
       password: "",
       motd: "Bring potions",
       seed: "",
       secure: true,
-      language: "en-US",
+      language: "zh-Hans",
       autoCreateWorld: true
     }
   },
@@ -125,12 +127,12 @@ export const terrariaPresets = [
       worldEvil: "random",
       difficulty: "master",
       maxPlayers: 6,
-      port: 7779,
+      port: terrariaInternalPort,
       password: "",
       motd: "Good luck",
       seed: "",
       secure: true,
-      language: "en-US",
+      language: "zh-Hans",
       autoCreateWorld: true
     }
   },
@@ -145,12 +147,12 @@ export const terrariaPresets = [
       worldEvil: "random",
       difficulty: "classic",
       maxPlayers: 12,
-      port: 7780,
+      port: terrariaInternalPort,
       password: "",
       motd: "Build something sharp",
       seed: "",
       secure: true,
-      language: "en-US",
+      language: "zh-Hans",
       autoCreateWorld: true
     }
   },
@@ -165,12 +167,12 @@ export const terrariaPresets = [
       worldEvil: "random",
       difficulty: "classic",
       maxPlayers: 8,
-      port: 7781,
+      port: terrariaInternalPort,
       password: "",
       motd: "Mods enabled",
       seed: "",
       secure: true,
-      language: "en-US",
+      language: "zh-Hans",
       autoCreateWorld: true
     }
   }
@@ -244,6 +246,9 @@ export const gameServerInstanceSchema = z.object({
   status: serverStatusSchema,
   port: serverPortSchema,
   maxPlayers: z.number().int().min(1).max(255),
+  lastError: z.string().optional(),
+  sourceWorldId: z.string().optional(),
+  sourceWorldName: z.string().optional(),
   createdAt: z.date(),
   updatedAt: z.date()
 });
@@ -258,6 +263,7 @@ export const backupSchema = z.object({
 
 export const worldSchema = z.object({
   id: z.string().min(1),
+  providerKey: terrariaProviderKeySchema.optional(),
   name: z.string().min(1).max(80),
   fileName: z.string().endsWith(".wld"),
   sizeBytes: z.number().int().nonnegative(),

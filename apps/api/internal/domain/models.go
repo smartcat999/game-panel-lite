@@ -26,22 +26,27 @@ const (
 )
 
 type GameServerInstance struct {
-	ID          string         `json:"id" gorm:"primaryKey"`
-	Name        string         `json:"name"`
-	GameKey     string         `json:"gameKey"`
-	ProviderKey ProviderKey    `json:"providerKey"`
-	Status      ServerStatus   `json:"status"`
-	WorldName   string         `json:"worldName"`
-	Port        int            `json:"port"`
-	MaxPlayers  int            `json:"maxPlayers"`
-	Password    string         `json:"password,omitempty"`
-	DataDir     string         `json:"dataDir,omitempty"`
-	ContainerID string         `json:"containerId,omitempty"`
-	HostPort    int            `json:"hostPort,omitempty"`
-	Version     string         `json:"version,omitempty"`
-	Config      TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
+	ID                    string         `json:"id" gorm:"primaryKey"`
+	Name                  string         `json:"name"`
+	GameKey               string         `json:"gameKey"`
+	ProviderKey           ProviderKey    `json:"providerKey"`
+	Status                ServerStatus   `json:"status"`
+	WorldName             string         `json:"worldName"`
+	Port                  int            `json:"port"`
+	MaxPlayers            int            `json:"maxPlayers"`
+	Password              string         `json:"password,omitempty"`
+	DataDir               string         `json:"dataDir,omitempty"`
+	ContainerID           string         `json:"containerId,omitempty"`
+	HostPort              int            `json:"hostPort,omitempty"`
+	Version               string         `json:"version,omitempty"`
+	LastError             string         `json:"lastError,omitempty"`
+	SourceWorldID         string         `json:"sourceWorldId,omitempty"`
+	SourceWorldName       string         `json:"sourceWorldName,omitempty"`
+	Config                TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
+	ConfigRevision        int            `json:"configRevision"`
+	AppliedConfigRevision int            `json:"appliedConfigRevision"`
+	CreatedAt             time.Time      `json:"createdAt"`
+	UpdatedAt             time.Time      `json:"updatedAt"`
 }
 
 type TerrariaConfig struct {
@@ -71,14 +76,17 @@ type Backup struct {
 }
 
 type World struct {
-	ID               string    `json:"id" gorm:"primaryKey"`
-	InstanceID       string    `json:"instanceId" gorm:"index"`
-	Name             string    `json:"name"`
-	FileName         string    `json:"fileName"`
-	SizeBytes        int64     `json:"sizeBytes"`
-	ActiveInstanceID string    `json:"activeInstanceId,omitempty"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	ID               string         `json:"id" gorm:"primaryKey"`
+	InstanceID       string         `json:"instanceId" gorm:"index"`
+	ProviderKey      ProviderKey    `json:"providerKey,omitempty" gorm:"index"`
+	Name             string         `json:"name"`
+	FileName         string         `json:"fileName"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	Source           string         `json:"source,omitempty"`
+	Config           TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
+	ActiveInstanceID string         `json:"activeInstanceId,omitempty"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
 type ModFile struct {
