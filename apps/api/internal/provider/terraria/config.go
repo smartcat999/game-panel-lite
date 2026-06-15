@@ -62,23 +62,7 @@ func RenderServerConfig(config domain.TerrariaConfig) (string, error) {
 	if err := ValidateConfig(config); err != nil {
 		return "", err
 	}
-	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
-	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
-	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
-	lines := []string{
-		fmt.Sprintf("world=worlds/%s.wld", config.WorldName),
-		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),
-		fmt.Sprintf("worldevil=%d", worldEvils[config.WorldEvil]),
-		fmt.Sprintf("difficulty=%d", difficulties[config.Difficulty]),
-		fmt.Sprintf("maxplayers=%d", config.MaxPlayers),
-		fmt.Sprintf("port=%d", config.Port),
-		fmt.Sprintf("password=%s", config.Password),
-		fmt.Sprintf("motd=%s", config.MOTD),
-		fmt.Sprintf("seed=%s", config.Seed),
-		fmt.Sprintf("secure=%d", boolInt(config.Secure)),
-		fmt.Sprintf("language=%s", value(config.Language, "zh-Hans")),
-	}
-	return strings.Join(lines, "\n"), nil
+	return renderVanillaRuntimeConfig(config), nil
 }
 
 func ParseServerConfig(base domain.TerrariaConfig, input string) (domain.TerrariaConfig, error) {

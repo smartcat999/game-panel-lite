@@ -1665,11 +1665,11 @@ func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedConfigLine := "world=worlds/" + expectedWorldName + ".wld"
+	expectedConfigLine := "world=/home/container/Worlds/" + expectedWorldName + ".wld"
 	if !bytes.Contains(configBytes, []byte(expectedConfigLine)) {
 		t.Fatalf("expected serverconfig to point at assigned world, got %q", string(configBytes))
 	}
-	runtimeWorld, err := os.ReadFile(filepath.Join(server.DataDir, "worlds", expectedWorldName+".wld"))
+	runtimeWorld, err := os.ReadFile(filepath.Join(server.DataDir, "Worlds", expectedWorldName+".wld"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1864,10 +1864,10 @@ func TestCreateWorldSnapshotFromServerRuntimeWorld(t *testing.T) {
 	server := testServer("snapshot-source", cfg.DataDir)
 	server.Name = "Snapshot Source"
 	server.WorldName = server.Config.WorldName
-	if err := os.MkdirAll(filepath.Join(server.DataDir, "worlds"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(server.DataDir, "Worlds"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(server.DataDir, "worlds", server.Config.WorldName+".wld"), []byte("world-data"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(server.DataDir, "Worlds", server.Config.WorldName+".wld"), []byte("world-data"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.CreateServer(context.Background(), &server); err != nil {
@@ -1990,7 +1990,7 @@ func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(configBytes, []byte("world=worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) || !bytes.Contains(configBytes, []byte("port=7777")) {
+	if !bytes.Contains(configBytes, []byte("world=/home/container/Worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) || !bytes.Contains(configBytes, []byte("port=7777")) {
 		t.Fatalf("expected rewritten serverconfig, got %q", string(configBytes))
 	}
 }

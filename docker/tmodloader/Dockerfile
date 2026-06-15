@@ -4,7 +4,10 @@ ARG TML_VERSION=v2026.04.3.0
 ARG MANAGE_URL=https://raw.githubusercontent.com/tModLoader/tModLoader/stable/patches/tModLoader/Terraria/release_extras/DedicatedServerUtils/manage-tModLoaderServer.sh
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl unzip wget lib32gcc-s1 \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip wget \
+    && if [ "$(dpkg --print-architecture)" = "amd64" ] || [ "$(dpkg --print-architecture)" = "i386" ]; then \
+        apt-get install -y --no-install-recommends lib32gcc-s1; \
+    fi \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /opt/tmodloader/Mods /opt/tmodloader/Worlds /opt/tmodloader/logs /opt/tmodloader/steamapps \
@@ -21,7 +24,10 @@ LABEL org.opencontainers.image.description="Prebuilt tModLoader server runtime f
 
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates lib32gcc-s1 \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && if [ "$(dpkg --print-architecture)" = "amd64" ] || [ "$(dpkg --print-architecture)" = "i386" ]; then \
+        apt-get install -y --no-install-recommends lib32gcc-s1; \
+    fi \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /home/container \
     && chown -R container:container /home/container

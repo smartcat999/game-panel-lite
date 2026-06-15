@@ -1243,6 +1243,23 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Self-Built Terraria Images Update
+
+Status: Completed
+
+Completed:
+- Switched vanilla Terraria runtime images from `ryshe/terraria` to `smartcat99999/terraria-vanilla:{version}`.
+- Added a self-built vanilla Terraria Docker image that packages the official dedicated server archive during image build instead of downloading game files on server startup.
+- Added an architecture-aware vanilla entrypoint: `linux/amd64` uses the official `TerrariaServer.bin.x86_64`; `linux/arm64` uses `TerrariaServer.exe` through system Mono with compatible runtime assemblies.
+- Unified vanilla and tModLoader runtime world paths under `Worlds/{world}.wld`.
+- Removed TShock-specific vanilla runtime leftovers from the provider.
+- Kept the tModLoader self-built image arm64-safe by only installing `lib32gcc-s1` on x86 architectures.
+
+Checks:
+- `GOCACHE=/tmp/game-panel-lite-go-build go test ./apps/api/internal/provider/terraria ./apps/api/internal/http ./apps/api/internal/runtime/docker`: passed.
+- `docker buildx build --builder orbstack --platform linux/arm64 -f docker/terraria-vanilla/Dockerfile --build-arg TERRARIA_VERSION=1.4.5.6 --build-arg TERRARIA_DOWNLOAD_ID=1456 -t smartcat99999/terraria-vanilla:1.4.5.6-arm64-test .`: passed.
+- `docker run ... smartcat99999/terraria-vanilla:1.4.5.6-arm64-test`: passed smoke verification; the arm64 container generated a world and logged `Terraria Server v1.4.5.6`, `Listening on port 7777`, and `Server started`.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 
