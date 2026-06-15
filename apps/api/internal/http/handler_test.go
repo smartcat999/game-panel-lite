@@ -592,7 +592,7 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 			"maxPlayers":8,
 			"port":7777,
 			"secure":true,
-			"language":"en-US",
+			"language":"zh-Hans",
 			"autoCreateWorld":true
 		}
 	}`
@@ -610,6 +610,9 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	}
 	if server.Port != 7777 || server.HostPort != 17777 {
 		t.Fatalf("expected fixed internal port and requested external port, got internal=%d external=%d", server.Port, server.HostPort)
+	}
+	if server.Config.Language != terraria.DefaultLanguage {
+		t.Fatalf("expected created server language to be fixed to %s, got %q", terraria.DefaultLanguage, server.Config.Language)
 	}
 
 	start := httptest.NewRecorder()
@@ -753,7 +756,7 @@ func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
 			"maxPlayers":8,
 			"port":7777,
 			"secure":true,
-			"language":"en-US",
+			"language":"zh-Hans",
 			"autoCreateWorld":true
 		}
 	}`
@@ -2132,7 +2135,7 @@ func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T)
 	if updated.Name != "Edited Server" || updated.WorldName != "EditedWorld" || updated.Port != 7777 || updated.HostPort != 17777 || updated.MaxPlayers != 12 || updated.Password != "secret" {
 		t.Fatalf("expected server fields synchronized from config, got %+v", updated)
 	}
-	if updated.Config.Difficulty != domain.Difficulty("expert") || updated.Config.WorldSize != domain.WorldSize("large") {
+	if updated.Config.Difficulty != domain.Difficulty("expert") || updated.Config.WorldSize != domain.WorldSize("large") || updated.Config.Language != terraria.DefaultLanguage {
 		t.Fatalf("expected persisted config update, got %+v", updated.Config)
 	}
 	if updated.ContainerID != "" {
@@ -2145,7 +2148,7 @@ func TestUpdateServerConfigRequiresStoppedAndRewritesRuntimeConfig(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(configBytes, []byte("world=/home/container/Worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) || !bytes.Contains(configBytes, []byte("port=7777")) {
+	if !bytes.Contains(configBytes, []byte("world=/home/container/Worlds/EditedWorld.wld")) || !bytes.Contains(configBytes, []byte("maxplayers=12")) || !bytes.Contains(configBytes, []byte("port=7777")) || !bytes.Contains(configBytes, []byte("language=en-US")) {
 		t.Fatalf("expected rewritten serverconfig, got %q", string(configBytes))
 	}
 }

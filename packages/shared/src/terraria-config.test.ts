@@ -24,8 +24,8 @@ describe("Terraria presets", () => {
     );
   });
 
-  it("uses Chinese as the default language for presets", () => {
-    expect(getTerrariaPreset("friends-casual").config.language).toBe("zh-Hans");
+  it("uses English as the fixed server language for presets", () => {
+    expect(getTerrariaPreset("friends-casual").config.language).toBe("en-US");
   });
 });
 

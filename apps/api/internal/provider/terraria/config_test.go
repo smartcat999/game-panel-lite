@@ -22,7 +22,7 @@ func TestRenderServerConfig(t *testing.T) {
 	rendered, err := RenderServerConfig(domain.TerrariaConfig{
 		WorldName: "Moon Garden", WorldSize: "large", WorldEvil: "corruption", Difficulty: "master",
 		MaxPlayers: 12, Port: 7778, Password: "stars", MOTD: "Mind the wyverns",
-		Seed: "05162020", Secure: true, Language: "en-US",
+		Seed: "05162020", Secure: true, Language: "zh-Hans",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestRenderServerConfig(t *testing.T) {
 	for _, expected := range []string{
 		"world=/home/container/Worlds/Moon Garden.wld", "autocreate=3", "worldname=Moon Garden", "worldevil=1", "difficulty=3",
 		"maxplayers=12", "port=7778", "password=stars", "secure=1",
-		"worldpath=/home/container/Worlds", "upnp=0",
+		"worldpath=/home/container/Worlds", "language=en-US", "upnp=0",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected rendered config to contain %q, got:\n%s", expected, rendered)
@@ -87,7 +87,7 @@ func TestVanillaRuntimeOptionsUseSelfBuiltImageAndConfig(t *testing.T) {
 		"motd=Vanilla online",
 		"worldpath=/home/container/Worlds",
 		"secure=1",
-		"language=zh-Hans",
+		"language=en-US",
 		"upnp=0",
 	} {
 		if !strings.Contains(rendered, expected) {
@@ -126,7 +126,7 @@ func TestTModLoaderRuntimeOptionsUseNonInteractiveConfig(t *testing.T) {
 		"motd=Mods online",
 		"worldpath=/home/container/Worlds",
 		"secure=1",
-		"language=zh-Hans",
+		"language=en-US",
 		"upnp=0",
 	} {
 		if !strings.Contains(rendered, expected) {

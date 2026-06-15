@@ -33,6 +33,7 @@ export const serverPortSchema = z
   .max(65535, "Port must be between 1024 and 65535");
 
 export const terrariaInternalPort = 7777;
+export const terrariaDefaultLanguage = "en-US";
 
 export const terrariaConfigSchema = z.object({
   serverName: z.string().min(1).max(80).optional(),
@@ -50,7 +51,7 @@ export const terrariaConfigSchema = z.object({
   motd: z.string().max(256).optional(),
   seed: z.string().max(128).optional(),
   secure: z.boolean().default(true),
-  language: z.string().min(2).max(12).default("zh-Hans"),
+  language: z.string().min(2).max(12).default(terrariaDefaultLanguage),
   autoCreateWorld: z.boolean().default(true)
 }).superRefine((config, context) => {
   if (config.worldName.includes("..") || /[/\\]/.test(config.worldName)) {
@@ -92,7 +93,7 @@ export const terrariaPresets = [
       motd: "Welcome to GamePanel Lite",
       seed: "",
       secure: true,
-      language: "zh-Hans",
+      language: terrariaDefaultLanguage,
       autoCreateWorld: true
     }
   },
@@ -112,7 +113,7 @@ export const terrariaPresets = [
       motd: "Bring potions",
       seed: "",
       secure: true,
-      language: "zh-Hans",
+      language: terrariaDefaultLanguage,
       autoCreateWorld: true
     }
   },
@@ -132,7 +133,7 @@ export const terrariaPresets = [
       motd: "Good luck",
       seed: "",
       secure: true,
-      language: "zh-Hans",
+      language: terrariaDefaultLanguage,
       autoCreateWorld: true
     }
   },
@@ -152,7 +153,7 @@ export const terrariaPresets = [
       motd: "Build something sharp",
       seed: "",
       secure: true,
-      language: "zh-Hans",
+      language: terrariaDefaultLanguage,
       autoCreateWorld: true
     }
   },
@@ -172,7 +173,7 @@ export const terrariaPresets = [
       motd: "Mods enabled",
       seed: "",
       secure: true,
-      language: "zh-Hans",
+      language: terrariaDefaultLanguage,
       autoCreateWorld: true
     }
   }
@@ -234,7 +235,7 @@ export function renderTerrariaServerConfig(config: TerrariaConfig): string {
     `motd=${config.motd ?? ""}`,
     `seed=${config.seed ?? ""}`,
     `secure=${config.secure ? 1 : 0}`,
-    `language=${config.language}`
+    `language=${terrariaDefaultLanguage}`
   ].join("\n");
 }
 

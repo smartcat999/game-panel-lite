@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { getTerrariaVersions, listGlobalMods, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
-import { terrariaLanguageOptions } from "@/lib/terraria-language";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepMods", "stepReview"] as const;
@@ -401,13 +400,6 @@ function ConfigStep({
           <WizardSelect value={version} onChange={(value) => setVersion(value)}>
             {versions.map((v) => (
               <option key={v} value={v}>{v}</option>
-            ))}
-          </WizardSelect>
-        </WizardField>
-        <WizardField label={t("languageSetting")}>
-          <WizardSelect value={config.language ?? "zh-Hans"} onChange={(value) => update("language", value)}>
-            {terrariaLanguageOptions.map((option) => (
-              <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
             ))}
           </WizardSelect>
         </WizardField>

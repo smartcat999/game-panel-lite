@@ -284,6 +284,7 @@ func unnamedPlayers(count int) []domain.Player {
 }
 
 func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {
+	config = NormalizeConfig(config)
 	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
 	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
@@ -300,7 +301,7 @@ func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {
 		fmt.Sprintf("seed=%s", config.Seed),
 		fmt.Sprintf("worldpath=%s", "/home/container/Worlds"),
 		fmt.Sprintf("secure=%d", boolInt(config.Secure)),
-		fmt.Sprintf("language=%s", value(config.Language, "zh-Hans")),
+		fmt.Sprintf("language=%s", value(config.Language, DefaultLanguage)),
 		"upnp=0",
 		"priority=1",
 	}
@@ -308,6 +309,7 @@ func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {
 }
 
 func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
+	config = NormalizeConfig(config)
 	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
 	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
@@ -324,7 +326,7 @@ func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
 		fmt.Sprintf("seed=%s", config.Seed),
 		fmt.Sprintf("worldpath=%s", "/home/container/Worlds"),
 		fmt.Sprintf("secure=%d", boolInt(config.Secure)),
-		fmt.Sprintf("language=%s", value(config.Language, "zh-Hans")),
+		fmt.Sprintf("language=%s", value(config.Language, DefaultLanguage)),
 		"upnp=0",
 		"priority=1",
 	}

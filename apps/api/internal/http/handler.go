@@ -1910,7 +1910,7 @@ func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string
 
 func normalizeTerrariaRuntimeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
 	config.Port = terraria.DefaultInternalPort
-	return config
+	return terraria.NormalizeConfig(config)
 }
 
 func (h *Handler) resolveHostPort(ctx context.Context, requested int, excludeInstanceID string) (int, error) {

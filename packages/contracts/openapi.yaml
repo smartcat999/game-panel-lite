@@ -395,7 +395,7 @@ components:
             type: string
     TerrariaConfig:
       type: object
-      required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, language, autoCreateWorld]
+      required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, autoCreateWorld]
       properties:
         serverName:
           type: string
@@ -428,5 +428,7 @@ components:
           type: boolean
         language:
           type: string
+          default: en-US
+          description: Fixed to en-US by the backend in V1 so console commands stay consistent with Terraria/tModLoader originals.
         autoCreateWorld:
           type: boolean

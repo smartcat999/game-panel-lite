@@ -39,7 +39,6 @@ import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
-import { terrariaLanguageOptions } from "@/lib/terraria-language";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
 
@@ -905,18 +904,6 @@ function ConfigTab({
             </Field>
             <Field label={t("maxPlayers")}>
               <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
-            </Field>
-            <Field label={t("languageSetting")}>
-              <select
-                className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
-                value={draft.language ?? "zh-Hans"}
-                onChange={(event) => update("language", event.target.value)}
-                disabled={disabled}
-              >
-                {terrariaLanguageOptions.map((option) => (
-                  <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
-                ))}
-              </select>
             </Field>
           </div>
         </div>

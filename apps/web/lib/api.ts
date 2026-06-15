@@ -146,7 +146,7 @@ function configFromServer(server: ApiServer): TerrariaConfig {
     motd: server.config?.motd ?? "",
     seed: server.config?.seed ?? "",
     secure: server.config?.secure ?? true,
-    language: server.config?.language ?? "zh-Hans",
+    language: server.config?.language ?? "en-US",
     autoCreateWorld: server.config?.autoCreateWorld ?? true
   };
 }
