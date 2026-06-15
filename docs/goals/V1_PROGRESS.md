@@ -1,5 +1,19 @@
 # GamePanel Lite V1 Progress
 
+## V1 Runtime Container Recreate Update
+
+Status: Completed
+
+Completed:
+- Changed server restart to remove the existing runtime container, recreate it from the current configured image tag, and then start it.
+- Kept normal server start conservative: when an existing container is present and inspectable, start reuses it instead of rebuilding it.
+- This handles locally rebuilt images that reuse the same tag without relying on image tag or config hash comparisons.
+- Added backend HTTP coverage proving start reuses an existing container and restart recreates one.
+
+Checks:
+- `GOCACHE=/tmp/game-panel-lite-go-build go test ./apps/api/internal/http`: passed.
+- `GOCACHE=/tmp/game-panel-lite-go-build go test ./...`: passed.
+
 ## Phase 0: Repository and Environment Check
 
 Status: Completed

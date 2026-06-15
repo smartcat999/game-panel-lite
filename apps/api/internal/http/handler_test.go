@@ -95,18 +95,25 @@ func (a availableMockAdapter) Check(context.Context) runtime.DockerStatus {
 type captureCreateAdapter struct {
 	availableMockAdapter
 	created chan runtime.ContainerSpec
+	removed chan string
 }
 
 func newCaptureCreateAdapter() *captureCreateAdapter {
 	return &captureCreateAdapter{
 		availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()},
 		created:              make(chan runtime.ContainerSpec, 1),
+		removed:              make(chan string, 1),
 	}
 }
 
 func (a *captureCreateAdapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
 	a.created <- spec
 	return a.availableMockAdapter.Create(ctx, spec)
+}
+
+func (a *captureCreateAdapter) Remove(ctx context.Context, instance domain.GameServerInstance) error {
+	a.removed <- instance.ContainerID
+	return a.availableMockAdapter.Remove(ctx, instance)
 }
 
 func TestCorsAllowsPatchPreflight(t *testing.T) {
@@ -386,6 +393,81 @@ func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
 	updated := waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 	if updated.Version != "v2026.04.3.0" {
 		t.Fatalf("expected stored version to be normalized, got %q", updated.Version)
+	}
+}
+
+func TestStartServerReusesExistingContainer(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("start-reuse", cfg.DataDir)
+	server.Status = domain.StatusStopped
+	server.ContainerID = "old-container"
+	server.Version = "1.4.5.6"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if recorder.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	select {
+	case removed := <-adapter.removed:
+		t.Fatalf("expected start to reuse existing container, removed %q", removed)
+	case <-time.After(50 * time.Millisecond):
+	}
+	select {
+	case spec := <-adapter.created:
+		t.Fatalf("expected start to reuse existing container, created %+v", spec)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	updated := waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+	if updated.ContainerID != "old-container" {
+		t.Fatalf("expected existing container id to be reused, got %+v", updated)
+	}
+}
+
+func TestRestartServerRecreatesExistingContainer(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("restart-recreate", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "old-container"
+	server.Version = "1.4.5.6"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/restart", nil))
+	if recorder.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected restart 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	select {
+	case removed := <-adapter.removed:
+		if removed != "old-container" {
+			t.Fatalf("expected old container to be removed, got %q", removed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected restart to remove the old runtime container before recreation")
+	}
+
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected restart to recreate runtime container")
+	}
+	if spec.Image != "smartcat99999/terraria-vanilla:1.4.5.6" {
+		t.Fatalf("expected recreated container to use current image tag, got %q", spec.Image)
+	}
+	updated := waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+	if updated.ContainerID == "old-container" || updated.ContainerID == "" {
+		t.Fatalf("expected restarted server to use a recreated container, got %+v", updated)
 	}
 }
 

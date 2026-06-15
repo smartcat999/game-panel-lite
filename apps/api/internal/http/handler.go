@@ -1328,7 +1328,12 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) runStartServer(ctx context.Context, id string) {
-	server, err := h.serverWithRuntimeContainer(ctx, id)
+	server, err := h.store.GetServer(ctx, id)
+	if err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.start.failed", errors.New("server not found"))
+		return
+	}
+	server, _, err = h.ensureRuntimeContainer(ctx, server)
 	if err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.start.failed", err)
 		return
@@ -1354,29 +1359,17 @@ func (h *Handler) runRestartServer(ctx context.Context, id string) {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", errors.New("server not found"))
 		return
 	}
-	if server.ContainerID != "" && server.AppliedConfigRevision < server.ConfigRevision {
-		if err := h.requireRuntimeAvailable(ctx); err != nil {
-			h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
-			return
-		}
-		if _, err := h.runtime.Inspect(ctx, server); err == nil {
-			if err := h.runtime.Remove(ctx, server); err != nil {
-				h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
-				return
-			}
-		}
-		server.ContainerID = ""
-		if err := h.store.SaveServer(ctx, &server); err != nil {
-			h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
-			return
-		}
+	server, err = h.recreateRuntimeOnNextStart(ctx, server)
+	if err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
+		return
 	}
 	server, _, err = h.ensureRuntimeContainer(ctx, server)
 	if err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
 		return
 	}
-	if err := h.runtime.Restart(ctx, server); err != nil {
+	if err := h.runtime.Start(ctx, server); err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
 		return
 	}
@@ -1389,6 +1382,28 @@ func (h *Handler) runRestartServer(ctx context.Context, id string) {
 		return
 	}
 	h.recordActivity(ctx, server.ID, "server.restarted", fmt.Sprintf("Restarted server %s", server.Name))
+}
+
+func (h *Handler) recreateRuntimeOnNextStart(ctx context.Context, server domain.GameServerInstance) (domain.GameServerInstance, error) {
+	if server.ContainerID == "" {
+		return server, nil
+	}
+	if err := h.requireRuntimeAvailable(ctx); err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	if _, err := h.runtime.Inspect(ctx, server); err == nil {
+		if err := h.runtime.Remove(ctx, server); err != nil {
+			return domain.GameServerInstance{}, err
+		}
+	} else {
+		h.logger.Warn("runtime container missing before recreate; clearing stale container", "server", server.ID, "container", server.ContainerID, "error", err)
+	}
+	server.ContainerID = ""
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		return domain.GameServerInstance{}, err
+	}
+	return server, nil
 }
 
 func (h *Handler) runStopServer(ctx context.Context, id string) {
@@ -1498,35 +1513,15 @@ func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.Game
 		}
 		h.logger.Warn("runtime container missing; recreating from server data", "server", server.ID, "container", server.ContainerID)
 		server.ContainerID = ""
-	}
-	gameProvider, ok := h.provider.Get(server.ProviderKey)
-	if !ok {
-		return domain.GameServerInstance{}, false, fmt.Errorf("unknown provider: %s", server.ProviderKey)
-	}
-	configText, err := gameProvider.RenderConfig(server.Config)
-	if err != nil {
-		return domain.GameServerInstance{}, false, err
-	}
-	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
-		return domain.GameServerInstance{}, false, err
-	}
-	server.Version = normalizeStoredProviderVersion(gameProvider, server.Version)
-	if server.HostPort == 0 {
-		server.HostPort, err = h.allocateHostPort(ctx, server.ID)
-		if err != nil {
+		if err := h.store.SaveServer(ctx, &server); err != nil {
 			return domain.GameServerInstance{}, false, err
 		}
 	}
-	containerID, err := h.runtime.Create(ctx, runtime.ContainerSpec{
-		InstanceID: server.ID,
-		Name:       server.Name,
-		Image:      gameProvider.ImageFor(server.Version),
-		Port:       server.Port,
-		HostPort:   server.HostPort,
-		DataDir:    server.DataDir,
-		ConfigText: configText,
-		Options:    gameProvider.RuntimeOptions(server.Config),
-	})
+	spec, err := h.runtimeSpecForServer(ctx, &server)
+	if err != nil {
+		return domain.GameServerInstance{}, false, err
+	}
+	containerID, err := h.runtime.Create(ctx, spec)
 	if err != nil {
 		return domain.GameServerInstance{}, false, err
 	}
@@ -1537,6 +1532,38 @@ func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.Game
 		return domain.GameServerInstance{}, false, err
 	}
 	return server, true, nil
+}
+
+func (h *Handler) runtimeSpecForServer(ctx context.Context, server *domain.GameServerInstance) (runtime.ContainerSpec, error) {
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return runtime.ContainerSpec{}, fmt.Errorf("unknown provider: %s", server.ProviderKey)
+	}
+	configText, err := gameProvider.RenderConfig(server.Config)
+	if err != nil {
+		return runtime.ContainerSpec{}, err
+	}
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		return runtime.ContainerSpec{}, err
+	}
+	server.Version = normalizeStoredProviderVersion(gameProvider, server.Version)
+	if server.HostPort == 0 {
+		server.HostPort, err = h.allocateHostPort(ctx, server.ID)
+		if err != nil {
+			return runtime.ContainerSpec{}, err
+		}
+	}
+	spec := runtime.ContainerSpec{
+		InstanceID: server.ID,
+		Name:       server.Name,
+		Image:      gameProvider.ImageFor(server.Version),
+		Port:       server.Port,
+		HostPort:   server.HostPort,
+		DataDir:    server.DataDir,
+		ConfigText: configText,
+		Options:    gameProvider.RuntimeOptions(server.Config),
+	}
+	return spec, nil
 }
 
 func (h *Handler) requireRuntimeAvailable(ctx context.Context) error {
