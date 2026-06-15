@@ -10,10 +10,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { getTerrariaVersions, listGlobalMods, listWorlds, previewTerrariaConfig } from "@/lib/api";
+import { getTerrariaVersions, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
+import type { ModPack } from "@/lib/types";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepMods", "stepReview"] as const;
 const presets = [
@@ -43,15 +44,18 @@ export function CreateServerWizard() {
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
+  const [selectedModPackId, setSelectedModPackId] = useState("");
   const versionsQuery = useQuery({ queryKey: ["terraria-versions"], queryFn: getTerrariaVersions, staleTime: 5 * 60 * 1000 });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
   const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
+  const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const providerKey = mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla";
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = worldsQuery.data ?? [];
   const selectedWorld = allWorlds.find((w) => w.id === selectedWorldId);
   const availableMods = modsQuery.data ?? [];
+  const modPacks = modPacksQuery.data ?? [];
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => m.fileName);
   const fallbackStepKey: (typeof stepKeys)[number] = "stepReview";
   const currentStepKey = stepKeys[step] ?? fallbackStepKey;
@@ -83,11 +87,18 @@ export function CreateServerWizard() {
     setConfig(getTerrariaPreset(nextPreset).config);
     setSelectedWorldId("");
     setAppliedWorldConfigId("");
+    setSelectedModIds([]);
+    setSelectedModPackId("");
   };
   const choosePreset = (preset: PresetKey) => {
     setSelectedPreset(preset);
     if (preset === "custom") return;
     setConfig(getTerrariaPreset(preset).config);
+  };
+  const chooseModPack = (packId: string) => {
+    setSelectedModPackId(packId);
+    const pack = modPacks.find((item) => item.id === packId);
+    setSelectedModIds(pack?.modIds ?? []);
   };
 
   useEffect(() => {
@@ -170,8 +181,14 @@ export function CreateServerWizard() {
                 mode={mode}
                 worldName={selectedWorld?.name}
                 mods={availableMods}
+                modPacks={modPacks}
+                selectedModPackId={selectedModPackId}
                 selectedModIds={selectedModIds}
-                onToggleMod={(modId) => setSelectedModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId])}
+                onSelectModPack={chooseModPack}
+                onToggleMod={(modId) => {
+                  setSelectedModPackId("");
+                  setSelectedModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
+                }}
               />
             )}
             {step === 5 && (
@@ -500,13 +517,19 @@ function ModsStep({
   mode,
   worldName,
   mods,
+  modPacks,
+  selectedModPackId,
   selectedModIds,
+  onSelectModPack,
   onToggleMod
 }: {
   mode: "vanilla" | "tmodloader";
   worldName?: string;
   mods: { id: string; fileName: string; size: string }[];
+  modPacks: ModPack[];
+  selectedModPackId: string;
   selectedModIds: string[];
+  onSelectModPack: (packId: string) => void;
   onToggleMod: (modId: string) => void;
 }) {
   const { t } = useI18n();
@@ -543,6 +566,32 @@ function ModsStep({
         <div className="mt-6">
           <h2 className="text-lg font-semibold">{t("selectMods")}</h2>
           <p className="mt-1 text-sm text-slate-400">{t("selectModsHint")}</p>
+          {modPacks.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium text-slate-500">{t("modPacks")}</p>
+              <div className="mt-2 grid gap-2">
+                {modPacks.map((pack) => (
+                  <button
+                    key={pack.id}
+                    type="button"
+                    onClick={() => onSelectModPack(selectedModPackId === pack.id ? "" : pack.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-purple/50",
+                      selectedModPackId === pack.id
+                        ? "border-panel-purple bg-panel-purple/10 ring-1 ring-panel-purple/40"
+                        : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{pack.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
+                    </div>
+                    <span className="shrink-0 rounded bg-panel-purple/15 px-2 py-1 text-xs text-panel-purple">{pack.mods.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-4 space-y-2">
             {mods.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-8 text-center">

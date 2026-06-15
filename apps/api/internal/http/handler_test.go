@@ -1465,6 +1465,98 @@ func TestGlobalModUploadIsIdempotentForSameFile(t *testing.T) {
 	}
 }
 
+func TestModPackCreateListAndDelete(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	for _, name := range []string{"boss.tmod", "quality.tmod"} {
+		if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", name, bytes.NewBufferString(name)); err != nil {
+			t.Fatal(err)
+		}
+		item := domain.ModFile{
+			ID:         strings.TrimSuffix(name, ".tmod"),
+			InstanceID: "unassigned",
+			FileName:   name,
+			SizeBytes:  int64(len(name)),
+			Enabled:    true,
+			CreatedAt:  time.Now(),
+		}
+		if err := db.CreateMod(context.Background(), &item); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/mod-packs", bytes.NewBufferString(`{"name":"Boss Night","description":"Boss run mods","modIds":["boss","quality","boss"]}`)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected mod pack create 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var created struct {
+		ID          string           `json:"id"`
+		Name        string           `json:"name"`
+		Description string           `json:"description"`
+		ModIDs      []string         `json:"modIds"`
+		Mods        []domain.ModFile `json:"mods"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Name != "Boss Night" || created.Description != "Boss run mods" {
+		t.Fatalf("unexpected created mod pack: %+v", created)
+	}
+	if !reflect.DeepEqual(created.ModIDs, []string{"boss", "quality"}) {
+		t.Fatalf("expected unique ordered mod IDs, got %+v", created.ModIDs)
+	}
+	if len(created.Mods) != 2 {
+		t.Fatalf("expected resolved mods in response, got %+v", created.Mods)
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/mod-packs", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected mod pack list 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var packs []struct {
+		ID     string           `json:"id"`
+		ModIDs []string         `json:"modIds"`
+		Mods   []domain.ModFile `json:"mods"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &packs); err != nil {
+		t.Fatal(err)
+	}
+	if len(packs) != 1 || packs[0].ID != created.ID || len(packs[0].Mods) != 2 {
+		t.Fatalf("expected listed mod pack with resolved mods, got %+v", packs)
+	}
+
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/mod-packs/"+created.ID, nil))
+	if remove.Code != stdhttp.StatusOK {
+		t.Fatalf("expected mod pack delete 200, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if _, err := db.GetModPack(context.Background(), created.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected mod pack deleted, got err=%v", err)
+	}
+}
+
+func TestModPackCreateRejectsServerScopedMods(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	serverMod := domain.ModFile{
+		ID:         "server-mod",
+		InstanceID: "server-1",
+		FileName:   "server.tmod",
+		SizeBytes:  10,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &serverMod); err != nil {
+		t.Fatal(err)
+	}
+
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/mod-packs", bytes.NewBufferString(`{"name":"Bad Pack","modIds":["server-mod"]}`)))
+	if create.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected server-scoped mod pack create to fail, got %d: %s", create.Code, create.Body.String())
+	}
+}
+
 func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

@@ -1987,3 +1987,24 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 tModLoader Mod Pack Update
+
+Status: Completed
+
+Completed:
+- Polished the Mods page around the standard `.tmod` workflow, with clearer mod library, server mod, enabled-state, and restart-effect presentation.
+- Added reusable tModLoader mod packs backed by global mod library items.
+- Added backend mod pack persistence, list/create/delete API routes, and OpenAPI contract entries.
+- Added backend validation so mod packs can only reference unassigned global `.tmod` files.
+- Connected the Create Server wizard so selecting a mod pack expands to its mod IDs and reuses the existing post-create `assignMod` flow.
+- Added backend HTTP coverage for mod pack create/list/delete and server-scoped mod rejection.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./apps/api/internal/http ./apps/api/internal/store`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.

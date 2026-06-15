@@ -109,6 +109,15 @@ type ModFile struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+type ModPack struct {
+	ID          string    `json:"id" gorm:"primaryKey"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ModIDsJSON  string    `json:"-" gorm:"column:mod_ids_json"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type ActivityEvent struct {
 	ID         string    `json:"id" gorm:"primaryKey"`
 	InstanceID string    `json:"instanceId,omitempty" gorm:"index"`

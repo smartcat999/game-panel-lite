@@ -23,7 +23,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ActivityEvent{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
@@ -158,6 +158,28 @@ func (s *Store) SaveMod(ctx context.Context, mod *domain.ModFile) error {
 
 func (s *Store) DeleteMod(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.ModFile{}, "id = ?", id).Error
+}
+
+func (s *Store) CreateModPack(ctx context.Context, pack *domain.ModPack) error {
+	return s.db.WithContext(ctx).Create(pack).Error
+}
+
+func (s *Store) ListModPacks(ctx context.Context) ([]domain.ModPack, error) {
+	var packs []domain.ModPack
+	return packs, s.db.WithContext(ctx).Order("created_at desc").Find(&packs).Error
+}
+
+func (s *Store) GetModPack(ctx context.Context, id string) (domain.ModPack, error) {
+	var pack domain.ModPack
+	err := s.db.WithContext(ctx).First(&pack, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return pack, ErrNotFound
+	}
+	return pack, err
+}
+
+func (s *Store) DeleteModPack(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.ModPack{}, "id = ?", id).Error
 }
 
 func (s *Store) CreateActivity(ctx context.Context, event *domain.ActivityEvent) error {

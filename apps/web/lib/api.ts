@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ModFile, Server, World } from "./types";
+import type { ActivityEvent, Backup, ModFile, ModPack, Server, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -98,6 +98,15 @@ type ApiModFile = {
   fileName: string;
   sizeBytes: number;
   enabled: boolean;
+  createdAt: string;
+};
+
+type ApiModPack = {
+  id: string;
+  name: string;
+  description: string;
+  modIds: string[];
+  mods: ApiModFile[];
   createdAt: string;
 };
 
@@ -561,8 +570,20 @@ function toModFile(file: ApiModFile): ModFile {
     instanceId: file.instanceId,
     fileName: file.fileName,
     size: formatBytes(file.sizeBytes),
+    sizeBytes: file.sizeBytes,
     enabled: file.enabled,
     created: formatRelative(file.createdAt)
+  };
+}
+
+function toModPack(pack: ApiModPack): ModPack {
+  return {
+    id: pack.id,
+    name: pack.name,
+    description: pack.description,
+    modIds: pack.modIds,
+    mods: pack.mods.map(toModFile),
+    created: formatRelative(pack.createdAt)
   };
 }
 
@@ -640,6 +661,38 @@ export async function deleteGlobalMod(modId: string) {
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete mod");
+  }
+}
+
+export async function listModPacks(): Promise<ModPack[]> {
+  const response = await fetch(`${API_BASE}/api/mod-packs`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to load mod packs");
+  }
+  const payload = (await response.json()) as ApiModPack[];
+  return payload.map(toModPack);
+}
+
+export async function createModPack(input: { name: string; description?: string; modIds: string[] }): Promise<ModPack> {
+  const response = await fetch(`${API_BASE}/api/mod-packs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create mod pack");
+  }
+  const pack = (await response.json()) as ApiModPack;
+  return toModPack(pack);
+}
+
+export async function deleteModPack(id: string) {
+  const response = await fetch(`${API_BASE}/api/mod-packs/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod pack");
   }
 }
 

@@ -232,6 +232,39 @@ paths:
       responses:
         "200":
           description: Deleted global mod
+  /api/mod-packs:
+    get:
+      summary: List reusable tModLoader mod packs
+      responses:
+        "200":
+          description: Mod pack list
+    post:
+      summary: Create a reusable tModLoader mod pack from global mod library items
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, modIds]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                modIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Created mod pack
+  /api/mod-packs/{id}:
+    delete:
+      summary: Delete a reusable tModLoader mod pack
+      responses:
+        "200":
+          description: Deleted mod pack
   /api/worlds:
     get:
       summary: List worlds

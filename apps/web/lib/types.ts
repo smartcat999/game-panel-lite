@@ -59,7 +59,17 @@ export type ModFile = {
   instanceId: string;
   fileName: string;
   size: string;
+  sizeBytes?: number;
   enabled: boolean;
+  created: string;
+};
+
+export type ModPack = {
+  id: string;
+  name: string;
+  description: string;
+  modIds: string[];
+  mods: ModFile[];
   created: string;
 };
 

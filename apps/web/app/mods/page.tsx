@@ -1,16 +1,16 @@
 "use client";
 
-import { CheckCircle2, Library, Package, Power, ServerIcon, Trash2, Upload } from "lucide-react";
+import { Check, CheckCircle2, Library, Package, Power, ServerIcon, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Badge, Button, Card } from "@/components/ui";
-import { assignMod, deleteGlobalMod, deleteMod, listGlobalMods, listMods, listServers, setModEnabled, uploadGlobalMod, uploadMod } from "@/lib/api";
+import { Badge, Button, Card, Input } from "@/components/ui";
+import { assignMod, createModPack, deleteGlobalMod, deleteMod, deleteModPack, listGlobalMods, listModPacks, listMods, listServers, setModEnabled, uploadGlobalMod, uploadMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { describeResourceAction } from "@/lib/server-detail-actions";
 import { cn } from "@/lib/utils";
-import type { ModFile } from "@/lib/types";
+import type { ModFile, ModPack } from "@/lib/types";
 
 export default function ModsPage() {
   const { locale, t } = useI18n();
@@ -23,10 +23,15 @@ export default function ModsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
+  const [pendingPackDelete, setPendingPackDelete] = useState<ModPack | null>(null);
+  const [packName, setPackName] = useState("");
+  const [packDescription, setPackDescription] = useState("");
+  const [selectedPackModIds, setSelectedPackModIds] = useState<string[]>([]);
   const activeServerId = selectedServerId || moddedServers[0]?.id || "";
   const activeServer = useMemo(() => moddedServers.find((server) => server.id === activeServerId), [activeServerId, moddedServers]);
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus: activeServer?.status });
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
+  const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const modsQuery = useQuery({ queryKey: ["mods", activeServerId], queryFn: () => listMods(activeServerId), enabled: Boolean(activeServerId), retry: false });
 
   const globalUpload = useMutation({
@@ -105,8 +110,41 @@ export default function ModsPage() {
       setErrorMessage(error instanceof Error ? error.message : t("unableAssignMod"));
     }
   });
+  const createPack = useMutation({
+    mutationFn: () => createModPack({ name: packName, description: packDescription, modIds: selectedPackModIds }),
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage(t("modPackCreated"));
+      setPackName("");
+      setPackDescription("");
+      setSelectedPackModIds([]);
+      await client.invalidateQueries({ queryKey: ["mod-packs"] });
+    },
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableCreateModPack"));
+    }
+  });
+  const removePack = useMutation({
+    mutationFn: (packId: string) => deleteModPack(packId),
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage(t("modPackDeleted"));
+      setPendingPackDelete(null);
+      await client.invalidateQueries({ queryKey: ["mod-packs"] });
+    },
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableDeleteModPack"));
+    }
+  });
   const globalMods = globalModsQuery.data ?? [];
+  const modPacks = modPacksQuery.data ?? [];
   const serverMods = modsQuery.data ?? [];
+  const selectedPackModCount = selectedPackModIds.length;
+  const togglePackMod = (modId: string) => {
+    setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
+  };
 
   return (
     <>
@@ -132,7 +170,7 @@ export default function ModsPage() {
           </div>
         }
       />
-      {(serversQuery.isError || globalModsQuery.isError || modsQuery.isError) && (
+      {(serversQuery.isError || globalModsQuery.isError || modPacksQuery.isError || modsQuery.isError) && (
         <p className="mb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p>
       )}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
@@ -153,6 +191,14 @@ export default function ModsPage() {
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-panel-line pt-3">
                 <span className="text-xs text-slate-500">{moddedServers.length > 0 ? t("assignToServer") : t("noTmodServers")}</span>
                 <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => togglePackMod(item.id)}
+                    className={cn(selectedPackModIds.includes(item.id) && "bg-panel-purple/10 text-panel-purple")}
+                  >
+                    {selectedPackModIds.includes(item.id) && <Check aria-hidden="true" />}
+                    {t("selectForPack")}
+                  </Button>
                   {moddedServers.length > 0 && (
                     <Button
                       variant="secondary"
@@ -176,6 +222,62 @@ export default function ModsPage() {
               <div>
                 <Package aria-hidden="true" className="mx-auto" />
                 <p className="mt-2 text-sm">{t("noGlobalMods")}</p>
+              </div>
+            </Card>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-6">
+        <PanelHeading icon={<Package aria-hidden="true" />} title={t("modPacks")} hint={t("modPacksHint")} count={modPacks.length} />
+        <Card className="mt-3 p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-slate-500">{t("modPackName")}</span>
+              <Input value={packName} onChange={(event) => setPackName(event.target.value)} placeholder={t("modPackName")} />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-slate-500">{t("modPackDescription")}</span>
+              <Input value={packDescription} onChange={(event) => setPackDescription(event.target.value)} placeholder={t("modPacksHint")} />
+            </label>
+            <Button
+              variant="secondary"
+              onClick={() => createPack.mutate()}
+              disabled={createPack.isPending || packName.trim() === "" || selectedPackModCount === 0}
+            >
+              <Package aria-hidden="true" />
+              {createPack.isPending ? t("actionWorking") : t("createModPack")}
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">{t("selectedForPack", { count: selectedPackModCount })}</p>
+        </Card>
+        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+          {modPacks.map((pack) => (
+            <Card key={pack.id} className="p-4 transition hover:border-panel-purple/40">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <h3 className="truncate font-semibold text-white">{pack.name}</h3>
+                  <p className="mt-1 truncate text-sm text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
+                </div>
+                <Badge className="shrink-0 bg-panel-purple/15 text-panel-purple">{pack.mods.length}</Badge>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pack.mods.map((mod) => (
+                  <span key={mod.id} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{mod.fileName}</span>
+                ))}
+              </div>
+              <div className="mt-4 flex justify-end border-t border-panel-line pt-3">
+                <Button variant="danger" onClick={() => setPendingPackDelete(pack)} disabled={removePack.isPending}>
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>
+            </Card>
+          ))}
+          {!modPacksQuery.isLoading && modPacks.length === 0 && (
+            <Card className="flex min-h-32 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
+              <div>
+                <Package aria-hidden="true" className="mx-auto" />
+                <p className="mt-2 text-sm">{t("noModPacks")}</p>
               </div>
             </Card>
           )}
@@ -286,6 +388,23 @@ export default function ModsPage() {
           }
           remove.mutate({ serverId: pendingDelete.instanceId, modId: pendingDelete.id });
         }}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingPackDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteModPackConfirm", { name: pendingPackDelete?.name ?? "" })}
+        description={t("confirmDeleteModPackDescription")}
+        detail={pendingPackDelete ? (
+          <>
+            <span className="text-slate-500">{t("modPacks")}: </span>
+            <span className="font-medium text-white">{pendingPackDelete.name}</span>
+          </>
+        ) : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={removePack.isPending ? t("actionWorking") : t("delete")}
+        busy={removePack.isPending}
+        onCancel={() => setPendingPackDelete(null)}
+        onConfirm={() => pendingPackDelete && removePack.mutate(pendingPackDelete.id)}
       />
     </>
   );
