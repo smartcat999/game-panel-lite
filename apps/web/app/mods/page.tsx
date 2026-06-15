@@ -1,14 +1,15 @@
 "use client";
 
-import { Package, Power, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, Library, Package, Power, ServerIcon, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Button, Card } from "@/components/ui";
+import { Badge, Button, Card } from "@/components/ui";
 import { assignMod, deleteGlobalMod, deleteMod, listGlobalMods, listMods, listServers, setModEnabled, uploadGlobalMod, uploadMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { describeResourceAction } from "@/lib/server-detail-actions";
+import { cn } from "@/lib/utils";
 import type { ModFile } from "@/lib/types";
 
 export default function ModsPage() {
@@ -118,7 +119,7 @@ export default function ModsPage() {
               ref={globalInputRef}
               className="hidden"
               type="file"
-              accept=".tmod,.txt,.json"
+              accept=".tmod"
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) globalUpload.mutate(file);
@@ -136,20 +137,21 @@ export default function ModsPage() {
       )}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
-      <Card className="p-6 text-sm text-slate-400">
+      <Card className="p-4 text-sm text-slate-400">
         {t("supportedModFiles")}
       </Card>
 
-      {globalMods.length > 0 && (
-        <div className="mt-6">
-          <h2 className="mb-3 text-base font-semibold">{t("modLibrary")}</h2>
-          <div className="grid gap-3">
-            {globalMods.map((item) => (
-              <Card key={item.id} className="flex items-center justify-between gap-4 p-4">
-                <div>
-                  <h3 className="font-semibold text-white">{item.fileName}</h3>
-                  <p className="mt-1 text-sm text-slate-400">{item.size} · {localizeRelativeTime(item.created, locale)}</p>
-                </div>
+      <section className="mt-6">
+        <PanelHeading icon={<Library aria-hidden="true" />} title={t("modLibrary")} hint={t("modLibraryHint")} count={globalMods.length} />
+        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+          {globalMods.map((item) => (
+            <Card key={item.id} className="p-4 transition hover:border-panel-purple/40">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} />
+                <Badge className="shrink-0 bg-panel-purple/15 text-panel-purple">.tmod</Badge>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-panel-line pt-3">
+                <span className="text-xs text-slate-500">{moddedServers.length > 0 ? t("assignToServer") : t("noTmodServers")}</span>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   {moddedServers.length > 0 && (
                     <Button
@@ -158,60 +160,73 @@ export default function ModsPage() {
                       disabled={assign.isPending || !activeServerId || modAction.disabled}
                       title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
                     >
+                      <ServerIcon aria-hidden="true" />
                       {t("assignToServer")}
                     </Button>
                   )}
                   <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={removeGlobal.isPending}>
                     <Trash2 aria-hidden="true" />
-                    {t("delete")}
                   </Button>
                 </div>
-              </Card>
-            ))}
-          </div>
+              </div>
+            </Card>
+          ))}
+          {!globalModsQuery.isLoading && globalMods.length === 0 && (
+            <Card className="flex min-h-40 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
+              <div>
+                <Package aria-hidden="true" className="mx-auto" />
+                <p className="mt-2 text-sm">{t("noGlobalMods")}</p>
+              </div>
+            </Card>
+          )}
         </div>
-      )}
+      </section>
 
       {moddedServers.length > 0 && (
-        <div className="mt-6">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold">{t("serverMods")}</h2>
-            <select
-              className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
-              value={activeServerId}
-              onChange={(event) => setSelectedServerId(event.target.value)}
-            >
-              {moddedServers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-            </select>
+        <section className="mt-6">
+          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <PanelHeading icon={<ServerIcon aria-hidden="true" />} title={t("serverMods")} hint={t("serverModsHint")} count={serverMods.length} />
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
+                value={activeServerId}
+                onChange={(event) => setSelectedServerId(event.target.value)}
+              >
+                {moddedServers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
+              </select>
+              <Button
+                variant="secondary"
+                onClick={() => serverInputRef.current?.click()}
+                disabled={!activeServerId || serverUpload.isPending || modAction.disabled}
+                title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+              >
+                <Upload aria-hidden="true" />
+                {serverUpload.isPending ? t("uploading") : t("uploadMod")}
+              </Button>
+            </div>
             <input
               ref={serverInputRef}
               className="hidden"
               type="file"
-              accept=".tmod,.txt,.json"
+              accept=".tmod"
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) serverUpload.mutate(file);
               }}
             />
-            <Button
-              variant="secondary"
-              onClick={() => serverInputRef.current?.click()}
-              disabled={!activeServerId || serverUpload.isPending || modAction.disabled}
-              title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
-            >
-              <Upload aria-hidden="true" />
-              {serverUpload.isPending ? t("uploading") : t("uploadMod")}
-            </Button>
           </div>
           {modAction.reasonKey ? <p className="mb-3 text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
-          <div className="grid gap-3">
+          <div className="grid gap-3 xl:grid-cols-2">
             {serverMods.map((item) => (
-              <Card key={item.id} className="flex items-center justify-between gap-4 p-4">
-                <div>
-                  <h3 className="font-semibold text-white">{item.fileName}</h3>
-                  <p className="mt-1 text-sm text-slate-400">{item.size} · {item.enabled ? t("enabled") : t("disabled")} · {localizeRelativeTime(item.created, locale)}</p>
+              <Card key={item.id} className={cn("p-4 transition", item.enabled ? "border-panel-purple/35" : "opacity-75")}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} />
+                  <Badge className={cn("shrink-0", item.enabled ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>
+                    {item.enabled ? t("enabled") : t("disabled")}
+                  </Badge>
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
+                <p className="mt-3 text-xs text-slate-500">{t("modAppliesAfterRestart")}</p>
+                <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-panel-line pt-3">
                   <Button
                     variant="secondary"
                     onClick={() => toggle.mutate({ serverId: item.instanceId, modId: item.id, enabled: !item.enabled })}
@@ -223,13 +238,12 @@ export default function ModsPage() {
                   </Button>
                   <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={remove.isPending || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
                     <Trash2 aria-hidden="true" />
-                    {t("delete")}
                   </Button>
                 </div>
               </Card>
             ))}
             {activeServerId && !modsQuery.isLoading && serverMods.length === 0 && (
-              <Card className="flex min-h-40 items-center justify-center border-dashed p-6 text-center text-slate-400">
+              <Card className="flex min-h-40 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
                   <p className="mt-2 text-sm">{t("noModsUploaded")}</p>
@@ -237,10 +251,10 @@ export default function ModsPage() {
               </Card>
             )}
           </div>
-        </div>
+        </section>
       )}
 
-      {moddedServers.length === 0 && globalMods.length === 0 && (
+      {moddedServers.length === 0 && globalMods.length > 0 && (
         <Card className="mt-4 flex min-h-40 items-center justify-center border-dashed p-6 text-center text-slate-400">
           <div>
             <Package aria-hidden="true" className="mx-auto" />
@@ -274,5 +288,41 @@ export default function ModsPage() {
         }}
       />
     </>
+  );
+}
+
+function PanelHeading({ count, hint, icon, title }: { count: number; hint: string; icon: ReactNode; title: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-purple">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-base font-semibold text-white">{title}</h2>
+            <Badge className="bg-slate-800 text-slate-300">{count}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">{hint}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModIdentity({ detail, item }: { detail: string; item: ModFile }) {
+  return (
+    <div className="flex min-w-0 items-start gap-3">
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-panel-line bg-slate-950/55 text-panel-purple">
+        <Package aria-hidden="true" className="size-5" />
+      </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate font-semibold text-white">{item.fileName}</h3>
+          {item.enabled && <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}
+        </div>
+        <p className="mt-1 truncate text-sm text-slate-400">{detail}</p>
+      </div>
+    </div>
   );
 }
