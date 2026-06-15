@@ -151,7 +151,6 @@ export default function WorldsPage() {
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="relative flex size-10 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/70 text-panel-green">
                     <FileArchive aria-hidden="true" className="size-5" />
-                    {usingServers.length > 0 && <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-panel-green ring-2 ring-panel-card" />}
                   </span>
                   <div className="min-w-0">
                     <Link href={`/worlds/${world.id}`} className="block min-w-0 focus:outline-none focus:ring-2 focus:ring-panel-green/50">
