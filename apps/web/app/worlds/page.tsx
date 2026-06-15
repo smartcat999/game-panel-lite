@@ -153,7 +153,7 @@ export default function WorldsPage() {
                     <FileArchive aria-hidden="true" className="size-5" />
                   </span>
                   <div className="min-w-0">
-                    <Link href={`/worlds/${world.id}`} className="block min-w-0 focus:outline-none focus:ring-2 focus:ring-panel-green/50">
+                    <Link href={`/worlds/${world.id}`} className="block min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
                       <h2 className="truncate font-semibold text-white transition group-hover:text-panel-green">{world.name}</h2>
                       <p className="mt-1 truncate text-xs text-slate-500">{worldFileName}</p>
                     </Link>
