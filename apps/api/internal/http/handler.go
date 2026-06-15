@@ -1980,11 +1980,92 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	defer stream.Close()
 	scanner := bufio.NewScanner(stream)
+	recentLines := make([]string, 0, 120)
 	for scanner.Scan() {
-		_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", scanner.Text())
+		line := scanner.Text()
+		recentLines = append(recentLines, line)
+		if len(recentLines) > 120 {
+			recentLines = recentLines[len(recentLines)-120:]
+		}
+		h.updatePlayersFromLogLine(r.Context(), server, recentLines, line)
+		_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}
+	}
+}
+
+func (h *Handler) updatePlayersFromLogLine(ctx context.Context, server domain.GameServerInstance, recentLines []string, line string) {
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return
+	}
+	if playerProvider, ok := gameProvider.(provider.PlayerListProvider); ok && looksLikePlayerListOutput(line) {
+		if players := playerProvider.ParsePlayerListOutput(recentLines); players != nil {
+			h.savePlayersOnline(ctx, server.ID, len(players))
+			return
+		}
+	}
+	activityProvider, ok := gameProvider.(provider.PlayerActivityProvider)
+	if !ok {
+		return
+	}
+	event, ok := activityProvider.ParsePlayerLogEvent(line)
+	if !ok {
+		return
+	}
+	latest, err := h.store.GetServer(ctx, server.ID)
+	if err != nil {
+		h.logger.Warn("failed to load server for player activity update", "server", server.ID, "error", err)
+		return
+	}
+	nextCount := latest.PlayersOnline
+	switch event {
+	case domain.PlayerJoined:
+		nextCount++
+		if latest.MaxPlayers > 0 && nextCount > latest.MaxPlayers {
+			nextCount = latest.MaxPlayers
+		}
+	case domain.PlayerLeft:
+		nextCount--
+		if nextCount < 0 {
+			nextCount = 0
+		}
+	default:
+		return
+	}
+	h.savePlayersOnline(ctx, server.ID, nextCount)
+}
+
+func looksLikePlayerListOutput(line string) bool {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ":"))
+	lower := strings.ToLower(trimmed)
+	return strings.Contains(lower, "players connected") ||
+		strings.Contains(lower, "player connected") ||
+		strings.Contains(lower, "no players") ||
+		strings.Contains(trimmed, "玩家已连接") ||
+		strings.Contains(trimmed, "无玩家连接")
+}
+
+func (h *Handler) savePlayersOnline(ctx context.Context, serverID string, count int) {
+	server, err := h.store.GetServer(ctx, serverID)
+	if err != nil {
+		h.logger.Warn("failed to load server for player count update", "server", serverID, "error", err)
+		return
+	}
+	if count < 0 {
+		count = 0
+	}
+	if server.MaxPlayers > 0 && count > server.MaxPlayers {
+		count = server.MaxPlayers
+	}
+	if server.PlayersOnline == count {
+		return
+	}
+	server.PlayersOnline = count
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		h.logger.Warn("failed to persist player count", "server", serverID, "error", err)
 	}
 }
 

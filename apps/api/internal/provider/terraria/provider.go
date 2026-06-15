@@ -45,6 +45,9 @@ func (VanillaProvider) PlayerListCommand(config domain.TerrariaConfig) string {
 func (VanillaProvider) ParsePlayerListOutput(lines []string) []domain.Player {
 	return parsePlayingCommandOutput(lines)
 }
+func (VanillaProvider) ParsePlayerLogEvent(line string) (domain.PlayerLogEvent, bool) {
+	return parsePlayerLogEvent(line)
+}
 
 func (TModLoaderProvider) Key() domain.ProviderKey { return domain.ProviderTerrariaTModLoader }
 func (TModLoaderProvider) Name() string            { return "Terraria tModLoader" }
@@ -70,6 +73,9 @@ func (TModLoaderProvider) PlayerListCommand(config domain.TerrariaConfig) string
 }
 func (TModLoaderProvider) ParsePlayerListOutput(lines []string) []domain.Player {
 	return parsePlayingCommandOutput(lines)
+}
+func (TModLoaderProvider) ParsePlayerLogEvent(line string) (domain.PlayerLogEvent, bool) {
+	return parsePlayerLogEvent(line)
 }
 
 func RuntimeWorldFiles(providerKey domain.ProviderKey, config domain.TerrariaConfig) []string {
@@ -161,6 +167,23 @@ func localizedPlayerListCommand(config domain.TerrariaConfig) string {
 		return "游戏中"
 	default:
 		return "playing"
+	}
+}
+
+func parsePlayerLogEvent(line string) (domain.PlayerLogEvent, bool) {
+	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ":"))
+	line = strings.TrimSpace(regexp.MustCompile(`^\[[^\]]+\]\s*`).ReplaceAllString(line, ""))
+	if line == "" {
+		return "", false
+	}
+	lower := strings.ToLower(line)
+	switch {
+	case strings.HasSuffix(line, "已加入。") || strings.HasSuffix(line, "已加入.") || strings.HasSuffix(lower, " has joined.") || strings.HasSuffix(lower, " joined."):
+		return domain.PlayerJoined, true
+	case strings.HasSuffix(line, "已离开。") || strings.HasSuffix(line, "已离开.") || strings.HasSuffix(lower, " has left.") || strings.HasSuffix(lower, " left."):
+		return domain.PlayerLeft, true
+	default:
+		return "", false
 	}
 }
 

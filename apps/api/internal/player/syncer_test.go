@@ -64,14 +64,13 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 		runtimeAdapter,
 		config.Config{},
 	)
-	syncer.ResponseDelay = 0
 
 	if err := syncer.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 
-	if len(runtimeAdapter.commands) != 1 || runtimeAdapter.commands[0] != "playing" {
-		t.Fatalf("expected fixed English tModLoader player sync to send playing, got %+v", runtimeAdapter.commands)
+	if len(runtimeAdapter.commands) != 0 {
+		t.Fatalf("expected passive player sync to avoid console commands, got %+v", runtimeAdapter.commands)
 	}
 	updated, err := db.GetServer(context.Background(), server.ID)
 	if err != nil {

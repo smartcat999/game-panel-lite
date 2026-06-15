@@ -14,20 +14,18 @@ import (
 )
 
 type Syncer struct {
-	store         *store.Store
-	providers     *provider.Registry
-	runtime       runtime.Adapter
-	logger        *slog.Logger
-	ResponseDelay time.Duration
+	store     *store.Store
+	providers *provider.Registry
+	runtime   runtime.Adapter
+	logger    *slog.Logger
 }
 
 func NewSyncer(store *store.Store, providers *provider.Registry, runtime runtime.Adapter, _ config.Config) *Syncer {
 	return &Syncer{
-		store:         store,
-		providers:     providers,
-		runtime:       runtime,
-		logger:        slog.Default(),
-		ResponseDelay: 500 * time.Millisecond,
+		store:     store,
+		providers: providers,
+		runtime:   runtime,
+		logger:    slog.Default(),
 	}
 }
 
@@ -83,24 +81,9 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 		if !ok {
 			continue
 		}
-		command := playerProvider.PlayerListCommand(server.Config)
-		if command == "" {
-			continue
-		}
-		if err := s.runtime.SendCommand(ctx, server, command); err != nil {
-			s.logger.Warn("failed to request player list", "server", server.ID, "error", err)
-			continue
-		}
-		if s.ResponseDelay > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(s.ResponseDelay):
-			}
-		}
 		lines, err := s.recentLogLines(ctx, server)
 		if err != nil {
-			s.logger.Warn("failed to read player list output", "server", server.ID, "error", err)
+			s.logger.Warn("failed to read player log output", "server", server.ID, "error", err)
 			continue
 		}
 		players := playerProvider.ParsePlayerListOutput(lines)

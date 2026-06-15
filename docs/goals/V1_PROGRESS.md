@@ -7,8 +7,9 @@ Status: Completed
 Completed:
 - Added a provider-level player list capability for Terraria servers.
 - New Terraria servers now use fixed English runtime config (`language=en-US`) so console commands stay aligned with the original Terraria/tModLoader command names.
-- Added Terraria log output parsing for named player lists, count-only output, and empty player lists.
-- Added a backend player syncer that periodically sends the English player-list command to running servers, reads recent log output, and stores `playersOnline`.
+- Added Terraria log output parsing for named player lists, count-only output, empty player lists, and join/leave events.
+- Updated player sync to avoid automatic console commands; it passively reads recent logs and updates `playersOnline` when explicit player-list output is present.
+- Real-time log streaming now updates player count from join/leave events and user-triggered `playing` output.
 - Non-running servers now reset their online player count to zero.
 - The frontend server mapper now uses `playersOnline` for server cards, detail summaries, and dashboard totals.
 

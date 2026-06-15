@@ -123,6 +123,11 @@ export default function ServerDetailPage() {
       setConsoleError(formatActionError(error, t("commandSendFailed")));
     }
   });
+  const runCommand = (value: string) => {
+    const next = value.trim();
+    if (!next || commandMutation.isPending) return;
+    commandMutation.mutate(next);
+  };
   const configSave = useMutation({
     mutationFn: ({ config, hostPort }: { config: TerrariaConfig; hostPort: number }) => updateServerConfig(id, config, hostPort),
     onSuccess: async (updatedServer) => {
@@ -326,9 +331,7 @@ export default function ServerDetailPage() {
   };
   const submitCommand = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const value = command.trim();
-    if (!value || commandMutation.isPending) return;
-    commandMutation.mutate(value);
+    runCommand(command);
   };
   const downloadWorld = async (world: World) => {
     setDownloadingResourceId(world.id);
@@ -449,6 +452,7 @@ export default function ServerDetailPage() {
                 setConsoleError("");
               }}
               onClear={() => setLogs([])}
+              onQuickCommand={runCommand}
               onSubmit={submitCommand}
               onTogglePause={() => setLogStreamPaused((current) => !current)}
             />
@@ -679,6 +683,7 @@ function ConsoleTab({
   viewportRef,
   onChangeCommand,
   onClear,
+  onQuickCommand,
   onSubmit,
   onTogglePause
 }: {
@@ -693,6 +698,7 @@ function ConsoleTab({
   viewportRef: React.RefObject<HTMLDivElement | null>;
   onChangeCommand: (value: string) => void;
   onClear: () => void;
+  onQuickCommand: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onTogglePause: () => void;
 }) {
@@ -734,6 +740,11 @@ function ConsoleTab({
           logStatus={logStatus}
           viewportRef={viewportRef}
         />
+        <div className="flex flex-wrap items-center gap-2 border-t border-panel-line bg-slate-950/50 px-3 py-2">
+          <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => onQuickCommand("playing")} disabled={!consoleEnabled || commandPending}>
+            {t("playerListCommand")}
+          </Button>
+        </div>
         <form className="flex items-center gap-2 border-t border-panel-line bg-slate-950/70 px-3 py-3" onSubmit={onSubmit}>
           <span className={consoleEnabled ? "font-mono text-sm text-panel-green" : "font-mono text-sm text-slate-600"}>$</span>
           <input

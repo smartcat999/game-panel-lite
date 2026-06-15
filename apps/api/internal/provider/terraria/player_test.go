@@ -1,6 +1,10 @@
 package terraria
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+)
 
 func TestTerrariaProvidersExposePlayerListCommand(t *testing.T) {
 	chineseConfig := NewVanillaProvider().DefaultConfig()
@@ -75,5 +79,29 @@ func TestParsePlayerListOutput(t *testing.T) {
 	players = provider.ParsePlayerListOutput([]string{"Server started"})
 	if players != nil {
 		t.Fatalf("expected unrelated logs to be ignored, got %+v", players)
+	}
+}
+
+func TestParsePlayerLogEvent(t *testing.T) {
+	p := NewVanillaProvider()
+
+	cases := []struct {
+		line string
+		want domain.PlayerLogEvent
+	}{
+		{"Alice has joined.", domain.PlayerJoined},
+		{": Bob has left.", domain.PlayerLeft},
+		{"222已加入。", domain.PlayerJoined},
+		{": yyds已离开。", domain.PlayerLeft},
+	}
+	for _, item := range cases {
+		got, ok := p.ParsePlayerLogEvent(item.line)
+		if !ok || got != item.want {
+			t.Fatalf("expected %q to parse as %s, got %s ok=%v", item.line, item.want, got, ok)
+		}
+	}
+
+	if _, ok := p.ParsePlayerLogEvent("Server started"); ok {
+		t.Fatal("expected unrelated log line to be ignored")
 	}
 }

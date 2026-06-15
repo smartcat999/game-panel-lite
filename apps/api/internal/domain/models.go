@@ -16,6 +16,8 @@ type Player struct {
 	Name string `json:"name,omitempty"`
 }
 
+type PlayerLogEvent string
+
 const (
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
@@ -28,6 +30,9 @@ const (
 	StatusRestarting ServerStatus = "restarting"
 	StatusDeleting   ServerStatus = "deleting"
 	StatusErrored    ServerStatus = "errored"
+
+	PlayerJoined PlayerLogEvent = "joined"
+	PlayerLeft   PlayerLogEvent = "left"
 )
 
 type GameServerInstance struct {

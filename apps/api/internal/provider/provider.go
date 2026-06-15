@@ -22,6 +22,10 @@ type PlayerListProvider interface {
 	ParsePlayerListOutput([]string) []domain.Player
 }
 
+type PlayerActivityProvider interface {
+	ParsePlayerLogEvent(string) (domain.PlayerLogEvent, bool)
+}
+
 type Registry struct {
 	providers map[domain.ProviderKey]GameProvider
 }
