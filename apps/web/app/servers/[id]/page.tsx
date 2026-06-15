@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, CheckCircle2, Copy, Cpu, Download, FileArchive, FileText, MemoryStick, Package, Plug, Power, RotateCcw, Terminal, Trash2, Upload, Users, X } from "lucide-react";
+import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds } from "@gamepanel-lite/shared";
@@ -740,11 +740,7 @@ function ConsoleTab({
           logStatus={logStatus}
           viewportRef={viewportRef}
         />
-        <div className="flex flex-wrap items-center gap-2 border-t border-panel-line bg-slate-950/50 px-3 py-2">
-          <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => onQuickCommand("playing")} disabled={!consoleEnabled || commandPending}>
-            {t("playerListCommand")}
-          </Button>
-        </div>
+        <ConsoleCommandPanel commandPending={commandPending} disabled={!consoleEnabled} onRun={onQuickCommand} />
         <form className="flex items-center gap-2 border-t border-panel-line bg-slate-950/70 px-3 py-3" onSubmit={onSubmit}>
           <span className={consoleEnabled ? "font-mono text-sm text-panel-green" : "font-mono text-sm text-slate-600"}>$</span>
           <input
@@ -761,6 +757,167 @@ function ConsoleTab({
       </div>
       {consoleError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{consoleError}</p>}
     </div>
+  );
+}
+
+type ParameterCommand = {
+  key: string;
+  label: string;
+  command: string;
+  icon: ReactNode;
+  placeholder: string;
+  danger?: boolean;
+};
+
+function ConsoleCommandPanel({
+  commandPending,
+  disabled,
+  onRun
+}: {
+  commandPending: boolean;
+  disabled: boolean;
+  onRun: (value: string) => void;
+}) {
+  const { t } = useI18n();
+  const [activeCommand, setActiveCommand] = useState<ParameterCommand | null>(null);
+  const [parameter, setParameter] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<{ label: string; command: string } | null>(null);
+  const blocked = disabled || commandPending;
+  const parameterCommands: ParameterCommand[] = [
+    { key: "say", label: t("consoleActionSay"), command: "say", icon: <Megaphone aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionSayPlaceholder") },
+    { key: "kick", label: t("consoleActionKick"), command: "kick", icon: <UserX aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPlayerPlaceholder"), danger: true },
+    { key: "ban", label: t("consoleActionBan"), command: "ban", icon: <Ban aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPlayerPlaceholder"), danger: true },
+    { key: "password", label: t("consoleActionPassword"), command: "password", icon: <KeyRound aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPasswordPlaceholder") },
+    { key: "motd", label: t("consoleActionMotd"), command: "motd", icon: <Megaphone aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionMotdPlaceholder") }
+  ];
+  const selectParameterCommand = (item: ParameterCommand) => {
+    setPendingConfirm(null);
+    setActiveCommand(item);
+    setParameter("");
+  };
+  const runSimple = (label: string, command: string, danger = false) => {
+    setActiveCommand(null);
+    setParameter("");
+    if (danger) {
+      setPendingConfirm({ label, command });
+      return;
+    }
+    setPendingConfirm(null);
+    onRun(command);
+  };
+  const submitParameter = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!activeCommand) return;
+    const value = parameter.trim();
+    if (!value) return;
+    const command = `${activeCommand.command} ${value}`;
+    if (activeCommand.danger) {
+      setPendingConfirm({ label: activeCommand.label, command });
+      return;
+    }
+    onRun(command);
+    setActiveCommand(null);
+    setParameter("");
+  };
+  const confirmPending = () => {
+    if (!pendingConfirm) return;
+    onRun(pendingConfirm.command);
+    setPendingConfirm(null);
+    setActiveCommand(null);
+    setParameter("");
+  };
+  return (
+    <div className="border-t border-panel-line bg-slate-950/50 px-3 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <QuickCommandButton disabled={blocked} icon={<Save aria-hidden="true" className="size-3.5" />} label={t("consoleActionSave")} onClick={() => runSimple(t("consoleActionSave"), "save")} />
+        <QuickCommandButton disabled={blocked} icon={<Users aria-hidden="true" className="size-3.5" />} label={t("playerListCommand")} onClick={() => runSimple(t("playerListCommand"), "playing")} />
+        <QuickCommandButton disabled={blocked} icon={<Clock aria-hidden="true" className="size-3.5" />} label={t("consoleActionTime")} onClick={() => runSimple(t("consoleActionTime"), "time")} />
+        <QuickCommandButton disabled={blocked} icon={<FileText aria-hidden="true" className="size-3.5" />} label={t("consoleActionSeed")} onClick={() => runSimple(t("consoleActionSeed"), "seed")} />
+        {parameterCommands.slice(0, 1).map((item) => (
+          <QuickCommandButton key={item.key} disabled={blocked} icon={item.icon} label={item.label} onClick={() => selectParameterCommand(item)} />
+        ))}
+      </div>
+      <details className="mt-2 group">
+        <summary className="inline-flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-panel-green/50">
+          {t("consoleMoreActions")}
+        </summary>
+        <div className="mt-2 grid gap-2 lg:grid-cols-3">
+          <CommandGroup title={t("consoleQueryGroup")}>
+            <QuickCommandButton disabled={blocked} icon={<FileText aria-hidden="true" className="size-3.5" />} label={t("consoleActionVersion")} onClick={() => runSimple(t("consoleActionVersion"), "version")} />
+            <QuickCommandButton disabled={blocked} icon={<Plug aria-hidden="true" className="size-3.5" />} label={t("consoleActionPort")} onClick={() => runSimple(t("consoleActionPort"), "port")} />
+            <QuickCommandButton disabled={blocked} icon={<Users aria-hidden="true" className="size-3.5" />} label={t("consoleActionMaxPlayers")} onClick={() => runSimple(t("consoleActionMaxPlayers"), "maxplayers")} />
+            <QuickCommandButton disabled={blocked} icon={<KeyRound aria-hidden="true" className="size-3.5" />} label={t("consoleActionShowPassword")} onClick={() => runSimple(t("consoleActionShowPassword"), "password")} />
+            <QuickCommandButton disabled={blocked} icon={<Megaphone aria-hidden="true" className="size-3.5" />} label={t("consoleActionShowMotd")} onClick={() => runSimple(t("consoleActionShowMotd"), "motd")} />
+          </CommandGroup>
+          <CommandGroup title={t("consoleWorldGroup")}>
+            <QuickCommandButton disabled={blocked} icon={<Sunrise aria-hidden="true" className="size-3.5" />} label={t("consoleActionDawn")} onClick={() => runSimple(t("consoleActionDawn"), "dawn")} />
+            <QuickCommandButton disabled={blocked} icon={<Sun aria-hidden="true" className="size-3.5" />} label={t("consoleActionNoon")} onClick={() => runSimple(t("consoleActionNoon"), "noon")} />
+            <QuickCommandButton disabled={blocked} icon={<Moon aria-hidden="true" className="size-3.5" />} label={t("consoleActionDusk")} onClick={() => runSimple(t("consoleActionDusk"), "dusk")} />
+            <QuickCommandButton disabled={blocked} icon={<Moon aria-hidden="true" className="size-3.5" />} label={t("consoleActionMidnight")} onClick={() => runSimple(t("consoleActionMidnight"), "midnight")} />
+            <QuickCommandButton disabled={blocked} icon={<Waves aria-hidden="true" className="size-3.5" />} label={t("consoleActionSettle")} onClick={() => runSimple(t("consoleActionSettle"), "settle")} />
+          </CommandGroup>
+          <CommandGroup title={t("consoleManageGroup")}>
+            {parameterCommands.slice(1).map((item) => (
+              <QuickCommandButton key={item.key} disabled={blocked} icon={item.icon} label={item.label} onClick={() => selectParameterCommand(item)} />
+            ))}
+            <QuickCommandButton disabled={blocked} danger icon={<Power aria-hidden="true" className="size-3.5" />} label={t("consoleActionExit")} onClick={() => runSimple(t("consoleActionExit"), "exit", true)} />
+            <QuickCommandButton disabled={blocked} danger icon={<Power aria-hidden="true" className="size-3.5" />} label={t("consoleActionExitNoSave")} onClick={() => runSimple(t("consoleActionExitNoSave"), "exit-nosave", true)} />
+          </CommandGroup>
+        </div>
+      </details>
+      {activeCommand && (
+        <form className="mt-3 flex flex-col gap-2 rounded-md border border-panel-line bg-slate-950/70 p-2 sm:flex-row sm:items-center" onSubmit={submitParameter}>
+          <span className="inline-flex items-center gap-2 text-sm text-slate-300">{activeCommand.icon}{activeCommand.label}</span>
+          <input
+            className="h-9 min-w-0 flex-1 rounded-md border border-panel-line bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green"
+            placeholder={activeCommand.placeholder}
+            value={parameter}
+            onChange={(event) => setParameter(event.target.value)}
+            disabled={blocked}
+          />
+          <Button type="submit" className="h-9 px-3" variant={activeCommand.danger ? "danger" : "secondary"} disabled={blocked || parameter.trim() === ""}>
+            <Send aria-hidden="true" className="size-3.5" />
+            {activeCommand.danger ? t("consoleReviewCommand") : t("send")}
+          </Button>
+          <Button type="button" className="h-9 px-3" variant="ghost" onClick={() => setActiveCommand(null)} disabled={blocked}>{t("cancel")}</Button>
+        </form>
+      )}
+      {pendingConfirm && (
+        <div className="mt-3 flex flex-col gap-2 rounded-md border border-red-500/20 bg-red-500/10 p-2 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-sm text-red-100">{t("consoleConfirmCommand", { command: pendingConfirm.command })}</span>
+          <div className="flex gap-2">
+            <Button type="button" className="h-8 px-2 text-xs" variant="secondary" onClick={() => setPendingConfirm(null)} disabled={blocked}>{t("cancel")}</Button>
+            <Button type="button" className="h-8 px-2 text-xs" variant="danger" onClick={confirmPending} disabled={blocked}>{pendingConfirm.label}</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommandGroup({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <div className="rounded-md border border-panel-line bg-slate-950/40 p-2">
+      <p className="mb-2 text-xs font-medium text-slate-500">{title}</p>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
+function QuickCommandButton({ danger, disabled, icon, label, onClick }: { danger?: boolean; disabled: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50 disabled:cursor-not-allowed disabled:opacity-45",
+        danger ? "border-red-500/20 bg-red-500/10 text-red-100 hover:bg-red-500/15" : "border-panel-line bg-slate-900/70 text-slate-200 hover:border-slate-600 hover:bg-slate-800"
+      )}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
