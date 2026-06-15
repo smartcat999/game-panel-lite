@@ -39,7 +39,9 @@ func (VanillaProvider) RenderConfig(config domain.TerrariaConfig) (string, error
 func (VanillaProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return vanillaRuntimeOptions(config)
 }
-func (VanillaProvider) PlayerListCommand() string { return "playing" }
+func (VanillaProvider) PlayerListCommand(config domain.TerrariaConfig) string {
+	return localizedPlayerListCommand(config)
+}
 func (VanillaProvider) ParsePlayerListOutput(lines []string) []domain.Player {
 	return parsePlayingCommandOutput(lines)
 }
@@ -63,7 +65,9 @@ func (TModLoaderProvider) RenderConfig(config domain.TerrariaConfig) (string, er
 func (TModLoaderProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return tModLoaderRuntimeOptions(config)
 }
-func (TModLoaderProvider) PlayerListCommand() string { return "playing" }
+func (TModLoaderProvider) PlayerListCommand(config domain.TerrariaConfig) string {
+	return localizedPlayerListCommand(config)
+}
 func (TModLoaderProvider) ParsePlayerListOutput(lines []string) []domain.Player {
 	return parsePlayingCommandOutput(lines)
 }
@@ -151,6 +155,15 @@ func VanillaImageForVersion(version string) string {
 	return "smartcat99999/terraria-vanilla:" + version
 }
 
+func localizedPlayerListCommand(config domain.TerrariaConfig) string {
+	switch strings.ToLower(strings.TrimSpace(config.Language)) {
+	case "zh-hans", "zh-cn", "zh":
+		return "游戏中"
+	default:
+		return "playing"
+	}
+}
+
 func parsePlayingCommandOutput(lines []string) []domain.Player {
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
@@ -158,13 +171,16 @@ func parsePlayingCommandOutput(lines []string) []domain.Player {
 			continue
 		}
 		lower := strings.ToLower(line)
-		if strings.Contains(lower, "no players") {
+		if strings.Contains(lower, "no players") || strings.Contains(line, "无玩家连接") {
 			return []domain.Player{}
 		}
 		if players, ok := parseNamedPlayerLine(line); ok {
 			return players
 		}
 		if count, ok := parsePlayerCountLine(line); ok {
+			if players := parsePlayerRowsBefore(lines[:i], count); len(players) > 0 {
+				return players
+			}
 			return unnamedPlayers(count)
 		}
 	}
@@ -198,12 +214,57 @@ func parseNamedPlayerLine(line string) ([]domain.Player, bool) {
 	return players, true
 }
 
+func parsePlayerRowsBefore(lines []string, count int) []domain.Player {
+	if count <= 0 {
+		return []domain.Player{}
+	}
+	players := make([]domain.Player, 0, count)
+	for i := len(lines) - 1; i >= 0; i-- {
+		name, ok := parsePlayerRow(lines[i])
+		if !ok {
+			if len(players) > 0 {
+				break
+			}
+			continue
+		}
+		players = append([]domain.Player{{Name: name}}, players...)
+		if len(players) == count {
+			break
+		}
+	}
+	return players
+}
+
+func parsePlayerRow(line string) (string, bool) {
+	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ":"))
+	if line == "" {
+		return "", false
+	}
+	index := strings.LastIndex(line, "(")
+	if index <= 0 || !strings.HasSuffix(line, ")") {
+		return "", false
+	}
+	name := strings.TrimSpace(line[:index])
+	if name == "" {
+		return "", false
+	}
+	return name, true
+}
+
 func parsePlayerCountLine(line string) (int, bool) {
 	lower := strings.ToLower(line)
-	if !strings.Contains(lower, "player") || !strings.Contains(lower, "connected") {
-		return 0, false
+	if strings.Contains(lower, "player") && strings.Contains(lower, "connected") {
+		match := regexp.MustCompile(`(?i)(\d+)\s+players?\s+connected`).FindStringSubmatch(line)
+		if len(match) != 2 {
+			return 0, false
+		}
+		count, err := strconv.Atoi(match[1])
+		if err != nil {
+			return 0, false
+		}
+		return count, true
 	}
-	match := regexp.MustCompile(`(?i)(\d+)\s+players?\s+connected`).FindStringSubmatch(line)
+	match := regexp.MustCompile(`(\d+)\s*个玩家已连接`).FindStringSubmatch(line)
 	if len(match) != 2 {
 		return 0, false
 	}

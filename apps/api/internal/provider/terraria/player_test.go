@@ -2,12 +2,23 @@ package terraria
 
 import "testing"
 
-func TestTerrariaProvidersExposePlayingCommand(t *testing.T) {
-	if command := NewVanillaProvider().PlayerListCommand(); command != "playing" {
-		t.Fatalf("expected vanilla player list command playing, got %q", command)
+func TestTerrariaProvidersExposePlayerListCommand(t *testing.T) {
+	chineseConfig := NewVanillaProvider().DefaultConfig()
+	chineseConfig.Language = "zh-Hans"
+	englishConfig := chineseConfig
+	englishConfig.Language = "en-US"
+
+	if command := NewVanillaProvider().PlayerListCommand(chineseConfig); command != "游戏中" {
+		t.Fatalf("expected localized vanilla player list command 游戏中, got %q", command)
 	}
-	if command := NewTModLoaderProvider().PlayerListCommand(); command != "playing" {
-		t.Fatalf("expected tModLoader player list command playing, got %q", command)
+	if command := NewVanillaProvider().PlayerListCommand(englishConfig); command != "playing" {
+		t.Fatalf("expected English vanilla player list command playing, got %q", command)
+	}
+	if command := NewTModLoaderProvider().PlayerListCommand(chineseConfig); command != "游戏中" {
+		t.Fatalf("expected localized tModLoader player list command 游戏中, got %q", command)
+	}
+	if command := NewTModLoaderProvider().PlayerListCommand(englishConfig); command != "playing" {
+		t.Fatalf("expected English tModLoader player list command playing, got %q", command)
 	}
 }
 
@@ -43,6 +54,22 @@ func TestParsePlayerListOutput(t *testing.T) {
 	})
 	if players == nil || len(players) != 0 {
 		t.Fatalf("expected recognized empty player list, got %+v", players)
+	}
+
+	players = provider.ParsePlayerListOutput([]string{
+		": 无玩家连接。",
+	})
+	if players == nil || len(players) != 0 {
+		t.Fatalf("expected recognized localized empty player list, got %+v", players)
+	}
+
+	players = provider.ParsePlayerListOutput([]string{
+		": yyds (192.168.215.1:32643)",
+		"",
+		"1个玩家已连接。",
+	})
+	if len(players) != 1 || players[0].Name != "yyds" {
+		t.Fatalf("expected localized named player, got %+v", players)
 	}
 
 	players = provider.ParsePlayerListOutput([]string{"Server started"})

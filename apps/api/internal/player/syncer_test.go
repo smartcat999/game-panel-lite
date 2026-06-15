@@ -43,7 +43,7 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 		ID:          "server-1",
 		Name:        "Friends",
 		GameKey:     "terraria",
-		ProviderKey: domain.ProviderTerrariaVanilla,
+		ProviderKey: domain.ProviderTerrariaTModLoader,
 		Status:      domain.StatusRunning,
 		WorldName:   "Friends",
 		Port:        terraria.DefaultInternalPort,
@@ -57,7 +57,7 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 	if err := db.CreateServer(context.Background(), &server); err != nil {
 		t.Fatal(err)
 	}
-	runtimeAdapter := &playerRuntime{logs: "Server started\nPlayers connected: Alice, Bob\n"}
+	runtimeAdapter := &playerRuntime{logs: "Server started\n: yyds (192.168.215.1:32643)\n\n1个玩家已连接。\n"}
 	syncer := NewSyncer(
 		db,
 		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
@@ -70,15 +70,15 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(runtimeAdapter.commands) != 1 || runtimeAdapter.commands[0] != "playing" {
-		t.Fatalf("expected playing command to be sent, got %+v", runtimeAdapter.commands)
+	if len(runtimeAdapter.commands) != 1 || runtimeAdapter.commands[0] != "游戏中" {
+		t.Fatalf("expected localized tModLoader player sync to send 游戏中, got %+v", runtimeAdapter.commands)
 	}
 	updated, err := db.GetServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.PlayersOnline != 2 {
-		t.Fatalf("expected player count to update to 2, got %+v", updated)
+	if updated.PlayersOnline != 1 {
+		t.Fatalf("expected player count to update to 1, got %+v", updated)
 	}
 }
 

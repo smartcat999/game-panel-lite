@@ -83,7 +83,7 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 		if !ok {
 			continue
 		}
-		command := playerProvider.PlayerListCommand()
+		command := playerProvider.PlayerListCommand(server.Config)
 		if command == "" {
 			continue
 		}

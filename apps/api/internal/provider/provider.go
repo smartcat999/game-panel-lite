@@ -18,7 +18,7 @@ type GameProvider interface {
 }
 
 type PlayerListProvider interface {
-	PlayerListCommand() string
+	PlayerListCommand(domain.TerrariaConfig) string
 	ParsePlayerListOutput([]string) []domain.Player
 }
 
