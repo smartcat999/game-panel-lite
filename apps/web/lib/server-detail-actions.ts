@@ -1,7 +1,7 @@
 import type { Server } from "./types";
 import type { MessageKey } from "./i18n";
 
-type ResourceActionKind = "assignWorld" | "restoreBackup" | "migrate" | "modifyMods";
+type ResourceActionKind = "restoreBackup" | "modifyMods";
 
 export function isServerLifecyclePending(status?: Server["status"]) {
   return status === "creating" || status === "starting" || status === "restarting" || status === "deleting";
@@ -34,21 +34,16 @@ export function formatServerDetailError(
 
 export function describeResourceAction({
   kind,
-  serverStatus,
-  targetCount
+  serverStatus
 }: {
   kind: ResourceActionKind;
   serverStatus?: Server["status"];
-  targetCount?: number;
 }): { disabled: boolean; reasonKey?: MessageKey } {
-  if ((kind === "assignWorld" || kind === "restoreBackup") && isServerLockedForResourceChanges(serverStatus)) {
-    return { disabled: true, reasonKey: kind === "assignWorld" ? "assignWorldRequiresStopped" : "restoreRequiresStopped" };
+  if (kind === "restoreBackup" && isServerLockedForResourceChanges(serverStatus)) {
+    return { disabled: true, reasonKey: "restoreRequiresStopped" };
   }
   if (kind === "modifyMods" && isServerLockedForResourceChanges(serverStatus)) {
     return { disabled: true, reasonKey: "modChangesRequireStopped" };
-  }
-  if (kind === "migrate" && (targetCount ?? 0) === 0) {
-    return { disabled: true, reasonKey: "noMigrationTargetHint" };
   }
   return { disabled: false, reasonKey: undefined };
 }

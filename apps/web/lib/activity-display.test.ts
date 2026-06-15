@@ -38,6 +38,32 @@ describe("formatActivityEvent", () => {
     });
   });
 
+  it("localizes queued lifecycle activity in Chinese", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      type: "server.restart.queued",
+      message: "Queued restart for server Friends Server"
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "已提交重启服务器 Friends Server",
+      typeLabel: "重启排队"
+    });
+  });
+
+  it("localizes world snapshot activity in Chinese", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      type: "world.snapshot.created",
+      message: "Saved world snapshot Friends World from Friends Server"
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "已从 Friends Server 保存世界快照 Friends World",
+      typeLabel: "世界快照"
+    });
+  });
+
   it("falls back to raw values for unknown activity types", () => {
     const event: ActivityEvent = {
       ...baseEvent,

@@ -47,17 +47,10 @@ const importedWorld: World = {
   bytes: "1 KB"
 };
 
-const migratedWorld: World = {
-  ...importedWorld,
-  id: "migrated-world-1",
-  server: "server-1"
-};
-
 describe("createTerrariaServerWithWorld", () => {
-  it("copies the selected world into the new server before assigning it", async () => {
+  it("assigns the selected reusable world snapshot without overriding the requested world name", async () => {
     const deps = {
       createServer: vi.fn().mockResolvedValue(server),
-      migrateWorld: vi.fn().mockResolvedValue(migratedWorld),
       assignWorld: vi.fn().mockResolvedValue(importedWorld),
       assignMod: vi.fn()
     };
@@ -69,16 +62,16 @@ describe("createTerrariaServerWithWorld", () => {
       deps
     });
 
-    expect(deps.migrateWorld).toHaveBeenCalledWith("world-1", "server-1");
-    expect(deps.assignWorld).toHaveBeenCalledWith("migrated-world-1", "server-1");
-    expect(result.server.world).toBe("UploadedWorld");
-    expect(result.server.config.worldName).toBe("UploadedWorld");
+    expect(deps.assignWorld).toHaveBeenCalledWith("world-1", "server-1");
+    expect(result.server.world).toBe("PresetWorld");
+    expect(result.server.config.worldName).toBe("PresetWorld");
+    expect(result.server.sourceWorldId).toBe("world-1");
+    expect(result.server.sourceWorldName).toBe("UploadedWorld");
   });
 
   it("creates a server without world assignment when no worldId is given", async () => {
     const deps = {
       createServer: vi.fn().mockResolvedValue(server),
-      migrateWorld: vi.fn(),
       assignWorld: vi.fn(),
       assignMod: vi.fn()
     };
@@ -90,7 +83,23 @@ describe("createTerrariaServerWithWorld", () => {
     });
 
     expect(deps.assignWorld).not.toHaveBeenCalled();
-    expect(deps.migrateWorld).not.toHaveBeenCalled();
     expect(result.server.world).toBe("PresetWorld");
+  });
+
+  it("passes the requested external port to server creation", async () => {
+    const deps = {
+      createServer: vi.fn().mockResolvedValue(server),
+      assignWorld: vi.fn(),
+      assignMod: vi.fn()
+    };
+
+    await createTerrariaServerWithWorld({
+      config,
+      hostPort: 17777,
+      mode: "vanilla",
+      deps
+    });
+
+    expect(deps.createServer).toHaveBeenCalledWith(expect.objectContaining({ hostPort: 17777 }));
   });
 });

@@ -1,12 +1,11 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { assignMod, assignWorld, createServer, migrateWorld } from "./api";
+import { assignMod, assignWorld, createServer } from "./api";
 import type { Server, World } from "./types";
 
 type CreateMode = "vanilla" | "tmodloader";
 
 type CreateServerWithWorldDeps = {
   createServer: typeof createServer;
-  migrateWorld: typeof migrateWorld;
   assignWorld: typeof assignWorld;
   assignMod: typeof assignMod;
 };
@@ -14,6 +13,7 @@ type CreateServerWithWorldDeps = {
 export type CreateServerWithWorldInput = {
   config: TerrariaConfig;
   deps?: CreateServerWithWorldDeps;
+  hostPort?: number;
   mode: CreateMode;
   worldId?: string;
   modIds?: string[];
@@ -28,13 +28,13 @@ export type CreatedServerWithWorld = {
 const defaultDeps: CreateServerWithWorldDeps = {
   assignWorld,
   createServer,
-  migrateWorld,
   assignMod
 };
 
 export async function createTerrariaServerWithWorld({
   config,
   deps = defaultDeps,
+  hostPort,
   mode,
   worldId,
   modIds = [],
@@ -44,20 +44,17 @@ export async function createTerrariaServerWithWorld({
     name: config.serverName || "Terraria Server",
     providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
     config,
+    hostPort,
     version
   });
 
   let assignedWorld: World | undefined;
   if (worldId) {
-    const copiedWorld = await deps.migrateWorld(worldId, server.id);
-    assignedWorld = await deps.assignWorld(copiedWorld.id, server.id);
+    assignedWorld = await deps.assignWorld(worldId, server.id);
     server = {
       ...server,
-      config: {
-        ...server.config,
-        worldName: assignedWorld.name
-      },
-      world: assignedWorld.name
+      sourceWorldId: assignedWorld.id,
+      sourceWorldName: assignedWorld.name
     };
   }
 

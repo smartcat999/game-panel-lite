@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadWorldFile, listBackups, listWorlds, setModEnabled } from "./api";
+import { downloadWorldFile, getServer, listBackups, listWorlds, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -54,6 +54,30 @@ describe("api mappers", () => {
       activeInstanceId: "active-server",
       server: "active-server"
     });
+  });
+
+  it("keeps server runtime error details for errored servers", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "server-1",
+          name: "Broken tModLoader",
+          providerKey: "terraria-tmodloader",
+          status: "errored",
+          worldName: "Modded",
+          port: 7777,
+          maxPlayers: 8,
+          lastError: "container exited (exit code 1)",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const server = await getServer("server-1");
+
+    expect(server.lastError).toBe("container exited (exit code 1)");
   });
 
   it("surfaces backend download errors before the browser navigates away", async () => {

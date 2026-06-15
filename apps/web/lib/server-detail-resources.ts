@@ -1,24 +1,11 @@
-import type { Server, World } from "./types";
+import type { ProviderKey, Server, World } from "./types";
 
-export function getDetailTargetServers(servers: Server[], currentServerId: string): Server[] {
-  return servers.filter((server) => server.id !== currentServerId);
+export function providerKeyForServer(server: Pick<Server, "mode">): ProviderKey {
+  return server.mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla";
 }
 
-export function getMigrationTargetServers(servers: Server[], sourceServerId?: string): Server[] {
-  if (!sourceServerId) return servers;
-  return servers.filter((server) => server.id !== sourceServerId);
-}
-
-export function resolveMigrationTargetId(servers: Server[], selectedTargetId: string, sourceServerId?: string): string {
-  const targets = getMigrationTargetServers(servers, sourceServerId);
-  if (targets.some((server) => server.id === selectedTargetId)) {
-    return selectedTargetId;
-  }
-  return targets[0]?.id ?? "";
-}
-
-export function nextWorldCopyName(worldName: string, suffix: string): string {
-  return `${worldName} ${suffix}`.trim();
+export function isWorldCompatibleWithServer(world: World, server: Pick<Server, "mode">): boolean {
+  return !world.providerKey || world.providerKey === providerKeyForServer(server);
 }
 
 export function getWorldSourceServerId(world: World): string | undefined {

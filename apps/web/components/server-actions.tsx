@@ -12,7 +12,7 @@ import { serverInviteText } from "@/lib/server-join";
 import type { Server } from "@/lib/types";
 import { serverAction } from "@/lib/api";
 
-export function ServerActions({ server }: { server: Server }) {
+export function ServerActions({ server, showInvite = true }: { server: Server; showInvite?: boolean }) {
   const client = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -105,7 +105,12 @@ export function ServerActions({ server }: { server: Server }) {
             {busyAction === "stop" ? t("actionWorking") : t("actionStop")}
           </Button>
         ) : (
-          <Button onClick={() => runAction("start")} disabled={controlsDisabled}>
+          <Button
+            className="border border-panel-green/30 bg-panel-green/10 text-panel-green hover:border-panel-green/50 hover:bg-panel-green/15 disabled:border-panel-line disabled:bg-slate-900/70 disabled:text-slate-500"
+            variant="ghost"
+            onClick={() => runAction("start")}
+            disabled={controlsDisabled}
+          >
             <Play aria-hidden="true" />
             {startLabel}
           </Button>
@@ -114,10 +119,12 @@ export function ServerActions({ server }: { server: Server }) {
           <RotateCcw aria-hidden="true" />
           {restartLabel}
         </Button>
-        <Button variant="primary" onClick={() => void copyInvite()} disabled={server.status === "deleting"}>
-          <Copy aria-hidden="true" />
-          {copiedInvite ? t("copied") : t("actionCopyInvite")}
-        </Button>
+        {showInvite && (
+          <Button variant="secondary" onClick={() => void copyInvite()} disabled={server.status === "deleting"}>
+            <Copy aria-hidden="true" />
+            {copiedInvite ? t("copied") : t("actionCopyInvite")}
+          </Button>
+        )}
         <Button variant="danger" onClick={() => runAction("delete")} disabled={controlsDisabled}>
           <Trash2 aria-hidden="true" />
           {deleteLabel}

@@ -3,36 +3,32 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, CheckCircle2, Copy, Cpu, Download, FileText, MemoryStick, MoveRight, Package, Plus, Power, RotateCcw, Terminal, Trash2, Upload } from "lucide-react";
+import { Archive, ArrowRight, CheckCircle2, Copy, Cpu, Download, FileArchive, FileText, MemoryStick, Package, Plug, Power, RotateCcw, Terminal, Trash2, Upload, Users, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { secretSeedKeyFor, terrariaSecretSeeds } from "@gamepanel-lite/shared";
+import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
 import {
-  assignWorld,
   createBackup,
+  createWorldSnapshot,
   deleteBackup,
   deleteMod,
   deleteWorld,
   downloadBackupFile,
   downloadWorldFile,
-  duplicateWorld,
   getServer,
   getServerLogSnapshot,
   getServerStats,
-  importWorld,
   listBackups,
-  listServers,
   listMods,
   listWorlds,
-  migrateBackup,
-  migrateWorld,
   previewTerrariaConfig,
   restoreBackup,
   sendServerCommand,
+  serverAction,
   setModEnabled,
   serverLogsUrl,
   updateServerConfig,
@@ -40,10 +36,10 @@ import {
 } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { describeResourceAction, formatServerDetailError, isServerLockedForResourceChanges } from "@/lib/server-detail-actions";
-import { getDetailTargetServers, isWorldActiveOnServer, nextWorldCopyName } from "@/lib/server-detail-resources";
-import { Sparkline, useTimeSeries } from "@/lib/sparkline";
+import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
+import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
+import { terrariaLanguageOptions } from "@/lib/terraria-language";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, Server, World } from "@/lib/types";
 
@@ -54,7 +50,6 @@ export default function ServerDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const client = useQueryClient();
-  const worldInputRef = useRef<HTMLInputElement>(null);
   const modInputRef = useRef<HTMLInputElement>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
   const logServerIdRef = useRef("");
@@ -62,7 +57,6 @@ export default function ServerDetailPage() {
   const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
   const server = query.data;
   const statsQuery = useQuery({ queryKey: ["server-stats", id], queryFn: () => getServerStats(id), enabled: server?.status === "running", refetchInterval: 3000, retry: false });
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, enabled: Boolean(server), retry: false });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server), retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server), retry: false });
   const modsQuery = useQuery({
@@ -71,8 +65,6 @@ export default function ServerDetailPage() {
     enabled: Boolean(server && server.mode === "tmodloader"),
     retry: false
   });
-  const serverCpuSeries = useTimeSeries(statsQuery.data?.cpuPercent);
-  const serverMemSeries = useTimeSeries(statsQuery.data?.memoryMb, 60);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -84,8 +76,8 @@ export default function ServerDetailPage() {
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
+  const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
-  const [targetServerId, setTargetServerId] = useState("");
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
   const [logStreamPaused, setLogStreamPaused] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
@@ -94,6 +86,13 @@ export default function ServerDetailPage() {
     dockerUnavailable: t("detailDockerUnavailable"),
     containerUnavailable: t("detailContainerUnavailable")
   }) || fallback;
+  const formatSnapshotError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (message.toLowerCase().includes("current world file has not been created yet")) {
+      return t("worldSnapshotRequiresGeneratedWorld");
+    }
+    return formatActionError(error, t("unableSaveWorldSnapshot"));
+  };
 
   const showSuccess = (message: string) => {
     setErrorMessage("");
@@ -119,24 +118,14 @@ export default function ServerDetailPage() {
       setLogs((current) => [...current, `> ${value}`].slice(-300));
       setCommand("");
       setConsoleError("");
-      showSuccess(t("commandSent"));
     },
     onError: (error) => {
       setSuccessMessage("");
       setConsoleError(formatActionError(error, t("commandSendFailed")));
     }
   });
-  const worldUpload = useMutation({
-    mutationFn: (file: File) => importWorld(file, id),
-    onSuccess: async () => {
-      showSuccess(t("worldImported"));
-      if (worldInputRef.current) worldInputRef.current.value = "";
-      await client.invalidateQueries({ queryKey: ["worlds"] });
-    },
-    onError: (error) => showError(formatActionError(error, t("unableImportWorld")))
-  });
   const configSave = useMutation({
-    mutationFn: (nextConfig: TerrariaConfig) => updateServerConfig(id, nextConfig),
+    mutationFn: ({ config, hostPort }: { config: TerrariaConfig; hostPort: number }) => updateServerConfig(id, config, hostPort),
     onSuccess: async (updatedServer) => {
       showSuccess(t("configSaved"));
       setConfigSaved(true);
@@ -149,32 +138,18 @@ export default function ServerDetailPage() {
       showError(formatActionError(error, t("unableUpdateConfig")));
     }
   });
-  const worldAssign = useMutation({
-    mutationFn: (worldId: string) => assignWorld(worldId, id),
-    onSuccess: async () => {
-      showSuccess(t("worldAssigned"));
-      await client.invalidateQueries({ queryKey: ["worlds"] });
+  const configRestart = useMutation({
+    mutationFn: () => serverAction(id, "restart"),
+    onSuccess: async (updatedServer) => {
+      showSuccess(t("serverRestartQueued"));
+      setPendingConfigRestart(false);
+      if (updatedServer) {
+        client.setQueryData(["server", id], updatedServer);
+      }
       await client.invalidateQueries({ queryKey: ["server", id] });
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
-    onError: (error) => showError(formatActionError(error, t("unableAssignWorld")))
-  });
-  const worldDuplicate = useMutation({
-    mutationFn: (world: World) => duplicateWorld(world.id, nextWorldCopyName(world.name, t("duplicateSuffix"))),
-    onSuccess: async () => {
-      showSuccess(t("worldDuplicated"));
-      await client.invalidateQueries({ queryKey: ["worlds"] });
-    },
-    onError: (error) => showError(formatActionError(error, t("unableDuplicateWorld")))
-  });
-  const worldMigrate = useMutation({
-    mutationFn: ({ id: worldId, instanceId }: { id: string; instanceId: string }) => migrateWorld(worldId, instanceId),
-    onSuccess: async () => {
-      showSuccess(t("worldMigrated"));
-      await client.invalidateQueries({ queryKey: ["worlds"] });
-      await client.invalidateQueries({ queryKey: ["servers"] });
-    },
-    onError: (error) => showError(formatActionError(error, t("unableMigrateWorld")))
+    onError: (error) => showError(formatActionError(error, t("unableAction", { action: t("actionRestart") })))
   });
   const worldDelete = useMutation({
     mutationFn: deleteWorld,
@@ -207,14 +182,13 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(formatActionError(error, t("unableRestoreBackup")))
   });
-  const backupMigrate = useMutation({
-    mutationFn: ({ id: backupId, instanceId }: { id: string; instanceId: string }) => migrateBackup(backupId, instanceId),
+  const worldSnapshotCreate = useMutation({
+    mutationFn: () => createWorldSnapshot(id),
     onSuccess: async () => {
-      showSuccess(t("backupMigrated"));
-      await client.invalidateQueries({ queryKey: ["backups"] });
-      await client.invalidateQueries({ queryKey: ["servers"] });
+      showSuccess(t("worldSnapshotSaved"));
+      await client.invalidateQueries({ queryKey: ["worlds"] });
     },
-    onError: (error) => showError(formatActionError(error, t("unableMigrateBackup")))
+    onError: (error) => showError(formatSnapshotError(error))
   });
   const backupDelete = useMutation({
     mutationFn: deleteBackup,
@@ -308,7 +282,11 @@ export default function ServerDetailPage() {
   }, [logs, activeTab]);
 
   const serverWorlds = useMemo(
-    () => (server ? (worldsQuery.data ?? []).filter((world) => world.instanceId === server.id || world.activeInstanceId === server.id) : []),
+    () => (
+      server
+        ? (worldsQuery.data ?? []).filter((world) => world.instanceId === server.id)
+        : []
+    ),
     [server, worldsQuery.data]
   );
   const serverBackups = useMemo(
@@ -316,9 +294,6 @@ export default function ServerDetailPage() {
     [backupsQuery.data, server]
   );
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
-  const targetServers = useMemo(() => (server ? getDetailTargetServers(serversQuery.data ?? [], server.id) : []), [server, serversQuery.data]);
-  const activeTargetServerId = targetServerId || targetServers[0]?.id || "";
-
   if (!server) {
     return (
       <>
@@ -385,40 +360,52 @@ export default function ServerDetailPage() {
     <>
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
+      {server.status === "errored" && server.lastError && (
+        <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+          <p className="font-medium">{t("serverRuntimeError")}</p>
+          <p className="mt-1 break-words text-red-100/85">{formatActionError(new Error(server.lastError), server.lastError)}</p>
+        </div>
+      )}
       {errorMessage && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mt-3 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm text-panel-green">{successMessage}</p>}
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold">{server.name}</h1>
             <ServerModeBadge mode={server.mode} />
             <ServerStatusBadge status={server.status} />
           </div>
-          <p className="mt-2 text-sm text-slate-400">
-            {t("world")}: {server.world}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+            <HeaderMetric
+              icon={<Users aria-hidden="true" className="size-3.5" />}
+              label={t("players")}
+              value={`${server.players} / ${server.maxPlayers}`}
+            />
+            <HeaderMetric
+              icon={<Plug aria-hidden="true" className="size-3.5" />}
+              label={t("port")}
+              value={String(serverJoinPort(server))}
+            />
+            <HeaderMetric
+              accent
+              icon={<Cpu aria-hidden="true" className="size-3.5" />}
+              label={t("serverCpu")}
+              value={server.status === "running" ? `${(statsQuery.data?.cpuPercent ?? 0).toFixed(1)}%` : "—"}
+              active={server.status === "running"}
+            />
+            <HeaderMetric
+              accent
+              icon={<MemoryStick aria-hidden="true" className="size-3.5" />}
+              label={t("serverMemory")}
+              value={server.status === "running" && statsQuery.data ? `${statsQuery.data.memoryMb} MB` : "—"}
+              active={server.status === "running"}
+            />
+          </div>
         </div>
-        <ServerActions server={server} />
+        <ServerActions server={server} showInvite={false} />
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <MonitorCard
-          icon={<Cpu aria-hidden="true" className={`size-4 ${server.status === "running" ? "" : "text-slate-600"}`} />}
-          label={t("serverCpu")}
-          value={server.status === "running" ? `${(statsQuery.data?.cpuPercent ?? 0).toFixed(1)}%` : "—"}
-          sparkline={server.status === "running" ? <Sparkline data={serverCpuSeries} color="#7bd978" max={400} width={140} /> : undefined}
-          color="#7bd978"
-        />
-        <MonitorCard
-          icon={<MemoryStick aria-hidden="true" className={`size-4 ${server.status === "running" ? "" : "text-slate-600"}`} />}
-          label={t("serverMemory")}
-          value={server.status === "running" && statsQuery.data ? `${statsQuery.data.memoryMb} MB` : "—"}
-          sparkline={server.status === "running" ? <Sparkline data={serverMemSeries} color="#a78bfa" max={Math.max(1024, statsQuery.data?.memoryLimitMb ?? 1024)} width={140} /> : undefined}
-          color="#a78bfa"
-        />
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="min-w-0 p-4">
           <div className="mb-4 flex gap-2 overflow-x-auto border-b border-panel-line px-1 pb-4 pt-1" role="tablist" aria-label={server.name}>
             {tabs.map((tab) => (
@@ -452,18 +439,19 @@ export default function ServerDetailPage() {
               command={command}
               commandPending={commandMutation.isPending}
               consoleError={consoleError}
+              logs={logs}
               logStatus={logStatus}
               logStatusLabel={logStatusLabel}
               logStreamPaused={logStreamPaused}
-              logs={logs}
               server={server}
               viewportRef={logViewportRef}
               onChangeCommand={(value) => {
                 setCommand(value);
                 setConsoleError("");
               }}
-              onTogglePause={() => setLogStreamPaused((current) => !current)}
+              onClear={() => setLogs([])}
               onSubmit={submitCommand}
+              onTogglePause={() => setLogStreamPaused((current) => !current)}
             />
           )}
           {activeTab === "logs" && (
@@ -482,8 +470,10 @@ export default function ServerDetailPage() {
               saveError={configSave.error instanceof Error ? configSave.error.message : ""}
               savePending={configSave.isPending}
               saveSuccess={configSaved}
+              restartPending={configRestart.isPending}
               server={server}
-              onSave={(nextConfig) => configSave.mutate(nextConfig)}
+              onRestart={() => setPendingConfigRestart(true)}
+              onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
             />
           )}
           {activeTab === "worlds" && (
@@ -492,22 +482,12 @@ export default function ServerDetailPage() {
               isLoading={worldsQuery.isLoading}
               items={serverWorlds}
               deleting={worldDelete.isPending}
-              assigning={worldAssign.isPending}
-              duplicating={worldDuplicate.isPending}
               currentServerId={server.id}
-              serverStatus={server.status}
               downloadingId={downloadingResourceId}
-              migrating={worldMigrate.isPending}
-              targetServerId={activeTargetServerId}
-              targetServers={targetServers}
-              uploading={worldUpload.isPending}
-              onAssign={(world) => worldAssign.mutate(world.id)}
+              snapshotting={worldSnapshotCreate.isPending}
               onDelete={setPendingWorldDelete}
               onDownload={(world) => void downloadWorld(world)}
-              onDuplicate={(world) => worldDuplicate.mutate(world)}
-              onMigrate={(world) => activeTargetServerId && worldMigrate.mutate({ id: world.id, instanceId: activeTargetServerId })}
-              onTargetServerChange={setTargetServerId}
-              onUploadClick={() => worldInputRef.current?.click()}
+              onCreateSnapshot={() => worldSnapshotCreate.mutate()}
             />
           )}
           {activeTab === "backups" && (
@@ -518,17 +498,12 @@ export default function ServerDetailPage() {
               items={serverBackups}
               deleting={backupDelete.isPending}
               downloadingId={downloadingResourceId}
-              migrating={backupMigrate.isPending}
               restoring={backupRestore.isPending}
               serverStatus={server.status}
-              targetServerId={activeTargetServerId}
-              targetServers={targetServers}
               onDelete={setPendingBackupDelete}
               onDownload={(backup) => void downloadBackup(backup)}
               onCreate={() => backupCreate.mutate()}
-              onMigrate={(backup) => activeTargetServerId && backupMigrate.mutate({ id: backup.id, instanceId: activeTargetServerId })}
               onRestore={setPendingRestore}
-              onTargetServerChange={setTargetServerId}
             />
           )}
           {activeTab === "mods" && server.mode === "tmodloader" && (
@@ -553,35 +528,30 @@ export default function ServerDetailPage() {
             <CopyRow label={t("ipAddress")} value="127.0.0.1" copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <CopyRow label={t("port")} value={String(serverJoinPort(server))} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <CopyRow label={t("password")} value={server.password || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <Button className="mt-4 w-full" onClick={() => void copy("Invite", invite)}>
+            <Button className="mt-4 w-full" variant="secondary" onClick={() => void copy("Invite", invite)}>
               <Copy aria-hidden="true" />
               {copied === "Invite" ? t("copied") : t("copyInviteText")}
             </Button>
           </Card>
           <Card className="p-4">
-            <h2 className="font-semibold">{t("serverInfo")}</h2>
-            <Info label={t("world")} value={server.world} />
-            <Info label={t("difficulty")} value={difficultyLabel(server.config.difficulty, t)} />
-            <Info label={t("worldSize")} value={worldSizeLabel(server.config.worldSize, t)} />
-            <Info label={t("maxPlayers")} value={String(server.maxPlayers)} />
-            <Info label={t("version")} value={server.version} />
-            {server.hostPort > 0 && server.hostPort !== server.port && (
-              <Info label={t("hostPort")} value={String(server.hostPort)} />
+            <h2 className="font-semibold">{t("worldTemplate")}</h2>
+            {server.sourceWorldId ? (
+              <Link
+                href={`/worlds/${server.sourceWorldId}`}
+                className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+              >
+                <p className="truncate text-sm font-medium text-slate-100">{server.sourceWorldName || t("worldTemplate")}</p>
+                <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
+              </Link>
+            ) : (
+              <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
+                <p className="truncate text-sm font-medium text-slate-500">{t("noWorldTemplate")}</p>
+              </div>
             )}
           </Card>
         </div>
       </div>
 
-      <input
-        ref={worldInputRef}
-        className="hidden"
-        type="file"
-        accept=".wld"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) worldUpload.mutate(file);
-        }}
-      />
       <input
         ref={modInputRef}
         className="hidden"
@@ -593,6 +563,19 @@ export default function ServerDetailPage() {
         }}
       />
 
+      <ConfirmDialog
+        open={pendingConfigRestart}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmServerActionTitle", { action: t("actionRestart") })}
+        description={t("confirmRestartForConfigDescription", { name: server.name })}
+        detail={<DetailLine label={t("server")} value={server.name} />}
+        cancelLabel={t("cancel")}
+        confirmLabel={configRestart.isPending ? t("actionWorking") : t("confirmServerActionButton", { action: t("actionRestart") })}
+        confirmVariant="gold"
+        busy={configRestart.isPending}
+        onCancel={() => setPendingConfigRestart(false)}
+        onConfirm={() => configRestart.mutate()}
+      />
       <ConfirmDialog
         open={Boolean(pendingWorldDelete)}
         eyebrow={t("destructiveAction")}
@@ -660,11 +643,27 @@ function OverviewTab({
   onSelectTab: (tab: TabId) => void;
 }) {
   const { t } = useI18n();
+  const detailItems = [
+    { label: t("world"), value: server.world },
+    { label: t("difficulty"), value: difficultyLabel(server.config.difficulty, t) },
+    { label: t("worldSize"), value: worldSizeLabel(server.config.worldSize, t) },
+    { label: t("maxPlayers"), value: String(server.maxPlayers) },
+    { label: t("version"), value: server.version },
+    ...(server.hostPort > 0 && server.hostPort !== server.port ? [{ label: t("hostPort"), value: String(server.hostPort) }] : [])
+  ];
   return (
-    <div className="grid gap-3 md:grid-cols-3">
-      <SummaryButton icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} onClick={() => onSelectTab("worlds")} />
-      <SummaryButton icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} onClick={() => onSelectTab("backups")} />
-      {server.mode === "tmodloader" && <SummaryButton icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} onClick={() => onSelectTab("mods")} />}
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <SummaryButton icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} onClick={() => onSelectTab("worlds")} />
+        <SummaryButton icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} onClick={() => onSelectTab("backups")} />
+        {server.mode === "tmodloader" && <SummaryButton icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} onClick={() => onSelectTab("mods")} />}
+      </div>
+      <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+        <h2 className="font-semibold">{t("serverInfo")}</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -673,52 +672,84 @@ function ConsoleTab({
   command,
   commandPending,
   consoleError,
+  logs,
   logStatus,
   logStatusLabel,
   logStreamPaused,
-  logs,
   server,
   viewportRef,
   onChangeCommand,
-  onTogglePause,
-  onSubmit
+  onClear,
+  onSubmit,
+  onTogglePause
 }: {
   command: string;
   commandPending: boolean;
   consoleError: string;
+  logs: string[];
   logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   logStatusLabel: string;
   logStreamPaused: boolean;
-  logs: string[];
   server: Server;
   viewportRef: React.RefObject<HTMLDivElement | null>;
   onChangeCommand: (value: string) => void;
-  onTogglePause: () => void;
+  onClear: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onTogglePause: () => void;
 }) {
   const { t } = useI18n();
+  const consoleEnabled = server.status === "running";
   return (
     <div>
-      <LogHeader
-        action={<Button variant="secondary" className="px-2 py-1 text-xs" onClick={onTogglePause} disabled={logStatus !== "connected" && logStatus !== "paused"}>{logStreamPaused ? t("resumeLogs") : t("pauseLogs")}</Button>}
-        logStatus={logStatus}
-        logStatusLabel={logStatusLabel}
-        title={t("liveLogs")}
-      />
-      <LogViewport logs={logs} logStatus={logStatus} viewportRef={viewportRef} />
-      {consoleError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{consoleError}</p>}
-      <form className="mt-3 flex gap-2" onSubmit={onSubmit}>
-        <Input
-          placeholder={server.status === "running" ? t("enterCommand") : t("consoleRequiresRunning")}
-          value={command}
-          onChange={(event) => onChangeCommand(event.target.value)}
-          disabled={server.status !== "running" || commandPending}
+      <div className="overflow-hidden rounded-lg border border-panel-line bg-[#070b14]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-line bg-slate-950/70 px-4 py-2.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-900 text-panel-green">
+              <Terminal aria-hidden="true" className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-slate-100">{t("consoleCommandTitle")}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{t("consoleOutputHint")}</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+              consoleEnabled ? "border-panel-green/25 bg-panel-green/10 text-panel-green" : "border-panel-line bg-slate-900/70 text-slate-500"
+            )}>
+              <span className={cn("size-1.5 rounded-full", consoleEnabled ? "bg-panel-green" : "bg-slate-600")} />
+              {consoleEnabled ? logStatusLabel : t("statusStopped")}
+            </span>
+            <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onTogglePause} disabled={!consoleEnabled || (logStatus !== "connected" && logStatus !== "paused")}>
+              {logStreamPaused ? t("resumeLogs") : t("pauseLogs")}
+            </Button>
+            <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onClear} disabled={logs.length === 0}>
+              {t("clearLogs")}
+            </Button>
+          </div>
+        </div>
+        <LogViewport
+          className="h-[420px] rounded-none border-0 bg-[#060a12]"
+          emptyMessage={consoleEnabled ? t("consoleNoOutput") : t("consoleRequiresRunning")}
+          logs={logs}
+          logStatus={logStatus}
+          viewportRef={viewportRef}
         />
-        <Button disabled={server.status !== "running" || command.trim() === "" || commandPending}>
-          <Terminal aria-hidden="true" />
-          {commandPending ? t("sending") : t("send")}
-        </Button>
-      </form>
+        <form className="flex items-center gap-2 border-t border-panel-line bg-slate-950/70 px-3 py-3" onSubmit={onSubmit}>
+          <span className={consoleEnabled ? "font-mono text-sm text-panel-green" : "font-mono text-sm text-slate-600"}>$</span>
+          <input
+            className="h-9 min-w-0 flex-1 bg-transparent font-mono text-sm text-slate-100 outline-none placeholder:text-slate-600 disabled:cursor-not-allowed disabled:text-slate-600"
+            placeholder={consoleEnabled ? t("consoleReady") : t("consoleRequiresRunning")}
+            value={command}
+            onChange={(event) => onChangeCommand(event.target.value)}
+            disabled={!consoleEnabled || commandPending}
+          />
+          <Button className="h-9 px-3" variant="secondary" disabled={!consoleEnabled || command.trim() === "" || commandPending}>
+            {commandPending ? t("sending") : t("send")}
+          </Button>
+        </form>
+      </div>
+      {consoleError && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{consoleError}</p>}
     </div>
   );
 }
@@ -742,31 +773,49 @@ function LogsTab({
 }) {
   const { t } = useI18n();
   return (
-    <div>
-      <LogHeader
-        action={(
-          <>
-            <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onTogglePause} disabled={logStatus !== "connected" && logStatus !== "paused"}>{logStreamPaused ? t("resumeLogs") : t("pauseLogs")}</Button>
-            <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onClear} disabled={logs.length === 0}>{t("clearLogs")}</Button>
-          </>
-        )}
-        logStatus={logStatus}
-        logStatusLabel={logStatusLabel}
-        title={t("liveLogs")}
-      />
-      <LogViewport className="h-[520px]" logs={logs} logStatus={logStatus} viewportRef={viewportRef} />
+    <div className="overflow-hidden rounded-lg border border-panel-line bg-[#070b14]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-line bg-slate-950/70 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-900 text-panel-green">
+            <Terminal aria-hidden="true" className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-slate-100">{t("liveLogs")}</p>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{t("logsOutputHint")}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={cn(
+            "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+            logStatus === "connected" ? "border-panel-green/25 bg-panel-green/10 text-panel-green" : logStatus === "error" ? "border-panel-gold/25 bg-panel-gold/10 text-panel-gold" : "border-panel-line bg-slate-900/70 text-slate-500"
+          )}>
+            <span className={cn("size-1.5 rounded-full", logStatus === "connected" ? "bg-panel-green" : logStatus === "error" ? "bg-panel-gold" : "bg-slate-600")} />
+            {logStatusLabel}
+          </span>
+          <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onTogglePause} disabled={logStatus !== "connected" && logStatus !== "paused"}>{logStreamPaused ? t("resumeLogs") : t("pauseLogs")}</Button>
+          <Button variant="secondary" className="px-2 py-1 text-xs" onClick={onClear} disabled={logs.length === 0}>{t("clearLogs")}</Button>
+        </div>
+      </div>
+      <LogViewport className="h-[420px] rounded-none border-0 bg-[#060a12]" logs={logs} logStatus={logStatus} viewportRef={viewportRef} />
+      <div className="border-t border-panel-line bg-slate-950/60 px-3 py-2 text-xs text-slate-500">
+        {logStatus === "idle" ? t("logsRequiresRunning") : t("logsLiveHint")}
+      </div>
     </div>
   );
 }
 
 function ConfigTab({
+  onRestart,
   onSave,
+  restartPending,
   saveError,
   savePending,
   saveSuccess,
   server
 }: {
-  onSave: (config: TerrariaConfig) => void;
+  onRestart: () => void;
+  onSave: (config: TerrariaConfig, hostPort: number) => void;
+  restartPending: boolean;
   saveError: string;
   savePending: boolean;
   saveSuccess: boolean;
@@ -774,16 +823,47 @@ function ConfigTab({
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<TerrariaConfig>(server.config);
+  const [hostPortDraft, setHostPortDraft] = useState(serverJoinPort(server));
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [restartRecommended, setRestartRecommended] = useState(false);
   useEffect(() => setDraft(server.config), [server.config, server.id]);
+  useEffect(() => setHostPortDraft(serverJoinPort(server)), [server.hostPort, server.id, server.port]);
+  const normalizedDraft = useMemo(() => ({ ...draft, port: terrariaInternalPort }), [draft]);
   const preview = useQuery({
-    queryKey: ["server-config-preview", server.id, draft],
-    queryFn: () => previewTerrariaConfig(draft),
+    queryKey: ["server-config-preview", server.id, normalizedDraft],
+    queryFn: () => previewTerrariaConfig(normalizedDraft),
+    enabled: previewOpen,
     retry: false
   });
-  const dirty = JSON.stringify(draft) !== JSON.stringify(server.config);
-  const lockedForChanges = isServerLockedForResourceChanges(server.status);
-  const disabled = lockedForChanges || savePending;
+  const configDirty = JSON.stringify(normalizedDraft) !== JSON.stringify({ ...server.config, port: terrariaInternalPort });
+  const hostPortDirty = hostPortDraft !== serverJoinPort(server);
+  const dirty = configDirty || hostPortDirty;
+  const lifecycleLocked = isServerLifecyclePending(server.status);
+  const running = server.status === "running";
+  const disabled = lifecycleLocked || savePending;
+  const restartRequired = running && !dirty && (server.configPendingRestart || restartRecommended);
+  const showConfigActions = dirty || savePending || saveSuccess || restartRequired || lifecycleLocked;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  useEffect(() => {
+    if (dirty || !running || !server.configPendingRestart) {
+      setRestartRecommended(false);
+    }
+  }, [dirty, running, server.configPendingRestart]);
+  useEffect(() => {
+    if (saveSuccess && running) {
+      setRestartRecommended(true);
+    }
+  }, [running, saveSuccess]);
+  useEffect(() => {
+    if (!previewOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewOpen]);
   const secretSeed = secretSeedKeyFor(draft.seed);
   const worldEvilLabel = draft.worldEvil === "corruption" ? t("tagCorruption") : draft.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
   const difficultyLabel = draft.difficulty === "journey" ? t("tagJourney") : draft.difficulty === "classic" ? t("tagClassic") : draft.difficulty === "expert" ? t("tagExpert") : t("tagMaster");
@@ -794,11 +874,19 @@ function ConfigTab({
   return (
     <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault();
-      if (!disabled && dirty) onSave(draft);
+      if (!disabled && dirty) onSave(normalizedDraft, hostPortDraft);
     }}>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
-        <h2 className="font-semibold">{t("serverConfig")}</h2>
-        {lockedForChanges && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configRequiresStopped")}</span>}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">{t("serverConfig")}</h2>
+            {lifecycleLocked && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configLifecycleLocked")}</span>}
+          </div>
+          <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => setPreviewOpen(true)}>
+            <FileText aria-hidden="true" className="size-3.5" />
+            {t("showPreview")}
+          </Button>
+        </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="space-y-3">
             <Field label={t("serverName")}>
@@ -812,14 +900,23 @@ function ConfigTab({
             </Field>
           </div>
           <div className="space-y-3">
-            <Field label={t("port")}>
-              <Input type="number" min={1024} max={65535} value={draft.port} onChange={(event) => update("port", Number(event.target.value))} disabled={disabled} />
+            <Field label={t("externalPort")}>
+              <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
             </Field>
             <Field label={t("maxPlayers")}>
               <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
             </Field>
             <Field label={t("languageSetting")}>
-              <Input value={draft.language ?? ""} onChange={(event) => update("language", event.target.value)} disabled={disabled} />
+              <select
+                className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
+                value={draft.language ?? "zh-Hans"}
+                onChange={(event) => update("language", event.target.value)}
+                disabled={disabled}
+              >
+                {terrariaLanguageOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+                ))}
+              </select>
             </Field>
           </div>
         </div>
@@ -838,34 +935,92 @@ function ConfigTab({
           <ReadOnlyField label={t("worldSize")} value={worldSizeLabel} />
           <ReadOnlyField label={t("worldEvil")} value={worldEvilLabel} />
           <ReadOnlyField label={t("difficulty")} value={difficultyLabel} />
+          <ReadOnlyField label={t("internalPort")} value={String(terrariaInternalPort)} />
           <ReadOnlyField label={t("customSeed")} value={seedLabel} />
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={disabled || !dirty}>
-          {savePending ? t("savingConfig") : t("saveConfig")}
-        </Button>
-        <Button type="button" variant="secondary" disabled={savePending || !dirty} onClick={() => setDraft(server.config)}>
-          {t("resetChanges")}
-        </Button>
-        {saveSuccess && <span className="text-sm text-panel-green">{t("configSaved")}</span>}
-      </div>
-      {saveError && <p className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
-
-      <div className="rounded-md border border-panel-line bg-slate-950 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
-          <FileText aria-hidden="true" className="size-4 text-panel-green" />
-          {t("previewServerConfig")}
+      {showConfigActions && (
+        <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-lg border border-panel-line bg-panel-card/95 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.25)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className={cn("text-sm font-medium", dirty || restartRequired ? "text-slate-100" : "text-slate-400")}>
+              {lifecycleLocked
+                ? t("configLifecycleLocked")
+                : dirty || savePending
+                  ? t("unsavedConfigChanges")
+                  : restartRequired
+                    ? t("configSavedRestartRequired")
+                    : t("configSaved")}
+            </p>
+            {(dirty || restartRequired) && <p className="mt-0.5 text-xs text-slate-500">{restartRequired ? t("configRestartPrompt") : t("configActionHint")}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {restartRequired && (
+              <Button type="button" variant="gold" disabled={restartPending} onClick={onRestart}>
+                <RotateCcw aria-hidden="true" />
+                {restartPending ? t("actionRestarting") : t("restartServerNow")}
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={savePending || !dirty}
+              onClick={() => {
+                setDraft(server.config);
+                setHostPortDraft(serverJoinPort(server));
+              }}
+            >
+              {t("resetChanges")}
+            </Button>
+            <Button disabled={disabled || !dirty}>
+              {savePending ? t("savingConfig") : t("saveConfig")}
+            </Button>
+          </div>
         </div>
-        {preview.isLoading ? (
-          <p className="text-sm text-slate-400">{t("rendering")}</p>
-        ) : preview.isError ? (
-          <p className="text-sm text-panel-gold">{t("configPreviewUnavailable")}</p>
-        ) : (
-          <pre className="max-h-[560px] overflow-auto whitespace-pre-wrap font-mono text-xs leading-6 text-slate-300">{preview.data}</pre>
-        )}
-      </div>
+      )}
+      {saveError && <p className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
+      {previewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-slate-950/50 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPreviewOpen(false);
+          }}
+        >
+          <aside
+            aria-label={t("previewServerConfig")}
+            className="flex h-full w-full max-w-2xl flex-col border-l border-panel-line bg-panel-card shadow-[0_0_40px_rgba(0,0,0,0.35)]"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{t("previewServerConfig")}</p>
+                <p className="mt-1 text-xs text-slate-500">{t("configPreviewHint")}</p>
+              </div>
+              <button
+                aria-label={t("hidePreview")}
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                onClick={() => setPreviewOpen(false)}
+                title={t("hidePreview")}
+                type="button"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </button>
+            </div>
+            <div className="border-b border-panel-line bg-slate-950/50 px-5 py-2">
+              <span className="rounded bg-slate-900 px-2 py-1 font-mono text-xs text-slate-500">serverconfig.txt</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-[#060a12] p-5">
+              {preview.isLoading ? (
+                <p className="text-sm text-slate-400">{t("rendering")}</p>
+              ) : preview.isError ? (
+                <p className="text-sm text-panel-gold">{t("configPreviewUnavailable")}</p>
+              ) : (
+                <pre className="whitespace-pre-wrap font-mono text-xs leading-6 text-slate-300">{preview.data}</pre>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </form>
   );
 }
@@ -904,77 +1059,43 @@ function Checkbox({ checked, disabled, label, onChange }: { checked: boolean; di
 }
 
 function WorldsTab({
-  assigning,
   currentServerId,
   deleting,
-  duplicating,
   downloadingId,
   isError,
   isLoading,
   items,
-  onAssign,
   onDelete,
   onDownload,
-  onDuplicate,
-  onMigrate,
-  onTargetServerChange,
-  migrating,
-  uploading,
-  serverStatus,
-  targetServerId,
-  targetServers,
-  onUploadClick
+  onCreateSnapshot,
+  snapshotting
 }: {
-  assigning: boolean;
   currentServerId: string;
   deleting: boolean;
-  duplicating: boolean;
   downloadingId: string;
   isError: boolean;
   isLoading: boolean;
   items: World[];
-  onAssign: (world: World) => void;
   onDelete: (world: World) => void;
   onDownload: (world: World) => void;
-  onDuplicate: (world: World) => void;
-  onMigrate: (world: World) => void;
-  onTargetServerChange: (value: string) => void;
-  migrating: boolean;
-  uploading: boolean;
-  serverStatus: Server["status"];
-  targetServerId: string;
-  targetServers: Server[];
-  onUploadClick: () => void;
+  onCreateSnapshot: () => void;
+  snapshotting: boolean;
 }) {
   const { locale, t } = useI18n();
-  const assignAction = describeResourceAction({ kind: "assignWorld", serverStatus });
-  const migrateAction = describeResourceAction({ kind: "migrate", targetCount: targetServers.length });
-  const actionHint = assignAction.reasonKey ? t(assignAction.reasonKey) : migrateAction.reasonKey ? t(migrateAction.reasonKey) : "";
   return (
     <ResourcePanel
       title={t("detailWorldActions")}
       href="/worlds"
       action={
-        <Button variant="secondary" onClick={onUploadClick} disabled={uploading}>
-          <Upload aria-hidden="true" />
-          {uploading ? t("importing") : t("importWorldForServer")}
+        <Button variant="secondary" onClick={onCreateSnapshot} disabled={snapshotting}>
+          <FileArchive aria-hidden="true" />
+          {snapshotting ? t("savingSnapshot") : t("saveWorldSnapshot")}
         </Button>
-      }
-      target={
-        <TargetServerSelect
-          disabled={targetServers.length === 0}
-          label={t("migrationTarget")}
-          noTargetLabel={t("noOtherServers")}
-          onChange={onTargetServerChange}
-          servers={targetServers}
-          value={targetServerId}
-        />
       }
     >
       {isError ? <p className="text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p> : null}
-      {!isError && actionHint ? <p className="mb-3 text-sm text-slate-500">{actionHint}</p> : null}
       {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
-      {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noWorldsYet")}</p> : null}
+      {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noServerWorldSnapshots")}</p> : null}
       <div className="grid gap-2">
         {items.map((world) => (
           <ResourceRow
@@ -983,30 +1104,12 @@ function WorldsTab({
             meta={`${world.bytes} · ${localizeRelativeTime(world.modified, locale)}`}
             actions={
               <>
-                {isWorldActiveOnServer(world, currentServerId) ? (
+                {isWorldActiveOnServer(world, currentServerId) && (
                   <span className="inline-flex items-center gap-2 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm font-medium text-panel-green">
                     <CheckCircle2 aria-hidden="true" className="size-4" />
                     {t("currentWorld")}
                   </span>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    onClick={() => onAssign(world)}
-                    disabled={assignAction.disabled || assigning}
-                    title={assignAction.reasonKey ? t(assignAction.reasonKey) : undefined}
-                  >
-                    <CheckCircle2 aria-hidden="true" />
-                    {assigning ? t("actionWorking") : t("setCurrentWorld")}
-                  </Button>
                 )}
-                <Button variant="secondary" onClick={() => onDuplicate(world)} disabled={duplicating}>
-                  <Plus aria-hidden="true" />
-                  {duplicating ? t("actionWorking") : t("duplicate")}
-                </Button>
-                <Button variant="secondary" onClick={() => onMigrate(world)} disabled={migrateAction.disabled || migrating} title={migrateAction.reasonKey ? t(migrateAction.reasonKey) : undefined}>
-                  <MoveRight aria-hidden="true" />
-                  {migrating ? t("actionWorking") : t("migrate")}
-                </Button>
                 <ActionButton
                   disabled={downloadingId === world.id}
                   label={downloadingId === world.id ? t("downloading") : t("download")}
@@ -1034,15 +1137,10 @@ function BackupsTab({
   items,
   onDelete,
   onDownload,
-  onMigrate,
   restoring,
-  migrating,
   serverStatus,
-  targetServerId,
-  targetServers,
   onCreate,
-  onRestore,
-  onTargetServerChange
+  onRestore
 }: {
   creating: boolean;
   deleting: boolean;
@@ -1052,20 +1150,13 @@ function BackupsTab({
   items: Backup[];
   onDelete: (backup: Backup) => void;
   onDownload: (backup: Backup) => void;
-  onMigrate: (backup: Backup) => void;
   restoring: boolean;
-  migrating: boolean;
   serverStatus: Server["status"];
-  targetServerId: string;
-  targetServers: Server[];
   onCreate: () => void;
   onRestore: (backup: Backup) => void;
-  onTargetServerChange: (value: string) => void;
 }) {
   const { locale, t } = useI18n();
   const restoreAction = describeResourceAction({ kind: "restoreBackup", serverStatus });
-  const migrateAction = describeResourceAction({ kind: "migrate", targetCount: targetServers.length });
-  const actionHint = restoreAction.reasonKey ? t(restoreAction.reasonKey) : migrateAction.reasonKey ? t(migrateAction.reasonKey) : "";
   return (
     <ResourcePanel
       title={t("detailBackupActions")}
@@ -1076,19 +1167,9 @@ function BackupsTab({
           {creating ? t("backingUp") : t("createBackupNow")}
         </Button>
       }
-      target={
-        <TargetServerSelect
-          disabled={targetServers.length === 0}
-          label={t("migrationTarget")}
-          noTargetLabel={t("noOtherServers")}
-          onChange={onTargetServerChange}
-          servers={targetServers}
-          value={targetServerId}
-        />
-      }
     >
       {isError ? <p className="text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p> : null}
-      {!isError && actionHint ? <p className="mb-3 text-sm text-slate-500">{actionHint}</p> : null}
+      {!isError && restoreAction.reasonKey ? <p className="mb-3 text-sm text-slate-500">{t(restoreAction.reasonKey)}</p> : null}
       {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
       {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noBackupsYet")}</p> : null}
       <div className="grid gap-2">
@@ -1114,9 +1195,6 @@ function BackupsTab({
                   icon={<Download aria-hidden="true" />}
                   onClick={() => onDownload(backup)}
                 />
-                <Button variant="secondary" aria-label={t("migrate")} onClick={() => onMigrate(backup)} disabled={migrateAction.disabled || migrating} title={migrateAction.reasonKey ? t(migrateAction.reasonKey) : undefined}>
-                  <MoveRight aria-hidden="true" />
-                </Button>
                 <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>
                   <Trash2 aria-hidden="true" />
                 </Button>
@@ -1202,7 +1280,7 @@ function ResourcePanel({
 }: {
   title: string;
   href: string;
-  action: ReactNode;
+  action?: ReactNode;
   children: ReactNode;
   target?: ReactNode;
 }) {
@@ -1213,7 +1291,7 @@ function ResourcePanel({
         <h2 className="font-semibold">{title}</h2>
         <div className="flex flex-wrap items-center gap-2">
           {target}
-          {action}
+          {action ?? null}
           <Link href={href} className="inline-flex items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800">
             {t("openFullManager")}
           </Link>
@@ -1224,55 +1302,15 @@ function ResourcePanel({
   );
 }
 
-function TargetServerSelect({
-  disabled,
-  label,
-  noTargetLabel,
-  onChange,
-  servers,
-  value
-}: {
-  disabled: boolean;
-  label: string;
-  noTargetLabel: string;
-  onChange: (value: string) => void;
-  servers: Server[];
-  value: string;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-xs text-slate-500">
-      <span className="hidden sm:inline">{label}</span>
-      <select
-        className="h-9 min-w-36 rounded-md border border-panel-line bg-slate-950/60 px-2 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {servers.length === 0 ? <option value="">{noTargetLabel}</option> : servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function LogHeader({ action, logStatus, logStatusLabel, title }: { action?: ReactNode; logStatus: "idle" | "connecting" | "connected" | "error" | "paused"; logStatusLabel: string; title: string }) {
-  return (
-    <div className="mb-3 flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs">
-      <span className="text-slate-400">{title}</span>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className={logStatus === "connected" ? "text-panel-green" : logStatus === "error" ? "text-panel-gold" : "text-slate-400"}>{logStatusLabel}</span>
-        {action}
-      </div>
-    </div>
-  );
-}
-
 function LogViewport({
   className,
+  emptyMessage,
   logs,
   logStatus,
   viewportRef
 }: {
   className?: string;
+  emptyMessage?: string;
   logs: string[];
   logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   viewportRef: React.RefObject<HTMLDivElement | null>;
@@ -1281,13 +1319,22 @@ function LogViewport({
   return (
     <div ref={viewportRef} className={cn("h-[420px] overflow-auto rounded-md bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-300", className)}>
       {logs.length === 0 ? (
-        <p className="text-slate-500">{logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsNoHistory") : logStatus === "paused" ? t("logsPaused") : t("logsWaiting")}</p>
+        <p className="text-slate-500">{emptyMessage ?? (logStatus === "error" ? t("logsUnavailable") : logStatus === "idle" ? t("logsNoHistory") : logStatus === "paused" ? t("logsPaused") : t("logsWaiting"))}</p>
       ) : logs.map((line, index) => (
-        <p key={`${index}-${line}`}>
-          <span className={line.includes("[Warn]") || line.toLowerCase().includes("error") ? "text-panel-gold" : "text-panel-green"}>
-            {line.slice(0, 18)}
-          </span>
-          {line.slice(18)}
+        <p key={`${index}-${line}`} className={line.startsWith(">") ? "text-slate-100" : undefined}>
+          {line.startsWith(">") ? (
+            <>
+              <span className="mr-2 text-panel-green">$</span>
+              {line.slice(2)}
+            </>
+          ) : (
+            <>
+              <span className={line.includes("[Warn]") || line.toLowerCase().includes("error") ? "text-panel-gold" : "text-panel-green"}>
+                {line.slice(0, 18)}
+              </span>
+              {line.slice(18)}
+            </>
+          )}
         </p>
       ))}
     </div>
@@ -1376,7 +1423,7 @@ function CopyRow({
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mt-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
+    <div className="rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 break-words text-sm text-slate-200">{value}</p>
     </div>
@@ -1392,18 +1439,17 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MonitorCard({ icon, label, value, sparkline, color = "#7bd978" }: { icon: ReactNode; label: string; value: string; sparkline?: ReactNode; color?: string }) {
+function HeaderMetric({ accent = false, active = true, icon, label, value }: { accent?: boolean; active?: boolean; icon: ReactNode; label: string; value: string }) {
+  const highlighted = accent && active;
   return (
-    <div className="rounded-lg border border-panel-line bg-panel-card px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded text-slate-300" style={{ color }}>{icon}</span>
-        <p className="text-xs text-slate-500">{label}</p>
-      </div>
-      <div className="mt-2 flex items-end justify-between gap-2">
-        <p className="font-mono text-xl font-semibold text-white">{value}</p>
-        {sparkline && <div className="shrink-0">{sparkline}</div>}
-      </div>
-    </div>
+    <span className={cn(
+      "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+      highlighted ? "border-panel-green/25 bg-panel-green/10 text-slate-200" : "border-panel-line bg-slate-950/50 text-slate-400"
+    )}>
+      <span className={highlighted ? "text-panel-green" : "text-slate-500"}>{icon}</span>
+      <span className="text-slate-500">{label}</span>
+      <span className={cn("font-mono font-medium", active ? "text-slate-100" : "text-slate-500")}>{value}</span>
+    </span>
   );
 }
 

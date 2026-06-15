@@ -58,16 +58,24 @@ type ApiServer = {
   maxPlayers: number;
   password?: string;
   version?: string;
+  lastError?: string;
   hostPort?: number;
+  sourceWorldId?: string;
+  sourceWorldName?: string;
   config?: TerrariaConfig;
+  configRevision?: number;
+  appliedConfigRevision?: number;
 };
 
 type ApiWorld = {
   id: string;
   instanceId: string;
+  providerKey?: "terraria-vanilla" | "terraria-tmodloader";
   name: string;
   fileName: string;
   sizeBytes: number;
+  source?: string;
+  config?: TerrariaConfig;
   activeInstanceId?: string;
   updatedAt?: string;
   createdAt: string;
@@ -137,13 +145,15 @@ function configFromServer(server: ApiServer): TerrariaConfig {
     motd: server.config?.motd ?? "",
     seed: server.config?.seed ?? "",
     secure: server.config?.secure ?? true,
-    language: server.config?.language ?? "en-US",
+    language: server.config?.language ?? "zh-Hans",
     autoCreateWorld: server.config?.autoCreateWorld ?? true
   };
 }
 
 function toServer(server: ApiServer): Server {
   const config = configFromServer(server);
+  const configRevision = server.configRevision ?? 0;
+  const appliedConfigRevision = server.appliedConfigRevision ?? 0;
   return {
     id: server.id,
     name: server.name,
@@ -155,11 +165,15 @@ function toServer(server: ApiServer): Server {
     port: server.port,
     version: server.version ?? "1.4.5.6",
     hostPort: server.hostPort ?? 0,
+    lastError: server.lastError,
+    sourceWorldId: server.sourceWorldId,
+    sourceWorldName: server.sourceWorldName,
     lastBackup: "Not yet",
     password: server.password ?? "",
     cpu: "0%",
     memory: "0 MB",
-    config
+    config,
+    configPendingRestart: server.status === "running" && configRevision > appliedConfigRevision
   };
 }
 
@@ -168,12 +182,15 @@ function toWorld(world: ApiWorld): World {
     id: world.id,
     instanceId: world.instanceId,
     activeInstanceId: world.activeInstanceId,
+    providerKey: world.providerKey,
     name: world.name,
     size: world.fileName,
     difficulty: "Imported",
     server: world.activeInstanceId || (world.instanceId !== "unassigned" ? world.instanceId : undefined),
     modified: formatRelative(world.updatedAt ?? world.createdAt),
-    bytes: formatBytes(world.sizeBytes)
+    bytes: formatBytes(world.sizeBytes),
+    source: world.source,
+    config: world.config
   };
 }
 
@@ -195,11 +212,11 @@ export async function getServer(id: string): Promise<Server> {
   return toServer(server);
 }
 
-export async function updateServerConfig(id: string, config: TerrariaConfig): Promise<Server> {
+export async function updateServerConfig(id: string, config: TerrariaConfig, hostPort?: number): Promise<Server> {
   const response = await fetch(`${API_BASE}/api/servers/${id}/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ config })
+    body: JSON.stringify({ config, hostPort })
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -340,6 +357,7 @@ export async function createServer(input: {
   name: string;
   providerKey: "terraria-vanilla" | "terraria-tmodloader";
   config: TerrariaConfig;
+  hostPort?: number;
   version?: string;
 }): Promise<Server> {
   const response = await fetch(`${API_BASE}/api/servers`, {
@@ -404,6 +422,20 @@ export async function importWorld(file: File, instanceId = "unassigned"): Promis
   return toWorld(world);
 }
 
+export async function createWorldSnapshot(serverId: string, name?: string): Promise<World> {
+  const response = await fetch(`${API_BASE}/api/servers/${serverId}/world-snapshots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to save world snapshot");
+  }
+  const world = (await response.json()) as ApiWorld;
+  return toWorld(world);
+}
+
 export async function assignWorld(id: string, instanceId: string): Promise<World> {
   const response = await fetch(`${API_BASE}/api/worlds/${id}/assign`, {
     method: "POST",
@@ -413,35 +445,6 @@ export async function assignWorld(id: string, instanceId: string): Promise<World
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to assign world");
-  }
-  const world = (await response.json()) as ApiWorld;
-  return toWorld(world);
-}
-
-export async function duplicateWorld(id: string, name: string): Promise<World> {
-  const fileName = `${name.trim().replaceAll(/[^a-zA-Z0-9._-]/g, "-") || "world-copy"}.wld`;
-  const response = await fetch(`${API_BASE}/api/worlds/${id}/duplicate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, fileName })
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? "Unable to duplicate world");
-  }
-  const world = (await response.json()) as ApiWorld;
-  return toWorld(world);
-}
-
-export async function migrateWorld(id: string, instanceId: string): Promise<World> {
-  const response = await fetch(`${API_BASE}/api/worlds/${id}/migrate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instanceId })
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? "Unable to migrate world");
   }
   const world = (await response.json()) as ApiWorld;
   return toWorld(world);
@@ -523,31 +526,6 @@ export async function restoreBackup(id: string) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to restore backup");
   }
-}
-
-export async function migrateBackup(id: string, instanceId: string): Promise<Backup> {
-  const response = await fetch(`${API_BASE}/api/backups/${id}/migrate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instanceId })
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? "Unable to migrate backup");
-  }
-  const backup = (await response.json()) as ApiBackup;
-  return {
-    id: backup.id,
-    instanceId: backup.instanceId,
-    name: backup.fileName,
-    server: backup.instanceId,
-    world: backup.worldName,
-    type: backup.type,
-    size: formatBytes(backup.sizeBytes),
-    sizeBytes: backup.sizeBytes,
-    created: formatRelative(backup.createdAt),
-    createdAt: backup.createdAt
-  };
 }
 
 export async function deleteBackup(id: string) {

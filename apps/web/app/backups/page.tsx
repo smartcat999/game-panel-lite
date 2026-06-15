@@ -1,15 +1,14 @@
 "use client";
 
-import { Archive, Download, MoveRight, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Download, RotateCcw, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { createBackup, deleteBackup, downloadBackupFile, listBackups, listServers, migrateBackup, restoreBackup } from "@/lib/api";
+import { createBackup, deleteBackup, downloadBackupFile, listBackups, listServers, restoreBackup } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { getMigrationTargetServers, resolveMigrationTargetId } from "@/lib/server-detail-resources";
 import type { Backup } from "@/lib/types";
 
 export default function BackupsPage() {
@@ -18,7 +17,6 @@ export default function BackupsPage() {
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const [selectedServerId, setSelectedServerId] = useState("");
-  const [targetServerIds, setTargetServerIds] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
@@ -69,19 +67,6 @@ export default function BackupsPage() {
       setErrorMessage(error instanceof Error ? error.message : t("unableDeleteBackup"));
     }
   });
-  const migrate = useMutation({
-    mutationFn: ({ id, instanceId }: { id: string; instanceId: string }) => migrateBackup(id, instanceId),
-    onSuccess: async () => {
-      setErrorMessage("");
-      setSuccessMessage(t("backupMigrated"));
-      await client.invalidateQueries({ queryKey: ["backups"] });
-    },
-    onError: (error) => {
-      setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableMigrateBackup"));
-    }
-  });
-
   const downloadBackup = async (backup: Backup) => {
     setDownloadingBackupId(backup.id);
     setErrorMessage("");
@@ -133,15 +118,12 @@ export default function BackupsPage() {
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <Card className="overflow-x-auto">
-        <table className="w-full min-w-[980px] text-left text-sm">
+        <table className="w-full min-w-[840px] text-left text-sm">
           <thead className="bg-slate-950/50 text-xs text-slate-400">
             <tr>{[t("backupName"), t("server"), t("world"), t("type"), t("size"), t("created"), t("actions")].map((head) => <th key={head} className="px-4 py-3 font-medium">{head}</th>)}</tr>
           </thead>
           <tbody className="divide-y divide-panel-line">
-            {backups.map((backup) => {
-              const targetServers = getMigrationTargetServers(servers, backup.instanceId);
-              const targetServerId = resolveMigrationTargetId(servers, targetServerIds[backup.id] ?? "", backup.instanceId);
-              return (
+            {backups.map((backup) => (
                 <tr key={backup.id}>
                   <td className="px-4 py-4">{backup.name}</td>
                   <td className="px-4 py-4 text-slate-300">{backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server}</td>
@@ -168,23 +150,6 @@ export default function BackupsPage() {
                       >
                         <Download aria-hidden="true" />
                       </Button>
-                      <select
-                        aria-label={t("migrationTarget")}
-                        className="h-10 max-w-48 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
-                        value={targetServerId}
-                        onChange={(event) => setTargetServerIds((current) => ({ ...current, [backup.id]: event.target.value }))}
-                        disabled={targetServers.length === 0 || serversQuery.isError}
-                      >
-                        {targetServers.length === 0 ? <option value="">{t("noOtherServers")}</option> : targetServers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-                      </select>
-                      <Button
-                        variant="secondary"
-                        aria-label={t("migrate")}
-                        onClick={() => targetServerId && migrate.mutate({ id: backup.id, instanceId: targetServerId })}
-                        disabled={!targetServerId || migrate.isPending || backupsQuery.isError || serversQuery.isError}
-                      >
-                        <MoveRight aria-hidden="true" />
-                      </Button>
                       <Button
                         variant="danger"
                         aria-label={t("delete")}
@@ -196,8 +161,7 @@ export default function BackupsPage() {
                     </div>
                   </td>
                 </tr>
-              );
-            })}
+            ))}
             {!backupsQuery.isLoading && backups.length === 0 && (
               <tr>
                 <td className="px-4 py-8 text-center text-slate-400" colSpan={7}>{t("noBackupsYet")}</td>

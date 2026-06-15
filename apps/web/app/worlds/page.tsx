@@ -1,82 +1,90 @@
 "use client";
 
-import { Download, MoveRight, Plus, Trash2, Upload } from "lucide-react";
+import Link from "next/link";
+import { Download, FileArchive, Server as ServerIcon, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Button, Card } from "@/components/ui";
-import { deleteWorld, downloadWorldFile, duplicateWorld, importWorld, listServers, listWorlds, migrateWorld } from "@/lib/api";
+import { Button, Card, Input } from "@/components/ui";
+import { deleteWorld, downloadWorldFile, listServers, listWorlds } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
-import { localizeDifficulty, localizeRelativeTime, localizeWorldSize, useI18n } from "@/lib/i18n";
-import { getMigrationTargetServers, getWorldSourceServerId, isWorldActiveOnServer, resolveMigrationTargetId } from "@/lib/server-detail-resources";
+import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import type { MessageKey } from "@/lib/i18n";
+import { getWorldSourceServerId } from "@/lib/server-detail-resources";
+import { cn } from "@/lib/utils";
+import type { Server } from "@/lib/types";
 import type { World } from "@/lib/types";
+
+type PendingWorldAction =
+  | { kind: "download"; world: World }
+  | { kind: "delete"; world: World };
+
+type WorldGameFilter = "all" | "terraria";
+type WorldTypeFilter = "all" | "vanilla" | "modded";
+
+const gameFilters = [
+  { key: "all", labelKey: "filterAll" },
+  { key: "terraria", labelKey: "gameTerraria" }
+] as const satisfies readonly { key: WorldGameFilter; labelKey: MessageKey }[];
+
+const typeFilters = [
+  { key: "all", labelKey: "filterAll" },
+  { key: "vanilla", labelKey: "filterVanilla" },
+  { key: "modded", labelKey: "filterModded" }
+] as const satisfies readonly { key: WorldTypeFilter; labelKey: MessageKey }[];
+
+function worldModeLabel(world: World, vanillaLabel: string) {
+  if (world.providerKey === "terraria-tmodloader") return "tModLoader";
+  return vanillaLabel;
+}
+
+function worldMatchesType(world: World, type: WorldTypeFilter) {
+  if (type === "all") return true;
+  if (type === "modded") return world.providerKey === "terraria-tmodloader";
+  return world.providerKey !== "terraria-tmodloader";
+}
+
+function serversUsingWorld(world: World, servers: Server[]) {
+  return servers.filter((server) => server.sourceWorldId === world.id);
+}
 
 export default function WorldsPage() {
   const { locale, t } = useI18n();
-  const inputRef = useRef<HTMLInputElement>(null);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
-  const [targetServerIds, setTargetServerIds] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [pendingDelete, setPendingDelete] = useState<World | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingWorldAction | null>(null);
   const [downloadingWorldId, setDownloadingWorldId] = useState("");
-  const quickImportHandledRef = useRef(false);
+  const [gameFilter, setGameFilter] = useState<WorldGameFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<WorldTypeFilter>("all");
+  const [search, setSearch] = useState("");
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
-
-  const upload = useMutation({
-    mutationFn: (file: File) => importWorld(file),
-    onSuccess: async () => {
-      setErrorMessage("");
-      setSuccessMessage(t("worldImported"));
-      await client.invalidateQueries({ queryKey: ["worlds"] });
-      if (inputRef.current) inputRef.current.value = "";
-    },
-    onError: (error) => {
-      setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableImportWorld"));
-    }
-  });
-  const duplicate = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => duplicateWorld(id, name),
-    onSuccess: async () => {
-      setErrorMessage("");
-      setSuccessMessage(t("worldDuplicated"));
-      await client.invalidateQueries({ queryKey: ["worlds"] });
-    },
-    onError: (error) => {
-      setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableDuplicateWorld"));
-    }
-  });
+  const filteredWorlds = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return worlds.filter((world) => {
+      const usingServers = serversUsingWorld(world, servers);
+      const matchesSearch = !term || [world.name, world.size, worldModeLabel(world, "vanilla"), ...usingServers.map((server) => server.name)].some((value) => value.toLowerCase().includes(term));
+      const matchesGame = gameFilter === "all" || world.providerKey === "terraria-vanilla" || world.providerKey === "terraria-tmodloader";
+      return matchesSearch && matchesGame && worldMatchesType(world, typeFilter);
+    });
+  }, [gameFilter, search, servers, typeFilter, worlds]);
   const remove = useMutation({
     mutationFn: deleteWorld,
     onSuccess: async () => {
       setErrorMessage("");
       setSuccessMessage(t("worldDeleted"));
-      setPendingDelete(null);
+      setPendingAction(null);
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
     onError: (error) => {
       setSuccessMessage("");
       const message = error instanceof Error ? error.message : "";
-      setErrorMessage(message.includes("active world") ? t("unableDeleteActiveWorld") : message || t("unableDeleteWorld"));
-    }
-  });
-  const migrate = useMutation({
-    mutationFn: ({ id, instanceId }: { id: string; instanceId: string }) => migrateWorld(id, instanceId),
-    onSuccess: async () => {
-      setErrorMessage("");
-      setSuccessMessage(t("worldMigrated"));
-      await client.invalidateQueries({ queryKey: ["worlds"] });
-    },
-    onError: (error) => {
-      setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableMigrateWorld"));
+      setErrorMessage(message.includes("world template is used") ? t("unableDeleteWorldInUse") : message.includes("active world") ? t("unableDeleteActiveWorld") : message || t("unableDeleteWorld"));
     }
   });
 
@@ -88,140 +96,210 @@ export default function WorldsPage() {
       const blob = await downloadWorldFile(world.id);
       saveBlob(blob, `${world.name}.wld`);
       setSuccessMessage(t("downloadStarted"));
+      setPendingAction(null);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : t("unableDownloadWorld"));
     } finally {
       setDownloadingWorldId("");
     }
   };
+  const pendingBusy = Boolean(
+    pendingAction && (
+      (pendingAction.kind === "download" && downloadingWorldId === pendingAction.world.id) ||
+      (pendingAction.kind === "delete" && remove.isPending)
+    )
+  );
 
-  useEffect(() => {
-    if (quickImportHandledRef.current || typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("action") !== "import") return;
-    quickImportHandledRef.current = true;
-    url.searchParams.delete("action");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    setSuccessMessage(t("chooseWorldFileToImport"));
-    window.setTimeout(() => inputRef.current?.click(), 0);
-  }, [t]);
+  const confirmPendingAction = () => {
+    if (!pendingAction) return;
+    if (pendingAction.kind === "download") {
+      void downloadWorld(pendingAction.world);
+      return;
+    }
+    if (pendingAction.kind === "delete") {
+      remove.mutate(pendingAction.world.id);
+    }
+  };
 
   return (
     <>
       <PageHeader
         title={t("worldsTitle")}
         description={t("worldsDescription")}
-        action={
-          <>
-            <input
-              ref={inputRef}
-              className="hidden"
-              type="file"
-              accept=".wld"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) upload.mutate(file);
-              }}
-            />
-            <Button variant="secondary" onClick={() => inputRef.current?.click()} disabled={upload.isPending}>
-              <Upload aria-hidden="true" />
-              {upload.isPending ? t("importing") : t("importWorld")}
-            </Button>
-          </>
-        }
       />
+      <div className="mb-4 rounded-lg border border-panel-line bg-panel-card p-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <Input className="xl:max-w-xs" placeholder={t("searchWorlds")} value={search} onChange={(event) => setSearch(event.target.value)} />
+          <div className="flex flex-wrap gap-3">
+            <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
+            <FilterGroup label={t("filterType")} options={typeFilters} value={typeFilter} onChange={setTypeFilter} t={t} />
+          </div>
+        </div>
+      </div>
       {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {worlds.map((world) => {
+        {filteredWorlds.map((world) => {
           const sourceServerId = getWorldSourceServerId(world);
-          const activeServerId = world.activeInstanceId || "";
-          const activeServerName = activeServerId ? serverNameById.get(activeServerId) ?? activeServerId : "";
-          const targetServers = getMigrationTargetServers(servers, sourceServerId);
-          const targetServerId = resolveMigrationTargetId(servers, targetServerIds[world.id] ?? "", sourceServerId);
+          const sourceServerName = sourceServerId ? serverNameById.get(sourceServerId) ?? sourceServerId : "";
+          const usingServers = serversUsingWorld(world, servers);
+          const worldFileName = world.size.endsWith(".wld") ? world.size : `${world.name}.wld`;
           return (
-            <Card key={world.id} className="p-4">
+            <Card key={world.id} className="group p-4 transition hover:border-panel-green/40">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <h2 className="truncate font-semibold">{world.name}</h2>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
-                    <span className="rounded bg-slate-800 px-2 py-1">{localizeWorldSize(world.size, locale)}</span>
-                    <span className="rounded bg-slate-800 px-2 py-1">{localizeDifficulty(world.difficulty, locale)}</span>
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="relative flex size-10 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/70 text-panel-green">
+                    <FileArchive aria-hidden="true" className="size-5" />
+                    {usingServers.length > 0 && <span className="absolute -right-1 -top-1 size-2.5 rounded-full bg-panel-green ring-2 ring-panel-card" />}
+                  </span>
+                  <div className="min-w-0">
+                    <Link href={`/worlds/${world.id}`} className="block min-w-0 focus:outline-none focus:ring-2 focus:ring-panel-green/50">
+                      <h2 className="truncate font-semibold text-white transition group-hover:text-panel-green">{world.name}</h2>
+                      <p className="mt-1 truncate text-xs text-slate-500">{worldFileName}</p>
+                    </Link>
                   </div>
                 </div>
-                {isWorldActiveOnServer(world) && <span className="shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("inUse")}</span>}
+                <span className={usingServers.length > 0 ? "shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs font-medium text-panel-green" : "shrink-0 rounded bg-slate-800 px-2 py-1 text-xs font-medium text-slate-400"}>
+                  {usingServers.length > 0 ? t("inUse") : t("notInUse")}
+                </span>
               </div>
-              <p className="mt-4 text-sm text-slate-400">{t("modified")}: {localizeRelativeTime(world.modified, locale)}</p>
-              <p className="text-sm text-slate-400">{t("usedBy")}: {activeServerName || t("notInUse")}</p>
-              <p className="text-sm text-slate-400">{t("size")}: {world.bytes}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => duplicate.mutate({ id: world.id, name: `${world.name} ${t("duplicateSuffix")}` })}
-                  disabled={duplicate.isPending || query.isError}
+
+              <div className="mt-4 space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs text-slate-500">{t("serverType")}</span>
+                  <span className="truncate font-medium text-slate-100">{worldModeLabel(world, t("modeVanilla"))}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs text-slate-500">{t("sourceServer")}</span>
+                  {sourceServerId ? (
+                    <Link href={`/servers/${sourceServerId}`} className="truncate font-medium text-panel-green hover:underline">
+                      {sourceServerName}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-slate-500">{t("imported")}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs text-slate-500">{t("activeServer")}</span>
+                  {usingServers.length > 0 ? (
+                    <Link href={`/worlds/${world.id}`} className="truncate font-medium text-panel-green hover:underline">
+                      {t("usingServersCount", { count: usingServers.length })}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-slate-500">{t("notInUse")}</span>
+                  )}
+                </div>
+              </div>
+
+              <p className="mt-3 truncate text-sm text-slate-400">
+                {world.bytes} · {t("modified")}: {localizeRelativeTime(world.modified, locale)}
+              </p>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-panel-line pt-3">
+                <Link
+                  className="inline-flex h-8 items-center gap-2 rounded-md border border-panel-green/40 bg-panel-green/10 px-3 text-sm font-medium text-panel-green transition hover:bg-panel-green/15 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                  href={`/servers/new?worldId=${encodeURIComponent(world.id)}`}
                 >
-                  <Plus aria-hidden="true" />
-                  {t("duplicate")}
-                </Button>
-                <Button variant="secondary" onClick={() => void downloadWorld(world)} disabled={query.isError || downloadingWorldId === world.id}>
-                  <Download aria-hidden="true" />
-                  {downloadingWorldId === world.id ? t("downloading") : t("download")}
-                </Button>
-                <select
-                  aria-label={t("migrationTarget")}
-                  className="h-10 max-w-48 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-50"
-                  value={targetServerId}
-                  onChange={(event) => setTargetServerIds((current) => ({ ...current, [world.id]: event.target.value }))}
-                  disabled={targetServers.length === 0 || serversQuery.isError}
-                >
-                  {targetServers.length === 0 ? <option value="">{t("noOtherServers")}</option> : targetServers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-                </select>
-                <Button
-                  variant="secondary"
-                  onClick={() => targetServerId && migrate.mutate({ id: world.id, instanceId: targetServerId })}
-                  disabled={!targetServerId || migrate.isPending || query.isError || serversQuery.isError}
-                >
-                  <MoveRight aria-hidden="true" />
-                  {t("migrate")}
-                </Button>
-                <Button
-                  variant="danger"
-                  onClick={() => setPendingDelete(world)}
-                  disabled={remove.isPending || query.isError}
-                >
-                  <Trash2 aria-hidden="true" />
-                  {t("delete")}
-                </Button>
+                  <ServerIcon aria-hidden="true" className="size-4" />
+                  <span>{t("createServerFromWorld")}</span>
+                </Link>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    className="h-8 px-2 text-xs"
+                    variant="ghost"
+                    onClick={() => setPendingAction({ kind: "download", world })}
+                    disabled={query.isError || downloadingWorldId === world.id}
+                    aria-label={downloadingWorldId === world.id ? t("downloading") : t("download")}
+                    title={downloadingWorldId === world.id ? t("downloading") : t("download")}
+                  >
+                    <Download aria-hidden="true" className="size-4" />
+                  </Button>
+                  <Button
+                    className="h-8 px-2 text-xs text-red-200 hover:bg-red-500/15"
+                    variant="ghost"
+                    onClick={() => setPendingAction({ kind: "delete", world })}
+                    disabled={remove.isPending || query.isError}
+                    aria-label={t("delete")}
+                    title={t("delete")}
+                  >
+                    <Trash2 aria-hidden="true" className="size-4" />
+                  </Button>
+                </div>
               </div>
             </Card>
           );
         })}
-        <Card className="flex min-h-52 items-center justify-center border-dashed p-4 text-slate-400">
-          <button className="text-center" type="button" onClick={() => inputRef.current?.click()}>
-            <Plus aria-hidden="true" className="mx-auto" />
-            <p className="mt-2 text-sm">{t("importNewWorld")}</p>
-          </button>
-        </Card>
       </div>
-      {!query.isLoading && worlds.length === 0 && <p className="mt-4 text-sm text-slate-400">{t("noWorldsYet")}</p>}
-      <ConfirmDialog
-        open={Boolean(pendingDelete)}
-        eyebrow={t("destructiveAction")}
-        title={t("deleteWorldConfirm", { name: pendingDelete?.name ?? "" })}
-        description={t("confirmDeleteWorldDescription", { name: pendingDelete?.name ?? "" })}
-        detail={pendingDelete ? (
-          <>
-            <span className="text-slate-500">{t("world")}: </span>
-            <span className="font-medium text-white">{pendingDelete.name}</span>
-          </>
-        ) : undefined}
-        cancelLabel={t("cancel")}
-        confirmLabel={remove.isPending ? t("actionWorking") : t("delete")}
-        busy={remove.isPending}
-        onCancel={() => setPendingDelete(null)}
-        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
-      />
+      {!query.isLoading && filteredWorlds.length === 0 && <p className="mt-4 text-sm text-slate-400">{worlds.length === 0 ? t("noWorldsYet") : t("noWorldsMatch")}</p>}
+      {pendingAction && (
+        <ConfirmDialog
+          open={Boolean(pendingAction)}
+          eyebrow={pendingAction.kind === "delete" ? t("destructiveAction") : t("confirmActionEyebrow")}
+          title={
+            pendingAction.kind === "download"
+                ? t("downloadWorldConfirm", { name: pendingAction.world.name })
+                : t("deleteWorldConfirm", { name: pendingAction.world.name })
+          }
+          description={
+            pendingAction.kind === "download"
+                ? t("confirmDownloadWorldDescription", { name: pendingAction.world.name })
+                : t("confirmDeleteWorldDescription", { name: pendingAction.world.name })
+          }
+          detail={(
+            <div className="space-y-1">
+              <p>
+                <span className="text-slate-500">{t("world")}: </span>
+                <span className="font-medium text-white">{pendingAction.world.name}</span>
+              </p>
+            </div>
+          )}
+          cancelLabel={t("cancel")}
+          confirmLabel={
+            pendingBusy
+              ? t("actionWorking")
+              : pendingAction.kind === "download"
+                  ? t("download")
+                  : t("delete")
+          }
+          confirmVariant={pendingAction.kind === "delete" ? "danger" : "gold"}
+          busy={pendingBusy}
+          onCancel={() => setPendingAction(null)}
+          onConfirm={confirmPendingAction}
+        />
+      )}
     </>
+  );
+}
+
+function FilterGroup<T extends string>({
+  label,
+  onChange,
+  options,
+  t,
+  value
+}: {
+  label: string;
+  onChange: (value: T) => void;
+  options: readonly { key: T; labelKey: MessageKey }[];
+  t: (key: MessageKey, params?: Record<string, string | number>) => string;
+  value: T;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
+        {options.map((item) => (
+          <Button
+            key={item.key}
+            variant="ghost"
+            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
+            onClick={() => onChange(item.key)}
+          >
+            {t(item.labelKey)}
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }

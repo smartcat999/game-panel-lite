@@ -10,20 +10,15 @@ describe("server detail action feedback", () => {
     expect(formatServerDetailError(new Error("Error response from daemon: page not found"))).toBe(
       "Docker 容器不可用或已被外部删除，请重新启动服务器让面板恢复运行容器。"
     );
+    expect(formatServerDetailError(new Error("Error response from daemon: manifest for radioactivehydra/tmodloader:2024.10 not found: manifest unknown: manifest unknown"))).toBe(
+      "Error response from daemon: manifest for radioactivehydra/tmodloader:2024.10 not found: manifest unknown: manifest unknown"
+    );
   });
 
   it("explains why state-dependent resource actions are unavailable", () => {
-    expect(describeResourceAction({ kind: "assignWorld", serverStatus: "running" })).toEqual({
+    expect(describeResourceAction({ kind: "restoreBackup", serverStatus: "running" })).toEqual({
       disabled: true,
-      reasonKey: "assignWorldRequiresStopped"
-    });
-    expect(describeResourceAction({ kind: "migrate", targetCount: 0 })).toEqual({
-      disabled: true,
-      reasonKey: "noMigrationTargetHint"
-    });
-    expect(describeResourceAction({ kind: "migrate", targetCount: 2 })).toEqual({
-      disabled: false,
-      reasonKey: undefined
+      reasonKey: "restoreRequiresStopped"
     });
   });
 

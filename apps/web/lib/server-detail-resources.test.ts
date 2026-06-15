@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  getDetailTargetServers,
-  getMigrationTargetServers,
   getWorldSourceServerId,
+  isWorldCompatibleWithServer,
   isWorldActiveOnServer,
-  nextWorldCopyName,
-  resolveMigrationTargetId
+  providerKeyForServer
 } from "./server-detail-resources";
 import type { Server, World } from "./types";
 
@@ -42,45 +40,21 @@ const baseServer: Server = {
 };
 
 describe("server detail resource helpers", () => {
-  it("uses other servers as migration targets without offering the current server", () => {
-    const targets = getDetailTargetServers(
-      [
-        baseServer,
-        { ...baseServer, id: "server-2", name: "Builder Server" },
-        { ...baseServer, id: "server-3", name: "Expert Server" }
-      ],
-      "server-1"
-    );
+  it("matches reusable worlds by server provider type", () => {
+    const vanillaWorld: World = {
+      id: "world-1",
+      instanceId: "source-server",
+      providerKey: "terraria-vanilla",
+      name: "Home",
+      size: "Home.wld",
+      difficulty: "Imported",
+      modified: "Just now",
+      bytes: "1 KB"
+    };
 
-    expect(targets.map((server) => server.id)).toEqual(["server-2", "server-3"]);
-  });
-
-  it("creates a localized default world copy name", () => {
-    expect(nextWorldCopyName("Home", "副本")).toBe("Home 副本");
-  });
-
-  it("removes the source server from per-resource migration targets", () => {
-    const targets = getMigrationTargetServers(
-      [
-        baseServer,
-        { ...baseServer, id: "server-2", name: "Builder Server" }
-      ],
-      "server-1"
-    );
-
-    expect(targets.map((server) => server.id)).toEqual(["server-2"]);
-  });
-
-  it("falls back to the first valid migration target when the selected target is the source server", () => {
-    const servers = [
-      baseServer,
-      { ...baseServer, id: "server-2", name: "Builder Server" },
-      { ...baseServer, id: "server-3", name: "Expert Server" }
-    ];
-
-    expect(resolveMigrationTargetId(servers, "server-1", "server-1")).toBe("server-2");
-    expect(resolveMigrationTargetId(servers, "server-3", "server-1")).toBe("server-3");
-    expect(resolveMigrationTargetId([baseServer], "server-1", "server-1")).toBe("");
+    expect(providerKeyForServer(baseServer)).toBe("terraria-vanilla");
+    expect(isWorldCompatibleWithServer(vanillaWorld, baseServer)).toBe(true);
+    expect(isWorldCompatibleWithServer(vanillaWorld, { ...baseServer, mode: "tmodloader" })).toBe(false);
   });
 
   it("keeps world ownership separate from active world state", () => {
