@@ -13,7 +13,9 @@ const labels: Record<string, Record<Locale, string>> = {
   "server.start.queued": { zh: "启动排队", en: "Start Queued" },
   "server.started": { zh: "服务器启动", en: "Server Started" },
   "server.start.failed": { zh: "启动失败", en: "Start Failed" },
+  "server.stop.queued": { zh: "停止排队", en: "Stop Queued" },
   "server.stopped": { zh: "服务器停止", en: "Server Stopped" },
+  "server.stop.failed": { zh: "停止失败", en: "Stop Failed" },
   "server.restart.queued": { zh: "重启排队", en: "Restart Queued" },
   "server.restarted": { zh: "服务器重启", en: "Server Restarted" },
   "server.restart.failed": { zh: "重启失败", en: "Restart Failed" },
@@ -38,7 +40,9 @@ const zhTemplates: Record<string, (message: string) => string | undefined> = {
   "server.start.queued": (message) => withMatch(message, /^Queued start for server (.+)$/, ([name]) => `已提交启动服务器 ${name}`),
   "server.started": (message) => withMatch(message, /^Started server (.+)$/, ([name]) => `已启动服务器 ${name}`),
   "server.start.failed": (message) => withMatch(message, /^(.+): (.+)$/, ([name, reason]) => `${name} 启动失败：${formatServerDetailError(new Error(reason))}`),
+  "server.stop.queued": (message) => withMatch(message, /^Queued stop for server (.+)$/, ([name]) => `已提交停止服务器 ${name}`),
   "server.stopped": (message) => withMatch(message, /^Stopped server (.+)$/, ([name]) => `已停止服务器 ${name}`),
+  "server.stop.failed": (message) => withMatch(message, /^(.+): (.+)$/, ([name, reason]) => `${name} 停止失败：${formatServerDetailError(new Error(reason))}`),
   "server.restart.queued": (message) => withMatch(message, /^Queued restart for server (.+)$/, ([name]) => `已提交重启服务器 ${name}`),
   "server.restarted": (message) => withMatch(message, /^Restarted server (.+)$/, ([name]) => `已重启服务器 ${name}`),
   "server.restart.failed": (message) => withMatch(message, /^(.+): (.+)$/, ([name, reason]) => `${name} 重启失败：${formatServerDetailError(new Error(reason))}`),
@@ -63,7 +67,7 @@ const zhTemplates: Record<string, (message: string) => string | undefined> = {
 export function formatActivityEvent(event: ActivityEvent, locale: Locale): ActivityDisplay {
   const typeLabel = labels[event.type]?.[locale] ?? event.type;
   if (locale === "en") {
-    if (event.type === "server.start.failed" || event.type === "server.restart.failed") {
+    if (event.type === "server.start.failed" || event.type === "server.stop.failed" || event.type === "server.restart.failed") {
       return {
         message: withMatch(event.message, /^(.+): (.+)$/, ([name, reason]) => `${name}: ${formatServerDetailError(new Error(reason), {
           dockerUnavailable: "Docker is not connected. Configure Docker Host in Settings first.",

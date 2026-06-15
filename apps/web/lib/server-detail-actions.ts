@@ -4,7 +4,7 @@ import type { MessageKey } from "./i18n";
 type ResourceActionKind = "restoreBackup" | "modifyMods";
 
 export function isServerLifecyclePending(status?: Server["status"]) {
-  return status === "creating" || status === "starting" || status === "restarting" || status === "deleting";
+  return status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
 }
 
 export function isServerLockedForResourceChanges(status?: Server["status"]) {

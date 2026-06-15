@@ -19,6 +19,7 @@ const (
 	StatusCreating   ServerStatus = "creating"
 	StatusStarting   ServerStatus = "starting"
 	StatusRunning    ServerStatus = "running"
+	StatusStopping   ServerStatus = "stopping"
 	StatusStopped    ServerStatus = "stopped"
 	StatusRestarting ServerStatus = "restarting"
 	StatusDeleting   ServerStatus = "deleting"

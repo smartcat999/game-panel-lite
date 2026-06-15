@@ -1260,6 +1260,24 @@ Checks:
 - `GOCACHE=/tmp/game-panel-lite-go-build go test ./apps/api/internal/provider/terraria ./apps/api/internal/http ./apps/api/internal/runtime/docker`: passed.
 - `docker buildx build --builder orbstack --platform linux/arm64 -f docker/terraria-vanilla/Dockerfile --build-arg TERRARIA_VERSION=1.4.5.6 --build-arg TERRARIA_DOWNLOAD_ID=1456 -t smartcat99999/terraria-vanilla:1.4.5.6-arm64-test .`: passed.
 - `docker run ... smartcat99999/terraria-vanilla:1.4.5.6-arm64-test`: passed smoke verification; the arm64 container generated a world and logged `Terraria Server v1.4.5.6`, `Listening on port 7777`, and `Server started`.
+
+## V1 Async Stop Lifecycle Update
+
+Status: Completed
+
+Completed:
+- Changed server stop from a blocking HTTP action to an asynchronous lifecycle command.
+- `POST /api/servers/{id}/stop` now returns `202 Accepted` with status `stopping`, records `server.stop.queued`, and completes in a background worker.
+- The background stop worker marks servers `stopped`, records `server.stopped`, clears stale missing container IDs, or marks `errored` with `server.stop.failed`.
+- Stop requests still fail immediately when a server has a container ID but Docker is unavailable, so the UI does not enter a misleading queued state.
+- Added frontend `stopping` status support for badges, disabled resource actions, activity labels, and server action buttons.
+
+Checks:
+- `GOCACHE=/tmp/game-panel-lite-go-build go test ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
 - `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
 

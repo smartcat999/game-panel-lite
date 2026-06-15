@@ -1278,7 +1278,31 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
-	h.transitionServer(w, r, domain.StatusStopped, h.runtime.Stop)
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if isLifecyclePending(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
+		return
+	}
+	if server.ContainerID != "" {
+		if err := h.requireRuntimeAvailable(r.Context()); err != nil {
+			writeError(w, statusCodeForRuntimeError(err), err.Error())
+			return
+		}
+	}
+	server.Status = domain.StatusStopping
+	server.LastError = ""
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "server.stop.queued", fmt.Sprintf("Queued stop for server %s", server.Name))
+	go h.runStopServer(context.Background(), server.ID)
+	writeJSON(w, http.StatusAccepted, server)
 }
 
 func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
@@ -1367,6 +1391,35 @@ func (h *Handler) runRestartServer(ctx context.Context, id string) {
 	h.recordActivity(ctx, server.ID, "server.restarted", fmt.Sprintf("Restarted server %s", server.Name))
 }
 
+func (h *Handler) runStopServer(ctx context.Context, id string) {
+	server, err := h.store.GetServer(ctx, id)
+	if err != nil {
+		h.markServerLifecycleFailed(ctx, id, "server.stop.failed", errors.New("server not found"))
+		return
+	}
+	if server.ContainerID != "" {
+		if err := h.requireRuntimeAvailable(ctx); err != nil {
+			h.markServerLifecycleFailed(ctx, id, "server.stop.failed", err)
+			return
+		}
+		if _, err := h.runtime.Inspect(ctx, server); err != nil {
+			h.logger.Warn("runtime container missing during async stop; clearing stale container", "server", server.ID, "container", server.ContainerID, "error", err)
+			server.ContainerID = ""
+		} else if err := h.runtime.Stop(ctx, server); err != nil {
+			h.markServerLifecycleFailed(ctx, id, "server.stop.failed", err)
+			return
+		}
+	}
+	server.Status = domain.StatusStopped
+	server.LastError = ""
+	server.UpdatedAt = time.Now()
+	if err := h.store.SaveServer(ctx, &server); err != nil {
+		h.logger.Warn("failed to persist async server stop", "server", id, "error", err)
+		return
+	}
+	h.recordActivity(ctx, server.ID, "server.stopped", fmt.Sprintf("Stopped server %s", server.Name))
+}
+
 func (h *Handler) markServerLifecycleFailed(ctx context.Context, id string, activityType string, cause error) {
 	server, err := h.store.GetServer(ctx, id)
 	if err != nil {
@@ -1424,43 +1477,6 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
-}
-
-func (h *Handler) transitionServer(w http.ResponseWriter, r *http.Request, status domain.ServerStatus, action func(context.Context, domain.GameServerInstance) error) {
-	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "server not found")
-		return
-	}
-	if server.ContainerID != "" {
-		if err := h.requireRuntimeAvailable(r.Context()); err != nil {
-			writeError(w, statusCodeForRuntimeError(err), err.Error())
-			return
-		}
-		if _, err := h.runtime.Inspect(r.Context(), server); err != nil {
-			h.logger.Warn("runtime container missing during state transition; clearing stale container", "server", server.ID, "container", server.ContainerID, "error", err)
-			server.ContainerID = ""
-		} else {
-			if err := action(r.Context(), server); err != nil {
-				writeError(w, http.StatusServiceUnavailable, err.Error())
-				return
-			}
-		}
-	}
-	server.Status = status
-	server.UpdatedAt = time.Now()
-	if err := h.store.SaveServer(r.Context(), &server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	activityType := "server.updated"
-	message := fmt.Sprintf("Updated server %s", server.Name)
-	if status == domain.StatusStopped {
-		activityType = "server.stopped"
-		message = fmt.Sprintf("Stopped server %s", server.Name)
-	}
-	h.recordActivity(r.Context(), server.ID, activityType, message)
-	writeJSON(w, http.StatusOK, server)
 }
 
 func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (domain.GameServerInstance, error) {
@@ -1683,7 +1699,7 @@ func statusCodeForRuntimeError(err error) int {
 }
 
 func isLifecyclePending(status domain.ServerStatus) bool {
-	return status == domain.StatusStarting || status == domain.StatusRestarting || status == domain.StatusDeleting
+	return status == domain.StatusStarting || status == domain.StatusStopping || status == domain.StatusRestarting || status == domain.StatusDeleting
 }
 
 func isServerLockedForMutation(status domain.ServerStatus) bool {

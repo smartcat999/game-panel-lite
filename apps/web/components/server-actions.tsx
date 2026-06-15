@@ -22,13 +22,14 @@ export function ServerActions({ server, showInvite = true }: { server: Server; s
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const lifecycleBusy = server.status === "creating" || server.status === "starting" || server.status === "restarting" || server.status === "deleting";
+  const lifecycleBusy = server.status === "creating" || server.status === "starting" || server.status === "stopping" || server.status === "restarting" || server.status === "deleting";
   const controlsDisabled = Boolean(busyAction) || lifecycleBusy;
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
   const successLabel = (action: "start" | "stop" | "restart" | "delete") =>
-    action === "start" ? t("serverStartQueued") : action === "stop" ? t("serverStopped") : action === "restart" ? t("serverRestartQueued") : t("serverDeleteQueued");
+    action === "start" ? t("serverStartQueued") : action === "stop" ? t("serverStopQueued") : action === "restart" ? t("serverRestartQueued") : t("serverDeleteQueued");
   const startLabel = busyAction === "start" || server.status === "starting" || server.status === "creating" ? t("actionStarting") : t("actionStart");
+  const stopLabel = busyAction === "stop" || server.status === "stopping" ? t("actionStopping") : t("actionStop");
   const restartLabel = busyAction === "restart" || server.status === "restarting" ? t("actionRestarting") : t("actionRestart");
   const deleteLabel = busyAction === "delete" || server.status === "deleting" ? t("actionDeleting") : t("delete");
 
@@ -99,10 +100,10 @@ export function ServerActions({ server, showInvite = true }: { server: Server; s
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {server.status === "running" ? (
+        {server.status === "running" || server.status === "stopping" ? (
           <Button variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
             <Square aria-hidden="true" />
-            {busyAction === "stop" ? t("actionWorking") : t("actionStop")}
+            {stopLabel}
           </Button>
         ) : (
           <Button

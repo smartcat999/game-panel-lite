@@ -11,7 +11,7 @@ export function ServerStatusBadge({ status }: { status: ServerStatus }) {
       ? "bg-panel-green/15 text-panel-green"
       : status === "errored"
         ? "bg-red-500/15 text-red-200"
-        : status === "starting" || status === "restarting" || status === "creating"
+        : status === "starting" || status === "stopping" || status === "restarting" || status === "creating"
           ? "bg-panel-gold/15 text-panel-gold"
           : status === "deleting"
             ? "bg-red-500/15 text-red-200"
@@ -23,13 +23,15 @@ export function ServerStatusBadge({ status }: { status: ServerStatus }) {
         ? t("statusErrored")
         : status === "starting"
           ? t("statusStarting")
-          : status === "restarting"
-            ? t("statusRestarting")
-            : status === "creating"
-              ? t("statusCreating")
-              : status === "deleting"
-                ? t("statusDeleting")
-                : t("statusStopped");
+          : status === "stopping"
+            ? t("statusStopping")
+            : status === "restarting"
+              ? t("statusRestarting")
+              : status === "creating"
+                ? t("statusCreating")
+                : status === "deleting"
+                  ? t("statusDeleting")
+                  : t("statusStopped");
   return <Badge className={color}>{label}</Badge>;
 }
 

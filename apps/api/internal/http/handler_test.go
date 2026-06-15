@@ -252,6 +252,8 @@ type blockingRuntimeAdapter struct {
 	availableMockAdapter
 	createStarted chan struct{}
 	createRelease chan struct{}
+	stopStarted   chan struct{}
+	stopRelease   chan struct{}
 	removeStarted chan struct{}
 	removeRelease chan struct{}
 }
@@ -261,6 +263,8 @@ func newBlockingRuntimeAdapter() *blockingRuntimeAdapter {
 		availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()},
 		createStarted:        make(chan struct{}),
 		createRelease:        make(chan struct{}),
+		stopStarted:          make(chan struct{}),
+		stopRelease:          make(chan struct{}),
 		removeStarted:        make(chan struct{}),
 		removeRelease:        make(chan struct{}),
 	}
@@ -273,6 +277,16 @@ func (a *blockingRuntimeAdapter) Create(ctx context.Context, spec runtime.Contai
 		return "", ctx.Err()
 	case <-a.createRelease:
 		return a.availableMockAdapter.Create(ctx, spec)
+	}
+}
+
+func (a *blockingRuntimeAdapter) Stop(ctx context.Context, instance domain.GameServerInstance) error {
+	close(a.stopStarted)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-a.stopRelease:
+		return nil
 	}
 }
 
@@ -373,6 +387,60 @@ func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
 	if updated.Version != "v2026.04.3.0" {
 		t.Fatalf("expected stored version to be normalized, got %q", updated.Version)
 	}
+}
+
+func TestStopServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
+	adapter := newBlockingRuntimeAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("async-stop", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "running-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/stop", nil))
+		response <- recorder
+	}()
+
+	select {
+	case <-adapter.stopStarted:
+	case <-time.After(time.Second):
+		t.Fatal("expected async stop worker to begin stopping the runtime container")
+	}
+
+	select {
+	case recorder := <-response:
+		if recorder.Code != stdhttp.StatusAccepted {
+			t.Fatalf("expected stop 202, got %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var queued domain.GameServerInstance
+		if err := json.Unmarshal(recorder.Body.Bytes(), &queued); err != nil {
+			t.Fatal(err)
+		}
+		if queued.Status != domain.StatusStopping {
+			t.Fatalf("expected queued stop status stopping, got %+v", queued)
+		}
+	case <-time.After(100 * time.Millisecond):
+		close(adapter.stopRelease)
+		recorder := <-response
+		t.Fatalf("stop request blocked until runtime completed; got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	close(adapter.stopRelease)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		updated, err := db.GetServer(context.Background(), server.ID)
+		if err == nil && updated.Status == domain.StatusStopped {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	updated, _ := db.GetServer(context.Background(), server.ID)
+	t.Fatalf("expected async stop worker to mark server stopped, got %+v", updated)
 }
 
 func TestDeleteServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
@@ -501,16 +569,17 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 
 	stop := httptest.NewRecorder()
 	router.ServeHTTP(stop, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/stop", nil))
-	if stop.Code != stdhttp.StatusOK {
-		t.Fatalf("expected stop 200, got %d: %s", stop.Code, stop.Body.String())
+	if stop.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected stop 202, got %d: %s", stop.Code, stop.Body.String())
 	}
 	var stopped domain.GameServerInstance
 	if err := json.Unmarshal(stop.Body.Bytes(), &stopped); err != nil {
 		t.Fatal(err)
 	}
-	if stopped.Status != domain.StatusStopped {
-		t.Fatalf("expected stop status stopped, got %+v", stopped)
+	if stopped.Status != domain.StatusStopping {
+		t.Fatalf("expected stop status stopping, got %+v", stopped)
 	}
+	server = waitForServerStatus(t, db, server.ID, domain.StatusStopped)
 
 	logs := httptest.NewRecorder()
 	router.ServeHTTP(logs, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/logs", nil))
@@ -785,15 +854,19 @@ func TestStopServerClearsMissingRuntimeContainer(t *testing.T) {
 
 	stop := httptest.NewRecorder()
 	router.ServeHTTP(stop, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/stop", nil))
-	if stop.Code != stdhttp.StatusOK {
+	if stop.Code != stdhttp.StatusAccepted {
 		t.Fatalf("expected stop to clear stale runtime container, got %d: %s", stop.Code, stop.Body.String())
 	}
 	var stopped domain.GameServerInstance
 	if err := json.Unmarshal(stop.Body.Bytes(), &stopped); err != nil {
 		t.Fatal(err)
 	}
-	if stopped.Status != domain.StatusStopped || stopped.ContainerID != "" {
-		t.Fatalf("expected stopped server with cleared container, got %+v", stopped)
+	if stopped.Status != domain.StatusStopping {
+		t.Fatalf("expected queued stop status stopping, got %+v", stopped)
+	}
+	stored := waitForServerStatus(t, db, server.ID, domain.StatusStopped)
+	if stored.ContainerID != "" {
+		t.Fatalf("expected stopped server with cleared container, got %+v", stored)
 	}
 	if adapter.stoppedContainer != "" {
 		t.Fatalf("expected stale stop to skip runtime stop call, got %q", adapter.stoppedContainer)

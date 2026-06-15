@@ -34,8 +34,8 @@ describe("server detail action feedback", () => {
   });
 
   it("locks resource changes while lifecycle commands are still running", () => {
-    const pendingStatuses: ServerStatus[] = ["creating", "starting", "restarting", "deleting"];
-    expect(pendingStatuses.map((status) => isServerLockedForResourceChanges(status))).toEqual([true, true, true, true]);
+    const pendingStatuses: ServerStatus[] = ["creating", "starting", "stopping", "restarting", "deleting"];
+    expect(pendingStatuses.map((status) => isServerLockedForResourceChanges(status))).toEqual([true, true, true, true, true]);
     expect(isServerLockedForResourceChanges("stopped")).toBe(false);
   });
 });
