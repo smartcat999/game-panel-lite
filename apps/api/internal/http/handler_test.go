@@ -1316,7 +1316,7 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	}
 }
 
-func TestRunningTModLoaderServerRejectsModMutation(t *testing.T) {
+func TestRunningTModLoaderServerAllowsModMutation(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)
 	server.ProviderKey = domain.ProviderTerrariaTModLoader
@@ -1341,34 +1341,34 @@ func TestRunningTModLoaderServerRejectsModMutation(t *testing.T) {
 	request := httptest.NewRequest(stdhttp.MethodPatch, "/api/servers/tmod/mods/mod-1", body)
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
-	if recorder.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected running mod update conflict, got %d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected running mod update success, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 	persisted, err := db.GetMod(context.Background(), mod.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !persisted.Enabled {
-		t.Fatalf("expected running mod update to preserve enabled state, got %+v", persisted)
+	if persisted.Enabled {
+		t.Fatalf("expected running mod update to change enabled state, got %+v", persisted)
 	}
 
 	uploadRecorder := httptest.NewRecorder()
 	router.ServeHTTP(uploadRecorder, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/servers/tmod/mods/upload", "file", "new.tmod", []byte("new")))
-	if uploadRecorder.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected running mod upload conflict, got %d: %s", uploadRecorder.Code, uploadRecorder.Body.String())
+	if uploadRecorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected running mod upload success, got %d: %s", uploadRecorder.Code, uploadRecorder.Body.String())
 	}
-	if _, err := db.GetModByInstanceAndFile(context.Background(), server.ID, "new.tmod"); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected running upload to skip creating mod record, got err=%v", err)
+	if _, err := db.GetModByInstanceAndFile(context.Background(), server.ID, "new.tmod"); err != nil {
+		t.Fatalf("expected running upload to create mod record: %v", err)
 	}
 
 	deleteRecorder := httptest.NewRecorder()
 	deleteRequest := httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/tmod/mods/mod-1", nil)
 	router.ServeHTTP(deleteRecorder, deleteRequest)
-	if deleteRecorder.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected running mod delete conflict, got %d: %s", deleteRecorder.Code, deleteRecorder.Body.String())
+	if deleteRecorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected running mod delete success, got %d: %s", deleteRecorder.Code, deleteRecorder.Body.String())
 	}
-	if _, err := db.GetMod(context.Background(), mod.ID); err != nil {
-		t.Fatalf("expected running delete to preserve mod record: %v", err)
+	if _, err := db.GetMod(context.Background(), mod.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected running delete to remove mod record, got err=%v", err)
 	}
 
 	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "library.tmod", bytes.NewBufferString("library")); err != nil {
@@ -1389,11 +1389,11 @@ func TestRunningTModLoaderServerRejectsModMutation(t *testing.T) {
 	assignRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/library-mod/assign", strings.NewReader(`{"instanceId":"tmod"}`))
 	assignRequest.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(assignRecorder, assignRequest)
-	if assignRecorder.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected running mod assign conflict, got %d: %s", assignRecorder.Code, assignRecorder.Body.String())
+	if assignRecorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected running mod assign success, got %d: %s", assignRecorder.Code, assignRecorder.Body.String())
 	}
-	if _, err := db.GetModByInstanceAndFile(context.Background(), server.ID, "library.tmod"); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected running assign to skip creating server mod record, got err=%v", err)
+	if _, err := db.GetModByInstanceAndFile(context.Background(), server.ID, "library.tmod"); err != nil {
+		t.Fatalf("expected running assign to create server mod record: %v", err)
 	}
 }
 

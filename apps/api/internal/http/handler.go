@@ -139,8 +139,8 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
 		return
 	}
-	if isServerLockedForMutation(server.Status) {
-		writeError(w, http.StatusConflict, "stop the server before changing mods")
+	if isServerBusyForModMutation(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -185,8 +185,8 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "workshop mods are only supported for tModLoader servers")
 		return
 	}
-	if isServerLockedForMutation(server.Status) {
-		writeError(w, http.StatusConflict, "stop the server before changing mods")
+	if isServerBusyForModMutation(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
 	var payload struct {
@@ -241,8 +241,8 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
-	if isServerLockedForMutation(server.Status) {
-		writeError(w, http.StatusConflict, "stop the server before changing mods")
+	if isServerBusyForModMutation(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
 	var payload struct {
@@ -280,8 +280,8 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
-	if isServerLockedForMutation(server.Status) {
-		writeError(w, http.StatusConflict, "stop the server before changing mods")
+	if isServerBusyForModMutation(server.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
 	if err := h.removeRuntimeMod(item, server); err != nil {
@@ -365,8 +365,8 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
 		return
 	}
-	if isServerLockedForMutation(targetServer.Status) {
-		writeError(w, http.StatusConflict, "stop the server before changing mods")
+	if isServerBusyForModMutation(targetServer.Status) {
+		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
 	sourcePath, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
@@ -1956,6 +1956,10 @@ func isLifecyclePending(status domain.ServerStatus) bool {
 
 func isServerLockedForMutation(status domain.ServerStatus) bool {
 	return status == domain.StatusRunning || isLifecyclePending(status)
+}
+
+func isServerBusyForModMutation(status domain.ServerStatus) bool {
+	return status == domain.StatusCreating || isLifecyclePending(status)
 }
 
 func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {

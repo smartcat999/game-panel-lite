@@ -104,6 +104,7 @@ export default function ServerDetailPage() {
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
   const [logStreamPaused, setLogStreamPaused] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
+  const [modsPendingRestart, setModsPendingRestart] = useState(false);
   const successTimerRef = useRef<number | null>(null);
   const formatActionError = (error: unknown, fallback: string) => formatServerDetailError(error, {
     dockerUnavailable: t("detailDockerUnavailable"),
@@ -127,6 +128,12 @@ export default function ServerDetailPage() {
   const showError = (message: string) => {
     setSuccessMessage("");
     setErrorMessage(message);
+  };
+
+  const markModsChanged = () => {
+    if (server?.status === "running") {
+      setModsPendingRestart(true);
+    }
   };
 
   useEffect(() => {
@@ -233,6 +240,7 @@ export default function ServerDetailPage() {
     mutationFn: (file: File) => uploadMod(id, file),
     onSuccess: async () => {
       showSuccess(t("modUploaded"));
+      markModsChanged();
       setPendingModUpload(null);
       if (modInputRef.current) modInputRef.current.value = "";
       await client.invalidateQueries({ queryKey: ["mods", id] });
@@ -243,6 +251,7 @@ export default function ServerDetailPage() {
     mutationFn: ({ modId, enabled }: { modId: string; enabled: boolean }) => setModEnabled(id, modId, enabled),
     onSuccess: async (updatedMod) => {
       showSuccess(updatedMod.enabled ? t("modEnabled") : t("modDisabled"));
+      markModsChanged();
       setPendingModToggle(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
@@ -252,6 +261,7 @@ export default function ServerDetailPage() {
     mutationFn: (modId: string) => deleteMod(id, modId),
     onSuccess: async () => {
       showSuccess(t("modDeleted"));
+      markModsChanged();
       setPendingModDelete(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
@@ -261,6 +271,7 @@ export default function ServerDetailPage() {
     mutationFn: (modId: string) => assignMod(modId, id),
     onSuccess: async () => {
       showSuccess(t("modAssigned"));
+      markModsChanged();
       setPendingModAssign(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
@@ -274,6 +285,7 @@ export default function ServerDetailPage() {
     },
     onSuccess: async () => {
       showSuccess(t("modPackInstalled"));
+      markModsChanged();
       setPendingModPackInstall(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
@@ -283,6 +295,7 @@ export default function ServerDetailPage() {
     mutationFn: () => importWorkshopMods(id, parseWorkshopIds(workshopIdsText)),
     onSuccess: async () => {
       showSuccess(t("workshopModsImported"));
+      markModsChanged();
       setPendingWorkshopImport(false);
       setWorkshopIdsText("");
       await client.invalidateQueries({ queryKey: ["mods", id] });
@@ -344,6 +357,12 @@ export default function ServerDetailPage() {
     const viewport = logViewportRef.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
   }, [logs, activeTab]);
+
+  useEffect(() => {
+    if (server?.status !== "running") {
+      setModsPendingRestart(false);
+    }
+  }, [server?.status]);
 
   const serverWorlds = useMemo(
     () => (
@@ -583,6 +602,7 @@ export default function ServerDetailPage() {
               items={serverMods}
               libraryError={globalModsQuery.isError || modPacksQuery.isError}
               modPacks={modPacks}
+              pendingRestart={modsPendingRestart}
               packInstalling={modPackAssign.isPending}
               serverStatus={server.status}
               toggling={modEnabled.isPending}
@@ -1551,6 +1571,7 @@ function ModsTab({
   items,
   libraryError,
   modPacks,
+  pendingRestart,
   packInstalling,
   serverStatus,
   toggling,
@@ -1574,6 +1595,7 @@ function ModsTab({
   items: ModFile[];
   libraryError: boolean;
   modPacks: ModPack[];
+  pendingRestart: boolean;
   packInstalling: boolean;
   serverStatus: Server["status"];
   toggling: boolean;
@@ -1605,34 +1627,32 @@ function ModsTab({
       <div className="space-y-4">
         {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
         {libraryError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
+        {pendingRestart ? (
+          <div className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">
+            {t("modChangesPendingRestart")}
+          </div>
+        ) : null}
 
-        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+        <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+            <div className="px-4 py-4">
               <h3 className="font-semibold text-white">{t("serverMods")}</h3>
               <p className="mt-1 text-sm text-slate-500">{t("serverModsHint")}</p>
             </div>
           </div>
-          {isError ? <p className="mt-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
-          {!isError && isLoading ? <p className="mt-4 text-sm text-slate-400">{t("loading")}</p> : null}
-          {!isError && !isLoading && items.length === 0 ? <p className="mt-4 text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
-          <div className="mt-4 grid gap-2">
+          {isError ? <p className="px-4 pb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
+          {!isError && isLoading ? <p className="px-4 pb-4 text-sm text-slate-400">{t("loading")}</p> : null}
+          {!isError && !isLoading && items.length === 0 ? <p className="px-4 pb-4 text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
+          <div className="divide-y divide-panel-line border-t border-panel-line">
             {items.map((mod) => (
-              <ResourceRow
+              <ServerModRow
                 key={mod.id}
-                title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
-                meta={`${mod.size} · ${mod.enabled ? t("enabled") : t("disabled")} · ${localizeRelativeTime(mod.created, locale)}`}
-                actions={
-                  <>
-                    <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                      <Power aria-hidden="true" />
-                      {mod.enabled ? t("disable") : t("enable")}
-                    </Button>
-                    <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </>
-                }
+                disabled={blocked}
+                deleting={deleting}
+                mod={mod}
+                toggling={toggling}
+                onDelete={onDelete}
+                onToggle={onToggle}
               />
             ))}
           </div>
@@ -1740,6 +1760,61 @@ function ResourcePanel({
         </div>
       </div>
       {children}
+    </div>
+  );
+}
+
+function ServerModRow({
+  deleting,
+  disabled,
+  mod,
+  toggling,
+  onDelete,
+  onToggle
+}: {
+  deleting: boolean;
+  disabled: boolean;
+  mod: ModFile;
+  toggling: boolean;
+  onDelete: (mod: ModFile) => void;
+  onToggle: (mod: ModFile) => void;
+}) {
+  const { locale, t } = useI18n();
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={cn(
+          "mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-md border",
+          mod.enabled ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-line bg-slate-950/60 text-slate-500"
+        )}>
+          <Package aria-hidden="true" className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Link href={`/mods/${mod.id}`} className="truncate text-sm font-semibold text-white transition hover:text-panel-green">
+              {mod.fileName}
+            </Link>
+            <span className={cn(
+              "shrink-0 rounded px-2 py-0.5 text-xs font-medium",
+              mod.enabled ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400"
+            )}>
+              {mod.enabled ? t("enabled") : t("disabled")}
+            </span>
+          </div>
+          <p className="mt-1 truncate text-xs text-slate-500">
+            {mod.size} · {localizeRelativeTime(mod.created, locale)}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+        <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling || disabled}>
+          <Power aria-hidden="true" />
+          {mod.enabled ? t("disable") : t("enable")}
+        </Button>
+        <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting || disabled}>
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   );
 }

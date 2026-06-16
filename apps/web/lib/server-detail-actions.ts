@@ -42,8 +42,8 @@ export function describeResourceAction({
   if (kind === "restoreBackup" && isServerLockedForResourceChanges(serverStatus)) {
     return { disabled: true, reasonKey: "restoreRequiresStopped" };
   }
-  if (kind === "modifyMods" && isServerLockedForResourceChanges(serverStatus)) {
-    return { disabled: true, reasonKey: "modChangesRequireStopped" };
+  if (kind === "modifyMods" && isServerLifecyclePending(serverStatus)) {
+    return { disabled: true, reasonKey: "modChangesLifecycleBusy" };
   }
   return { disabled: false, reasonKey: undefined };
 }

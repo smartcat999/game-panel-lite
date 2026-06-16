@@ -22,10 +22,14 @@ describe("server detail action feedback", () => {
     });
   });
 
-  it("requires stopped servers before modifying runtime mod files", () => {
+  it("allows mod edits while running and blocks lifecycle transitions", () => {
     expect(describeResourceAction({ kind: "modifyMods", serverStatus: "running" })).toEqual({
+      disabled: false,
+      reasonKey: undefined
+    });
+    expect(describeResourceAction({ kind: "modifyMods", serverStatus: "restarting" })).toEqual({
       disabled: true,
-      reasonKey: "modChangesRequireStopped"
+      reasonKey: "modChangesLifecycleBusy"
     });
     expect(describeResourceAction({ kind: "modifyMods", serverStatus: "stopped" })).toEqual({
       disabled: false,
