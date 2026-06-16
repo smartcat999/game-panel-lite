@@ -267,18 +267,18 @@ function ModeStep({ mode, setMode }: { mode: "vanilla" | "tmodloader"; setMode: 
           aria-pressed={mode === "tmodloader"}
           onClick={() => setMode("tmodloader")}
           className={cn(
-            "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-purple/50",
+            "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
             mode === "tmodloader"
-              ? "border-panel-purple bg-panel-purple/10 ring-1 ring-panel-purple/40"
-              : "border-panel-line bg-slate-950/40 hover:border-panel-purple/70 hover:bg-slate-900/55"
+              ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+              : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
           )}
         >
           {mode === "tmodloader" && (
-            <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-purple text-white">
+            <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-white">
               <Check aria-hidden="true" className="size-4" />
             </span>
           )}
-          <Package aria-hidden="true" className="text-panel-purple" />
+          <Package aria-hidden="true" className="text-panel-green" />
           <p className="mt-3 font-medium">tModLoader</p>
           <p className="mt-1 text-sm text-slate-400">{t("tmodLoaderDescription")}</p>
         </button>
@@ -322,13 +322,13 @@ function PresetStep({
             className={cn(
               "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2",
               isSelected && !isModded && !isCustom && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
-              isSelected && isModded && "border-panel-purple bg-panel-purple/10 ring-1 ring-panel-purple/40 focus:ring-panel-purple/50",
+              isSelected && isModded && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
               isSelected && isCustom && "border-slate-400 bg-slate-800/60 ring-1 ring-slate-500/50 focus:ring-slate-400/50",
               !isSelected && "border-panel-line bg-slate-950/40 hover:bg-slate-900/55 focus:ring-panel-green/40"
             )}
           >
             {isSelected && (
-              <span className={cn("absolute right-3 top-3 flex size-6 items-center justify-center rounded-full", isModded ? "bg-panel-purple text-white" : isCustom ? "bg-slate-300 text-slate-950" : "bg-panel-green text-slate-950")}>
+              <span className={cn("absolute right-3 top-3 flex size-6 items-center justify-center rounded-full", isModded ? "bg-panel-green text-white" : isCustom ? "bg-slate-300 text-slate-950" : "bg-panel-green text-slate-950")}>
                 <Check aria-hidden="true" className="size-4" />
               </span>
             )}
@@ -576,9 +576,9 @@ function ModsStep({
                     type="button"
                     onClick={() => onSelectModPack(selectedModPackId === pack.id ? "" : pack.id)}
                     className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-purple/50",
+                      "flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
                       selectedModPackId === pack.id
-                        ? "border-panel-purple bg-panel-purple/10 ring-1 ring-panel-purple/40"
+                        ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
                         : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
                     )}
                   >
@@ -586,7 +586,7 @@ function ModsStep({
                       <p className="truncate text-sm font-medium">{pack.name}</p>
                       <p className="mt-0.5 truncate text-xs text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
                     </div>
-                    <span className="shrink-0 rounded bg-panel-purple/15 px-2 py-1 text-xs text-panel-purple">{pack.mods.length}</span>
+                    <span className="shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{pack.mods.length}</span>
                   </button>
                 ))}
               </div>
@@ -597,7 +597,7 @@ function ModsStep({
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-8 text-center">
                 <Package aria-hidden="true" className="size-8 text-slate-600" />
                 <p className="mt-3 text-sm text-slate-400">{t("noModsInLibrary")}</p>
-                <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-purple hover:underline">
+                <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
                   <Package aria-hidden="true" className="size-4" />
                   {t("goToModsPage")}
                 </Link>
@@ -610,13 +610,13 @@ function ModsStep({
                     type="button"
                     onClick={() => onToggleMod(mod.id)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-purple/50",
+                      "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
                       selectedModIds.includes(mod.id)
-                        ? "border-panel-purple bg-panel-purple/10 ring-1 ring-panel-purple/40"
+                        ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
                         : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
                     )}
                   >
-                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", selectedModIds.includes(mod.id) ? "border-panel-purple bg-panel-purple text-white" : "border-slate-600")}>
+                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", selectedModIds.includes(mod.id) ? "border-panel-green bg-panel-green text-white" : "border-slate-600")}>
                       {selectedModIds.includes(mod.id) && <Check aria-hidden="true" className="size-3" />}
                     </span>
                     <div className="min-w-0">
@@ -625,7 +625,7 @@ function ModsStep({
                     </div>
                   </button>
                 ))}
-                <Link href="/mods" className="inline-flex items-center gap-2 pt-1 text-sm text-panel-purple hover:underline">
+                <Link href="/mods" className="inline-flex items-center gap-2 pt-1 text-sm text-panel-green hover:underline">
                   <Package aria-hidden="true" className="size-4" />
                   {t("goToModsPage")}
                 </Link>
@@ -668,7 +668,7 @@ function ReviewStep({
         )}
         {mode === "tmodloader" && selectedModNames.length > 0 && (
           <div className="mt-2 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
-            <p>{t("selectedModFiles")}: <span className="text-panel-purple">{selectedModNames.join(", ")}</span></p>
+            <p>{t("selectedModFiles")}: <span className="text-panel-green">{selectedModNames.join(", ")}</span></p>
           </div>
         )}
       </Card>

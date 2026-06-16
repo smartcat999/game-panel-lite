@@ -198,10 +198,10 @@ export default function ModsPage() {
         <PanelHeading icon={<Library aria-hidden="true" />} title={t("modLibrary")} hint={t("modLibraryHint")} count={globalMods.length} />
         <div className="mt-3 grid gap-3 xl:grid-cols-2">
           {globalMods.map((item) => (
-            <Card key={item.id} className="p-4 transition hover:border-panel-purple/40">
+            <Card key={item.id} className="p-4 transition hover:border-panel-green/25">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} />
-                <Badge className="shrink-0 bg-panel-purple/15 text-panel-purple">.tmod</Badge>
+                <Badge className="shrink-0 bg-slate-800 text-slate-300">.tmod</Badge>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-panel-line pt-3">
                 <span className="text-xs text-slate-500">{moddedServers.length > 0 ? t("assignToServer") : t("noTmodServers")}</span>
@@ -209,7 +209,7 @@ export default function ModsPage() {
                   <Button
                     variant="ghost"
                     onClick={() => togglePackMod(item.id)}
-                    className={cn(selectedPackModIds.includes(item.id) && "bg-panel-purple/10 text-panel-purple")}
+                    className={cn(selectedPackModIds.includes(item.id) && "bg-panel-green/10 text-panel-green")}
                   >
                     {selectedPackModIds.includes(item.id) && <Check aria-hidden="true" />}
                     {t("selectForPack")}
@@ -268,13 +268,13 @@ export default function ModsPage() {
         </Card>
         <div className="mt-3 grid gap-3 xl:grid-cols-2">
           {modPacks.map((pack) => (
-            <Card key={pack.id} className="p-4 transition hover:border-panel-purple/40">
+            <Card key={pack.id} className="p-4 transition hover:border-panel-green/25">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h3 className="truncate font-semibold text-white">{pack.name}</h3>
                   <p className="mt-1 truncate text-sm text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
                 </div>
-                <Badge className="shrink-0 bg-panel-purple/15 text-panel-purple">{pack.mods.length}</Badge>
+                <Badge className="shrink-0 bg-slate-800 text-slate-300">{pack.mods.length}</Badge>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {pack.mods.map((mod) => (
@@ -353,7 +353,7 @@ export default function ModsPage() {
           </Card>
           <div className="grid gap-3 xl:grid-cols-2">
             {serverMods.map((item) => (
-              <Card key={item.id} className={cn("p-4 transition", item.enabled ? "border-panel-purple/35" : "opacity-75")}>
+              <Card key={item.id} className={cn("p-4 transition", item.enabled ? "border-panel-green/25" : "opacity-75")}>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} />
                   <Badge className={cn("shrink-0", item.enabled ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>
@@ -447,7 +447,7 @@ function PanelHeading({ count, hint, icon, title }: { count: number; hint: strin
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-2">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-purple">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-slate-400">
           {icon}
         </span>
         <div className="min-w-0">
@@ -465,7 +465,7 @@ function PanelHeading({ count, hint, icon, title }: { count: number; hint: strin
 function ModIdentity({ detail, item }: { detail: string; item: ModFile }) {
   return (
     <div className="flex min-w-0 items-start gap-3">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-panel-line bg-slate-950/55 text-panel-purple">
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-panel-line bg-slate-950/55 text-slate-400">
         <Package aria-hidden="true" className="size-5" />
       </span>
       <div className="min-w-0">
