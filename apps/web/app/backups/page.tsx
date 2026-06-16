@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Download, Search, Trash2 } from "lucide-react";
+import { Download, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -143,15 +143,6 @@ export default function BackupsPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  {backup.instanceId && (
-                    <Link
-                      href={`/servers/${backup.instanceId}`}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 text-sm font-medium text-slate-100 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-                    >
-                      {t("manageOnServer")}
-                      <ArrowRight aria-hidden="true" className="size-4" />
-                    </Link>
-                  )}
                   <Button
                     variant="secondary"
                     aria-label={t("download")}
