@@ -9,12 +9,18 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { createModPack, deleteGlobalMod, deleteModPack, importGlobalWorkshopMods, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
-import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack, RecommendedMod } from "@/lib/types";
 
 type ModsView = "discover" | "library" | "packs";
+type ModGameFilter = "all" | "terraria";
+
+const gameFilters = [
+  { key: "all", labelKey: "filterAll" },
+  { key: "terraria", labelKey: "gameTerraria" }
+] as const satisfies readonly { key: ModGameFilter; labelKey: MessageKey }[];
 
 export default function ModsPage() {
   const { locale, t } = useI18n();
@@ -25,6 +31,7 @@ export default function ModsPage() {
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const [pendingPackDelete, setPendingPackDelete] = useState<ModPack | null>(null);
   const [activeView, setActiveView] = useState<ModsView>("discover");
+  const [gameFilter, setGameFilter] = useState<ModGameFilter>("all");
   const [workshopDialogOpen, setWorkshopDialogOpen] = useState(false);
   const [packDialogOpen, setPackDialogOpen] = useState(false);
   const [packName, setPackName] = useState("");
@@ -108,6 +115,9 @@ export default function ModsPage() {
   const globalMods = globalModsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const recommendedMods = recommendedModsQuery.data ?? [];
+  const filteredGlobalMods = gameFilter === "all" || gameFilter === "terraria" ? globalMods : [];
+  const filteredModPacks = gameFilter === "all" || gameFilter === "terraria" ? modPacks : [];
+  const filteredRecommendedMods = gameFilter === "all" || gameFilter === "terraria" ? recommendedMods : [];
   const selectedPackModCount = selectedPackModIds.length;
   const workshopIds = parseWorkshopIds(workshopIdsText);
   const togglePackMod = (modId: string) => {
@@ -136,24 +146,30 @@ export default function ModsPage() {
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
 
+      <Card className="mb-4 p-3">
+        <div className="flex flex-wrap gap-3">
+          <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
+        </div>
+      </Card>
+
       <div className="mt-6 flex flex-wrap gap-2 border-b border-panel-line pb-3">
         <ViewTab
           active={activeView === "discover"}
-          count={recommendedMods.length}
+          count={filteredRecommendedMods.length}
           icon={<Compass aria-hidden="true" />}
           label={t("discoverMods")}
           onClick={() => setActiveView("discover")}
         />
         <ViewTab
           active={activeView === "library"}
-          count={globalMods.length}
+          count={filteredGlobalMods.length}
           icon={<Library aria-hidden="true" />}
           label={t("modLibrary")}
           onClick={() => setActiveView("library")}
         />
         <ViewTab
           active={activeView === "packs"}
-          count={modPacks.length}
+          count={filteredModPacks.length}
           icon={<Package aria-hidden="true" />}
           label={t("modPacks")}
           onClick={() => setActiveView("packs")}
@@ -165,7 +181,7 @@ export default function ModsPage() {
           <SectionToolbar
             title={t("discoverMods")}
             hint={t("discoverModsHint")}
-            count={recommendedMods.length}
+            count={filteredRecommendedMods.length}
             actions={(
               <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending}>
                 <Download aria-hidden="true" />
@@ -174,7 +190,7 @@ export default function ModsPage() {
             )}
           />
           <div className="mt-4 grid gap-3 2xl:grid-cols-2">
-            {recommendedMods.map((item) => (
+            {filteredRecommendedMods.map((item) => (
               <RecommendedModCard
                 key={item.workshopId}
                 item={item}
@@ -193,7 +209,7 @@ export default function ModsPage() {
           <SectionToolbar
             title={t("modLibrary")}
             hint={t("modLibraryHint")}
-            count={globalMods.length}
+            count={filteredGlobalMods.length}
             actions={(
               <>
                 <Button variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
@@ -208,7 +224,7 @@ export default function ModsPage() {
             )}
           />
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {globalMods.map((item) => (
+            {filteredGlobalMods.map((item) => (
               <Card key={item.id} className="p-4 transition hover:border-panel-green/25">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} locale={locale} />
@@ -221,7 +237,7 @@ export default function ModsPage() {
                 </div>
               </Card>
             ))}
-            {!globalModsQuery.isLoading && globalMods.length === 0 && (
+            {!globalModsQuery.isLoading && filteredGlobalMods.length === 0 && (
               <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
@@ -236,7 +252,7 @@ export default function ModsPage() {
           <SectionToolbar
             title={t("modPacks")}
             hint={t("modPacksHint")}
-            count={modPacks.length}
+            count={filteredModPacks.length}
             actions={(
               <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
                 <Package aria-hidden="true" />
@@ -245,7 +261,7 @@ export default function ModsPage() {
             )}
           />
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {modPacks.map((pack) => (
+            {filteredModPacks.map((pack) => (
               <Card key={pack.id} className="p-4 transition hover:border-panel-green/25">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -269,7 +285,7 @@ export default function ModsPage() {
                 </div>
               </Card>
             ))}
-            {!modPacksQuery.isLoading && modPacks.length === 0 && (
+            {!modPacksQuery.isLoading && filteredModPacks.length === 0 && (
               <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
@@ -589,4 +605,37 @@ function sanitizeWorkshopDescription(value: string) {
     .replace(/https?:\/\/\S+/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function FilterGroup<T extends string>({
+  label,
+  onChange,
+  options,
+  t,
+  value
+}: {
+  label: string;
+  onChange: (value: T) => void;
+  options: readonly { key: T; labelKey: MessageKey }[];
+  t: (key: MessageKey) => string;
+  value: T;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
+        {options.map((item) => (
+          <Button
+            key={item.key}
+            type="button"
+            variant="ghost"
+            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
+            onClick={() => onChange(item.key)}
+          >
+            {t(item.labelKey)}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
 }

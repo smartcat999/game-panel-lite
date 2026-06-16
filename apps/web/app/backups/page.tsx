@@ -15,7 +15,13 @@ import type { Backup, Server } from "@/lib/types";
 
 type BackupServerFilter = "all" | string;
 type BackupTypeFilter = "all" | Backup["type"];
+type BackupGameFilter = "all" | "terraria";
 type BackupServerTypeFilter = "all" | Server["mode"];
+
+const backupGameFilters = [
+  { key: "all", labelKey: "filterAll" },
+  { key: "terraria", labelKey: "gameTerraria" }
+] as const satisfies readonly { key: BackupGameFilter; labelKey: MessageKey }[];
 
 const backupTypeFilters = [
   { key: "all", labelKey: "filterAll" },
@@ -35,6 +41,7 @@ export default function BackupsPage() {
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const [search, setSearch] = useState("");
+  const [gameFilter, setGameFilter] = useState<BackupGameFilter>("all");
   const [serverFilter, setServerFilter] = useState<BackupServerFilter>("all");
   const [serverTypeFilter, setServerTypeFilter] = useState<BackupServerTypeFilter>("all");
   const [backupTypeFilter, setBackupTypeFilter] = useState<BackupTypeFilter>("all");
@@ -52,12 +59,13 @@ export default function BackupsPage() {
       const server = backup.instanceId ? serverById.get(backup.instanceId) : undefined;
       const serverName = backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server;
       const matchesSearch = !term || [backup.name, backup.world, backup.type, serverName].some((value) => value.toLowerCase().includes(term));
+      const matchesGame = gameFilter === "all" || server?.mode === "vanilla" || server?.mode === "tmodloader";
       const matchesServer = serverFilter === "all" || backup.instanceId === serverFilter;
       const matchesServerType = serverTypeFilter === "all" || server?.mode === serverTypeFilter;
       const matchesBackupType = backupTypeFilter === "all" || backup.type === backupTypeFilter;
-      return matchesSearch && matchesServer && matchesServerType && matchesBackupType;
+      return matchesSearch && matchesGame && matchesServer && matchesServerType && matchesBackupType;
     }).sort(sortBackupsNewestFirst);
-  }, [backupTypeFilter, backups, search, serverById, serverFilter, serverNameById, serverTypeFilter]);
+  }, [backupTypeFilter, backups, gameFilter, search, serverById, serverFilter, serverNameById, serverTypeFilter]);
 
   const remove = useMutation({
     mutationFn: deleteBackup,
@@ -103,6 +111,7 @@ export default function BackupsPage() {
             <Input className="pl-9" placeholder={t("searchBackups")} value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
           <div className="flex flex-wrap gap-3">
+            <FilterGroup label={t("filterGame")} options={backupGameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
             <label className="flex items-center gap-2">
               <span className="text-xs font-medium text-slate-500">{t("server")}</span>
               <select
