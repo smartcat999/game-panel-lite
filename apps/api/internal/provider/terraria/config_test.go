@@ -107,8 +107,12 @@ func TestTModLoaderRuntimeOptionsUseNonInteractiveConfig(t *testing.T) {
 	if provider.Image() != "smartcat99999/tmodloader:v2026.04.3.0" {
 		t.Fatalf("unexpected tModLoader image: %s", provider.Image())
 	}
-	if got := strings.Join(options.Cmd, " "); !strings.Contains(got, "-config /home/container/serverconfig.txt") {
-		t.Fatalf("expected non-interactive config command, got %q", got)
+	gotCmd := strings.Join(options.Cmd, " ")
+	if !strings.Contains(gotCmd, "-config /home/container/serverconfig.txt") {
+		t.Fatalf("expected non-interactive config command, got %q", gotCmd)
+	}
+	if !strings.Contains(gotCmd, "-nosteam") {
+		t.Fatalf("expected tModLoader command to disable Steam prompts, got %q", gotCmd)
 	}
 	env := strings.Join(options.Env, "\n")
 	for _, expected := range []string{"WORLD_NAME=Modded Smoke", "WORLD_SIZE=1"} {

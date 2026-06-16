@@ -130,7 +130,7 @@ func tModLoaderRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOpt
 		Cmd: []string{
 			"sh",
 			"-c",
-			"cd /home/container && exec ./gamepanel-tmodloader-entrypoint.sh -config /home/container/serverconfig.txt -tmlsavedirectory /home/container -world \"/home/container/Worlds/${WORLD_NAME}.wld\" -autocreate \"${WORLD_SIZE}\" -noupnp",
+			"cd /home/container && exec ./gamepanel-tmodloader-entrypoint.sh -nosteam -config /home/container/serverconfig.txt -tmlsavedirectory /home/container -world \"/home/container/Worlds/${WORLD_NAME}.wld\" -autocreate \"${WORLD_SIZE}\" -noupnp",
 		},
 		DataMounts: []string{
 			"Worlds:/home/container/Worlds",

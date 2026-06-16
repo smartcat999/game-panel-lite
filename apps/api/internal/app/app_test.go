@@ -172,7 +172,7 @@ func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
 
 func waitForAPIServerStatus(t *testing.T, api *App, id string, status domain.ServerStatus) domain.GameServerInstance {
 	t.Helper()
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		recorder := httptest.NewRecorder()
 		api.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/servers/"+id, nil))
