@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, Library, Package, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode } from "react";
@@ -185,7 +186,9 @@ export default function ModsPage() {
             <Card key={pack.id} className="p-4 transition hover:border-panel-green/25">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h3 className="truncate font-semibold text-white">{pack.name}</h3>
+                  <Link href={`/mods/packs/${pack.id}`} className="block min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
+                    <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{pack.name}</h3>
+                  </Link>
                   <p className="mt-1 truncate text-sm text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
                 </div>
                 <Badge className="shrink-0 bg-slate-800 text-slate-300">{pack.mods.length}</Badge>
@@ -281,7 +284,9 @@ function ModIdentity({ detail, item }: { detail: string; item: ModFile }) {
       </span>
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
-          <h3 className="truncate font-semibold text-white">{item.fileName}</h3>
+          <Link href={`/mods/${item.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
+            <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{item.fileName}</h3>
+          </Link>
         </div>
         <p className="mt-1 truncate text-sm text-slate-400">{detail}</p>
       </div>

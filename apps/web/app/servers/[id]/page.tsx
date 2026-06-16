@@ -1316,7 +1316,7 @@ function WorldsTab({
         {items.map((world) => (
           <ResourceRow
             key={world.id}
-            title={world.name}
+            title={<Link href={`/worlds/${world.id}`} className="transition hover:text-panel-green">{world.name}</Link>}
             meta={`${world.bytes} · ${localizeRelativeTime(world.modified, locale)}`}
             actions={
               <>
@@ -1394,7 +1394,7 @@ function BackupsTab({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
-                  <p className="truncate font-medium text-white">{backup.name}</p>
+                  <Link href={`/backups/${backup.id}`} className="truncate font-medium text-white transition hover:text-panel-green">{backup.name}</Link>
                   <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
                     {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
                   </span>
@@ -1499,73 +1499,6 @@ function ModsTab({
         {libraryError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
 
         <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="font-semibold text-white">{t("installFromLibrary")}</h3>
-              <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-2 xl:grid-cols-2">
-            {availableMods.map((mod) => (
-              <ResourceRow
-                key={mod.id}
-                title={mod.fileName}
-                meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
-                actions={
-                  <Button variant="secondary" onClick={() => onAssignMod(mod)} disabled={assigning || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                    <Package aria-hidden="true" />
-                    {t("installToServer")}
-                  </Button>
-                }
-              />
-            ))}
-            {availableMods.length === 0 && <p className="text-sm text-slate-500 xl:col-span-2">{t("noGlobalMods")}</p>}
-          </div>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-            <h3 className="font-semibold text-white">{t("modPacks")}</h3>
-            <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
-            <div className="mt-4 grid gap-2">
-              {modPacks.map((pack) => (
-                <ResourceRow
-                  key={pack.id}
-                  title={pack.name}
-                  meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
-                  actions={
-                    <Button variant="secondary" onClick={() => onInstallPack(pack)} disabled={packInstalling || blocked || pack.modIds.length === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                      <Package aria-hidden="true" />
-                      {t("installModPack")}
-                    </Button>
-                  }
-                />
-              ))}
-              {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-            <h3 className="font-semibold text-white">{t("importWorkshopMods")}</h3>
-            <p className="mt-1 text-sm text-slate-500">{t("workshopImportHint")}</p>
-            <textarea
-              className="mt-4 min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
-              placeholder={t("workshopIdsPlaceholder")}
-              value={workshopIdsText}
-              onChange={(event) => onWorkshopIdsChange(event.target.value)}
-              disabled={importingWorkshop || blocked}
-            />
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIdsCount })}</span>
-              <Button variant="secondary" onClick={onImportWorkshop} disabled={importingWorkshop || blocked || workshopIdsCount === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                <Download aria-hidden="true" />
-                {importingWorkshop ? t("actionWorking") : t("importWorkshopMods")}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-semibold text-white">{t("serverMods")}</h3>
@@ -1579,7 +1512,7 @@ function ModsTab({
             {items.map((mod) => (
               <ResourceRow
                 key={mod.id}
-                title={mod.fileName}
+                title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
                 meta={`${mod.size} · ${mod.enabled ? t("enabled") : t("disabled")} · ${localizeRelativeTime(mod.created, locale)}`}
                 actions={
                   <>
@@ -1596,6 +1529,77 @@ function ModsTab({
             ))}
           </div>
         </div>
+
+        <details className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-100 outline-none transition hover:text-panel-green focus-visible:ring-2 focus-visible:ring-panel-green/50">
+            {t("installOptions")}
+            <span className="ml-2 font-normal text-slate-500">{t("installOptionsHint")}</span>
+          </summary>
+          <div className="mt-4 space-y-4">
+            <div>
+              <h3 className="font-semibold text-white">{t("installFromLibrary")}</h3>
+              <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
+              <div className="mt-4 grid gap-2 xl:grid-cols-2">
+                {availableMods.map((mod) => (
+                  <ResourceRow
+                    key={mod.id}
+                    title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
+                    meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
+                    actions={
+                      <Button variant="secondary" onClick={() => onAssignMod(mod)} disabled={assigning || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                        <Package aria-hidden="true" />
+                        {t("installToServer")}
+                      </Button>
+                    }
+                  />
+                ))}
+                {availableMods.length === 0 && <p className="text-sm text-slate-500 xl:col-span-2">{t("noGlobalMods")}</p>}
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+                <h3 className="font-semibold text-white">{t("modPacks")}</h3>
+                <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
+                <div className="mt-4 grid gap-2">
+                  {modPacks.map((pack) => (
+                    <ResourceRow
+                      key={pack.id}
+                      title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
+                      meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
+                      actions={
+                        <Button variant="secondary" onClick={() => onInstallPack(pack)} disabled={packInstalling || blocked || pack.modIds.length === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                          <Package aria-hidden="true" />
+                          {t("installModPack")}
+                        </Button>
+                      }
+                    />
+                  ))}
+                  {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+                <h3 className="font-semibold text-white">{t("importWorkshopMods")}</h3>
+                <p className="mt-1 text-sm text-slate-500">{t("workshopImportHint")}</p>
+                <textarea
+                  className="mt-4 min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
+                  placeholder={t("workshopIdsPlaceholder")}
+                  value={workshopIdsText}
+                  onChange={(event) => onWorkshopIdsChange(event.target.value)}
+                  disabled={importingWorkshop || blocked}
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIdsCount })}</span>
+                  <Button variant="secondary" onClick={onImportWorkshop} disabled={importingWorkshop || blocked || workshopIdsCount === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                    <Download aria-hidden="true" />
+                    {importingWorkshop ? t("actionWorking") : t("importWorkshopMods")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
     </ResourcePanel>
   );
@@ -1671,11 +1675,11 @@ function LogViewport({
   );
 }
 
-function ResourceRow({ title, meta, actions }: { title: string; meta: string; actions?: ReactNode }) {
+function ResourceRow({ title, meta, actions }: { title: ReactNode; meta: string; actions?: ReactNode }) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{title}</p>
+        <div className="truncate text-sm font-medium">{title}</div>
         <p className="mt-1 text-xs text-slate-500">{meta}</p>
       </div>
       {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}

@@ -128,13 +128,15 @@ export default function BackupsPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate font-semibold text-white">{backup.name}</h2>
+                    <Link href={`/backups/${backup.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
+                      <h2 className="truncate font-semibold text-white transition hover:text-panel-green">{backup.name}</h2>
+                    </Link>
                     <span className={cn("rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
                       {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
                     </span>
                   </div>
                   <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
-                    <BackupMeta label={t("server")} value={serverName} />
+                    <BackupMeta href={backup.instanceId ? `/servers/${backup.instanceId}` : undefined} label={t("server")} value={serverName} />
                     <BackupMeta label={t("world")} value={backup.world} />
                     <BackupMeta label={t("size")} value={backup.size} />
                     <BackupMeta label={t("created")} value={localizeRelativeTime(backup.created, locale)} />
@@ -195,11 +197,15 @@ export default function BackupsPage() {
   );
 }
 
-function BackupMeta({ label, value }: { label: string; value: string }) {
+function BackupMeta({ href, label, value }: { href?: string; label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 truncate font-medium text-slate-200">{value}</p>
+      {href ? (
+        <Link href={href} className="mt-1 block truncate font-medium text-panel-green hover:underline">{value}</Link>
+      ) : (
+        <p className="mt-1 truncate font-medium text-slate-200">{value}</p>
+      )}
     </div>
   );
 }
