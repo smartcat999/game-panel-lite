@@ -12,6 +12,7 @@ import { deleteModPack, listGlobalMods, listModPacks, updateModPack } from "@/li
 import { useI18n } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
+import type { ModFile } from "@/lib/types";
 
 export default function ModPackDetailPage() {
   const { locale, t } = useI18n();
@@ -29,6 +30,14 @@ export default function ModPackDetailPage() {
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const pack = useMemo(() => (packsQuery.data ?? []).find((item) => item.id === id), [id, packsQuery.data]);
   const globalMods = globalModsQuery.data ?? [];
+  const selectedMods = useMemo(
+    () => globalMods.filter((mod) => selectedModIds.includes(mod.id)),
+    [globalMods, selectedModIds]
+  );
+  const availableMods = useMemo(
+    () => globalMods.filter((mod) => !selectedModIds.includes(mod.id)),
+    [globalMods, selectedModIds]
+  );
   const remove = useMutation({
     mutationFn: deleteModPack,
     onSuccess: async () => {
@@ -167,34 +176,22 @@ export default function ModPackDetailPage() {
                   <Input value={draftDescription} onChange={(event) => setDraftDescription(event.target.value)} placeholder={t("modPackDescription")} />
                 </label>
               </div>
-              <div className="mt-4 rounded-md border border-panel-line bg-slate-950/45">
-                <div className="flex items-center justify-between border-b border-panel-line px-3 py-2">
-                  <span className="text-sm font-medium text-white">{t("modLibrary")}</span>
-                  <span className="text-xs text-slate-500">{t("selectedForPack", { count: selectedModIds.length })}</span>
-                </div>
-                <div className="max-h-72 space-y-2 overflow-y-auto p-3">
-                  {globalMods.map((mod) => {
-                    const selected = selectedModIds.includes(mod.id);
-                    return (
-                      <button
-                        key={mod.id}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-left transition hover:border-panel-green/35",
-                          selected && "border-panel-green/60 bg-panel-green/10"
-                        )}
-                        onClick={() => setSelectedModIds((current) => current.includes(mod.id) ? current.filter((item) => item !== mod.id) : [...current, mod.id])}
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium text-white">{modDisplayName(mod, locale)}</span>
-                          <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size}</span>
-                        </span>
-                        {selected && <Check aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}
-                      </button>
-                    );
-                  })}
-                  {!globalModsQuery.isLoading && globalMods.length === 0 && <p className="px-1 py-4 text-center text-sm text-slate-500">{t("noGlobalMods")}</p>}
-                </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <SelectionColumn
+                  emptyMessage={t("noModPacks")}
+                  items={selectedMods}
+                  label={`${t("modPacks")} · ${t("selectedForPack", { count: selectedMods.length })}`}
+                  locale={locale}
+                  onSelect={(modId) => setSelectedModIds((current) => current.filter((item) => item !== modId))}
+                  selected
+                />
+                <SelectionColumn
+                  emptyMessage={t("noGlobalMods")}
+                  items={availableMods}
+                  label={t("modLibrary")}
+                  locale={locale}
+                  onSelect={(modId) => setSelectedModIds((current) => [...current, modId])}
+                />
               </div>
               <div className="mt-4 flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setEditing(false)} disabled={save.isPending}>{t("cancel")}</Button>
@@ -240,5 +237,50 @@ function DetailLine({ label, value }: { label: string; value: string }) {
       <span className="text-slate-500">{label}: </span>
       <span className="font-medium text-white">{value}</span>
     </>
+  );
+}
+
+function SelectionColumn({
+  emptyMessage,
+  items,
+  label,
+  locale,
+  onSelect,
+  selected = false
+}: {
+  emptyMessage: string;
+  items: ModFile[];
+  label: string;
+  locale: string;
+  onSelect: (modId: string) => void;
+  selected?: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-panel-line bg-slate-950/45">
+      <div className="flex items-center justify-between border-b border-panel-line px-3 py-2">
+        <span className="text-sm font-medium text-white">{label}</span>
+        <span className="text-xs text-slate-500">{items.length}</span>
+      </div>
+      <div className="max-h-80 space-y-2 overflow-y-auto p-3">
+        {items.map((mod) => (
+          <button
+            key={mod.id}
+            type="button"
+            className={cn(
+              "flex w-full items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-left transition hover:border-panel-green/35",
+              selected && "border-panel-green/60 bg-panel-green/10"
+            )}
+            onClick={() => onSelect(mod.id)}
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-white">{modDisplayName(mod, locale)}</span>
+              <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size}</span>
+            </span>
+            {selected ? <X aria-hidden="true" className="size-4 shrink-0 text-slate-400" /> : <Check aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}
+          </button>
+        ))}
+        {items.length === 0 && <p className="px-1 py-4 text-center text-sm text-slate-500">{emptyMessage}</p>}
+      </div>
+    </div>
   );
 }
