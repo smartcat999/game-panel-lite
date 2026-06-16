@@ -12,6 +12,7 @@ import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
 import {
+  assignMod,
   createBackup,
   createWorldSnapshot,
   deleteBackup,
@@ -22,7 +23,10 @@ import {
   getServer,
   getServerLogSnapshot,
   getServerStats,
+  importWorkshopMods,
   listBackups,
+  listGlobalMods,
+  listModPacks,
   listMods,
   listWorlds,
   previewTerrariaConfig,
@@ -40,7 +44,7 @@ import { describeResourceAction, formatServerDetailError, isServerLifecyclePendi
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
-import type { Backup, ModFile, Server, World } from "@/lib/types";
+import type { Backup, ModFile, ModPack, Server, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 
@@ -64,10 +68,23 @@ export default function ServerDetailPage() {
     enabled: Boolean(server && server.mode === "tmodloader"),
     retry: false
   });
+  const globalModsQuery = useQuery({
+    queryKey: ["global-mods"],
+    queryFn: listGlobalMods,
+    enabled: Boolean(server && server.mode === "tmodloader"),
+    retry: false
+  });
+  const modPacksQuery = useQuery({
+    queryKey: ["mod-packs"],
+    queryFn: listModPacks,
+    enabled: Boolean(server && server.mode === "tmodloader"),
+    retry: false
+  });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
+  const [workshopIdsText, setWorkshopIdsText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
@@ -229,6 +246,35 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(formatActionError(error, t("unableDeleteMod")))
   });
+  const modAssign = useMutation({
+    mutationFn: (modId: string) => assignMod(modId, id),
+    onSuccess: async () => {
+      showSuccess(t("modAssigned"));
+      await client.invalidateQueries({ queryKey: ["mods", id] });
+    },
+    onError: (error) => showError(formatActionError(error, t("unableAssignMod")))
+  });
+  const modPackAssign = useMutation({
+    mutationFn: async (pack: ModPack) => {
+      for (const modId of pack.modIds) {
+        await assignMod(modId, id);
+      }
+    },
+    onSuccess: async () => {
+      showSuccess(t("modPackInstalled"));
+      await client.invalidateQueries({ queryKey: ["mods", id] });
+    },
+    onError: (error) => showError(formatActionError(error, t("unableAssignMod")))
+  });
+  const workshopImport = useMutation({
+    mutationFn: () => importWorkshopMods(id, parseWorkshopIds(workshopIdsText)),
+    onSuccess: async () => {
+      showSuccess(t("workshopModsImported"));
+      setWorkshopIdsText("");
+      await client.invalidateQueries({ queryKey: ["mods", id] });
+    },
+    onError: (error) => showError(formatActionError(error, t("unableImportWorkshopMods")))
+  });
 
   useEffect(() => {
     if (!id || (activeTab !== "console" && activeTab !== "logs")) return;
@@ -298,6 +344,9 @@ export default function ServerDetailPage() {
     [backupsQuery.data, server]
   );
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
+  const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
+  const modPacks = useMemo(() => modPacksQuery.data ?? [], [modPacksQuery.data]);
+  const workshopIds = useMemo(() => parseWorkshopIds(workshopIdsText), [workshopIdsText]);
   if (!server) {
     return (
       <>
@@ -511,16 +560,28 @@ export default function ServerDetailPage() {
           )}
           {activeTab === "mods" && server.mode === "tmodloader" && (
             <ModsTab
+              availableMods={globalMods}
+              assigning={modAssign.isPending}
               deleting={modDelete.isPending}
+              importingWorkshop={workshopImport.isPending}
               isError={modsQuery.isError}
               isLoading={modsQuery.isLoading}
               items={serverMods}
+              libraryError={globalModsQuery.isError || modPacksQuery.isError}
+              modPacks={modPacks}
+              packInstalling={modPackAssign.isPending}
               serverStatus={server.status}
               toggling={modEnabled.isPending}
               uploading={modUpload.isPending}
+              workshopIdsCount={workshopIds.length}
+              workshopIdsText={workshopIdsText}
+              onAssignMod={(mod) => modAssign.mutate(mod.id)}
               onDelete={setPendingModDelete}
+              onImportWorkshop={() => workshopImport.mutate()}
+              onInstallPack={(pack) => modPackAssign.mutate(pack)}
               onToggle={(mod) => modEnabled.mutate({ modId: mod.id, enabled: !mod.enabled })}
               onUploadClick={() => modInputRef.current?.click()}
+              onWorkshopIdsChange={setWorkshopIdsText}
             />
           )}
         </Card>
@@ -1373,64 +1434,168 @@ function BackupsTab({
 }
 
 function ModsTab({
+  availableMods,
+  assigning,
   deleting,
+  importingWorkshop,
   isError,
   isLoading,
   items,
+  libraryError,
+  modPacks,
+  packInstalling,
   serverStatus,
   toggling,
   uploading,
+  workshopIdsCount,
+  workshopIdsText,
+  onAssignMod,
   onDelete,
+  onImportWorkshop,
+  onInstallPack,
   onToggle,
-  onUploadClick
+  onUploadClick,
+  onWorkshopIdsChange
 }: {
+  availableMods: ModFile[];
+  assigning: boolean;
   deleting: boolean;
+  importingWorkshop: boolean;
   isError: boolean;
   isLoading: boolean;
   items: ModFile[];
+  libraryError: boolean;
+  modPacks: ModPack[];
+  packInstalling: boolean;
   serverStatus: Server["status"];
   toggling: boolean;
   uploading: boolean;
+  workshopIdsCount: number;
+  workshopIdsText: string;
+  onAssignMod: (mod: ModFile) => void;
   onDelete: (mod: ModFile) => void;
+  onImportWorkshop: () => void;
+  onInstallPack: (pack: ModPack) => void;
   onToggle: (mod: ModFile) => void;
   onUploadClick: () => void;
+  onWorkshopIdsChange: (value: string) => void;
 }) {
   const { locale, t } = useI18n();
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
+  const blocked = modAction.disabled;
   return (
     <ResourcePanel
       title={t("detailModActions")}
       href="/mods"
       action={
-        <Button variant="secondary" onClick={onUploadClick} disabled={uploading || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+        <Button variant="secondary" onClick={onUploadClick} disabled={uploading || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
           <Upload aria-hidden="true" />
           {uploading ? t("uploading") : t("uploadMod")}
         </Button>
       }
     >
-      {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
-      {isError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
-      {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
-      {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
-      <div className="grid gap-2">
-        {items.map((mod) => (
-          <ResourceRow
-            key={mod.id}
-            title={mod.fileName}
-            meta={`${mod.size} · ${mod.enabled ? t("enabled") : t("disabled")} · ${localizeRelativeTime(mod.created, locale)}`}
-            actions={
-              <>
-                <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                  <Power aria-hidden="true" />
-                  {mod.enabled ? t("disable") : t("enable")}
-                </Button>
-                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting || modAction.disabled} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </>
-            }
-          />
-        ))}
+      <div className="space-y-4">
+        {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
+        {libraryError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
+
+        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-white">{t("installFromLibrary")}</h3>
+              <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 xl:grid-cols-2">
+            {availableMods.map((mod) => (
+              <ResourceRow
+                key={mod.id}
+                title={mod.fileName}
+                meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
+                actions={
+                  <Button variant="secondary" onClick={() => onAssignMod(mod)} disabled={assigning || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                    <Package aria-hidden="true" />
+                    {t("installToServer")}
+                  </Button>
+                }
+              />
+            ))}
+            {availableMods.length === 0 && <p className="text-sm text-slate-500 xl:col-span-2">{t("noGlobalMods")}</p>}
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+            <h3 className="font-semibold text-white">{t("modPacks")}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
+            <div className="mt-4 grid gap-2">
+              {modPacks.map((pack) => (
+                <ResourceRow
+                  key={pack.id}
+                  title={pack.name}
+                  meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
+                  actions={
+                    <Button variant="secondary" onClick={() => onInstallPack(pack)} disabled={packInstalling || blocked || pack.modIds.length === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                      <Package aria-hidden="true" />
+                      {t("installModPack")}
+                    </Button>
+                  }
+                />
+              ))}
+              {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+            <h3 className="font-semibold text-white">{t("importWorkshopMods")}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t("workshopImportHint")}</p>
+            <textarea
+              className="mt-4 min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
+              placeholder={t("workshopIdsPlaceholder")}
+              value={workshopIdsText}
+              onChange={(event) => onWorkshopIdsChange(event.target.value)}
+              disabled={importingWorkshop || blocked}
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIdsCount })}</span>
+              <Button variant="secondary" onClick={onImportWorkshop} disabled={importingWorkshop || blocked || workshopIdsCount === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                <Download aria-hidden="true" />
+                {importingWorkshop ? t("actionWorking") : t("importWorkshopMods")}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-white">{t("serverMods")}</h3>
+              <p className="mt-1 text-sm text-slate-500">{t("serverModsHint")}</p>
+            </div>
+          </div>
+          {isError ? <p className="mt-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
+          {!isError && isLoading ? <p className="mt-4 text-sm text-slate-400">{t("loading")}</p> : null}
+          {!isError && !isLoading && items.length === 0 ? <p className="mt-4 text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
+          <div className="mt-4 grid gap-2">
+            {items.map((mod) => (
+              <ResourceRow
+                key={mod.id}
+                title={mod.fileName}
+                meta={`${mod.size} · ${mod.enabled ? t("enabled") : t("disabled")} · ${localizeRelativeTime(mod.created, locale)}`}
+                actions={
+                  <>
+                    <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                      <Power aria-hidden="true" />
+                      {mod.enabled ? t("disable") : t("enable")}
+                    </Button>
+                    <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </>
+                }
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </ResourcePanel>
   );
@@ -1635,4 +1800,16 @@ function worldSizeLabel(value: Server["config"]["worldSize"], t: ReturnType<type
     large: t("tagLargeWorld")
   };
   return labels[value] ?? value;
+}
+
+function parseWorkshopIds(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split(/[\s,，]+/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
 }
