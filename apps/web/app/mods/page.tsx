@@ -173,7 +173,7 @@ export default function ModsPage() {
               </Button>
             )}
           />
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          <div className="mt-4 grid gap-3 2xl:grid-cols-2">
             {recommendedMods.map((item) => (
               <RecommendedModCard
                 key={item.workshopId}
@@ -527,7 +527,7 @@ function RecommendedModCard({
               <StatPill icon={<Package aria-hidden="true" className="size-3.5" />} label={item.size} />
             </div>
           </div>
-          <p className="mt-3 line-clamp-3 text-sm text-slate-400">{item.description || item.title}</p>
+          <p className="mt-3 line-clamp-3 text-sm text-slate-400">{sanitizeWorkshopDescription(item.description || item.title)}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(item.tags ?? []).slice(0, 4).map((tag) => (
               <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
@@ -535,8 +535,15 @@ function RecommendedModCard({
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between border-t border-panel-line px-4 py-3 text-xs text-slate-500">
-        <span>{locale === "zh" ? "来源：Steam 创意工坊" : "Source: Steam Workshop"}</span>
+      <div className="flex items-center justify-between gap-3 border-t border-panel-line px-4 py-3 text-xs text-slate-500">
+        <a
+          href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="truncate text-slate-400 transition hover:text-panel-green"
+        >
+          {locale === "zh" ? "打开 Steam 工坊" : "Open Steam Workshop"}
+        </a>
         {item.inLibrary ? (
           <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
         ) : (
@@ -574,4 +581,12 @@ function formatWorkshopUpdated(timestamp: number | undefined, locale: string) {
     value = `${minutes} min ago`;
   }
   return locale === "zh" ? `更新 ${localizeRelativeTime(value, "zh")}` : `Updated ${value}`;
+}
+
+function sanitizeWorkshopDescription(value: string) {
+  return value
+    .replace(/\[(\/)?[a-z0-9=:#/.\-_"' ]+\]/gi, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }

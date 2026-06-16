@@ -2468,6 +2468,12 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	stream, err := h.runtime.Logs(r.Context(), server)
 	if err != nil {
+		if strings.TrimSpace(server.LastError) != "" {
+			_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", server.LastError)
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		}
 		_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
 		return
 	}
@@ -2588,6 +2594,10 @@ func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
 	server.Status = domain.StatusStopped
 	stream, err := h.runtime.Logs(r.Context(), server)
 	if err != nil {
+		if strings.TrimSpace(server.LastError) != "" {
+			writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{server.LastError}})
+			return
+		}
 		if server.Status != domain.StatusRunning {
 			h.logger.Warn("stopped server log snapshot unavailable; returning empty history", "server", server.ID, "error", err)
 			writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{}})

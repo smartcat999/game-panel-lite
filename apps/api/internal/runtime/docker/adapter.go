@@ -49,6 +49,10 @@ func (a *Adapter) Check(ctx context.Context) runtime.DockerStatus {
 }
 
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
+	containerName := "gamepanel-" + spec.InstanceID
+	if err := a.removeContainerByNameIfExists(ctx, containerName); err != nil {
+		return "", err
+	}
 	dataDir, err := filepath.Abs(spec.DataDir)
 	if err != nil {
 		return "", err
@@ -82,11 +86,22 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 	}, &container.HostConfig{
 		Binds:        dataBinds(dataDir, spec.Options.DataMounts),
 		PortBindings: natPortMap(spec.Port, spec.HostPort),
-	}, nil, nil, "gamepanel-"+spec.InstanceID)
+	}, nil, nil, containerName)
 	if err != nil {
 		return "", err
 	}
 	return resp.ID, nil
+}
+
+func (a *Adapter) removeContainerByNameIfExists(ctx context.Context, name string) error {
+	inspected, err := a.client.ContainerInspect(ctx, name)
+	if err == nil {
+		return a.client.ContainerRemove(ctx, inspected.ID, types.ContainerRemoveOptions{Force: true})
+	}
+	if client.IsErrNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 func (a *Adapter) ensureImage(ctx context.Context, image string) error {
