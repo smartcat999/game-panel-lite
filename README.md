@@ -77,14 +77,32 @@ Do not add auth, billing, cloud provisioning, OAuth, RBAC, Kubernetes, or plugin
 4. Use **Create Server** to choose Terraria, Vanilla or tModLoader, a preset, and config values.
 5. Use **Preview serverconfig.txt** to render the Go backend config output.
 6. Start a server from the Servers page. The API will reuse an existing runtime container when it is present, or create a new container from the persisted server config and data directory when it is missing.
-7. Use Worlds to import `.wld` files, Backups to manage zip backups, and Mods for tModLoader-only `.tmod`, `install.txt`, and `enabled.json` files.
+7. Use Worlds to import `.wld` files, Backups to manage zip backups, and Mods for tModLoader `.tmod` files, mod packs, and Workshop ID imports.
 
 ## Docker Runtime
 
 The API exposes `GET /api/runtime/docker` for daemon status. Game server records are persisted in SQLite; Docker containers are runtime instances. Starting a server creates or reuses a container mounted to that server's isolated data directory, so a missing old container can be recreated without losing world/config data. Real container creation requires Docker to be running and access to the configured Terraria images:
 
-- Vanilla: `ryshe/terraria:<versioned tag>` selected from the provider version list.
-- tModLoader: `radioactivehydra/tmodloader:<version>` selected from the provider version list.
+- Vanilla: `smartcat99999/terraria-vanilla:<version>` selected from the provider version list.
+- tModLoader: `smartcat99999/tmodloader:<version>` selected from the provider version list.
+
+Build the supported game images with:
+
+```bash
+scripts/build-game-images.sh
+```
+
+For local arm64 testing:
+
+```bash
+scripts/build-game-images.sh all --platform linux/arm64 --load
+```
+
+For multi-platform registry publishing:
+
+```bash
+scripts/build-game-images.sh all --platform linux/amd64,linux/arm64 --push
+```
 
 Configure the Docker socket or host with `GAMEPANEL_DOCKER_HOST`. If it is not set, the API falls back to `DOCKER_HOST`, then `unix:///var/run/docker.sock`.
 
@@ -103,7 +121,7 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 ## Safety
 
 - Uploaded world files must end in `.wld`.
-- Uploaded mod files must be `.tmod`, `install.txt`, or `enabled.json`.
+- Uploaded mod files use the `.tmod` workflow; Workshop ID imports generate `install.txt` for tModLoader.
 - File names, joined paths, and restored backup archive entries are checked to prevent path traversal.
 - Stop, restart, and delete server actions require an in-app confirmation before the API call.
 - Secrets, tokens, and machine-specific absolute paths must stay out of committed config.

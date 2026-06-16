@@ -3,12 +3,13 @@
 Build a fixed Terraria vanilla dedicated server image before starting vanilla servers:
 
 ```bash
-docker build \
-  -f docker/terraria-vanilla/Dockerfile \
-  --build-arg TERRARIA_VERSION=1.4.5.6 \
-  --build-arg TERRARIA_DOWNLOAD_ID=1456 \
-  -t smartcat99999/terraria-vanilla:1.4.5.6 \
-  .
+scripts/build-game-images.sh vanilla
+```
+
+For a specific local platform:
+
+```bash
+scripts/build-game-images.sh vanilla --platform linux/arm64 --load
 ```
 
 Known version mappings:
