@@ -61,6 +61,8 @@ export type ModFile = {
   source?: "upload" | "workshop" | string;
   workshopId?: string;
   title?: string;
+  modVersion?: string;
+  tmodVersion?: string;
   creatorSteamId?: string;
   previewUrl?: string;
   description?: string;

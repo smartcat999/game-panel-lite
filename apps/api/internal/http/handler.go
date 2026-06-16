@@ -157,12 +157,16 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
 		return
 	}
-	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, header.Filename, file)
+	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	item, created, err := h.upsertModRecord(r.Context(), server.ID, header.Filename, size)
+	metadata, err := modsvc.Inspect(path)
+	if err != nil {
+		h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
+	}
+	item, created, err := h.upsertModRecord(r.Context(), server.ID, header.Filename, size, metadata)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -398,12 +402,16 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
 		return
 	}
-	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", header.Filename, file)
+	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	item, created, err := h.upsertModRecord(r.Context(), "unassigned", header.Filename, size)
+	metadata, err := modsvc.Inspect(path)
+	if err != nil {
+		h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
+	}
+	item, created, err := h.upsertModRecord(r.Context(), "unassigned", header.Filename, size, metadata)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -465,7 +473,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	assigned, created, err := h.upsertModRecord(r.Context(), targetServer.ID, item.FileName, size)
+	assigned, created, err := h.upsertModRecord(r.Context(), targetServer.ID, item.FileName, size, metadataFromMod(item))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -502,19 +510,41 @@ func (h *Handler) copyLibraryModToServerCache(item domain.ModFile, targetInstanc
 	return size, err
 }
 
-func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileName string, size int64) (domain.ModFile, bool, error) {
+func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileName string, size int64, metadata modsvc.Metadata) (domain.ModFile, bool, error) {
 	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.SizeBytes = size
 		existing.Enabled = true
 		if existing.Source == "" {
 			existing.Source = "upload"
 		}
+		applyTModMetadata(&existing, metadata)
 		return existing, false, h.store.SaveMod(ctx, &existing)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.ModFile{}, false, err
 	}
 	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, Source: "upload", SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	applyTModMetadata(&item, metadata)
 	return item, true, h.store.CreateMod(ctx, &item)
+}
+
+func applyTModMetadata(item *domain.ModFile, metadata modsvc.Metadata) {
+	if metadata.Name != "" {
+		item.Title = metadata.Name
+	}
+	if metadata.Version != "" {
+		item.ModVersion = metadata.Version
+	}
+	if metadata.TModLoaderVersion != "" {
+		item.TModVersion = metadata.TModLoaderVersion
+	}
+}
+
+func metadataFromMod(item domain.ModFile) modsvc.Metadata {
+	return modsvc.Metadata{
+		Name:              item.Title,
+		Version:           item.ModVersion,
+		TModLoaderVersion: item.TModVersion,
+	}
 }
 
 func (h *Handler) upsertWorkshopModRecord(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, bool, error) {

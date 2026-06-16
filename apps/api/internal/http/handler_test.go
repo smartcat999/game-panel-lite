@@ -53,6 +53,19 @@ func newMultipartFileRequest(t *testing.T, method string, target string, field s
 	return request
 }
 
+func tmodFixture(name string, version string, tmodVersion string) []byte {
+	data := append([]byte("TMOD"), tmodBinaryString(tmodVersion)...)
+	data = append(data, make([]byte, 20+256)...)
+	data = append(data, 0x79, 0x9a, 0x05, 0x00)
+	data = append(data, tmodBinaryString(name)...)
+	data = append(data, tmodBinaryString(version)...)
+	return data
+}
+
+func tmodBinaryString(value string) []byte {
+	return append([]byte{byte(len(value))}, []byte(value)...)
+}
+
 func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Handler, *store.Store, config.Config) {
 	t.Helper()
 	root := t.TempDir()
@@ -1052,7 +1065,8 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := part.Write([]byte("mod")); err != nil {
+	modBytes := tmodFixture("ExampleMod", "1.2.3", "2026.3.3.0")
+	if _, err := part.Write(modBytes); err != nil {
 		t.Fatal(err)
 	}
 	if err := writer.Close(); err != nil {
@@ -1073,12 +1087,15 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	if mod.FileName != "example.tmod" || !mod.Enabled {
 		t.Fatalf("expected uploaded enabled mod, got %+v", mod)
 	}
+	if mod.Title != "ExampleMod" || mod.ModVersion != "1.2.3" || mod.TModVersion != "2026.3.3.0" {
+		t.Fatalf("expected parsed tmod metadata, got %+v", mod)
+	}
 	runtimeMod, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "example.tmod"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(runtimeMod) != "mod" {
-		t.Fatalf("expected uploaded mod copied into runtime data dir, got %q", string(runtimeMod))
+	if !bytes.Equal(runtimeMod, modBytes) {
+		t.Fatalf("expected uploaded mod copied into runtime data dir")
 	}
 
 	list := httptest.NewRecorder()

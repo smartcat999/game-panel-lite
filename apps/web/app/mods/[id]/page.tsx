@@ -79,10 +79,13 @@ export default function ModDetailPage() {
               </div>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <DetailTile label={t("fileName")} value={source.mod.fileName} />
               <DetailTile label={t("size")} value={source.mod.size} />
-              <DetailTile label={t("created")} value={localizeRelativeTime(source.mod.created, locale)} />
+              {source.mod.modVersion && <DetailTile label={t("modVersion")} value={source.mod.modVersion} />}
+              {source.mod.tmodVersion && <DetailTile label={t("tmodVersion")} value={source.mod.tmodVersion} />}
               <DetailTile label={t("type")} value={source.scope === "library" ? t("platformLibrary") : t("serverMods")} />
-              <DetailTile label={t("type")} value={source.mod.enabled ? t("enabled") : t("disabled")} />
+              <DetailTile label={t("status")} value={source.mod.enabled ? t("enabled") : t("disabled")} />
+              <DetailTile label={t("created")} value={localizeRelativeTime(source.mod.created, locale)} />
             </div>
           </Card>
 

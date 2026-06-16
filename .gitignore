@@ -12,3 +12,4 @@ data
 *.db
 *.db-journal
 generated
+tmp

@@ -107,6 +107,8 @@ type ModFile struct {
 	Source         string    `json:"source,omitempty" gorm:"index"`
 	WorkshopID     string    `json:"workshopId,omitempty" gorm:"index"`
 	Title          string    `json:"title,omitempty"`
+	ModVersion     string    `json:"modVersion,omitempty"`
+	TModVersion    string    `json:"tmodVersion,omitempty"`
 	CreatorSteamID string    `json:"creatorSteamId,omitempty"`
 	PreviewURL     string    `json:"previewUrl,omitempty"`
 	Description    string    `json:"description,omitempty"`

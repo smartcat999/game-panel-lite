@@ -99,6 +99,8 @@ type ApiModFile = {
   source?: string;
   workshopId?: string;
   title?: string;
+  modVersion?: string;
+  tmodVersion?: string;
   creatorSteamId?: string;
   previewUrl?: string;
   description?: string;
@@ -601,6 +603,8 @@ function toModFile(file: ApiModFile): ModFile {
     source: file.source,
     workshopId: file.workshopId,
     title: file.title,
+    modVersion: file.modVersion,
+    tmodVersion: file.tmodVersion,
     creatorSteamId: file.creatorSteamId,
     previewUrl: file.previewUrl,
     description: file.description,
