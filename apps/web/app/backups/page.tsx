@@ -1,12 +1,13 @@
 "use client";
 
-import { Archive, Download, RotateCcw, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Download, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
-import { createBackup, deleteBackup, downloadBackupFile, listBackups, listServers, restoreBackup } from "@/lib/api";
+import { deleteBackup, downloadBackupFile, listBackups, listServers } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -33,23 +34,18 @@ export default function BackupsPage() {
   const client = useQueryClient();
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
-  const [selectedServerId, setSelectedServerId] = useState("");
   const [search, setSearch] = useState("");
   const [serverFilter, setServerFilter] = useState<BackupServerFilter>("all");
   const [serverTypeFilter, setServerTypeFilter] = useState<BackupServerTypeFilter>("all");
   const [backupTypeFilter, setBackupTypeFilter] = useState<BackupTypeFilter>("all");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Backup | null>(null);
   const [downloadingBackupId, setDownloadingBackupId] = useState("");
-  const quickCreateHandledRef = useRef(false);
   const servers = serversQuery.data ?? [];
   const backups = backupsQuery.data ?? [];
-  const activeServerId = selectedServerId || servers[0]?.id || "";
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
   const serverById = useMemo(() => new Map(servers.map((server) => [server.id, server])), [servers]);
-  const runningServerIds = useMemo(() => new Set(servers.filter((server) => server.status === "running").map((server) => server.id)), [servers]);
   const filteredBackups = useMemo(() => {
     const term = search.trim().toLowerCase();
     return backups.filter((backup) => {
@@ -63,31 +59,6 @@ export default function BackupsPage() {
     });
   }, [backupTypeFilter, backups, search, serverById, serverFilter, serverNameById, serverTypeFilter]);
 
-  const create = useMutation({
-    mutationFn: createBackup,
-    onSuccess: async () => {
-      setErrorMessage("");
-      setSuccessMessage(t("backupCreated"));
-      await client.invalidateQueries({ queryKey: ["backups"] });
-    },
-    onError: (error) => {
-      setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableCreateBackup"));
-    }
-  });
-  const restore = useMutation({
-    mutationFn: restoreBackup,
-    onSuccess: async () => {
-      setErrorMessage("");
-      setSuccessMessage(t("backupRestored"));
-      setPendingRestore(null);
-      await client.invalidateQueries({ queryKey: ["backups"] });
-    },
-    onError: (error) => {
-      setSuccessMessage("");
-      setErrorMessage(error instanceof Error ? error.message : t("unableRestoreBackup"));
-    }
-  });
   const remove = useMutation({
     mutationFn: deleteBackup,
     onSuccess: async () => {
@@ -116,37 +87,11 @@ export default function BackupsPage() {
     }
   };
 
-  useEffect(() => {
-    if (quickCreateHandledRef.current || typeof window === "undefined" || !activeServerId) return;
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("action") !== "create") return;
-    quickCreateHandledRef.current = true;
-    url.searchParams.delete("action");
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-    create.mutate(activeServerId);
-  }, [activeServerId, create]);
-
   return (
     <>
       <PageHeader
         title={t("backupsTitle")}
         description={t("backupsDescription")}
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
-              value={activeServerId}
-              onChange={(event) => setSelectedServerId(event.target.value)}
-              disabled={servers.length === 0}
-            >
-              {servers.length === 0 ? <option>{t("noApiServers")}</option> : servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-            </select>
-            <Button variant="gold" onClick={() => activeServerId && create.mutate(activeServerId)} disabled={!activeServerId || create.isPending}>
-              <Archive aria-hidden="true" />
-              {create.isPending ? t("backingUp") : t("backupNow")}
-            </Button>
-          </div>
-        }
       />
       {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
@@ -178,7 +123,6 @@ export default function BackupsPage() {
       <div className="grid gap-3">
         {filteredBackups.map((backup) => {
           const serverName = backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server;
-          const restoreLocked = Boolean(backup.instanceId && runningServerIds.has(backup.instanceId));
           return (
             <Card key={backup.id} className="p-4 transition hover:border-panel-green/30">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -195,19 +139,17 @@ export default function BackupsPage() {
                     <BackupMeta label={t("size")} value={backup.size} />
                     <BackupMeta label={t("created")} value={localizeRelativeTime(backup.created, locale)} />
                   </div>
-                  {restoreLocked && <p className="mt-3 text-xs text-panel-gold">{t("restoreRequiresStopped")}</p>}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    aria-label={t("restore")}
-                    onClick={() => setPendingRestore(backup)}
-                    disabled={restore.isPending || backupsQuery.isError || restoreLocked}
-                    title={restoreLocked ? t("restoreRequiresStopped") : undefined}
-                  >
-                    <RotateCcw aria-hidden="true" />
-                    {t("restore")}
-                  </Button>
+                  {backup.instanceId && (
+                    <Link
+                      href={`/servers/${backup.instanceId}`}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 text-sm font-medium text-slate-100 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                    >
+                      {t("manageOnServer")}
+                      <ArrowRight aria-hidden="true" className="size-4" />
+                    </Link>
+                  )}
                   <Button
                     variant="secondary"
                     aria-label={t("download")}
@@ -232,24 +174,6 @@ export default function BackupsPage() {
         })}
       </div>
       {!backupsQuery.isLoading && filteredBackups.length === 0 && <p className="mt-4 text-sm text-slate-400">{backups.length === 0 ? t("noBackupsYet") : t("noBackupsMatch")}</p>}
-      <ConfirmDialog
-        open={Boolean(pendingRestore)}
-        eyebrow={t("destructiveAction")}
-        title={t("restoreBackupConfirm", { name: pendingRestore?.name ?? "" })}
-        description={t("confirmRestoreBackupDescription", { name: pendingRestore?.name ?? "" })}
-        detail={pendingRestore ? (
-          <>
-            <span className="text-slate-500">{t("backupName")}: </span>
-            <span className="font-medium text-white">{pendingRestore.name}</span>
-          </>
-        ) : undefined}
-        cancelLabel={t("cancel")}
-        confirmLabel={restore.isPending ? t("actionWorking") : t("restore")}
-        confirmVariant="gold"
-        busy={restore.isPending}
-        onCancel={() => setPendingRestore(null)}
-        onConfirm={() => pendingRestore && restore.mutate(pendingRestore.id)}
-      />
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         eyebrow={t("destructiveAction")}

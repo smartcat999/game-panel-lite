@@ -5,7 +5,7 @@ describe("dashboard quick actions", () => {
   it("preserves action intent when navigating to resource pages", () => {
     expect(dashboardQuickActionHrefs).toEqual({
       createServer: "/servers/new",
-      createBackup: "/backups?action=create"
+      createBackup: "/servers"
     });
   });
 });
