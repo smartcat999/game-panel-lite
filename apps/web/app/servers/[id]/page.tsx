@@ -89,9 +89,16 @@ export default function ServerDetailPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
   const [pendingWorldDelete, setPendingWorldDelete] = useState<World | null>(null);
+  const [pendingWorldSnapshot, setPendingWorldSnapshot] = useState(false);
+  const [pendingBackupCreate, setPendingBackupCreate] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
+  const [pendingModUpload, setPendingModUpload] = useState<File | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
+  const [pendingModToggle, setPendingModToggle] = useState<{ mod: ModFile; enabled: boolean } | null>(null);
+  const [pendingModAssign, setPendingModAssign] = useState<ModFile | null>(null);
+  const [pendingModPackInstall, setPendingModPackInstall] = useState<ModPack | null>(null);
+  const [pendingWorkshopImport, setPendingWorkshopImport] = useState(false);
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
@@ -188,6 +195,7 @@ export default function ServerDetailPage() {
     mutationFn: () => createBackup(id),
     onSuccess: async () => {
       showSuccess(t("backupCreated"));
+      setPendingBackupCreate(false);
       await client.invalidateQueries({ queryKey: ["backups"] });
     },
     onError: (error) => showError(formatActionError(error, t("unableCreateBackup")))
@@ -207,6 +215,7 @@ export default function ServerDetailPage() {
     mutationFn: () => createWorldSnapshot(id),
     onSuccess: async () => {
       showSuccess(t("worldSnapshotSaved"));
+      setPendingWorldSnapshot(false);
       await client.invalidateQueries({ queryKey: ["worlds"] });
     },
     onError: (error) => showError(formatSnapshotError(error))
@@ -224,6 +233,7 @@ export default function ServerDetailPage() {
     mutationFn: (file: File) => uploadMod(id, file),
     onSuccess: async () => {
       showSuccess(t("modUploaded"));
+      setPendingModUpload(null);
       if (modInputRef.current) modInputRef.current.value = "";
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
@@ -233,6 +243,7 @@ export default function ServerDetailPage() {
     mutationFn: ({ modId, enabled }: { modId: string; enabled: boolean }) => setModEnabled(id, modId, enabled),
     onSuccess: async (updatedMod) => {
       showSuccess(updatedMod.enabled ? t("modEnabled") : t("modDisabled"));
+      setPendingModToggle(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
     onError: (error) => showError(formatActionError(error, t("unableUpdateMod")))
@@ -250,6 +261,7 @@ export default function ServerDetailPage() {
     mutationFn: (modId: string) => assignMod(modId, id),
     onSuccess: async () => {
       showSuccess(t("modAssigned"));
+      setPendingModAssign(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
     onError: (error) => showError(formatActionError(error, t("unableAssignMod")))
@@ -262,6 +274,7 @@ export default function ServerDetailPage() {
     },
     onSuccess: async () => {
       showSuccess(t("modPackInstalled"));
+      setPendingModPackInstall(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
     onError: (error) => showError(formatActionError(error, t("unableAssignMod")))
@@ -270,6 +283,7 @@ export default function ServerDetailPage() {
     mutationFn: () => importWorkshopMods(id, parseWorkshopIds(workshopIdsText)),
     onSuccess: async () => {
       showSuccess(t("workshopModsImported"));
+      setPendingWorkshopImport(false);
       setWorkshopIdsText("");
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
@@ -539,7 +553,7 @@ export default function ServerDetailPage() {
               snapshotting={worldSnapshotCreate.isPending}
               onDelete={setPendingWorldDelete}
               onDownload={(world) => void downloadWorld(world)}
-              onCreateSnapshot={() => worldSnapshotCreate.mutate()}
+              onCreateSnapshot={() => setPendingWorldSnapshot(true)}
             />
           )}
           {activeTab === "backups" && (
@@ -554,7 +568,7 @@ export default function ServerDetailPage() {
               serverStatus={server.status}
               onDelete={setPendingBackupDelete}
               onDownload={(backup) => void downloadBackup(backup)}
-              onCreate={() => backupCreate.mutate()}
+              onCreate={() => setPendingBackupCreate(true)}
               onRestore={setPendingRestore}
             />
           )}
@@ -575,11 +589,11 @@ export default function ServerDetailPage() {
               uploading={modUpload.isPending}
               workshopIdsCount={workshopIds.length}
               workshopIdsText={workshopIdsText}
-              onAssignMod={(mod) => modAssign.mutate(mod.id)}
+              onAssignMod={setPendingModAssign}
               onDelete={setPendingModDelete}
-              onImportWorkshop={() => workshopImport.mutate()}
-              onInstallPack={(pack) => modPackAssign.mutate(pack)}
-              onToggle={(mod) => modEnabled.mutate({ modId: mod.id, enabled: !mod.enabled })}
+              onImportWorkshop={() => setPendingWorkshopImport(true)}
+              onInstallPack={setPendingModPackInstall}
+              onToggle={(mod) => setPendingModToggle({ mod, enabled: !mod.enabled })}
               onUploadClick={() => modInputRef.current?.click()}
               onWorkshopIdsChange={setWorkshopIdsText}
             />
@@ -623,7 +637,7 @@ export default function ServerDetailPage() {
         accept=".tmod,.txt,.json"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) modUpload.mutate(file);
+          if (file) setPendingModUpload(file);
         }}
       />
 
@@ -653,6 +667,32 @@ export default function ServerDetailPage() {
         onConfirm={() => pendingWorldDelete && worldDelete.mutate(pendingWorldDelete.id)}
       />
       <ConfirmDialog
+        open={pendingWorldSnapshot}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmWorldSnapshotTitle", { name: server.name })}
+        description={t("confirmWorldSnapshotDescription", { name: server.name })}
+        detail={<DetailLine label={t("server")} value={server.name} />}
+        cancelLabel={t("cancel")}
+        confirmLabel={worldSnapshotCreate.isPending ? t("actionWorking") : t("saveWorldSnapshot")}
+        confirmVariant="gold"
+        busy={worldSnapshotCreate.isPending}
+        onCancel={() => setPendingWorldSnapshot(false)}
+        onConfirm={() => worldSnapshotCreate.mutate()}
+      />
+      <ConfirmDialog
+        open={pendingBackupCreate}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmBackupCreateTitle", { name: server.name })}
+        description={t("confirmBackupCreateDescription", { name: server.name })}
+        detail={<DetailLine label={t("server")} value={server.name} />}
+        cancelLabel={t("cancel")}
+        confirmLabel={backupCreate.isPending ? t("actionWorking") : t("createBackupNow")}
+        confirmVariant="gold"
+        busy={backupCreate.isPending}
+        onCancel={() => setPendingBackupCreate(false)}
+        onConfirm={() => backupCreate.mutate()}
+      />
+      <ConfirmDialog
         open={Boolean(pendingRestore)}
         eyebrow={t("destructiveAction")}
         title={t("restoreBackupConfirm", { name: pendingRestore?.name ?? "" })}
@@ -676,6 +716,74 @@ export default function ServerDetailPage() {
         busy={backupDelete.isPending}
         onCancel={() => setPendingBackupDelete(null)}
         onConfirm={() => pendingBackupDelete && backupDelete.mutate(pendingBackupDelete.id)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingModUpload)}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmModUploadTitle", { name: pendingModUpload?.name ?? "" })}
+        description={t("confirmModUploadDescription", { name: pendingModUpload?.name ?? "", server: server.name })}
+        detail={pendingModUpload ? <DetailLine label={t("modsTitle")} value={pendingModUpload.name} /> : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={modUpload.isPending ? t("actionWorking") : t("uploadMod")}
+        confirmVariant="gold"
+        busy={modUpload.isPending}
+        onCancel={() => {
+          setPendingModUpload(null);
+          if (modInputRef.current) modInputRef.current.value = "";
+        }}
+        onConfirm={() => pendingModUpload && modUpload.mutate(pendingModUpload)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingModToggle)}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmModToggleTitle", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle?.mod.fileName ?? "" })}
+        description={t("confirmModToggleDescription", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle?.mod.fileName ?? "" })}
+        detail={pendingModToggle ? <DetailLine label={t("modsTitle")} value={pendingModToggle.mod.fileName} /> : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={modEnabled.isPending ? t("actionWorking") : pendingModToggle?.enabled ? t("enable") : t("disable")}
+        confirmVariant="gold"
+        busy={modEnabled.isPending}
+        onCancel={() => setPendingModToggle(null)}
+        onConfirm={() => pendingModToggle && modEnabled.mutate({ modId: pendingModToggle.mod.id, enabled: pendingModToggle.enabled })}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingModAssign)}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmModInstallTitle", { name: pendingModAssign?.fileName ?? "" })}
+        description={t("confirmModInstallDescription", { name: pendingModAssign?.fileName ?? "", server: server.name })}
+        detail={pendingModAssign ? <DetailLine label={t("modsTitle")} value={pendingModAssign.fileName} /> : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={modAssign.isPending ? t("actionWorking") : t("installToServer")}
+        confirmVariant="gold"
+        busy={modAssign.isPending}
+        onCancel={() => setPendingModAssign(null)}
+        onConfirm={() => pendingModAssign && modAssign.mutate(pendingModAssign.id)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingModPackInstall)}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmModPackInstallTitle", { name: pendingModPackInstall?.name ?? "" })}
+        description={t("confirmModPackInstallDescription", { name: pendingModPackInstall?.name ?? "", server: server.name })}
+        detail={pendingModPackInstall ? <DetailLine label={t("modPacks")} value={pendingModPackInstall.name} /> : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={modPackAssign.isPending ? t("actionWorking") : t("installModPack")}
+        confirmVariant="gold"
+        busy={modPackAssign.isPending}
+        onCancel={() => setPendingModPackInstall(null)}
+        onConfirm={() => pendingModPackInstall && modPackAssign.mutate(pendingModPackInstall)}
+      />
+      <ConfirmDialog
+        open={pendingWorkshopImport}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmWorkshopImportTitle", { count: workshopIds.length })}
+        description={t("confirmWorkshopImportDescription", { count: workshopIds.length, server: server.name })}
+        detail={<DetailLine label={t("workshopIds")} value={String(workshopIds.length)} />}
+        cancelLabel={t("cancel")}
+        confirmLabel={workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
+        confirmVariant="gold"
+        busy={workshopImport.isPending}
+        onCancel={() => setPendingWorkshopImport(false)}
+        onConfirm={() => workshopImport.mutate()}
       />
       <ConfirmDialog
         open={Boolean(pendingModDelete)}
