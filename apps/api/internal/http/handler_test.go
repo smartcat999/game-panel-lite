@@ -268,6 +268,16 @@ func (a *staleContainerAdapter) SendCommand(_ context.Context, instance domain.G
 	return nil
 }
 
+type statusCapturingLogsAdapter struct {
+	availableMockAdapter
+	logStatus domain.ServerStatus
+}
+
+func (a *statusCapturingLogsAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
+	a.logStatus = instance.Status
+	return io.NopCloser(strings.NewReader("[Info] running log snapshot\n")), nil
+}
+
 type blockingRuntimeAdapter struct {
 	availableMockAdapter
 	createStarted chan struct{}
@@ -937,6 +947,37 @@ func TestStoppedServerLogSnapshotToleratesMissingRuntimeContainer(t *testing.T) 
 	}
 	if stored.ContainerID != "" {
 		t.Fatalf("expected stale stopped container id to be cleared, got %+v", stored)
+	}
+}
+
+func TestRunningServerLogSnapshotKeepsRunningStatus(t *testing.T) {
+	adapter := &statusCapturingLogsAdapter{
+		availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()},
+	}
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("running-log-snapshot", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "runtime-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := httptest.NewRecorder()
+	router.ServeHTTP(snapshot, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/logs/snapshot", nil))
+	if snapshot.Code != stdhttp.StatusOK {
+		t.Fatalf("expected running log snapshot 200, got %d: %s", snapshot.Code, snapshot.Body.String())
+	}
+	if adapter.logStatus != domain.StatusRunning {
+		t.Fatalf("expected runtime logs to be read with running status, got %q", adapter.logStatus)
+	}
+	var payload struct {
+		Lines []string `json:"lines"`
+	}
+	if err := json.Unmarshal(snapshot.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Lines) != 1 || !strings.Contains(payload.Lines[0], "running log snapshot") {
+		t.Fatalf("expected running snapshot logs, got %+v", payload)
 	}
 }
 

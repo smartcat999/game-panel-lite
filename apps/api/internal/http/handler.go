@@ -2680,7 +2680,6 @@ func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	server.Status = domain.StatusStopped
 	stream, err := h.runtime.Logs(r.Context(), server)
 	if err != nil {
 		if strings.TrimSpace(server.LastError) != "" {
