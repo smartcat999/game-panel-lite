@@ -1525,12 +1525,28 @@ function ModsTab({
   onToggle: (mod: ModFile) => void;
 }) {
   const { locale, t } = useI18n();
+  const [installerOpen, setInstallerOpen] = useState(false);
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
   const blocked = modAction.disabled;
+  useEffect(() => {
+    if (!installerOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setInstallerOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [installerOpen]);
+
   return (
     <ResourcePanel
       title={t("detailModActions")}
       href="/mods"
+      action={
+        <Button variant="secondary" onClick={() => setInstallerOpen(true)}>
+          <Package aria-hidden="true" />
+          {t("installMods")}
+        </Button>
+      }
     >
       <div className="space-y-4">
         {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
@@ -1559,57 +1575,97 @@ function ModsTab({
             ))}
           </div>
         </div>
-
-        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-          <div>
-            <h3 className="font-semibold text-white">{t("installOptions")}</h3>
-            <p className="mt-1 text-sm text-slate-500">{t("installOptionsHint")}</p>
-          </div>
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-              <h4 className="font-semibold text-white">{t("installFromLibrary")}</h4>
-              <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
-              <div className="mt-4 grid gap-2">
-                {availableMods.map((mod) => (
-                  <ResourceRow
-                    key={mod.id}
-                    title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
-                    meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
-                    actions={
-                      <Button variant="secondary" onClick={() => onAssignMod(mod)} disabled={assigning || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                        <Package aria-hidden="true" />
-                        {t("installToServer")}
-                      </Button>
-                    }
-                  />
-                ))}
-                {availableMods.length === 0 && <p className="text-sm text-slate-500">{t("noGlobalMods")}</p>}
+      </div>
+      {installerOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setInstallerOpen(false);
+          }}
+        >
+          <div
+            aria-labelledby="mod-installer-title"
+            aria-modal="true"
+            className="max-h-[82vh] w-full max-w-5xl overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+            role="dialog"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
+              <div>
+                <h3 className="font-semibold text-white" id="mod-installer-title">{t("installMods")}</h3>
+                <p className="mt-1 text-sm text-slate-500">{t("installOptionsHint")}</p>
               </div>
+              <button
+                aria-label={t("cancel")}
+                className="flex size-8 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                onClick={() => setInstallerOpen(false)}
+                type="button"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </button>
             </div>
+            <div className="grid max-h-[calc(82vh-5rem)] gap-4 overflow-y-auto p-5 xl:grid-cols-2">
+              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+                <h4 className="font-semibold text-white">{t("installFromLibrary")}</h4>
+                <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
+                <div className="mt-4 grid gap-2">
+                  {availableMods.map((mod) => (
+                    <ResourceRow
+                      key={mod.id}
+                      title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
+                      meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
+                      actions={
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setInstallerOpen(false);
+                            onAssignMod(mod);
+                          }}
+                          disabled={assigning || blocked}
+                          title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                        >
+                          <Package aria-hidden="true" />
+                          {t("installToServer")}
+                        </Button>
+                      }
+                    />
+                  ))}
+                  {availableMods.length === 0 && <p className="text-sm text-slate-500">{t("noGlobalMods")}</p>}
+                </div>
+              </div>
 
-            <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-              <h4 className="font-semibold text-white">{t("modPacks")}</h4>
-              <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
-              <div className="mt-4 grid gap-2">
-                {modPacks.map((pack) => (
-                  <ResourceRow
-                    key={pack.id}
-                    title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                    meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
-                    actions={
-                      <Button variant="secondary" onClick={() => onInstallPack(pack)} disabled={packInstalling || blocked || pack.modIds.length === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                        <Package aria-hidden="true" />
-                        {t("installModPack")}
-                      </Button>
-                    }
-                  />
-                ))}
-                {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
+              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+                <h4 className="font-semibold text-white">{t("modPacks")}</h4>
+                <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
+                <div className="mt-4 grid gap-2">
+                  {modPacks.map((pack) => (
+                    <ResourceRow
+                      key={pack.id}
+                      title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
+                      meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
+                      actions={
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setInstallerOpen(false);
+                            onInstallPack(pack);
+                          }}
+                          disabled={packInstalling || blocked || pack.modIds.length === 0}
+                          title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                        >
+                          <Package aria-hidden="true" />
+                          {t("installModPack")}
+                        </Button>
+                      }
+                    />
+                  ))}
+                  {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </ResourcePanel>
   );
 }
