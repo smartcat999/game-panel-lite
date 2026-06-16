@@ -59,3 +59,7 @@ type Adapter interface {
 	Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error)
 	SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error
 }
+
+type LogSnapshotter interface {
+	LogSnapshot(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error)
+}

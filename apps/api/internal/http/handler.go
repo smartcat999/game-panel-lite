@@ -2680,7 +2680,7 @@ func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	stream, err := h.runtime.Logs(r.Context(), server)
+	stream, err := h.runtime.LogSnapshot(r.Context(), server)
 	if err != nil {
 		if strings.TrimSpace(server.LastError) != "" {
 			writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{server.LastError}})

@@ -254,13 +254,29 @@ func (a *Adapter) Logs(ctx context.Context, instance domain.GameServerInstance) 
 	if err != nil {
 		return nil, err
 	}
+	return demuxLogStream(stream), nil
+}
+
+func (a *Adapter) LogSnapshot(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
+	containerID, err := a.resolveContainerID(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := a.client.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Follow: false, Tail: "300"})
+	if err != nil {
+		return nil, err
+	}
+	return demuxLogStream(stream), nil
+}
+
+func demuxLogStream(stream io.ReadCloser) io.ReadCloser {
 	reader, writer := io.Pipe()
 	go func() {
 		defer stream.Close()
 		_, copyErr := stdcopy.StdCopy(writer, writer, stream)
 		_ = writer.CloseWithError(copyErr)
 	}()
-	return reader, nil
+	return reader
 }
 
 func (a *Adapter) SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error {

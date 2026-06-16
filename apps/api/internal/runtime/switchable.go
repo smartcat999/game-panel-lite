@@ -69,6 +69,14 @@ func (s *SwitchableAdapter) Logs(ctx context.Context, instance domain.GameServer
 	return s.current().Logs(ctx, instance)
 }
 
+func (s *SwitchableAdapter) LogSnapshot(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
+	current := s.current()
+	if snapshotter, ok := current.(LogSnapshotter); ok {
+		return snapshotter.LogSnapshot(ctx, instance)
+	}
+	return current.Logs(ctx, instance)
+}
+
 func (s *SwitchableAdapter) SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error {
 	return s.current().SendCommand(ctx, instance, command)
 }
