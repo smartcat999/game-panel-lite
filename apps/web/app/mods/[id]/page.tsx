@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge, Card } from "@/components/ui";
 import { listGlobalMods, listModPacks, listMods, listServers } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import type { ModFile, Server } from "@/lib/types";
 
 type ModSource = {
@@ -64,7 +65,7 @@ export default function ModDetailPage() {
   return (
     <>
       <BackLink />
-      <PageHeader title={source.mod.fileName} description={t("modDetailDescription")} />
+      <PageHeader title={modDisplayName(source.mod, locale)} description={t("modDetailDescription")} />
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           <Card className="p-4">
@@ -73,8 +74,8 @@ export default function ModDetailPage() {
                 <Package aria-hidden="true" className="size-5" />
               </span>
               <div className="min-w-0">
-                <h2 className="truncate text-lg font-semibold text-white">{source.mod.fileName}</h2>
-                <p className="mt-1 truncate text-sm text-slate-500">.tmod</p>
+                <h2 className="truncate text-lg font-semibold text-white">{modDisplayName(source.mod, locale)}</h2>
+                <p className="mt-1 truncate text-sm text-slate-500">{modSourceLabel(source.mod, locale)}</p>
               </div>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2">

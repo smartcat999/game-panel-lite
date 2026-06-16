@@ -58,6 +58,8 @@ export type ModFile = {
   id: string;
   instanceId: string;
   fileName: string;
+  source?: "upload" | "workshop" | string;
+  workshopId?: string;
   size: string;
   sizeBytes?: number;
   enabled: boolean;

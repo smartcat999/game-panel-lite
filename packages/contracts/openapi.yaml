@@ -185,7 +185,7 @@ paths:
           description: Uploaded mod file
   /api/servers/{id}/mods/workshop:
     post:
-      summary: Import tModLoader Workshop IDs by writing install.txt for the server
+      summary: Import tModLoader Workshop IDs as server mod records
       requestBody:
         required: true
         content:
@@ -200,7 +200,13 @@ paths:
                     type: string
       responses:
         "200":
-          description: Updated install.txt mod support file
+          description: Imported Workshop mod records; runtime install.txt is generated when the server starts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModFile"
   /api/servers/{id}/mods/{modId}:
     patch:
       summary: Enable or disable a tModLoader mod
@@ -236,6 +242,30 @@ paths:
           description: Updated existing global mod file record
         "201":
           description: Uploaded global mod
+  /api/mods/workshop:
+    post:
+      summary: Import tModLoader Workshop IDs as global mod library records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workshopIds]
+              properties:
+                workshopIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Imported Workshop mod records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModFile"
   /api/mods/{id}/assign:
     post:
       summary: Copy a global mod library item to a tModLoader server
@@ -444,6 +474,31 @@ components:
           type: array
           items:
             type: string
+    ModFile:
+      type: object
+      required: [id, instanceId, fileName, sizeBytes, enabled, createdAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        fileName:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        enabled:
+          type: boolean
+        source:
+          type: string
+          enum: [upload, workshop]
+          description: Upload means a .tmod file; workshop means an independent Steam Workshop item.
+        workshopId:
+          type: string
+          description: Steam Workshop item ID when source is workshop.
+        createdAt:
+          type: string
+          format: date-time
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, autoCreateWorld]

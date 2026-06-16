@@ -38,6 +38,7 @@ import {
 } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { modDisplayName } from "@/lib/mod-display";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
@@ -48,7 +49,7 @@ type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" |
 type ModInstallSource = "library" | "packs";
 
 export default function ServerDetailPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const params = useParams<{ id: string }>();
   const id = params.id;
   const client = useQueryClient();
@@ -694,9 +695,9 @@ export default function ServerDetailPage() {
       <ConfirmDialog
         open={Boolean(pendingModToggle)}
         eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmModToggleTitle", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle?.mod.fileName ?? "" })}
-        description={t("confirmModToggleDescription", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle?.mod.fileName ?? "" })}
-        detail={pendingModToggle ? <DetailLine label={t("modsTitle")} value={pendingModToggle.mod.fileName} /> : undefined}
+        title={t("confirmModToggleTitle", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle ? modDisplayName(pendingModToggle.mod, locale) : "" })}
+        description={t("confirmModToggleDescription", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle ? modDisplayName(pendingModToggle.mod, locale) : "" })}
+        detail={pendingModToggle ? <DetailLine label={t("modsTitle")} value={modDisplayName(pendingModToggle.mod, locale)} /> : undefined}
         cancelLabel={t("cancel")}
         confirmLabel={modEnabled.isPending ? t("actionWorking") : pendingModToggle?.enabled ? t("enable") : t("disable")}
         confirmVariant="gold"
@@ -707,9 +708,9 @@ export default function ServerDetailPage() {
       <ConfirmDialog
         open={Boolean(pendingModAssign)}
         eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmModInstallTitle", { name: pendingModAssign?.fileName ?? "" })}
-        description={t("confirmModInstallDescription", { name: pendingModAssign?.fileName ?? "", server: server.name })}
-        detail={pendingModAssign ? <DetailLine label={t("modsTitle")} value={pendingModAssign.fileName} /> : undefined}
+        title={t("confirmModInstallTitle", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "" })}
+        description={t("confirmModInstallDescription", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "", server: server.name })}
+        detail={pendingModAssign ? <DetailLine label={t("modsTitle")} value={modDisplayName(pendingModAssign, locale)} /> : undefined}
         cancelLabel={t("cancel")}
         confirmLabel={modAssign.isPending ? t("actionWorking") : t("installToServer")}
         confirmVariant="gold"
@@ -733,9 +734,9 @@ export default function ServerDetailPage() {
       <ConfirmDialog
         open={Boolean(pendingModDelete)}
         eyebrow={t("destructiveAction")}
-        title={t("deleteModConfirm", { name: pendingModDelete?.fileName ?? "" })}
-        description={t("confirmDeleteModDescription", { name: pendingModDelete?.fileName ?? "" })}
-        detail={pendingModDelete ? <DetailLine label={t("modsTitle")} value={pendingModDelete.fileName} /> : undefined}
+        title={t("deleteModConfirm", { name: pendingModDelete ? modDisplayName(pendingModDelete, locale) : "" })}
+        description={t("confirmDeleteModDescription", { name: pendingModDelete ? modDisplayName(pendingModDelete, locale) : "" })}
+        detail={pendingModDelete ? <DetailLine label={t("modsTitle")} value={modDisplayName(pendingModDelete, locale)} /> : undefined}
         cancelLabel={t("cancel")}
         confirmLabel={modDelete.isPending ? t("actionWorking") : t("delete")}
         busy={modDelete.isPending}
@@ -1640,7 +1641,7 @@ function ModsTab({
                         <ResourceRow
                           className="rounded-none border-0 bg-transparent px-4"
                           key={mod.id}
-                          title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
+                          title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{modDisplayName(mod, locale)}</Link>}
                           meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
                           actions={
                             <Button
@@ -1669,7 +1670,7 @@ function ModsTab({
                         className="rounded-none border-0 bg-transparent px-4"
                         key={pack.id}
                         title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                        meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
+                        meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ")}`}
                         actions={
                           <Button
                             variant="secondary"
@@ -1758,7 +1759,7 @@ function ServerModRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Link href={`/mods/${mod.id}`} className="truncate text-sm font-semibold text-white transition hover:text-panel-green">
-              {mod.fileName}
+              {modDisplayName(mod, locale)}
             </Link>
             <span className={cn(
               "shrink-0 rounded px-2 py-0.5 text-xs font-medium",

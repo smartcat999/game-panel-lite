@@ -9,12 +9,13 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
+import { modDisplayName } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
 import { getTerrariaVersions, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ModPack } from "@/lib/types";
+import type { ModFile, ModPack } from "@/lib/types";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepMods", "stepReview"] as const;
 const presets = [
@@ -31,7 +32,7 @@ type PresetKey = BuiltInPresetKey | typeof customPreset.key;
 type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset)["tags"][number];
 
 export function CreateServerWizard() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
@@ -56,7 +57,7 @@ export function CreateServerWizard() {
   const selectedWorld = allWorlds.find((w) => w.id === selectedWorldId);
   const availableMods = modsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
-  const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => m.fileName);
+  const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
   const fallbackStepKey: (typeof stepKeys)[number] = "stepReview";
   const currentStepKey = stepKeys[step] ?? fallbackStepKey;
   const nextStepKey = stepKeys[Math.min(stepKeys.length - 1, step + 1)] ?? fallbackStepKey;
@@ -178,6 +179,7 @@ export function CreateServerWizard() {
             )}
             {step === 4 && (
               <ModsStep
+                locale={locale}
                 mode={mode}
                 worldName={selectedWorld?.name}
                 mods={availableMods}
@@ -514,6 +516,7 @@ function WizardCheckbox({ checked, label, onChange }: { checked: boolean; label:
 }
 
 function ModsStep({
+  locale,
   mode,
   worldName,
   mods,
@@ -523,9 +526,10 @@ function ModsStep({
   onSelectModPack,
   onToggleMod
 }: {
+  locale: string;
   mode: "vanilla" | "tmodloader";
   worldName?: string;
-  mods: { id: string; fileName: string; size: string }[];
+  mods: ModFile[];
   modPacks: ModPack[];
   selectedModPackId: string;
   selectedModIds: string[];
@@ -584,7 +588,7 @@ function ModsStep({
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{pack.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-500">{pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ")}</p>
                     </div>
                     <span className="shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{pack.mods.length}</span>
                   </button>
@@ -620,7 +624,7 @@ function ModsStep({
                       {selectedModIds.includes(mod.id) && <Check aria-hidden="true" className="size-3" />}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{mod.fileName}</p>
+                      <p className="truncate text-sm font-medium">{modDisplayName(mod, locale)}</p>
                       <p className="mt-0.5 text-xs text-slate-500">{mod.size}</p>
                     </div>
                   </button>

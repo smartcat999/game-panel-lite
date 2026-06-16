@@ -10,9 +10,10 @@ import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
 import { deleteModPack, listModPacks } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { modDisplayName } from "@/lib/mod-display";
 
 export default function ModPackDetailPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const client = useQueryClient();
@@ -76,7 +77,7 @@ export default function ModPackDetailPage() {
               {pack.mods.map((mod) => (
                 <Link key={mod.id} href={`/mods/${mod.id}`} className="flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60">
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-slate-100">{mod.fileName}</span>
+                    <span className="block truncate text-sm font-medium text-slate-100">{modDisplayName(mod, locale)}</span>
                     <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size}</span>
                   </span>
                   <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />

@@ -1227,21 +1227,17 @@ func TestTModLoaderWorkshopImportWritesInstallFile(t *testing.T) {
 	if recorder.Code != stdhttp.StatusOK {
 		t.Fatalf("expected workshop import 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
-	var item domain.ModFile
-	if err := json.Unmarshal(recorder.Body.Bytes(), &item); err != nil {
+	var items []domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
 		t.Fatal(err)
 	}
-	if item.FileName != "install.txt" {
-		t.Fatalf("expected install.txt record, got %+v", item)
+	if len(items) != 2 {
+		t.Fatalf("expected two workshop records, got %+v", items)
+	}
+	if items[0].Source != "workshop" || items[0].WorkshopID == "" || items[0].FileName == "install.txt" {
+		t.Fatalf("expected workshop mod record, got %+v", items[0])
 	}
 	expected := "2563309347\n2824688072\n"
-	stored, err := os.ReadFile(filepath.Join(cfg.DataDir, "mods", server.ID, "install.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(stored) != expected {
-		t.Fatalf("expected stored install.txt %q, got %q", expected, string(stored))
-	}
 	runtimeInstall, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "install.txt"))
 	if err != nil {
 		t.Fatal(err)
@@ -1251,8 +1247,9 @@ func TestTModLoaderWorkshopImportWritesInstallFile(t *testing.T) {
 	}
 }
 
-func TestGlobalWorkshopImportWritesLibraryInstallFile(t *testing.T) {
+func TestGlobalWorkshopImportCreatesLibraryWorkshopRecords(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
+	_ = cfg
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/workshop", bytes.NewBufferString(`{"workshopIds":["2563309347","2824688072","2563309347"]}`))
@@ -1261,27 +1258,67 @@ func TestGlobalWorkshopImportWritesLibraryInstallFile(t *testing.T) {
 	if recorder.Code != stdhttp.StatusOK {
 		t.Fatalf("expected global workshop import 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
-	var item domain.ModFile
-	if err := json.Unmarshal(recorder.Body.Bytes(), &item); err != nil {
+	var items []domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
 		t.Fatal(err)
 	}
-	if item.InstanceID != "unassigned" || item.FileName != "install.txt" {
-		t.Fatalf("expected unassigned install.txt record, got %+v", item)
+	if len(items) != 2 {
+		t.Fatalf("expected two global workshop records, got %+v", items)
 	}
-	expected := "2563309347\n2824688072\n"
-	stored, err := os.ReadFile(filepath.Join(cfg.DataDir, "mods", "unassigned", "install.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(stored) != expected {
-		t.Fatalf("expected stored install.txt %q, got %q", expected, string(stored))
+	for _, item := range items {
+		if item.InstanceID != "unassigned" || item.Source != "workshop" || item.WorkshopID == "" || item.FileName == "install.txt" {
+			t.Fatalf("expected unassigned workshop record, got %+v", item)
+		}
 	}
 	mods, err := db.ListMods(context.Background(), "unassigned")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(mods) != 1 || mods[0].FileName != "install.txt" {
-		t.Fatalf("expected one global install.txt mod, got %+v", mods)
+	if len(mods) != 2 {
+		t.Fatalf("expected two global workshop mods, got %+v", mods)
+	}
+}
+
+func TestLegacyWorkshopInstallRecordMigratesToWorkshopMods(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	_, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "install.txt", bytes.NewBufferString("2563309347\n2824688072\n2563309347\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := domain.ModFile{
+		ID:         "legacy-install",
+		InstanceID: "unassigned",
+		FileName:   "install.txt",
+		SizeBytes:  int64(len("2563309347\n2824688072\n2563309347\n")),
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &legacy); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/mods", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected global mod list 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var items []domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected two migrated workshop mods, got %+v", items)
+	}
+	for _, item := range items {
+		if item.Source != "workshop" || item.WorkshopID == "" || item.FileName == "install.txt" {
+			t.Fatalf("expected migrated workshop mod, got %+v", item)
+		}
+	}
+	if _, err := db.GetMod(context.Background(), legacy.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected legacy install record deleted, got err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "mods", "unassigned", "install.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy install file removed, got err=%v", err)
 	}
 }
 
@@ -1687,6 +1724,49 @@ func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
 	}
 	if string(runtimeMod) != "mod-v1" {
 		t.Fatalf("expected assigned mod copied into runtime data dir, got %q", string(runtimeMod))
+	}
+}
+
+func TestAssignGlobalWorkshopModWritesServerInstallFile(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	globalMod := domain.ModFile{
+		ID:         "global-workshop-mod",
+		InstanceID: "unassigned",
+		FileName:   "workshop-2619954303",
+		Source:     "workshop",
+		WorkshopID: "2619954303",
+		SizeBytes:  11,
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &globalMod); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/global-workshop-mod/assign", bytes.NewBufferString(`{"instanceId":"tmod"}`))
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected assign 201, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var assigned domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &assigned); err != nil {
+		t.Fatal(err)
+	}
+	if assigned.Source != "workshop" || assigned.WorkshopID != "2619954303" || assigned.FileName == "install.txt" {
+		t.Fatalf("expected assigned workshop record, got %+v", assigned)
+	}
+	runtimeInstall, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "install.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeInstall) != "2619954303\n" {
+		t.Fatalf("expected runtime install.txt to contain workshop id, got %q", string(runtimeInstall))
 	}
 }
 

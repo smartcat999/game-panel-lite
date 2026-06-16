@@ -150,6 +150,10 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	if !isTModPackage(header.Filename) {
+		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
+		return
+	}
 	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -195,27 +199,21 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	content := strings.Join(workshopIDs, "\n") + "\n"
-	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, "install.txt", strings.NewReader(content))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	item, _, err := h.upsertModRecord(r.Context(), server.ID, "install.txt", size)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := h.materializeModForRuntime(item, server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	items := make([]domain.ModFile, 0, len(workshopIDs))
+	for _, workshopID := range workshopIDs {
+		item, _, err := h.upsertWorkshopModRecord(r.Context(), server.ID, workshopID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		items = append(items, item)
 	}
 	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "mod.workshop_imported", fmt.Sprintf("Imported %d workshop mod IDs for %s", len(workshopIDs), server.Name))
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, items)
 }
 
 func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Request) {
@@ -224,19 +222,17 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	content := strings.Join(workshopIDs, "\n") + "\n"
-	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", "install.txt", strings.NewReader(content))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	item, _, err := h.upsertModRecord(r.Context(), "unassigned", "install.txt", size)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	items := make([]domain.ModFile, 0, len(workshopIDs))
+	for _, workshopID := range workshopIDs {
+		item, _, err := h.upsertWorkshopModRecord(r.Context(), "unassigned", workshopID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		items = append(items, item)
 	}
 	h.recordActivity(r.Context(), "", "mod.workshop_imported", fmt.Sprintf("Imported %d workshop mod IDs into mod library", len(workshopIDs)))
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, items)
 }
 
 func decodeWorkshopIDs(r *http.Request) ([]string, error) {
@@ -312,14 +308,16 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
-	if err := h.removeRuntimeMod(item, server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	if err := removeStoredFile(path); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	if item.Source != "workshop" {
+		if err := h.removeRuntimeMod(item, server); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+		if err := removeStoredFile(path); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	if err := h.store.DeleteMod(r.Context(), item.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -354,6 +352,10 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	if !isTModPackage(header.Filename) {
+		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
+		return
+	}
 	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -397,6 +399,25 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
+	if item.Source == "workshop" {
+		assigned, created, err := h.upsertWorkshopModRecord(r.Context(), targetServer.ID, item.WorkshopID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !created {
+			h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name))
+			writeJSON(w, http.StatusOK, assigned)
+			return
+		}
+		h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Assigned mod %s to %s", item.FileName, targetServer.Name))
+		writeJSON(w, http.StatusCreated, assigned)
+		return
+	}
 	sourcePath, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	src, err := os.Open(sourcePath)
 	if err != nil {
@@ -435,15 +456,44 @@ func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileNa
 	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.SizeBytes = size
 		existing.Enabled = true
+		if existing.Source == "" {
+			existing.Source = "upload"
+		}
 		return existing, false, h.store.SaveMod(ctx, &existing)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.ModFile{}, false, err
 	}
-	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, Source: "upload", SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
+	return item, true, h.store.CreateMod(ctx, &item)
+}
+
+func (h *Handler) upsertWorkshopModRecord(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, bool, error) {
+	fileName := "workshop-" + workshopID
+	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+		existing.Source = "workshop"
+		existing.WorkshopID = workshopID
+		existing.Enabled = true
+		return existing, false, h.store.SaveMod(ctx, &existing)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.ModFile{}, false, err
+	}
+	item := domain.ModFile{
+		ID:         uuid.NewString(),
+		InstanceID: instanceID,
+		FileName:   fileName,
+		Source:     "workshop",
+		WorkshopID: workshopID,
+		SizeBytes:  int64(len(workshopID) + 1),
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
 	return item, true, h.store.CreateMod(ctx, &item)
 }
 
 func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.GameServerInstance) error {
+	if item.Source == "workshop" {
+		return nil
+	}
 	sourcePath, err := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
 	if err != nil {
 		return err
@@ -475,13 +525,21 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 		return err
 	}
 	enabled := make([]string, 0, len(mods))
+	workshopIDs := make([]string, 0, len(mods))
 	for _, item := range mods {
-		if !item.Enabled || !isTModPackage(item.FileName) {
+		if !item.Enabled {
 			continue
 		}
-		enabled = append(enabled, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName)))
+		if item.Source == "workshop" && item.WorkshopID != "" {
+			workshopIDs = append(workshopIDs, item.WorkshopID)
+			continue
+		}
+		if isTModPackage(item.FileName) {
+			enabled = append(enabled, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName)))
+		}
 	}
 	sort.Strings(enabled)
+	sort.Strings(workshopIDs)
 	payload, err := json.MarshalIndent(enabled, "", "  ")
 	if err != nil {
 		return err
@@ -496,6 +554,26 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 			return err
 		}
 	}
+	if err := h.writeRuntimeInstallFile(server, workshopIDs); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *Handler) writeRuntimeInstallFile(server domain.GameServerInstance, workshopIDs []string) error {
+	content := ""
+	if len(workshopIDs) > 0 {
+		content = strings.Join(workshopIDs, "\n") + "\n"
+	}
+	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, "install.txt") {
+		targetPath := filepath.Join(server.DataDir, relPath)
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(targetPath, []byte(content), 0o600); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -507,8 +585,20 @@ func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]dom
 	svc := modsvc.NewService(h.cfg.DataDir)
 	visible := make([]domain.ModFile, 0, len(mods))
 	for _, item := range mods {
+		if item.Source == "workshop" {
+			visible = append(visible, item)
+			continue
+		}
 		path, err := svc.Path(item.InstanceID, item.FileName)
 		if err != nil {
+			continue
+		}
+		if item.FileName == "install.txt" && item.Source == "" {
+			items, err := h.migrateLegacyWorkshopInstall(ctx, item, path)
+			if err != nil {
+				return nil, err
+			}
+			visible = append(visible, items...)
 			continue
 		}
 		if _, err := os.Stat(path); err != nil {
@@ -523,6 +613,50 @@ func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]dom
 	return visible, nil
 }
 
+func (h *Handler) migrateLegacyWorkshopInstall(ctx context.Context, item domain.ModFile, path string) ([]domain.ModFile, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, h.store.DeleteMod(ctx, item.ID)
+		}
+		return nil, err
+	}
+	workshopIDs := workshopIDsFromInstallContent(string(content))
+	items := make([]domain.ModFile, 0, len(workshopIDs))
+	for _, workshopID := range workshopIDs {
+		mod, _, err := h.upsertWorkshopModRecord(ctx, item.InstanceID, workshopID)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, mod)
+	}
+	if err := h.store.DeleteMod(ctx, item.ID); err != nil {
+		return nil, err
+	}
+	if err := removeStoredFile(path); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func workshopIDsFromInstallContent(content string) []string {
+	ids := make([]string, 0)
+	seen := make(map[string]struct{})
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		id := strings.TrimSpace(scanner.Text())
+		if id == "" || !isDigitsOnly(id) {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
@@ -533,10 +667,12 @@ func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "global mod delete only supports unassigned library mods")
 		return
 	}
-	path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	if err := removeStoredFile(path); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	if item.Source != "workshop" {
+		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+		if err := removeStoredFile(path); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	if err := h.store.DeleteMod(r.Context(), item.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -599,8 +735,8 @@ func (h *Handler) createModPack(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "mod not found")
 			return
 		}
-		if item.InstanceID != "unassigned" || !isTModPackage(item.FileName) {
-			writeError(w, http.StatusBadRequest, "mod packs can only use global .tmod files")
+		if item.InstanceID != "unassigned" || (!isTModPackage(item.FileName) && item.Source != "workshop") {
+			writeError(w, http.StatusBadRequest, "mod packs can only use global mod library items")
 			return
 		}
 	}

@@ -275,7 +275,9 @@ export const worldSchema = z.object({
 
 export const modFileSchema = z.object({
   id: z.string().min(1),
-  fileName: z.string().endsWith(".tmod"),
+  fileName: z.string().min(1),
+  source: z.enum(["upload", "workshop"]).optional(),
+  workshopId: z.string().regex(/^\d+$/).optional(),
   sizeBytes: z.number().int().nonnegative(),
   createdAt: z.date()
 });

@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { createModPack, deleteGlobalMod, deleteModPack, importGlobalWorkshopMods, listGlobalMods, listModPacks, uploadGlobalMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack } from "@/lib/types";
 
@@ -171,8 +172,8 @@ export default function ModsPage() {
             {globalMods.map((item) => (
               <Card key={item.id} className="p-4 transition hover:border-panel-green/25">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} />
-                  <Badge className="shrink-0 bg-slate-800 text-slate-300">{item.fileName.endsWith(".txt") ? "install.txt" : ".tmod"}</Badge>
+                  <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} locale={locale} />
+                  <Badge className="shrink-0 bg-slate-800 text-slate-300">{modSourceLabel(item, locale)}</Badge>
                 </div>
                 <div className="mt-4 flex justify-end border-t border-panel-line pt-3">
                   <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={removeGlobal.isPending}>
@@ -212,13 +213,13 @@ export default function ModsPage() {
                     <Link href={`/mods/packs/${pack.id}`} className="block min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
                       <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{pack.name}</h3>
                     </Link>
-                    <p className="mt-1 truncate text-sm text-slate-500">{pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}</p>
+                    <p className="mt-1 truncate text-sm text-slate-500">{pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ")}</p>
                   </div>
                   <Badge className="shrink-0 bg-slate-800 text-slate-300">{pack.mods.length}</Badge>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {pack.mods.slice(0, 6).map((mod) => (
-                    <span key={mod.id} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{mod.fileName}</span>
+                    <span key={mod.id} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{modDisplayName(mod, locale)}</span>
                   ))}
                   {pack.mods.length > 6 && <span className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-500">+{pack.mods.length - 6}</span>}
                 </div>
@@ -302,7 +303,7 @@ export default function ModsPage() {
                     onClick={() => togglePackMod(mod.id)}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-white">{mod.fileName}</span>
+                      <span className="block truncate text-sm font-medium text-white">{modDisplayName(mod, locale)}</span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size} · {localizeRelativeTime(mod.created, locale)}</span>
                     </span>
                     {selected && <Check aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}
@@ -329,12 +330,12 @@ export default function ModsPage() {
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         eyebrow={t("destructiveAction")}
-        title={t("deleteModConfirm", { name: pendingDelete?.fileName ?? "" })}
-        description={t("confirmDeleteModDescription", { name: pendingDelete?.fileName ?? "" })}
+        title={t("deleteModConfirm", { name: pendingDelete ? modDisplayName(pendingDelete, locale) : "" })}
+        description={t("confirmDeleteModDescription", { name: pendingDelete ? modDisplayName(pendingDelete, locale) : "" })}
         detail={pendingDelete ? (
           <>
             <span className="text-slate-500">{t("modsTitle")}: </span>
-            <span className="font-medium text-white">{pendingDelete.fileName}</span>
+            <span className="font-medium text-white">{modDisplayName(pendingDelete, locale)}</span>
           </>
         ) : undefined}
         cancelLabel={t("cancel")}
@@ -435,7 +436,7 @@ function DialogShell({ children, description, onClose, title }: { children: Reac
   );
 }
 
-function ModIdentity({ detail, item }: { detail: string; item: ModFile }) {
+function ModIdentity({ detail, item, locale }: { detail: string; item: ModFile; locale: string }) {
   return (
     <div className="flex min-w-0 items-start gap-3">
       <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-panel-line bg-slate-950/55 text-slate-400">
@@ -444,7 +445,7 @@ function ModIdentity({ detail, item }: { detail: string; item: ModFile }) {
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <Link href={`/mods/${item.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
-            <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{item.fileName}</h3>
+            <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{modDisplayName(item, locale)}</h3>
           </Link>
         </div>
         <p className="mt-1 truncate text-sm text-slate-400">{detail}</p>

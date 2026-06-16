@@ -104,6 +104,8 @@ type ModFile struct {
 	ID         string    `json:"id" gorm:"primaryKey"`
 	InstanceID string    `json:"instanceId" gorm:"index"`
 	FileName   string    `json:"fileName"`
+	Source     string    `json:"source,omitempty" gorm:"index"`
+	WorkshopID string    `json:"workshopId,omitempty" gorm:"index"`
 	SizeBytes  int64     `json:"sizeBytes"`
 	Enabled    bool      `json:"enabled"`
 	CreatedAt  time.Time `json:"createdAt"`
