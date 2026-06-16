@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Compass, Download, Library, Package, Trash2, Upload, X } from "lucide-react";
+import { Check, Clock3, Compass, Download, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -511,14 +511,23 @@ function RecommendedModCard({
           {item.previewUrl ? <Image src={item.previewUrl} alt={item.title} className="size-full object-cover" width={96} height={96} unoptimized /> : <Package aria-hidden="true" className="size-6 text-slate-500" />}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
-              <p className="mt-1 text-xs text-slate-500">{locale === "zh" ? "创意工坊" : "Workshop"} {item.workshopId}</p>
+          <div className="min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
+                <p className="mt-1 text-xs text-slate-500">{locale === "zh" ? "创意工坊" : "Workshop"} {item.workshopId}</p>
+              </div>
+              <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300">
+                #{item.rank}
+              </span>
             </div>
-            <Badge className="shrink-0 bg-slate-800 text-slate-300">{item.size}</Badge>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+              <StatPill icon={<Users aria-hidden="true" className="size-3.5" />} label={`${(item.subscriptions ?? 0).toLocaleString()} ${locale === "zh" ? "订阅" : "subs"}`} />
+              <StatPill icon={<Clock3 aria-hidden="true" className="size-3.5" />} label={formatWorkshopUpdated(item.timeUpdated, locale)} />
+              <StatPill icon={<Package aria-hidden="true" className="size-3.5" />} label={item.size} />
+            </div>
           </div>
-          <p className="mt-2 line-clamp-3 text-sm text-slate-400">{item.description || item.title}</p>
+          <p className="mt-3 line-clamp-3 text-sm text-slate-400">{item.description || item.title}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(item.tags ?? []).slice(0, 4).map((tag) => (
               <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
@@ -527,7 +536,7 @@ function RecommendedModCard({
         </div>
       </div>
       <div className="flex items-center justify-between border-t border-panel-line px-4 py-3 text-xs text-slate-500">
-        <span>{(item.subscriptions ?? 0).toLocaleString()} {locale === "zh" ? "订阅" : "subs"}</span>
+        <span>{locale === "zh" ? "来源：Steam 创意工坊" : "Source: Steam Workshop"}</span>
         {item.inLibrary ? (
           <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
         ) : (
@@ -539,4 +548,30 @@ function RecommendedModCard({
       </div>
     </Card>
   );
+}
+
+function StatPill({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded bg-slate-900 px-2 py-1">
+      <span className="text-slate-500">{icon}</span>
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function formatWorkshopUpdated(timestamp: number | undefined, locale: string) {
+  if (!timestamp) {
+    return locale === "zh" ? "更新时间未知" : "Unknown";
+  }
+  const diff = Math.max(0, Date.now() - timestamp * 1000);
+  const minutes = Math.floor(diff / 60000);
+  let value = "Just now";
+  if (minutes >= 60 && minutes < 1440) {
+    value = `${Math.floor(minutes / 60)} h ago`;
+  } else if (minutes >= 1440) {
+    value = `${Math.floor(minutes / 1440)} d ago`;
+  } else if (minutes >= 1) {
+    value = `${minutes} min ago`;
+  }
+  return locale === "zh" ? `更新 ${localizeRelativeTime(value, "zh")}` : `Updated ${value}`;
 }
