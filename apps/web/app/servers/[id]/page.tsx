@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import type { Backup, ModFile, ModPack, Server, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
+type ModInstallSource = "library" | "packs";
 
 export default function ServerDetailPage() {
   const { t } = useI18n();
@@ -1526,6 +1527,7 @@ function ModsTab({
 }) {
   const { locale, t } = useI18n();
   const [installerOpen, setInstallerOpen] = useState(false);
+  const [installSource, setInstallSource] = useState<ModInstallSource>("library");
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
   const blocked = modAction.disabled;
   useEffect(() => {
@@ -1604,63 +1606,90 @@ function ModsTab({
                 <X aria-hidden="true" className="size-4" />
               </button>
             </div>
-            <div className="grid max-h-[calc(82vh-5rem)] gap-4 overflow-y-auto p-5 xl:grid-cols-2">
-              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-                <h4 className="font-semibold text-white">{t("installFromLibrary")}</h4>
-                <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
-                <div className="mt-4 grid gap-2">
-                  {availableMods.map((mod) => (
-                    <ResourceRow
-                      key={mod.id}
-                      title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
-                      meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
-                      actions={
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setInstallerOpen(false);
-                            onAssignMod(mod);
-                          }}
-                          disabled={assigning || blocked}
-                          title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
-                        >
-                          <Package aria-hidden="true" />
-                          {t("installToServer")}
-                        </Button>
-                      }
-                    />
-                  ))}
-                  {availableMods.length === 0 && <p className="text-sm text-slate-500">{t("noGlobalMods")}</p>}
+            <div className="max-h-[calc(82vh-5rem)] overflow-y-auto p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <InstallerSourceTab
+                    active={installSource === "library"}
+                    count={availableMods.length}
+                    label={t("modLibrary")}
+                    onClick={() => setInstallSource("library")}
+                  />
+                  <InstallerSourceTab
+                    active={installSource === "packs"}
+                    count={modPacks.length}
+                    label={t("modPacks")}
+                    onClick={() => setInstallSource("packs")}
+                  />
                 </div>
+                <Link href="/mods" className="inline-flex items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800">
+                  {t("openFullManager")}
+                </Link>
               </div>
 
-              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-                <h4 className="font-semibold text-white">{t("modPacks")}</h4>
-                <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
-                <div className="mt-4 grid gap-2">
-                  {modPacks.map((pack) => (
-                    <ResourceRow
-                      key={pack.id}
-                      title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                      meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
-                      actions={
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setInstallerOpen(false);
-                            onInstallPack(pack);
-                          }}
-                          disabled={packInstalling || blocked || pack.modIds.length === 0}
-                          title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
-                        >
-                          <Package aria-hidden="true" />
-                          {t("installModPack")}
-                        </Button>
-                      }
-                    />
-                  ))}
-                  {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
+              <div className="mt-4 rounded-lg border border-panel-line bg-slate-950/35">
+                <div className="border-b border-panel-line px-4 py-3">
+                  <h4 className="font-semibold text-white">{installSource === "library" ? t("installFromLibrary") : t("modPacks")}</h4>
+                  <p className="mt-1 text-sm text-slate-500">{installSource === "library" ? t("installFromLibraryHint") : t("installModPacksHint")}</p>
                 </div>
+
+                {installSource === "library" ? (
+                  availableMods.length > 0 ? (
+                    <div className="divide-y divide-panel-line">
+                      {availableMods.map((mod) => (
+                        <ResourceRow
+                          className="rounded-none border-0 bg-transparent px-4"
+                          key={mod.id}
+                          title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{mod.fileName}</Link>}
+                          meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
+                          actions={
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setInstallerOpen(false);
+                                onAssignMod(mod);
+                              }}
+                              disabled={assigning || blocked}
+                              title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                            >
+                              <Package aria-hidden="true" />
+                              {t("installToServer")}
+                            </Button>
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <InstallerEmptyState message={t("noGlobalMods")} />
+                  )
+                ) : modPacks.length > 0 ? (
+                  <div className="divide-y divide-panel-line">
+                    {modPacks.map((pack) => (
+                      <ResourceRow
+                        className="rounded-none border-0 bg-transparent px-4"
+                        key={pack.id}
+                        title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
+                        meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
+                        actions={
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setInstallerOpen(false);
+                              onInstallPack(pack);
+                            }}
+                            disabled={packInstalling || blocked || pack.modIds.length === 0}
+                            title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                          >
+                            <Package aria-hidden="true" />
+                            {t("installModPack")}
+                          </Button>
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <InstallerEmptyState message={t("noModPacks")} />
+                )}
               </div>
             </div>
           </div>
@@ -1795,9 +1824,36 @@ function LogViewport({
   );
 }
 
-function ResourceRow({ title, meta, actions }: { title: ReactNode; meta: string; actions?: ReactNode }) {
+function InstallerSourceTab({ active, count, label, onClick }: { active: boolean; count: number; label: string; onClick: () => void }) {
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+        active ? "border-panel-green/50 bg-panel-green/15 text-panel-green" : "border-panel-line bg-slate-950/45 text-slate-300 hover:bg-slate-900"
+      )}
+      onClick={onClick}
+    >
+      {label}
+      <span className={cn("rounded px-1.5 py-0.5 text-xs", active ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>{count}</span>
+    </button>
+  );
+}
+
+function InstallerEmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-36 flex-col items-center justify-center px-4 py-8 text-center">
+      <span className="flex size-10 items-center justify-center rounded-md border border-panel-line bg-slate-950/60 text-slate-400">
+        <Package aria-hidden="true" className="size-5" />
+      </span>
+      <p className="mt-3 max-w-md text-sm text-slate-500">{message}</p>
+    </div>
+  );
+}
+
+function ResourceRow({ actions, className, meta, title }: { title: ReactNode; meta: string; actions?: ReactNode; className?: string }) {
+  return (
+    <div className={cn("flex flex-col gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between", className)}>
       <div className="min-w-0">
         <div className="truncate text-sm font-medium">{title}</div>
         <p className="mt-1 text-xs text-slate-500">{meta}</p>
