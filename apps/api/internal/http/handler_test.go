@@ -1279,6 +1279,80 @@ func TestGlobalWorkshopImportCreatesLibraryWorkshopRecords(t *testing.T) {
 	}
 }
 
+func TestGlobalWorkshopImportRejectsDuplicateWorkshopID(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	_ = cfg
+	existing := domain.ModFile{
+		ID:             "existing-workshop",
+		InstanceID:     "unassigned",
+		FileName:       "workshop-2563309347",
+		Source:         "workshop",
+		WorkshopID:     "2563309347",
+		Title:          "Magic Storage",
+		CreatorSteamID: "76561198122163241",
+		SizeBytes:      5643106,
+		Enabled:        true,
+		CreatedAt:      time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &existing); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/workshop", bytes.NewBufferString(`{"workshopIds":["2563309347"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected duplicate workshop import 409, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	_ = cfg
+	existing := domain.ModFile{
+		ID:             "existing-workshop",
+		InstanceID:     "unassigned",
+		FileName:       "workshop-2563309347",
+		Source:         "workshop",
+		WorkshopID:     "2563309347",
+		Title:          "Magic Storage",
+		CreatorSteamID: "76561198122163241",
+		SizeBytes:      5643106,
+		Enabled:        true,
+		CreatedAt:      time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &existing); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/mods/recommended", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected recommended mods 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var items []struct {
+		WorkshopID string `json:"workshopId"`
+		InLibrary  bool   `json:"inLibrary"`
+		ModID      string `json:"modId"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range items {
+		if item.WorkshopID == "2563309347" {
+			found = true
+			if !item.InLibrary || item.ModID != "existing-workshop" {
+				t.Fatalf("expected recommended workshop mod marked as in library, got %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected Magic Storage to appear in recommended mods")
+	}
+}
+
 func TestLegacyWorkshopInstallRecordMigratesToWorkshopMods(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	_, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "install.txt", bytes.NewBufferString("2563309347\n2824688072\n2563309347\n"))

@@ -1,19 +1,20 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { Check, Download, Library, Package, Trash2, Upload, X } from "lucide-react";
+import { Check, Compass, Download, Library, Package, Trash2, Upload, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, deleteGlobalMod, deleteModPack, importGlobalWorkshopMods, listGlobalMods, listModPacks, uploadGlobalMod } from "@/lib/api";
+import { createModPack, deleteGlobalMod, deleteModPack, importGlobalWorkshopMods, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
-import type { ModFile, ModPack } from "@/lib/types";
+import type { ModFile, ModPack, RecommendedMod } from "@/lib/types";
 
-type ModsView = "library" | "packs";
+type ModsView = "discover" | "library" | "packs";
 
 export default function ModsPage() {
   const { locale, t } = useI18n();
@@ -23,7 +24,7 @@ export default function ModsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const [pendingPackDelete, setPendingPackDelete] = useState<ModPack | null>(null);
-  const [activeView, setActiveView] = useState<ModsView>("library");
+  const [activeView, setActiveView] = useState<ModsView>("discover");
   const [workshopDialogOpen, setWorkshopDialogOpen] = useState(false);
   const [packDialogOpen, setPackDialogOpen] = useState(false);
   const [packName, setPackName] = useState("");
@@ -32,6 +33,7 @@ export default function ModsPage() {
   const [workshopIdsText, setWorkshopIdsText] = useState("");
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
+  const recommendedModsQuery = useQuery({ queryKey: ["recommended-mods"], queryFn: listRecommendedMods, retry: false });
 
   const globalUpload = useMutation({
     mutationFn: (file: File) => uploadGlobalMod(file),
@@ -96,6 +98,7 @@ export default function ModsPage() {
       setWorkshopDialogOpen(false);
       setWorkshopIdsText("");
       await client.invalidateQueries({ queryKey: ["global-mods"] });
+      await client.invalidateQueries({ queryKey: ["recommended-mods"] });
     },
     onError: (error) => {
       setSuccessMessage("");
@@ -104,6 +107,7 @@ export default function ModsPage() {
   });
   const globalMods = globalModsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
+  const recommendedMods = recommendedModsQuery.data ?? [];
   const selectedPackModCount = selectedPackModIds.length;
   const workshopIds = parseWorkshopIds(workshopIdsText);
   const togglePackMod = (modId: string) => {
@@ -126,13 +130,20 @@ export default function ModsPage() {
           if (file) globalUpload.mutate(file);
         }}
       />
-      {(globalModsQuery.isError || modPacksQuery.isError) && (
+      {(globalModsQuery.isError || modPacksQuery.isError || recommendedModsQuery.isError) && (
         <p className="mb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p>
       )}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
 
       <div className="mt-6 flex flex-wrap gap-2 border-b border-panel-line pb-3">
+        <ViewTab
+          active={activeView === "discover"}
+          count={recommendedMods.length}
+          icon={<Compass aria-hidden="true" />}
+          label={t("discoverMods")}
+          onClick={() => setActiveView("discover")}
+        />
         <ViewTab
           active={activeView === "library"}
           count={globalMods.length}
@@ -149,7 +160,35 @@ export default function ModsPage() {
         />
       </div>
 
-      {activeView === "library" ? (
+      {activeView === "discover" ? (
+        <section className="mt-5">
+          <SectionToolbar
+            title={t("discoverMods")}
+            hint={t("discoverModsHint")}
+            count={recommendedMods.length}
+            actions={(
+              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending}>
+                <Download aria-hidden="true" />
+                {t("importWorkshopMods")}
+              </Button>
+            )}
+          />
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+            {recommendedMods.map((item) => (
+              <RecommendedModCard
+                key={item.workshopId}
+                item={item}
+                locale={locale}
+                busy={workshopImport.isPending}
+                onAdd={() => {
+                  setWorkshopIdsText(item.workshopId);
+                  workshopImport.mutate();
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      ) : activeView === "library" ? (
         <section className="mt-5">
           <SectionToolbar
             title={t("modLibrary")}
@@ -451,5 +490,53 @@ function ModIdentity({ detail, item, locale }: { detail: string; item: ModFile; 
         <p className="mt-1 truncate text-sm text-slate-400">{detail}</p>
       </div>
     </div>
+  );
+}
+
+function RecommendedModCard({
+  busy,
+  item,
+  locale,
+  onAdd
+}: {
+  item: RecommendedMod;
+  locale: string;
+  busy: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <Card className="overflow-hidden p-0 transition hover:border-panel-green/25">
+      <div className="flex gap-4 p-4">
+        <div className="flex size-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-panel-line bg-slate-950/55">
+          {item.previewUrl ? <Image src={item.previewUrl} alt={item.title} className="size-full object-cover" width={96} height={96} unoptimized /> : <Package aria-hidden="true" className="size-6 text-slate-500" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
+              <p className="mt-1 text-xs text-slate-500">{locale === "zh" ? "创意工坊" : "Workshop"} {item.workshopId}</p>
+            </div>
+            <Badge className="shrink-0 bg-slate-800 text-slate-300">{item.size}</Badge>
+          </div>
+          <p className="mt-2 line-clamp-3 text-sm text-slate-400">{item.description || item.title}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(item.tags ?? []).slice(0, 4).map((tag) => (
+              <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between border-t border-panel-line px-4 py-3 text-xs text-slate-500">
+        <span>{(item.subscriptions ?? 0).toLocaleString()} {locale === "zh" ? "订阅" : "subs"}</span>
+        {item.inLibrary ? (
+          <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
+        ) : (
+          <Button variant="secondary" onClick={onAdd} disabled={busy}>
+            <Download aria-hidden="true" />
+            {locale === "zh" ? "加入模组库" : "Add to library"}
+          </Button>
+        )}
+      </div>
+    </Card>
   );
 }

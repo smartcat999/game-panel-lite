@@ -101,14 +101,24 @@ type World struct {
 }
 
 type ModFile struct {
-	ID         string    `json:"id" gorm:"primaryKey"`
-	InstanceID string    `json:"instanceId" gorm:"index"`
-	FileName   string    `json:"fileName"`
-	Source     string    `json:"source,omitempty" gorm:"index"`
-	WorkshopID string    `json:"workshopId,omitempty" gorm:"index"`
-	SizeBytes  int64     `json:"sizeBytes"`
-	Enabled    bool      `json:"enabled"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID             string    `json:"id" gorm:"primaryKey"`
+	InstanceID     string    `json:"instanceId" gorm:"index"`
+	FileName       string    `json:"fileName"`
+	Source         string    `json:"source,omitempty" gorm:"index"`
+	WorkshopID     string    `json:"workshopId,omitempty" gorm:"index"`
+	Title          string    `json:"title,omitempty"`
+	CreatorSteamID string    `json:"creatorSteamId,omitempty"`
+	PreviewURL     string    `json:"previewUrl,omitempty"`
+	Description    string    `json:"description,omitempty"`
+	TagsJSON       string    `json:"-" gorm:"column:tags_json"`
+	Tags           []string  `json:"tags,omitempty" gorm:"-"`
+	Subscriptions  int       `json:"subscriptions,omitempty"`
+	Favorited      int       `json:"favorited,omitempty"`
+	Views          int       `json:"views,omitempty"`
+	UpdatedAtSteam int64     `json:"updatedAtSteam,omitempty"`
+	SizeBytes      int64     `json:"sizeBytes"`
+	Enabled        bool      `json:"enabled"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 type ModPack struct {

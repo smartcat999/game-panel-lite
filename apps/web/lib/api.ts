@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ModFile, ModPack, Server, World } from "./types";
+import type { ActivityEvent, Backup, ModFile, ModPack, RecommendedMod, Server, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -98,9 +98,36 @@ type ApiModFile = {
   fileName: string;
   source?: string;
   workshopId?: string;
+  title?: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  description?: string;
+  tags?: string[];
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  updatedAtSteam?: number;
   sizeBytes: number;
   enabled: boolean;
   createdAt: string;
+};
+
+type ApiRecommendedMod = {
+  rank: number;
+  workshopId: string;
+  title: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  description?: string;
+  fileSize: number;
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  timeCreated?: number;
+  timeUpdated?: number;
+  tags?: string[];
+  inLibrary: boolean;
+  modId?: string;
 };
 
 type ApiModPack = {
@@ -573,10 +600,40 @@ function toModFile(file: ApiModFile): ModFile {
     fileName: file.fileName,
     source: file.source,
     workshopId: file.workshopId,
+    title: file.title,
+    creatorSteamId: file.creatorSteamId,
+    previewUrl: file.previewUrl,
+    description: file.description,
+    tags: file.tags,
+    subscriptions: file.subscriptions,
+    favorited: file.favorited,
+    views: file.views,
+    updatedAtSteam: file.updatedAtSteam,
     size: formatBytes(file.sizeBytes),
     sizeBytes: file.sizeBytes,
     enabled: file.enabled,
     created: formatRelative(file.createdAt)
+  };
+}
+
+function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
+  return {
+    rank: mod.rank,
+    workshopId: mod.workshopId,
+    title: mod.title,
+    creatorSteamId: mod.creatorSteamId,
+    previewUrl: mod.previewUrl,
+    description: mod.description,
+    fileSize: mod.fileSize,
+    size: formatBytes(mod.fileSize),
+    subscriptions: mod.subscriptions,
+    favorited: mod.favorited,
+    views: mod.views,
+    timeCreated: mod.timeCreated,
+    timeUpdated: mod.timeUpdated,
+    tags: mod.tags,
+    inLibrary: mod.inLibrary,
+    modId: mod.modId
   };
 }
 
@@ -658,6 +715,16 @@ export async function uploadGlobalMod(file: File): Promise<ModFile> {
   }
   const item = (await response.json()) as ApiModFile;
   return toModFile(item);
+}
+
+export async function listRecommendedMods(): Promise<RecommendedMod[]> {
+  const response = await fetch(`${API_BASE}/api/mods/recommended`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to load recommended mods");
+  }
+  const payload = (await response.json()) as ApiRecommendedMod[];
+  return payload.map(toRecommendedMod);
 }
 
 export async function importGlobalWorkshopMods(workshopIds: string[]): Promise<ModFile[]> {

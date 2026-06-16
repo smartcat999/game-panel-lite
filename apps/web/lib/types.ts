@@ -60,10 +60,38 @@ export type ModFile = {
   fileName: string;
   source?: "upload" | "workshop" | string;
   workshopId?: string;
+  title?: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  description?: string;
+  tags?: string[];
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  updatedAtSteam?: number;
   size: string;
   sizeBytes?: number;
   enabled: boolean;
   created: string;
+};
+
+export type RecommendedMod = {
+  rank: number;
+  workshopId: string;
+  title: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  fileSize: number;
+  size: string;
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  timeCreated?: number;
+  timeUpdated?: number;
+  tags?: string[];
+  description?: string;
+  inLibrary: boolean;
+  modId?: string;
 };
 
 export type ModPack = {

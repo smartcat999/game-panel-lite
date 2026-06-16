@@ -21,6 +21,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -99,6 +100,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Patch("/api/servers/{id}/mods/{modId}", h.updateMod)
 	r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
 	r.Get("/api/mods", h.listGlobalMods)
+	r.Get("/api/mods/recommended", h.listRecommendedMods)
 	r.Post("/api/mods/upload", h.uploadGlobalMod)
 	r.Post("/api/mods/workshop", h.importGlobalWorkshopMods)
 	r.Post("/api/mods/{id}/assign", h.assignMod)
@@ -224,8 +226,12 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 	}
 	items := make([]domain.ModFile, 0, len(workshopIDs))
 	for _, workshopID := range workshopIDs {
-		item, _, err := h.upsertWorkshopModRecord(r.Context(), "unassigned", workshopID)
+		item, _, err := h.createWorkshopModRecord(r.Context(), "unassigned", workshopID)
 		if err != nil {
+			if errors.Is(err, errWorkshopModExists) {
+				writeError(w, http.StatusConflict, fmt.Sprintf("workshop mod %s already exists in mod library", workshopID))
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -343,6 +349,41 @@ func (h *Handler) listGlobalMods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, visible)
+}
+
+type recommendedModResponse struct {
+	modcatalog.RecommendedMod
+	InLibrary bool   `json:"inLibrary"`
+	ModID     string `json:"modId,omitempty"`
+}
+
+func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
+	items, err := modcatalog.RecommendedTModLoaderMods()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	mods, err := h.store.ListMods(r.Context(), "unassigned")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	byWorkshopID := make(map[string]domain.ModFile, len(mods))
+	for _, item := range mods {
+		if item.Source == "workshop" && item.WorkshopID != "" {
+			byWorkshopID[item.WorkshopID] = item
+		}
+	}
+	response := make([]recommendedModResponse, 0, len(items))
+	for _, item := range items {
+		entry := recommendedModResponse{RecommendedMod: item}
+		if mod, ok := byWorkshopID[item.WorkshopID]; ok {
+			entry.InLibrary = true
+			entry.ModID = mod.ID
+		}
+		response = append(response, entry)
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
@@ -469,10 +510,20 @@ func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileNa
 
 func (h *Handler) upsertWorkshopModRecord(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, bool, error) {
 	fileName := "workshop-" + workshopID
+	if existing, err := h.store.GetModByInstanceAndWorkshopID(ctx, instanceID, workshopID); err == nil {
+		existing.Source = "workshop"
+		existing.WorkshopID = workshopID
+		existing.Enabled = true
+		applyRecommendedModMetadata(&existing, workshopID)
+		return existing, false, h.store.SaveMod(ctx, &existing)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.ModFile{}, false, err
+	}
 	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.Source = "workshop"
 		existing.WorkshopID = workshopID
 		existing.Enabled = true
+		applyRecommendedModMetadata(&existing, workshopID)
 		return existing, false, h.store.SaveMod(ctx, &existing)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.ModFile{}, false, err
@@ -487,7 +538,54 @@ func (h *Handler) upsertWorkshopModRecord(ctx context.Context, instanceID string
 		Enabled:    true,
 		CreatedAt:  time.Now(),
 	}
+	applyRecommendedModMetadata(&item, workshopID)
 	return item, true, h.store.CreateMod(ctx, &item)
+}
+
+var errWorkshopModExists = errors.New("workshop mod already exists")
+
+func (h *Handler) createWorkshopModRecord(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, bool, error) {
+	if _, err := h.store.GetModByInstanceAndWorkshopID(ctx, instanceID, workshopID); err == nil {
+		return domain.ModFile{}, false, errWorkshopModExists
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.ModFile{}, false, err
+	}
+	if _, err := h.store.GetModByInstanceAndFile(ctx, instanceID, "workshop-"+workshopID); err == nil {
+		return domain.ModFile{}, false, errWorkshopModExists
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.ModFile{}, false, err
+	}
+	return h.upsertWorkshopModRecord(ctx, instanceID, workshopID)
+}
+
+func applyRecommendedModMetadata(item *domain.ModFile, workshopID string) {
+	recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(workshopID)
+	if !ok {
+		return
+	}
+	tags, _ := json.Marshal(recommended.Tags)
+	item.Title = recommended.Title
+	item.CreatorSteamID = recommended.CreatorSteamID
+	item.PreviewURL = recommended.PreviewURL
+	item.Description = recommended.Description
+	item.TagsJSON = string(tags)
+	item.Subscriptions = recommended.Subscriptions
+	item.Favorited = recommended.Favorited
+	item.Views = recommended.Views
+	item.UpdatedAtSteam = recommended.TimeUpdated
+	if recommended.FileSize > 0 {
+		item.SizeBytes = recommended.FileSize
+	}
+	hydrateModMetadata(item)
+}
+
+func hydrateModMetadata(item *domain.ModFile) {
+	if item.TagsJSON != "" {
+		_ = json.Unmarshal([]byte(item.TagsJSON), &item.Tags)
+	}
+	if item.Source == "workshop" && item.Title == "" && item.WorkshopID != "" {
+		item.Title = "Workshop " + item.WorkshopID
+	}
 }
 
 func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.GameServerInstance) error {
@@ -586,6 +684,7 @@ func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]dom
 	visible := make([]domain.ModFile, 0, len(mods))
 	for _, item := range mods {
 		if item.Source == "workshop" {
+			hydrateModMetadata(&item)
 			visible = append(visible, item)
 			continue
 		}
@@ -608,6 +707,7 @@ func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]dom
 			}
 			continue
 		}
+		hydrateModMetadata(&item)
 		visible = append(visible, item)
 	}
 	return visible, nil

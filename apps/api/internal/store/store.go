@@ -152,6 +152,15 @@ func (s *Store) GetModByInstanceAndFile(ctx context.Context, instanceID string, 
 	return mod, err
 }
 
+func (s *Store) GetModByInstanceAndWorkshopID(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, error) {
+	var mod domain.ModFile
+	err := s.db.WithContext(ctx).First(&mod, "instance_id = ? AND workshop_id = ?", instanceID, workshopID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return mod, ErrNotFound
+	}
+	return mod, err
+}
+
 func (s *Store) SaveMod(ctx context.Context, mod *domain.ModFile) error {
 	return s.db.WithContext(ctx).Save(mod).Error
 }
