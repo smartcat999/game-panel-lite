@@ -126,12 +126,7 @@ export default function BackupsPage() {
             {filteredBackups.map((backup) => {
               const serverName = backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server;
               return (
-                <div key={backup.id} className="grid gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:grid-cols-[9rem_minmax(0,1fr)_auto] lg:items-center">
-                  <div className="flex items-center gap-2 text-sm text-slate-400 lg:block">
-                    <Clock aria-hidden="true" className="size-4 text-slate-500 lg:mb-2" />
-                    <p className="font-medium text-slate-200">{localizeRelativeTime(backup.created, locale)}</p>
-                    <p className="hidden text-xs text-slate-500 lg:block">{formatBackupDate(backup.createdAt, locale)}</p>
-                  </div>
+                <div key={backup.id} className="grid gap-3 px-4 py-3 transition hover:bg-slate-900/40 xl:grid-cols-[minmax(0,1fr)_10rem_auto] xl:items-center">
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <Link href={`/backups/${backup.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
@@ -145,6 +140,13 @@ export default function BackupsPage() {
                       <BackupMeta href={backup.instanceId ? `/servers/${backup.instanceId}` : undefined} label={t("server")} value={serverName} />
                       <BackupMeta label={t("world")} value={backup.world} />
                       <BackupMeta label={t("size")} value={backup.size} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-400 xl:justify-end">
+                    <Clock aria-hidden="true" className="size-4 text-slate-500" />
+                    <div className="min-w-0 xl:text-right">
+                      <p className="font-medium text-slate-200">{localizeRelativeTime(backup.created, locale)}</p>
+                      <p className="text-xs text-slate-500">{formatBackupDate(backup.createdAt, locale)}</p>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
