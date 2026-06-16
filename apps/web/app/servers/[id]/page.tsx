@@ -55,6 +55,7 @@ export default function ServerDetailPage() {
   const client = useQueryClient();
   const logViewportRef = useRef<HTMLDivElement>(null);
   const logServerIdRef = useRef("");
+  const logReplayIndexRef = useRef(0);
 
   const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
   const server = query.data;
@@ -285,45 +286,59 @@ export default function ServerDetailPage() {
     if (logServerIdRef.current !== id) {
       logServerIdRef.current = id;
       setLogs([]);
+      logReplayIndexRef.current = 0;
     }
-    if (server?.status !== "running") {
-      let alive = true;
-      setLogStatus("connecting");
-      getServerLogSnapshot(id)
-        .then((lines) => {
-          if (!alive) return;
-          setLogs(lines.slice(-300));
-          setConsoleError("");
-          setLogStatus("idle");
-        })
-        .catch((error) => {
-          if (!alive) return;
-          setLogStatus("error");
-          setConsoleError(formatActionError(error, t("logsUnavailable")));
-        });
-      return () => {
-        alive = false;
-      };
-    }
+    let alive = true;
+    let source: EventSource | null = null;
     setLogStatus("connecting");
-    const source = new EventSource(serverLogsUrl(id));
-    source.onopen = () => {
-      setConsoleError("");
-      setLogStatus("connected");
+
+    getServerLogSnapshot(id)
+      .then((lines) => {
+        if (!alive) return;
+        const snapshotLines = lines.slice(-300);
+        setLogs(snapshotLines);
+        logReplayIndexRef.current = 0;
+        setConsoleError("");
+        if (server?.status !== "running") {
+          setLogStatus("idle");
+          return;
+        }
+        source = new EventSource(serverLogsUrl(id));
+        source.onopen = () => {
+          setConsoleError("");
+          setLogStatus("connected");
+        };
+        source.addEventListener("log", (event) => {
+          setLogs((current) => {
+            const replayIndex = logReplayIndexRef.current;
+            if (replayIndex < snapshotLines.length && event.data === snapshotLines[replayIndex]) {
+              logReplayIndexRef.current = replayIndex + 1;
+              return current;
+            }
+            logReplayIndexRef.current = snapshotLines.length;
+            return [...current, event.data].slice(-300);
+          });
+        });
+        source.addEventListener("error", (event) => {
+          setLogStatus("error");
+          const data = "data" in event && typeof event.data === "string" ? event.data : "";
+          if (data) {
+            setLogs((current) => [...current, data].slice(-300));
+            setConsoleError(data);
+          }
+        });
+        source.onerror = () => setLogStatus("error");
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setLogStatus("error");
+        setConsoleError(formatActionError(error, t("logsUnavailable")));
+      });
+
+    return () => {
+      alive = false;
+      source?.close();
     };
-    source.addEventListener("log", (event) => {
-      setLogs((current) => [...current, event.data].slice(-300));
-    });
-    source.addEventListener("error", (event) => {
-      setLogStatus("error");
-      const data = "data" in event && typeof event.data === "string" ? event.data : "";
-      if (data) {
-        setLogs((current) => [...current, data].slice(-300));
-        setConsoleError(data);
-      }
-    });
-    source.onerror = () => setLogStatus("error");
-    return () => source.close();
   }, [activeTab, id, server?.status, logStreamPaused, t]);
 
   useEffect(() => {
