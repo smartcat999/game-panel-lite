@@ -107,6 +107,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Delete("/api/mods/{id}", h.deleteGlobalMod)
 	r.Get("/api/mod-packs", h.listModPacks)
 	r.Post("/api/mod-packs", h.createModPack)
+	r.Patch("/api/mod-packs/{id}", h.updateModPack)
 	r.Delete("/api/mod-packs/{id}", h.deleteModPack)
 	r.Get("/api/terraria/presets", h.presets)
 	r.Get("/api/terraria/versions", h.versions)
@@ -819,36 +820,15 @@ func (h *Handler) createModPack(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	name := strings.TrimSpace(payload.Name)
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "mod pack name is required")
-		return
-	}
-	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
-	if len(modIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "select at least one mod")
-		return
-	}
-	for _, modID := range modIDs {
-		item, err := h.store.GetMod(r.Context(), modID)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "mod not found")
-			return
-		}
-		if item.InstanceID != "unassigned" || (!isTModPackage(item.FileName) && item.Source != "workshop") {
-			writeError(w, http.StatusBadRequest, "mod packs can only use global mod library items")
-			return
-		}
-	}
-	modIDsJSON, err := json.Marshal(modIDs)
+	name, description, modIDsJSON, err := h.modPackPayload(r.Context(), payload.Name, payload.Description, payload.ModIDs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	pack := domain.ModPack{
 		ID:          uuid.NewString(),
 		Name:        name,
-		Description: strings.TrimSpace(payload.Description),
+		Description: description,
 		ModIDsJSON:  string(modIDsJSON),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -863,6 +843,67 @@ func (h *Handler) createModPack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, response)
+}
+
+func (h *Handler) updateModPack(w http.ResponseWriter, r *http.Request) {
+	pack, err := h.store.GetModPack(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "mod pack not found")
+		return
+	}
+	var payload struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		ModIDs      []string `json:"modIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	name, description, modIDsJSON, err := h.modPackPayload(r.Context(), payload.Name, payload.Description, payload.ModIDs)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	pack.Name = name
+	pack.Description = description
+	pack.ModIDsJSON = string(modIDsJSON)
+	pack.UpdatedAt = time.Now()
+	if err := h.store.SaveModPack(r.Context(), &pack); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response, err := h.modPackResponse(r.Context(), pack)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) modPackPayload(ctx context.Context, rawName string, rawDescription string, rawModIDs []string) (string, string, []byte, error) {
+	name := strings.TrimSpace(rawName)
+	if name == "" {
+		return "", "", nil, fmt.Errorf("mod pack name is required")
+	}
+	modIDs := uniqueNonEmptyStrings(rawModIDs)
+	if len(modIDs) == 0 {
+		return "", "", nil, fmt.Errorf("select at least one mod")
+	}
+	for _, modID := range modIDs {
+		item, err := h.store.GetMod(ctx, modID)
+		if err != nil {
+			return "", "", nil, fmt.Errorf("mod not found")
+		}
+		if item.InstanceID != "unassigned" || (!isTModPackage(item.FileName) && item.Source != "workshop") {
+			return "", "", nil, fmt.Errorf("mod packs can only use global mod library items")
+		}
+	}
+	modIDsJSON, err := json.Marshal(modIDs)
+	if err != nil {
+		return "", "", nil, err
+	}
+	return name, strings.TrimSpace(rawDescription), modIDsJSON, nil
 }
 
 func (h *Handler) deleteModPack(w http.ResponseWriter, r *http.Request) {

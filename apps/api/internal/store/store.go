@@ -187,6 +187,10 @@ func (s *Store) GetModPack(ctx context.Context, id string) (domain.ModPack, erro
 	return pack, err
 }
 
+func (s *Store) SaveModPack(ctx context.Context, pack *domain.ModPack) error {
+	return s.db.WithContext(ctx).Save(pack).Error
+}
+
 func (s *Store) DeleteModPack(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.ModPack{}, "id = ?", id).Error
 }
