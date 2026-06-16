@@ -100,6 +100,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
 	r.Get("/api/mods", h.listGlobalMods)
 	r.Post("/api/mods/upload", h.uploadGlobalMod)
+	r.Post("/api/mods/workshop", h.importGlobalWorkshopMods)
 	r.Post("/api/mods/{id}/assign", h.assignMod)
 	r.Delete("/api/mods/{id}", h.deleteGlobalMod)
 	r.Get("/api/mod-packs", h.listModPacks)
@@ -189,23 +190,10 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
-	var payload struct {
-		WorkshopIDs []string `json:"workshopIds"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
+	workshopIDs, err := decodeWorkshopIDs(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
-	if len(workshopIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "select at least one workshop item")
-		return
-	}
-	for _, id := range workshopIDs {
-		if !isDigitsOnly(id) {
-			writeError(w, http.StatusBadRequest, "workshop IDs must contain digits only")
-			return
-		}
 	}
 	content := strings.Join(workshopIDs, "\n") + "\n"
 	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, "install.txt", strings.NewReader(content))
@@ -228,6 +216,46 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "mod.workshop_imported", fmt.Sprintf("Imported %d workshop mod IDs for %s", len(workshopIDs), server.Name))
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Request) {
+	workshopIDs, err := decodeWorkshopIDs(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	content := strings.Join(workshopIDs, "\n") + "\n"
+	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", "install.txt", strings.NewReader(content))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	item, _, err := h.upsertModRecord(r.Context(), "unassigned", "install.txt", size)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "mod.workshop_imported", fmt.Sprintf("Imported %d workshop mod IDs into mod library", len(workshopIDs)))
+	writeJSON(w, http.StatusOK, item)
+}
+
+func decodeWorkshopIDs(r *http.Request) ([]string, error) {
+	var payload struct {
+		WorkshopIDs []string `json:"workshopIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("invalid JSON body")
+	}
+	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
+	if len(workshopIDs) == 0 {
+		return nil, fmt.Errorf("select at least one workshop item")
+	}
+	for _, id := range workshopIDs {
+		if !isDigitsOnly(id) {
+			return nil, fmt.Errorf("workshop IDs must contain digits only")
+		}
+	}
+	return workshopIDs, nil
 }
 
 func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {

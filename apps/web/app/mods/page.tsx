@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Library, Package, Trash2, Upload } from "lucide-react";
+import { Check, Download, Library, Package, Trash2, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, deleteGlobalMod, deleteModPack, listGlobalMods, listModPacks, uploadGlobalMod } from "@/lib/api";
+import { createModPack, deleteGlobalMod, deleteModPack, importGlobalWorkshopMods, listGlobalMods, listModPacks, uploadGlobalMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack } from "@/lib/types";
@@ -20,9 +20,11 @@ export default function ModsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const [pendingPackDelete, setPendingPackDelete] = useState<ModPack | null>(null);
+  const [pendingWorkshopImport, setPendingWorkshopImport] = useState(false);
   const [packName, setPackName] = useState("");
   const [packDescription, setPackDescription] = useState("");
   const [selectedPackModIds, setSelectedPackModIds] = useState<string[]>([]);
+  const [workshopIdsText, setWorkshopIdsText] = useState("");
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
 
@@ -80,9 +82,24 @@ export default function ModsPage() {
       setErrorMessage(error instanceof Error ? error.message : t("unableDeleteModPack"));
     }
   });
+  const workshopImport = useMutation({
+    mutationFn: () => importGlobalWorkshopMods(parseWorkshopIds(workshopIdsText)),
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage(t("workshopModsImported"));
+      setPendingWorkshopImport(false);
+      setWorkshopIdsText("");
+      await client.invalidateQueries({ queryKey: ["global-mods"] });
+    },
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableImportWorkshopMods"));
+    }
+  });
   const globalMods = globalModsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const selectedPackModCount = selectedPackModIds.length;
+  const workshopIds = parseWorkshopIds(workshopIdsText);
   const togglePackMod = (modId: string) => {
     setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
   };
@@ -92,36 +109,55 @@ export default function ModsPage() {
       <PageHeader
         title={t("modsTitle")}
         description={t("modsDescription")}
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              ref={globalInputRef}
-              className="hidden"
-              type="file"
-              accept=".tmod"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) globalUpload.mutate(file);
-              }}
-            />
-            <Button variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
-              <Upload aria-hidden="true" />
-              {globalUpload.isPending ? t("uploading") : t("uploadMod")}
-            </Button>
-          </div>
-        }
+      />
+      <input
+        ref={globalInputRef}
+        className="hidden"
+        type="file"
+        accept=".tmod"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) globalUpload.mutate(file);
+        }}
       />
       {(globalModsQuery.isError || modPacksQuery.isError) && (
         <p className="mb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p>
       )}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
-      <Card className="p-4 text-sm text-slate-400">
-        {t("supportedModFiles")}
-      </Card>
 
       <section className="mt-6">
         <PanelHeading icon={<Library aria-hidden="true" />} title={t("modLibrary")} hint={t("modLibraryHint")} count={globalMods.length} />
+        <Card className="mt-3 p-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+            <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+              <h3 className="font-semibold text-white">{t("uploadMod")}</h3>
+              <p className="mt-1 text-sm text-slate-500">{t("supportedModFiles")}</p>
+              <Button className="mt-4" variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
+                <Upload aria-hidden="true" />
+                {globalUpload.isPending ? t("uploading") : t("uploadMod")}
+              </Button>
+            </div>
+            <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+              <h3 className="font-semibold text-white">{t("importWorkshopMods")}</h3>
+              <p className="mt-1 text-sm text-slate-500">{t("workshopImportLibraryHint")}</p>
+              <textarea
+                className="mt-4 min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
+                placeholder={t("workshopIdsPlaceholder")}
+                value={workshopIdsText}
+                onChange={(event) => setWorkshopIdsText(event.target.value)}
+                disabled={workshopImport.isPending}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIds.length })}</span>
+                <Button variant="secondary" onClick={() => setPendingWorkshopImport(true)} disabled={workshopImport.isPending || workshopIds.length === 0}>
+                  <Download aria-hidden="true" />
+                  {workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
         <div className="mt-3 grid gap-3 xl:grid-cols-2">
           {globalMods.map((item) => (
             <Card key={item.id} className="p-4 transition hover:border-panel-green/25">
@@ -217,6 +253,19 @@ export default function ModsPage() {
       </section>
 
       <ConfirmDialog
+        open={pendingWorkshopImport}
+        eyebrow={t("confirmActionEyebrow")}
+        title={t("confirmWorkshopImportTitle", { count: workshopIds.length })}
+        description={t("confirmWorkshopImportLibraryDescription", { count: workshopIds.length })}
+        detail={<DetailLine label={t("workshopIds")} value={String(workshopIds.length)} />}
+        cancelLabel={t("cancel")}
+        confirmLabel={workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
+        confirmVariant="gold"
+        busy={workshopImport.isPending}
+        onCancel={() => setPendingWorkshopImport(false)}
+        onConfirm={() => workshopImport.mutate()}
+      />
+      <ConfirmDialog
         open={Boolean(pendingDelete)}
         eyebrow={t("destructiveAction")}
         title={t("deleteModConfirm", { name: pendingDelete?.fileName ?? "" })}
@@ -255,6 +304,27 @@ export default function ModsPage() {
       />
     </>
   );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <span className="text-slate-500">{label}: </span>
+      <span className="font-medium text-white">{value}</span>
+    </>
+  );
+}
+
+function parseWorkshopIds(value: string) {
+  const seen = new Set<string>();
+  return value
+    .split(/[\s,，]+/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
 }
 
 function PanelHeading({ count, hint, icon, title }: { count: number; hint: string; icon: ReactNode; title: string }) {

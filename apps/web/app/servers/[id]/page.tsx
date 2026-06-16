@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds } from "@gamepanel-lite/shared";
@@ -23,7 +23,6 @@ import {
   getServer,
   getServerLogSnapshot,
   getServerStats,
-  importWorkshopMods,
   listBackups,
   listGlobalMods,
   listModPacks,
@@ -36,7 +35,6 @@ import {
   setModEnabled,
   serverLogsUrl,
   updateServerConfig,
-  uploadMod,
 } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
@@ -53,7 +51,6 @@ export default function ServerDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const client = useQueryClient();
-  const modInputRef = useRef<HTMLInputElement>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
   const logServerIdRef = useRef("");
 
@@ -84,7 +81,6 @@ export default function ServerDetailPage() {
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
-  const [workshopIdsText, setWorkshopIdsText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
@@ -93,12 +89,10 @@ export default function ServerDetailPage() {
   const [pendingBackupCreate, setPendingBackupCreate] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
-  const [pendingModUpload, setPendingModUpload] = useState<File | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [pendingModToggle, setPendingModToggle] = useState<{ mod: ModFile; enabled: boolean } | null>(null);
   const [pendingModAssign, setPendingModAssign] = useState<ModFile | null>(null);
   const [pendingModPackInstall, setPendingModPackInstall] = useState<ModPack | null>(null);
-  const [pendingWorkshopImport, setPendingWorkshopImport] = useState(false);
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
@@ -236,17 +230,6 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(formatActionError(error, t("unableDeleteBackup")))
   });
-  const modUpload = useMutation({
-    mutationFn: (file: File) => uploadMod(id, file),
-    onSuccess: async () => {
-      showSuccess(t("modUploaded"));
-      markModsChanged();
-      setPendingModUpload(null);
-      if (modInputRef.current) modInputRef.current.value = "";
-      await client.invalidateQueries({ queryKey: ["mods", id] });
-    },
-    onError: (error) => showError(formatActionError(error, t("unableUploadMod")))
-  });
   const modEnabled = useMutation({
     mutationFn: ({ modId, enabled }: { modId: string; enabled: boolean }) => setModEnabled(id, modId, enabled),
     onSuccess: async (updatedMod) => {
@@ -291,18 +274,6 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(formatActionError(error, t("unableAssignMod")))
   });
-  const workshopImport = useMutation({
-    mutationFn: () => importWorkshopMods(id, parseWorkshopIds(workshopIdsText)),
-    onSuccess: async () => {
-      showSuccess(t("workshopModsImported"));
-      markModsChanged();
-      setPendingWorkshopImport(false);
-      setWorkshopIdsText("");
-      await client.invalidateQueries({ queryKey: ["mods", id] });
-    },
-    onError: (error) => showError(formatActionError(error, t("unableImportWorkshopMods")))
-  });
-
   useEffect(() => {
     if (!id || (activeTab !== "console" && activeTab !== "logs")) return;
     if (logStreamPaused) {
@@ -379,7 +350,6 @@ export default function ServerDetailPage() {
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
   const modPacks = useMemo(() => modPacksQuery.data ?? [], [modPacksQuery.data]);
-  const workshopIds = useMemo(() => parseWorkshopIds(workshopIdsText), [workshopIdsText]);
   if (!server) {
     return (
       <>
@@ -596,7 +566,6 @@ export default function ServerDetailPage() {
               availableMods={globalMods}
               assigning={modAssign.isPending}
               deleting={modDelete.isPending}
-              importingWorkshop={workshopImport.isPending}
               isError={modsQuery.isError}
               isLoading={modsQuery.isLoading}
               items={serverMods}
@@ -606,16 +575,10 @@ export default function ServerDetailPage() {
               packInstalling={modPackAssign.isPending}
               serverStatus={server.status}
               toggling={modEnabled.isPending}
-              uploading={modUpload.isPending}
-              workshopIdsCount={workshopIds.length}
-              workshopIdsText={workshopIdsText}
               onAssignMod={setPendingModAssign}
               onDelete={setPendingModDelete}
-              onImportWorkshop={() => setPendingWorkshopImport(true)}
               onInstallPack={setPendingModPackInstall}
               onToggle={(mod) => setPendingModToggle({ mod, enabled: !mod.enabled })}
-              onUploadClick={() => modInputRef.current?.click()}
-              onWorkshopIdsChange={setWorkshopIdsText}
             />
           )}
         </Card>
@@ -650,16 +613,6 @@ export default function ServerDetailPage() {
         </div>
       </div>
 
-      <input
-        ref={modInputRef}
-        className="hidden"
-        type="file"
-        accept=".tmod,.txt,.json"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) setPendingModUpload(file);
-        }}
-      />
 
       <ConfirmDialog
         open={pendingConfigRestart}
@@ -738,22 +691,6 @@ export default function ServerDetailPage() {
         onConfirm={() => pendingBackupDelete && backupDelete.mutate(pendingBackupDelete.id)}
       />
       <ConfirmDialog
-        open={Boolean(pendingModUpload)}
-        eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmModUploadTitle", { name: pendingModUpload?.name ?? "" })}
-        description={t("confirmModUploadDescription", { name: pendingModUpload?.name ?? "", server: server.name })}
-        detail={pendingModUpload ? <DetailLine label={t("modsTitle")} value={pendingModUpload.name} /> : undefined}
-        cancelLabel={t("cancel")}
-        confirmLabel={modUpload.isPending ? t("actionWorking") : t("uploadMod")}
-        confirmVariant="gold"
-        busy={modUpload.isPending}
-        onCancel={() => {
-          setPendingModUpload(null);
-          if (modInputRef.current) modInputRef.current.value = "";
-        }}
-        onConfirm={() => pendingModUpload && modUpload.mutate(pendingModUpload)}
-      />
-      <ConfirmDialog
         open={Boolean(pendingModToggle)}
         eyebrow={t("confirmActionEyebrow")}
         title={t("confirmModToggleTitle", { action: pendingModToggle?.enabled ? t("enable") : t("disable"), name: pendingModToggle?.mod.fileName ?? "" })}
@@ -791,19 +728,6 @@ export default function ServerDetailPage() {
         busy={modPackAssign.isPending}
         onCancel={() => setPendingModPackInstall(null)}
         onConfirm={() => pendingModPackInstall && modPackAssign.mutate(pendingModPackInstall)}
-      />
-      <ConfirmDialog
-        open={pendingWorkshopImport}
-        eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmWorkshopImportTitle", { count: workshopIds.length })}
-        description={t("confirmWorkshopImportDescription", { count: workshopIds.length, server: server.name })}
-        detail={<DetailLine label={t("workshopIds")} value={String(workshopIds.length)} />}
-        cancelLabel={t("cancel")}
-        confirmLabel={workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
-        confirmVariant="gold"
-        busy={workshopImport.isPending}
-        onCancel={() => setPendingWorkshopImport(false)}
-        onConfirm={() => workshopImport.mutate()}
       />
       <ConfirmDialog
         open={Boolean(pendingModDelete)}
@@ -1569,7 +1493,6 @@ function ModsTab({
   availableMods,
   assigning,
   deleting,
-  importingWorkshop,
   isError,
   isLoading,
   items,
@@ -1579,21 +1502,14 @@ function ModsTab({
   packInstalling,
   serverStatus,
   toggling,
-  uploading,
-  workshopIdsCount,
-  workshopIdsText,
   onAssignMod,
   onDelete,
-  onImportWorkshop,
   onInstallPack,
-  onToggle,
-  onUploadClick,
-  onWorkshopIdsChange
+  onToggle
 }: {
   availableMods: ModFile[];
   assigning: boolean;
   deleting: boolean;
-  importingWorkshop: boolean;
   isError: boolean;
   isLoading: boolean;
   items: ModFile[];
@@ -1603,16 +1519,10 @@ function ModsTab({
   packInstalling: boolean;
   serverStatus: Server["status"];
   toggling: boolean;
-  uploading: boolean;
-  workshopIdsCount: number;
-  workshopIdsText: string;
   onAssignMod: (mod: ModFile) => void;
   onDelete: (mod: ModFile) => void;
-  onImportWorkshop: () => void;
   onInstallPack: (pack: ModPack) => void;
   onToggle: (mod: ModFile) => void;
-  onUploadClick: () => void;
-  onWorkshopIdsChange: (value: string) => void;
 }) {
   const { locale, t } = useI18n();
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
@@ -1621,12 +1531,6 @@ function ModsTab({
     <ResourcePanel
       title={t("detailModActions")}
       href="/mods"
-      action={
-        <Button variant="secondary" onClick={onUploadClick} disabled={uploading || blocked} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-          <Upload aria-hidden="true" />
-          {uploading ? t("uploading") : t("uploadMod")}
-        </Button>
-      }
     >
       <div className="space-y-4">
         {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
@@ -1638,16 +1542,10 @@ function ModsTab({
         ) : null}
 
         <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="px-4 py-4">
-              <h3 className="font-semibold text-white">{t("serverMods")}</h3>
-              <p className="mt-1 text-sm text-slate-500">{t("serverModsHint")}</p>
-            </div>
-          </div>
           {isError ? <p className="px-4 pb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
-          {!isError && isLoading ? <p className="px-4 pb-4 text-sm text-slate-400">{t("loading")}</p> : null}
-          {!isError && !isLoading && items.length === 0 ? <p className="px-4 pb-4 text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
-          <div className="divide-y divide-panel-line border-t border-panel-line">
+          {!isError && isLoading ? <p className="px-4 py-4 text-sm text-slate-400">{t("loading")}</p> : null}
+          {!isError && !isLoading && items.length === 0 ? <p className="px-4 py-4 text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
+          <div className="divide-y divide-panel-line">
             {items.map((mod) => (
               <ServerModRow
                 key={mod.id}
@@ -1662,16 +1560,16 @@ function ModsTab({
           </div>
         </div>
 
-        <details className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-100 outline-none transition hover:text-panel-green focus-visible:ring-2 focus-visible:ring-panel-green/50">
-            {t("installOptions")}
-            <span className="ml-2 font-normal text-slate-500">{t("installOptionsHint")}</span>
-          </summary>
-          <div className="mt-4 space-y-4">
-            <div>
-              <h3 className="font-semibold text-white">{t("installFromLibrary")}</h3>
+        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+          <div>
+            <h3 className="font-semibold text-white">{t("installOptions")}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t("installOptionsHint")}</p>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+              <h4 className="font-semibold text-white">{t("installFromLibrary")}</h4>
               <p className="mt-1 text-sm text-slate-500">{t("installFromLibraryHint")}</p>
-              <div className="mt-4 grid gap-2 xl:grid-cols-2">
+              <div className="mt-4 grid gap-2">
                 {availableMods.map((mod) => (
                   <ResourceRow
                     key={mod.id}
@@ -1685,53 +1583,32 @@ function ModsTab({
                     }
                   />
                 ))}
-                {availableMods.length === 0 && <p className="text-sm text-slate-500 xl:col-span-2">{t("noGlobalMods")}</p>}
+                {availableMods.length === 0 && <p className="text-sm text-slate-500">{t("noGlobalMods")}</p>}
               </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-                <h3 className="font-semibold text-white">{t("modPacks")}</h3>
-                <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
-                <div className="mt-4 grid gap-2">
-                  {modPacks.map((pack) => (
-                    <ResourceRow
-                      key={pack.id}
-                      title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                      meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
-                      actions={
-                        <Button variant="secondary" onClick={() => onInstallPack(pack)} disabled={packInstalling || blocked || pack.modIds.length === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                          <Package aria-hidden="true" />
-                          {t("installModPack")}
-                        </Button>
-                      }
-                    />
-                  ))}
-                  {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
-                </div>
-              </div>
-
-              <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-                <h3 className="font-semibold text-white">{t("importWorkshopMods")}</h3>
-                <p className="mt-1 text-sm text-slate-500">{t("workshopImportHint")}</p>
-                <textarea
-                  className="mt-4 min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
-                  placeholder={t("workshopIdsPlaceholder")}
-                  value={workshopIdsText}
-                  onChange={(event) => onWorkshopIdsChange(event.target.value)}
-                  disabled={importingWorkshop || blocked}
-                />
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIdsCount })}</span>
-                  <Button variant="secondary" onClick={onImportWorkshop} disabled={importingWorkshop || blocked || workshopIdsCount === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
-                    <Download aria-hidden="true" />
-                    {importingWorkshop ? t("actionWorking") : t("importWorkshopMods")}
-                  </Button>
-                </div>
+            <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+              <h4 className="font-semibold text-white">{t("modPacks")}</h4>
+              <p className="mt-1 text-sm text-slate-500">{t("installModPacksHint")}</p>
+              <div className="mt-4 grid gap-2">
+                {modPacks.map((pack) => (
+                  <ResourceRow
+                    key={pack.id}
+                    title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
+                    meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => mod.fileName).join(", ")}`}
+                    actions={
+                      <Button variant="secondary" onClick={() => onInstallPack(pack)} disabled={packInstalling || blocked || pack.modIds.length === 0} title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}>
+                        <Package aria-hidden="true" />
+                        {t("installModPack")}
+                      </Button>
+                    }
+                  />
+                ))}
+                {modPacks.length === 0 && <p className="text-sm text-slate-500">{t("noModPacks")}</p>}
               </div>
             </div>
           </div>
-        </details>
+        </div>
       </div>
     </ResourcePanel>
   );
@@ -2004,16 +1881,4 @@ function worldSizeLabel(value: Server["config"]["worldSize"], t: ReturnType<type
     large: t("tagLargeWorld")
   };
   return labels[value] ?? value;
-}
-
-function parseWorkshopIds(value: string) {
-  const seen = new Set<string>();
-  return value
-    .split(/[\s,，]+/)
-    .map((item) => item.trim())
-    .filter((item) => {
-      if (!item || seen.has(item)) return false;
-      seen.add(item);
-      return true;
-    });
 }

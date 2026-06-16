@@ -656,6 +656,20 @@ export async function uploadGlobalMod(file: File): Promise<ModFile> {
   return toModFile(item);
 }
 
+export async function importGlobalWorkshopMods(workshopIds: string[]): Promise<ModFile> {
+  const response = await fetch(`${API_BASE}/api/mods/workshop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workshopIds })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import workshop mods");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
 export async function assignMod(modId: string, instanceId: string): Promise<ModFile> {
   const response = await fetch(`${API_BASE}/api/mods/${modId}/assign`, {
     method: "POST",
