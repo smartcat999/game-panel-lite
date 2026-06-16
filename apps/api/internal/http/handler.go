@@ -460,14 +460,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusCreated, assigned)
 		return
 	}
-	sourcePath, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
-	src, err := os.Open(sourcePath)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "mod file not found")
-		return
-	}
-	defer src.Close()
-	_, size, err := modsvc.NewService(h.cfg.DataDir).Upload(targetServer.ID, item.FileName, src)
+	size, err := h.copyLibraryModToServerCache(item, targetServer.ID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -492,6 +485,21 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Assigned mod %s to %s", item.FileName, targetServer.Name))
 	writeJSON(w, http.StatusCreated, assigned)
+}
+
+func (h *Handler) copyLibraryModToServerCache(item domain.ModFile, targetInstanceID string) (int64, error) {
+	svc := modsvc.NewService(h.cfg.DataDir)
+	sourcePath, err := svc.Path(item.InstanceID, item.FileName)
+	if err != nil {
+		return 0, err
+	}
+	src, err := os.Open(sourcePath)
+	if err != nil {
+		return 0, fmt.Errorf("mod file not found")
+	}
+	defer src.Close()
+	_, size, err := svc.Upload(targetInstanceID, item.FileName, src)
+	return size, err
 }
 
 func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileName string, size int64) (domain.ModFile, bool, error) {
@@ -1198,15 +1206,25 @@ func copyStoredFile(sourcePath string, targetPath string) error {
 		return err
 	}
 	defer source.Close()
-	target, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	target, err := os.CreateTemp(filepath.Dir(targetPath), "."+filepath.Base(targetPath)+".*.tmp")
 	if err != nil {
 		return err
 	}
+	tmpName := target.Name()
+	defer func() {
+		_ = os.Remove(tmpName)
+	}()
 	if _, err := io.Copy(target, source); err != nil {
 		_ = target.Close()
 		return err
 	}
-	return target.Close()
+	if err := target.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, targetPath)
 }
 
 func (h *Handler) clearActiveWorlds(ctx context.Context, instanceID string, keepWorldID string) error {

@@ -1542,6 +1542,61 @@ func TestRunningTModLoaderServerAllowsModMutation(t *testing.T) {
 	}
 }
 
+func TestAssignModRefreshesExistingServerModCache(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "large.tmod", bytes.NewBufferString("library-version")); err != nil {
+		t.Fatal(err)
+	}
+	libraryMod := domain.ModFile{
+		ID:         "library-large-mod",
+		InstanceID: "unassigned",
+		FileName:   "large.tmod",
+		SizeBytes:  int64(len("library-version")),
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &libraryMod); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, "large.tmod", bytes.NewBufferString("cached-version")); err != nil {
+		t.Fatal(err)
+	}
+	runtimeModPath := filepath.Join(server.DataDir, "Mods", "large.tmod")
+	if err := os.MkdirAll(filepath.Dir(runtimeModPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(runtimeModPath, []byte("cached-runtime-version"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/library-large-mod/assign", strings.NewReader(`{"instanceId":"tmod"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected mod assign success, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	cached, err := os.ReadFile(filepath.Join(cfg.DataDir, "mods", server.ID, "large.tmod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(cached) != "library-version" {
+		t.Fatalf("expected server mod cache to be refreshed from library, got %q", string(cached))
+	}
+	runtimeCached, err := os.ReadFile(runtimeModPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeCached) != "library-version" {
+		t.Fatalf("expected runtime mod mount cache to be refreshed from library, got %q", string(runtimeCached))
+	}
+}
+
 func TestTModLoaderModDeleteRejectsDifferentServerMod(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	source := testServer("source-tmod", cfg.DataDir)

@@ -29,13 +29,28 @@ func (s *Service) Upload(instanceID string, fileName string, reader io.Reader) (
 		return "", 0, err
 	}
 	target := filepath.Join(dir, safeName)
-	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	out, err := os.CreateTemp(dir, "."+safeName+".*.tmp")
 	if err != nil {
 		return "", 0, err
 	}
-	defer out.Close()
+	tmpName := out.Name()
+	defer func() {
+		_ = os.Remove(tmpName)
+	}()
 	size, err := io.Copy(out, reader)
-	return target, size, err
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		return "", 0, err
+	}
+	if err := os.Rename(tmpName, target); err != nil {
+		return "", 0, err
+	}
+	return target, size, nil
 }
 
 func (s *Service) Path(instanceID string, fileName string) (string, error) {

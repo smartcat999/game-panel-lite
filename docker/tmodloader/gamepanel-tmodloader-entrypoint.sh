@@ -12,10 +12,33 @@ if [[ -x "${MANAGE_SCRIPT}" || -r "${MANAGE_SCRIPT}" ]]; then
   chmod +x "${MANAGE_SCRIPT}" 2>/dev/null || true
 fi
 
+workshop_mod_cached() {
+  local workshop_id="$1"
+  [[ -n "${workshop_id}" ]] || return 1
+  [[ -d "${WORKSHOP_DIR}/${workshop_id}" ]] || return 1
+  find "${WORKSHOP_DIR}/${workshop_id}" -type f -name '*.tmod' -print -quit 2>/dev/null | grep -q .
+}
+
+workshop_sync_needed() {
+  while IFS= read -r workshop_id || [[ -n "${workshop_id}" ]]; do
+    workshop_id="${workshop_id//[$'\t\r\n ']}"
+    [[ -n "${workshop_id}" ]] || continue
+    if ! workshop_mod_cached "${workshop_id}"; then
+      return 0
+    fi
+  done <"${MODS_DIR}/install.txt"
+  return 1
+}
+
 if [[ -s "${MODS_DIR}/install.txt" ]]; then
   export STEAMCMDPATH="/opt/steamcmd/steamcmd.sh"
-  if command -v steamcmd >/dev/null 2>&1 || command -v steamcmd.sh >/dev/null 2>&1; then
-    echo "Syncing Workshop mods from install.txt..."
+  arch="$(uname -m)"
+  if [[ "${arch}" != "x86_64" && "${arch}" != "amd64" ]]; then
+    echo "Workshop sync skipped: downloading Workshop mods is only supported on x86_64. Upload .tmod files on ARM hosts."
+  elif ! workshop_sync_needed; then
+    echo "Workshop sync skipped: cached Workshop mods are already present."
+  elif command -v steamcmd >/dev/null 2>&1 || command -v steamcmd.sh >/dev/null 2>&1; then
+    echo "Syncing missing Workshop mods from install.txt..."
     bash "${MANAGE_SCRIPT}" install-mods -f "${ROOT_DIR}"
   else
     echo "Workshop sync skipped: steamcmd is not available in the container"
