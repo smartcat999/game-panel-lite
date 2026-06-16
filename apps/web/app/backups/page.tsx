@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Download, Search, Trash2 } from "lucide-react";
+import { Clock, Download, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -56,7 +56,7 @@ export default function BackupsPage() {
       const matchesServerType = serverTypeFilter === "all" || server?.mode === serverTypeFilter;
       const matchesBackupType = backupTypeFilter === "all" || backup.type === backupTypeFilter;
       return matchesSearch && matchesServer && matchesServerType && matchesBackupType;
-    });
+    }).sort(sortBackupsNewestFirst);
   }, [backupTypeFilter, backups, search, serverById, serverFilter, serverNameById, serverTypeFilter]);
 
   const remove = useMutation({
@@ -120,52 +120,58 @@ export default function BackupsPage() {
         </div>
         <p className="mt-3 text-xs text-slate-500">{t("backupFilterSummary", { shown: filteredBackups.length, total: backups.length })}</p>
       </Card>
-      <div className="grid gap-3">
-        {filteredBackups.map((backup) => {
-          const serverName = backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server;
-          return (
-            <Card key={backup.id} className="p-4 transition hover:border-panel-green/30">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/backups/${backup.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
-                      <h2 className="truncate font-semibold text-white transition hover:text-panel-green">{backup.name}</h2>
-                    </Link>
-                    <span className={cn("rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
-                      {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
-                    </span>
+      {filteredBackups.length > 0 ? (
+        <Card className="overflow-hidden">
+          <div className="divide-y divide-panel-line">
+            {filteredBackups.map((backup) => {
+              const serverName = backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server;
+              return (
+                <div key={backup.id} className="grid gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:grid-cols-[9rem_minmax(0,1fr)_auto] lg:items-center">
+                  <div className="flex items-center gap-2 text-sm text-slate-400 lg:block">
+                    <Clock aria-hidden="true" className="size-4 text-slate-500 lg:mb-2" />
+                    <p className="font-medium text-slate-200">{localizeRelativeTime(backup.created, locale)}</p>
+                    <p className="hidden text-xs text-slate-500 lg:block">{formatBackupDate(backup.createdAt, locale)}</p>
                   </div>
-                  <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
-                    <BackupMeta href={backup.instanceId ? `/servers/${backup.instanceId}` : undefined} label={t("server")} value={serverName} />
-                    <BackupMeta label={t("world")} value={backup.world} />
-                    <BackupMeta label={t("size")} value={backup.size} />
-                    <BackupMeta label={t("created")} value={localizeRelativeTime(backup.created, locale)} />
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <Link href={`/backups/${backup.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
+                        <h2 className="truncate font-semibold text-white transition hover:text-panel-green">{backup.name}</h2>
+                      </Link>
+                      <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
+                        {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex min-w-0 flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400">
+                      <BackupMeta href={backup.instanceId ? `/servers/${backup.instanceId}` : undefined} label={t("server")} value={serverName} />
+                      <BackupMeta label={t("world")} value={backup.world} />
+                      <BackupMeta label={t("size")} value={backup.size} />
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                    <Button
+                      variant="secondary"
+                      aria-label={t("download")}
+                      onClick={() => void downloadBackup(backup)}
+                      disabled={backupsQuery.isError || downloadingBackupId === backup.id}
+                    >
+                      <Download aria-hidden="true" />
+                      {downloadingBackupId === backup.id ? t("downloading") : t("download")}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      aria-label={t("delete")}
+                      onClick={() => setPendingDelete(backup)}
+                      disabled={remove.isPending || backupsQuery.isError}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    aria-label={t("download")}
-                    onClick={() => void downloadBackup(backup)}
-                    disabled={backupsQuery.isError || downloadingBackupId === backup.id}
-                  >
-                    <Download aria-hidden="true" />
-                    {downloadingBackupId === backup.id ? t("downloading") : t("download")}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    aria-label={t("delete")}
-                    onClick={() => setPendingDelete(backup)}
-                    disabled={remove.isPending || backupsQuery.isError}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        </Card>
+      ) : null}
       {!backupsQuery.isLoading && filteredBackups.length === 0 && <p className="mt-4 text-sm text-slate-400">{backups.length === 0 ? t("noBackupsYet") : t("noBackupsMatch")}</p>}
       <ConfirmDialog
         open={Boolean(pendingDelete)}
@@ -190,15 +196,28 @@ export default function BackupsPage() {
 
 function BackupMeta({ href, label, value }: { href?: string; label: string; value: string }) {
   return (
-    <div className="min-w-0">
-      <p className="text-xs text-slate-500">{label}</p>
+    <span className="min-w-0">
+      <span className="text-xs text-slate-500">{label}: </span>
       {href ? (
-        <Link href={href} className="mt-1 block truncate font-medium text-panel-green hover:underline">{value}</Link>
+        <Link href={href} className="font-medium text-panel-green hover:underline">{value}</Link>
       ) : (
-        <p className="mt-1 truncate font-medium text-slate-200">{value}</p>
+        <span className="font-medium text-slate-200">{value}</span>
       )}
-    </div>
+    </span>
   );
+}
+
+function sortBackupsNewestFirst(a: Backup, b: Backup) {
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+}
+
+function formatBackupDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
 }
 
 function FilterGroup<T extends string>({
