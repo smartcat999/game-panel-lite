@@ -21,6 +21,15 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	if len(provider.ConfigSchema()) == 0 {
 		t.Fatal("expected Palworld config schema")
 	}
+	names := map[string]bool{}
+	for _, field := range provider.ConfigSchema() {
+		names[field.Name] = true
+	}
+	for _, expected := range []string{"serverName", "saveName", "maxPlayers", "serverPassword", "adminPassword"} {
+		if !names[expected] {
+			t.Fatalf("expected config schema field %q, got %+v", expected, provider.ConfigSchema())
+		}
+	}
 }
 
 func TestNormalizeAndValidateConfig(t *testing.T) {
@@ -65,6 +74,56 @@ func TestRuntimeOptionsUsePalworldImageAndUdpPort(t *testing.T) {
 	} {
 		if !strings.Contains(env, expected) {
 			t.Fatalf("expected env to contain %q, got:\n%s", expected, env)
+		}
+	}
+}
+
+func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
+	provider := NewProvider()
+	server := domain.GameServerInstance{
+		Config: NormalizeConfig(domain.TerrariaConfig{
+			ServerName: "Old Name",
+			WorldName:  "Old Save",
+			MaxPlayers: 4,
+			Password:   "old-password",
+			MOTD:       "old-admin",
+		}),
+		ConfigPayload: map[string]any{
+			"serverName":     "Payload Name",
+			"saveName":       "Payload Save",
+			"maxPlayers":     float64(12),
+			"serverPassword": "payload-password",
+			"adminPassword":  "payload-admin",
+		},
+	}
+	rendered, err := provider.RenderServerConfig(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	options, err := provider.RuntimeOptionsForServer(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"serverName=Payload Name",
+		"saveName=Payload Save",
+		"maxPlayers=12",
+		"serverPassword=payload-password",
+		"adminPassword=payload-admin",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("expected rendered payload config to contain %q, got:\n%s", expected, rendered)
+		}
+	}
+	env := strings.Join(options.Env, "\n")
+	for _, expected := range []string{
+		"PLAYERS=12",
+		"SERVER_NAME=Payload Name",
+		"SERVER_PASSWORD=payload-password",
+		"ADMIN_PASSWORD=payload-admin",
+	} {
+		if !strings.Contains(env, expected) {
+			t.Fatalf("expected payload env to contain %q, got:\n%s", expected, env)
 		}
 	}
 }

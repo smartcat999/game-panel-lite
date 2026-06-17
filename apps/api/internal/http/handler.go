@@ -2416,7 +2416,7 @@ func (h *Handler) runtimeSpecForServer(ctx context.Context, server *domain.GameS
 	if !ok {
 		return runtime.ContainerSpec{}, fmt.Errorf("unknown provider: %s", server.ProviderKey)
 	}
-	configText, err := gameProvider.RenderConfig(server.Config)
+	configText, options, err := runtimeConfigForServer(gameProvider, *server)
 	if err != nil {
 		return runtime.ContainerSpec{}, err
 	}
@@ -2442,9 +2442,28 @@ func (h *Handler) runtimeSpecForServer(ctx context.Context, server *domain.GameS
 		},
 		DataDir:    server.DataDir,
 		ConfigText: configText,
-		Options:    gameProvider.RuntimeOptions(server.Config),
+		Options:    options,
 	}
 	return spec, nil
+}
+
+func runtimeConfigForServer(gameProvider provider.GameProvider, server domain.GameServerInstance) (string, runtime.ContainerOptions, error) {
+	if serverRuntimeProvider, ok := gameProvider.(provider.ServerRuntimeProvider); ok {
+		configText, err := serverRuntimeProvider.RenderServerConfig(server)
+		if err != nil {
+			return "", runtime.ContainerOptions{}, err
+		}
+		options, err := serverRuntimeProvider.RuntimeOptionsForServer(server)
+		if err != nil {
+			return "", runtime.ContainerOptions{}, err
+		}
+		return configText, options, nil
+	}
+	configText, err := gameProvider.RenderConfig(server.Config)
+	if err != nil {
+		return "", runtime.ContainerOptions{}, err
+	}
+	return configText, gameProvider.RuntimeOptions(server.Config), nil
 }
 
 func normalizeResourceLimits(input resourceLimitPayload) (resourceLimitPayload, error) {

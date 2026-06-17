@@ -88,7 +88,7 @@ In progress:
 - Palworld provider runtime verification against a real Docker daemon.
 
 Not started:
-- Full runtime spec model that no longer maps non-Terraria providers through the compatibility config fields.
+- Fully typed per-game config models beyond the current provider-specific runtime bridge.
 
 ## Goal 3 Scope
 
@@ -115,6 +115,10 @@ Completed:
 - Create-server and config-update APIs now decode provider-specific config payloads before mapping them to runtime config.
 - Frontend create flow now sends semantic Palworld config payloads while keeping Terraria creation unchanged.
 - Added backend coverage for Palworld config payload creation and update.
+- Added an optional `ServerRuntimeProvider` interface so non-Terraria providers can render runtime config and container options from the server's provider-specific payload.
+- Palworld runtime spec generation now reads semantic payload fields directly instead of relying only on Terraria-compatible config fields.
+- Palworld config schema now exposes `saveName`, `serverPassword`, and `adminPassword` field names.
+- Added provider and handler tests proving Palworld runtime env/config text are generated from `configPayload`.
 
 ## Verification Log
 
@@ -220,12 +224,29 @@ Result:
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 
+2026-06-18 Goal 3 provider runtime bridge:
+
+```bash
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+```
+
+Result:
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
 - No RBAC, OAuth, SaaS account system, or multi-user management is planned for this phase.
 - If no admin account exists, backend API routes remain open so a fresh instance can bootstrap; the frontend still forces setup before rendering the app.
-- Palworld uses a first-pass provider implementation. It can be selected and created, and its API payload now uses Palworld-specific config fields. Runtime rendering still maps through compatibility config fields until the runtime spec model is fully generalized.
+- Palworld uses a first-pass provider implementation. It can be selected and created, and its API/runtime payload now uses Palworld-specific config fields through a provider runtime bridge.
 - Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
 - Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
 

@@ -513,6 +513,56 @@ func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
 	}
 }
 
+func TestStartPalworldServerRuntimeSpecUsesConfigPayload(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("palworld-payload-runtime", cfg.DataDir)
+	server.GameKey = domain.GamePalworld
+	server.ProviderKey = domain.ProviderPalworld
+	server.Version = "latest"
+	server.Port = palworld.DefaultInternalPort
+	server.HostPort = 18211
+	server.Config = palworld.NormalizeConfig(domain.TerrariaConfig{
+		ServerName: "Old Pal",
+		WorldName:  "Old Save",
+		MaxPlayers: 4,
+		Password:   "old-join",
+		MOTD:       "old-admin",
+	})
+	server.ConfigPayloadJSON = `{"serverName":"Payload Pal","saveName":"Payload Save","maxPlayers":14,"serverPassword":"payload-join","adminPassword":"payload-admin"}`
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if recorder.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected async start to create runtime container")
+	}
+	env := strings.Join(spec.Options.Env, "\n")
+	for _, expected := range []string{
+		"PLAYERS=14",
+		"SERVER_NAME=Payload Pal",
+		"SERVER_PASSWORD=payload-join",
+		"ADMIN_PASSWORD=payload-admin",
+	} {
+		if !strings.Contains(env, expected) {
+			t.Fatalf("expected runtime env to contain %q, got:\n%s", expected, env)
+		}
+	}
+	if !strings.Contains(spec.ConfigText, "saveName=Payload Save") || strings.Contains(spec.ConfigText, "Old Save") {
+		t.Fatalf("expected runtime config text to use payload save, got:\n%s", spec.ConfigText)
+	}
+	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+}
+
 func TestStartServerReusesExistingContainer(t *testing.T) {
 	adapter := newCaptureCreateAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)

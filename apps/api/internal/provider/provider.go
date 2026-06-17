@@ -23,6 +23,11 @@ type GameProvider interface {
 	RuntimeOptions(domain.TerrariaConfig) runtime.ContainerOptions
 }
 
+type ServerRuntimeProvider interface {
+	RenderServerConfig(domain.GameServerInstance) (string, error)
+	RuntimeOptionsForServer(domain.GameServerInstance) (runtime.ContainerOptions, error)
+}
+
 type PlayerListProvider interface {
 	PlayerListCommand(domain.TerrariaConfig) string
 	ParsePlayerListOutput([]string) []domain.Player

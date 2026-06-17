@@ -1,6 +1,7 @@
 package palworld
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -37,10 +38,10 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
 	return []domain.ProviderConfigField{
 		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Palworld Server"},
-		{Name: "worldName", Label: "存档名称", Type: "text", Required: true, Default: "Palworld Save"},
+		{Name: "saveName", Label: "存档名称", Type: "text", Required: true, Default: "Palworld Save"},
 		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 8},
-		{Name: "password", Label: "服务器密码", Type: "password", Required: false},
-		{Name: "motd", Label: "管理员密码", Type: "password", Required: true, Help: "用于 Palworld 管理员操作。"},
+		{Name: "serverPassword", Label: "服务器密码", Type: "password", Required: false},
+		{Name: "adminPassword", Label: "管理员密码", Type: "password", Required: true, Help: "用于 Palworld 管理员操作。"},
 	}
 }
 func (Provider) Image() string      { return ImageForVersion(versions[0]) }
@@ -113,6 +114,18 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 	}
 }
 
+func (provider Provider) RenderServerConfig(server domain.GameServerInstance) (string, error) {
+	return provider.RenderConfig(configFromServer(server))
+}
+
+func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstance) (runtime.ContainerOptions, error) {
+	config := configFromServer(server)
+	if err := provider.ValidateConfig(config); err != nil {
+		return runtime.ContainerOptions{}, err
+	}
+	return provider.RuntimeOptions(config), nil
+}
+
 func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
 	if strings.TrimSpace(config.ServerName) == "" {
 		config.ServerName = "Palworld Server"
@@ -131,6 +144,74 @@ func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
 	config.AutoCreateWorld = false
 	config.Language = "en-US"
 	return config
+}
+
+func configFromServer(server domain.GameServerInstance) domain.TerrariaConfig {
+	config := NormalizeConfig(server.Config)
+	payload := server.ConfigPayload
+	if len(payload) == 0 && strings.TrimSpace(server.ConfigPayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload)
+	}
+	if len(payload) == 0 {
+		return config
+	}
+	if value := stringPayload(payload, "serverName"); value != "" {
+		config.ServerName = value
+	}
+	if value := stringPayload(payload, "saveName"); value != "" {
+		config.WorldName = value
+	} else if value := stringPayload(payload, "worldName"); value != "" {
+		config.WorldName = value
+	}
+	if value, ok := intPayload(payload, "maxPlayers"); ok {
+		config.MaxPlayers = value
+	}
+	if value := stringPayload(payload, "serverPassword"); value != "" {
+		config.Password = value
+	} else if value := stringPayload(payload, "password"); value != "" {
+		config.Password = value
+	}
+	if value := stringPayload(payload, "adminPassword"); value != "" {
+		config.MOTD = value
+	} else if value := stringPayload(payload, "motd"); value != "" {
+		config.MOTD = value
+	}
+	return NormalizeConfig(config)
+}
+
+func stringPayload(payload map[string]any, key string) string {
+	value, ok := payload[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+func intPayload(payload map[string]any, key string) (int, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case json.Number:
+		got, err := typed.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(got), true
+	default:
+		return 0, false
+	}
 }
 
 func ImageForVersion(version string) string {
