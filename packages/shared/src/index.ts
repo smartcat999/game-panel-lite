@@ -239,6 +239,11 @@ export function renderTerrariaServerConfig(config: TerrariaConfig): string {
   ].join("\n");
 }
 
+export const resourceLimitSchema = z.object({
+  cpuLimitCores: z.number().min(0).max(64).refine((value) => value === 0 || value >= 0.25, "CPU limit must be 0 or at least 0.25 cores").default(0),
+  memoryLimitMb: z.number().int().min(0).max(262144).default(0)
+});
+
 export const gameServerInstanceSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(80),
@@ -247,6 +252,8 @@ export const gameServerInstanceSchema = z.object({
   status: serverStatusSchema,
   port: serverPortSchema,
   maxPlayers: z.number().int().min(1).max(255),
+  cpuLimitCores: z.number().nonnegative().optional(),
+  memoryLimitMb: z.number().int().nonnegative().optional(),
   lastError: z.string().optional(),
   sourceWorldId: z.string().optional(),
   sourceWorldName: z.string().optional(),
@@ -295,6 +302,7 @@ export type TerrariaProviderKey = z.infer<typeof terrariaProviderKeySchema>;
 export type ServerStatus = z.infer<typeof serverStatusSchema>;
 export type TerrariaConfig = z.infer<typeof terrariaConfigSchema>;
 export type TerrariaPreset = z.infer<typeof terrariaPresetSchema>;
+export type ResourceLimits = z.infer<typeof resourceLimitSchema>;
 export type GameServerInstance = z.infer<typeof gameServerInstanceSchema>;
 export type Backup = z.infer<typeof backupSchema>;
 export type World = z.infer<typeof worldSchema>;

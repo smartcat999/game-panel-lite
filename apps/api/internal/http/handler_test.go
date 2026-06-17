@@ -799,6 +799,105 @@ func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
 	}
 }
 
+func TestCreateServerPersistsResourceLimitsInRuntimeSpec(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, _ := newTestRouterWithAdapter(t, adapter)
+	payload := `{
+		"name":"Limited Server",
+		"providerKey":"terraria-vanilla",
+		"hostPort":17778,
+		"resources":{"cpuLimitCores":1.5,"memoryLimitMb":2048},
+		"config":{
+			"serverName":"Limited Server",
+			"worldName":"LimitedWorld",
+			"worldSize":"medium",
+			"difficulty":"classic",
+			"maxPlayers":8,
+			"port":7777,
+			"secure":true,
+			"language":"en-US",
+			"autoCreateWorld":true
+		}
+	}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var server domain.GameServerInstance
+	if err := json.Unmarshal(create.Body.Bytes(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if server.CPULimitCores != 1.5 || server.MemoryLimitMB != 2048 {
+		t.Fatalf("expected persisted resource limits, got cpu=%v memory=%d", server.CPULimitCores, server.MemoryLimitMB)
+	}
+
+	start := httptest.NewRecorder()
+	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if start.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", start.Code, start.Body.String())
+	}
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected async start to create runtime container")
+	}
+	if spec.Resources.CPULimitCores != 1.5 || spec.Resources.MemoryLimitMB != 2048 {
+		t.Fatalf("expected runtime resource limits, got %+v", spec.Resources)
+	}
+	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+}
+
+func TestUpdateServerConfigPersistsResourceLimitsAndRequiresRestartWhenRunning(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("resource-update", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "container-1"
+	server.ConfigRevision = 2
+	server.AppliedConfigRevision = 2
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{
+		"hostPort":18888,
+		"resources":{"cpuLimitCores":2,"memoryLimitMb":4096},
+		"config":{
+			"serverName":"Resource Update",
+			"worldName":"ResourceWorld",
+			"worldSize":"medium",
+			"difficulty":"classic",
+			"maxPlayers":10,
+			"port":7777,
+			"secure":true,
+			"language":"en-US",
+			"autoCreateWorld":true
+		}
+	}`
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/"+server.ID+"/config", bytes.NewBufferString(payload)))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected config update 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var updated domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.CPULimitCores != 2 || updated.MemoryLimitMB != 4096 || updated.HostPort != 18888 {
+		t.Fatalf("expected updated resource and port limits, got %+v", updated)
+	}
+	if updated.ConfigRevision != 3 || updated.AppliedConfigRevision != 2 {
+		t.Fatalf("expected running config update to wait for restart, got revision=%d applied=%d", updated.ConfigRevision, updated.AppliedConfigRevision)
+	}
+	stored, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.CPULimitCores != 2 || stored.MemoryLimitMB != 4096 {
+		t.Fatalf("expected stored resource limits, got cpu=%v memory=%d", stored.CPULimitCores, stored.MemoryLimitMB)
+	}
+}
+
 func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("owned-resources", cfg.DataDir)

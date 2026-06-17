@@ -4,6 +4,11 @@ export type ServerStatus = "creating" | "starting" | "running" | "stopping" | "s
 export type ServerMode = "vanilla" | "tmodloader";
 export type ProviderKey = "terraria-vanilla" | "terraria-tmodloader";
 
+export type ResourceLimits = {
+  cpuLimitCores: number;
+  memoryLimitMb: number;
+};
+
 export type Server = {
   id: string;
   name: string;
@@ -14,6 +19,8 @@ export type Server = {
   maxPlayers: number;
   port: number;
   hostPort: number;
+  cpuLimitCores: number;
+  memoryLimitMb: number;
   version: string;
   lastError?: string;
   sourceWorldId?: string;

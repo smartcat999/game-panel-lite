@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ModFile, ModPack, RecommendedMod, Server, World } from "./types";
+import type { ActivityEvent, Backup, ModFile, ModPack, RecommendedMod, ResourceLimits, Server, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -61,6 +61,8 @@ type ApiServer = {
   version?: string;
   lastError?: string;
   hostPort?: number;
+  cpuLimitCores?: number;
+  memoryLimitMb?: number;
   sourceWorldId?: string;
   sourceWorldName?: string;
   config?: TerrariaConfig;
@@ -212,6 +214,8 @@ function toServer(server: ApiServer): Server {
     port: server.port,
     version: server.version ?? "1.4.5.6",
     hostPort: server.hostPort ?? 0,
+    cpuLimitCores: server.cpuLimitCores ?? 0,
+    memoryLimitMb: server.memoryLimitMb ?? 0,
     lastError: server.lastError,
     sourceWorldId: server.sourceWorldId,
     sourceWorldName: server.sourceWorldName,
@@ -259,11 +263,11 @@ export async function getServer(id: string): Promise<Server> {
   return toServer(server);
 }
 
-export async function updateServerConfig(id: string, config: TerrariaConfig, hostPort?: number): Promise<Server> {
+export async function updateServerConfig(id: string, config: TerrariaConfig, hostPort?: number, resources?: ResourceLimits): Promise<Server> {
   const response = await fetch(`${API_BASE}/api/servers/${id}/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ config, hostPort })
+    body: JSON.stringify({ config, hostPort, resources })
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -361,6 +365,7 @@ export async function createServer(input: {
   config: TerrariaConfig;
   hostPort?: number;
   version?: string;
+  resources?: ResourceLimits;
 }): Promise<Server> {
   const response = await fetch(`${API_BASE}/api/servers`, {
     method: "POST",

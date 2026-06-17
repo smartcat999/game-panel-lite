@@ -49,6 +49,8 @@ type GameServerInstance struct {
 	DataDir               string         `json:"dataDir,omitempty"`
 	ContainerID           string         `json:"containerId,omitempty"`
 	HostPort              int            `json:"hostPort,omitempty"`
+	CPULimitCores         float64        `json:"cpuLimitCores,omitempty"`
+	MemoryLimitMB         int            `json:"memoryLimitMb,omitempty"`
 	Version               string         `json:"version,omitempty"`
 	LastError             string         `json:"lastError,omitempty"`
 	SourceWorldID         string         `json:"sourceWorldId,omitempty"`

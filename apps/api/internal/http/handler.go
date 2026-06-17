@@ -40,6 +40,11 @@ type Handler struct {
 	runtimeFactory func(string) (runtime.Adapter, error)
 }
 
+type resourceLimitPayload struct {
+	CPULimitCores float64 `json:"cpuLimitCores,omitempty"`
+	MemoryLimitMB int     `json:"memoryLimitMb,omitempty"`
+}
+
 func NewHandler(
 	cfg config.Config,
 	logger *slog.Logger,
@@ -1457,7 +1462,7 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nextConfig := server.Config
-	if err := h.applyServerConfig(r.Context(), &server, nextConfig, nil); err != nil {
+	if err := h.applyServerConfig(r.Context(), &server, nextConfig, nil, nil); err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
@@ -1965,14 +1970,15 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload struct {
-		Config   domain.TerrariaConfig `json:"config"`
-		HostPort *int                  `json:"hostPort,omitempty"`
+		Config    domain.TerrariaConfig `json:"config"`
+		HostPort  *int                  `json:"hostPort,omitempty"`
+		Resources *resourceLimitPayload `json:"resources,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if err := h.applyServerConfig(r.Context(), &server, payload.Config, payload.HostPort); err != nil {
+	if err := h.applyServerConfig(r.Context(), &server, payload.Config, payload.HostPort, payload.Resources); err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
@@ -1991,6 +1997,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		Config      domain.TerrariaConfig `json:"config"`
 		HostPort    int                   `json:"hostPort,omitempty"`
 		Version     string                `json:"version"`
+		Resources   resourceLimitPayload  `json:"resources,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -2027,10 +2034,16 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	resources, err := normalizeResourceLimits(payload.Resources)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	server := domain.GameServerInstance{
 		ID: id, Name: payload.Name, GameKey: "terraria", ProviderKey: payload.ProviderKey,
 		Status: domain.StatusStopped, WorldName: payload.Config.WorldName, Port: payload.Config.Port,
 		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir, HostPort: hostPort,
+		CPULimitCores: resources.CPULimitCores, MemoryLimitMB: resources.MemoryLimitMB,
 		Config: payload.Config, Version: payload.Version, ConfigRevision: 1, AppliedConfigRevision: 1,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
@@ -2346,11 +2359,31 @@ func (h *Handler) runtimeSpecForServer(ctx context.Context, server *domain.GameS
 		Image:      gameProvider.ImageFor(server.Version),
 		Port:       server.Port,
 		HostPort:   server.HostPort,
+		Resources: runtime.ContainerResources{
+			CPULimitCores: server.CPULimitCores,
+			MemoryLimitMB: server.MemoryLimitMB,
+		},
 		DataDir:    server.DataDir,
 		ConfigText: configText,
 		Options:    gameProvider.RuntimeOptions(server.Config),
 	}
 	return spec, nil
+}
+
+func normalizeResourceLimits(input resourceLimitPayload) (resourceLimitPayload, error) {
+	if input.CPULimitCores < 0 {
+		return resourceLimitPayload{}, fmt.Errorf("CPU limit cannot be negative")
+	}
+	if input.CPULimitCores > 0 && (input.CPULimitCores < 0.25 || input.CPULimitCores > 64) {
+		return resourceLimitPayload{}, fmt.Errorf("CPU limit must be between 0.25 and 64 cores")
+	}
+	if input.MemoryLimitMB < 0 {
+		return resourceLimitPayload{}, fmt.Errorf("memory limit cannot be negative")
+	}
+	if input.MemoryLimitMB > 0 && (input.MemoryLimitMB < 256 || input.MemoryLimitMB > 262144) {
+		return resourceLimitPayload{}, fmt.Errorf("memory limit must be between 256 MB and 262144 MB")
+	}
+	return input, nil
 }
 
 func (h *Handler) requireRuntimeAvailable(ctx context.Context) error {
@@ -2383,7 +2416,7 @@ func (h *Handler) startRecreatedRunningContainer(ctx context.Context, server dom
 	return server, nil
 }
 
-func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig, hostPort *int) error {
+func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig, hostPort *int, resourceLimits *resourceLimitPayload) error {
 	if isLifecyclePending(server.Status) {
 		return fmt.Errorf("server lifecycle action already in progress")
 	}
@@ -2399,7 +2432,17 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	if hostPort != nil {
 		nextHostPort = *hostPort
 	}
+	nextCPU := server.CPULimitCores
+	nextMemory := server.MemoryLimitMB
 	var err error
+	if resourceLimits != nil {
+		nextResources, err := normalizeResourceLimits(*resourceLimits)
+		if err != nil {
+			return err
+		}
+		nextCPU = nextResources.CPULimitCores
+		nextMemory = nextResources.MemoryLimitMB
+	}
 	nextHostPort, err = h.resolveHostPort(ctx, nextHostPort, server.ID)
 	if err != nil {
 		return err
@@ -2434,6 +2477,8 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	server.WorldName = nextConfig.WorldName
 	server.Port = nextConfig.Port
 	server.HostPort = nextHostPort
+	server.CPULimitCores = nextCPU
+	server.MemoryLimitMB = nextMemory
 	server.MaxPlayers = nextConfig.MaxPlayers
 	server.Password = nextConfig.Password
 	server.Config = nextConfig

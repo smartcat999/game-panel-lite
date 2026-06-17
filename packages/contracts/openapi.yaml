@@ -57,6 +57,27 @@ paths:
           description: Server list
     post:
       summary: Create server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerKey, config]
+              properties:
+                name:
+                  type: string
+                providerKey:
+                  type: string
+                  enum: [terraria-vanilla, terraria-tmodloader]
+                config:
+                  $ref: "#/components/schemas/TerrariaConfig"
+                hostPort:
+                  type: integer
+                version:
+                  type: string
+                resources:
+                  $ref: "#/components/schemas/ResourceLimits"
       responses:
         "201":
           description: Created server
@@ -73,7 +94,7 @@ paths:
           description: Delete accepted; returned server is marked deleting until the background task completes
   /api/servers/{id}/config:
     put:
-      summary: Update persisted Terraria server config while the server is stopped
+      summary: Update persisted Terraria server config, external port, and resource limits; running servers apply changes after restart
       requestBody:
         required: true
         content:
@@ -84,11 +105,15 @@ paths:
               properties:
                 config:
                   $ref: "#/components/schemas/TerrariaConfig"
+                hostPort:
+                  type: integer
+                resources:
+                  $ref: "#/components/schemas/ResourceLimits"
       responses:
         "200":
           description: Updated server config
         "409":
-          description: Server must be stopped before config changes
+          description: Server lifecycle action is already in progress
   /api/servers/{id}/start:
     post:
       summary: Queue async server start, creating a runtime container from persisted config and data when needed
@@ -449,6 +474,20 @@ components:
           type: number
         memoryLimitMb:
           type: number
+    ResourceLimits:
+      type: object
+      description: Optional maximum resources for one game server container. Zero means unlimited.
+      properties:
+        cpuLimitCores:
+          type: number
+          minimum: 0
+          maximum: 64
+          description: Maximum CPU cores. Zero means Docker default/unlimited.
+        memoryLimitMb:
+          type: integer
+          minimum: 0
+          maximum: 262144
+          description: Maximum memory in MB. Zero means Docker default/unlimited.
     LogSnapshot:
       type: object
       required: [lines]

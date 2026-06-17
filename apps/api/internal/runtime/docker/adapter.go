@@ -78,6 +78,16 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 	if err := a.ensureImage(ctx, spec.Image); err != nil {
 		return "", err
 	}
+	hostConfig := &container.HostConfig{
+		Binds:        dataBinds(dataDir, spec.Options.DataMounts),
+		PortBindings: natPortMap(spec.Port, spec.HostPort),
+	}
+	if spec.Resources.CPULimitCores > 0 {
+		hostConfig.Resources.NanoCPUs = int64(spec.Resources.CPULimitCores * 1_000_000_000)
+	}
+	if spec.Resources.MemoryLimitMB > 0 {
+		hostConfig.Resources.Memory = int64(spec.Resources.MemoryLimitMB) * 1024 * 1024
+	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image:       spec.Image,
 		Env:         spec.Options.Env,
@@ -87,10 +97,7 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 		Labels: map[string]string{
 			"gamepanel.instance": spec.InstanceID,
 		},
-	}, &container.HostConfig{
-		Binds:        dataBinds(dataDir, spec.Options.DataMounts),
-		PortBindings: natPortMap(spec.Port, spec.HostPort),
-	}, nil, nil, containerName)
+	}, hostConfig, nil, nil, containerName)
 	if err != nil {
 		return "", err
 	}

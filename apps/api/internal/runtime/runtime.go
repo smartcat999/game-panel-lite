@@ -14,9 +14,15 @@ type ContainerSpec struct {
 	Image      string
 	Port       int
 	HostPort   int
+	Resources  ContainerResources
 	DataDir    string
 	ConfigText string
 	Options    ContainerOptions
+}
+
+type ContainerResources struct {
+	CPULimitCores float64
+	MemoryLimitMB int
 }
 
 type ContainerOptions struct {

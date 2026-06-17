@@ -13,6 +13,8 @@ const baseServer: Server = {
   port: 7777,
   hostPort: 7777,
   version: "1.4.4.9",
+  cpuLimitCores: 0,
+  memoryLimitMb: 0,
   lastBackup: "Not yet",
   password: "",
   cpu: "0%",

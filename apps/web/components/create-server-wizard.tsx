@@ -15,7 +15,7 @@ import { getTerrariaVersions, listGlobalMods, listModPacks, listWorlds, previewT
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ModFile, ModPack } from "@/lib/types";
+import type { ModFile, ModPack, ResourceLimits } from "@/lib/types";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepMods", "stepReview"] as const;
 const presets = [
@@ -31,6 +31,17 @@ type BuiltInPresetKey = (typeof presets)[number]["key"];
 type PresetKey = BuiltInPresetKey | typeof customPreset.key;
 type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset)["tags"][number];
 
+const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
+const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
+
+function formatCpuLimitLabel(value: number, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
+  return value > 0 ? t("cpuCoresValue", { cores: value }) : t("unlimited");
+}
+
+function formatMemoryLimitLabel(value: number, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
+  return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
+}
+
 export function CreateServerWizard() {
   const { locale, t } = useI18n();
   const router = useRouter();
@@ -41,6 +52,7 @@ export function CreateServerWizard() {
   const [config, setConfig] = useState<TerrariaConfig>(defaultCreateServerConfig);
   const [hostPortMode, setHostPortMode] = useState<"auto" | "manual">("auto");
   const [hostPort, setHostPort] = useState(terrariaInternalPort);
+  const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 0, memoryLimitMb: 0 });
   const [version, setVersion] = useState("");
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
@@ -67,6 +79,7 @@ export function CreateServerWizard() {
       config: { ...config, port: terrariaInternalPort },
       hostPort: hostPortMode === "manual" ? hostPort : undefined,
       mode,
+      resources: resourceLimits,
       worldId: selectedWorldId || undefined,
       modIds: selectedModIds,
       version: selectedVersion
@@ -172,6 +185,8 @@ export function CreateServerWizard() {
                 onCustomize={() => setSelectedPreset("custom")}
                 setHostPort={setHostPort}
                 setHostPortMode={setHostPortMode}
+                resourceLimits={resourceLimits}
+                setResourceLimits={setResourceLimits}
                 versions={availableVersions}
                 version={selectedVersion}
                 setVersion={setVersion}
@@ -199,6 +214,7 @@ export function CreateServerWizard() {
                 config={config}
                 hostPortLabel={hostPortMode === "manual" ? String(hostPort) : t("automaticPort")}
                 version={selectedVersion}
+                resourceLimits={resourceLimits}
                 selectedWorldName={selectedWorld?.name}
                 selectedModNames={selectedModNames}
               />
@@ -355,10 +371,12 @@ function ConfigStep({
   config,
   hostPort,
   hostPortMode,
+  resourceLimits,
   setConfig,
   onCustomize,
   setHostPort,
   setHostPortMode,
+  setResourceLimits,
   versions,
   version,
   setVersion
@@ -366,10 +384,12 @@ function ConfigStep({
   config: TerrariaConfig;
   hostPort: number;
   hostPortMode: "auto" | "manual";
+  resourceLimits: ResourceLimits;
   setConfig: (config: TerrariaConfig) => void;
   onCustomize: () => void;
   setHostPort: (port: number) => void;
   setHostPortMode: (mode: "auto" | "manual") => void;
+  setResourceLimits: (limits: ResourceLimits) => void;
   versions: string[];
   version: string;
   setVersion: (version: string) => void;
@@ -381,6 +401,10 @@ function ConfigStep({
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => {
     onCustomize();
     setConfig({ ...config, [key]: value });
+  };
+  const updateResources = (limits: ResourceLimits) => {
+    onCustomize();
+    setResourceLimits(limits);
   };
   const secretSeed = secretSeedKeyFor(config.seed);
   return (
@@ -463,6 +487,28 @@ function ConfigStep({
         <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
           <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
           <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
+        </div>
+        <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-200">{t("resourceLimits")}</p>
+            <p className="mt-1 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <WizardField label={t("cpuLimit")}>
+              <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => updateResources({ ...resourceLimits, cpuLimitCores: Number(value) })}>
+                {cpuLimitOptions.map((value) => (
+                  <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
+                ))}
+              </WizardSelect>
+            </WizardField>
+            <WizardField label={t("memoryLimit")}>
+              <WizardSelect value={String(resourceLimits.memoryLimitMb)} onChange={(value) => updateResources({ ...resourceLimits, memoryLimitMb: Number(value) })}>
+                {memoryLimitOptions.map((value) => (
+                  <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
+                ))}
+              </WizardSelect>
+            </WizardField>
+          </div>
         </div>
       </div>
       <div className="mt-4 flex items-center gap-3">
@@ -646,6 +692,7 @@ function ReviewStep({
   mode,
   config,
   hostPortLabel,
+  resourceLimits,
   version,
   selectedWorldName,
   selectedModNames
@@ -653,6 +700,7 @@ function ReviewStep({
   mode: "vanilla" | "tmodloader";
   config: TerrariaConfig;
   hostPortLabel: string;
+  resourceLimits: ResourceLimits;
   version: string;
   selectedWorldName?: string;
   selectedModNames: string[];
@@ -664,6 +712,9 @@ function ReviewStep({
       <Card className="mt-4 p-4">
         <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { mode: mode === "tmodloader" ? "tModLoader" : t("modeVanilla"), port: hostPortLabel })}</div>
         <p className="mt-3 text-sm text-slate-400">{t("reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
+        <p className="mt-2 text-sm text-slate-400">
+          {t("resourceLimits")}: <span className="text-slate-200">{formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}</span>
+        </p>
         {version && <p className="mt-2 text-sm text-slate-400">{t("gameVersion")}: <span className="text-slate-200">{version}</span></p>}
         {selectedWorldName && (
           <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">

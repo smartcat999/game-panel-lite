@@ -44,10 +44,21 @@ import { describeResourceAction, formatServerDetailError, isServerLifecyclePendi
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
-import type { Backup, ModFile, ModPack, Server, World } from "@/lib/types";
+import type { Backup, ModFile, ModPack, ResourceLimits, Server, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 type ModInstallSource = "library" | "packs";
+
+const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
+const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
+
+function formatCpuLimitLabel(value: number, t: (key: "unlimited" | "cpuCoresValue", values?: Record<string, string | number>) => string) {
+  return value > 0 ? t("cpuCoresValue", { cores: value }) : t("unlimited");
+}
+
+function formatMemoryLimitLabel(value: number, t: (key: "unlimited" | "memoryGbValue", values?: Record<string, string | number>) => string) {
+  return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
+}
 
 export default function ServerDetailPage() {
   const { locale, t } = useI18n();
@@ -159,7 +170,7 @@ export default function ServerDetailPage() {
     commandMutation.mutate(next);
   };
   const configSave = useMutation({
-    mutationFn: ({ config, hostPort }: { config: TerrariaConfig; hostPort: number }) => updateServerConfig(id, config, hostPort),
+    mutationFn: ({ config, hostPort, resources }: { config: TerrariaConfig; hostPort: number; resources: ResourceLimits }) => updateServerConfig(id, config, hostPort, resources),
     onSuccess: async (updatedServer) => {
       showSuccess(t("configSaved"));
       setConfigSaved(true);
@@ -464,14 +475,14 @@ export default function ServerDetailPage() {
               accent
               icon={<Cpu aria-hidden="true" className="size-3.5" />}
               label={t("serverCpu")}
-              value={server.status === "running" ? `${(statsQuery.data?.cpuPercent ?? 0).toFixed(1)}%` : "—"}
+              value={server.status === "running" ? `${(statsQuery.data?.cpuPercent ?? 0).toFixed(1)}%${server.cpuLimitCores ? ` / ${formatCpuLimitLabel(server.cpuLimitCores, t)}` : ""}` : "—"}
               active={server.status === "running"}
             />
             <HeaderMetric
               accent
               icon={<MemoryStick aria-hidden="true" className="size-3.5" />}
               label={t("serverMemory")}
-              value={server.status === "running" && statsQuery.data ? `${statsQuery.data.memoryMb} MB` : "—"}
+              value={server.status === "running" && statsQuery.data ? `${statsQuery.data.memoryMb} MB${server.memoryLimitMb ? ` / ${formatMemoryLimitLabel(server.memoryLimitMb, t)}` : ""}` : "—"}
               active={server.status === "running"}
             />
           </div>
@@ -548,7 +559,7 @@ export default function ServerDetailPage() {
               restartPending={configRestart.isPending}
               server={server}
               onRestart={() => setPendingConfigRestart(true)}
-              onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
+              onSave={(nextConfig, hostPort, resources) => configSave.mutate({ config: nextConfig, hostPort, resources })}
             />
           )}
           {activeTab === "worlds" && (
@@ -1128,7 +1139,7 @@ function ConfigTab({
   server
 }: {
   onRestart: () => void;
-  onSave: (config: TerrariaConfig, hostPort: number) => void;
+  onSave: (config: TerrariaConfig, hostPort: number, resources: ResourceLimits) => void;
   restartPending: boolean;
   saveError: string;
   savePending: boolean;
@@ -1138,10 +1149,12 @@ function ConfigTab({
   const { t } = useI18n();
   const [draft, setDraft] = useState<TerrariaConfig>(server.config);
   const [hostPortDraft, setHostPortDraft] = useState(serverJoinPort(server));
+  const [resourceDraft, setResourceDraft] = useState<ResourceLimits>({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
   const [previewOpen, setPreviewOpen] = useState(false);
   const [restartRecommended, setRestartRecommended] = useState(false);
   useEffect(() => setDraft(server.config), [server.config, server.id]);
   useEffect(() => setHostPortDraft(serverJoinPort(server)), [server.hostPort, server.id, server.port]);
+  useEffect(() => setResourceDraft({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 }), [server.cpuLimitCores, server.id, server.memoryLimitMb]);
   const normalizedDraft = useMemo(() => ({ ...draft, port: terrariaInternalPort }), [draft]);
   const preview = useQuery({
     queryKey: ["server-config-preview", server.id, normalizedDraft],
@@ -1151,7 +1164,8 @@ function ConfigTab({
   });
   const configDirty = JSON.stringify(normalizedDraft) !== JSON.stringify({ ...server.config, port: terrariaInternalPort });
   const hostPortDirty = hostPortDraft !== serverJoinPort(server);
-  const dirty = configDirty || hostPortDirty;
+  const resourceDirty = resourceDraft.cpuLimitCores !== (server.cpuLimitCores ?? 0) || resourceDraft.memoryLimitMb !== (server.memoryLimitMb ?? 0);
+  const dirty = configDirty || hostPortDirty || resourceDirty;
   const lifecycleLocked = isServerLifecyclePending(server.status);
   const running = server.status === "running";
   const disabled = lifecycleLocked || savePending;
@@ -1188,7 +1202,7 @@ function ConfigTab({
   return (
     <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault();
-      if (!disabled && dirty) onSave(normalizedDraft, hostPortDraft);
+      if (!disabled && dirty) onSave(normalizedDraft, hostPortDraft, resourceDraft);
     }}>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1219,6 +1233,28 @@ function ConfigTab({
             </Field>
             <Field label={t("maxPlayers")}>
               <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
+            </Field>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 rounded-md border border-panel-line bg-slate-950/50 p-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-200">{t("resourceLimits")}</p>
+            <p className="mt-1 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label={t("cpuLimit")}>
+              <Select value={String(resourceDraft.cpuLimitCores)} onChange={(value) => setResourceDraft((current) => ({ ...current, cpuLimitCores: Number(value) }))} disabled={disabled}>
+                {cpuLimitOptions.map((value) => (
+                  <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("memoryLimit")}>
+              <Select value={String(resourceDraft.memoryLimitMb)} onChange={(value) => setResourceDraft((current) => ({ ...current, memoryLimitMb: Number(value) }))} disabled={disabled}>
+                {memoryLimitOptions.map((value) => (
+                  <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
+                ))}
+              </Select>
             </Field>
           </div>
         </div>
@@ -1270,6 +1306,7 @@ function ConfigTab({
               onClick={() => {
                 setDraft(server.config);
                 setHostPortDraft(serverJoinPort(server));
+                setResourceDraft({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
               }}
             >
               {t("resetChanges")}
@@ -1342,6 +1379,19 @@ function Field({ children, label }: { children: ReactNode; label: string }) {
       <span className="text-xs font-medium text-slate-500">{label}</span>
       {children}
     </label>
+  );
+}
+
+function Select({ children, disabled, onChange, value }: { children: ReactNode; disabled?: boolean; onChange: (value: string) => void; value: string }) {
+  return (
+    <select
+      className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {children}
+    </select>
   );
 }
 

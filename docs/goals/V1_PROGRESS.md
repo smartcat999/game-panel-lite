@@ -2029,3 +2029,27 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with the existing Next.js ESLint plugin warning.
+
+## V1 Server Resource Limits Update
+
+Status: Completed
+
+Completed:
+- Added optional per-server CPU and memory limits to server records and runtime container specs.
+- Docker runtime creation now applies `NanoCPUs` and memory limits when configured; zero keeps Docker defaults.
+- Create Server and server configuration UI now expose compact CPU / memory limit selectors.
+- Server headers show runtime CPU and memory usage alongside configured limits when a limit exists.
+- Config updates persist resource limits with the same restart-to-apply revision behavior as Terraria config changes.
+- Updated shared types and OpenAPI request schemas for resource limits.
+- Added backend HTTP coverage for create/start runtime limit propagation and config update persistence.
+
+Notes:
+- Bandwidth is intentionally not implemented as a Docker runtime limit in V1 because Docker has no reliable cross-platform per-container bandwidth control. Treat it as a future monitoring/host-network feature.
+
+Checks:
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go test ./...`: passed.
+- `GOCACHE=/Users/pengwu/Desktop/Projects/go-project/game-panel-lite/.cache/go-build go vet ./...`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed after refreshing local `node_modules` to restore Rollup's macOS optional dependency.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC fallback and ESLint plugin warnings.
