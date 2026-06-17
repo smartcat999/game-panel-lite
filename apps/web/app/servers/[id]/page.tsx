@@ -473,17 +473,9 @@ export default function ServerDetailPage() {
             <h1 className="text-2xl font-semibold">{server.name}</h1>
             <ServerModeBadge mode={server.mode} />
             <ServerStatusBadge status={server.status} />
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-            <HeaderMetric
-              icon={<Users aria-hidden="true" className="size-3.5" />}
+            <PlayerCountBadge
               label={t("players")}
               value={`${server.players} / ${server.maxPlayers}`}
-            />
-            <HeaderMetric
-              icon={<Plug aria-hidden="true" className="size-3.5" />}
-              label={t("port")}
-              value={String(serverJoinPort(server))}
             />
           </div>
         </div>
@@ -2275,16 +2267,12 @@ function DetailLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HeaderMetric({ accent = false, active = true, icon, label, value }: { accent?: boolean; active?: boolean; icon: ReactNode; label: string; value: string }) {
-  const highlighted = accent && active;
+function PlayerCountBadge({ label, value }: { label: string; value: string }) {
   return (
-    <span className={cn(
-      "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
-      highlighted ? "border-panel-green/25 bg-panel-green/10 text-slate-200" : "border-panel-line bg-slate-950/50 text-slate-400"
-    )}>
-      <span className={highlighted ? "text-panel-green" : "text-slate-500"}>{icon}</span>
+    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-panel-line bg-slate-950/50 px-2 text-xs font-medium text-slate-300">
+      <Users aria-hidden="true" className="size-3.5 text-slate-500" />
       <span className="text-slate-500">{label}</span>
-      <span className={cn("font-mono font-medium", active ? "text-slate-100" : "text-slate-500")}>{value}</span>
+      <span className="font-semibold text-slate-100">{value}</span>
     </span>
   );
 }
