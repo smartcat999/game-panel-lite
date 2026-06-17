@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -95,7 +96,13 @@ func (s *Store) SaveServer(ctx context.Context, server *domain.GameServerInstanc
 
 func (s *Store) ListServers(ctx context.Context) ([]domain.GameServerInstance, error) {
 	var servers []domain.GameServerInstance
-	return servers, s.db.WithContext(ctx).Order("created_at desc").Find(&servers).Error
+	if err := s.db.WithContext(ctx).Order("created_at desc").Find(&servers).Error; err != nil {
+		return nil, err
+	}
+	for index := range servers {
+		hydrateServerConfigPayload(&servers[index])
+	}
+	return servers, nil
 }
 
 func (s *Store) GetServer(ctx context.Context, id string) (domain.GameServerInstance, error) {
@@ -104,11 +111,24 @@ func (s *Store) GetServer(ctx context.Context, id string) (domain.GameServerInst
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return server, ErrNotFound
 	}
+	if err == nil {
+		hydrateServerConfigPayload(&server)
+	}
 	return server, err
 }
 
 func (s *Store) DeleteServer(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.GameServerInstance{}, "id = ?", id).Error
+}
+
+func hydrateServerConfigPayload(server *domain.GameServerInstance) {
+	if server == nil || server.ConfigPayloadJSON == "" {
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload); err == nil {
+		server.ConfigPayload = payload
+	}
 }
 
 func (s *Store) CreateWorld(ctx context.Context, world *domain.World) error {

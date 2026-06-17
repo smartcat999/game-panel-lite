@@ -50,6 +50,17 @@ function formatMemoryLimitLabel(value: number, t: (key: MessageKey, values?: Rec
   return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
 }
 
+function createProviderConfigPayload(providerKey: ProviderKey, config: TerrariaConfig): Record<string, unknown> | undefined {
+  if (providerKey !== "palworld") return undefined;
+  return {
+    serverName: config.serverName,
+    saveName: config.worldName,
+    maxPlayers: config.maxPlayers,
+    serverPassword: config.password ?? "",
+    adminPassword: config.motd ?? ""
+  };
+}
+
 export function CreateServerWizard() {
   const { locale, t } = useI18n();
   const router = useRouter();
@@ -102,6 +113,7 @@ export function CreateServerWizard() {
   const create = useMutation({
     mutationFn: () => createTerrariaServerWithWorld({
       config: { ...config, port: terrariaInternalPort },
+      configPayload: createProviderConfigPayload(providerKey, config),
       hostPort: hostPortMode === "manual" ? hostPort : undefined,
       mode,
       providerKey,

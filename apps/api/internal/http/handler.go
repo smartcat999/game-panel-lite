@@ -1481,7 +1481,12 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nextConfig := server.Config
-	if err := h.applyServerConfig(r.Context(), &server, nextConfig, nil, nil); err != nil {
+	configPayloadJSON, err := providerConfigPayloadJSON(server.ProviderKey, nextConfig)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.applyServerConfig(r.Context(), &server, nextConfig, configPayloadJSON, nil, nil); err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
@@ -1821,11 +1826,17 @@ func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.G
 		return err
 	}
 	nextConfig = normalizeProviderRuntimeConfig(server.ProviderKey, nextConfig)
+	configPayloadJSON, err := providerConfigPayloadJSON(server.ProviderKey, nextConfig)
+	if err != nil {
+		return err
+	}
 	server.WorldName = nextConfig.WorldName
 	server.Port = nextConfig.Port
 	server.MaxPlayers = nextConfig.MaxPlayers
 	server.Password = nextConfig.Password
 	server.Config = nextConfig
+	server.ConfigPayloadJSON = configPayloadJSON
+	hydrateServerConfigPayload(server)
 	server.UpdatedAt = time.Now()
 	if server.ContainerID != "" {
 		if h.runtimeStatusAvailable() {
@@ -2020,7 +2031,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload struct {
-		Config    domain.TerrariaConfig `json:"config"`
+		Config    json.RawMessage       `json:"config"`
 		HostPort  *int                  `json:"hostPort,omitempty"`
 		Resources *resourceLimitPayload `json:"resources,omitempty"`
 	}
@@ -2028,7 +2039,12 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if err := h.applyServerConfig(r.Context(), &server, payload.Config, payload.HostPort, payload.Resources); err != nil {
+	nextConfig, configPayloadJSON, err := decodeProviderRuntimeConfig(server.ProviderKey, payload.Config, server.Config)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.applyServerConfig(r.Context(), &server, nextConfig, configPayloadJSON, payload.HostPort, payload.Resources); err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
 		return
 	}
@@ -2042,12 +2058,12 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		Name        string                `json:"name"`
-		ProviderKey domain.ProviderKey    `json:"providerKey"`
-		Config      domain.TerrariaConfig `json:"config"`
-		HostPort    int                   `json:"hostPort,omitempty"`
-		Version     string                `json:"version"`
-		Resources   resourceLimitPayload  `json:"resources,omitempty"`
+		Name        string               `json:"name"`
+		ProviderKey domain.ProviderKey   `json:"providerKey"`
+		Config      json.RawMessage      `json:"config"`
+		HostPort    int                  `json:"hostPort,omitempty"`
+		Version     string               `json:"version"`
+		Resources   resourceLimitPayload `json:"resources,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -2058,9 +2074,13 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unknown provider")
 		return
 	}
-	payload.Config = normalizeProviderRuntimeConfig(payload.ProviderKey, payload.Config)
+	config, configPayloadJSON, err := decodeProviderRuntimeConfig(payload.ProviderKey, payload.Config, gameProvider.DefaultConfig())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if payload.Name == "" {
-		payload.Name = payload.Config.ServerName
+		payload.Name = config.ServerName
 	}
 	if payload.Version == "" {
 		payload.Version = gameProvider.Versions()[0]
@@ -2069,7 +2089,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported provider version")
 		return
 	}
-	if err := gameProvider.ValidateConfig(payload.Config); err != nil {
+	if err := gameProvider.ValidateConfig(config); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -2091,12 +2111,13 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	server := domain.GameServerInstance{
 		ID: id, Name: payload.Name, GameKey: gameProvider.GameKey(), ProviderKey: payload.ProviderKey,
-		Status: domain.StatusStopped, WorldName: payload.Config.WorldName, Port: payload.Config.Port,
-		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir, HostPort: hostPort,
+		Status: domain.StatusStopped, WorldName: config.WorldName, Port: config.Port,
+		MaxPlayers: config.MaxPlayers, Password: config.Password, DataDir: dataDir, HostPort: hostPort,
 		CPULimitCores: resources.CPULimitCores, MemoryLimitMB: resources.MemoryLimitMB,
-		Config: payload.Config, Version: payload.Version, ConfigRevision: 1, AppliedConfigRevision: 1,
+		Config: config, ConfigPayloadJSON: configPayloadJSON, Version: payload.Version, ConfigRevision: 1, AppliedConfigRevision: 1,
 		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
+	hydrateServerConfigPayload(&server)
 	if err := h.store.CreateServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -2472,7 +2493,7 @@ func (h *Handler) startRecreatedRunningContainer(ctx context.Context, server dom
 	return server, nil
 }
 
-func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig, hostPort *int, resourceLimits *resourceLimitPayload) error {
+func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServerInstance, nextConfig domain.TerrariaConfig, configPayloadJSON string, hostPort *int, resourceLimits *resourceLimitPayload) error {
 	if isLifecyclePending(server.Status) {
 		return fmt.Errorf("server lifecycle action already in progress")
 	}
@@ -2483,7 +2504,14 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	if nextConfig.ServerName == "" {
 		nextConfig.ServerName = server.Name
 	}
-	nextConfig = normalizeTerrariaRuntimeConfig(nextConfig)
+	nextConfig = normalizeProviderRuntimeConfig(server.ProviderKey, nextConfig)
+	if configPayloadJSON == "" {
+		var err error
+		configPayloadJSON, err = providerConfigPayloadJSON(server.ProviderKey, nextConfig)
+		if err != nil {
+			return err
+		}
+	}
 	nextHostPort := server.HostPort
 	if hostPort != nil {
 		nextHostPort = *hostPort
@@ -2538,6 +2566,8 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	server.MaxPlayers = nextConfig.MaxPlayers
 	server.Password = nextConfig.Password
 	server.Config = nextConfig
+	server.ConfigPayloadJSON = configPayloadJSON
+	hydrateServerConfigPayload(server)
 	server.ConfigRevision++
 	if server.ConfigRevision <= 0 {
 		server.ConfigRevision = 1
@@ -2848,6 +2878,104 @@ func normalizeProviderRuntimeConfig(providerKey domain.ProviderKey, config domai
 		return palworld.NormalizeConfig(config)
 	default:
 		return normalizeTerrariaRuntimeConfig(config)
+	}
+}
+
+func decodeProviderRuntimeConfig(providerKey domain.ProviderKey, raw json.RawMessage, fallback domain.TerrariaConfig) (domain.TerrariaConfig, string, error) {
+	if isEmptyRawJSON(raw) {
+		config := normalizeProviderRuntimeConfig(providerKey, fallback)
+		payload, err := providerConfigPayloadJSON(providerKey, config)
+		return config, payload, err
+	}
+	switch providerKey {
+	case domain.ProviderPalworld:
+		return decodePalworldRuntimeConfig(raw, fallback)
+	default:
+		return decodeTerrariaRuntimeConfig(raw, fallback)
+	}
+}
+
+func decodeTerrariaRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaConfig) (domain.TerrariaConfig, string, error) {
+	config := fallback
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return domain.TerrariaConfig{}, "", fmt.Errorf("invalid config payload")
+	}
+	config = normalizeTerrariaRuntimeConfig(config)
+	payload, err := providerConfigPayloadJSON(domain.ProviderTerrariaVanilla, config)
+	return config, payload, err
+}
+
+func decodePalworldRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaConfig) (domain.TerrariaConfig, string, error) {
+	var payload struct {
+		ServerName     string `json:"serverName"`
+		SaveName       string `json:"saveName"`
+		WorldName      string `json:"worldName"`
+		MaxPlayers     int    `json:"maxPlayers"`
+		ServerPassword string `json:"serverPassword"`
+		Password       string `json:"password"`
+		AdminPassword  string `json:"adminPassword"`
+		MOTD           string `json:"motd"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return domain.TerrariaConfig{}, "", fmt.Errorf("invalid config payload")
+	}
+	config := fallback
+	if payload.ServerName != "" {
+		config.ServerName = payload.ServerName
+	}
+	if payload.SaveName != "" {
+		config.WorldName = payload.SaveName
+	} else if payload.WorldName != "" {
+		config.WorldName = payload.WorldName
+	}
+	if payload.MaxPlayers > 0 {
+		config.MaxPlayers = payload.MaxPlayers
+	}
+	if payload.ServerPassword != "" {
+		config.Password = payload.ServerPassword
+	} else if payload.Password != "" {
+		config.Password = payload.Password
+	}
+	if payload.AdminPassword != "" {
+		config.MOTD = payload.AdminPassword
+	} else if payload.MOTD != "" {
+		config.MOTD = payload.MOTD
+	}
+	config = palworld.NormalizeConfig(config)
+	configPayloadJSON, err := providerConfigPayloadJSON(domain.ProviderPalworld, config)
+	return config, configPayloadJSON, err
+}
+
+func providerConfigPayloadJSON(providerKey domain.ProviderKey, config domain.TerrariaConfig) (string, error) {
+	if providerKey == domain.ProviderPalworld {
+		payload := map[string]any{
+			"serverName":    config.ServerName,
+			"saveName":      config.WorldName,
+			"maxPlayers":    config.MaxPlayers,
+			"adminPassword": config.MOTD,
+		}
+		if config.Password != "" {
+			payload["serverPassword"] = config.Password
+		}
+		buf, err := json.Marshal(payload)
+		return string(buf), err
+	}
+	buf, err := json.Marshal(config)
+	return string(buf), err
+}
+
+func isEmptyRawJSON(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	return trimmed == "" || trimmed == "null"
+}
+
+func hydrateServerConfigPayload(server *domain.GameServerInstance) {
+	if server == nil || strings.TrimSpace(server.ConfigPayloadJSON) == "" {
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload); err == nil {
+		server.ConfigPayload = payload
 	}
 }
 

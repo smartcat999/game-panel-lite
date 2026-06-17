@@ -106,6 +106,8 @@ type GameServerInstance struct {
 	SourceWorldID         string         `json:"sourceWorldId,omitempty"`
 	SourceWorldName       string         `json:"sourceWorldName,omitempty"`
 	Config                TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
+	ConfigPayloadJSON     string         `json:"-" gorm:"column:config_payload_json"`
+	ConfigPayload         map[string]any `json:"configPayload,omitempty" gorm:"-"`
 	ConfigRevision        int            `json:"configRevision"`
 	AppliedConfigRevision int            `json:"appliedConfigRevision"`
 	CreatedAt             time.Time      `json:"createdAt"`

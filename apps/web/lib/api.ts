@@ -141,6 +141,7 @@ type ApiServer = {
   sourceWorldId?: string;
   sourceWorldName?: string;
   config?: TerrariaConfig;
+  configPayload?: Record<string, unknown>;
   configRevision?: number;
   appliedConfigRevision?: number;
 };
@@ -301,6 +302,7 @@ function toServer(server: ApiServer): Server {
     cpu: "0%",
     memory: "0 MB",
     config,
+    configPayload: server.configPayload,
     configPendingRestart: server.status === "running" && configRevision > appliedConfigRevision
   };
 }
@@ -439,7 +441,7 @@ export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
 export async function createServer(input: {
   name: string;
   providerKey: ProviderKey;
-  config: TerrariaConfig;
+  config: TerrariaConfig | Record<string, unknown>;
   hostPort?: number;
   version?: string;
   resources?: ResourceLimits;

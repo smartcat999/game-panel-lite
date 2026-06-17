@@ -896,10 +896,10 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 		"hostPort":18211,
 		"config":{
 			"serverName":"Pal Friends",
-			"worldName":"Starter Save",
+			"saveName":"Starter Save",
 			"maxPlayers":10,
-			"password":"join-secret",
-			"motd":"admin-secret"
+			"serverPassword":"join-secret",
+			"adminPassword":"admin-secret"
 		}
 	}`
 	create := httptest.NewRecorder()
@@ -916,6 +916,12 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 	}
 	if server.Port != 8211 || server.HostPort != 18211 {
 		t.Fatalf("expected Palworld ports, got internal=%d external=%d", server.Port, server.HostPort)
+	}
+	if server.WorldName != "Starter Save" || server.Password != "join-secret" || server.Config.MOTD != "admin-secret" {
+		t.Fatalf("expected Palworld config to be mapped to runtime fields, got server=%+v config=%+v", server, server.Config)
+	}
+	if server.ConfigPayload["saveName"] != "Starter Save" || server.ConfigPayload["adminPassword"] != "admin-secret" {
+		t.Fatalf("expected semantic Palworld config payload, got %+v", server.ConfigPayload)
 	}
 
 	start := httptest.NewRecorder()
@@ -936,6 +942,43 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 		t.Fatalf("expected Palworld UDP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
 	}
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+}
+
+func TestUpdatePalworldConfigPersistsSemanticPayload(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("palworld-config-update", cfg.DataDir)
+	server.GameKey = domain.GamePalworld
+	server.ProviderKey = domain.ProviderPalworld
+	server.Port = 8211
+	server.HostPort = 18211
+	server.Config = palworld.NewProvider().DefaultConfig()
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{
+		"config":{
+			"serverName":"Pal Update",
+			"saveName":"Updated Save",
+			"maxPlayers":16,
+			"serverPassword":"join-updated",
+			"adminPassword":"admin-updated"
+		}
+	}`
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/"+server.ID+"/config", bytes.NewBufferString(payload)))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected config update 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var updated domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.WorldName != "Updated Save" || updated.MaxPlayers != 16 || updated.Password != "join-updated" || updated.Config.MOTD != "admin-updated" {
+		t.Fatalf("expected updated Palworld runtime mapping, got server=%+v config=%+v", updated, updated.Config)
+	}
+	if updated.ConfigPayload["saveName"] != "Updated Save" || updated.ConfigPayload["serverPassword"] != "join-updated" {
+		t.Fatalf("expected updated semantic Palworld config payload, got %+v", updated.ConfigPayload)
+	}
 }
 
 func TestGameCatalogEndpoints(t *testing.T) {

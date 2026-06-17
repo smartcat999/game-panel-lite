@@ -12,6 +12,7 @@ type CreateServerWithWorldDeps = {
 
 export type CreateServerWithWorldInput = {
   config: TerrariaConfig;
+  configPayload?: Record<string, unknown>;
   deps?: CreateServerWithWorldDeps;
   hostPort?: number;
   mode: CreateMode;
@@ -35,6 +36,7 @@ const defaultDeps: CreateServerWithWorldDeps = {
 
 export async function createTerrariaServerWithWorld({
   config,
+  configPayload,
   deps = defaultDeps,
   hostPort,
   mode,
@@ -44,10 +46,11 @@ export async function createTerrariaServerWithWorld({
   modIds = [],
   version
 }: CreateServerWithWorldInput): Promise<CreatedServerWithWorld> {
+  const nextProviderKey = providerKey ?? (mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla");
   let server = await deps.createServer({
     name: config.serverName || "Terraria Server",
-    providerKey: providerKey ?? (mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla"),
-    config,
+    providerKey: nextProviderKey,
+    config: configPayload ?? config,
     hostPort,
     resources,
     version

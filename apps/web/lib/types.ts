@@ -72,6 +72,7 @@ export type Server = {
   cpu: string;
   memory: string;
   config: TerrariaConfig;
+  configPayload?: Record<string, unknown>;
   configPendingRestart?: boolean;
 };
 
