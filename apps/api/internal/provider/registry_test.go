@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 )
 
@@ -18,10 +19,10 @@ func TestRegistryFindsTerrariaProviders(t *testing.T) {
 }
 
 func TestRegistryBuildsGameCatalog(t *testing.T) {
-	registry := NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider())
+	registry := NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider())
 	games := registry.Games()
 	if len(games) < 2 {
-		t.Fatalf("expected available Terraria and planned Palworld entries, got %+v", games)
+		t.Fatalf("expected available Terraria and Palworld entries, got %+v", games)
 	}
 	terrariaGame, ok := registry.Game(domain.GameTerraria)
 	if !ok {
@@ -38,9 +39,12 @@ func TestRegistryBuildsGameCatalog(t *testing.T) {
 	}
 	palworldGame, ok := registry.Game(domain.GamePalworld)
 	if !ok {
-		t.Fatal("expected planned Palworld game catalog entry")
+		t.Fatal("expected Palworld game catalog entry")
 	}
-	if palworldGame.Status != "planned" || len(palworldGame.Providers) != 0 {
-		t.Fatalf("expected planned Palworld stub without providers, got %+v", palworldGame)
+	if palworldGame.Status != "available" || len(palworldGame.Providers) != 1 {
+		t.Fatalf("expected available Palworld entry with provider, got %+v", palworldGame)
+	}
+	if palworldGame.Providers[0].Key != domain.ProviderPalworld || !palworldGame.Providers[0].Capabilities.SaveSnapshots {
+		t.Fatalf("expected Palworld provider capabilities, got %+v", palworldGame.Providers[0])
 	}
 }

@@ -19,7 +19,7 @@ The work starts with user-facing product functionality rather than V1 UI polish:
 
 ## Active Goal
 
-Goal 2: Multi-Game Provider Foundation
+Goal 3: Palworld Provider
 
 Status: In progress
 
@@ -85,10 +85,31 @@ Completed:
 - Create-server review summary now uses game/provider names instead of Terraria-only copy.
 
 In progress:
-- Full game-specific create-server flow.
+- Palworld provider runtime verification against a real Docker daemon.
 
 Not started:
-- Goal 3 Palworld provider runtime implementation.
+- Full game-specific config envelope that is no longer shaped like Terraria config.
+
+## Goal 3 Scope
+
+- Create Palworld server.
+- Start, stop, restart, delete through the shared server lifecycle.
+- Show join information using the external host port.
+- Keep save data isolated under the server instance directory.
+- Palworld-specific creation form with the most important fields first.
+
+## Goal 3 Progress
+
+Completed:
+- Added `palworld` provider key and registered a Palworld provider in the backend registry.
+- Palworld now appears as an available game in the game catalog.
+- Added Palworld provider metadata, capabilities, schema, default config, validation, and runtime options.
+- Added Palworld Docker runtime options using UDP 8211 and an isolated `/palworld` data mount.
+- Extended Docker runtime port mapping to support provider-selected TCP or UDP protocol.
+- Create-server API now normalizes runtime config by provider instead of forcing Terraria's internal port.
+- Create-server wizard can select Palworld and shows a simplified Palworld config form.
+- Create-server flow now sends the selected provider key explicitly instead of deriving it only from Terraria mode.
+- Added backend tests for Palworld catalog, create/start runtime spec, provider validation, and UDP mapping.
 
 ## Verification Log
 
@@ -160,14 +181,32 @@ Result:
 - `go test ./...` passed.
 - `go vet ./...` passed.
 
+2026-06-18 Goal 3 Palworld provider slice:
+
+```bash
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+go test ./...
+go vet ./...
+```
+
+Result:
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+- `go test ./...` passed.
+- `go vet ./...` passed.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
 - No RBAC, OAuth, SaaS account system, or multi-user management is planned for this phase.
 - If no admin account exists, backend API routes remain open so a fresh instance can bootstrap; the frontend still forces setup before rendering the app.
-- Palworld is visible only as a planned catalog stub; it cannot be created until Goal 3.
-- The create-server page now uses game/provider catalog state and provider capabilities, but the detailed config form is still implemented with Terraria fields until the first non-Terraria runtime lands.
+- Palworld uses a first-pass provider implementation. It can be selected and created, but still maps through the existing shared config structure until the planned game-specific config envelope lands.
+- Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
+- Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
 
 ## Next Work
 
-Continue toward full game-specific create-server flows, then begin Goal 3 Palworld provider runtime implementation.
+Manually verify Palworld start with Docker, then upgrade the server config envelope so non-Terraria providers no longer reuse Terraria field names internally.

@@ -70,6 +70,7 @@ const (
 
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
+	ProviderPalworld           ProviderKey = "palworld"
 
 	StatusCreating   ServerStatus = "creating"
 	StatusStarting   ServerStatus = "starting"

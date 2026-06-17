@@ -24,6 +24,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -87,7 +88,7 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 		cfg,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		db,
-		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
+		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider()),
 		runtimeAdapter,
 		monitor,
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
@@ -886,6 +887,57 @@ func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
 	}
 }
 
+func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, _ := newTestRouterWithAdapter(t, adapter)
+	payload := `{
+		"name":"Pal Friends",
+		"providerKey":"palworld",
+		"hostPort":18211,
+		"config":{
+			"serverName":"Pal Friends",
+			"worldName":"Starter Save",
+			"maxPlayers":10,
+			"password":"join-secret",
+			"motd":"admin-secret"
+		}
+	}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var server domain.GameServerInstance
+	if err := json.Unmarshal(create.Body.Bytes(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if server.GameKey != domain.GamePalworld || server.ProviderKey != domain.ProviderPalworld {
+		t.Fatalf("expected Palworld server identity, got %+v", server)
+	}
+	if server.Port != 8211 || server.HostPort != 18211 {
+		t.Fatalf("expected Palworld ports, got internal=%d external=%d", server.Port, server.HostPort)
+	}
+
+	start := httptest.NewRecorder()
+	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if start.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", start.Code, start.Body.String())
+	}
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected async start to create runtime container")
+	}
+	if spec.Image != "thijsvanloef/palworld-server-docker:latest" {
+		t.Fatalf("expected Palworld image, got %q", spec.Image)
+	}
+	if spec.Port != 8211 || spec.Options.PortProtocol != "udp" {
+		t.Fatalf("expected Palworld UDP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
+	}
+	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+}
+
 func TestGameCatalogEndpoints(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 
@@ -911,8 +963,11 @@ func TestGameCatalogEndpoints(t *testing.T) {
 	if terrariaGame == nil || terrariaGame.Status != "available" || len(terrariaGame.Providers) != 2 {
 		t.Fatalf("expected available Terraria entry with two providers, got %+v", terrariaGame)
 	}
-	if palworldGame == nil || palworldGame.Status != "planned" || len(palworldGame.Providers) != 0 {
-		t.Fatalf("expected planned Palworld stub without providers, got %+v", palworldGame)
+	if palworldGame == nil || palworldGame.Status != "available" || len(palworldGame.Providers) != 1 {
+		t.Fatalf("expected available Palworld entry with provider, got %+v", palworldGame)
+	}
+	if palworldGame.Providers[0].Key != domain.ProviderPalworld || palworldGame.Providers[0].Capabilities.ConsoleCommands {
+		t.Fatalf("expected Palworld provider without console commands, got %+v", palworldGame.Providers[0])
 	}
 	if len(terrariaGame.Providers[0].ConfigSchema) == 0 || !terrariaGame.Providers[0].Capabilities.ConsoleCommands {
 		t.Fatalf("expected provider schema and capabilities, got %+v", terrariaGame.Providers[0])

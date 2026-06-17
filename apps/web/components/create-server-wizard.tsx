@@ -80,11 +80,11 @@ export function CreateServerWizard() {
   const stepIds: StepId[] = useMemo(() => [
     "game",
     "mode",
-    "preset",
+    ...(selectedGameKey === "terraria" ? ["preset" as const] : []),
     "config",
     ...(selectedProvider?.capabilities.mods ? ["mods" as const] : []),
     "review"
-  ], [selectedProvider?.capabilities.mods]);
+  ], [selectedGameKey, selectedProvider?.capabilities.mods]);
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = worldsQuery.data ?? [];
@@ -98,12 +98,13 @@ export function CreateServerWizard() {
   const currentStepKey = stepLabelKeys[currentStepId];
   const nextStepKey = stepLabelKeys[nextStepId];
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
-  const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider) && selectedGame.key === "terraria";
+  const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider);
   const create = useMutation({
     mutationFn: () => createTerrariaServerWithWorld({
       config: { ...config, port: terrariaInternalPort },
       hostPort: hostPortMode === "manual" ? hostPort : undefined,
       mode,
+      providerKey,
       resources: resourceLimits,
       worldId: selectedWorldId || undefined,
       modIds: selectedModIds,
@@ -139,6 +140,19 @@ export function CreateServerWizard() {
     if (game.key === "terraria") {
       chooseMode(nextProvider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
+      setSelectedPreset("custom");
+      setConfig({
+        ...defaultCreateServerConfig,
+        serverName: `${game.name} Server`,
+        worldName: `${game.name} Save`,
+        maxPlayers: 8,
+        password: "",
+        motd: ""
+      });
+      setSelectedWorldId("");
+      setAppliedWorldConfigId("");
+      setSelectedModIds([]);
+      setSelectedModPackId("");
       setStep(1);
     }
   };
@@ -146,6 +160,10 @@ export function CreateServerWizard() {
     setSelectedProviderKey(provider.key);
     if (provider.key === "terraria-tmodloader" || provider.key === "terraria-vanilla") {
       chooseMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
+    } else {
+      setSelectedPreset("custom");
+      setSelectedModIds([]);
+      setSelectedModPackId("");
     }
   };
   const choosePreset = (preset: PresetKey) => {
@@ -231,6 +249,7 @@ export function CreateServerWizard() {
             {currentStepId === "config" && (
               <ConfigStep
                 config={config}
+                gameKey={selectedGameKey}
                 hostPort={hostPort}
                 hostPortMode={hostPortMode}
                 setConfig={setConfig}
@@ -522,6 +541,7 @@ function PresetStep({
 
 function ConfigStep({
   config,
+  gameKey,
   hostPort,
   hostPortMode,
   resourceLimits,
@@ -535,6 +555,7 @@ function ConfigStep({
   setVersion
 }: {
   config: TerrariaConfig;
+  gameKey: string;
   hostPort: number;
   hostPortMode: "auto" | "manual";
   resourceLimits: ResourceLimits;
@@ -560,6 +581,70 @@ function ConfigStep({
     setResourceLimits(limits);
   };
   const secretSeed = secretSeedKeyFor(config.seed);
+  if (gameKey === "palworld") {
+    return (
+      <div>
+        <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <WizardField label={t("serverName")}>
+            <Input value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
+          </WizardField>
+          <WizardField label={t("saveName")}>
+            <Input value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
+          </WizardField>
+          <WizardField label={t("maxPlayersInput")}>
+            <Input type="number" min={1} max={32} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
+          </WizardField>
+          <WizardField label={t("gameVersion")}>
+            <WizardSelect value={version} onChange={(value) => setVersion(value)}>
+              {versions.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </WizardSelect>
+          </WizardField>
+          <WizardField label={t("serverPassword")}>
+            <Input value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
+          </WizardField>
+          <WizardField label={t("adminPassword")}>
+            <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
+          </WizardField>
+          <WizardField label={t("externalPort")}>
+            <WizardSelect value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
+              <option value="auto">{t("automaticPort")}</option>
+              <option value="manual">{t("manualPort")}</option>
+            </WizardSelect>
+          </WizardField>
+          {hostPortMode === "manual" && (
+            <WizardField label={t("externalPortValue")}>
+              <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
+            </WizardField>
+          )}
+          <details className="rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
+            <summary className="cursor-pointer select-none text-sm font-semibold text-slate-200 outline-none transition hover:text-panel-green focus:text-panel-green">
+              {t("advancedRuntimeResources")}
+            </summary>
+            <p className="mt-2 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <WizardField label={t("cpuLimit")}>
+                <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => updateResources({ ...resourceLimits, cpuLimitCores: Number(value) })}>
+                  {cpuLimitOptions.map((value) => (
+                    <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
+                  ))}
+                </WizardSelect>
+              </WizardField>
+              <WizardField label={t("memoryLimit")}>
+                <WizardSelect value={String(resourceLimits.memoryLimitMb)} onChange={(value) => updateResources({ ...resourceLimits, memoryLimitMb: Number(value) })}>
+                  {memoryLimitOptions.map((value) => (
+                    <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
+                  ))}
+                </WizardSelect>
+              </WizardField>
+            </div>
+          </details>
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>

@@ -26,10 +26,11 @@ type ContainerResources struct {
 }
 
 type ContainerOptions struct {
-	Env        []string
-	Cmd        []string
-	DataMounts []string
-	Files      map[string]string
+	Env          []string
+	Cmd          []string
+	DataMounts   []string
+	Files        map[string]string
+	PortProtocol string
 }
 
 type DockerStatus struct {

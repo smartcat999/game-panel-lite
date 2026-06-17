@@ -1,6 +1,6 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { assignMod, assignWorld, createServer } from "./api";
-import type { ResourceLimits, Server, World } from "./types";
+import type { ProviderKey, ResourceLimits, Server, World } from "./types";
 
 type CreateMode = "vanilla" | "tmodloader";
 
@@ -15,6 +15,7 @@ export type CreateServerWithWorldInput = {
   deps?: CreateServerWithWorldDeps;
   hostPort?: number;
   mode: CreateMode;
+  providerKey?: ProviderKey;
   resources?: ResourceLimits;
   worldId?: string;
   modIds?: string[];
@@ -37,6 +38,7 @@ export async function createTerrariaServerWithWorld({
   deps = defaultDeps,
   hostPort,
   mode,
+  providerKey,
   resources,
   worldId,
   modIds = [],
@@ -44,7 +46,7 @@ export async function createTerrariaServerWithWorld({
 }: CreateServerWithWorldInput): Promise<CreatedServerWithWorld> {
   let server = await deps.createServer({
     name: config.serverName || "Terraria Server",
-    providerKey: mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla",
+    providerKey: providerKey ?? (mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla"),
     config,
     hostPort,
     resources,

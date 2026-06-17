@@ -12,6 +12,7 @@ import (
 	apihttp "github.com/smartcat999/game-panel-lite/apps/api/internal/http"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/player"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	dockerruntime "github.com/smartcat999/game-panel-lite/apps/api/internal/runtime/docker"
@@ -29,7 +30,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider())
+	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider())
 	adapter, err := dockerruntime.NewAdapter(cfg.DockerHost)
 	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/safety"
@@ -1819,7 +1820,7 @@ func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.G
 	if err != nil {
 		return err
 	}
-	nextConfig = normalizeTerrariaRuntimeConfig(nextConfig)
+	nextConfig = normalizeProviderRuntimeConfig(server.ProviderKey, nextConfig)
 	server.WorldName = nextConfig.WorldName
 	server.Port = nextConfig.Port
 	server.MaxPlayers = nextConfig.MaxPlayers
@@ -2052,12 +2053,12 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	payload.Config = normalizeTerrariaRuntimeConfig(payload.Config)
 	gameProvider, ok := h.provider.Get(payload.ProviderKey)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unknown provider")
 		return
 	}
+	payload.Config = normalizeProviderRuntimeConfig(payload.ProviderKey, payload.Config)
 	if payload.Name == "" {
 		payload.Name = payload.Config.ServerName
 	}
@@ -2839,6 +2840,15 @@ func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string
 func normalizeTerrariaRuntimeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
 	config.Port = terraria.DefaultInternalPort
 	return terraria.NormalizeConfig(config)
+}
+
+func normalizeProviderRuntimeConfig(providerKey domain.ProviderKey, config domain.TerrariaConfig) domain.TerrariaConfig {
+	switch providerKey {
+	case domain.ProviderPalworld:
+		return palworld.NormalizeConfig(config)
+	default:
+		return normalizeTerrariaRuntimeConfig(config)
+	}
 }
 
 func (h *Handler) resolveHostPort(ctx context.Context, requested int, excludeInstanceID string) (int, error) {

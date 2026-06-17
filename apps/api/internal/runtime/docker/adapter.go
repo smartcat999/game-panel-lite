@@ -80,7 +80,7 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 	}
 	hostConfig := &container.HostConfig{
 		Binds:        dataBinds(dataDir, spec.Options.DataMounts),
-		PortBindings: natPortMap(spec.Port, spec.HostPort),
+		PortBindings: natPortMap(spec.Port, spec.HostPort, spec.Options.PortProtocol),
 	}
 	if spec.Resources.CPULimitCores > 0 {
 		hostConfig.Resources.NanoCPUs = int64(spec.Resources.CPULimitCores * 1_000_000_000)
@@ -92,7 +92,7 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 		Image:        spec.Image,
 		Env:          spec.Options.Env,
 		Cmd:          spec.Options.Cmd,
-		ExposedPorts: natPortSet(spec.Port),
+		ExposedPorts: natPortSet(spec.Port, spec.Options.PortProtocol),
 		OpenStdin:    true,
 		AttachStdin:  true,
 		Labels: map[string]string{
@@ -402,11 +402,20 @@ func dataBindPaths(dataDir string, mount string) (string, string) {
 	return hostPath, containerPath
 }
 
-func natPortMap(containerPort int, hostPort int) nat.PortMap {
-	p := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
+func natPortMap(containerPort int, hostPort int, protocol string) nat.PortMap {
+	p := nat.Port(fmt.Sprintf("%d/%s", containerPort, normalizePortProtocol(protocol)))
 	return nat.PortMap{p: []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", hostPort)}}}
 }
 
-func natPortSet(containerPort int) nat.PortSet {
-	return nat.PortSet{nat.Port(fmt.Sprintf("%d/tcp", containerPort)): struct{}{}}
+func natPortSet(containerPort int, protocol string) nat.PortSet {
+	return nat.PortSet{nat.Port(fmt.Sprintf("%d/%s", containerPort, normalizePortProtocol(protocol))): struct{}{}}
+}
+
+func normalizePortProtocol(protocol string) string {
+	switch strings.ToLower(strings.TrimSpace(protocol)) {
+	case "udp":
+		return "udp"
+	default:
+		return "tcp"
+	}
 }

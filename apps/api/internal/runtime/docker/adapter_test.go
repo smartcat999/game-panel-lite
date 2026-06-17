@@ -41,8 +41,15 @@ func TestDataBindsSupportsSubPathMounts(t *testing.T) {
 }
 
 func TestNatPortSetExposesContainerPort(t *testing.T) {
-	ports := natPortSet(7777)
+	ports := natPortSet(7777, "")
 	if _, ok := ports["7777/tcp"]; !ok {
 		t.Fatalf("expected exposed 7777/tcp port, got %v", ports)
+	}
+}
+
+func TestNatPortSetSupportsUdp(t *testing.T) {
+	ports := natPortSet(8211, "udp")
+	if _, ok := ports["8211/udp"]; !ok {
+		t.Fatalf("expected exposed 8211/udp port, got %v", ports)
 	}
 }
