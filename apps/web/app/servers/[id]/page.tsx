@@ -110,6 +110,7 @@ export default function ServerDetailPage() {
   const [pendingModAssign, setPendingModAssign] = useState<ModFile | null>(null);
   const [pendingModPackInstall, setPendingModPackInstall] = useState<ModPack | null>(null);
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
+  const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
   const [logStreamPaused, setLogStreamPaused] = useState(false);
@@ -170,7 +171,7 @@ export default function ServerDetailPage() {
     commandMutation.mutate(next);
   };
   const configSave = useMutation({
-    mutationFn: ({ config, hostPort, resources }: { config: TerrariaConfig; hostPort: number; resources: ResourceLimits }) => updateServerConfig(id, config, hostPort, resources),
+    mutationFn: ({ config, hostPort }: { config: TerrariaConfig; hostPort: number }) => updateServerConfig(id, config, hostPort),
     onSuccess: async (updatedServer) => {
       showSuccess(t("configSaved"));
       setConfigSaved(true);
@@ -182,6 +183,19 @@ export default function ServerDetailPage() {
       setConfigSaved(false);
       showError(formatActionError(error, t("unableUpdateConfig")));
     }
+  });
+  const resourceSave = useMutation({
+    mutationFn: ({ resources }: { resources: ResourceLimits }) => {
+      if (!server) throw new Error("server not loaded");
+      return updateServerConfig(id, server.config, serverJoinPort(server), resources);
+    },
+    onSuccess: async (updatedServer) => {
+      showSuccess(t("resourceLimitsSaved"));
+      setResourceDialogOpen(false);
+      client.setQueryData(["server", id], updatedServer);
+      await client.invalidateQueries({ queryKey: ["servers"] });
+    },
+    onError: (error) => showError(formatActionError(error, t("unableUpdateConfig")))
   });
   const configRestart = useMutation({
     mutationFn: () => serverAction(id, "restart"),
@@ -559,7 +573,7 @@ export default function ServerDetailPage() {
               restartPending={configRestart.isPending}
               server={server}
               onRestart={() => setPendingConfigRestart(true)}
-              onSave={(nextConfig, hostPort, resources) => configSave.mutate({ config: nextConfig, hostPort, resources })}
+              onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
             />
           )}
           {activeTab === "worlds" && (
@@ -626,6 +640,14 @@ export default function ServerDetailPage() {
               {copied === "Invite" ? t("copied") : t("copyInviteText")}
             </Button>
           </Card>
+          <ResourceLimitsCard
+            cpuPercent={statsQuery.data?.cpuPercent}
+            memoryMb={statsQuery.data?.memoryMb}
+            restartPending={configRestart.isPending}
+            server={server}
+            onEdit={() => setResourceDialogOpen(true)}
+            onRestart={() => setPendingConfigRestart(true)}
+          />
           <Card className="p-4">
             <h2 className="font-semibold">{t("worldTemplate")}</h2>
             {server.sourceWorldId ? (
@@ -658,6 +680,13 @@ export default function ServerDetailPage() {
         busy={configRestart.isPending}
         onCancel={() => setPendingConfigRestart(false)}
         onConfirm={() => configRestart.mutate()}
+      />
+      <ResourceLimitsDialog
+        open={resourceDialogOpen}
+        savePending={resourceSave.isPending}
+        server={server}
+        onCancel={() => setResourceDialogOpen(false)}
+        onSave={(resources) => resourceSave.mutate({ resources })}
       />
       <ConfirmDialog
         open={Boolean(pendingWorldDelete)}
@@ -825,6 +854,75 @@ function OverviewTab({
           {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ResourceLimitsCard({
+  cpuPercent,
+  memoryMb,
+  restartPending,
+  server,
+  onEdit,
+  onRestart
+}: {
+  cpuPercent?: number;
+  memoryMb?: number;
+  restartPending: boolean;
+  server: Server;
+  onEdit: () => void;
+  onRestart: () => void;
+}) {
+  const { t } = useI18n();
+  const running = server.status === "running";
+  const lifecycleLocked = isServerLifecyclePending(server.status);
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">{t("runtimeResources")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("runtimeResourcesHint")}</p>
+        </div>
+        <Button className="h-8 px-2 text-xs" variant="secondary" onClick={onEdit} disabled={lifecycleLocked}>
+          {t("adjustResources")}
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-2">
+        <ResourceMetric
+          icon={<Cpu aria-hidden="true" className="size-4" />}
+          label={t("cpuLimit")}
+          value={formatCpuLimitLabel(server.cpuLimitCores ?? 0, t)}
+          subValue={running && cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : t("notRunning")}
+        />
+        <ResourceMetric
+          icon={<MemoryStick aria-hidden="true" className="size-4" />}
+          label={t("memoryLimit")}
+          value={formatMemoryLimitLabel(server.memoryLimitMb ?? 0, t)}
+          subValue={running && memoryMb !== undefined ? `${memoryMb} MB` : t("notRunning")}
+        />
+      </div>
+      {server.configPendingRestart && (
+        <div className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 p-3">
+          <p className="text-xs font-medium text-panel-gold">{t("resourceLimitsPendingRestart")}</p>
+          <Button className="mt-2 h-8 px-2 text-xs" variant="gold" onClick={onRestart} disabled={restartPending || lifecycleLocked}>
+            <RotateCcw aria-hidden="true" className="size-3.5" />
+            {restartPending ? t("actionRestarting") : t("restartServerNow")}
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ResourceMetric({ icon, label, subValue, value }: { icon: ReactNode; label: string; subValue: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-panel-line bg-slate-950/35 p-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-green/25 bg-panel-green/10 text-panel-green">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="mt-0.5 truncate text-sm font-semibold text-slate-100">{value}</p>
+      </div>
+      <span className="shrink-0 rounded-md border border-panel-line bg-slate-950/50 px-2 py-1 text-xs text-slate-400">{subValue}</span>
     </div>
   );
 }
@@ -1139,7 +1237,7 @@ function ConfigTab({
   server
 }: {
   onRestart: () => void;
-  onSave: (config: TerrariaConfig, hostPort: number, resources: ResourceLimits) => void;
+  onSave: (config: TerrariaConfig, hostPort: number) => void;
   restartPending: boolean;
   saveError: string;
   savePending: boolean;
@@ -1149,12 +1247,10 @@ function ConfigTab({
   const { t } = useI18n();
   const [draft, setDraft] = useState<TerrariaConfig>(server.config);
   const [hostPortDraft, setHostPortDraft] = useState(serverJoinPort(server));
-  const [resourceDraft, setResourceDraft] = useState<ResourceLimits>({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
   const [previewOpen, setPreviewOpen] = useState(false);
   const [restartRecommended, setRestartRecommended] = useState(false);
   useEffect(() => setDraft(server.config), [server.config, server.id]);
   useEffect(() => setHostPortDraft(serverJoinPort(server)), [server.hostPort, server.id, server.port]);
-  useEffect(() => setResourceDraft({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 }), [server.cpuLimitCores, server.id, server.memoryLimitMb]);
   const normalizedDraft = useMemo(() => ({ ...draft, port: terrariaInternalPort }), [draft]);
   const preview = useQuery({
     queryKey: ["server-config-preview", server.id, normalizedDraft],
@@ -1164,8 +1260,7 @@ function ConfigTab({
   });
   const configDirty = JSON.stringify(normalizedDraft) !== JSON.stringify({ ...server.config, port: terrariaInternalPort });
   const hostPortDirty = hostPortDraft !== serverJoinPort(server);
-  const resourceDirty = resourceDraft.cpuLimitCores !== (server.cpuLimitCores ?? 0) || resourceDraft.memoryLimitMb !== (server.memoryLimitMb ?? 0);
-  const dirty = configDirty || hostPortDirty || resourceDirty;
+  const dirty = configDirty || hostPortDirty;
   const lifecycleLocked = isServerLifecyclePending(server.status);
   const running = server.status === "running";
   const disabled = lifecycleLocked || savePending;
@@ -1202,7 +1297,7 @@ function ConfigTab({
   return (
     <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault();
-      if (!disabled && dirty) onSave(normalizedDraft, hostPortDraft, resourceDraft);
+      if (!disabled && dirty) onSave(normalizedDraft, hostPortDraft);
     }}>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1233,28 +1328,6 @@ function ConfigTab({
             </Field>
             <Field label={t("maxPlayers")}>
               <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
-            </Field>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-3 rounded-md border border-panel-line bg-slate-950/50 p-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-200">{t("resourceLimits")}</p>
-            <p className="mt-1 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label={t("cpuLimit")}>
-              <Select value={String(resourceDraft.cpuLimitCores)} onChange={(value) => setResourceDraft((current) => ({ ...current, cpuLimitCores: Number(value) }))} disabled={disabled}>
-                {cpuLimitOptions.map((value) => (
-                  <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label={t("memoryLimit")}>
-              <Select value={String(resourceDraft.memoryLimitMb)} onChange={(value) => setResourceDraft((current) => ({ ...current, memoryLimitMb: Number(value) }))} disabled={disabled}>
-                {memoryLimitOptions.map((value) => (
-                  <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
-                ))}
-              </Select>
             </Field>
           </div>
         </div>
@@ -1306,7 +1379,6 @@ function ConfigTab({
               onClick={() => {
                 setDraft(server.config);
                 setHostPortDraft(serverJoinPort(server));
-                setResourceDraft({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
               }}
             >
               {t("resetChanges")}
@@ -1369,6 +1441,97 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
     <div className="grid gap-1.5">
       <span className="text-xs font-medium text-slate-500">{label}</span>
       <div className="flex h-10 items-center rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-400">{value}</div>
+    </div>
+  );
+}
+
+function ResourceLimitsDialog({
+  open,
+  savePending,
+  server,
+  onCancel,
+  onSave
+}: {
+  open: boolean;
+  savePending: boolean;
+  server: Server;
+  onCancel: () => void;
+  onSave: (resources: ResourceLimits) => void;
+}) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState<ResourceLimits>({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
+  const lifecycleLocked = isServerLifecyclePending(server.status);
+  const dirty = draft.cpuLimitCores !== (server.cpuLimitCores ?? 0) || draft.memoryLimitMb !== (server.memoryLimitMb ?? 0);
+  useEffect(() => {
+    if (open) {
+      setDraft({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
+    }
+  }, [open, server.cpuLimitCores, server.id, server.memoryLimitMb]);
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !savePending) onCancel();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, open, savePending]);
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !savePending) onCancel();
+      }}
+    >
+      <form
+        aria-labelledby="resource-dialog-title"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-lg border border-panel-line bg-panel-card p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+        role="dialog"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!savePending && !lifecycleLocked && dirty) onSave(draft);
+        }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-panel-green">{t("runtimeResources")}</p>
+            <h2 className="mt-2 text-lg font-semibold text-white" id="resource-dialog-title">{t("adjustResources")}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{server.status === "running" ? t("resourceLimitsApplyAfterRestart") : t("resourceLimitsApplyOnStart")}</p>
+          </div>
+          <button
+            aria-label={t("cancel")}
+            className="flex size-8 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+            disabled={savePending}
+            onClick={onCancel}
+            type="button"
+          >
+            <X aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <Field label={t("cpuLimit")}>
+            <Select value={String(draft.cpuLimitCores)} onChange={(value) => setDraft((current) => ({ ...current, cpuLimitCores: Number(value) }))} disabled={savePending || lifecycleLocked}>
+              {cpuLimitOptions.map((value) => (
+                <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t("memoryLimit")}>
+            <Select value={String(draft.memoryLimitMb)} onChange={(value) => setDraft((current) => ({ ...current, memoryLimitMb: Number(value) }))} disabled={savePending || lifecycleLocked}>
+              {memoryLimitOptions.map((value) => (
+                <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        {lifecycleLocked && <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">{t("configLifecycleLocked")}</p>}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={savePending}>{t("cancel")}</Button>
+          <Button disabled={savePending || lifecycleLocked || !dirty}>{savePending ? t("savingConfig") : t("saveResourceLimits")}</Button>
+        </div>
+      </form>
     </div>
   );
 }

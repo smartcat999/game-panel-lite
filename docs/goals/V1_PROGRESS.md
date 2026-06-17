@@ -2053,3 +2053,19 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web test`: passed after refreshing local `node_modules` to restore Rollup's macOS optional dependency.
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC fallback and ESLint plugin warnings.
+
+## V1 Resource Limits UI Separation Update
+
+Status: Completed
+
+Completed:
+- Moved server resource limits out of the Terraria config form so game settings and Docker runtime settings are visually separated.
+- Added a right-side Runtime Resources card on server details with CPU / memory limits, current usage, and an Adjust Resources action.
+- Added a dedicated resource-limit dialog with save semantics that match the existing restart-to-apply flow.
+- Kept Create Server resource limits as an advanced collapsed Runtime Resources section.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web test`: passed after refreshing local `node_modules` to restore Rollup's macOS optional dependency.
+- `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC fallback and ESLint plugin warnings.

@@ -488,12 +488,12 @@ function ConfigStep({
           <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
           <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
         </div>
-        <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
-          <div>
-            <p className="text-sm font-semibold text-slate-200">{t("resourceLimits")}</p>
-            <p className="mt-1 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
+        <details className="rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-200 outline-none transition hover:text-panel-green focus:text-panel-green">
+            {t("advancedRuntimeResources")}
+          </summary>
+          <p className="mt-2 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
             <WizardField label={t("cpuLimit")}>
               <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => updateResources({ ...resourceLimits, cpuLimitCores: Number(value) })}>
                 {cpuLimitOptions.map((value) => (
@@ -509,7 +509,7 @@ function ConfigStep({
               </WizardSelect>
             </WizardField>
           </div>
-        </div>
+        </details>
       </div>
       <div className="mt-4 flex items-center gap-3">
         <Button variant="secondary" onClick={() => preview.mutate()} disabled={preview.isPending}>
