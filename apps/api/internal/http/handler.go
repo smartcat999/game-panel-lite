@@ -887,6 +887,9 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 		}
 		if item.Source == "workshop" && item.WorkshopID != "" {
 			workshopIDs = append(workshopIDs, item.WorkshopID)
+			if name := modIdentity(item); name != "" {
+				enabled = append(enabled, name)
+			}
 			continue
 		}
 		if isTModPackage(item.FileName) {

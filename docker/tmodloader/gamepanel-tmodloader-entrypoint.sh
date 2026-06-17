@@ -30,6 +30,68 @@ workshop_sync_needed() {
   return 1
 }
 
+latest_workshop_mod_file() {
+  local workshop_id="$1"
+  [[ -n "${workshop_id}" ]] || return 1
+  [[ -d "${WORKSHOP_DIR}/${workshop_id}" ]] || return 1
+  find "${WORKSHOP_DIR}/${workshop_id}" -type f -name '*.tmod' 2>/dev/null | sort -V | tail -n 1
+}
+
+write_enabled_json() {
+	local names_file="$1"
+	local first mod_name tmp_enabled
+	tmp_enabled="$(mktemp)"
+
+  printf '[\n' >"${tmp_enabled}"
+  first=1
+  while IFS= read -r mod_name || [[ -n "${mod_name}" ]]; do
+    [[ -n "${mod_name}" ]] || continue
+    if [[ "${first}" -eq 0 ]]; then
+      printf ',\n' >>"${tmp_enabled}"
+    fi
+    printf '  "%s"' "${mod_name}" >>"${tmp_enabled}"
+    first=0
+  done < <(
+    {
+      if [[ -s "${MODS_DIR}/enabled.json" ]]; then
+        grep -Eo '"[^"]+"' "${MODS_DIR}/enabled.json" | tr -d '"' || true
+      fi
+      cat "${names_file}"
+    } | sort -u
+  )
+  printf '\n]\n' >>"${tmp_enabled}"
+  mv "${tmp_enabled}" "${MODS_DIR}/enabled.json"
+}
+
+install_cached_workshop_mods() {
+	local file_name mod_name source_file target_file tmp_names tmp_target workshop_id
+	tmp_names="$(mktemp)"
+
+  while IFS= read -r workshop_id || [[ -n "${workshop_id}" ]]; do
+    workshop_id="${workshop_id//[$'\t\r\n ']}"
+    [[ -n "${workshop_id}" ]] || continue
+
+    source_file="$(latest_workshop_mod_file "${workshop_id}")"
+    if [[ -z "${source_file}" || ! -f "${source_file}" ]]; then
+      echo "Workshop mod ${workshop_id} is not cached yet."
+      continue
+    fi
+
+    file_name="$(basename "${source_file}")"
+    mod_name="${file_name%.tmod}"
+    tmp_target="${MODS_DIR}/.${file_name}.tmp"
+    target_file="${MODS_DIR}/${file_name}"
+
+    cp "${source_file}" "${tmp_target}"
+    mv "${tmp_target}" "${target_file}"
+    printf '%s\n' "${mod_name}" >>"${tmp_names}"
+    echo "Installed Workshop mod ${workshop_id}: ${file_name}"
+  done <"${MODS_DIR}/install.txt"
+
+  write_enabled_json "${tmp_names}"
+  rm -f "${tmp_names}"
+}
+
 if [[ -s "${MODS_DIR}/install.txt" ]]; then
   export STEAMCMDPATH="/opt/steamcmd/steamcmd.sh"
   arch="$(uname -m)"
@@ -43,25 +105,7 @@ if [[ -s "${MODS_DIR}/install.txt" ]]; then
   else
     echo "Workshop sync skipped: steamcmd is not available in the container"
   fi
+  install_cached_workshop_mods
 fi
-
-tmp_enabled="$(mktemp)"
-printf '[\n' >"${tmp_enabled}"
-first=1
-while IFS= read -r mod_name; do
-  [[ -z "${mod_name}" ]] && continue
-  if [[ "${first}" -eq 0 ]]; then
-    printf ',\n' >>"${tmp_enabled}"
-  fi
-  printf '  "%s"' "${mod_name}" >>"${tmp_enabled}"
-  first=0
-done < <(
-  {
-    find "${MODS_DIR}" -maxdepth 1 -type f -name '*.tmod' -exec basename {} .tmod \; 2>/dev/null
-    find "${WORKSHOP_DIR}" -type f -name '*.tmod' -exec basename {} .tmod \; 2>/dev/null
-  } | sort -u
-)
-printf '\n]\n' >>"${tmp_enabled}"
-mv "${tmp_enabled}" "${MODS_DIR}/enabled.json"
 
 exec ./server/start-tModLoaderServer.sh "$@"
