@@ -15,9 +15,17 @@ import { getGameVersions, listGames, listGlobalMods, listModPacks, listWorlds, p
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { GameCatalogEntry, ModFile, ModPack, ResourceLimits } from "@/lib/types";
+import type { GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
 
-const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepMods", "stepReview"] as const;
+const stepLabelKeys = {
+  game: "stepGame",
+  mode: "stepMode",
+  preset: "stepPreset",
+  config: "stepConfig",
+  mods: "stepMods",
+  review: "stepReview"
+} as const;
+type StepId = keyof typeof stepLabelKeys;
 const presets = [
   { key: "friends-casual", labelKey: "presetFriendsCasual", descriptionKey: "presetFriendsCasualDescription", tags: ["tagClassic", "tagMediumWorld", "8"] },
   { key: "building-world", labelKey: "presetBuildingWorld", descriptionKey: "presetBuildingWorldDescription", tags: ["tagClassic", "tagLargeWorld", "12"] },
@@ -47,6 +55,8 @@ export function CreateServerWizard() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
+  const [selectedGameKey, setSelectedGameKey] = useState("terraria");
+  const [selectedProviderKey, setSelectedProviderKey] = useState<ProviderKey>("terraria-vanilla");
   const [mode, setMode] = useState<"vanilla" | "tmodloader">(defaultCreateServerMode);
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>(defaultCreateServerPreset);
   const [config, setConfig] = useState<TerrariaConfig>(defaultCreateServerConfig);
@@ -59,11 +69,22 @@ export function CreateServerWizard() {
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [selectedModPackId, setSelectedModPackId] = useState("");
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000 });
-  const versionsQuery = useQuery({ queryKey: ["game-versions", "terraria"], queryFn: () => getGameVersions("terraria"), staleTime: 5 * 60 * 1000 });
+  const versionsQuery = useQuery({ queryKey: ["game-versions", selectedGameKey], queryFn: () => getGameVersions(selectedGameKey), enabled: selectedGameKey.length > 0, staleTime: 5 * 60 * 1000 });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
   const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
-  const providerKey = mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla";
+  const games = gamesQuery.data ?? [];
+  const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games.find((game) => game.key === "terraria");
+  const selectedProvider = selectedGame?.providers.find((provider) => provider.key === selectedProviderKey) ?? selectedGame?.providers.find((provider) => provider.recommended) ?? selectedGame?.providers[0];
+  const providerKey = selectedProvider?.key ?? selectedProviderKey;
+  const stepIds: StepId[] = useMemo(() => [
+    "game",
+    "mode",
+    "preset",
+    "config",
+    ...(selectedProvider?.capabilities.mods ? ["mods" as const] : []),
+    "review"
+  ], [selectedProvider?.capabilities.mods]);
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = worldsQuery.data ?? [];
@@ -71,11 +92,13 @@ export function CreateServerWizard() {
   const availableMods = modsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
-  const games = gamesQuery.data ?? [];
-  const fallbackStepKey: (typeof stepKeys)[number] = "stepReview";
-  const currentStepKey = stepKeys[step] ?? fallbackStepKey;
-  const nextStepKey = stepKeys[Math.min(stepKeys.length - 1, step + 1)] ?? fallbackStepKey;
+  const fallbackStepId: StepId = "review";
+  const currentStepId = stepIds[step] ?? fallbackStepId;
+  const nextStepId = stepIds[Math.min(stepIds.length - 1, step + 1)] ?? fallbackStepId;
+  const currentStepKey = stepLabelKeys[currentStepId];
+  const nextStepKey = stepLabelKeys[nextStepId];
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
+  const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider) && selectedGame.key === "terraria";
   const create = useMutation({
     mutationFn: () => createTerrariaServerWithWorld({
       config: { ...config, port: terrariaInternalPort },
@@ -98,6 +121,7 @@ export function CreateServerWizard() {
   });
   const chooseMode = (nextMode: "vanilla" | "tmodloader") => {
     const nextPreset = nextMode === "tmodloader" ? "modded-starter" : "friends-casual";
+    setSelectedProviderKey(nextMode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla");
     setMode(nextMode);
     setSelectedPreset(nextPreset);
     setConfig(getTerrariaPreset(nextPreset).config);
@@ -105,6 +129,24 @@ export function CreateServerWizard() {
     setAppliedWorldConfigId("");
     setSelectedModIds([]);
     setSelectedModPackId("");
+  };
+  const chooseGame = (game: GameCatalogEntry) => {
+    if (game.status !== "available" || game.providers.length === 0) return;
+    setSelectedGameKey(game.key);
+    const nextProvider = game.providers.find((provider) => provider.recommended) ?? game.providers[0];
+    if (!nextProvider) return;
+    setSelectedProviderKey(nextProvider.key);
+    if (game.key === "terraria") {
+      chooseMode(nextProvider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
+    } else {
+      setStep(1);
+    }
+  };
+  const chooseProvider = (provider: ProviderCatalog) => {
+    setSelectedProviderKey(provider.key);
+    if (provider.key === "terraria-tmodloader" || provider.key === "terraria-vanilla") {
+      chooseMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
+    }
   };
   const choosePreset = (preset: PresetKey) => {
     setSelectedPreset(preset);
@@ -135,6 +177,11 @@ export function CreateServerWizard() {
     setAppliedWorldConfigId(selectedWorld.id);
     setStep(3);
   }, [appliedWorldConfigId, selectedWorld]);
+  useEffect(() => {
+    if (step > stepIds.length - 1) {
+      setStep(stepIds.length - 1);
+    }
+  }, [step, stepIds.length]);
 
   return (
     <Card className="overflow-hidden">
@@ -165,20 +212,23 @@ export function CreateServerWizard() {
             </Link>
           </div>
           <div className="mt-7 grid grid-cols-3 gap-3 md:grid-cols-6">
-            {stepKeys.map((labelKey, index) => (
+            {stepIds.map((stepId, index) => {
+              const labelKey = stepLabelKeys[stepId];
+              return (
               <button key={labelKey} className="flex flex-col items-center gap-2 text-xs text-slate-400" onClick={() => setStep(index)}>
                 <span className={cn("flex size-8 items-center justify-center rounded-full border border-panel-line", index <= step && "border-panel-green bg-panel-green text-slate-950")}>
                   {index < step ? <Check aria-hidden="true" /> : index + 1}
                 </span>
                 {t(labelKey)}
               </button>
-            ))}
+              );
+            })}
           </div>
           <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
-            {step === 0 && <GameStep games={games} isLoading={gamesQuery.isLoading} selectedGameKey="terraria" />}
-            {step === 1 && <ModeStep mode={mode} setMode={chooseMode} />}
-            {step === 2 && <PresetStep mode={mode} selectedPreset={selectedPreset} setPreset={choosePreset} />}
-            {step === 3 && (
+            {currentStepId === "game" && <GameStep games={games} isLoading={gamesQuery.isLoading} selectedGameKey={selectedGameKey} onSelectGame={chooseGame} />}
+            {currentStepId === "mode" && <ModeStep mode={mode} providers={selectedGame?.providers ?? []} selectedProviderKey={providerKey} setMode={chooseMode} onSelectProvider={chooseProvider} />}
+            {currentStepId === "preset" && <PresetStep mode={mode} selectedPreset={selectedPreset} setPreset={choosePreset} />}
+            {currentStepId === "config" && (
               <ConfigStep
                 config={config}
                 hostPort={hostPort}
@@ -194,10 +244,10 @@ export function CreateServerWizard() {
                 setVersion={setVersion}
               />
             )}
-            {step === 4 && (
+            {currentStepId === "mods" && (
               <ModsStep
                 locale={locale}
-                mode={mode}
+                supportsMods={Boolean(selectedProvider?.capabilities.mods)}
                 worldName={selectedWorld?.name}
                 mods={availableMods}
                 modPacks={modPacks}
@@ -210,11 +260,12 @@ export function CreateServerWizard() {
                 }}
               />
             )}
-            {step === 5 && (
+            {currentStepId === "review" && (
               <ReviewStep
-                mode={mode}
                 config={config}
+                gameName={selectedGame?.name ?? "Terraria"}
                 hostPortLabel={hostPortMode === "manual" ? String(hostPort) : t("automaticPort")}
+                providerName={selectedProvider?.name ?? (mode === "tmodloader" ? "tModLoader" : t("modeVanilla"))}
                 version={selectedVersion}
                 resourceLimits={resourceLimits}
                 selectedWorldName={selectedWorld?.name}
@@ -227,11 +278,12 @@ export function CreateServerWizard() {
               <ChevronLeft aria-hidden="true" />
               {t("back")}
             </Button>
-            <Button onClick={() => step === stepKeys.length - 1 ? create.mutate() : setStep((value) => Math.min(stepKeys.length - 1, value + 1))} disabled={create.isPending}>
-              {step === stepKeys.length - 1 ? create.isPending ? t("creating") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
+            <Button onClick={() => step === stepIds.length - 1 ? create.mutate() : setStep((value) => Math.min(stepIds.length - 1, value + 1))} disabled={create.isPending || (step === stepIds.length - 1 && !canCreateSelectedProvider)}>
+              {step === stepIds.length - 1 ? create.isPending ? t("creating") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
+          {!canCreateSelectedProvider && currentStepId === "review" && <p className="mt-4 text-sm text-panel-gold">{t("providerNotCreatableYet")}</p>}
           {create.isError && <p className="mt-4 text-sm text-red-200">{create.error.message}</p>}
           {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.server.name })}</p>}
           <p className="mt-4 text-xs text-slate-500">{t("currentStep", { step: selectedTitle })}</p>
@@ -241,7 +293,17 @@ export function CreateServerWizard() {
   );
 }
 
-function GameStep({ games, isLoading, selectedGameKey }: { games: GameCatalogEntry[]; isLoading: boolean; selectedGameKey: string }) {
+function GameStep({
+  games,
+  isLoading,
+  selectedGameKey,
+  onSelectGame
+}: {
+  games: GameCatalogEntry[];
+  isLoading: boolean;
+  selectedGameKey: string;
+  onSelectGame: (game: GameCatalogEntry) => void;
+}) {
   const { t } = useI18n();
   const orderedGames = games.length > 0 ? games : [{ key: "terraria", name: "Terraria", description: "", status: "available", providers: [] }];
   return (
@@ -253,7 +315,17 @@ function GameStep({ games, isLoading, selectedGameKey }: { games: GameCatalogEnt
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
           return (
-            <Card key={game.key} className={cn("relative p-4", isSelected ? "border-panel-green bg-panel-green/10" : "bg-slate-950/40", !isAvailable && "opacity-75")}>
+            <button
+              key={game.key}
+              type="button"
+              disabled={!isAvailable}
+              onClick={() => onSelectGame(game)}
+              className={cn(
+                "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+                isSelected ? "border-panel-green bg-panel-green/10" : "border-panel-line bg-slate-950/40",
+                isAvailable ? "hover:border-panel-green/70 hover:bg-slate-900/55" : "cursor-not-allowed opacity-75"
+              )}
+            >
               <div className="flex items-start gap-3">
                 <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-md border", isSelected ? "border-panel-green bg-panel-green/15 text-panel-green" : "border-panel-line text-slate-400")}>
                   <Gamepad2 aria-hidden="true" />
@@ -269,6 +341,7 @@ function GameStep({ games, isLoading, selectedGameKey }: { games: GameCatalogEnt
                   {game.providers.length > 0 && (
                     <p className="mt-3 text-xs text-slate-500">{t("providerCount", { count: game.providers.length })}</p>
                   )}
+                  {!isAvailable && <p className="mt-3 text-xs text-slate-500">{t("plannedGameHint")}</p>}
                 </div>
               </div>
               {isSelected && (
@@ -276,7 +349,7 @@ function GameStep({ games, isLoading, selectedGameKey }: { games: GameCatalogEnt
                   <Check aria-hidden="true" className="size-4" />
                 </span>
               )}
-            </Card>
+            </button>
           );
         })}
       </div>
@@ -285,8 +358,57 @@ function GameStep({ games, isLoading, selectedGameKey }: { games: GameCatalogEnt
   );
 }
 
-function ModeStep({ mode, setMode }: { mode: "vanilla" | "tmodloader"; setMode: (mode: "vanilla" | "tmodloader") => void }) {
+function ModeStep({
+  mode,
+  providers,
+  selectedProviderKey,
+  setMode,
+  onSelectProvider
+}: {
+  mode: "vanilla" | "tmodloader";
+  providers: ProviderCatalog[];
+  selectedProviderKey: ProviderKey;
+  setMode: (mode: "vanilla" | "tmodloader") => void;
+  onSelectProvider: (provider: ProviderCatalog) => void;
+}) {
   const { t } = useI18n();
+  if (providers.length > 0) {
+    return (
+      <div>
+        <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {providers.map((provider) => {
+            const isSelected = selectedProviderKey === provider.key;
+            const isModded = provider.capabilities.mods;
+            return (
+              <button
+                key={provider.key}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSelectProvider(provider)}
+                className={cn(
+                  "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+                  isSelected
+                    ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+                    : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
+                )}
+              >
+                {isSelected && (
+                  <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
+                    <Check aria-hidden="true" className="size-4" />
+                  </span>
+                )}
+                {isModded ? <Package aria-hidden="true" className="text-panel-green" /> : <Hammer aria-hidden="true" className="text-panel-green" />}
+                <p className="mt-3 pr-8 font-medium">{provider.name}</p>
+                <p className="mt-1 text-sm text-slate-400">{provider.description}</p>
+                {provider.recommended && <span className="mt-4 inline-flex rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("recommended")}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
@@ -594,7 +716,7 @@ function WizardCheckbox({ checked, label, onChange }: { checked: boolean; label:
 
 function ModsStep({
   locale,
-  mode,
+  supportsMods,
   worldName,
   mods,
   modPacks,
@@ -604,7 +726,7 @@ function ModsStep({
   onToggleMod
 }: {
   locale: string;
-  mode: "vanilla" | "tmodloader";
+  supportsMods: boolean;
   worldName?: string;
   mods: ModFile[];
   modPacks: ModPack[];
@@ -638,10 +760,10 @@ function ModsStep({
         </div>
       </div>
 
-      {mode !== "tmodloader" ? (
+      {!supportsMods ? (
         <div className="mt-6 flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-12 text-center">
           <Package aria-hidden="true" className="size-8 text-slate-600" />
-          <p className="mt-3 text-sm text-slate-400">{t("noModsForVanilla")}</p>
+          <p className="mt-3 text-sm text-slate-400">{t("noModsForProvider")}</p>
         </div>
       ) : (
         <div className="mt-6">
@@ -720,17 +842,19 @@ function ModsStep({
 }
 
 function ReviewStep({
-  mode,
   config,
+  gameName,
   hostPortLabel,
+  providerName,
   resourceLimits,
   version,
   selectedWorldName,
   selectedModNames
 }: {
-  mode: "vanilla" | "tmodloader";
   config: TerrariaConfig;
+  gameName: string;
   hostPortLabel: string;
+  providerName: string;
   resourceLimits: ResourceLimits;
   version: string;
   selectedWorldName?: string;
@@ -741,7 +865,7 @@ function ReviewStep({
     <div>
       <h2 className="text-lg font-semibold">{t("review")}</h2>
       <Card className="mt-4 p-4">
-        <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { mode: mode === "tmodloader" ? "tModLoader" : t("modeVanilla"), port: hostPortLabel })}</div>
+        <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { game: gameName, mode: providerName, port: hostPortLabel })}</div>
         <p className="mt-3 text-sm text-slate-400">{t("reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
         <p className="mt-2 text-sm text-slate-400">
           {t("resourceLimits")}: <span className="text-slate-200">{formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}</span>
@@ -752,7 +876,7 @@ function ReviewStep({
             <p>{t("selectedWorldFile")}: <span className="text-panel-green">{selectedWorldName}</span></p>
           </div>
         )}
-        {mode === "tmodloader" && selectedModNames.length > 0 && (
+        {selectedModNames.length > 0 && (
           <div className="mt-2 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
             <p>{t("selectedModFiles")}: <span className="text-panel-green">{selectedModNames.join(", ")}</span></p>
           </div>

@@ -79,6 +79,10 @@ Completed:
 - Server detail resource queries only run when the provider supports the corresponding feature.
 - Console quick actions hide kick and ban commands when the provider does not support them.
 - Server API mapping now preserves `gameKey` and `providerKey` for frontend capability lookups.
+- Create-server wizard now tracks selected game and provider catalog state explicitly.
+- Create-server wizard loads versions by selected game and provider instead of hardcoding Terraria.
+- Create-server wizard steps are generated from provider capabilities, so unsupported mod steps are hidden.
+- Create-server review summary now uses game/provider names instead of Terraria-only copy.
 
 In progress:
 - Full game-specific create-server flow.
@@ -139,13 +143,30 @@ Result:
 - `pnpm --filter @gamepanel-lite/web build` passed.
 - `pnpm --filter @gamepanel-lite/web test` still could not start because local dependencies are missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 
+2026-06-18 Goal 2 provider-aware create wizard:
+
+```bash
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+go test ./...
+go vet ./...
+```
+
+Result:
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+- `go test ./...` passed.
+- `go vet ./...` passed.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
 - No RBAC, OAuth, SaaS account system, or multi-user management is planned for this phase.
 - If no admin account exists, backend API routes remain open so a fresh instance can bootstrap; the frontend still forces setup before rendering the app.
 - Palworld is visible only as a planned catalog stub; it cannot be created until Goal 3.
-- The create-server page now uses the game catalog for game selection, but the later setup steps still use the Terraria-specific form instead of rendering from provider schema metadata.
+- The create-server page now uses game/provider catalog state and provider capabilities, but the detailed config form is still implemented with Terraria fields until the first non-Terraria runtime lands.
 
 ## Next Work
 
