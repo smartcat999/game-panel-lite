@@ -1,0 +1,16 @@
+.git
+.cache
+.crush
+.idea
+.pnpm-store
+node_modules
+**/node_modules
+apps/web/.next
+test-results
+tmp
+data
+*.log
+.env
+.env.local
+.env.*.local
+
