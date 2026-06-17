@@ -43,7 +43,7 @@ import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
-import { serverInviteText, serverJoinPort } from "@/lib/server-join";
+import { serverInviteText, serverJoinAddress, serverJoinPassword, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, ModPack, ProviderCapabilities, ResourceLimits, Server, World } from "@/lib/types";
 
@@ -440,6 +440,8 @@ export default function ServerDetailPage() {
   }
 
   const invite = serverInviteText(server);
+  const joinAddress = serverJoinAddress(server);
+  const joinPassword = serverJoinPassword(server);
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const copy = async (label: string, value: string) => {
     try {
@@ -638,9 +640,9 @@ export default function ServerDetailPage() {
         <div className="flex flex-col gap-4">
           <Card className="p-4">
             <h2 className="font-semibold">{t("joinServer")}</h2>
-            <CopyRow label={t("ipAddress")} value="127.0.0.1" copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
+            <CopyRow label={t("ipAddress")} value={joinAddress} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <CopyRow label={t("port")} value={String(serverJoinPort(server))} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <CopyRow label={t("password")} value={server.password || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
+            <CopyRow label={t("password")} value={joinPassword || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <Button className="mt-4 w-full" variant="secondary" onClick={() => void copy("Invite", invite)}>
               <Copy aria-hidden="true" />
               {copied === "Invite" ? t("copied") : t("copyInviteText")}

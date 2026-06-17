@@ -1993,6 +1993,7 @@ func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 	}
 	for index := range servers {
 		servers[index] = h.refreshServerStatus(r.Context(), servers[index])
+		h.attachServerJoinInfo(&servers[index])
 	}
 	writeJSON(w, http.StatusOK, servers)
 }
@@ -2017,6 +2018,7 @@ func (h *Handler) getServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server = h.refreshServerStatus(r.Context(), server)
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusOK, server)
 }
 
@@ -2053,6 +2055,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.config.updated", fmt.Sprintf("Updated config for %s", server.Name))
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusOK, server)
 }
 
@@ -2123,6 +2126,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.created", fmt.Sprintf("Created server %s", server.Name))
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusCreated, server)
 }
 
@@ -2145,6 +2149,7 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "server.start.queued", fmt.Sprintf("Queued start for server %s", server.Name))
 	go h.runServerLifecycle(server.ID, h.runStartServer)
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2173,6 +2178,7 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "server.stop.queued", fmt.Sprintf("Queued stop for server %s", server.Name))
 	go h.runServerLifecycle(server.ID, h.runStopServer)
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2195,6 +2201,7 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "server.restart.queued", fmt.Sprintf("Queued restart for server %s", server.Name))
 	go h.runServerLifecycle(server.ID, h.runRestartServer)
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2729,6 +2736,7 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "server.delete.queued", fmt.Sprintf("Queued delete for server %s", server.Name))
 	go h.runServerLifecycle(server.ID, h.runDeleteServer)
+	h.attachServerJoinInfo(&server)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2995,6 +3003,38 @@ func hydrateServerConfigPayload(server *domain.GameServerInstance) {
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload); err == nil {
 		server.ConfigPayload = payload
+	}
+}
+
+func (h *Handler) attachServerJoinInfo(server *domain.GameServerInstance) {
+	if server == nil {
+		return
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if ok {
+		if joinProvider, ok := gameProvider.(provider.JoinInfoProvider); ok {
+			server.JoinInfo = joinProvider.JoinInfo(*server)
+			return
+		}
+	}
+	server.JoinInfo = defaultJoinInfo(*server)
+}
+
+func defaultJoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+	port := server.HostPort
+	if port == 0 {
+		port = server.Port
+	}
+	address := "127.0.0.1"
+	invite := fmt.Sprintf("Join %s at %s:%d", server.Name, address, port)
+	if server.Password != "" {
+		invite += " password: " + server.Password
+	}
+	return domain.ServerJoinInfo{
+		Address:    address,
+		Port:       port,
+		Password:   server.Password,
+		InviteText: invite,
 	}
 }
 

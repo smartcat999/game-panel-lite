@@ -108,10 +108,19 @@ type GameServerInstance struct {
 	Config                TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
 	ConfigPayloadJSON     string         `json:"-" gorm:"column:config_payload_json"`
 	ConfigPayload         map[string]any `json:"configPayload,omitempty" gorm:"-"`
+	JoinInfo              ServerJoinInfo `json:"joinInfo,omitempty" gorm:"-"`
 	ConfigRevision        int            `json:"configRevision"`
 	AppliedConfigRevision int            `json:"appliedConfigRevision"`
 	CreatedAt             time.Time      `json:"createdAt"`
 	UpdatedAt             time.Time      `json:"updatedAt"`
+}
+
+type ServerJoinInfo struct {
+	Address      string   `json:"address"`
+	Port         int      `json:"port"`
+	Password     string   `json:"password,omitempty"`
+	InviteText   string   `json:"inviteText"`
+	Instructions []string `json:"instructions,omitempty"`
 }
 
 type TerrariaConfig struct {

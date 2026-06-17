@@ -49,6 +49,14 @@ export type ResourceLimits = {
   memoryLimitMb: number;
 };
 
+export type ServerJoinInfo = {
+  address: string;
+  port: number;
+  password?: string;
+  inviteText: string;
+  instructions?: string[];
+};
+
 export type Server = {
   id: string;
   name: string;
@@ -73,6 +81,7 @@ export type Server = {
   memory: string;
   config: TerrariaConfig;
   configPayload?: Record<string, unknown>;
+  joinInfo?: ServerJoinInfo;
   configPendingRestart?: boolean;
 };
 

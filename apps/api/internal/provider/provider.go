@@ -28,6 +28,10 @@ type ServerRuntimeProvider interface {
 	RuntimeOptionsForServer(domain.GameServerInstance) (runtime.ContainerOptions, error)
 }
 
+type JoinInfoProvider interface {
+	JoinInfo(domain.GameServerInstance) domain.ServerJoinInfo
+}
+
 type PlayerListProvider interface {
 	PlayerListCommand(domain.TerrariaConfig) string
 	ParsePlayerListOutput([]string) []domain.Player

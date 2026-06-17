@@ -49,6 +49,9 @@ func (VanillaProvider) RenderConfig(config domain.TerrariaConfig) (string, error
 func (VanillaProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return vanillaRuntimeOptions(config)
 }
+func (VanillaProvider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+	return terrariaJoinInfo(server)
+}
 func (VanillaProvider) PlayerListCommand(config domain.TerrariaConfig) string {
 	return localizedPlayerListCommand(config)
 }
@@ -90,6 +93,9 @@ func (TModLoaderProvider) RenderConfig(config domain.TerrariaConfig) (string, er
 func (TModLoaderProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	return tModLoaderRuntimeOptions(config)
 }
+func (TModLoaderProvider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+	return terrariaJoinInfo(server)
+}
 func (TModLoaderProvider) PlayerListCommand(config domain.TerrariaConfig) string {
 	return localizedPlayerListCommand(config)
 }
@@ -110,6 +116,35 @@ func vanillaCapabilities() domain.ProviderCapabilities {
 		Backups:         true,
 		Versions:        true,
 	}
+}
+
+func terrariaJoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+	address := defaultJoinAddress
+	port := joinPort(server)
+	password := server.Password
+	invite := fmt.Sprintf("Join %s in Terraria at %s:%d", server.Name, address, port)
+	if password != "" {
+		invite += " password: " + password
+	}
+	return domain.ServerJoinInfo{
+		Address:    address,
+		Port:       port,
+		Password:   password,
+		InviteText: invite,
+		Instructions: []string{
+			"Open Terraria multiplayer.",
+			"Choose Join via IP and enter the address and port.",
+		},
+	}
+}
+
+const defaultJoinAddress = "127.0.0.1"
+
+func joinPort(server domain.GameServerInstance) int {
+	if server.HostPort > 0 {
+		return server.HostPort
+	}
+	return server.Port
 }
 
 func configSchema() []domain.ProviderConfigField {

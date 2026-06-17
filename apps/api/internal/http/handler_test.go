@@ -973,6 +973,9 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 	if server.ConfigPayload["saveName"] != "Starter Save" || server.ConfigPayload["adminPassword"] != "admin-secret" {
 		t.Fatalf("expected semantic Palworld config payload, got %+v", server.ConfigPayload)
 	}
+	if server.JoinInfo.Port != 18211 || server.JoinInfo.Address != "127.0.0.1" || !strings.Contains(server.JoinInfo.InviteText, "Palworld") {
+		t.Fatalf("expected Palworld join info in create response, got %+v", server.JoinInfo)
+	}
 
 	start := httptest.NewRecorder()
 	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))

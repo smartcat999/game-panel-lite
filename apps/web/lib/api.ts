@@ -142,6 +142,7 @@ type ApiServer = {
   sourceWorldName?: string;
   config?: TerrariaConfig;
   configPayload?: Record<string, unknown>;
+  joinInfo?: Server["joinInfo"];
   configRevision?: number;
   appliedConfigRevision?: number;
 };
@@ -303,6 +304,7 @@ function toServer(server: ApiServer): Server {
     memory: "0 MB",
     config,
     configPayload: server.configPayload,
+    joinInfo: server.joinInfo,
     configPendingRestart: server.status === "running" && configRevision > appliedConfigRevision
   };
 }

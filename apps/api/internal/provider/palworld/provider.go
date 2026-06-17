@@ -114,6 +114,29 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 	}
 }
 
+func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+	address := "127.0.0.1"
+	port := server.HostPort
+	if port == 0 {
+		port = server.Port
+	}
+	password := server.Password
+	invite := fmt.Sprintf("Join %s in Palworld at %s:%d", server.Name, address, port)
+	if password != "" {
+		invite += " password: " + password
+	}
+	return domain.ServerJoinInfo{
+		Address:    address,
+		Port:       port,
+		Password:   password,
+		InviteText: invite,
+		Instructions: []string{
+			"Open Palworld multiplayer.",
+			"Join by address using the host and port shown here.",
+		},
+	}
+}
+
 func (provider Provider) RenderServerConfig(server domain.GameServerInstance) (string, error) {
 	return provider.RenderConfig(configFromServer(server))
 }

@@ -119,6 +119,10 @@ Completed:
 - Palworld runtime spec generation now reads semantic payload fields directly instead of relying only on Terraria-compatible config fields.
 - Palworld config schema now exposes `saveName`, `serverPassword`, and `adminPassword` field names.
 - Added provider and handler tests proving Palworld runtime env/config text are generated from `configPayload`.
+- Added provider-specific join info through a `JoinInfoProvider` contract.
+- Server list/detail/create/lifecycle responses now include `joinInfo` with address, external port, password, invite text, and optional game-specific instructions.
+- Terraria and Palworld now generate game-specific invite text instead of relying on a frontend-only generic string.
+- Frontend server detail and copy-invite actions now use backend `joinInfo` with safe fallback for older responses.
 
 ## Verification Log
 
@@ -239,6 +243,25 @@ Result:
 - `go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
+2026-06-18 Goal 3 provider-specific join info:
+
+```bash
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web test
+pnpm --filter @gamepanel-lite/web build
+```
+
+Result:
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 
 ## Known Limitations
