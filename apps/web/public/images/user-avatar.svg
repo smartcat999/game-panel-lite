@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc" shape-rendering="crispEdges">
+  <title id="title">Pixel player avatar</title>
+  <desc id="desc">A small Terraria-style pixel player portrait.</desc>
+  <rect width="96" height="96" rx="48" fill="#151c2a"/>
+  <rect x="8" y="8" width="80" height="80" rx="40" fill="#253246"/>
+  <rect x="16" y="16" width="64" height="64" rx="32" fill="#6a4b2f"/>
+  <rect x="24" y="18" width="48" height="18" fill="#8a5c36"/>
+  <rect x="20" y="28" width="56" height="20" fill="#8a5c36"/>
+  <rect x="24" y="38" width="48" height="34" fill="#d49a63"/>
+  <rect x="18" y="42" width="10" height="20" fill="#d49a63"/>
+  <rect x="68" y="42" width="10" height="20" fill="#d49a63"/>
+  <rect x="34" y="48" width="8" height="8" fill="#152033"/>
+  <rect x="56" y="48" width="8" height="8" fill="#152033"/>
+  <rect x="44" y="60" width="10" height="6" fill="#8f4a42"/>
+  <rect x="28" y="72" width="40" height="12" fill="#2f7a3f"/>
+  <rect x="34" y="76" width="28" height="8" fill="#7bd978"/>
+  <rect x="18" y="76" width="14" height="8" fill="#214a2d"/>
+  <rect x="64" y="76" width="14" height="8" fill="#214a2d"/>
+  <rect x="8" y="8" width="80" height="80" rx="40" fill="none" stroke="#7bd978" stroke-opacity=".62" stroke-width="4"/>
+</svg>

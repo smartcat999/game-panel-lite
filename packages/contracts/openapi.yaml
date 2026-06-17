@@ -1,0 +1,562 @@
+openapi: 3.1.0
+info:
+  title: GamePanel Lite API
+  version: 0.1.0
+servers:
+  - url: http://localhost:4000
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: API is healthy
+  /api/version:
+    get:
+      summary: Product version
+      responses:
+        "200":
+          description: Product version
+  /api/runtime/docker:
+    get:
+      summary: Read cached Docker runtime availability
+      responses:
+        "200":
+          description: Docker status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DockerStatus"
+  /api/settings:
+    get:
+      summary: Read local API settings
+      responses:
+        "200":
+          description: Local settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+  /api/activity:
+    get:
+      summary: List recent activity events
+      responses:
+        "200":
+          description: Recent activity events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+  /api/servers:
+    get:
+      summary: List servers
+      responses:
+        "200":
+          description: Server list
+    post:
+      summary: Create server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerKey, config]
+              properties:
+                name:
+                  type: string
+                providerKey:
+                  type: string
+                  enum: [terraria-vanilla, terraria-tmodloader]
+                config:
+                  $ref: "#/components/schemas/TerrariaConfig"
+                hostPort:
+                  type: integer
+                version:
+                  type: string
+                resources:
+                  $ref: "#/components/schemas/ResourceLimits"
+      responses:
+        "201":
+          description: Created server
+  /api/servers/{id}:
+    get:
+      summary: Get server
+      responses:
+        "200":
+          description: Server detail
+    delete:
+      summary: Queue async server deletion; backend removes runtime/container resources in the background
+      responses:
+        "202":
+          description: Delete accepted; returned server is marked deleting until the background task completes
+  /api/servers/{id}/config:
+    put:
+      summary: Update persisted Terraria server config, external port, and resource limits; running servers apply changes after restart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config]
+              properties:
+                config:
+                  $ref: "#/components/schemas/TerrariaConfig"
+                hostPort:
+                  type: integer
+                resources:
+                  $ref: "#/components/schemas/ResourceLimits"
+      responses:
+        "200":
+          description: Updated server config
+        "409":
+          description: Server lifecycle action is already in progress
+  /api/servers/{id}/start:
+    post:
+      summary: Queue async server start, creating a runtime container from persisted config and data when needed
+      responses:
+        "202":
+          description: Start accepted; returned server is marked starting until the background task completes
+  /api/servers/{id}/stop:
+    post:
+      summary: Stop server
+      responses:
+        "200":
+          description: Stopped server
+  /api/servers/{id}/restart:
+    post:
+      summary: Queue async server restart, creating a runtime container from persisted config and data when needed
+      responses:
+        "202":
+          description: Restart accepted; returned server is marked restarting until the background task completes
+  /api/servers/{id}/command:
+    post:
+      summary: Send a console command to a running server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  maxLength: 200
+      responses:
+        "200":
+          description: Command sent
+        "409":
+          description: Server is not running
+  /api/servers/{id}/logs:
+    get:
+      summary: Stream server logs with SSE
+      responses:
+        "200":
+          description: SSE log stream
+  /api/servers/{id}/logs/snapshot:
+    get:
+      summary: Read recent server log lines without following the live stream
+      responses:
+        "200":
+          description: Recent log lines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogSnapshot"
+  /api/servers/{id}/stats:
+    get:
+      summary: Read runtime CPU and memory stats for a running server
+      responses:
+        "200":
+          description: Runtime stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerStats"
+  /api/servers/{id}/mods:
+    get:
+      summary: List tModLoader mods
+      responses:
+        "200":
+          description: Mod list
+  /api/servers/{id}/mods/upload:
+    post:
+      summary: Upload tModLoader mod metadata or .tmod file
+      responses:
+        "200":
+          description: Updated existing mod file record
+        "201":
+          description: Uploaded mod file
+  /api/servers/{id}/mods/workshop:
+    post:
+      summary: Import tModLoader Workshop IDs as server mod records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workshopIds]
+              properties:
+                workshopIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Imported Workshop mod records; runtime install.txt is generated when the server starts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModFile"
+  /api/servers/{id}/mods/{modId}:
+    patch:
+      summary: Enable or disable a tModLoader mod
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated mod state
+    delete:
+      summary: Delete tModLoader mod file
+      responses:
+        "200":
+          description: Deleted mod
+  /api/mods:
+    get:
+      summary: List unassigned global mod library files
+      responses:
+        "200":
+          description: Global mod library
+  /api/mods/upload:
+    post:
+      summary: Upload a mod to the global mod library
+      responses:
+        "200":
+          description: Updated existing global mod file record
+        "201":
+          description: Uploaded global mod
+  /api/mods/workshop:
+    post:
+      summary: Import tModLoader Workshop IDs as global mod library records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workshopIds]
+              properties:
+                workshopIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: Imported Workshop mod records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModFile"
+  /api/mods/{id}/assign:
+    post:
+      summary: Copy a global mod library item to a tModLoader server
+      responses:
+        "200":
+          description: Updated existing assigned mod file record
+        "201":
+          description: Assigned mod
+  /api/mods/{id}:
+    delete:
+      summary: Delete an unassigned global mod library item
+      responses:
+        "200":
+          description: Deleted global mod
+  /api/mod-packs:
+    get:
+      summary: List reusable tModLoader mod packs
+      responses:
+        "200":
+          description: Mod pack list
+    post:
+      summary: Create a reusable tModLoader mod pack from global mod library items
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, modIds]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                modIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Created mod pack
+  /api/mod-packs/{id}:
+    delete:
+      summary: Delete a reusable tModLoader mod pack
+      responses:
+        "200":
+          description: Deleted mod pack
+  /api/worlds:
+    get:
+      summary: List worlds
+      responses:
+        "200":
+          description: World list
+  /api/worlds/import:
+    post:
+      summary: Import .wld world file
+      responses:
+        "200":
+          description: Updated existing world file record
+        "201":
+          description: Imported world
+  /api/worlds/{id}/assign:
+    post:
+      summary: Assign world to server
+      responses:
+        "200":
+          description: Assigned world
+  /api/worlds/{id}/download:
+    get:
+      summary: Download world file
+      responses:
+        "200":
+          description: World file
+  /api/worlds/{id}:
+    delete:
+      summary: Delete world file
+      responses:
+        "200":
+          description: Deleted world
+  /api/backups:
+    get:
+      summary: List backups
+      responses:
+        "200":
+          description: Backup list
+  /api/servers/{id}/backups:
+    post:
+      summary: Create manual backup
+      responses:
+        "201":
+          description: Created backup
+  /api/backups/{id}/restore:
+    post:
+      summary: Restore backup
+      responses:
+        "200":
+          description: Restored backup
+  /api/backups/{id}/download:
+    get:
+      summary: Download backup archive
+      responses:
+        "200":
+          description: Backup archive
+  /api/backups/{id}:
+    delete:
+      summary: Delete backup
+      responses:
+        "200":
+          description: Deleted backup
+  /api/terraria/presets:
+    get:
+      summary: List Terraria server presets
+      responses:
+        "200":
+          description: Presets
+  /api/terraria/versions:
+    get:
+      summary: List supported provider versions
+      responses:
+        "200":
+          description: Version lists keyed by provider
+  /api/terraria/config/preview:
+    post:
+      summary: Render serverconfig.txt preview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [config]
+              properties:
+                config:
+                  $ref: "#/components/schemas/TerrariaConfig"
+      responses:
+        "200":
+          description: Rendered config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serverconfig:
+                    type: string
+        "400":
+          description: Invalid config
+components:
+  schemas:
+    DockerStatus:
+      type: object
+      required: [available, message, host, lastCheckedAt]
+      properties:
+        available:
+          type: boolean
+        message:
+          type: string
+        host:
+          type: string
+        lastCheckedAt:
+          type: string
+          format: date-time
+    AppSettings:
+      type: object
+      required: [host, port, dataDir, dbPath, dockerHost]
+      properties:
+        host:
+          type: string
+        port:
+          type: string
+        dataDir:
+          type: string
+        dbPath:
+          type: string
+        dockerHost:
+          type: string
+    ActivityEvent:
+      type: object
+      required: [id, type, message, createdAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        type:
+          type: string
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ServerStats:
+      type: object
+      required: [cpuPercent, memoryMb, memoryLimitMb]
+      properties:
+        cpuPercent:
+          type: number
+        memoryMb:
+          type: number
+        memoryLimitMb:
+          type: number
+    ResourceLimits:
+      type: object
+      description: Optional maximum resources for one game server container. Zero means unlimited.
+      properties:
+        cpuLimitCores:
+          type: number
+          minimum: 0
+          maximum: 64
+          description: Maximum CPU cores. Zero means Docker default/unlimited.
+        memoryLimitMb:
+          type: integer
+          minimum: 0
+          maximum: 262144
+          description: Maximum memory in MB. Zero means Docker default/unlimited.
+    LogSnapshot:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          items:
+            type: string
+    ModFile:
+      type: object
+      required: [id, instanceId, fileName, sizeBytes, enabled, createdAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        fileName:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        enabled:
+          type: boolean
+        source:
+          type: string
+          enum: [upload, workshop]
+          description: Upload means a .tmod file; workshop means an independent Steam Workshop item.
+        workshopId:
+          type: string
+          description: Steam Workshop item ID when source is workshop.
+        createdAt:
+          type: string
+          format: date-time
+    TerrariaConfig:
+      type: object
+      required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, autoCreateWorld]
+      properties:
+        serverName:
+          type: string
+        worldName:
+          type: string
+        worldSize:
+          type: string
+          enum: [small, medium, large]
+        worldEvil:
+          type: string
+          enum: [random, corruption, crimson]
+        difficulty:
+          type: string
+          enum: [journey, classic, expert, master]
+        maxPlayers:
+          type: integer
+          minimum: 1
+          maximum: 255
+        port:
+          type: integer
+          minimum: 1024
+          maximum: 65535
+        password:
+          type: string
+        motd:
+          type: string
+        seed:
+          type: string
+        secure:
+          type: boolean
+        language:
+          type: string
+          default: en-US
+          description: Fixed to en-US by the backend in V1 so console commands stay consistent with Terraria/tModLoader originals.
+        autoCreateWorld:
+          type: boolean
