@@ -125,6 +125,7 @@ export async function previewTerrariaConfig(config: TerrariaConfig): Promise<str
 type ApiServer = {
   id: string;
   name: string;
+  gameKey?: string;
   providerKey: ProviderKey;
   status: Server["status"];
   worldName: string;
@@ -280,6 +281,8 @@ function toServer(server: ApiServer): Server {
   return {
     id: server.id,
     name: server.name,
+    gameKey: server.gameKey,
+    providerKey: server.providerKey,
     mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
     status: server.status,
     world: server.worldName,

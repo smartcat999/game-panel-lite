@@ -74,12 +74,17 @@ Completed:
 - Updated the create-server first step to render games from `GET /api/games`.
 - Updated create-server version loading to use `GET /api/games/terraria/versions`.
 - Shows planned games such as Palworld as roadmap-visible but not creatable yet.
+- Server detail now resolves provider capabilities from `GET /api/games`.
+- Server detail hides unsupported tabs for console, worlds, backups, and mods.
+- Server detail resource queries only run when the provider supports the corresponding feature.
+- Console quick actions hide kick and ban commands when the provider does not support them.
+- Server API mapping now preserves `gameKey` and `providerKey` for frontend capability lookups.
 
 In progress:
-- Capability-based hiding of unsupported server detail tabs/actions.
+- Full game-specific create-server flow.
 
 Not started:
-- Full game-specific create-server flow.
+- Goal 3 Palworld provider runtime implementation.
 
 ## Verification Log
 
@@ -115,6 +120,25 @@ Result:
 - `pnpm --filter @gamepanel-lite/web build` passed.
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 
+2026-06-18 Goal 2 capability-aware detail UI:
+
+```bash
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+pnpm --filter @gamepanel-lite/web test
+```
+
+Result:
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed.
+- `pnpm --filter @gamepanel-lite/web test` still could not start because local dependencies are missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
@@ -125,4 +149,4 @@ Result:
 
 ## Next Work
 
-Hide unsupported server detail tabs/actions by provider capability, then continue toward full game-specific create-server flows.
+Continue toward full game-specific create-server flows, then begin Goal 3 Palworld provider runtime implementation.

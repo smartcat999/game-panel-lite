@@ -86,6 +86,7 @@ describe("api mappers", () => {
         JSON.stringify({
           id: "server-1",
           name: "Friends Server",
+          gameKey: "terraria",
           providerKey: "terraria-vanilla",
           status: "running",
           worldName: "Friends World",
@@ -102,6 +103,8 @@ describe("api mappers", () => {
     const server = await getServer("server-1");
 
     expect(server.players).toBe(2);
+    expect(server.gameKey).toBe("terraria");
+    expect(server.providerKey).toBe("terraria-vanilla");
   });
 
   it("loads game catalog entries with provider capabilities", async () => {

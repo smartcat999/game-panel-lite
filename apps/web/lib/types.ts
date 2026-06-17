@@ -52,6 +52,8 @@ export type ResourceLimits = {
 export type Server = {
   id: string;
   name: string;
+  gameKey?: GameKey;
+  providerKey?: ProviderKey;
   mode: ServerMode;
   status: ServerStatus;
   world: string;

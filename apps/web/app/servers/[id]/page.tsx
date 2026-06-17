@@ -21,6 +21,7 @@ import {
   downloadBackupFile,
   downloadWorldFile,
   getDockerStatus,
+  listGames,
   getServer,
   getServerLogSnapshot,
   getServerStats,
@@ -44,13 +45,24 @@ import { describeResourceAction, formatServerDetailError, isServerLifecyclePendi
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
-import type { Backup, ModFile, ModPack, ResourceLimits, Server, World } from "@/lib/types";
+import type { Backup, ModFile, ModPack, ProviderCapabilities, ResourceLimits, Server, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 type ModInstallSource = "library" | "packs";
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
+
+const defaultCapabilities: ProviderCapabilities = {
+  consoleCommands: true,
+  playerList: true,
+  kickPlayer: true,
+  banPlayer: true,
+  saveSnapshots: true,
+  backups: true,
+  mods: false,
+  versions: true
+};
 
 function formatCpuLimitLabel(value: number, t: (key: "unlimited" | "cpuCoresValue", values?: Record<string, string | number>) => string) {
   return value > 0 ? t("cpuCoresValue", { cores: value }) : t("unlimited");
@@ -71,28 +83,37 @@ export default function ServerDetailPage() {
 
   const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
   const server = query.data;
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, enabled: Boolean(server), staleTime: 5 * 60 * 1000, retry: false });
+  const providerCatalog = useMemo(
+    () => gamesQuery.data?.flatMap((game) => game.providers).find((provider) => provider.key === server?.providerKey),
+    [gamesQuery.data, server?.providerKey]
+  );
+  const capabilities = providerCatalog?.capabilities ?? {
+    ...defaultCapabilities,
+    mods: server?.mode === "tmodloader"
+  };
   const statsQuery = useQuery({ queryKey: ["server-stats", id], queryFn: () => getServerStats(id), enabled: server?.status === "running", refetchInterval: 3000, retry: false });
-  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server), retry: false });
-  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server), retry: false });
+  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server && capabilities.saveSnapshots), retry: false });
+  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server && capabilities.backups), retry: false });
   const modsQuery = useQuery({
     queryKey: ["mods", id],
     queryFn: () => listMods(id),
-    enabled: Boolean(server && server.mode === "tmodloader"),
+    enabled: Boolean(server && capabilities.mods),
     retry: false
   });
   const globalModsQuery = useQuery({
     queryKey: ["global-mods"],
     queryFn: listGlobalMods,
-    enabled: Boolean(server && server.mode === "tmodloader"),
+    enabled: Boolean(server && capabilities.mods),
     retry: false
   });
   const modPacksQuery = useQuery({
     queryKey: ["mod-packs"],
     queryFn: listModPacks,
-    enabled: Boolean(server && server.mode === "tmodloader"),
+    enabled: Boolean(server && capabilities.mods),
     retry: false
   });
-  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && server.mode === "tmodloader"), retry: false, refetchInterval: 5000 });
+  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && capabilities.mods), retry: false, refetchInterval: 5000 });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -395,6 +416,20 @@ export default function ServerDetailPage() {
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
   const modPacks = useMemo(() => modPacksQuery.data ?? [], [modPacksQuery.data]);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
+  const tabs: { id: TabId; label: string }[] = useMemo(() => [
+    { id: "overview", label: t("tabOverview") },
+    ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
+    { id: "logs", label: t("tabLogs") },
+    { id: "config", label: t("tabConfig") },
+    ...(capabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
+    ...(capabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
+    ...(capabilities.mods ? [{ id: "mods" as const, label: t("tabMods") }] : [])
+  ], [capabilities.backups, capabilities.consoleCommands, capabilities.mods, capabilities.saveSnapshots, t]);
+  useEffect(() => {
+    if (server && !tabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, server, tabs]);
   if (!server) {
     return (
       <>
@@ -404,15 +439,6 @@ export default function ServerDetailPage() {
     );
   }
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: "overview", label: t("tabOverview") },
-    { id: "console", label: t("tabConsole") },
-    { id: "logs", label: t("tabLogs") },
-    { id: "config", label: t("tabConfig") },
-    { id: "worlds", label: t("tabWorlds") },
-    { id: "backups", label: t("tabBackups") },
-    ...(server.mode === "tmodloader" ? [{ id: "mods" as const, label: t("tabMods") }] : [])
-  ];
   const invite = serverInviteText(server);
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const copy = async (label: string, value: string) => {
@@ -504,6 +530,7 @@ export default function ServerDetailPage() {
 
           {activeTab === "overview" && (
             <OverviewTab
+              capabilities={capabilities}
               server={server}
               worldCount={serverWorlds.length}
               backupCount={serverBackups.length}
@@ -520,6 +547,7 @@ export default function ServerDetailPage() {
               logStatus={logStatus}
               logStatusLabel={logStatusLabel}
               logStreamPaused={logStreamPaused}
+              capabilities={capabilities}
               server={server}
               viewportRef={logViewportRef}
               onChangeCommand={(value) => {
@@ -584,7 +612,7 @@ export default function ServerDetailPage() {
               onRestore={setPendingRestore}
             />
           )}
-          {activeTab === "mods" && server.mode === "tmodloader" && (
+          {activeTab === "mods" && capabilities.mods && (
             <ModsTab
               availableMods={globalMods}
               assigning={modAssign.isPending}
@@ -626,22 +654,24 @@ export default function ServerDetailPage() {
             onEdit={() => setResourceDialogOpen(true)}
             onRestart={() => setPendingConfigRestart(true)}
           />
-          <Card className="p-4">
-            <h2 className="font-semibold">{t("worldTemplate")}</h2>
-            {server.sourceWorldId ? (
-              <Link
-                href={`/worlds/${server.sourceWorldId}`}
-                className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-              >
-                <p className="truncate text-sm font-medium text-slate-100">{server.sourceWorldName || t("worldTemplate")}</p>
-                <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
-              </Link>
-            ) : (
-              <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
-                <p className="truncate text-sm font-medium text-slate-500">{t("noWorldTemplate")}</p>
-              </div>
-            )}
-          </Card>
+          {capabilities.saveSnapshots && (
+            <Card className="p-4">
+              <h2 className="font-semibold">{t("worldTemplate")}</h2>
+              {server.sourceWorldId ? (
+                <Link
+                  href={`/worlds/${server.sourceWorldId}`}
+                  className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                >
+                  <p className="truncate text-sm font-medium text-slate-100">{server.sourceWorldName || t("worldTemplate")}</p>
+                  <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
+                </Link>
+              ) : (
+                <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
+                  <p className="truncate text-sm font-medium text-slate-500">{t("noWorldTemplate")}</p>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       </div>
 
@@ -798,12 +828,14 @@ export default function ServerDetailPage() {
 }
 
 function OverviewTab({
+  capabilities,
   server,
   worldCount,
   backupCount,
   modCount,
   onSelectTab
 }: {
+  capabilities: ProviderCapabilities;
   server: Server;
   worldCount: number;
   backupCount: number;
@@ -822,9 +854,9 @@ function OverviewTab({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <SummaryButton icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} onClick={() => onSelectTab("worlds")} />
-        <SummaryButton icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} onClick={() => onSelectTab("backups")} />
-        {server.mode === "tmodloader" && <SummaryButton icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} onClick={() => onSelectTab("mods")} />}
+        {capabilities.saveSnapshots && <SummaryButton icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} onClick={() => onSelectTab("worlds")} />}
+        {capabilities.backups && <SummaryButton icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} onClick={() => onSelectTab("backups")} />}
+        {capabilities.mods && <SummaryButton icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} onClick={() => onSelectTab("mods")} />}
       </div>
       <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
         <h2 className="font-semibold">{t("serverInfo")}</h2>
@@ -909,6 +941,7 @@ function ConsoleTab({
   command,
   commandPending,
   consoleError,
+  capabilities,
   logs,
   logStatus,
   logStatusLabel,
@@ -924,6 +957,7 @@ function ConsoleTab({
   command: string;
   commandPending: boolean;
   consoleError: string;
+  capabilities: ProviderCapabilities;
   logs: string[];
   logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   logStatusLabel: string;
@@ -974,7 +1008,7 @@ function ConsoleTab({
           logStatus={logStatus}
           viewportRef={viewportRef}
         />
-        <ConsoleCommandPanel commandPending={commandPending} disabled={!consoleEnabled} onRun={onQuickCommand} />
+        <ConsoleCommandPanel capabilities={capabilities} commandPending={commandPending} disabled={!consoleEnabled} onRun={onQuickCommand} />
         <form className="flex items-center gap-2 border-t border-panel-line bg-slate-950/70 px-3 py-3" onSubmit={onSubmit}>
           <span className={consoleEnabled ? "font-mono text-sm text-panel-green" : "font-mono text-sm text-slate-600"}>$</span>
           <input
@@ -1004,10 +1038,12 @@ type ParameterCommand = {
 };
 
 function ConsoleCommandPanel({
+  capabilities,
   commandPending,
   disabled,
   onRun
 }: {
+  capabilities: ProviderCapabilities;
   commandPending: boolean;
   disabled: boolean;
   onRun: (value: string) => void;
@@ -1019,8 +1055,8 @@ function ConsoleCommandPanel({
   const blocked = disabled || commandPending;
   const parameterCommands: ParameterCommand[] = [
     { key: "say", label: t("consoleActionSay"), command: "say", icon: <Megaphone aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionSayPlaceholder") },
-    { key: "kick", label: t("consoleActionKick"), command: "kick", icon: <UserX aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPlayerPlaceholder"), danger: true },
-    { key: "ban", label: t("consoleActionBan"), command: "ban", icon: <Ban aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPlayerPlaceholder"), danger: true },
+    ...(capabilities.kickPlayer ? [{ key: "kick", label: t("consoleActionKick"), command: "kick", icon: <UserX aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPlayerPlaceholder"), danger: true }] : []),
+    ...(capabilities.banPlayer ? [{ key: "ban", label: t("consoleActionBan"), command: "ban", icon: <Ban aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPlayerPlaceholder"), danger: true }] : []),
     { key: "password", label: t("consoleActionPassword"), command: "password", icon: <KeyRound aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionPasswordPlaceholder") },
     { key: "motd", label: t("consoleActionMotd"), command: "motd", icon: <Megaphone aria-hidden="true" className="size-3.5" />, placeholder: t("consoleActionMotdPlaceholder") }
   ];
