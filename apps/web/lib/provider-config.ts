@@ -36,10 +36,10 @@ export function providerPayloadToTerrariaConfig(
   }
 
   const serverName = stringValue(payload.serverName) || fallback.serverName || "Game Server";
-  const worldName = stringValue(payload.worldName) || stringValue(payload.saveName) || fallback.worldName || serverName;
+  const worldName = stringValue(payload.worldName) || stringValue(payload.saveName) || stringValue(payload.clusterName) || fallback.worldName || serverName;
   const maxPlayers = numberValue(payload.maxPlayers, fallback.maxPlayers);
   const password = stringValue(payload.password) ?? stringValue(payload.serverPassword) ?? fallback.password ?? "";
-  const motd = stringValue(payload.motd) ?? stringValue(payload.adminPassword) ?? fallback.motd ?? "";
+  const motd = stringValue(payload.motd) ?? stringValue(payload.adminPassword) ?? stringValue(payload.clusterToken) ?? fallback.motd ?? "";
 
   return {
     ...fallback,

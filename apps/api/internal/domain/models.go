@@ -67,10 +67,12 @@ type ProviderCatalog struct {
 const (
 	GameTerraria GameKey = "terraria"
 	GamePalworld GameKey = "palworld"
+	GameDST      GameKey = "dont-starve-together"
 
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
 	ProviderPalworld           ProviderKey = "palworld"
+	ProviderDST                ProviderKey = "dont-starve-together"
 
 	StatusCreating   ServerStatus = "creating"
 	StatusStarting   ServerStatus = "starting"

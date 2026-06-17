@@ -13,4 +13,10 @@ describe("createReviewInvitePreview", () => {
       "Join Pal Friends in Palworld at 127.0.0.1:18211"
     );
   });
+
+  it("creates Don't Starve Together invite preview text", () => {
+    expect(createReviewInvitePreview({ gameKey: "dont-starve-together", hostPortLabel: "11099", password: "secret", serverName: "DST Friends" })).toBe(
+      "Join DST Friends in Don't Starve Together at 127.0.0.1:11099 password: secret"
+    );
+  });
 });

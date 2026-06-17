@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 )
@@ -19,10 +20,10 @@ func TestRegistryFindsTerrariaProviders(t *testing.T) {
 }
 
 func TestRegistryBuildsGameCatalog(t *testing.T) {
-	registry := NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider())
+	registry := NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider())
 	games := registry.Games()
-	if len(games) < 2 {
-		t.Fatalf("expected available Terraria and Palworld entries, got %+v", games)
+	if len(games) < 3 {
+		t.Fatalf("expected available Terraria, Palworld, and DST entries, got %+v", games)
 	}
 	terrariaGame, ok := registry.Game(domain.GameTerraria)
 	if !ok {
@@ -46,5 +47,15 @@ func TestRegistryBuildsGameCatalog(t *testing.T) {
 	}
 	if palworldGame.Providers[0].Key != domain.ProviderPalworld || !palworldGame.Providers[0].Capabilities.SaveSnapshots {
 		t.Fatalf("expected Palworld provider capabilities, got %+v", palworldGame.Providers[0])
+	}
+	dstGame, ok := registry.Game(domain.GameDST)
+	if !ok {
+		t.Fatal("expected DST game catalog entry")
+	}
+	if dstGame.Status != "available" || len(dstGame.Providers) != 1 {
+		t.Fatalf("expected available DST entry with provider, got %+v", dstGame)
+	}
+	if dstGame.Providers[0].Key != domain.ProviderDST || !dstGame.Providers[0].Capabilities.Backups {
+		t.Fatalf("expected DST provider capabilities, got %+v", dstGame.Providers[0])
 	}
 }

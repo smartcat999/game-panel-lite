@@ -24,6 +24,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -88,7 +89,7 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 		cfg,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		db,
-		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider()),
+		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider()),
 		runtimeAdapter,
 		monitor,
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
@@ -993,6 +994,73 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 	}
 	if spec.Port != 8211 || spec.Options.PortProtocol != "udp" {
 		t.Fatalf("expected Palworld UDP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
+	}
+	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+}
+
+func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, _ := newTestRouterWithAdapter(t, adapter)
+	payload := `{
+		"name":"DST Friends",
+		"providerKey":"dont-starve-together",
+		"hostPort":11099,
+		"config":{
+			"serverName":"DST Friends",
+			"clusterName":"FriendsCluster",
+			"maxPlayers":6,
+			"serverPassword":"join-secret",
+			"clusterToken":"klei-token",
+			"gameMode":"endless"
+		}
+	}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var server domain.GameServerInstance
+	if err := json.Unmarshal(create.Body.Bytes(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if server.GameKey != domain.GameDST || server.ProviderKey != domain.ProviderDST {
+		t.Fatalf("expected DST server identity, got %+v", server)
+	}
+	if server.Port != 10999 || server.HostPort != 11099 {
+		t.Fatalf("expected DST ports, got internal=%d external=%d", server.Port, server.HostPort)
+	}
+	if server.WorldName != "FriendsCluster" || server.Password != "join-secret" || server.Config.MOTD != "klei-token" {
+		t.Fatalf("expected DST config to be mapped to runtime fields, got server=%+v config=%+v", server, server.Config)
+	}
+	if server.ConfigPayload["clusterName"] != "FriendsCluster" || server.ConfigPayload["clusterToken"] != "klei-token" || server.ConfigPayload["gameMode"] != "endless" {
+		t.Fatalf("expected semantic DST config payload, got %+v", server.ConfigPayload)
+	}
+	if server.JoinInfo.Port != 11099 || server.JoinInfo.Address != "127.0.0.1" || !strings.Contains(server.JoinInfo.InviteText, "Don't Starve Together") {
+		t.Fatalf("expected DST join info in create response, got %+v", server.JoinInfo)
+	}
+
+	start := httptest.NewRecorder()
+	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if start.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", start.Code, start.Body.String())
+	}
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected async start to create runtime container")
+	}
+	if spec.Image != "smartcat99999/dst-server:latest" {
+		t.Fatalf("expected DST image, got %q", spec.Image)
+	}
+	if spec.Port != 10999 || spec.Options.PortProtocol != "udp" {
+		t.Fatalf("expected DST UDP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
+	}
+	if !strings.Contains(spec.Options.Files["dst/cluster.ini"], "game_mode = endless") {
+		t.Fatalf("expected DST cluster.ini in runtime files, got %+v", spec.Options.Files)
+	}
+	if spec.Options.Files["dst/server_token.txt"] != "klei-token\n" {
+		t.Fatalf("expected DST token file, got %q", spec.Options.Files["dst/server_token.txt"])
 	}
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 }

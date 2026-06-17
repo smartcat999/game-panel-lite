@@ -156,6 +156,7 @@ export function CreateServerWizard() {
         motd: ""
       });
       setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, {
+        clusterName: `${game.name} Cluster`,
         serverName: `${game.name} Server`,
         saveName: `${game.name} Save`
       }));
@@ -983,6 +984,7 @@ function ReviewStep({
   const { t } = useI18n();
   const invitePreview = createReviewInvitePreview({
     gameKey,
+    gameName,
     hostPortLabel,
     password: config.password,
     serverName: config.serverName || gameName

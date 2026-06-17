@@ -312,6 +312,35 @@ Result:
 - `go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 
+2026-06-18 Goal 5 Don't Starve Together provider slice:
+
+Changes:
+- Added `dont-starve-together` game/provider domain keys.
+- Added backend DST provider metadata, config schema, validation, runtime options, generated `cluster.ini`, `server_token.txt`, `Master/server.ini`, and join info.
+- Registered DST in the backend provider registry and application startup.
+- Added create/config payload decoding for DST fields such as `clusterName`, `clusterToken`, and `gameMode`.
+- Create-server review now uses the catalog game name for invite previews, including Don't Starve Together.
+- Added backend provider, registry, and create/start runtime spec tests for DST.
+
+Verification:
+
+```bash
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web test
+pnpm --filter @gamepanel-lite/web build
+```
+
+Result:
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
@@ -321,7 +350,8 @@ Result:
 - Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
 - Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
 - Non-Terraria create flow still uses a compatibility config envelope internally while the backend provider payload model is being phased in.
+- Don't Starve Together is wired through catalog/create/runtime spec generation, but the `smartcat99999/dst-server:latest` image still needs a build script and real Docker host verification before claiming full runtime support.
 
 ## Next Work
 
-Manually verify Palworld start with Docker, then continue Goal 5 with a Don't Starve Together provider slice now that the create form can render provider schema fields generically.
+Add the Don't Starve Together image build script/runtime verification path, then continue toward Minecraft Java provider planning.

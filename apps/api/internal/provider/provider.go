@@ -83,6 +83,12 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 			Description: "Survival crafting server for small friend groups. Provider implementation is next on the roadmap.",
 			Status:      "planned",
 		},
+		domain.GameDST: {
+			Key:         domain.GameDST,
+			Name:        "Don't Starve Together",
+			Description: "Co-op survival server for private friend groups.",
+			Status:      "planned",
+		},
 	}
 	for _, item := range r.List() {
 		entry := games[item.GameKey()]

@@ -23,6 +23,7 @@ import (
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -2915,6 +2916,8 @@ func decodeProviderRuntimeConfig(providerKey domain.ProviderKey, raw json.RawMes
 		return config, payload, err
 	}
 	switch providerKey {
+	case domain.ProviderDST:
+		return decodeDSTRuntimeConfig(raw, fallback)
 	case domain.ProviderPalworld:
 		return decodePalworldRuntimeConfig(raw, fallback)
 	default:
@@ -2973,7 +2976,36 @@ func decodePalworldRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaCo
 	return config, configPayloadJSON, err
 }
 
+func decodeDSTRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaConfig) (domain.TerrariaConfig, string, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return domain.TerrariaConfig{}, "", fmt.Errorf("invalid config payload")
+	}
+	config := dst.ConfigFromPayload(payload, fallback)
+	configPayloadJSON, err := json.Marshal(dst.PayloadFromConfig(config, stringPayload(payload, "gameMode")))
+	if err != nil {
+		return domain.TerrariaConfig{}, "", err
+	}
+	return config, string(configPayloadJSON), nil
+}
+
+func stringPayload(payload map[string]any, key string) string {
+	value, ok := payload[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
 func providerConfigPayloadJSON(providerKey domain.ProviderKey, config domain.TerrariaConfig) (string, error) {
+	if providerKey == domain.ProviderDST {
+		buf, err := json.Marshal(dst.PayloadFromConfig(config, "survival"))
+		return string(buf), err
+	}
 	if providerKey == domain.ProviderPalworld {
 		payload := map[string]any{
 			"serverName":    config.ServerName,

@@ -62,4 +62,20 @@ describe("provider config helpers", () => {
     expect(config.maxPlayers).toBe(16);
     expect(config.password).toBe("secret");
   });
+
+  it("maps DST cluster fields into the compatibility config envelope", () => {
+    const config = providerPayloadToTerrariaConfig("dont-starve-together", {
+      clusterName: "FriendsCluster",
+      clusterToken: "klei-token",
+      maxPlayers: 6,
+      serverName: "DST Friends",
+      serverPassword: "join-secret"
+    });
+
+    expect(config.serverName).toBe("DST Friends");
+    expect(config.worldName).toBe("FriendsCluster");
+    expect(config.maxPlayers).toBe(6);
+    expect(config.password).toBe("join-secret");
+    expect(config.motd).toBe("klei-token");
+  });
 });
