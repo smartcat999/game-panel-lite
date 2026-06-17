@@ -119,6 +119,7 @@ export default function ModsPage() {
   const filteredModPacks = gameFilter === "all" || gameFilter === "terraria" ? modPacks : [];
   const filteredRecommendedMods = gameFilter === "all" || gameFilter === "terraria" ? recommendedMods : [];
   const selectedPackModCount = selectedPackModIds.length;
+  const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
   const togglePackMod = (modId: string) => {
     setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
@@ -344,6 +345,11 @@ export default function ModsPage() {
               <span className="text-sm font-medium text-white">{t("modLibrary")}</span>
               <span className="text-xs text-slate-500">{t("selectedForPack", { count: selectedPackModCount })}</span>
             </div>
+            {selectedPackDependencies.length > 0 ? (
+              <div className="border-b border-panel-line bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">
+                {t("packWillIncludeDependencies", { names: selectedPackDependencies.join(", ") })}
+              </div>
+            ) : null}
             <div className="max-h-64 space-y-2 overflow-y-auto p-3">
               {globalMods.map((mod) => {
                 const selected = selectedPackModIds.includes(mod.id);
@@ -357,10 +363,15 @@ export default function ModsPage() {
                     )}
                     onClick={() => togglePackMod(mod.id)}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-white">{modDisplayName(mod, locale)}</span>
-                      <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size} · {localizeRelativeTime(mod.created, locale)}</span>
-                    </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-white">{modDisplayName(mod, locale)}</span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size} · {localizeRelativeTime(mod.created, locale)}</span>
+                        {mod.dependencies && mod.dependencies.length > 0 ? (
+                          <span className="mt-1 block truncate text-xs text-panel-gold">
+                            {t("dependencies")}: {mod.dependencies.join(", ")}
+                          </span>
+                        ) : null}
+                      </span>
                     {selected && <Check aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}
                   </button>
                 );
@@ -544,6 +555,11 @@ function RecommendedModCard({
             </div>
           </div>
           <p className="mt-3 line-clamp-3 text-sm text-slate-400">{sanitizeWorkshopDescription(item.description || item.title)}</p>
+          {item.dependencies && item.dependencies.length > 0 ? (
+            <p className="mt-3 truncate text-xs text-panel-gold">
+              {locale === "zh" ? "依赖" : "Dependencies"}: {item.dependencies.join(", ")}
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {(item.tags ?? []).slice(0, 4).map((tag) => (
               <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
@@ -571,6 +587,23 @@ function RecommendedModCard({
       </div>
     </Card>
   );
+}
+
+function dependencyNamesForSelectedMods(mods: ModFile[], selectedIds: string[]) {
+  const selected = new Set(selectedIds);
+  const names = new Set<string>();
+  for (const mod of mods) {
+    if (!selected.has(mod.id)) continue;
+    for (const dependency of mod.dependencies ?? []) {
+      const dependencyInstalled = mods.some((item) => selected.has(item.id) && modIdentity(item) === dependency);
+      if (!dependencyInstalled) names.add(dependency);
+    }
+  }
+  return Array.from(names);
+}
+
+function modIdentity(mod: ModFile) {
+  return mod.modName || mod.title || mod.fileName.replace(/\.[^.]+$/, "");
 }
 
 function StatPill({ icon, label }: { icon: ReactNode; label: string }) {

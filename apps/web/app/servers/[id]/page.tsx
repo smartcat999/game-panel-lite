@@ -725,7 +725,13 @@ export default function ServerDetailPage() {
         eyebrow={t("confirmActionEyebrow")}
         title={t("confirmModInstallTitle", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "" })}
         description={t("confirmModInstallDescription", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "", server: server.name })}
-        detail={pendingModAssign ? <DetailLine label={t("modsTitle")} value={modDisplayName(pendingModAssign, locale)} /> : undefined}
+        detail={pendingModAssign ? (
+          <InstallDependencyDetail
+            dependencies={pendingModAssign.dependencies ?? []}
+            label={t("modsTitle")}
+            name={modDisplayName(pendingModAssign, locale)}
+          />
+        ) : undefined}
         cancelLabel={t("cancel")}
         confirmLabel={modAssign.isPending ? t("actionWorking") : t("installToServer")}
         confirmVariant="gold"
@@ -738,7 +744,14 @@ export default function ServerDetailPage() {
         eyebrow={t("confirmActionEyebrow")}
         title={t("confirmModPackInstallTitle", { name: pendingModPackInstall?.name ?? "" })}
         description={t("confirmModPackInstallDescription", { name: pendingModPackInstall?.name ?? "", server: server.name })}
-        detail={pendingModPackInstall ? <DetailLine label={t("modPacks")} value={pendingModPackInstall.name} /> : undefined}
+        detail={pendingModPackInstall ? (
+          <InstallDependencyDetail
+            dependencies={dependencyNamesForMods(pendingModPackInstall.mods)}
+            label={t("modPacks")}
+            name={pendingModPackInstall.name}
+            summary={t("modPackIncludes", { count: pendingModPackInstall.mods.length })}
+          />
+        ) : undefined}
         cancelLabel={t("cancel")}
         confirmLabel={modPackAssign.isPending ? t("actionWorking") : t("installModPack")}
         confirmVariant="gold"
@@ -1657,7 +1670,7 @@ function ModsTab({
                           className="rounded-none border-0 bg-transparent px-4"
                           key={mod.id}
                           title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{modDisplayName(mod, locale)}</Link>}
-                          meta={`${mod.size} · ${localizeRelativeTime(mod.created, locale)}`}
+                          meta={modInstallMeta(mod, locale, t)}
                           actions={
                             <Button
                               variant="secondary"
@@ -1685,7 +1698,7 @@ function ModsTab({
                         className="rounded-none border-0 bg-transparent px-4"
                         key={pack.id}
                         title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                        meta={`${pack.mods.length} · ${pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ")}`}
+                        meta={modPackInstallMeta(pack, locale, t)}
                         actions={
                           <Button
                             variant="secondary"
@@ -1802,6 +1815,46 @@ function ServerModRow({
       </div>
     </div>
   );
+}
+
+function InstallDependencyDetail({
+  dependencies,
+  label,
+  name,
+  summary
+}: {
+  dependencies: string[];
+  label: string;
+  name: string;
+  summary?: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-1">
+      <DetailLine label={label} value={name} />
+      {summary ? <p className="text-slate-400">{summary}</p> : null}
+      {dependencies.length > 0 ? (
+        <p className="text-panel-gold">{t("autoInstallDependencies", { names: dependencies.join(", ") })}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function modInstallMeta(mod: ModFile, locale: ReturnType<typeof useI18n>["locale"], t: ReturnType<typeof useI18n>["t"]) {
+  const base = `${mod.size} · ${localizeRelativeTime(mod.created, locale)}`;
+  if (!mod.dependencies || mod.dependencies.length === 0) return base;
+  return `${base} · ${t("dependencies")}: ${mod.dependencies.join(", ")}`;
+}
+
+function modPackInstallMeta(pack: ModPack, locale: ReturnType<typeof useI18n>["locale"], t: ReturnType<typeof useI18n>["t"]) {
+  const description = pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ");
+  const dependencies = dependencyNamesForMods(pack.mods);
+  const dependencyText = dependencies.length > 0 ? ` · ${t("dependencies")}: ${dependencies.join(", ")}` : "";
+  return `${pack.mods.length} · ${description}${dependencyText}`;
+}
+
+function dependencyNamesForMods(mods: ModFile[]) {
+  return Array.from(new Set(mods.flatMap((mod) => mod.dependencies ?? [])));
 }
 
 function modRuntimeStatus(mod: ModFile): { labelKey: "enabled" | "disabled" | "notApplied" | "pendingRestart"; className: string } {

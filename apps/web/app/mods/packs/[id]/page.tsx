@@ -34,6 +34,10 @@ export default function ModPackDetailPage() {
     () => globalMods.filter((mod) => selectedModIds.includes(mod.id)),
     [globalMods, selectedModIds]
   );
+  const selectedDependencies = useMemo(
+    () => dependencyNamesForSelectedMods(globalMods, selectedModIds),
+    [globalMods, selectedModIds]
+  );
   const availableMods = useMemo(
     () => globalMods.filter((mod) => !selectedModIds.includes(mod.id)),
     [globalMods, selectedModIds]
@@ -112,6 +116,9 @@ export default function ModPackDetailPage() {
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-slate-100">{modDisplayName(mod, locale)}</span>
                     <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size}</span>
+                    {mod.dependencies && mod.dependencies.length > 0 ? (
+                      <span className="mt-1 block truncate text-xs text-panel-gold">{t("dependencies")}: {mod.dependencies.join(", ")}</span>
+                    ) : null}
                   </span>
                   <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
                 </Link>
@@ -193,6 +200,11 @@ export default function ModPackDetailPage() {
                   onSelect={(modId) => setSelectedModIds((current) => [...current, modId])}
                 />
               </div>
+              {selectedDependencies.length > 0 ? (
+                <div className="mt-4 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">
+                  {t("packWillIncludeDependencies", { names: selectedDependencies.join(", ") })}
+                </div>
+              ) : null}
               <div className="mt-4 flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setEditing(false)} disabled={save.isPending}>{t("cancel")}</Button>
                 <Button
@@ -275,6 +287,9 @@ function SelectionColumn({
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium text-white">{modDisplayName(mod, locale)}</span>
               <span className="mt-0.5 block truncate text-xs text-slate-500">{mod.size}</span>
+              {mod.dependencies && mod.dependencies.length > 0 ? (
+                <span className="mt-1 block truncate text-xs text-panel-gold">{mod.dependencies.join(", ")}</span>
+              ) : null}
             </span>
             {selected ? <X aria-hidden="true" className="size-4 shrink-0 text-slate-400" /> : <Check aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}
           </button>
@@ -283,4 +298,21 @@ function SelectionColumn({
       </div>
     </div>
   );
+}
+
+function dependencyNamesForSelectedMods(mods: ModFile[], selectedIds: string[]) {
+  const selected = new Set(selectedIds);
+  const names = new Set<string>();
+  for (const mod of mods) {
+    if (!selected.has(mod.id)) continue;
+    for (const dependency of mod.dependencies ?? []) {
+      const dependencyInstalled = mods.some((item) => selected.has(item.id) && modIdentity(item) === dependency);
+      if (!dependencyInstalled) names.add(dependency);
+    }
+  }
+  return Array.from(names);
+}
+
+function modIdentity(mod: ModFile) {
+  return mod.modName || mod.title || mod.fileName.replace(/\.[^.]+$/, "");
 }

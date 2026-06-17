@@ -90,6 +90,16 @@ export default function ModDetailPage() {
           </Card>
 
           <Card className="p-4">
+            <h2 className="font-semibold">{t("dependencyRelations")}</h2>
+            <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
+              <p className="text-xs text-slate-500">{t("dependencies")}</p>
+              <p className="mt-1 text-sm font-medium text-slate-100">
+                {source.mod.dependencies && source.mod.dependencies.length > 0 ? source.mod.dependencies.join(", ") : t("noDependencies")}
+              </p>
+            </div>
+          </Card>
+
+          <Card className="p-4">
             <h2 className="font-semibold">{t("relatedMods")}</h2>
             <div className="mt-4 grid gap-2">
               {sources.map((item) => (
