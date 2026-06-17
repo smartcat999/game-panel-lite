@@ -32,8 +32,9 @@ func (VanillaProvider) Capabilities() domain.ProviderCapabilities {
 func (VanillaProvider) ConfigSchema() []domain.ProviderConfigField {
 	return configSchema()
 }
-func (VanillaProvider) Image() string      { return VanillaImageForVersion(vanillaVersions[0]) }
-func (VanillaProvider) Versions() []string { return vanillaVersions }
+func (VanillaProvider) SaveDisplayName() string { return "world" }
+func (VanillaProvider) Image() string           { return VanillaImageForVersion(vanillaVersions[0]) }
+func (VanillaProvider) Versions() []string      { return vanillaVersions }
 func (VanillaProvider) ImageFor(version string) string {
 	return VanillaImageForVersion(version)
 }
@@ -54,6 +55,12 @@ func (VanillaProvider) JoinInfo(server domain.GameServerInstance) domain.ServerJ
 }
 func (VanillaProvider) PlayerListCommand(config domain.TerrariaConfig) string {
 	return localizedPlayerListCommand(config)
+}
+func (VanillaProvider) KickCommand(player string) string {
+	return "kick " + sanitizePlayerName(player)
+}
+func (VanillaProvider) BanCommand(player string) string {
+	return "ban " + sanitizePlayerName(player)
 }
 func (VanillaProvider) ParsePlayerListOutput(lines []string) []domain.Player {
 	return parsePlayingCommandOutput(lines)
@@ -76,8 +83,9 @@ func (TModLoaderProvider) Capabilities() domain.ProviderCapabilities {
 func (TModLoaderProvider) ConfigSchema() []domain.ProviderConfigField {
 	return configSchema()
 }
-func (TModLoaderProvider) Image() string      { return TModLoaderImageForVersion(tmodloaderVersions[0]) }
-func (TModLoaderProvider) Versions() []string { return tmodloaderVersions }
+func (TModLoaderProvider) SaveDisplayName() string { return "world" }
+func (TModLoaderProvider) Image() string           { return TModLoaderImageForVersion(tmodloaderVersions[0]) }
+func (TModLoaderProvider) Versions() []string      { return tmodloaderVersions }
 func (TModLoaderProvider) ImageFor(version string) string {
 	return TModLoaderImageForVersion(version)
 }
@@ -98,6 +106,12 @@ func (TModLoaderProvider) JoinInfo(server domain.GameServerInstance) domain.Serv
 }
 func (TModLoaderProvider) PlayerListCommand(config domain.TerrariaConfig) string {
 	return localizedPlayerListCommand(config)
+}
+func (TModLoaderProvider) KickCommand(player string) string {
+	return "kick " + sanitizePlayerName(player)
+}
+func (TModLoaderProvider) BanCommand(player string) string {
+	return "ban " + sanitizePlayerName(player)
 }
 func (TModLoaderProvider) ParsePlayerListOutput(lines []string) []domain.Player {
 	return parsePlayingCommandOutput(lines)
@@ -273,6 +287,18 @@ func localizedPlayerListCommand(config domain.TerrariaConfig) string {
 	default:
 		return "playing"
 	}
+}
+
+func sanitizePlayerName(player string) string {
+	player = strings.TrimSpace(player)
+	player = strings.Trim(player, "\"'")
+	player = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == ';' {
+			return -1
+		}
+		return r
+	}, player)
+	return player
 }
 
 func parsePlayerLogEvent(line string) (domain.PlayerLogEvent, bool) {

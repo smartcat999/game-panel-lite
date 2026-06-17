@@ -25,6 +25,7 @@ import (
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -89,7 +90,7 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 		cfg,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		db,
-		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider()),
+		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider(), minecraft.NewProvider()),
 		runtimeAdapter,
 		monitor,
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
@@ -1077,6 +1078,76 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 }
 
+func TestCreateMinecraftServerUsesMinecraftRuntimeSpec(t *testing.T) {
+	adapter := newCaptureCreateAdapter()
+	router, db, _ := newTestRouterWithAdapter(t, adapter)
+	payload := `{
+		"name":"Friends MC",
+		"providerKey":"minecraft",
+		"hostPort":25565,
+		"version":"1.20.4",
+		"config":{
+			"serverName":"Friends MC",
+			"worldName":"survival-island",
+			"maxPlayers":12,
+			"gameMode":"survival",
+			"difficulty":"normal",
+			"onlineMode":true,
+			"whitelistEnabled":false,
+			"eulaAccepted":true
+		}
+	}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var server domain.GameServerInstance
+	if err := json.Unmarshal(create.Body.Bytes(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if server.GameKey != domain.GameMinecraft || server.ProviderKey != domain.ProviderMinecraft {
+		t.Fatalf("expected Minecraft server identity, got %+v", server)
+	}
+	if server.Port != 25565 {
+		t.Fatalf("expected Minecraft internal port 25565, got %d", server.Port)
+	}
+	if server.ConfigPayload["eulaAccepted"] != true || server.ConfigPayload["gameMode"] != "survival" {
+		t.Fatalf("expected semantic Minecraft config payload, got %+v", server.ConfigPayload)
+	}
+	if !strings.Contains(server.JoinInfo.InviteText, "Minecraft") || server.JoinInfo.Port != 25565 {
+		t.Fatalf("expected Minecraft join info in create response, got %+v", server.JoinInfo)
+	}
+
+	start := httptest.NewRecorder()
+	router.ServeHTTP(start, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/start", nil))
+	if start.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", start.Code, start.Body.String())
+	}
+	var spec runtime.ContainerSpec
+	select {
+	case spec = <-adapter.created:
+	case <-time.After(time.Second):
+		t.Fatal("expected async start to create runtime container")
+	}
+	if spec.Image != "itzg/minecraft-server:1.20.4" {
+		t.Fatalf("expected Minecraft image, got %q", spec.Image)
+	}
+	if spec.Port != 25565 || spec.Options.PortProtocol != "tcp" {
+		t.Fatalf("expected Minecraft TCP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
+	}
+	properties := spec.Options.Files["data/server.properties"]
+	for _, expected := range []string{"max-players=12", "motd=Friends MC", "level-name=survival-island", "gamemode=survival", "difficulty=normal", "online-mode=true"} {
+		if !strings.Contains(properties, expected) {
+			t.Fatalf("expected server.properties to contain %q, got:\n%s", expected, properties)
+		}
+	}
+	if spec.Options.Files["data/eula.txt"] != "eula=true\n" {
+		t.Fatalf("expected Minecraft eula=true, got %q", spec.Options.Files["data/eula.txt"])
+	}
+	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+}
+
 func TestUpdatePalworldConfigPersistsSemanticPayload(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("palworld-config-update", cfg.DataDir)
@@ -1128,12 +1199,15 @@ func TestGameCatalogEndpoints(t *testing.T) {
 	}
 	var terrariaGame *domain.GameCatalogEntry
 	var palworldGame *domain.GameCatalogEntry
+	var minecraftGame *domain.GameCatalogEntry
 	for index := range games {
 		switch games[index].Key {
 		case domain.GameTerraria:
 			terrariaGame = &games[index]
 		case domain.GamePalworld:
 			palworldGame = &games[index]
+		case domain.GameMinecraft:
+			minecraftGame = &games[index]
 		}
 	}
 	if terrariaGame == nil || terrariaGame.Status != "available" || len(terrariaGame.Providers) != 2 {
@@ -1141,6 +1215,9 @@ func TestGameCatalogEndpoints(t *testing.T) {
 	}
 	if palworldGame == nil || palworldGame.Status != "available" || len(palworldGame.Providers) != 1 {
 		t.Fatalf("expected available Palworld entry with provider, got %+v", palworldGame)
+	}
+	if minecraftGame == nil || minecraftGame.Status != "available" || len(minecraftGame.Providers) != 1 {
+		t.Fatalf("expected available Minecraft entry with provider, got %+v", minecraftGame)
 	}
 	if palworldGame.Providers[0].Key != domain.ProviderPalworld || palworldGame.Providers[0].Capabilities.ConsoleCommands {
 		t.Fatalf("expected Palworld provider without console commands, got %+v", palworldGame.Providers[0])
@@ -3486,6 +3563,233 @@ func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "backups", "backup-source", backup.FileName)); !os.IsNotExist(err) {
 		t.Fatalf("expected backup archive deleted, stat err=%v", err)
+	}
+}
+
+func TestServerSavesEndpointsAreGameAware(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("minecraft-saves", cfg.DataDir)
+	server.GameKey = domain.GameMinecraft
+	server.ProviderKey = domain.ProviderMinecraft
+	server.Port = 25565
+	server.DataDir = filepath.Join(cfg.DataDir, "instances", "minecraft-saves")
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "level.dat"), []byte("world-data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := httptest.NewRecorder()
+	router.ServeHTTP(snapshot, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/minecraft-saves/saves/snapshot", nil))
+	if snapshot.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected save snapshot 201, got %d: %s", snapshot.Code, snapshot.Body.String())
+	}
+	var snapshotResp struct {
+		SaveDisplayName string        `json:"saveDisplayName"`
+		Save            domain.Backup `json:"save"`
+	}
+	if err := json.Unmarshal(snapshot.Body.Bytes(), &snapshotResp); err != nil {
+		t.Fatal(err)
+	}
+	if snapshotResp.SaveDisplayName != "world" {
+		t.Fatalf("expected Minecraft save display name 'world', got %q", snapshotResp.SaveDisplayName)
+	}
+	if snapshotResp.Save.InstanceID != "minecraft-saves" {
+		t.Fatalf("expected snapshot tied to server, got %+v", snapshotResp.Save)
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/minecraft-saves/saves", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected saves list 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var listResp struct {
+		SaveDisplayName string          `json:"saveDisplayName"`
+		Saves           []domain.Backup `json:"saves"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &listResp); err != nil {
+		t.Fatal(err)
+	}
+	if listResp.SaveDisplayName != "world" || len(listResp.Saves) != 1 {
+		t.Fatalf("expected one save with game-aware name, got %+v", listResp)
+	}
+
+	download := httptest.NewRecorder()
+	router.ServeHTTP(download, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/minecraft-saves/saves/"+snapshotResp.Save.ID+"/download", nil))
+	if download.Code != stdhttp.StatusOK {
+		t.Fatalf("expected save download 200, got %d: %s", download.Code, download.Body.String())
+	}
+	if download.Body.Len() == 0 {
+		t.Fatal("expected non-empty save archive")
+	}
+
+	restore := httptest.NewRecorder()
+	router.ServeHTTP(restore, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/minecraft-saves/saves/"+snapshotResp.Save.ID+"/restore", nil))
+	if restore.Code != stdhttp.StatusOK {
+		t.Fatalf("expected save restore 200, got %d: %s", restore.Code, restore.Body.String())
+	}
+
+	crossInstance := httptest.NewRecorder()
+	router.ServeHTTP(crossInstance, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/minecraft-saves/saves/unknown-id/download", nil))
+	if crossInstance.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected missing save 404, got %d", crossInstance.Code)
+	}
+}
+
+func TestFriendInviteAndPublicHostFlow(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("invite-server", cfg.DataDir)
+	server.GameKey = domain.GameTerraria
+	server.ProviderKey = domain.ProviderTerrariaVanilla
+	server.Port = 7777
+	server.HostPort = 17777
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	joinInfo := httptest.NewRecorder()
+	router.ServeHTTP(joinInfo, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/invite-server/join-info", nil))
+	if joinInfo.Code != stdhttp.StatusOK {
+		t.Fatalf("expected join-info 200, got %d: %s", joinInfo.Code, joinInfo.Body.String())
+	}
+	var info domain.ServerJoinInfo
+	if err := json.Unmarshal(joinInfo.Body.Bytes(), &info); err != nil {
+		t.Fatal(err)
+	}
+	if info.Port != 17777 || !strings.Contains(info.InviteText, "127.0.0.1:17777") {
+		t.Fatalf("expected default join info, got %+v", info)
+	}
+
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/settings/public-host", bytes.NewBufferString(`{"publicHost":"play.example.com"}`)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected public host update 200, got %d: %s", update.Code, update.Body.String())
+	}
+
+	joinInfoAfter := httptest.NewRecorder()
+	router.ServeHTTP(joinInfoAfter, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/invite-server/join-info", nil))
+	var infoAfter domain.ServerJoinInfo
+	if err := json.Unmarshal(joinInfoAfter.Body.Bytes(), &infoAfter); err != nil {
+		t.Fatal(err)
+	}
+	if infoAfter.Address != "play.example.com" || !strings.Contains(infoAfter.InviteText, "play.example.com:17777") {
+		t.Fatalf("expected public host in join info, got %+v", infoAfter)
+	}
+
+	settings := httptest.NewRecorder()
+	router.ServeHTTP(settings, httptest.NewRequest(stdhttp.MethodGet, "/api/settings", nil))
+	var settingsResp map[string]string
+	if err := json.Unmarshal(settings.Body.Bytes(), &settingsResp); err != nil {
+		t.Fatal(err)
+	}
+	if settingsResp["publicHost"] != "play.example.com" {
+		t.Fatalf("expected settings to expose public host, got %+v", settingsResp)
+	}
+}
+
+func TestGameCatalogServerCountsAndRecommendedVersion(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	for i := 0; i < 2; i++ {
+		server := testServer("mc-"+fmt.Sprint(i), cfg.DataDir)
+		server.GameKey = domain.GameMinecraft
+		server.ProviderKey = domain.ProviderMinecraft
+		if err := db.CreateServer(context.Background(), &server); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
+	var games []domain.GameCatalogEntry
+	if err := json.Unmarshal(list.Body.Bytes(), &games); err != nil {
+		t.Fatal(err)
+	}
+	var minecraftGame *domain.GameCatalogEntry
+	for index := range games {
+		if games[index].Key == domain.GameMinecraft {
+			minecraftGame = &games[index]
+		}
+	}
+	if minecraftGame == nil {
+		t.Fatal("expected minecraft game in catalog")
+	}
+	if minecraftGame.ServerCount != 2 {
+		t.Fatalf("expected minecraft server count 2, got %d", minecraftGame.ServerCount)
+	}
+	if minecraftGame.CoverImage != "minecraft" {
+		t.Fatalf("expected minecraft cover image, got %q", minecraftGame.CoverImage)
+	}
+	if minecraftGame.Providers[0].RecommendedVersion == "" {
+		t.Fatalf("expected recommended version set, got %+v", minecraftGame.Providers[0])
+	}
+}
+
+func TestPlayerManagementGatedByProviderCapability(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	palworldServer := testServer("palworld-players", cfg.DataDir)
+	palworldServer.GameKey = domain.GamePalworld
+	palworldServer.ProviderKey = domain.ProviderPalworld
+	if err := db.CreateServer(context.Background(), &palworldServer); err != nil {
+		t.Fatal(err)
+	}
+
+	palworldPlayers := httptest.NewRecorder()
+	router.ServeHTTP(palworldPlayers, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/palworld-players/players", nil))
+	if palworldPlayers.Code != stdhttp.StatusOK {
+		t.Fatalf("expected players 200, got %d: %s", palworldPlayers.Code, palworldPlayers.Body.String())
+	}
+	var palworldResp struct {
+		Supported bool            `json:"supported"`
+		Players   []domain.Player `json:"players"`
+	}
+	if err := json.Unmarshal(palworldPlayers.Body.Bytes(), &palworldResp); err != nil {
+		t.Fatal(err)
+	}
+	if palworldResp.Supported {
+		t.Fatal("expected Palworld player list to be unsupported")
+	}
+
+	palworldKick := httptest.NewRecorder()
+	router.ServeHTTP(palworldKick, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/palworld-players/players/Alice/kick", nil))
+	if palworldKick.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected Palworld kick to be rejected 400, got %d: %s", palworldKick.Code, palworldKick.Body.String())
+	}
+
+	palworldBan := httptest.NewRecorder()
+	router.ServeHTTP(palworldBan, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/palworld-players/players/Alice/ban", nil))
+	if palworldBan.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected Palworld ban to be rejected 400, got %d: %s", palworldBan.Code, palworldBan.Body.String())
+	}
+
+	terraria := testServer("terraria-players", cfg.DataDir)
+	terraria.GameKey = domain.GameTerraria
+	terraria.ProviderKey = domain.ProviderTerrariaVanilla
+	if err := db.CreateServer(context.Background(), &terraria); err != nil {
+		t.Fatal(err)
+	}
+	terrariaPlayers := httptest.NewRecorder()
+	router.ServeHTTP(terrariaPlayers, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/terraria-players/players", nil))
+	if terrariaPlayers.Code != stdhttp.StatusOK {
+		t.Fatalf("expected terraria players 200, got %d: %s", terrariaPlayers.Code, terrariaPlayers.Body.String())
+	}
+	var terrariaResp struct {
+		Supported bool            `json:"supported"`
+		Players   []domain.Player `json:"players"`
+	}
+	if err := json.Unmarshal(terrariaPlayers.Body.Bytes(), &terrariaResp); err != nil {
+		t.Fatal(err)
+	}
+	if !terrariaResp.Supported {
+		t.Fatal("expected Terraria player list to be supported")
+	}
+
+	terrariaKick := httptest.NewRecorder()
+	router.ServeHTTP(terrariaKick, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/terraria-players/players/Alice/kick", nil))
+	if terrariaKick.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected terraria kick conflict for stopped server, got %d: %s", terrariaKick.Code, terrariaKick.Body.String())
 	}
 }
 

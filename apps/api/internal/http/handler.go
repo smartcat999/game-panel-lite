@@ -24,6 +24,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -85,6 +86,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/runtime/docker", h.dockerStatus)
 		r.Get("/api/runtime/stats", h.runtimeStats)
 		r.Get("/api/settings", h.getSettings)
+		r.Put("/api/settings/public-host", h.updatePublicHost)
 		r.Get("/api/activity", h.listActivity)
 		r.Get("/api/games", h.listGames)
 		r.Get("/api/games/{gameKey}", h.getGame)
@@ -112,6 +114,14 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/backups/{id}/download", h.downloadBackup)
 		r.Post("/api/backups/{id}/restore", h.restoreBackup)
 		r.Delete("/api/backups/{id}", h.deleteBackup)
+		r.Get("/api/servers/{id}/saves", h.listServerSaves)
+		r.Post("/api/servers/{id}/saves/snapshot", h.createServerSaveSnapshot)
+		r.Get("/api/servers/{id}/saves/{saveId}/download", h.downloadServerSave)
+		r.Post("/api/servers/{id}/saves/{saveId}/restore", h.restoreServerSave)
+		r.Get("/api/servers/{id}/players", h.listServerPlayers)
+		r.Post("/api/servers/{id}/players/{player}/kick", h.kickServerPlayer)
+		r.Post("/api/servers/{id}/players/{player}/ban", h.banServerPlayer)
+		r.Get("/api/servers/{id}/join-info", h.getServerJoinInfo)
 		r.Get("/api/servers/{id}/mods", h.listMods)
 		r.Post("/api/servers/{id}/mods/upload", h.uploadMod)
 		r.Post("/api/servers/{id}/mods/workshop", h.importWorkshopMods)
@@ -1814,6 +1824,277 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "restored", "backupId": item.ID})
 }
 
+func (h *Handler) saveDisplayName(providerKey domain.ProviderKey) string {
+	gameProvider, ok := h.provider.Get(providerKey)
+	if !ok {
+		return "save"
+	}
+	if saveProvider, ok := gameProvider.(provider.SaveMetadataProvider); ok {
+		return saveProvider.SaveDisplayName()
+	}
+	return "save"
+}
+
+func (h *Handler) listServerSaves(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	backups, err := h.store.ListBackupsByInstance(r.Context(), server.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	svc := backupsvc.NewService(h.cfg.DataDir)
+	visible := make([]domain.Backup, 0, len(backups))
+	for _, b := range backups {
+		path, err := svc.Path(b.InstanceID, b.FileName)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(path); err != nil {
+			_ = h.store.DeleteBackup(r.Context(), b.ID)
+			continue
+		}
+		visible = append(visible, b)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"saveDisplayName": h.saveDisplayName(server.ProviderKey),
+		"saves":           visible,
+	})
+}
+
+func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, server.DataDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	item := domain.Backup{ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: server.WorldName, SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
+	if err := h.store.CreateBackup(r.Context(), &item); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	saveName := h.saveDisplayName(server.ProviderKey)
+	h.recordActivity(r.Context(), server.ID, "save.snapshot.created", fmt.Sprintf("Created %s snapshot %s for %s", saveName, item.FileName, server.Name))
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"saveDisplayName": saveName,
+		"save":            item,
+	})
+}
+
+func (h *Handler) downloadServerSave(w http.ResponseWriter, r *http.Request) {
+	instanceID := chi.URLParam(r, "id")
+	saveID := chi.URLParam(r, "saveId")
+	item, err := h.store.GetBackup(r.Context(), saveID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "save snapshot not found")
+		return
+	}
+	if item.InstanceID != instanceID {
+		writeError(w, http.StatusNotFound, "save snapshot not found")
+		return
+	}
+	path, err := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := os.Stat(path); err != nil {
+		_ = h.store.DeleteBackup(r.Context(), item.ID)
+		writeError(w, http.StatusNotFound, "save snapshot file not found on disk")
+		return
+	}
+	http.ServeFile(w, r, path)
+}
+
+func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
+	instanceID := chi.URLParam(r, "id")
+	saveID := chi.URLParam(r, "saveId")
+	item, err := h.store.GetBackup(r.Context(), saveID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "save snapshot not found")
+		return
+	}
+	if item.InstanceID != instanceID {
+		writeError(w, http.StatusNotFound, "save snapshot not found")
+		return
+	}
+	server, err := h.store.GetServer(r.Context(), instanceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if isServerLockedForMutation(server.Status) {
+		writeError(w, http.StatusConflict, "stop the server before restoring a save snapshot")
+		return
+	}
+	missing, err := h.pruneMissingBackupSource(r.Context(), item)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if missing {
+		writeError(w, http.StatusNotFound, "save snapshot file not found on disk")
+		return
+	}
+	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, server.DataDir); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.syncRestoredServerConfig(r.Context(), &server); err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	saveName := h.saveDisplayName(server.ProviderKey)
+	h.recordActivity(r.Context(), server.ID, "save.snapshot.restored", fmt.Sprintf("Restored %s snapshot %s for %s", saveName, item.FileName, server.Name))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "restored", "saveId": item.ID})
+}
+
+func (h *Handler) requirePlayerCapability(server domain.GameServerInstance, capabilityCheck func(domain.ProviderCapabilities) bool, action string) (provider.PlayerCommandProvider, error) {
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return nil, fmt.Errorf("unknown provider")
+	}
+	if !capabilityCheck(gameProvider.Capabilities()) {
+		return nil, fmt.Errorf("%s is not supported by this game", action)
+	}
+	commandProvider, ok := gameProvider.(provider.PlayerCommandProvider)
+	if !ok {
+		return nil, fmt.Errorf("%s is not supported by this game", action)
+	}
+	return commandProvider, nil
+}
+
+func (h *Handler) listServerPlayers(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok || !gameProvider.Capabilities().PlayerList {
+		writeJSON(w, http.StatusOK, map[string]any{"supported": false, "players": []domain.Player{}})
+		return
+	}
+	playerProvider, ok := gameProvider.(provider.PlayerListProvider)
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{"supported": false, "players": []domain.Player{}})
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": []domain.Player{}})
+		return
+	}
+	lines, err := h.recentServerLogLines(r.Context(), server)
+	if err != nil {
+		h.logger.Warn("failed to read player log output", "server", server.ID, "error", err)
+		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": []domain.Player{}})
+		return
+	}
+	players := playerProvider.ParsePlayerListOutput(lines)
+	if players == nil {
+		players = []domain.Player{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": players})
+}
+
+func (h *Handler) recentServerLogLines(ctx context.Context, server domain.GameServerInstance) ([]string, error) {
+	snapshotServer := server
+	snapshotServer.Status = domain.StatusStopped
+	stream, err := h.runtime.Logs(ctx, snapshotServer)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+	lines := make([]string, 0, 120)
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+		if len(lines) > 120 {
+			lines = lines[len(lines)-120:]
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return lines, nil
+}
+
+func (h *Handler) kickServerPlayer(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	commandProvider, err := h.requirePlayerCapability(server, func(c domain.ProviderCapabilities) bool { return c.KickPlayer }, "kick")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	player := strings.TrimSpace(chi.URLParam(r, "player"))
+	if player == "" {
+		writeError(w, http.StatusBadRequest, "player name is required")
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeError(w, http.StatusConflict, "server must be running to kick players")
+		return
+	}
+	server, _, err = h.ensureRuntimeContainer(r.Context(), server)
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	command := commandProvider.KickCommand(player)
+	if err := h.runtime.SendCommand(r.Context(), server, command); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "player.kicked", fmt.Sprintf("Kicked player %s from %s", player, server.Name))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "kicked", "player": player})
+}
+
+func (h *Handler) banServerPlayer(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	commandProvider, err := h.requirePlayerCapability(server, func(c domain.ProviderCapabilities) bool { return c.BanPlayer }, "ban")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	player := strings.TrimSpace(chi.URLParam(r, "player"))
+	if player == "" {
+		writeError(w, http.StatusBadRequest, "player name is required")
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeError(w, http.StatusConflict, "server must be running to ban players")
+		return
+	}
+	server, _, err = h.ensureRuntimeContainer(r.Context(), server)
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	command := commandProvider.BanCommand(player)
+	if err := h.runtime.SendCommand(r.Context(), server, command); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "player.banned", fmt.Sprintf("Banned player %s from %s", player, server.Name))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "banned", "player": player})
+}
+
 func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.GameServerInstance) error {
 	configBytes, err := os.ReadFile(filepath.Join(server.DataDir, "serverconfig.txt"))
 	if err != nil {
@@ -1957,11 +2238,60 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"dataDir":    h.cfg.DataDir,
 		"dbPath":     h.cfg.DBPath,
 		"dockerHost": h.cfg.DockerHost,
+		"publicHost": h.resolvePublicHost(),
 	})
 }
 
+func (h *Handler) updatePublicHost(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PublicHost string `json:"publicHost"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	host := strings.TrimSpace(payload.PublicHost)
+	if host != "" {
+		if strings.ContainsAny(host, " \t\n\r/") || len(host) > 253 {
+			writeError(w, http.StatusBadRequest, "public host must be a valid hostname or IP")
+			return
+		}
+	}
+	if host == "" {
+		host = ""
+	}
+	if err := h.store.SetSetting(r.Context(), "publicHost", host); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "settings.publicHost", fmt.Sprintf("Updated public host to %q", host))
+	writeJSON(w, http.StatusOK, map[string]string{"publicHost": h.resolvePublicHost()})
+}
+
+func (h *Handler) getServerJoinInfo(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	hydrateServerConfigPayload(&server)
+	h.attachServerJoinInfo(&server)
+	writeJSON(w, http.StatusOK, server.JoinInfo)
+}
+
 func (h *Handler) listGames(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.provider.Games())
+	games := h.provider.Games()
+	servers, err := h.store.ListServers(r.Context())
+	if err == nil {
+		counts := map[domain.GameKey]int{}
+		for _, server := range servers {
+			counts[server.GameKey]++
+		}
+		for index := range games {
+			games[index].ServerCount = counts[games[index].Key]
+		}
+	}
+	writeJSON(w, http.StatusOK, games)
 }
 
 func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
@@ -2904,6 +3234,10 @@ func normalizeProviderRuntimeConfig(providerKey domain.ProviderKey, config domai
 	switch providerKey {
 	case domain.ProviderPalworld:
 		return palworld.NormalizeConfig(config)
+	case domain.ProviderDST:
+		return dst.NormalizeConfig(config)
+	case domain.ProviderMinecraft:
+		return minecraft.NormalizeConfig(config)
 	default:
 		return normalizeTerrariaRuntimeConfig(config)
 	}
@@ -2920,6 +3254,8 @@ func decodeProviderRuntimeConfig(providerKey domain.ProviderKey, raw json.RawMes
 		return decodeDSTRuntimeConfig(raw, fallback)
 	case domain.ProviderPalworld:
 		return decodePalworldRuntimeConfig(raw, fallback)
+	case domain.ProviderMinecraft:
+		return decodeMinecraftRuntimeConfig(raw, fallback)
 	default:
 		return decodeTerrariaRuntimeConfig(raw, fallback)
 	}
@@ -2989,6 +3325,19 @@ func decodeDSTRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaConfig)
 	return config, string(configPayloadJSON), nil
 }
 
+func decodeMinecraftRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaConfig) (domain.TerrariaConfig, string, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return domain.TerrariaConfig{}, "", fmt.Errorf("invalid config payload")
+	}
+	config := minecraft.ConfigFromPayload(payload, fallback)
+	configPayloadJSON, err := json.Marshal(minecraft.EnrichPayloadFromConfig(config, payload))
+	if err != nil {
+		return domain.TerrariaConfig{}, "", err
+	}
+	return config, string(configPayloadJSON), nil
+}
+
 func stringPayload(payload map[string]any, key string) string {
 	value, ok := payload[key]
 	if !ok {
@@ -3004,6 +3353,10 @@ func stringPayload(payload map[string]any, key string) string {
 func providerConfigPayloadJSON(providerKey domain.ProviderKey, config domain.TerrariaConfig) (string, error) {
 	if providerKey == domain.ProviderDST {
 		buf, err := json.Marshal(dst.PayloadFromConfig(config, "survival"))
+		return string(buf), err
+	}
+	if providerKey == domain.ProviderMinecraft {
+		buf, err := json.Marshal(minecraft.PayloadFromConfig(config, nil))
 		return string(buf), err
 	}
 	if providerKey == domain.ProviderPalworld {
@@ -3046,10 +3399,34 @@ func (h *Handler) attachServerJoinInfo(server *domain.GameServerInstance) {
 	if ok {
 		if joinProvider, ok := gameProvider.(provider.JoinInfoProvider); ok {
 			server.JoinInfo = joinProvider.JoinInfo(*server)
+			h.applyPublicHostToJoinInfo(&server.JoinInfo, *server)
 			return
 		}
 	}
 	server.JoinInfo = defaultJoinInfo(*server)
+	h.applyPublicHostToJoinInfo(&server.JoinInfo, *server)
+}
+
+func (h *Handler) resolvePublicHost() string {
+	host, err := h.store.GetSetting(context.Background(), "publicHost")
+	if err == nil && strings.TrimSpace(host) != "" {
+		return strings.TrimSpace(host)
+	}
+	if strings.TrimSpace(h.cfg.PublicHost) != "" {
+		return strings.TrimSpace(h.cfg.PublicHost)
+	}
+	return "127.0.0.1"
+}
+
+func (h *Handler) applyPublicHostToJoinInfo(info *domain.ServerJoinInfo, server domain.GameServerInstance) {
+	host := h.resolvePublicHost()
+	if host == "" || host == info.Address {
+		return
+	}
+	old := info.Address
+	info.Address = host
+	info.InviteText = strings.ReplaceAll(info.InviteText, old+":"+fmt.Sprintf("%d", info.Port), host+":"+fmt.Sprintf("%d", info.Port))
+	info.InviteText = strings.ReplaceAll(info.InviteText, old, host)
 }
 
 func defaultJoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {

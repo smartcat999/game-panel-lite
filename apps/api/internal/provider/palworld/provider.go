@@ -35,6 +35,7 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 		Versions:        true,
 	}
 }
+func (Provider) SaveDisplayName() string { return "save" }
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
 	return []domain.ProviderConfigField{
 		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Palworld Server"},

@@ -32,9 +32,18 @@ type JoinInfoProvider interface {
 	JoinInfo(domain.GameServerInstance) domain.ServerJoinInfo
 }
 
+type SaveMetadataProvider interface {
+	SaveDisplayName() string
+}
+
 type PlayerListProvider interface {
 	PlayerListCommand(domain.TerrariaConfig) string
 	ParsePlayerListOutput([]string) []domain.Player
+}
+
+type PlayerCommandProvider interface {
+	KickCommand(player string) string
+	BanCommand(player string) string
 }
 
 type PlayerActivityProvider interface {
@@ -76,18 +85,28 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 			Name:        "Terraria",
 			Description: "2D sandbox adventure server for vanilla and tModLoader worlds.",
 			Status:      "available",
+			CoverImage:  "terraria",
 		},
 		domain.GamePalworld: {
 			Key:         domain.GamePalworld,
 			Name:        "Palworld",
 			Description: "Survival crafting server for small friend groups. Provider implementation is next on the roadmap.",
 			Status:      "planned",
+			CoverImage:  "palworld",
 		},
 		domain.GameDST: {
 			Key:         domain.GameDST,
 			Name:        "Don't Starve Together",
 			Description: "Co-op survival server for private friend groups.",
 			Status:      "planned",
+			CoverImage:  "dont-starve-together",
+		},
+		domain.GameMinecraft: {
+			Key:         domain.GameMinecraft,
+			Name:        "Minecraft Java",
+			Description: "Vanilla Minecraft Java Edition server for friends.",
+			Status:      "planned",
+			CoverImage:  "minecraft",
 		},
 	}
 	for _, item := range r.List() {
@@ -101,13 +120,15 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 			}
 		}
 		entry.Providers = append(entry.Providers, domain.ProviderCatalog{
-			Key:          item.Key(),
-			Name:         item.Name(),
-			Description:  item.Description(),
-			Recommended:  len(entry.Providers) == 0,
-			Versions:     append([]string{}, item.Versions()...),
-			Capabilities: item.Capabilities(),
-			ConfigSchema: append([]domain.ProviderConfigField{}, item.ConfigSchema()...),
+			Key:                item.Key(),
+			Name:               item.Name(),
+			Description:        item.Description(),
+			Recommended:        len(entry.Providers) == 0,
+			Versions:           append([]string{}, item.Versions()...),
+			RecommendedVersion: recommendedVersion(item.Versions()),
+			Capabilities:       item.Capabilities(),
+			ConfigSchema:       append([]domain.ProviderConfigField{}, item.ConfigSchema()...),
+			SaveDisplayName:    saveDisplayNameFor(item),
 		})
 		entry.Status = "available"
 		games[item.GameKey()] = entry
@@ -132,4 +153,23 @@ func (r *Registry) Game(key domain.GameKey) (domain.GameCatalogEntry, bool) {
 		}
 	}
 	return domain.GameCatalogEntry{}, false
+}
+
+func saveDisplayNameFor(item GameProvider) string {
+	if saveProvider, ok := item.(SaveMetadataProvider); ok {
+		return saveProvider.SaveDisplayName()
+	}
+	return "save"
+}
+
+func recommendedVersion(versions []string) string {
+	if len(versions) == 0 {
+		return ""
+	}
+	for _, v := range versions[1:] {
+		if v != "latest" {
+			return v
+		}
+	}
+	return versions[0]
 }

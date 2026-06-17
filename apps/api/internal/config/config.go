@@ -11,6 +11,7 @@ type Config struct {
 	DataDir    string
 	DBPath     string
 	DockerHost string
+	PublicHost string
 }
 
 func Load() Config {
@@ -24,6 +25,7 @@ func Load() Config {
 		DataDir:    value("GAMEPANEL_DATA_DIR", "./data"),
 		DBPath:     value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
 		DockerHost: dockerHost,
+		PublicHost: value("GAMEPANEL_PUBLIC_HOST", ""),
 	}
 }
 

@@ -25,7 +25,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
@@ -175,6 +175,11 @@ func (s *Store) ListBackups(ctx context.Context) ([]domain.Backup, error) {
 	return backups, s.db.WithContext(ctx).Order("created_at desc").Find(&backups).Error
 }
 
+func (s *Store) ListBackupsByInstance(ctx context.Context, instanceID string) ([]domain.Backup, error) {
+	var backups []domain.Backup
+	return backups, s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc").Find(&backups).Error
+}
+
 func (s *Store) GetBackup(ctx context.Context, id string) (domain.Backup, error) {
 	var backup domain.Backup
 	err := s.db.WithContext(ctx).First(&backup, "id = ?", id).Error
@@ -199,6 +204,20 @@ func (s *Store) SaveBackup(ctx context.Context, backup *domain.Backup) error {
 
 func (s *Store) DeleteBackup(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.Backup{}, "id = ?", id).Error
+}
+
+func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
+	var setting domain.Setting
+	err := s.db.WithContext(ctx).First(&setting, "key = ?", key).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return setting.Value, err
+}
+
+func (s *Store) SetSetting(ctx context.Context, key string, value string) error {
+	setting := domain.Setting{Key: key, Value: value}
+	return s.db.WithContext(ctx).Save(&setting).Error
 }
 
 func (s *Store) CreateMod(ctx context.Context, mod *domain.ModFile) error {

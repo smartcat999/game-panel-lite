@@ -51,28 +51,34 @@ type GameCatalogEntry struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
 	Status      string            `json:"status"`
+	CoverImage  string            `json:"coverImage,omitempty"`
+	ServerCount int               `json:"serverCount"`
 	Providers   []ProviderCatalog `json:"providers"`
 }
 
 type ProviderCatalog struct {
-	Key          ProviderKey           `json:"key"`
-	Name         string                `json:"name"`
-	Description  string                `json:"description"`
-	Recommended  bool                  `json:"recommended"`
-	Versions     []string              `json:"versions"`
-	Capabilities ProviderCapabilities  `json:"capabilities"`
-	ConfigSchema []ProviderConfigField `json:"configSchema"`
+	Key                ProviderKey           `json:"key"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description"`
+	Recommended        bool                  `json:"recommended"`
+	Versions           []string              `json:"versions"`
+	RecommendedVersion string                `json:"recommendedVersion,omitempty"`
+	Capabilities       ProviderCapabilities  `json:"capabilities"`
+	ConfigSchema       []ProviderConfigField `json:"configSchema"`
+	SaveDisplayName    string                `json:"saveDisplayName,omitempty"`
 }
 
 const (
-	GameTerraria GameKey = "terraria"
-	GamePalworld GameKey = "palworld"
-	GameDST      GameKey = "dont-starve-together"
+	GameTerraria  GameKey = "terraria"
+	GamePalworld  GameKey = "palworld"
+	GameDST       GameKey = "dont-starve-together"
+	GameMinecraft GameKey = "minecraft"
 
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
 	ProviderPalworld           ProviderKey = "palworld"
 	ProviderDST                ProviderKey = "dont-starve-together"
+	ProviderMinecraft          ProviderKey = "minecraft"
 
 	StatusCreating   ServerStatus = "creating"
 	StatusStarting   ServerStatus = "starting"
@@ -224,4 +230,9 @@ type Session struct {
 	TokenHash string    `json:"-" gorm:"uniqueIndex"`
 	ExpiresAt time.Time `json:"expiresAt" gorm:"index"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+type Setting struct {
+	Key   string `json:"key" gorm:"primaryKey"`
+	Value string `json:"value"`
 }

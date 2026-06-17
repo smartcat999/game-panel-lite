@@ -105,3 +105,23 @@ func TestParsePlayerLogEvent(t *testing.T) {
 		t.Fatal("expected unrelated log line to be ignored")
 	}
 }
+
+func TestTerrariaKickBanCommands(t *testing.T) {
+	vanilla := NewVanillaProvider()
+	tmod := NewTModLoaderProvider()
+	if cmd := vanilla.KickCommand("Alice"); cmd != "kick Alice" {
+		t.Fatalf("expected vanilla kick command, got %q", cmd)
+	}
+	if cmd := vanilla.BanCommand("Bob"); cmd != "ban Bob" {
+		t.Fatalf("expected vanilla ban command, got %q", cmd)
+	}
+	if cmd := tmod.KickCommand("Alice"); cmd != "kick Alice" {
+		t.Fatalf("expected tModLoader kick command, got %q", cmd)
+	}
+	if cmd := tmod.BanCommand("Bob"); cmd != "ban Bob" {
+		t.Fatalf("expected tModLoader ban command, got %q", cmd)
+	}
+	if cmd := vanilla.KickCommand("name\ninjection"); cmd != "kick nameinjection" {
+		t.Fatalf("expected sanitized kick command, got %q", cmd)
+	}
+}
