@@ -64,7 +64,7 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(dataDir, "serverconfig.txt"), []byte(spec.ConfigText), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dataDir, "serverconfig.txt"), []byte(spec.ConfigText), 0o644); err != nil {
 		return "", err
 	}
 	for name, content := range spec.Options.Files {
@@ -328,7 +328,7 @@ func writeDataFile(dataDir string, name string, content string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(target, []byte(content), 0o600)
+	return os.WriteFile(target, []byte(content), 0o644)
 }
 
 func dataBinds(dataDir string, mounts []string) []string {
@@ -362,10 +362,10 @@ func prepareDataMounts(dataDir string, mounts []string) error {
 			continue
 		}
 		if filepath.Ext(hostPath) != "" {
-			if err := os.MkdirAll(filepath.Dir(hostPath), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(hostPath), 0o777); err != nil {
 				return err
 			}
-			file, err := os.OpenFile(hostPath, os.O_CREATE, 0o600)
+			file, err := os.OpenFile(hostPath, os.O_CREATE, 0o666)
 			if err != nil {
 				return err
 			}
@@ -374,7 +374,10 @@ func prepareDataMounts(dataDir string, mounts []string) error {
 			}
 			continue
 		}
-		if err := os.MkdirAll(hostPath, 0o755); err != nil {
+		if err := os.MkdirAll(hostPath, 0o777); err != nil {
+			return err
+		}
+		if err := os.Chmod(hostPath, 0o777); err != nil {
 			return err
 		}
 	}

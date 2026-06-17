@@ -840,6 +840,20 @@ func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.Ga
 	return nil
 }
 
+func ensureRuntimeDataDir(path string) error {
+	if err := os.MkdirAll(path, 0o777); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o777)
+}
+
+func writeRuntimeDataFile(targetPath string, content []byte) error {
+	if err := ensureRuntimeDataDir(filepath.Dir(targetPath)); err != nil {
+		return err
+	}
+	return os.WriteFile(targetPath, content, 0o666)
+}
+
 func (h *Handler) removeRuntimeMod(item domain.ModFile, server domain.GameServerInstance) error {
 	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, item.FileName) {
 		if err := removeStoredFile(filepath.Join(server.DataDir, relPath)); err != nil {
@@ -882,10 +896,7 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 	payload = append(payload, '\n')
 	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, "enabled.json") {
 		targetPath := filepath.Join(server.DataDir, relPath)
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(targetPath, payload, 0o600); err != nil {
+		if err := writeRuntimeDataFile(targetPath, payload); err != nil {
 			return err
 		}
 	}
@@ -902,10 +913,7 @@ func (h *Handler) writeRuntimeInstallFile(server domain.GameServerInstance, work
 	}
 	for _, relPath := range terraria.RuntimeModFiles(server.ProviderKey, "install.txt") {
 		targetPath := filepath.Join(server.DataDir, relPath)
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(targetPath, []byte(content), 0o600); err != nil {
+		if err := writeRuntimeDataFile(targetPath, []byte(content)); err != nil {
 			return err
 		}
 	}
@@ -1494,7 +1502,7 @@ func (h *Handler) materializeWorldForRuntime(world domain.World, server domain.G
 }
 
 func copyStoredFile(sourcePath string, targetPath string) error {
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+	if err := ensureRuntimeDataDir(filepath.Dir(targetPath)); err != nil {
 		return err
 	}
 	source, err := os.Open(sourcePath)
@@ -1517,7 +1525,7 @@ func copyStoredFile(sourcePath string, targetPath string) error {
 	if err := target.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmpName, 0o600); err != nil {
+	if err := os.Chmod(tmpName, 0o666); err != nil {
 		return err
 	}
 	return os.Rename(tmpName, targetPath)
@@ -2406,7 +2414,7 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(configText), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte(configText), 0o644); err != nil {
 		return err
 	}
 	for name, content := range gameProvider.RuntimeOptions(nextConfig).Files {
@@ -3008,5 +3016,5 @@ func writeInstanceDataFile(dataDir string, name string, content string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(target, []byte(content), 0o600)
+	return os.WriteFile(target, []byte(content), 0o644)
 }

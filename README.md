@@ -37,9 +37,10 @@ Run both services with Docker Compose:
 docker compose up
 ```
 
-For OrbStack on macOS, keep the machine-specific socket path in your untracked `.env`:
+For OrbStack on macOS, keep the machine-specific workspace and socket paths in your untracked `.env`:
 
 ```bash
+GAMEPANEL_WORKSPACE_PATH="/Users/<you>/Desktop/Projects/go-project/game-panel-lite"
 GAMEPANEL_DOCKER_SOCKET_PATH="/Users/<you>/.orbstack/run/docker.sock"
 ```
 
@@ -128,7 +129,7 @@ GAMEPANEL_DOCKER_HOST="tcp://127.0.0.1:2375"
 
 The Settings page displays the configured Docker Host and runtime status only. Docker Host changes should be made in the backend config or environment, then applied by restarting the backend process.
 
-When using `compose.yaml`, the API service always reads Docker through `unix:///var/run/docker.sock` inside the API container. Override `GAMEPANEL_DOCKER_SOCKET_PATH` in local `.env` to decide which host socket is mounted there.
+When using `compose.yaml`, the API service always reads Docker through `unix:///var/run/docker.sock` inside the API container. Override `GAMEPANEL_DOCKER_SOCKET_PATH` in local `.env` to decide which host socket is mounted there. Set `GAMEPANEL_WORKSPACE_PATH` to the absolute repo path so game server containers receive bind mounts from the Docker daemon's host path instead of the API container's internal path.
 
 Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instances/{instanceId}`. World, backup, and mod files use separate per-instance directories.
 
