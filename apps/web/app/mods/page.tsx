@@ -51,10 +51,25 @@ export default function ModsPage() {
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
 
   const globalUpload = useMutation({
-    mutationFn: (file: File) => uploadGlobalMod(file),
-    onSuccess: async () => {
+    mutationFn: async (files: File[]) => {
+      const uploaded: ModFile[] = [];
+      const failed: string[] = [];
+      for (const file of files) {
+        try {
+          uploaded.push(await uploadGlobalMod(file));
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : t("unableUploadMod");
+          failed.push(`${file.name}: ${reason}`);
+        }
+      }
+      return { uploaded, failed };
+    },
+    onSuccess: async ({ uploaded, failed }) => {
       setErrorMessage("");
-      setSuccessMessage(t("modUploaded"));
+      setSuccessMessage(uploaded.length > 0 ? t("modsUploadedSummary", { count: uploaded.length }) : "");
+      if (failed.length > 0) {
+        setErrorMessage(t("modsUploadFailedSummary", { count: failed.length, names: failed.slice(0, 3).join("；") }));
+      }
       await client.invalidateQueries({ queryKey: ["global-mods"] });
       if (globalInputRef.current) globalInputRef.current.value = "";
     },
@@ -158,9 +173,10 @@ export default function ModsPage() {
         className="hidden"
         type="file"
         accept=".tmod"
+        multiple
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) globalUpload.mutate(file);
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 0) globalUpload.mutate(files);
         }}
       />
       {(globalModsQuery.isError || modPacksQuery.isError || recommendedModsQuery.isError) && (
@@ -253,6 +269,7 @@ export default function ModsPage() {
                   <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} locale={locale} />
                   <Badge className="shrink-0 bg-slate-800 text-slate-300">{modSourceLabel(item, locale)}</Badge>
                 </div>
+                <ModMetadataStrip item={item} />
                 <div className="mt-4 flex justify-end border-t border-panel-line pt-3">
                   <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={removeGlobal.isPending}>
                     <Trash2 aria-hidden="true" />
@@ -561,6 +578,28 @@ function ModIdentity({ detail, item, locale }: { detail: string; item: ModFile; 
         </div>
         <p className="mt-1 truncate text-sm text-slate-400">{detail}</p>
       </div>
+    </div>
+  );
+}
+
+function ModMetadataStrip({ item }: { item: ModFile }) {
+  const { locale, t } = useI18n();
+  const displayName = modDisplayName(item, locale);
+  const entries = [
+    item.modName && item.modName !== displayName ? [t("internalModName"), item.modName] : null,
+    item.modVersion ? [t("modVersion"), item.modVersion] : null,
+    item.tmodVersion ? [t("tmodVersion"), item.tmodVersion] : null,
+    item.dependencies && item.dependencies.length > 0 ? [t("dependencies"), item.dependencies.join(", ")] : null
+  ].filter(Boolean) as [string, string][];
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      {entries.map(([label, value]) => (
+        <div key={label} className="min-w-0 rounded-md border border-panel-line bg-slate-950/40 px-3 py-2">
+          <p className="text-xs text-slate-500">{label}</p>
+          <p className="mt-1 truncate text-sm font-medium text-slate-100" title={value}>{value}</p>
+        </div>
+      ))}
     </div>
   );
 }
