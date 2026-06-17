@@ -6,12 +6,13 @@ usage() {
 Build GamePanel Lite game runtime images.
 
 Usage:
-  scripts/build-game-images.sh [all|vanilla|tmodloader] [options]
+  scripts/build-game-images.sh [all|vanilla|tmodloader|dst] [options]
 
 Targets:
   all           Build vanilla Terraria and tModLoader images. Default.
   vanilla       Build only vanilla Terraria images.
   tmodloader    Build only tModLoader images.
+  dst           Build only Don't Starve Together images. linux/amd64 only.
 
 Options:
   --registry NAME       Image namespace. Default: smartcat99999
@@ -26,6 +27,7 @@ Examples:
   scripts/build-game-images.sh
   scripts/build-game-images.sh vanilla --platform linux/arm64 --load
   scripts/build-game-images.sh all --platform linux/amd64,linux/arm64 --push
+  scripts/build-game-images.sh dst --platform linux/amd64 --load
 USAGE
 }
 
@@ -80,7 +82,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$target" in
-  all|vanilla|tmodloader) ;;
+  all|vanilla|tmodloader|dst) ;;
   *)
     echo "Unknown target: $target" >&2
     usage >&2
@@ -133,6 +135,22 @@ build_tmodloader() {
     "${root_dir}"
 }
 
+build_dst() {
+  local version="$1"
+  local image="${registry}/dst-server:${version}"
+
+  if [[ -n "$platform" && "$platform" != "linux/amd64" ]]; then
+    echo "Don't Starve Together image builds are currently supported only for linux/amd64." >&2
+    exit 1
+  fi
+
+  echo "==> Building ${image}"
+  docker "${buildx_args[@]}" \
+    -f docker/dst/Dockerfile \
+    -t "${image}" \
+    "${root_dir}"
+}
+
 cd "$root_dir"
 
 if [[ "$target" == "all" || "$target" == "vanilla" ]]; then
@@ -143,6 +161,10 @@ fi
 if [[ "$target" == "all" || "$target" == "tmodloader" ]]; then
   build_tmodloader "v2026.04.3.0"
   build_tmodloader "v2026.02.3.1"
+fi
+
+if [[ "$target" == "dst" ]]; then
+  build_dst "latest"
 fi
 
 echo "Done."

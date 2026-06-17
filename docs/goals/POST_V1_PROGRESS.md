@@ -368,6 +368,36 @@ Result:
 - `pnpm --filter @gamepanel-lite/web typecheck` passed after rerunning independently. The first parallel run raced with `next build` while `.next/types` was being regenerated.
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 
+2026-06-18 Goal 5 DST runtime image script:
+
+Changes:
+- Added `docker/dst/Dockerfile` for a GamePanel Lite Don't Starve Together dedicated server runtime image.
+- Added `docker/dst/gamepanel-dst-entrypoint.sh` to start the Master shard and optional Caves shard from the generated cluster config.
+- Updated DST provider runtime files to match the real DST cluster layout: `/data/dst/<cluster-name>/...`.
+- Added `dst` target to `scripts/build-game-images.sh` with an explicit `linux/amd64` guard.
+- Added `docker/dst/README.md` documenting build commands, runtime layout, and the Klei token requirement.
+
+Verification:
+
+```bash
+bash -n scripts/build-game-images.sh docker/dst/gamepanel-dst-entrypoint.sh docker/tmodloader/gamepanel-tmodloader-entrypoint.sh docker/terraria-vanilla/gamepanel-terraria-entrypoint.sh
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+pnpm --filter @gamepanel-lite/web test
+```
+
+Result:
+- `bash -n ...` passed.
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
@@ -377,8 +407,8 @@ Result:
 - Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
 - Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
 - Non-Terraria create flow still uses a compatibility config envelope internally while the backend provider payload model is being phased in.
-- Don't Starve Together is wired through catalog/create/runtime spec generation, including caves and Workshop setup files, but the `smartcat99999/dst-server:latest` image still needs a build script and real Docker host verification before claiming full runtime support.
+- Don't Starve Together is wired through catalog/create/runtime spec generation, including caves and Workshop setup files. The runtime image now has a build script, but still needs a real Docker host build/start verification before claiming full runtime support.
 
 ## Next Work
 
-Add the Don't Starve Together image build script/runtime verification path, then continue toward Minecraft Java provider planning.
+Build and start the Don't Starve Together runtime image on a Docker host, then continue toward Minecraft Java provider planning.

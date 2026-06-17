@@ -119,6 +119,7 @@ func (Provider) RenderConfig(config domain.TerrariaConfig) (string, error) {
 }
 func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
 	config = NormalizeConfig(config)
+	clusterDir := clusterConfigDir(config)
 	return runtime.ContainerOptions{
 		Env: []string{
 			"DST_CLUSTER_NAME=" + config.WorldName,
@@ -127,10 +128,10 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 		},
 		DataMounts: []string{"/data"},
 		Files: map[string]string{
-			"dst/cluster.ini":         renderClusterINI(config, "survival"),
-			"dst/server_token.txt":    strings.TrimSpace(config.MOTD) + "\n",
-			"dst/Master/server.ini":   renderShardServerINI(config.Port, true, "Master"),
-			"dst/Master/worldgen.lua": renderWorldgenLua("forest_default"),
+			clusterDir + "/cluster.ini":         renderClusterINI(config, "survival"),
+			clusterDir + "/cluster_token.txt":   strings.TrimSpace(config.MOTD) + "\n",
+			clusterDir + "/Master/server.ini":   renderShardServerINI(config.Port, true, "Master"),
+			clusterDir + "/Master/worldgen.lua": renderWorldgenLua("forest_default"),
 		},
 		PortProtocol: "udp",
 	}
@@ -171,14 +172,15 @@ func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstanc
 	options := provider.RuntimeOptions(config)
 	payload := payloadFromServer(server)
 	settings := settingsFromPayload(payload)
-	options.Files["dst/cluster.ini"] = renderClusterINI(config, settings.GameMode)
-	options.Files["dst/Master/worldgen.lua"] = renderWorldgenLua(settings.WorldPreset)
+	clusterDir := clusterConfigDir(config)
+	options.Files[clusterDir+"/cluster.ini"] = renderClusterINI(config, settings.GameMode)
+	options.Files[clusterDir+"/Master/worldgen.lua"] = renderWorldgenLua(settings.WorldPreset)
 	if settings.CavesEnabled {
-		options.Files["dst/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
-		options.Files["dst/Caves/worldgen.lua"] = renderWorldgenLua("cave_default")
+		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
+		options.Files[clusterDir+"/Caves/worldgen.lua"] = renderWorldgenLua("cave_default")
 	}
 	if len(settings.WorkshopIDs) > 0 {
-		options.Files["dst/dedicated_server_mods_setup.lua"] = renderWorkshopSetup(settings.WorkshopIDs)
+		options.Files[clusterDir+"/dedicated_server_mods_setup.lua"] = renderWorkshopSetup(settings.WorkshopIDs)
 	}
 	return options, nil
 }
@@ -296,6 +298,10 @@ func renderClusterINI(config domain.TerrariaConfig, gameMode string) string {
 		"",
 	}
 	return strings.Join(lines, "\n")
+}
+
+func clusterConfigDir(config domain.TerrariaConfig) string {
+	return "dst/" + config.WorldName
 }
 
 func renderShardServerINI(port int, isMaster bool, name string) string {

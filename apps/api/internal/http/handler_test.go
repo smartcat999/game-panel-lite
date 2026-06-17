@@ -1059,20 +1059,20 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	if spec.Port != 10999 || spec.Options.PortProtocol != "udp" {
 		t.Fatalf("expected DST UDP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
 	}
-	if !strings.Contains(spec.Options.Files["dst/cluster.ini"], "game_mode = endless") {
+	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/cluster.ini"], "game_mode = endless") {
 		t.Fatalf("expected DST cluster.ini in runtime files, got %+v", spec.Options.Files)
 	}
-	if !strings.Contains(spec.Options.Files["dst/Master/worldgen.lua"], `preset = "forest_classic"`) {
+	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/Master/worldgen.lua"], `preset = "forest_classic"`) {
 		t.Fatalf("expected DST world preset in runtime files, got %+v", spec.Options.Files)
 	}
-	if _, ok := spec.Options.Files["dst/Caves/server.ini"]; !ok {
+	if _, ok := spec.Options.Files["dst/FriendsCluster/Caves/server.ini"]; !ok {
 		t.Fatalf("expected DST caves shard files, got %+v", spec.Options.Files)
 	}
-	if !strings.Contains(spec.Options.Files["dst/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
+	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
 		t.Fatalf("expected DST workshop setup file, got %+v", spec.Options.Files)
 	}
-	if spec.Options.Files["dst/server_token.txt"] != "klei-token\n" {
-		t.Fatalf("expected DST token file, got %q", spec.Options.Files["dst/server_token.txt"])
+	if spec.Options.Files["dst/FriendsCluster/cluster_token.txt"] != "klei-token\n" {
+		t.Fatalf("expected DST token file, got %q", spec.Options.Files["dst/FriendsCluster/cluster_token.txt"])
 	}
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 }

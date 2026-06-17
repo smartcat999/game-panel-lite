@@ -61,7 +61,7 @@ func TestRuntimeOptionsRenderDSTFiles(t *testing.T) {
 	if options.PortProtocol != "udp" {
 		t.Fatalf("expected UDP port protocol, got %q", options.PortProtocol)
 	}
-	cluster := options.Files["dst/cluster.ini"]
+	cluster := options.Files["dst/Cluster/cluster.ini"]
 	for _, expected := range []string{
 		"cluster_name = DST Friends",
 		"cluster_password = join-secret",
@@ -72,11 +72,11 @@ func TestRuntimeOptionsRenderDSTFiles(t *testing.T) {
 			t.Fatalf("expected cluster.ini to contain %q, got:\n%s", expected, cluster)
 		}
 	}
-	if got := options.Files["dst/server_token.txt"]; got != "klei-token\n" {
+	if got := options.Files["dst/Cluster/cluster_token.txt"]; got != "klei-token\n" {
 		t.Fatalf("expected server token file, got %q", got)
 	}
-	if !strings.Contains(options.Files["dst/Master/server.ini"], "server_port = 10999") {
-		t.Fatalf("expected Master server.ini to contain port, got:\n%s", options.Files["dst/Master/server.ini"])
+	if !strings.Contains(options.Files["dst/Cluster/Master/server.ini"], "server_port = 10999") {
+		t.Fatalf("expected Master server.ini to contain port, got:\n%s", options.Files["dst/Cluster/Master/server.ini"])
 	}
 }
 
@@ -120,19 +120,19 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 			t.Fatalf("expected rendered payload config to contain %q, got:\n%s", expected, rendered)
 		}
 	}
-	if !strings.Contains(options.Files["dst/cluster.ini"], "game_mode = endless") {
-		t.Fatalf("expected payload game mode in cluster.ini, got:\n%s", options.Files["dst/cluster.ini"])
+	if !strings.Contains(options.Files["dst/Payload Cluster/cluster.ini"], "game_mode = endless") {
+		t.Fatalf("expected payload game mode in cluster.ini, got:\n%s", options.Files["dst/Payload Cluster/cluster.ini"])
 	}
-	if !strings.Contains(options.Files["dst/Master/worldgen.lua"], `preset = "forest_classic"`) {
-		t.Fatalf("expected payload world preset in Master worldgen, got:\n%s", options.Files["dst/Master/worldgen.lua"])
+	if !strings.Contains(options.Files["dst/Payload Cluster/Master/worldgen.lua"], `preset = "forest_classic"`) {
+		t.Fatalf("expected payload world preset in Master worldgen, got:\n%s", options.Files["dst/Payload Cluster/Master/worldgen.lua"])
 	}
-	if _, ok := options.Files["dst/Caves/server.ini"]; !ok {
+	if _, ok := options.Files["dst/Payload Cluster/Caves/server.ini"]; !ok {
 		t.Fatalf("expected caves shard files when caves are enabled, got %+v", options.Files)
 	}
-	if !strings.Contains(options.Files["dst/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
-		t.Fatalf("expected workshop setup file, got:\n%s", options.Files["dst/dedicated_server_mods_setup.lua"])
+	if !strings.Contains(options.Files["dst/Payload Cluster/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
+		t.Fatalf("expected workshop setup file, got:\n%s", options.Files["dst/Payload Cluster/dedicated_server_mods_setup.lua"])
 	}
-	if got := options.Files["dst/server_token.txt"]; got != "payload-token\n" {
+	if got := options.Files["dst/Payload Cluster/cluster_token.txt"]; got != "payload-token\n" {
 		t.Fatalf("expected payload token file, got %q", got)
 	}
 }
