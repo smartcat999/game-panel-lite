@@ -20,6 +20,7 @@ import (
 
 type App struct {
 	router http.Handler
+	ctx    context.Context
 	cancel context.CancelFunc
 }
 
@@ -39,9 +40,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	switchableRuntime := runtime.NewSwitchableAdapter(runtimeAdapter)
 	dockerMonitor := runtime.NewDockerMonitor(switchableRuntime)
 	dockerMonitor.Refresh(context.Background())
-	monitorCtx, cancel := context.WithCancel(context.Background())
-	go dockerMonitor.Start(monitorCtx, 10*time.Second)
-	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(monitorCtx, 30*time.Second)
+	appCtx, cancel := context.WithCancel(context.Background())
+	go dockerMonitor.Start(appCtx, 10*time.Second)
+	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(appCtx, 30*time.Second)
 
 	dockerFactory := func(host string) (runtime.Adapter, error) {
 		return dockerruntime.NewAdapter(host)
@@ -53,11 +54,18 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	handler.Register(router)
-	return &App{router: router, cancel: cancel}, nil
+	return &App{router: router, ctx: appCtx, cancel: cancel}, nil
 }
 
 func (a *App) Routes() http.Handler {
 	return a.router
+}
+
+func (a *App) Context() context.Context {
+	if a.ctx == nil {
+		return context.Background()
+	}
+	return a.ctx
 }
 
 func (a *App) Close() {

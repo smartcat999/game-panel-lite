@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,6 +29,9 @@ func main() {
 		Addr:              cfg.Addr(),
 		Handler:           application.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
+		BaseContext: func(_ net.Listener) context.Context {
+			return application.Context()
+		},
 	}
 
 	go func() {
@@ -42,7 +46,9 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	application.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)

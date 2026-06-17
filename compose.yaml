@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
-    image: gamepanel-lite-api:local
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-latest}
     environment:
       GAMEPANEL_HOST: 0.0.0.0
       GAMEPANEL_PORT: 4000
@@ -12,6 +12,7 @@ services:
       GAMEPANEL_DOCKER_HOST: unix:///var/run/docker.sock
     ports:
       - "4000:4000"
+    stop_grace_period: 5s
     volumes:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
@@ -22,7 +23,7 @@ services:
       dockerfile: docker/web/Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
-    image: gamepanel-lite-web:local
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-latest}
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
     depends_on:
