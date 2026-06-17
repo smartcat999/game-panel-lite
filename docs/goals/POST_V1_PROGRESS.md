@@ -285,6 +285,33 @@ Result:
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 
+2026-06-18 Goal 4 provider schema create form:
+
+Changes:
+- Added frontend provider config helpers that derive default payloads from backend `configSchema`.
+- Create-server wizard now renders non-Terraria provider config fields from provider metadata instead of using a Palworld-only branch.
+- Non-Terraria create submissions keep semantic `configPayload` while deriving the existing compatibility config envelope for review and API submission.
+- Added helper coverage for schema defaults, field coercion, and Palworld payload mapping.
+
+Verification:
+
+```bash
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web build
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web test
+```
+
+Result:
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed after rerunning independently. The first parallel run raced with `next build` while `.next/types` was being regenerated.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
@@ -293,7 +320,8 @@ Result:
 - Palworld uses a first-pass provider implementation. It can be selected and created, and its API/runtime payload now uses Palworld-specific config fields through a provider runtime bridge.
 - Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
 - Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
+- Non-Terraria create flow still uses a compatibility config envelope internally while the backend provider payload model is being phased in.
 
 ## Next Work
 
-Manually verify Palworld start with Docker, then upgrade the server config envelope so non-Terraria providers no longer reuse Terraria field names internally.
+Manually verify Palworld start with Docker, then continue Goal 5 with a Don't Starve Together provider slice now that the create form can render provider schema fields generically.

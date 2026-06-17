@@ -15,6 +15,7 @@ import { getGameVersions, listGames, listGlobalMods, listModPacks, listWorlds, p
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { createReviewInvitePreview } from "@/lib/create-server-review";
+import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
 import type { GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
 
@@ -51,17 +52,6 @@ function formatMemoryLimitLabel(value: number, t: (key: MessageKey, values?: Rec
   return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
 }
 
-function createProviderConfigPayload(providerKey: ProviderKey, config: TerrariaConfig): Record<string, unknown> | undefined {
-  if (providerKey !== "palworld") return undefined;
-  return {
-    serverName: config.serverName,
-    saveName: config.worldName,
-    maxPlayers: config.maxPlayers,
-    serverPassword: config.password ?? "",
-    adminPassword: config.motd ?? ""
-  };
-}
-
 export function CreateServerWizard() {
   const { locale, t } = useI18n();
   const router = useRouter();
@@ -72,6 +62,7 @@ export function CreateServerWizard() {
   const [mode, setMode] = useState<"vanilla" | "tmodloader">(defaultCreateServerMode);
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>(defaultCreateServerPreset);
   const [config, setConfig] = useState<TerrariaConfig>(defaultCreateServerConfig);
+  const [providerConfigPayload, setProviderConfigPayload] = useState<ProviderConfigPayload>({});
   const [hostPortMode, setHostPortMode] = useState<"auto" | "manual">("auto");
   const [hostPort, setHostPort] = useState(terrariaInternalPort);
   const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 0, memoryLimitMb: 0 });
@@ -104,6 +95,7 @@ export function CreateServerWizard() {
   const availableMods = modsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
+  const effectiveConfig = selectedGameKey === "terraria" ? config : providerPayloadToTerrariaConfig(providerKey, providerConfigPayload, config);
   const fallbackStepId: StepId = "review";
   const currentStepId = stepIds[step] ?? fallbackStepId;
   const nextStepId = stepIds[Math.min(stepIds.length - 1, step + 1)] ?? fallbackStepId;
@@ -113,8 +105,8 @@ export function CreateServerWizard() {
   const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider);
   const create = useMutation({
     mutationFn: () => createTerrariaServerWithWorld({
-      config: { ...config, port: terrariaInternalPort },
-      configPayload: createProviderConfigPayload(providerKey, config),
+      config: { ...effectiveConfig, port: terrariaInternalPort },
+      configPayload: selectedGameKey === "terraria" ? undefined : providerConfigPayload,
       hostPort: hostPortMode === "manual" ? hostPort : undefined,
       mode,
       providerKey,
@@ -139,6 +131,7 @@ export function CreateServerWizard() {
     setMode(nextMode);
     setSelectedPreset(nextPreset);
     setConfig(getTerrariaPreset(nextPreset).config);
+    setProviderConfigPayload({});
     setSelectedWorldId("");
     setAppliedWorldConfigId("");
     setSelectedModIds([]);
@@ -162,6 +155,10 @@ export function CreateServerWizard() {
         password: "",
         motd: ""
       });
+      setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, {
+        serverName: `${game.name} Server`,
+        saveName: `${game.name} Save`
+      }));
       setSelectedWorldId("");
       setAppliedWorldConfigId("");
       setSelectedModIds([]);
@@ -175,6 +172,7 @@ export function CreateServerWizard() {
       chooseMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
       setSelectedPreset("custom");
+      setProviderConfigPayload(createDefaultProviderConfigPayload(provider));
       setSelectedModIds([]);
       setSelectedModPackId("");
     }
@@ -265,7 +263,10 @@ export function CreateServerWizard() {
                 gameKey={selectedGameKey}
                 hostPort={hostPort}
                 hostPortMode={hostPortMode}
+                provider={selectedProvider}
+                providerConfigPayload={providerConfigPayload}
                 setConfig={setConfig}
+                setProviderConfigPayload={setProviderConfigPayload}
                 onCustomize={() => setSelectedPreset("custom")}
                 setHostPort={setHostPort}
                 setHostPortMode={setHostPortMode}
@@ -294,7 +295,7 @@ export function CreateServerWizard() {
             )}
             {currentStepId === "review" && (
               <ReviewStep
-                config={config}
+                config={effectiveConfig}
                 gameKey={selectedGameKey}
                 gameName={selectedGame?.name ?? "Terraria"}
                 hostPortLabel={hostPortMode === "manual" ? String(hostPort) : t("automaticPort")}
@@ -558,8 +559,11 @@ function ConfigStep({
   gameKey,
   hostPort,
   hostPortMode,
+  provider,
+  providerConfigPayload,
   resourceLimits,
   setConfig,
+  setProviderConfigPayload,
   onCustomize,
   setHostPort,
   setHostPortMode,
@@ -572,8 +576,11 @@ function ConfigStep({
   gameKey: string;
   hostPort: number;
   hostPortMode: "auto" | "manual";
+  provider?: ProviderCatalog;
+  providerConfigPayload: ProviderConfigPayload;
   resourceLimits: ResourceLimits;
   setConfig: (config: TerrariaConfig) => void;
+  setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
   onCustomize: () => void;
   setHostPort: (port: number) => void;
   setHostPortMode: (mode: "auto" | "manual") => void;
@@ -595,32 +602,44 @@ function ConfigStep({
     setResourceLimits(limits);
   };
   const secretSeed = secretSeedKeyFor(config.seed);
-  if (gameKey === "palworld") {
+  if (gameKey !== "terraria") {
     return (
       <div>
         <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <WizardField label={t("serverName")}>
-            <Input value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
-          </WizardField>
-          <WizardField label={t("saveName")}>
-            <Input value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
-          </WizardField>
-          <WizardField label={t("maxPlayersInput")}>
-            <Input type="number" min={1} max={32} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
-          </WizardField>
+          {(provider?.configSchema ?? []).map((field) => {
+            const value = providerConfigPayload[field.name];
+            const setFieldValue = (nextValue: string | boolean) => {
+              onCustomize();
+              setProviderConfigPayload(updateProviderConfigPayload(providerConfigPayload, field, nextValue));
+            };
+            return (
+              <WizardField key={field.name} label={field.label}>
+                {field.type === "select" ? (
+                  <WizardSelect value={String(value ?? "")} onChange={setFieldValue}>
+                    {(field.options ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </WizardSelect>
+                ) : field.type === "boolean" ? (
+                  <WizardCheckbox label={field.help || field.label} checked={Boolean(value)} onChange={setFieldValue} />
+                ) : (
+                  <Input
+                    type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                    value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
+                    onChange={(event) => setFieldValue(event.target.value)}
+                  />
+                )}
+                {field.help && field.type !== "boolean" && <span className="text-xs text-slate-500">{field.help}</span>}
+              </WizardField>
+            );
+          })}
           <WizardField label={t("gameVersion")}>
             <WizardSelect value={version} onChange={(value) => setVersion(value)}>
               {versions.map((v) => (
                 <option key={v} value={v}>{v}</option>
               ))}
             </WizardSelect>
-          </WizardField>
-          <WizardField label={t("serverPassword")}>
-            <Input value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
-          </WizardField>
-          <WizardField label={t("adminPassword")}>
-            <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
           </WizardField>
           <WizardField label={t("externalPort")}>
             <WizardSelect value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
