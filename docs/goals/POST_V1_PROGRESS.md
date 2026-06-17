@@ -19,9 +19,7 @@ The work starts with user-facing product functionality rather than V1 UI polish:
 
 ## Active Goal
 
-Goal 3: Palworld Provider
-
-Status: In progress
+All post-V1 roadmap goals (1-10) are implemented. Status: Complete
 
 ## Completed Goals
 
@@ -398,17 +396,102 @@ Result:
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 
+## Goal 6 Progress (Minecraft Java Provider)
+
+Completed:
+- Added `minecraft` game/provider domain keys and registered a Minecraft provider in the backend registry.
+- Minecraft now appears as an available game in the game catalog with version selection (latest + pinned versions).
+- Added Minecraft provider metadata, capabilities (console, player list, kick, ban, saves, backups), config schema, validation, runtime options, and join info.
+- Added Minecraft Docker runtime options using TCP 25565 and an isolated `/data` mount.
+- Minecraft config renders `server.properties` and `eula.txt`; EULA acceptance is enforced during creation.
+- Provider runtime bridge reads semantic payload fields (serverName, worldName, maxPlayers, gameMode, difficulty, onlineMode, whitelistEnabled, eulaAccepted).
+- Create-server wizard renders Minecraft fields from provider metadata automatically (provider-aware flow).
+- Added backend provider and HTTP create/start runtime spec tests for Minecraft.
+
+## Goal 7 Progress (Cross-Game Save Management)
+
+Completed:
+- Added `SaveMetadataProvider` contract and `saveDisplayName` on each provider (Terraria=world, Palworld=save, DST=cluster save, Minecraft=world).
+- Game catalog now exposes `saveDisplayName` per provider so the UI uses game-aware naming.
+- Added cross-game save snapshot APIs:
+  - `GET /api/servers/{id}/saves`
+  - `POST /api/servers/{id}/saves/snapshot`
+  - `POST /api/servers/{id}/saves/{saveId}/restore`
+  - `GET /api/servers/{id}/saves/{saveId}/download`
+- Existing Terraria world routes and backup routes remain unchanged.
+- Added HTTP test covering create/list/download/restore with Minecraft and verifying game-aware save display name.
+- Frontend server detail backups tab label now reflects the game save noun.
+
+## Goal 8 Progress (Player Management by Provider Capability)
+
+Completed:
+- Added `PlayerCommandProvider` contract with `KickCommand` and `BanCommand` for sanitised command generation.
+- Terraria (Vanilla + tModLoader) and Minecraft expose kick/ban commands; Palworld and DST correctly do not.
+- Added player management APIs:
+  - `GET /api/servers/{id}/players` (returns `supported` flag + online players when supported)
+  - `POST /api/servers/{id}/players/{player}/kick`
+  - `POST /api/servers/{id}/players/{player}/ban`
+- All endpoints are gated by provider capability; unsupported games return `supported: false` / `400`.
+- Added a `PlayersPanel` frontend component shown only when `playerList` is supported, with confirmation dialogs for kick/ban.
+- Added backend provider command tests and an HTTP capability-gating test.
+
+## Goal 9 Progress (Friend Invite Experience)
+
+Completed:
+- Added a configurable public host setting (`GAMEPANEL_PUBLIC_HOST` env + mutable via API/DB).
+- Added `Setting` domain model and store methods (`GetSetting`/`SetSetting`).
+- Added `PUT /api/settings/public-host` to update the public host at runtime.
+- Added `GET /api/servers/{id}/join-info` dedicated endpoint.
+- Join info now resolves the public host and rewrites invite text/addresses accordingly.
+- Settings page now includes a Public Host card.
+- Added HTTP test covering join-info, public host update, and settings exposure.
+
+## Goal 10 Progress (Game Version Selection and Library Presentation)
+
+Completed:
+- Added game metadata: `coverImage` key and `serverCount` (computed per game in the catalog API).
+- Added `recommendedVersion` per provider (first non-`latest` version).
+- Frontend dashboard now renders a Game Library section with game cards, server counts, and create-server links.
+- Added HTTP test verifying server counts, cover image keys, and recommended version.
+
+## Verification Log
+
+2026-06-18 Goals 6-10 full implementation:
+
+```bash
+go test ./...
+go vet ./...
+gofmt -l apps/api/internal/
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+```
+
+Result:
+- `go test ./...` passed (15 packages).
+- `go vet ./...` passed.
+- `gofmt -l apps/api/internal/` reported no files (all formatted).
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
 - No RBAC, OAuth, SaaS account system, or multi-user management is planned for this phase.
 - If no admin account exists, backend API routes remain open so a fresh instance can bootstrap; the frontend still forces setup before rendering the app.
 - Palworld uses a first-pass provider implementation. It can be selected and created, and its API/runtime payload now uses Palworld-specific config fields through a provider runtime bridge.
-- Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
-- Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
+- Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag. Pinning to a curated version list remains follow-up work.
+- Palworld and Don't Starve Together have automated create/runtime spec coverage, but still need manual Docker start verification on a host that can pull and run each image.
+- Minecraft runtime uses the `itzg/minecraft-server` image. Manual Docker start verification on a host is recommended before production use.
 - Non-Terraria create flow still uses a compatibility config envelope internally while the backend provider payload model is being phased in.
-- Don't Starve Together is wired through catalog/create/runtime spec generation, including caves and Workshop setup files. The runtime image now has a build script, but still needs a real Docker host build/start verification before claiming full runtime support.
+- Don't Starve Together is wired through catalog/create/runtime spec generation, including caves and Workshop setup files. The runtime image has a build script, but still needs a real Docker host build/start verification before claiming full runtime support.
+- Player kick/ban and save snapshot restore require the server to be running/stopped respectively; the UI enforces these preconditions.
+- Frontend unit tests (`pnpm test`) cannot run locally because optional native Rollup binaries are missing on this machine; backend and frontend type/lint/build checks all pass.
 
 ## Next Work
 
-Build and start the Don't Starve Together runtime image on a Docker host, then continue toward Minecraft Java provider planning.
+The post-V1 roadmap (Goals 1-10) is fully implemented and verified. Recommended next work:
+- Manual Docker host verification for Palworld, DST, and Minecraft runtime images.
+- Curate and pin version lists per game.
+- V1 UI polish and the deferred items (monitoring charts, backup retention, generic file manager).
