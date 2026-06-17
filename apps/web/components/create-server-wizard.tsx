@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { getGameVersions, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
+import { createReviewInvitePreview } from "@/lib/create-server-review";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
 import type { GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
 
@@ -294,6 +295,7 @@ export function CreateServerWizard() {
             {currentStepId === "review" && (
               <ReviewStep
                 config={config}
+                gameKey={selectedGameKey}
                 gameName={selectedGame?.name ?? "Terraria"}
                 hostPortLabel={hostPortMode === "manual" ? String(hostPort) : t("automaticPort")}
                 providerName={selectedProvider?.name ?? (mode === "tmodloader" ? "tModLoader" : t("modeVanilla"))}
@@ -940,6 +942,7 @@ function ModsStep({
 
 function ReviewStep({
   config,
+  gameKey,
   gameName,
   hostPortLabel,
   providerName,
@@ -949,6 +952,7 @@ function ReviewStep({
   selectedModNames
 }: {
   config: TerrariaConfig;
+  gameKey: string;
   gameName: string;
   hostPortLabel: string;
   providerName: string;
@@ -958,16 +962,32 @@ function ReviewStep({
   selectedModNames: string[];
 }) {
   const { t } = useI18n();
+  const invitePreview = createReviewInvitePreview({
+    gameKey,
+    hostPortLabel,
+    password: config.password,
+    serverName: config.serverName || gameName
+  });
+  const joinInstruction = gameKey === "palworld" ? t("reviewPalworldJoinInstruction") : t("reviewTerrariaJoinInstruction");
   return (
     <div>
       <h2 className="text-lg font-semibold">{t("review")}</h2>
       <Card className="mt-4 p-4">
         <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { game: gameName, mode: providerName, port: hostPortLabel })}</div>
-        <p className="mt-3 text-sm text-slate-400">{t("reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
+        <p className="mt-3 text-sm text-slate-400">{t(gameKey === "palworld" ? "reviewSavePlayers" : "reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
         <p className="mt-2 text-sm text-slate-400">
           {t("resourceLimits")}: <span className="text-slate-200">{formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}</span>
         </p>
         {version && <p className="mt-2 text-sm text-slate-400">{t("gameVersion")}: <span className="text-slate-200">{version}</span></p>}
+        <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
+          <div className="flex items-center gap-2 font-medium text-slate-100">
+            <Globe aria-hidden="true" className="size-4 text-panel-green" />
+            {t("reviewJoinTitle")}
+          </div>
+          <p className="mt-2 text-slate-400">{joinInstruction}</p>
+          <p className="mt-2 text-xs text-slate-500">{t("reviewJoinHint")}</p>
+          <p className="mt-2 overflow-hidden text-ellipsis rounded-md border border-panel-line bg-slate-950 px-3 py-2 font-mono text-xs text-panel-green">{invitePreview}</p>
+        </div>
         {selectedWorldName && (
           <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
             <p>{t("selectedWorldFile")}: <span className="text-panel-green">{selectedWorldName}</span></p>

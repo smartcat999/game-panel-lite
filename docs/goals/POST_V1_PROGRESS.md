@@ -123,6 +123,8 @@ Completed:
 - Server list/detail/create/lifecycle responses now include `joinInfo` with address, external port, password, invite text, and optional game-specific instructions.
 - Terraria and Palworld now generate game-specific invite text instead of relying on a frontend-only generic string.
 - Frontend server detail and copy-invite actions now use backend `joinInfo` with safe fallback for older responses.
+- Create-server review step now shows game-specific join guidance and an invite text preview before creation.
+- Added frontend review invite helper coverage for Terraria and Palworld preview text.
 
 ## Verification Log
 
@@ -261,6 +263,25 @@ Result:
 - `go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
+2026-06-18 Goal 4 review join preview:
+
+```bash
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web test
+pnpm --filter @gamepanel-lite/web build
+```
+
+Result:
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `go test ./...` passed.
+- `go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 
