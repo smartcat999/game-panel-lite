@@ -19,13 +19,35 @@ async function fetchWithTimeout(
     }, timeoutMs);
   });
   try {
-    return await Promise.race([fetch(input, { ...init, signal: controller.signal }), timeoutPromise]);
+    return await Promise.race([apiFetch(input, { ...init, signal: controller.signal }), timeoutPromise]);
   } finally {
     if (timeout) {
       clearTimeout(timeout);
     }
   }
 }
+
+async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  return fetch(input, { ...init, credentials: "include" });
+}
+
+async function readPayload<T>(response: Response, fallback: string): Promise<T> {
+  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? fallback);
+  }
+  return payload;
+}
+
+export type AuthAccount = {
+  id: string;
+  username: string;
+};
+
+export type AuthBootstrap = {
+  initialized: boolean;
+  account?: AuthAccount;
+};
 
 export async function getApiHealth(): Promise<{ status: string }> {
   const response = await fetchWithTimeout(`${API_BASE}/healthz`, { cache: "no-store" }, 3000, "API health check timed out");
@@ -35,8 +57,45 @@ export async function getApiHealth(): Promise<{ status: string }> {
   return (await response.json()) as { status: string };
 }
 
+export async function getAuthBootstrap(): Promise<AuthBootstrap> {
+  const response = await apiFetch(`${API_BASE}/api/auth/bootstrap`, { cache: "no-store" });
+  return readPayload<AuthBootstrap>(response, "Unable to load auth state");
+}
+
+export async function setupAdmin(username: string, password: string): Promise<AuthAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  return readPayload<AuthAccount>(response, "Unable to create admin account");
+}
+
+export async function loginAdmin(username: string, password: string): Promise<AuthAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  return readPayload<AuthAccount>(response, "Unable to sign in");
+}
+
+export async function logoutAdmin(): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to sign out");
+}
+
+export async function changeAdminPassword(currentPassword: string, newPassword: string): Promise<AuthAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+  return readPayload<AuthAccount>(response, "Unable to change password");
+}
+
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
-  const response = await fetch(`${API_BASE}/api/terraria/config/preview`, {
+  const response = await apiFetch(`${API_BASE}/api/terraria/config/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ config })
@@ -246,7 +305,7 @@ function toWorld(world: ApiWorld): World {
 }
 
 export async function listServers(): Promise<Server[]> {
-  const response = await fetch(`${API_BASE}/api/servers`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/servers`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load servers");
   }
@@ -255,7 +314,7 @@ export async function listServers(): Promise<Server[]> {
 }
 
 export async function getServer(id: string): Promise<Server> {
-  const response = await fetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load server");
   }
@@ -264,7 +323,7 @@ export async function getServer(id: string): Promise<Server> {
 }
 
 export async function updateServerConfig(id: string, config: TerrariaConfig, hostPort?: number, resources?: ResourceLimits): Promise<Server> {
-  const response = await fetch(`${API_BASE}/api/servers/${id}/config`, {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ config, hostPort, resources })
@@ -308,7 +367,7 @@ export type ServerStats = {
 };
 
 export async function getServerStats(id: string): Promise<ServerStats> {
-  const response = await fetch(`${API_BASE}/api/servers/${id}/stats`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/stats`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load server stats");
   }
@@ -327,7 +386,7 @@ export type HostStats = {
 };
 
 export async function getRuntimeStats(): Promise<HostStats> {
-  const response = await fetch(`${API_BASE}/api/runtime/stats`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/runtime/stats`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load runtime stats");
   }
@@ -335,7 +394,7 @@ export async function getRuntimeStats(): Promise<HostStats> {
 }
 
 export async function getServerLogSnapshot(id: string): Promise<string[]> {
-  const response = await fetch(`${API_BASE}/api/servers/${id}/logs/snapshot`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/logs/snapshot`, { cache: "no-store" });
   const payload = (await response.json().catch(() => ({}))) as { lines?: string[]; error?: string };
   if (!response.ok) {
     throw new Error(payload.error ?? "Unable to load server logs");
@@ -344,7 +403,7 @@ export async function getServerLogSnapshot(id: string): Promise<string[]> {
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  const response = await fetch(`${API_BASE}/api/settings`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/settings`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load settings");
   }
@@ -352,7 +411,7 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
-  const response = await fetch(`${API_BASE}/api/terraria/versions`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/terraria/versions`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load versions");
   }
@@ -367,7 +426,7 @@ export async function createServer(input: {
   version?: string;
   resources?: ResourceLimits;
 }): Promise<Server> {
-  const response = await fetch(`${API_BASE}/api/servers`, {
+  const response = await apiFetch(`${API_BASE}/api/servers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
@@ -381,7 +440,7 @@ export async function createServer(input: {
 }
 
 export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<Server | null> {
-  const response = await fetch(`${API_BASE}/api/servers/${id}${action === "delete" ? "" : `/${action}`}`, {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}${action === "delete" ? "" : `/${action}`}`, {
     method: action === "delete" ? "DELETE" : "POST"
   });
   if (!response.ok) {
@@ -396,7 +455,7 @@ export async function serverAction(id: string, action: "start" | "stop" | "resta
 }
 
 export async function sendServerCommand(id: string, command: string) {
-  const response = await fetch(`${API_BASE}/api/servers/${id}/command`, {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/command`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ command })
@@ -408,7 +467,7 @@ export async function sendServerCommand(id: string, command: string) {
 }
 
 export async function listWorlds(): Promise<World[]> {
-  const response = await fetch(`${API_BASE}/api/worlds`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/worlds`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load worlds");
   }
@@ -420,7 +479,7 @@ export async function importWorld(file: File, instanceId = "unassigned"): Promis
   const body = new FormData();
   body.set("file", file);
   body.set("instanceId", instanceId);
-  const response = await fetch(`${API_BASE}/api/worlds/import`, { method: "POST", body });
+  const response = await apiFetch(`${API_BASE}/api/worlds/import`, { method: "POST", body });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to import world");
@@ -430,7 +489,7 @@ export async function importWorld(file: File, instanceId = "unassigned"): Promis
 }
 
 export async function createWorldSnapshot(serverId: string, name?: string): Promise<World> {
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/world-snapshots`, {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/world-snapshots`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name })
@@ -444,7 +503,7 @@ export async function createWorldSnapshot(serverId: string, name?: string): Prom
 }
 
 export async function assignWorld(id: string, instanceId: string): Promise<World> {
-  const response = await fetch(`${API_BASE}/api/worlds/${id}/assign`, {
+  const response = await apiFetch(`${API_BASE}/api/worlds/${id}/assign`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ instanceId })
@@ -458,7 +517,7 @@ export async function assignWorld(id: string, instanceId: string): Promise<World
 }
 
 export async function deleteWorld(id: string) {
-  const response = await fetch(`${API_BASE}/api/worlds/${id}`, { method: "DELETE" });
+  const response = await apiFetch(`${API_BASE}/api/worlds/${id}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete world");
@@ -470,7 +529,7 @@ export function worldDownloadUrl(id: string) {
 }
 
 async function downloadBlob(url: string, fallbackMessage: string): Promise<Blob> {
-  const response = await fetch(url);
+  const response = await apiFetch(url);
   if (!response.ok) {
     const payload = (await response.clone().json().catch(() => ({}))) as { error?: string };
     if (payload.error) {
@@ -487,7 +546,7 @@ export async function downloadWorldFile(id: string): Promise<Blob> {
 }
 
 export async function listBackups(): Promise<Backup[]> {
-  const response = await fetch(`${API_BASE}/api/backups`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/backups`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load backups");
   }
@@ -507,7 +566,7 @@ export async function listBackups(): Promise<Backup[]> {
 }
 
 export async function createBackup(serverId: string): Promise<Backup> {
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/backups`, { method: "POST" });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/backups`, { method: "POST" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to create backup");
@@ -528,7 +587,7 @@ export async function createBackup(serverId: string): Promise<Backup> {
 }
 
 export async function restoreBackup(id: string) {
-  const response = await fetch(`${API_BASE}/api/backups/${id}/restore`, { method: "POST" });
+  const response = await apiFetch(`${API_BASE}/api/backups/${id}/restore`, { method: "POST" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to restore backup");
@@ -536,7 +595,7 @@ export async function restoreBackup(id: string) {
 }
 
 export async function deleteBackup(id: string) {
-  const response = await fetch(`${API_BASE}/api/backups/${id}`, { method: "DELETE" });
+  const response = await apiFetch(`${API_BASE}/api/backups/${id}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete backup");
@@ -552,7 +611,7 @@ export async function downloadBackupFile(id: string): Promise<Blob> {
 }
 
 export async function listMods(serverId: string): Promise<ModFile[]> {
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods`, { cache: "no-store" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to load mods");
@@ -627,7 +686,7 @@ function toModPack(pack: ApiModPack): ModPack {
 export async function uploadMod(serverId: string, file: File): Promise<ModFile> {
   const body = new FormData();
   body.set("file", file);
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/upload`, { method: "POST", body });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/upload`, { method: "POST", body });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to upload mod");
@@ -637,7 +696,7 @@ export async function uploadMod(serverId: string, file: File): Promise<ModFile> 
 }
 
 export async function importWorkshopMods(serverId: string, workshopIds: string[]): Promise<ModFile[]> {
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/workshop`, {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/workshop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workshopIds })
@@ -651,7 +710,7 @@ export async function importWorkshopMods(serverId: string, workshopIds: string[]
 }
 
 export async function setModEnabled(serverId: string, modId: string, enabled: boolean): Promise<ModFile> {
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled })
@@ -665,7 +724,7 @@ export async function setModEnabled(serverId: string, modId: string, enabled: bo
 }
 
 export async function deleteMod(serverId: string, modId: string) {
-  const response = await fetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, { method: "DELETE" });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete mod");
@@ -673,7 +732,7 @@ export async function deleteMod(serverId: string, modId: string) {
 }
 
 export async function listGlobalMods(): Promise<ModFile[]> {
-  const response = await fetch(`${API_BASE}/api/mods`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/mods`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load mod library");
   }
@@ -684,7 +743,7 @@ export async function listGlobalMods(): Promise<ModFile[]> {
 export async function uploadGlobalMod(file: File): Promise<ModFile> {
   const body = new FormData();
   body.set("file", file);
-  const response = await fetch(`${API_BASE}/api/mods/upload`, { method: "POST", body });
+  const response = await apiFetch(`${API_BASE}/api/mods/upload`, { method: "POST", body });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to upload mod");
@@ -694,7 +753,7 @@ export async function uploadGlobalMod(file: File): Promise<ModFile> {
 }
 
 export async function listRecommendedMods(): Promise<RecommendedMod[]> {
-  const response = await fetch(`${API_BASE}/api/mods/recommended`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/mods/recommended`, { cache: "no-store" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to load recommended mods");
@@ -704,7 +763,7 @@ export async function listRecommendedMods(): Promise<RecommendedMod[]> {
 }
 
 export async function importGlobalWorkshopMods(workshopIds: string[]): Promise<ModFile[]> {
-  const response = await fetch(`${API_BASE}/api/mods/workshop`, {
+  const response = await apiFetch(`${API_BASE}/api/mods/workshop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workshopIds })
@@ -718,7 +777,7 @@ export async function importGlobalWorkshopMods(workshopIds: string[]): Promise<M
 }
 
 export async function assignMod(modId: string, instanceId: string): Promise<ModFile> {
-  const response = await fetch(`${API_BASE}/api/mods/${modId}/assign`, {
+  const response = await apiFetch(`${API_BASE}/api/mods/${modId}/assign`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ instanceId })
@@ -732,7 +791,7 @@ export async function assignMod(modId: string, instanceId: string): Promise<ModF
 }
 
 export async function deleteGlobalMod(modId: string) {
-  const response = await fetch(`${API_BASE}/api/mods/${modId}`, { method: "DELETE" });
+  const response = await apiFetch(`${API_BASE}/api/mods/${modId}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete mod");
@@ -740,7 +799,7 @@ export async function deleteGlobalMod(modId: string) {
 }
 
 export async function listModPacks(): Promise<ModPack[]> {
-  const response = await fetch(`${API_BASE}/api/mod-packs`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/mod-packs`, { cache: "no-store" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to load mod packs");
@@ -750,7 +809,7 @@ export async function listModPacks(): Promise<ModPack[]> {
 }
 
 export async function createModPack(input: { name: string; description?: string; modIds: string[] }): Promise<ModPack> {
-  const response = await fetch(`${API_BASE}/api/mod-packs`, {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
@@ -764,7 +823,7 @@ export async function createModPack(input: { name: string; description?: string;
 }
 
 export async function updateModPack(id: string, input: { name: string; description?: string; modIds: string[] }): Promise<ModPack> {
-  const response = await fetch(`${API_BASE}/api/mod-packs/${id}`, {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
@@ -778,7 +837,7 @@ export async function updateModPack(id: string, input: { name: string; descripti
 }
 
 export async function deleteModPack(id: string) {
-  const response = await fetch(`${API_BASE}/api/mod-packs/${id}`, { method: "DELETE" });
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/${id}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete mod pack");
@@ -786,7 +845,7 @@ export async function deleteModPack(id: string) {
 }
 
 export async function listActivity(): Promise<ActivityEvent[]> {
-  const response = await fetch(`${API_BASE}/api/activity`, { cache: "no-store" });
+  const response = await apiFetch(`${API_BASE}/api/activity`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load activity");
   }

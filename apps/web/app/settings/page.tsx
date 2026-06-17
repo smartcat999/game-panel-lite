@@ -1,18 +1,38 @@
 "use client";
 
+import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Database, ShieldCheck } from "lucide-react";
+import { Database, KeyRound, ShieldCheck } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui";
-import { getDockerStatus, getSettings } from "@/lib/api";
+import { Button, Card, Input } from "@/components/ui";
+import { changeAdminPassword, getDockerStatus, getSettings } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { t } = useI18n();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
   const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false });
   const configuredHost = settings.data?.dockerHost ?? docker.data?.host ?? "GAMEPANEL_DOCKER_HOST";
+  const passwordMutation = useMutation({
+    mutationFn: () => changeAdminPassword(currentPassword, newPassword),
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordMessage(t("passwordChanged"));
+    },
+    onError: (err) => setPasswordMessage(err instanceof Error ? err.message : t("passwordChangeFailed"))
+  });
+
+  const submitPasswordChange = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordMessage("");
+    passwordMutation.mutate();
+  };
 
   return (
     <>
@@ -60,6 +80,42 @@ export default function SettingsPage() {
                   <SettingValue label={t("dbPath")} value={settings.data.dbPath} />
                 </div>
               ) : null}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <KeyRound className="mt-1 shrink-0 text-panel-green" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold">{t("localAdmin")}</h2>
+              <p className="mt-2 text-sm text-slate-400">{t("localAdminDescription")}</p>
+              <form className="mt-5 space-y-3" onSubmit={submitPasswordChange}>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{t("currentPassword")}</span>
+                  <Input
+                    className="mt-2 w-full"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{t("newPassword")}</span>
+                  <Input
+                    className="mt-2 w-full"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                {passwordMessage ? <p className="text-sm text-slate-400">{passwordMessage}</p> : null}
+                <Button className="w-full" type="submit" disabled={passwordMutation.isPending}>
+                  {passwordMutation.isPending ? t("saving") : t("changePassword")}
+                </Button>
+              </form>
             </div>
           </div>
         </Card>

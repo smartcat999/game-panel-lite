@@ -330,7 +330,7 @@ export default function ServerDetailPage() {
           setLogStatus("idle");
           return;
         }
-        source = new EventSource(serverLogsUrl(id));
+        source = new EventSource(serverLogsUrl(id), { withCredentials: true });
         source.onopen = () => {
           setConsoleError("");
           setLogStatus("connected");

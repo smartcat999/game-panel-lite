@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"gorm.io/driver/sqlite"
@@ -23,10 +24,65 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+func (s *Store) HasAdminAccount(ctx context.Context) (bool, error) {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&domain.AdminAccount{}).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (s *Store) CreateAdminAccount(ctx context.Context, account *domain.AdminAccount) error {
+	return s.db.WithContext(ctx).Create(account).Error
+}
+
+func (s *Store) GetAdminAccountByUsername(ctx context.Context, username string) (domain.AdminAccount, error) {
+	var account domain.AdminAccount
+	err := s.db.WithContext(ctx).First(&account, "username = ?", username).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return account, ErrNotFound
+	}
+	return account, err
+}
+
+func (s *Store) GetAdminAccount(ctx context.Context, id string) (domain.AdminAccount, error) {
+	var account domain.AdminAccount
+	err := s.db.WithContext(ctx).First(&account, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return account, ErrNotFound
+	}
+	return account, err
+}
+
+func (s *Store) SaveAdminAccount(ctx context.Context, account *domain.AdminAccount) error {
+	return s.db.WithContext(ctx).Save(account).Error
+}
+
+func (s *Store) CreateSession(ctx context.Context, session *domain.Session) error {
+	return s.db.WithContext(ctx).Create(session).Error
+}
+
+func (s *Store) GetSessionByTokenHash(ctx context.Context, tokenHash string) (domain.Session, error) {
+	var session domain.Session
+	err := s.db.WithContext(ctx).First(&session, "token_hash = ?", tokenHash).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return session, ErrNotFound
+	}
+	return session, err
+}
+
+func (s *Store) DeleteSession(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.Session{}, "id = ?", id).Error
+}
+
+func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) error {
+	return s.db.WithContext(ctx).Delete(&domain.Session{}, "expires_at <= ?", now).Error
 }
 
 func (s *Store) CreateServer(ctx context.Context, server *domain.GameServerInstance) error {

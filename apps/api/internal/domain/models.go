@@ -146,3 +146,19 @@ type ActivityEvent struct {
 	Message    string    `json:"message"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
+
+type AdminAccount struct {
+	ID           string    `json:"id" gorm:"primaryKey"`
+	Username     string    `json:"username" gorm:"uniqueIndex"`
+	PasswordHash string    `json:"-"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type Session struct {
+	ID        string    `json:"id" gorm:"primaryKey"`
+	AccountID string    `json:"accountId" gorm:"index"`
+	TokenHash string    `json:"-" gorm:"uniqueIndex"`
+	ExpiresAt time.Time `json:"expiresAt" gorm:"index"`
+	CreatedAt time.Time `json:"createdAt"`
+}

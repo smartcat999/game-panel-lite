@@ -8,6 +8,8 @@ The priority is based on what ordinary self-hosted users can immediately underst
 
 V1 UI polish and existing-flow optimization are intentionally deferred unless they block a new feature.
 
+Development execution plan: `docs/goals/POST_V1_PRODUCT_DEVELOPMENT_PLAN.md`.
+
 ## Product Principles
 
 - Prefer features users can name in plain language: login, create a Palworld server, invite friends, manage saves.
@@ -254,4 +256,3 @@ They should not block the user-facing feature roadmap above.
 8. Friend invite experience.
 9. Game version selection.
 10. Game library presentation.
-

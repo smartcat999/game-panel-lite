@@ -3,13 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, Plus, Search, Settings, ShieldCheck } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, LogOut, Plus, Search, Settings, ShieldCheck } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { getApiHealth, listServers } from "@/lib/api";
+import { getApiHealth, getAuthBootstrap, listServers, logoutAdmin } from "@/lib/api";
 import { serverJoinPort } from "@/lib/server-join";
 
 const nav = [
@@ -25,6 +25,7 @@ const nav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { locale, setLocale, t } = useI18n();
   const [createPending, setCreatePending] = useState(false);
   const [search, setSearch] = useState("");
@@ -33,7 +34,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchRef = useRef<HTMLFormElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
+  const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
+  const logoutMutation = useMutation({
+    mutationFn: logoutAdmin,
+    onSuccess: async () => {
+      setProfileOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["auth-bootstrap"] });
+      router.push("/dashboard");
+    }
+  });
   const serviceAvailable = apiHealth.data?.status === "ok";
   const serviceLabel = serviceAvailable ? t("online") : apiHealth.isLoading ? t("dockerCheckingShort") : t("unavailable");
   const searchTerm = search.trim().toLowerCase();
@@ -256,13 +266,22 @@ export function AppShell({ children }: { children: ReactNode }) {
                         className="size-10 rounded-full border border-panel-line bg-slate-950"
                       />
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{t("localUser")}</p>
+                        <p className="truncate text-sm font-medium text-white">{authQuery.data?.account?.username ?? t("localUser")}</p>
                         <p className="text-xs text-slate-500">{t("localProfileDescription")}</p>
                       </div>
                     </div>
                     <div className="mt-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
                       GamePanel Lite v1.0.0
                     </div>
+                    <button
+                      type="button"
+                      className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => logoutMutation.mutate()}
+                      disabled={logoutMutation.isPending}
+                    >
+                      <LogOut aria-hidden="true" className="size-4" />
+                      {logoutMutation.isPending ? t("loggingOut") : t("logout")}
+                    </button>
                   </div>
                 )}
               </div>
