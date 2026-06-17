@@ -125,7 +125,7 @@ func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	visible, err := h.visibleMods(r.Context(), mods)
+	visible, err := h.visibleServerMods(r.Context(), server, mods)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -179,6 +179,17 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	dependencies, err := h.ensureModDependencies(r.Context(), server, []domain.ModFile{item})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(dependencies) > 0 {
+		if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	h.recordActivity(r.Context(), server.ID, "mod.uploaded", fmt.Sprintf("Uploaded mod %s to %s", item.FileName, server.Name))
 	status := http.StatusOK
 	if created {
@@ -215,6 +226,12 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		}
 		items = append(items, item)
 	}
+	dependencies, err := h.ensureModDependencies(r.Context(), server, items)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	items = append(items, dependencies...)
 	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -459,6 +476,17 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		dependencies, err := h.ensureModDependencies(r.Context(), targetServer, []domain.ModFile{assigned})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if len(dependencies) > 0 {
+			if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
 		if !created {
 			h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name))
 			writeJSON(w, http.StatusOK, assigned)
@@ -485,6 +513,17 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 	if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	dependencies, err := h.ensureModDependencies(r.Context(), targetServer, []domain.ModFile{assigned})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if len(dependencies) > 0 {
+		if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	if !created {
 		h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name))
@@ -529,6 +568,7 @@ func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileNa
 
 func applyTModMetadata(item *domain.ModFile, metadata modsvc.Metadata) {
 	if metadata.Name != "" {
+		item.ModName = metadata.Name
 		item.Title = metadata.Name
 	}
 	if metadata.Version != "" {
@@ -581,6 +621,136 @@ func (h *Handler) upsertWorkshopModRecord(ctx context.Context, instanceID string
 	return item, true, h.store.CreateMod(ctx, &item)
 }
 
+func (h *Handler) ensureModDependencies(ctx context.Context, server domain.GameServerInstance, roots []domain.ModFile) ([]domain.ModFile, error) {
+	if server.ProviderKey != domain.ProviderTerrariaTModLoader || len(roots) == 0 {
+		return nil, nil
+	}
+	added := make([]domain.ModFile, 0)
+	queue := append([]domain.ModFile(nil), roots...)
+	seen := make(map[string]struct{}, len(queue))
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+		key := modIdentity(item)
+		if key != "" {
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+		}
+		for _, dependencyName := range modDependencies(item) {
+			dependency, created, err := h.ensureModDependency(ctx, server, dependencyName)
+			if err != nil {
+				return nil, err
+			}
+			if created {
+				added = append(added, dependency)
+			}
+			queue = append(queue, dependency)
+		}
+	}
+	return added, nil
+}
+
+func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameServerInstance, dependencyName string) (domain.ModFile, bool, error) {
+	dependencyName = strings.TrimSpace(dependencyName)
+	if dependencyName == "" {
+		return domain.ModFile{}, false, nil
+	}
+	if existing, ok, err := h.findServerModByModName(ctx, server.ID, dependencyName); err != nil || ok {
+		return existing, false, err
+	}
+	if library, ok, err := h.findLibraryModByModName(ctx, dependencyName); err != nil || ok {
+		if err != nil {
+			return domain.ModFile{}, false, err
+		}
+		if library.Source == "workshop" {
+			assigned, created, err := h.upsertWorkshopModRecord(ctx, server.ID, library.WorkshopID)
+			return assigned, created, err
+		}
+		size, err := h.copyLibraryModToServerCache(library, server.ID)
+		if err != nil {
+			return domain.ModFile{}, false, err
+		}
+		assigned, created, err := h.upsertModRecord(ctx, server.ID, library.FileName, size, metadataFromMod(library))
+		if err != nil {
+			return domain.ModFile{}, false, err
+		}
+		if err := h.materializeModForRuntime(assigned, server); err != nil {
+			return domain.ModFile{}, false, err
+		}
+		return assigned, created, nil
+	}
+	recommended, ok := modcatalog.RecommendedTModLoaderModByModName(dependencyName)
+	if !ok || recommended.WorkshopID == "" {
+		return domain.ModFile{}, false, fmt.Errorf("missing dependency %s in mod library", dependencyName)
+	}
+	assigned, created, err := h.upsertWorkshopModRecord(ctx, server.ID, recommended.WorkshopID)
+	return assigned, created, err
+}
+
+func (h *Handler) findServerModByModName(ctx context.Context, instanceID string, modName string) (domain.ModFile, bool, error) {
+	mods, err := h.store.ListMods(ctx, instanceID)
+	if err != nil {
+		return domain.ModFile{}, false, err
+	}
+	for _, item := range mods {
+		if modIdentity(item) == modName {
+			return item, true, nil
+		}
+	}
+	return domain.ModFile{}, false, nil
+}
+
+func (h *Handler) findLibraryModByModName(ctx context.Context, modName string) (domain.ModFile, bool, error) {
+	mods, err := h.store.ListMods(ctx, "unassigned")
+	if err != nil {
+		return domain.ModFile{}, false, err
+	}
+	for _, item := range mods {
+		if modIdentity(item) == modName {
+			return item, true, nil
+		}
+	}
+	return domain.ModFile{}, false, nil
+}
+
+func modIdentity(item domain.ModFile) string {
+	for _, value := range []string{item.ModName, item.Title, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName))} {
+		value = strings.TrimSpace(value)
+		if value != "" && !strings.HasPrefix(value, "workshop-") {
+			return value
+		}
+	}
+	if item.WorkshopID != "" {
+		if recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(item.WorkshopID); ok {
+			return recommended.ModName
+		}
+	}
+	return ""
+}
+
+func modDependencies(item domain.ModFile) []string {
+	if len(item.Dependencies) > 0 {
+		return uniqueNonEmptyStrings(item.Dependencies)
+	}
+	if strings.TrimSpace(item.DependenciesJSON) != "" {
+		var values []string
+		if err := json.Unmarshal([]byte(item.DependenciesJSON), &values); err == nil {
+			return uniqueNonEmptyStrings(values)
+		}
+	}
+	if item.WorkshopID != "" {
+		if recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(item.WorkshopID); ok {
+			return uniqueNonEmptyStrings(recommended.Dependencies)
+		}
+	}
+	if recommended, ok := modcatalog.RecommendedTModLoaderModByModName(modIdentity(item)); ok {
+		return uniqueNonEmptyStrings(recommended.Dependencies)
+	}
+	return nil
+}
+
 var errWorkshopModExists = errors.New("workshop mod already exists")
 
 func (h *Handler) createWorkshopModRecord(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, bool, error) {
@@ -603,11 +773,14 @@ func applyRecommendedModMetadata(item *domain.ModFile, workshopID string) {
 		return
 	}
 	tags, _ := json.Marshal(recommended.Tags)
+	dependencies, _ := json.Marshal(uniqueNonEmptyStrings(recommended.Dependencies))
+	item.ModName = recommended.ModName
 	item.Title = recommended.Title
 	item.CreatorSteamID = recommended.CreatorSteamID
 	item.PreviewURL = recommended.PreviewURL
 	item.Description = recommended.Description
 	item.TagsJSON = string(tags)
+	item.DependenciesJSON = string(dependencies)
 	item.Subscriptions = recommended.Subscriptions
 	item.Favorited = recommended.Favorited
 	item.Views = recommended.Views
@@ -622,8 +795,14 @@ func hydrateModMetadata(item *domain.ModFile) {
 	if item.TagsJSON != "" {
 		_ = json.Unmarshal([]byte(item.TagsJSON), &item.Tags)
 	}
+	if item.DependenciesJSON != "" {
+		_ = json.Unmarshal([]byte(item.DependenciesJSON), &item.Dependencies)
+	}
 	if item.Source == "workshop" && item.Title == "" && item.WorkshopID != "" {
 		item.Title = "Workshop " + item.WorkshopID
+	}
+	if item.ModName == "" {
+		item.ModName = modIdentity(*item)
 	}
 }
 
@@ -672,7 +851,9 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 			continue
 		}
 		if isTModPackage(item.FileName) {
-			enabled = append(enabled, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName)))
+			if name := modIdentity(item); name != "" {
+				enabled = append(enabled, name)
+			}
 		}
 	}
 	sort.Strings(enabled)
@@ -750,6 +931,55 @@ func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]dom
 		visible = append(visible, item)
 	}
 	return visible, nil
+}
+
+func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServerInstance, mods []domain.ModFile) ([]domain.ModFile, error) {
+	visible, err := h.visibleMods(ctx, mods)
+	if err != nil {
+		return nil, err
+	}
+	runtimeEnabled, err := readRuntimeEnabledMods(server)
+	if err != nil {
+		h.logger.Warn("failed to read runtime enabled mods", "server", server.ID, "error", err)
+		return visible, nil
+	}
+	if runtimeEnabled == nil {
+		return visible, nil
+	}
+	for index := range visible {
+		enabled := false
+		if _, ok := runtimeEnabled[modIdentity(visible[index])]; ok {
+			enabled = true
+		}
+		visible[index].RuntimeEnabled = &enabled
+	}
+	return visible, nil
+}
+
+func readRuntimeEnabledMods(server domain.GameServerInstance) (map[string]struct{}, error) {
+	if server.ProviderKey != domain.ProviderTerrariaTModLoader || strings.TrimSpace(server.DataDir) == "" {
+		return nil, nil
+	}
+	path := filepath.Join(server.DataDir, "Mods", "enabled.json")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var values []string
+	if err := json.Unmarshal(content, &values); err != nil {
+		return nil, err
+	}
+	result := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			result[value] = struct{}{}
+		}
+	}
+	return result, nil
 }
 
 func (h *Handler) migrateLegacyWorkshopInstall(ctx context.Context, item domain.ModFile, path string) ([]domain.ModFile, error) {
@@ -928,6 +1158,11 @@ func (h *Handler) modPackPayload(ctx context.Context, rawName string, rawDescrip
 	if len(modIDs) == 0 {
 		return "", "", nil, fmt.Errorf("select at least one mod")
 	}
+	expandedModIDs, err := h.expandModPackDependencies(ctx, modIDs)
+	if err != nil {
+		return "", "", nil, err
+	}
+	modIDs = expandedModIDs
 	for _, modID := range modIDs {
 		item, err := h.store.GetMod(ctx, modID)
 		if err != nil {
@@ -942,6 +1177,45 @@ func (h *Handler) modPackPayload(ctx context.Context, rawName string, rawDescrip
 		return "", "", nil, err
 	}
 	return name, strings.TrimSpace(rawDescription), modIDsJSON, nil
+}
+
+func (h *Handler) expandModPackDependencies(ctx context.Context, modIDs []string) ([]string, error) {
+	result := make([]string, 0, len(modIDs))
+	seenIDs := make(map[string]struct{}, len(modIDs))
+	queue := append([]string(nil), modIDs...)
+	for len(queue) > 0 {
+		modID := queue[0]
+		queue = queue[1:]
+		if _, ok := seenIDs[modID]; ok {
+			continue
+		}
+		seenIDs[modID] = struct{}{}
+		item, err := h.store.GetMod(ctx, modID)
+		if err != nil {
+			return nil, fmt.Errorf("mod not found")
+		}
+		result = append(result, modID)
+		for _, dependencyName := range modDependencies(item) {
+			dependency, err := h.ensureLibraryDependency(ctx, dependencyName)
+			if err != nil {
+				return nil, err
+			}
+			queue = append(queue, dependency.ID)
+		}
+	}
+	return result, nil
+}
+
+func (h *Handler) ensureLibraryDependency(ctx context.Context, dependencyName string) (domain.ModFile, error) {
+	if library, ok, err := h.findLibraryModByModName(ctx, dependencyName); err != nil || ok {
+		return library, err
+	}
+	recommended, ok := modcatalog.RecommendedTModLoaderModByModName(dependencyName)
+	if !ok || recommended.WorkshopID == "" {
+		return domain.ModFile{}, fmt.Errorf("missing dependency %s in mod library", dependencyName)
+	}
+	item, _, err := h.upsertWorkshopModRecord(ctx, "unassigned", recommended.WorkshopID)
+	return item, err
 }
 
 func (h *Handler) deleteModPack(w http.ResponseWriter, r *http.Request) {
@@ -973,6 +1247,7 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 		if item.InstanceID != "unassigned" {
 			continue
 		}
+		hydrateModMetadata(&item)
 		mods = append(mods, item)
 	}
 	return modPackResponse{

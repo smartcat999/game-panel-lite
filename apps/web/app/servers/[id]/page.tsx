@@ -1762,6 +1762,7 @@ function ServerModRow({
   onToggle: (mod: ModFile) => void;
 }) {
   const { locale, t } = useI18n();
+  const status = modRuntimeStatus(mod);
   return (
     <div className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex min-w-0 items-start gap-3">
@@ -1776,16 +1777,18 @@ function ServerModRow({
             <Link href={`/mods/${mod.id}`} className="truncate text-sm font-semibold text-white transition hover:text-panel-green">
               {modDisplayName(mod, locale)}
             </Link>
-            <span className={cn(
-              "shrink-0 rounded px-2 py-0.5 text-xs font-medium",
-              mod.enabled ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400"
-            )}>
-              {mod.enabled ? t("enabled") : t("disabled")}
+            <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", status.className)}>
+              {t(status.labelKey)}
             </span>
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
             {mod.size} · {localizeRelativeTime(mod.created, locale)}
           </p>
+          {mod.dependencies && mod.dependencies.length > 0 ? (
+            <p className="mt-1 truncate text-xs text-slate-500">
+              {t("dependencies")}: {mod.dependencies.join(", ")}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
@@ -1799,6 +1802,19 @@ function ServerModRow({
       </div>
     </div>
   );
+}
+
+function modRuntimeStatus(mod: ModFile): { labelKey: "enabled" | "disabled" | "notApplied" | "pendingRestart"; className: string } {
+  if (!mod.enabled) {
+    return { labelKey: "disabled", className: "bg-slate-800 text-slate-400" };
+  }
+  if (mod.runtimeEnabled === false) {
+    return { labelKey: "notApplied", className: "bg-panel-gold/15 text-panel-gold" };
+  }
+  if (mod.runtimeEnabled === undefined) {
+    return { labelKey: "pendingRestart", className: "bg-slate-800 text-slate-300" };
+  }
+  return { labelKey: "enabled", className: "bg-panel-green/15 text-panel-green" };
 }
 
 function LogViewport({

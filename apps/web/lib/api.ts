@@ -98,6 +98,7 @@ type ApiModFile = {
   fileName: string;
   source?: string;
   workshopId?: string;
+  modName?: string;
   title?: string;
   modVersion?: string;
   tmodVersion?: string;
@@ -111,12 +112,15 @@ type ApiModFile = {
   updatedAtSteam?: number;
   sizeBytes: number;
   enabled: boolean;
+  runtimeEnabled?: boolean;
+  dependencies?: string[];
   createdAt: string;
 };
 
 type ApiRecommendedMod = {
   rank: number;
   workshopId: string;
+  modName?: string;
   title: string;
   creatorSteamId?: string;
   previewUrl?: string;
@@ -128,6 +132,7 @@ type ApiRecommendedMod = {
   timeCreated?: number;
   timeUpdated?: number;
   tags?: string[];
+  dependencies?: string[];
   inLibrary: boolean;
   modId?: string;
 };
@@ -602,6 +607,7 @@ function toModFile(file: ApiModFile): ModFile {
     fileName: file.fileName,
     source: file.source,
     workshopId: file.workshopId,
+    modName: file.modName,
     title: file.title,
     modVersion: file.modVersion,
     tmodVersion: file.tmodVersion,
@@ -616,6 +622,8 @@ function toModFile(file: ApiModFile): ModFile {
     size: formatBytes(file.sizeBytes),
     sizeBytes: file.sizeBytes,
     enabled: file.enabled,
+    runtimeEnabled: file.runtimeEnabled,
+    dependencies: file.dependencies,
     created: formatRelative(file.createdAt)
   };
 }
@@ -624,6 +632,7 @@ function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
   return {
     rank: mod.rank,
     workshopId: mod.workshopId,
+    modName: mod.modName,
     title: mod.title,
     creatorSteamId: mod.creatorSteamId,
     previewUrl: mod.previewUrl,
@@ -636,6 +645,7 @@ function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
     timeCreated: mod.timeCreated,
     timeUpdated: mod.timeUpdated,
     tags: mod.tags,
+    dependencies: mod.dependencies,
     inLibrary: mod.inLibrary,
     modId: mod.modId
   };

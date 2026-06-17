@@ -1151,6 +1151,23 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	if len(mods) != 1 || mods[0].ID != mod.ID {
 		t.Fatalf("expected listed uploaded mod, got %+v", mods)
 	}
+	if mods[0].RuntimeEnabled == nil || !*mods[0].RuntimeEnabled {
+		t.Fatalf("expected listed mod to be runtime enabled, got %+v", mods[0])
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "Mods", "enabled.json"), []byte("[]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	relist := httptest.NewRecorder()
+	router.ServeHTTP(relist, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/tmod/mods", nil))
+	if relist.Code != stdhttp.StatusOK {
+		t.Fatalf("expected mod relist 200, got %d: %s", relist.Code, relist.Body.String())
+	}
+	if err := json.Unmarshal(relist.Body.Bytes(), &mods); err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 || mods[0].RuntimeEnabled == nil || *mods[0].RuntimeEnabled {
+		t.Fatalf("expected configured mod to be runtime disabled after enabled.json changed, got %+v", mods)
+	}
 
 	remove := httptest.NewRecorder()
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/tmod/mods/"+mod.ID, nil))
@@ -1289,13 +1306,13 @@ func TestTModLoaderWorkshopImportWritesInstallFile(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("expected two workshop records, got %+v", items)
+	if len(items) != 3 {
+		t.Fatalf("expected requested workshop records plus dependency, got %+v", items)
 	}
 	if items[0].Source != "workshop" || items[0].WorkshopID == "" || items[0].FileName == "install.txt" {
 		t.Fatalf("expected workshop mod record, got %+v", items[0])
 	}
-	expected := "2563309347\n2824688072\n"
+	expected := "2563309347\n2824688072\n2908170107\n"
 	runtimeInstall, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "install.txt"))
 	if err != nil {
 		t.Fatal(err)
@@ -1390,9 +1407,11 @@ func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
 		t.Fatalf("expected recommended mods 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 	var items []struct {
-		WorkshopID string `json:"workshopId"`
-		InLibrary  bool   `json:"inLibrary"`
-		ModID      string `json:"modId"`
+		WorkshopID   string   `json:"workshopId"`
+		ModName      string   `json:"modName"`
+		Dependencies []string `json:"dependencies"`
+		InLibrary    bool     `json:"inLibrary"`
+		ModID        string   `json:"modId"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
 		t.Fatal(err)
@@ -1401,6 +1420,9 @@ func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
 	for _, item := range items {
 		if item.WorkshopID == "2563309347" {
 			found = true
+			if item.ModName != "MagicStorage" || !reflect.DeepEqual(item.Dependencies, []string{"SerousCommonLib"}) {
+				t.Fatalf("expected Magic Storage dependency metadata, got %+v", item)
+			}
 			if !item.InLibrary || item.ModID != "existing-workshop" {
 				t.Fatalf("expected recommended workshop mod marked as in library, got %+v", item)
 			}
@@ -1833,6 +1855,47 @@ func TestModPackCreateListAndDelete(t *testing.T) {
 	}
 }
 
+func TestModPackCreateIncludesKnownDependencies(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	magic := domain.ModFile{
+		ID:         "magic",
+		InstanceID: "unassigned",
+		FileName:   "workshop-2563309347",
+		Source:     "workshop",
+		WorkshopID: "2563309347",
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &magic); err != nil {
+		t.Fatal(err)
+	}
+
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/mod-packs", bytes.NewBufferString(`{"name":"Storage","modIds":["magic"]}`)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected mod pack create 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var created struct {
+		ModIDs []string         `json:"modIds"`
+		Mods   []domain.ModFile `json:"mods"`
+	}
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if len(created.ModIDs) != 2 || len(created.Mods) != 2 {
+		t.Fatalf("expected mod pack to include dependency, got %+v", created)
+	}
+	foundDependency := false
+	for _, item := range created.Mods {
+		if item.ModName == "SerousCommonLib" {
+			foundDependency = true
+		}
+	}
+	if !foundDependency {
+		t.Fatalf("expected mod pack response to include SerousCommonLib, got %+v", created.Mods)
+	}
+}
+
 func TestModPackCreateRejectsServerScopedMods(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	serverMod := domain.ModFile{
@@ -1911,6 +1974,67 @@ func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
 	}
 	if string(runtimeMod) != "mod-v1" {
 		t.Fatalf("expected assigned mod copied into runtime data dir, got %q", string(runtimeMod))
+	}
+}
+
+func TestAssignModCopiesKnownDependencies(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		id       string
+		fileName string
+		modName  string
+	}{
+		{id: "magic", fileName: "MagicStorage.tmod", modName: "MagicStorage"},
+		{id: "serous", fileName: "SerousCommonLib.tmod", modName: "SerousCommonLib"},
+	} {
+		if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", item.fileName, bytes.NewReader(tmodFixture(item.modName, "1.0.0", "2026.04.3.0"))); err != nil {
+			t.Fatal(err)
+		}
+		globalMod := domain.ModFile{
+			ID:         item.id,
+			InstanceID: "unassigned",
+			FileName:   item.fileName,
+			ModName:    item.modName,
+			Title:      item.modName,
+			SizeBytes:  64,
+			Enabled:    true,
+			CreatedAt:  time.Now(),
+		}
+		if err := db.CreateMod(context.Background(), &globalMod); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/mods/magic/assign", bytes.NewBufferString(`{"instanceId":"tmod"}`)))
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected assign 201, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	mods, err := db.ListMods(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 2 {
+		t.Fatalf("expected assigned mod and dependency, got %+v", mods)
+	}
+	for _, fileName := range []string{"MagicStorage.tmod", "SerousCommonLib.tmod"} {
+		if _, err := os.Stat(filepath.Join(server.DataDir, "Mods", fileName)); err != nil {
+			t.Fatalf("expected runtime mod %s to be copied: %v", fileName, err)
+		}
+	}
+	enabled, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "enabled.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"MagicStorage", "SerousCommonLib"} {
+		if !strings.Contains(string(enabled), name) {
+			t.Fatalf("expected enabled.json to contain %s, got %s", name, enabled)
+		}
 	}
 }
 

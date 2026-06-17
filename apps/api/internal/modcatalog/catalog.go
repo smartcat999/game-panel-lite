@@ -11,6 +11,7 @@ var recommendedTModLoaderModsJSON []byte
 type RecommendedMod struct {
 	Rank           int      `json:"rank"`
 	WorkshopID     string   `json:"workshopId"`
+	ModName        string   `json:"modName,omitempty"`
 	Title          string   `json:"title"`
 	CreatorSteamID string   `json:"creatorSteamId,omitempty"`
 	PreviewURL     string   `json:"previewUrl,omitempty"`
@@ -21,6 +22,7 @@ type RecommendedMod struct {
 	TimeCreated    int64    `json:"timeCreated,omitempty"`
 	TimeUpdated    int64    `json:"timeUpdated,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
+	Dependencies   []string `json:"dependencies,omitempty"`
 	Description    string   `json:"description,omitempty"`
 }
 
@@ -39,6 +41,19 @@ func RecommendedTModLoaderModByWorkshopID(workshopID string) (RecommendedMod, bo
 	}
 	for _, item := range items {
 		if item.WorkshopID == workshopID {
+			return item, true
+		}
+	}
+	return RecommendedMod{}, false
+}
+
+func RecommendedTModLoaderModByModName(modName string) (RecommendedMod, bool) {
+	items, err := RecommendedTModLoaderMods()
+	if err != nil {
+		return RecommendedMod{}, false
+	}
+	for _, item := range items {
+		if item.ModName == modName {
 			return item, true
 		}
 	}

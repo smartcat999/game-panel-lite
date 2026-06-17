@@ -60,6 +60,7 @@ export type ModFile = {
   fileName: string;
   source?: "upload" | "workshop" | string;
   workshopId?: string;
+  modName?: string;
   title?: string;
   modVersion?: string;
   tmodVersion?: string;
@@ -74,12 +75,15 @@ export type ModFile = {
   size: string;
   sizeBytes?: number;
   enabled: boolean;
+  runtimeEnabled?: boolean;
+  dependencies?: string[];
   created: string;
 };
 
 export type RecommendedMod = {
   rank: number;
   workshopId: string;
+  modName?: string;
   title: string;
   creatorSteamId?: string;
   previewUrl?: string;
@@ -92,6 +96,7 @@ export type RecommendedMod = {
   timeUpdated?: number;
   tags?: string[];
   description?: string;
+  dependencies?: string[];
   inLibrary: boolean;
   modId?: string;
 };

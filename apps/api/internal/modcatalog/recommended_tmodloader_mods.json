@@ -100,6 +100,7 @@
   {
     "rank": 5,
     "workshopId": "2563309347",
+    "modName": "MagicStorage",
     "title": "Magic Storage",
     "creatorSteamId": "76561198122163241",
     "previewUrl": "https://images.steamusercontent.com/ugc/12174576115002990045/0E0480EF57D34751B7BAA6863DE8304FAB99CB23/",
@@ -121,11 +122,15 @@
       "1.4.3",
       "1.4.4"
     ],
+    "dependencies": [
+      "SerousCommonLib"
+    ],
     "description": "Are you tired of having a mess of chests in your base? Never remember where you put your items, and have to run across your entire house to get from chest to chest? This mod will solve all of your problems!\n\nThis mod offers a solution to storage problems once and for all. It allows you to construct a central network to store all your items, that you can acce"
   },
   {
     "rank": 6,
     "workshopId": "2908170107",
+    "modName": "SerousCommonLib",
     "title": "absoluteAquarian Utilities (SerousCommonLib)",
     "creatorSteamId": "76561198122163241",
     "previewUrl": "https://images.steamusercontent.com/ugc/9280042966961771794/7C1C369F5C8913A588B45A73CFF97DBE7F9F438D/",
@@ -278,6 +283,7 @@
   {
     "rank": 12,
     "workshopId": "2797518634",
+    "modName": "ImproveGame",
     "title": "Quality of Terraria",
     "creatorSteamId": "76561198890883939",
     "previewUrl": "https://images.steamusercontent.com/ugc/12345016607019128760/A8C708C5A120C94DD99A67B553EBA32FC32A1421/",
@@ -300,6 +306,9 @@
       "Both",
       "1.4.3",
       "1.4.4"
+    ],
+    "dependencies": [
+      "SilkyUIFramework"
     ],
     "description": "[h2]Communication and Feedback[/h2]\n[url=https://discord.gg/rEmGMQv5z7]Join our Discord to report bugs and get replied quickly![/url]\nOnly some functions are enabled by default, please check mod config for details\n\n[img]https://i.imgur.com/ki1CPZe.gif[/img]\n\n[h2]Mod Items[/h2]\nYou can use Recipe Browser Mod to check their sources!\n[list]\n\t[*]Banner Box: Any "
   },
@@ -999,6 +1008,7 @@
   {
     "rank": 42,
     "workshopId": "3403460014",
+    "modName": "SilkyUIFramework",
     "title": "SilkyUI",
     "creatorSteamId": "76561198890883939",
     "previewUrl": "https://images.steamusercontent.com/ugc/12851848606638231159/73E25251134A6A9757ACAD7573AB3FDAA4F1FA3C/",
