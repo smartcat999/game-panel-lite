@@ -485,20 +485,6 @@ export default function ServerDetailPage() {
               label={t("port")}
               value={String(serverJoinPort(server))}
             />
-            <HeaderMetric
-              accent
-              icon={<Cpu aria-hidden="true" className="size-3.5" />}
-              label={t("serverCpu")}
-              value={server.status === "running" ? `${(statsQuery.data?.cpuPercent ?? 0).toFixed(1)}%${server.cpuLimitCores ? ` / ${formatCpuLimitLabel(server.cpuLimitCores, t)}` : ""}` : "—"}
-              active={server.status === "running"}
-            />
-            <HeaderMetric
-              accent
-              icon={<MemoryStick aria-hidden="true" className="size-3.5" />}
-              label={t("serverMemory")}
-              value={server.status === "running" && statsQuery.data ? `${statsQuery.data.memoryMb} MB${server.memoryLimitMb ? ` / ${formatMemoryLimitLabel(server.memoryLimitMb, t)}` : ""}` : "—"}
-              active={server.status === "running"}
-            />
           </div>
         </div>
         <ServerActions server={server} showInvite={false} />
