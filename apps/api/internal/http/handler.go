@@ -2445,6 +2445,14 @@ func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameSer
 		return server
 	}
 	if server.ContainerID == "" {
+		if server.Status == domain.StatusErrored && isRuntimeContainerMissingError(errors.New(server.LastError)) {
+			server.Status = domain.StatusStopped
+			server.LastError = ""
+			server.UpdatedAt = time.Now()
+			if err := h.store.SaveServer(ctx, &server); err != nil {
+				h.logger.Warn("failed to persist stale runtime server recovery", "server", server.ID, "error", err)
+			}
+		}
 		return server
 	}
 	if !h.runtimeStatusAvailable() {
@@ -2452,6 +2460,17 @@ func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameSer
 	}
 	status, err := h.runtime.Inspect(ctx, server)
 	if err != nil {
+		if isRuntimeContainerMissingError(err) {
+			h.logger.Warn("runtime container missing during status refresh; marking server stopped", "server", server.ID, "container", server.ContainerID, "error", err)
+			server.Status = domain.StatusStopped
+			server.ContainerID = ""
+			server.LastError = ""
+			server.UpdatedAt = time.Now()
+			if saveErr := h.store.SaveServer(ctx, &server); saveErr != nil {
+				h.logger.Warn("failed to persist stale runtime server recovery", "server", server.ID, "error", saveErr, "cause", err)
+			}
+			return server
+		}
 		if status == domain.StatusErrored {
 			server.Status = domain.StatusErrored
 			server.LastError = err.Error()
@@ -2476,6 +2495,16 @@ func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameSer
 		h.logger.Warn("failed to persist refreshed runtime server status", "server", server.ID, "status", status, "error", err)
 	}
 	return server
+}
+
+func isRuntimeContainerMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	normalized := strings.ToLower(err.Error())
+	return strings.Contains(normalized, "no docker container found") ||
+		strings.Contains(normalized, "no such container") ||
+		strings.Contains(normalized, "page not found")
 }
 
 func (h *Handler) runtimeStatusAvailable() bool {

@@ -154,6 +154,7 @@ func TestCorsAllowsPatchPreflight(t *testing.T) {
 
 type inspectStatusAdapter struct {
 	status domain.ServerStatus
+	err    error
 }
 
 func (a inspectStatusAdapter) Check(context.Context) runtime.DockerStatus {
@@ -167,7 +168,7 @@ func (a inspectStatusAdapter) Stop(context.Context, domain.GameServerInstance) e
 func (a inspectStatusAdapter) Restart(context.Context, domain.GameServerInstance) error { return nil }
 func (a inspectStatusAdapter) Remove(context.Context, domain.GameServerInstance) error  { return nil }
 func (a inspectStatusAdapter) Inspect(context.Context, domain.GameServerInstance) (domain.ServerStatus, error) {
-	return a.status, nil
+	return a.status, a.err
 }
 func (a inspectStatusAdapter) Stats(context.Context, domain.GameServerInstance) (runtime.ContainerStats, error) {
 	return runtime.ContainerStats{}, nil
@@ -1047,6 +1048,64 @@ func TestGetServerRefreshesStoredStatusFromRuntime(t *testing.T) {
 	}
 	if stored.Status != domain.StatusStopped {
 		t.Fatalf("expected refreshed status persisted, got %+v", stored)
+	}
+}
+
+func TestGetServerTreatsMissingRuntimeContainerAsStopped(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, inspectStatusAdapter{
+		status: domain.StatusErrored,
+		err:    fmt.Errorf("no Docker container found for server stale-runtime"),
+	})
+	server := testServer("missing-runtime-detail", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "missing-container"
+	server.LastError = "old runtime error"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/missing-runtime-detail", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server detail 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusStopped || got.ContainerID != "" || got.LastError != "" {
+		t.Fatalf("expected missing runtime to be recovered as stopped, got %+v", got)
+	}
+	stored, err := db.GetServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != domain.StatusStopped || stored.ContainerID != "" || stored.LastError != "" {
+		t.Fatalf("expected stored missing runtime recovery, got %+v", stored)
+	}
+}
+
+func TestGetServerClearsStaleMissingRuntimeErrorWithoutContainerID(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, inspectStatusAdapter{status: domain.StatusRunning})
+	server := testServer("missing-runtime-without-container", cfg.DataDir)
+	server.Status = domain.StatusErrored
+	server.ContainerID = ""
+	server.LastError = "no Docker container found for server missing-runtime-without-container"
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/missing-runtime-without-container", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server detail 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusStopped || got.LastError != "" {
+		t.Fatalf("expected stale missing runtime error to be cleared, got %+v", got)
 	}
 }
 
