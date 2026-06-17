@@ -155,5 +155,6 @@ Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instan
 
 ## Roadmap
 
-- Add an optional Playwright suite that runs against a live local Go API and Docker daemon instead of mocked API responses.
-- Add richer live log search, filtering, and history.
+- Post-V1 product direction is tracked in `docs/product/product-roadmap.md`.
+- The next product focus is local admin login and support for more user-facing games such as Palworld, Don't Starve Together, and Minecraft Java.
+- V1 UI polish and existing-flow optimization are deferred unless they block a new product feature.
