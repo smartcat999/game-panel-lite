@@ -58,24 +58,6 @@ async function mockApi(page: Page) {
     });
   });
 
-  await page.route("**/api/runtime/docker/hosts", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        currentHost: "unix:///Users/pengwu/.orbstack/run/docker.sock",
-        candidates: [
-          {
-            host: "unix:///Users/pengwu/.orbstack/run/docker.sock",
-            label: "OrbStack Docker",
-            source: "orbstack",
-            exists: true,
-            active: true
-          }
-        ]
-      })
-    });
-  });
-
   await page.route("**/api/runtime/docker", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -322,13 +304,9 @@ test("app shell renders Chinese UI, game art, avatar, and Docker scan feedback",
   await expect(page).toHaveURL(/\/settings$/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
   await expect(page.getByText("Docker 已连接，可以创建和管理服务器。")).toBeVisible();
-
-  await page.getByRole("button", { name: /扫描/ }).click();
-  await expect(page.getByText("扫描完成，发现 1 个候选 Docker Host。")).toBeVisible();
-
-  await page.getByRole("button", { name: /更改/ }).click();
-  await expect(page.getByText("候选 Host")).toBeVisible();
-  await expect(page.getByRole("button", { name: /OrbStack Docker/ })).toBeVisible();
+  await expect(page.getByText("配置的 Docker Host")).toBeVisible();
+  await expect(page.getByRole("button", { name: /扫描/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /更改/ })).toHaveCount(0);
 });
 
 test("create server wizard keeps clicked mode and preset selected", async ({ page }) => {

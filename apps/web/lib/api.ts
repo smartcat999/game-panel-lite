@@ -281,14 +281,6 @@ export async function getDockerStatus(): Promise<DockerStatus> {
   return (await response.json()) as DockerStatus;
 }
 
-export type DockerHostCandidate = {
-  host: string;
-  label: string;
-  source: string;
-  exists: boolean;
-  active: boolean;
-};
-
 export type DockerStatus = {
   available: boolean;
   message: string;
@@ -353,44 +345,6 @@ export async function getSettings(): Promise<AppSettings> {
     throw new Error("Unable to load settings");
   }
   return (await response.json()) as AppSettings;
-}
-
-export async function updateSettings(settings: Partial<Pick<AppSettings, "dockerHost">>): Promise<AppSettings> {
-  const response = await fetch(`${API_BASE}/api/settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(settings)
-  });
-  const payload = (await response.json().catch(() => ({}))) as AppSettings & { error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Unable to update settings");
-  }
-  return payload;
-}
-
-export async function getDockerHosts(): Promise<{ currentHost: string; candidates: DockerHostCandidate[] }> {
-  const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker/hosts`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Unable to load Docker host candidates");
-  }
-  return (await response.json()) as { currentHost: string; candidates: DockerHostCandidate[] };
-}
-
-export async function applyDockerHost(host: string): Promise<{ available: boolean; message: string; host: string }> {
-  const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker/host`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ host })
-  });
-  const payload = (await response.json().catch(() => ({}))) as { available?: boolean; message?: string; host?: string; error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Unable to apply Docker host");
-  }
-  return {
-    available: Boolean(payload.available),
-    message: payload.message ?? "",
-    host: payload.host ?? host
-  };
 }
 
 export async function getTerrariaVersions(): Promise<Record<string, string[]>> {

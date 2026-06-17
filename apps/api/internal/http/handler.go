@@ -66,10 +66,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/version", h.version)
 	r.Get("/api/runtime/docker", h.dockerStatus)
 	r.Get("/api/runtime/stats", h.runtimeStats)
-	r.Get("/api/runtime/docker/hosts", h.dockerHosts)
-	r.Post("/api/runtime/docker/host", h.applyDockerHost)
 	r.Get("/api/settings", h.getSettings)
-	r.Put("/api/settings", h.updateSettings)
 	r.Get("/api/activity", h.listActivity)
 	r.Get("/api/servers", h.listServers)
 	r.Post("/api/servers", h.createServer)
@@ -1904,39 +1901,6 @@ func (h *Handler) runtimeStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-func (h *Handler) dockerHosts(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"currentHost": h.cfg.DockerHost,
-		"candidates":  config.DockerHostCandidates(h.cfg.DockerHost),
-	})
-}
-
-func (h *Handler) applyDockerHost(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		Host string `json:"host"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	host := strings.TrimSpace(payload.Host)
-	if !isAllowedDockerHost(host) {
-		writeError(w, http.StatusBadRequest, "docker host must start with unix://, tcp://, or npipe://")
-		return
-	}
-	adapter, err := h.runtimeFactory(host)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.runtime.Set(adapter)
-	h.cfg.DockerHost = host
-	if err := config.PersistDockerHost(host); err != nil {
-		h.logger.Warn("failed to persist docker host", "error", err)
-	}
-	writeJSON(w, http.StatusOK, h.dockerMonitor.Refresh(r.Context()))
-}
-
 func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"host":       h.cfg.Host,
@@ -1945,43 +1909,6 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"dbPath":     h.cfg.DBPath,
 		"dockerHost": h.cfg.DockerHost,
 	})
-}
-
-func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
-	var payload struct {
-		DockerHost string `json:"dockerHost"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-	host := strings.TrimSpace(payload.DockerHost)
-	if host == "" {
-		writeError(w, http.StatusBadRequest, "dockerHost is required")
-		return
-	}
-	if !isAllowedDockerHost(host) {
-		writeError(w, http.StatusBadRequest, "docker host must start with unix://, tcp://, or npipe://")
-		return
-	}
-	adapter, err := h.runtimeFactory(host)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	h.runtime.Set(adapter)
-	h.cfg.DockerHost = host
-	if err := config.PersistDockerHost(host); err != nil {
-		h.logger.Warn("failed to persist docker host", "error", err)
-	}
-	h.dockerMonitor.Refresh(r.Context())
-	h.getSettings(w, r)
-}
-
-func isAllowedDockerHost(host string) bool {
-	return strings.HasPrefix(host, "unix://") ||
-		strings.HasPrefix(host, "tcp://") ||
-		strings.HasPrefix(host, "npipe://")
 }
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {

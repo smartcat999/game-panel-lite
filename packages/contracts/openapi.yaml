@@ -27,18 +27,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DockerStatus"
-  /api/runtime/docker/hosts:
-    get:
-      summary: List Docker host candidates
-      responses:
-        "200":
-          description: Docker host candidates
-  /api/runtime/docker/host:
-    post:
-      summary: Hot-apply Docker host
-      responses:
-        "200":
-          description: Docker status after reconnect
   /api/settings:
     get:
       summary: Read local API settings
@@ -49,11 +37,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppSettings"
-    put:
-      summary: Update allowed local API settings
-      responses:
-        "200":
-          description: Updated local settings
   /api/activity:
     get:
       summary: List recent activity events

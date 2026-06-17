@@ -23,23 +23,13 @@ func TestLoadFallsBackToDockerHost(t *testing.T) {
 	}
 }
 
-func TestDockerHostCandidatesIncludesCurrentAndCommonHosts(t *testing.T) {
-	t.Setenv("GAMEPANEL_DOCKER_HOST", "unix:///tmp/gamepanel-custom.sock")
-	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
+func TestLoadUsesDockerDefaultHost(t *testing.T) {
+	t.Setenv("GAMEPANEL_DOCKER_HOST", "")
+	t.Setenv("DOCKER_HOST", "")
 
-	candidates := DockerHostCandidates("unix:///tmp/current.sock")
-	hosts := map[string]DockerHostCandidate{}
-	for _, candidate := range candidates {
-		hosts[candidate.Host] = candidate
-	}
+	cfg := Load()
 
-	if !hosts["unix:///tmp/current.sock"].Active {
-		t.Fatalf("expected current host to be active")
-	}
-	if _, ok := hosts["unix:///tmp/gamepanel-custom.sock"]; !ok {
-		t.Fatalf("expected GAMEPANEL_DOCKER_HOST candidate")
-	}
-	if _, ok := hosts["tcp://127.0.0.1:2375"]; !ok {
-		t.Fatalf("expected DOCKER_HOST/local TCP candidate")
+	if cfg.DockerHost != "unix:///var/run/docker.sock" {
+		t.Fatalf("expected Docker default host, got %q", cfg.DockerHost)
 	}
 }

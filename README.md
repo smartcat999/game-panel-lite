@@ -110,11 +110,11 @@ Common examples:
 
 ```bash
 GAMEPANEL_DOCKER_HOST="unix:///var/run/docker.sock"
-GAMEPANEL_DOCKER_HOST="unix:///Users/<you>/.docker/run/docker.sock"
+GAMEPANEL_DOCKER_HOST="unix:///Users/<you>/.orbstack/run/docker.sock"
 GAMEPANEL_DOCKER_HOST="tcp://127.0.0.1:2375"
 ```
 
-The Settings page also calls `GET /api/runtime/docker/hosts` to scan common local Docker sockets and show environment-derived candidates. Selecting a candidate or typing a custom host can call `POST /api/runtime/docker/host` to hot-swap the backend Docker RuntimeAdapter without leaving the page. After a backend process restart, `GAMEPANEL_DOCKER_HOST` is still the source of truth.
+The Settings page displays the configured Docker Host and runtime status only. Docker Host changes should be made in the backend config or environment, then applied by restarting the backend process.
 
 Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instances/{instanceId}`. World, backup, and mod files use separate per-instance directories.
 

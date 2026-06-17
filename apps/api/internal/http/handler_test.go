@@ -3060,7 +3060,7 @@ func TestDeleteBackupKeepsRecordWhenFileRemovalFails(t *testing.T) {
 	}
 }
 
-func TestSettingsEndpointsReadAndUpdateDockerHost(t *testing.T) {
+func TestSettingsEndpointReadsConfiguredDockerHost(t *testing.T) {
 	router, _, _ := newTestRouter(t)
 
 	read := httptest.NewRecorder()
@@ -3079,14 +3079,8 @@ func TestSettingsEndpointsReadAndUpdateDockerHost(t *testing.T) {
 	body := bytes.NewBufferString(`{"dockerHost":"unix:///updated.sock"}`)
 	update := httptest.NewRecorder()
 	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/settings", body))
-	if update.Code != stdhttp.StatusOK {
-		t.Fatalf("expected settings update 200, got %d: %s", update.Code, update.Body.String())
-	}
-	if err := json.Unmarshal(update.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got["dockerHost"] != "unix:///updated.sock" {
-		t.Fatalf("expected updated docker host, got %q", got["dockerHost"])
+	if update.Code != stdhttp.StatusMethodNotAllowed {
+		t.Fatalf("expected settings update to be unavailable, got %d: %s", update.Code, update.Body.String())
 	}
 }
 
