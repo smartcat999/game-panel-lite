@@ -557,12 +557,14 @@ func (h *Handler) upsertModRecord(ctx context.Context, instanceID string, fileNa
 			existing.Source = "upload"
 		}
 		applyTModMetadata(&existing, metadata)
+		hydrateModMetadata(&existing)
 		return existing, false, h.store.SaveMod(ctx, &existing)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.ModFile{}, false, err
 	}
 	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, FileName: fileName, Source: "upload", SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
 	applyTModMetadata(&item, metadata)
+	hydrateModMetadata(&item)
 	return item, true, h.store.CreateMod(ctx, &item)
 }
 
@@ -803,6 +805,9 @@ func hydrateModMetadata(item *domain.ModFile) {
 	}
 	if item.ModName == "" {
 		item.ModName = modIdentity(*item)
+	}
+	if len(item.Dependencies) == 0 {
+		item.Dependencies = modDependencies(*item)
 	}
 }
 
@@ -1158,11 +1163,6 @@ func (h *Handler) modPackPayload(ctx context.Context, rawName string, rawDescrip
 	if len(modIDs) == 0 {
 		return "", "", nil, fmt.Errorf("select at least one mod")
 	}
-	expandedModIDs, err := h.expandModPackDependencies(ctx, modIDs)
-	if err != nil {
-		return "", "", nil, err
-	}
-	modIDs = expandedModIDs
 	for _, modID := range modIDs {
 		item, err := h.store.GetMod(ctx, modID)
 		if err != nil {
@@ -1177,45 +1177,6 @@ func (h *Handler) modPackPayload(ctx context.Context, rawName string, rawDescrip
 		return "", "", nil, err
 	}
 	return name, strings.TrimSpace(rawDescription), modIDsJSON, nil
-}
-
-func (h *Handler) expandModPackDependencies(ctx context.Context, modIDs []string) ([]string, error) {
-	result := make([]string, 0, len(modIDs))
-	seenIDs := make(map[string]struct{}, len(modIDs))
-	queue := append([]string(nil), modIDs...)
-	for len(queue) > 0 {
-		modID := queue[0]
-		queue = queue[1:]
-		if _, ok := seenIDs[modID]; ok {
-			continue
-		}
-		seenIDs[modID] = struct{}{}
-		item, err := h.store.GetMod(ctx, modID)
-		if err != nil {
-			return nil, fmt.Errorf("mod not found")
-		}
-		result = append(result, modID)
-		for _, dependencyName := range modDependencies(item) {
-			dependency, err := h.ensureLibraryDependency(ctx, dependencyName)
-			if err != nil {
-				return nil, err
-			}
-			queue = append(queue, dependency.ID)
-		}
-	}
-	return result, nil
-}
-
-func (h *Handler) ensureLibraryDependency(ctx context.Context, dependencyName string) (domain.ModFile, error) {
-	if library, ok, err := h.findLibraryModByModName(ctx, dependencyName); err != nil || ok {
-		return library, err
-	}
-	recommended, ok := modcatalog.RecommendedTModLoaderModByModName(dependencyName)
-	if !ok || recommended.WorkshopID == "" {
-		return domain.ModFile{}, fmt.Errorf("missing dependency %s in mod library", dependencyName)
-	}
-	item, _, err := h.upsertWorkshopModRecord(ctx, "unassigned", recommended.WorkshopID)
-	return item, err
 }
 
 func (h *Handler) deleteModPack(w http.ResponseWriter, r *http.Request) {

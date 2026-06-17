@@ -1784,6 +1784,36 @@ func TestGlobalModUploadIsIdempotentForSameFile(t *testing.T) {
 	}
 }
 
+func TestGlobalModUploadHydratesKnownDependencies(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	upload := httptest.NewRecorder()
+	router.ServeHTTP(upload, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/mods/upload", "file", "ImproveGame.tmod", tmodFixture("ImproveGame", "1.8.2", "2026.3.3.0")))
+	if upload.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected global upload 201, got %d: %s", upload.Code, upload.Body.String())
+	}
+	var uploaded domain.ModFile
+	if err := json.Unmarshal(upload.Body.Bytes(), &uploaded); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(uploaded.Dependencies, []string{"SilkyUIFramework"}) {
+		t.Fatalf("expected uploaded ImproveGame dependency metadata, got %+v", uploaded)
+	}
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/mods", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected global mod list 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var mods []domain.ModFile
+	if err := json.Unmarshal(list.Body.Bytes(), &mods); err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 || !reflect.DeepEqual(mods[0].Dependencies, []string{"SilkyUIFramework"}) {
+		t.Fatalf("expected listed ImproveGame dependency metadata, got %+v", mods)
+	}
+}
+
 func TestModPackCreateListAndDelete(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	for _, name := range []string{"boss.tmod", "quality.tmod"} {
@@ -1855,7 +1885,7 @@ func TestModPackCreateListAndDelete(t *testing.T) {
 	}
 }
 
-func TestModPackCreateIncludesKnownDependencies(t *testing.T) {
+func TestModPackCreateDoesNotAutoIncludeKnownDependencies(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	magic := domain.ModFile{
 		ID:         "magic",
@@ -1882,17 +1912,11 @@ func TestModPackCreateIncludesKnownDependencies(t *testing.T) {
 	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if len(created.ModIDs) != 2 || len(created.Mods) != 2 {
-		t.Fatalf("expected mod pack to include dependency, got %+v", created)
+	if len(created.ModIDs) != 1 || len(created.Mods) != 1 {
+		t.Fatalf("expected mod pack to include only selected mods, got %+v", created)
 	}
-	foundDependency := false
-	for _, item := range created.Mods {
-		if item.ModName == "SerousCommonLib" {
-			foundDependency = true
-		}
-	}
-	if !foundDependency {
-		t.Fatalf("expected mod pack response to include SerousCommonLib, got %+v", created.Mods)
+	if !reflect.DeepEqual(created.Mods[0].Dependencies, []string{"SerousCommonLib"}) {
+		t.Fatalf("expected selected mod to expose dependency metadata, got %+v", created.Mods)
 	}
 }
 
