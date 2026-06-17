@@ -1011,7 +1011,10 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 			"maxPlayers":6,
 			"serverPassword":"join-secret",
 			"clusterToken":"klei-token",
-			"gameMode":"endless"
+			"gameMode":"endless",
+			"worldPreset":"forest_classic",
+			"cavesEnabled":true,
+			"workshopIds":"123456789,987654321"
 		}
 	}`
 	create := httptest.NewRecorder()
@@ -1032,7 +1035,7 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	if server.WorldName != "FriendsCluster" || server.Password != "join-secret" || server.Config.MOTD != "klei-token" {
 		t.Fatalf("expected DST config to be mapped to runtime fields, got server=%+v config=%+v", server, server.Config)
 	}
-	if server.ConfigPayload["clusterName"] != "FriendsCluster" || server.ConfigPayload["clusterToken"] != "klei-token" || server.ConfigPayload["gameMode"] != "endless" {
+	if server.ConfigPayload["clusterName"] != "FriendsCluster" || server.ConfigPayload["clusterToken"] != "klei-token" || server.ConfigPayload["gameMode"] != "endless" || server.ConfigPayload["worldPreset"] != "forest_classic" || server.ConfigPayload["cavesEnabled"] != true {
 		t.Fatalf("expected semantic DST config payload, got %+v", server.ConfigPayload)
 	}
 	if server.JoinInfo.Port != 11099 || server.JoinInfo.Address != "127.0.0.1" || !strings.Contains(server.JoinInfo.InviteText, "Don't Starve Together") {
@@ -1058,6 +1061,15 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	}
 	if !strings.Contains(spec.Options.Files["dst/cluster.ini"], "game_mode = endless") {
 		t.Fatalf("expected DST cluster.ini in runtime files, got %+v", spec.Options.Files)
+	}
+	if !strings.Contains(spec.Options.Files["dst/Master/worldgen.lua"], `preset = "forest_classic"`) {
+		t.Fatalf("expected DST world preset in runtime files, got %+v", spec.Options.Files)
+	}
+	if _, ok := spec.Options.Files["dst/Caves/server.ini"]; !ok {
+		t.Fatalf("expected DST caves shard files, got %+v", spec.Options.Files)
+	}
+	if !strings.Contains(spec.Options.Files["dst/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
+		t.Fatalf("expected DST workshop setup file, got %+v", spec.Options.Files)
 	}
 	if spec.Options.Files["dst/server_token.txt"] != "klei-token\n" {
 		t.Fatalf("expected DST token file, got %q", spec.Options.Files["dst/server_token.txt"])

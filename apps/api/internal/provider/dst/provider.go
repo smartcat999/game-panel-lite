@@ -43,6 +43,18 @@ func (Provider) ConfigSchema() []domain.ProviderConfigField {
 		{Name: "serverPassword", Label: "服务器密码", Type: "password", Required: false},
 		{Name: "clusterToken", Label: "Klei 服务器令牌", Type: "password", Required: true, Help: "在 Klei 账号页面创建专用服务器令牌后填入。"},
 		{
+			Name:     "worldPreset",
+			Label:    "世界预设",
+			Type:     "select",
+			Required: true,
+			Default:  "forest_default",
+			Options: []domain.ProviderConfigFieldOption{
+				{Value: "forest_default", Label: "默认森林"},
+				{Value: "forest_classic", Label: "经典森林"},
+				{Value: "forest_survival", Label: "生存森林"},
+			},
+		},
+		{
 			Name:     "gameMode",
 			Label:    "游戏模式",
 			Type:     "select",
@@ -54,6 +66,8 @@ func (Provider) ConfigSchema() []domain.ProviderConfigField {
 				{Value: "wilderness", Label: "荒野"},
 			},
 		},
+		{Name: "cavesEnabled", Label: "启用洞穴", Type: "boolean", Required: false, Default: false, Help: "创建额外洞穴分片配置。"},
+		{Name: "workshopIds", Label: "创意工坊 ID", Type: "text", Required: false, Help: "多个创意工坊 ID 用逗号或空格分隔。"},
 	}
 }
 func (Provider) Image() string      { return ImageForVersion(versions[0]) }
@@ -115,8 +129,8 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 		Files: map[string]string{
 			"dst/cluster.ini":         renderClusterINI(config, "survival"),
 			"dst/server_token.txt":    strings.TrimSpace(config.MOTD) + "\n",
-			"dst/Master/server.ini":   renderMasterServerINI(config),
-			"dst/Master/worldgen.lua": "return {}\n",
+			"dst/Master/server.ini":   renderShardServerINI(config.Port, true, "Master"),
+			"dst/Master/worldgen.lua": renderWorldgenLua("forest_default"),
 		},
 		PortProtocol: "udp",
 	}
@@ -156,11 +170,16 @@ func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstanc
 	}
 	options := provider.RuntimeOptions(config)
 	payload := payloadFromServer(server)
-	gameMode := stringPayload(payload, "gameMode")
-	if gameMode == "" {
-		gameMode = "survival"
+	settings := settingsFromPayload(payload)
+	options.Files["dst/cluster.ini"] = renderClusterINI(config, settings.GameMode)
+	options.Files["dst/Master/worldgen.lua"] = renderWorldgenLua(settings.WorldPreset)
+	if settings.CavesEnabled {
+		options.Files["dst/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
+		options.Files["dst/Caves/worldgen.lua"] = renderWorldgenLua("cave_default")
 	}
-	options.Files["dst/cluster.ini"] = renderClusterINI(config, gameMode)
+	if len(settings.WorkshopIDs) > 0 {
+		options.Files["dst/dedicated_server_mods_setup.lua"] = renderWorkshopSetup(settings.WorkshopIDs)
+	}
 	return options, nil
 }
 
@@ -212,20 +231,31 @@ func ConfigFromPayload(payload map[string]any, fallback domain.TerrariaConfig) d
 
 func PayloadFromConfig(config domain.TerrariaConfig, gameMode string) map[string]any {
 	config = NormalizeConfig(config)
-	if strings.TrimSpace(gameMode) == "" {
-		gameMode = "survival"
-	}
+	settings := dstSettings{GameMode: strings.TrimSpace(gameMode), WorldPreset: "forest_default"}
+	settings = normalizeSettings(settings)
 	payload := map[string]any{
 		"serverName":   config.ServerName,
 		"clusterName":  config.WorldName,
 		"maxPlayers":   config.MaxPlayers,
 		"clusterToken": config.MOTD,
-		"gameMode":     gameMode,
+		"gameMode":     settings.GameMode,
+		"worldPreset":  settings.WorldPreset,
 	}
 	if config.Password != "" {
 		payload["serverPassword"] = config.Password
 	}
 	return payload
+}
+
+func EnrichPayloadFromConfig(config domain.TerrariaConfig, payload map[string]any) map[string]any {
+	settings := settingsFromPayload(payload)
+	next := PayloadFromConfig(config, settings.GameMode)
+	next["worldPreset"] = settings.WorldPreset
+	next["cavesEnabled"] = settings.CavesEnabled
+	if len(settings.WorkshopIDs) > 0 {
+		next["workshopIds"] = strings.Join(settings.WorkshopIDs, ",")
+	}
+	return next
 }
 
 func configFromServer(server domain.GameServerInstance) domain.TerrariaConfig {
@@ -268,16 +298,63 @@ func renderClusterINI(config domain.TerrariaConfig, gameMode string) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderMasterServerINI(config domain.TerrariaConfig) string {
+func renderShardServerINI(port int, isMaster bool, name string) string {
+	master := "false"
+	if isMaster {
+		master = "true"
+	}
 	return strings.Join([]string{
 		"[NETWORK]",
-		fmt.Sprintf("server_port = %d", config.Port),
+		fmt.Sprintf("server_port = %d", port),
 		"",
 		"[SHARD]",
-		"is_master = true",
-		"name = Master",
+		"is_master = " + master,
+		"name = " + name,
 		"",
 	}, "\n")
+}
+
+func renderWorldgenLua(preset string) string {
+	preset = strings.TrimSpace(preset)
+	if preset == "" {
+		preset = "forest_default"
+	}
+	return fmt.Sprintf("return { override_enabled = true, preset = %q }\n", preset)
+}
+
+func renderWorkshopSetup(workshopIDs []string) string {
+	lines := make([]string, 0, len(workshopIDs))
+	for _, id := range workshopIDs {
+		lines = append(lines, fmt.Sprintf("ServerModSetup(%q)", id))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+type dstSettings struct {
+	GameMode     string
+	WorldPreset  string
+	CavesEnabled bool
+	WorkshopIDs  []string
+}
+
+func settingsFromPayload(payload map[string]any) dstSettings {
+	return normalizeSettings(dstSettings{
+		GameMode:     stringPayload(payload, "gameMode"),
+		WorldPreset:  stringPayload(payload, "worldPreset"),
+		CavesEnabled: boolPayload(payload, "cavesEnabled"),
+		WorkshopIDs:  workshopIDsPayload(payload, "workshopIds"),
+	})
+}
+
+func normalizeSettings(settings dstSettings) dstSettings {
+	if strings.TrimSpace(settings.GameMode) == "" {
+		settings.GameMode = "survival"
+	}
+	if strings.TrimSpace(settings.WorldPreset) == "" {
+		settings.WorldPreset = "forest_default"
+	}
+	settings.WorkshopIDs = uniqueDigits(settings.WorkshopIDs)
+	return settings
 }
 
 func stringPayload(payload map[string]any, key string) string {
@@ -313,6 +390,69 @@ func intPayload(payload map[string]any, key string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func boolPayload(payload map[string]any, key string) bool {
+	value, ok := payload[key]
+	if !ok {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
+}
+
+func workshopIDsPayload(payload map[string]any, key string) []string {
+	value, ok := payload[key]
+	if !ok {
+		return nil
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.FieldsFunc(typed, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+		})
+	case []string:
+		return typed
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				out = append(out, text)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func uniqueDigits(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] || !isDigits(value) {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func isDigits(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return value != ""
 }
 
 func ImageForVersion(version string) string {

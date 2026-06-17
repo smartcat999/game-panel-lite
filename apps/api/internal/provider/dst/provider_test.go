@@ -22,7 +22,7 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	for _, field := range provider.ConfigSchema() {
 		names[field.Name] = true
 	}
-	for _, expected := range []string{"serverName", "clusterName", "maxPlayers", "serverPassword", "clusterToken", "gameMode"} {
+	for _, expected := range []string{"serverName", "clusterName", "maxPlayers", "serverPassword", "clusterToken", "gameMode", "worldPreset", "cavesEnabled", "workshopIds"} {
 		if !names[expected] {
 			t.Fatalf("expected config schema field %q, got %+v", expected, provider.ConfigSchema())
 		}
@@ -97,6 +97,9 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 			"serverPassword": "payload-password",
 			"clusterToken":   "payload-token",
 			"gameMode":       "endless",
+			"worldPreset":    "forest_classic",
+			"cavesEnabled":   true,
+			"workshopIds":    "123456789, 987654321",
 		},
 	}
 	rendered, err := provider.RenderServerConfig(server)
@@ -119,6 +122,15 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	}
 	if !strings.Contains(options.Files["dst/cluster.ini"], "game_mode = endless") {
 		t.Fatalf("expected payload game mode in cluster.ini, got:\n%s", options.Files["dst/cluster.ini"])
+	}
+	if !strings.Contains(options.Files["dst/Master/worldgen.lua"], `preset = "forest_classic"`) {
+		t.Fatalf("expected payload world preset in Master worldgen, got:\n%s", options.Files["dst/Master/worldgen.lua"])
+	}
+	if _, ok := options.Files["dst/Caves/server.ini"]; !ok {
+		t.Fatalf("expected caves shard files when caves are enabled, got %+v", options.Files)
+	}
+	if !strings.Contains(options.Files["dst/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
+		t.Fatalf("expected workshop setup file, got:\n%s", options.Files["dst/dedicated_server_mods_setup.lua"])
 	}
 	if got := options.Files["dst/server_token.txt"]; got != "payload-token\n" {
 		t.Fatalf("expected payload token file, got %q", got)

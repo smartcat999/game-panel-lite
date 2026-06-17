@@ -341,6 +341,33 @@ Result:
 - `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 
+2026-06-18 Goal 5 DST caves, preset, and Workshop setup:
+
+Changes:
+- Extended DST provider schema with world preset, caves toggle, and Workshop ID fields.
+- Runtime spec generation now writes Master world preset files, optional Caves shard files, and `dedicated_server_mods_setup.lua` when Workshop IDs are provided.
+- DST semantic payload persistence now keeps `worldPreset`, `cavesEnabled`, and normalized Workshop IDs so restarts use the same setup.
+- Expanded provider and HTTP create/start tests for DST caves, presets, and Workshop setup files.
+
+Verification:
+
+```bash
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web test
+```
+
+Result:
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed after rerunning independently. The first parallel run raced with `next build` while `.next/types` was being regenerated.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are still missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
@@ -350,7 +377,7 @@ Result:
 - Palworld runtime uses the `thijsvanloef/palworld-server-docker:latest` image tag for the first slice. Pinning to a curated version list remains follow-up work.
 - Palworld has automated create/runtime spec coverage, but still needs manual Docker start verification on a host that can pull and run the image.
 - Non-Terraria create flow still uses a compatibility config envelope internally while the backend provider payload model is being phased in.
-- Don't Starve Together is wired through catalog/create/runtime spec generation, but the `smartcat99999/dst-server:latest` image still needs a build script and real Docker host verification before claiming full runtime support.
+- Don't Starve Together is wired through catalog/create/runtime spec generation, including caves and Workshop setup files, but the `smartcat99999/dst-server:latest` image still needs a build script and real Docker host verification before claiming full runtime support.
 
 ## Next Work
 

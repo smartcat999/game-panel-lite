@@ -2982,7 +2982,7 @@ func decodeDSTRuntimeConfig(raw json.RawMessage, fallback domain.TerrariaConfig)
 		return domain.TerrariaConfig{}, "", fmt.Errorf("invalid config payload")
 	}
 	config := dst.ConfigFromPayload(payload, fallback)
-	configPayloadJSON, err := json.Marshal(dst.PayloadFromConfig(config, stringPayload(payload, "gameMode")))
+	configPayloadJSON, err := json.Marshal(dst.EnrichPayloadFromConfig(config, payload))
 	if err != nil {
 		return domain.TerrariaConfig{}, "", err
 	}
