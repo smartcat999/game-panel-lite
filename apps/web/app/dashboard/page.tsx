@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Archive, ArrowRight, Cpu, HardDrive, MemoryStick, Plus, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { GameLibrary } from "@/components/game-library";
 import { ServerCard } from "@/components/server-card";
 import { Card } from "@/components/ui";
 import { formatActivityEvent } from "@/lib/activity-display";
@@ -64,6 +65,8 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          <GameLibrary />
 
           <Card className="p-4">
             <h2 className="font-semibold">{t("recentActivity")}</h2>

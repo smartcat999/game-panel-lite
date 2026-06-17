@@ -32,8 +32,10 @@ export type ProviderCatalog = {
   description: string;
   recommended: boolean;
   versions: string[];
+  recommendedVersion?: string;
   capabilities: ProviderCapabilities;
   configSchema: ProviderConfigField[];
+  saveDisplayName?: string;
 };
 
 export type GameCatalogEntry = {
@@ -41,7 +43,19 @@ export type GameCatalogEntry = {
   name: string;
   description: string;
   status: "available" | "planned" | string;
+  coverImage?: string;
+  serverCount?: number;
   providers: ProviderCatalog[];
+};
+
+export type ServerPlayerListResponse = {
+  supported: boolean;
+  players: Array<{ name?: string }>;
+};
+
+export type SaveSnapshotListResponse = {
+  saveDisplayName: string;
+  saves: Backup[];
 };
 
 export type ResourceLimits = {

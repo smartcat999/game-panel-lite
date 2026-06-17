@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, GameCatalogEntry, ModFile, ModPack, ProviderKey, RecommendedMod, ResourceLimits, Server, World } from "./types";
+import type { ActivityEvent, Backup, GameCatalogEntry, ModFile, ModPack, ProviderKey, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -170,6 +170,21 @@ type ApiBackup = {
   type: "Auto" | "Manual";
   createdAt: string;
 };
+
+function toBackup(backup: ApiBackup): Backup {
+  return {
+    id: backup.id,
+    instanceId: backup.instanceId,
+    name: backup.fileName,
+    server: backup.instanceId,
+    world: backup.worldName,
+    type: backup.type,
+    size: formatBytes(backup.sizeBytes),
+    sizeBytes: backup.sizeBytes,
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
+  };
+}
 
 type ApiModFile = {
   id: string;
@@ -380,6 +395,7 @@ export type AppSettings = {
   dataDir: string;
   dbPath: string;
   dockerHost: string;
+  publicHost: string;
 };
 
 export type ServerStats = {
@@ -879,4 +895,61 @@ export async function listActivity(): Promise<ActivityEvent[]> {
     message: event.message,
     created: formatRelative(event.createdAt)
   }));
+}
+
+export async function updatePublicHost(publicHost: string): Promise<{ publicHost: string }> {
+  const response = await apiFetch(`${API_BASE}/api/settings/public-host`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicHost })
+  });
+  return readPayload<{ publicHost: string }>(response, "Unable to update public host");
+}
+
+export async function getServerJoinInfo(id: string): Promise<ServerJoinInfo> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/join-info`, { cache: "no-store" });
+  return readPayload<ServerJoinInfo>(response, "Unable to load join info");
+}
+
+export async function listServerSaves(id: string): Promise<SaveSnapshotListResponse> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/saves`, { cache: "no-store" });
+  const payload = await readPayload<{ saveDisplayName: string; saves: ApiBackup[] }>(response, "Unable to load saves");
+  return {
+    saveDisplayName: payload.saveDisplayName,
+    saves: payload.saves.map((backup) => toBackup(backup))
+  };
+}
+
+export async function createServerSaveSnapshot(id: string): Promise<Backup> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/saves/snapshot`, { method: "POST" });
+  const payload = await readPayload<{ save: ApiBackup }>(response, "Unable to create save snapshot");
+  return toBackup(payload.save);
+}
+
+export async function downloadServerSave(serverId: string, saveId: string): Promise<Blob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/saves/${saveId}/download`);
+  if (!response.ok) {
+    throw new Error("Unable to download save snapshot");
+  }
+  return response.blob();
+}
+
+export async function restoreServerSave(serverId: string, saveId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/saves/${saveId}/restore`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to restore save snapshot");
+}
+
+export async function listServerPlayers(id: string): Promise<ServerPlayerListResponse> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/players`, { cache: "no-store" });
+  return readPayload<ServerPlayerListResponse>(response, "Unable to load players");
+}
+
+export async function kickServerPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/players/${encodeURIComponent(player)}/kick`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to kick player");
+}
+
+export async function banServerPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/players/${encodeURIComponent(player)}/ban`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to ban player");
 }

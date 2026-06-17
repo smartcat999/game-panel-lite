@@ -2,11 +2,11 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Database, KeyRound, ShieldCheck } from "lucide-react";
+import { Database, Globe, KeyRound, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
-import { changeAdminPassword, getDockerStatus, getSettings } from "@/lib/api";
+import { changeAdminPassword, getDockerStatus, getSettings, updatePublicHost } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,8 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [publicHost, setPublicHost] = useState("");
+  const [publicHostMessage, setPublicHostMessage] = useState("");
   const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false });
   const configuredHost = settings.data?.dockerHost ?? docker.data?.host ?? "GAMEPANEL_DOCKER_HOST";
@@ -27,11 +29,24 @@ export default function SettingsPage() {
     },
     onError: (err) => setPasswordMessage(err instanceof Error ? err.message : t("passwordChangeFailed"))
   });
+  const publicHostMutation = useMutation({
+    mutationFn: () => updatePublicHost(publicHost),
+    onSuccess: () => {
+      setPublicHostMessage(t("publicHostSaved"));
+      settings.refetch();
+    },
+    onError: (err) => setPublicHostMessage(err instanceof Error ? err.message : t("publicHostSaveFailed"))
+  });
 
   const submitPasswordChange = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPasswordMessage("");
     passwordMutation.mutate();
+  };
+
+  const submitPublicHost = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    publicHostMutation.mutate();
   };
 
   return (
@@ -80,6 +95,31 @@ export default function SettingsPage() {
                   <SettingValue label={t("dbPath")} value={settings.data.dbPath} />
                 </div>
               ) : null}
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-start gap-3">
+            <Globe className="mt-1 shrink-0 text-panel-green" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold">{t("publicHostTitle")}</h2>
+              <p className="mt-2 text-sm text-slate-400">{t("publicHostDescription")}</p>
+              <form className="mt-5 space-y-3" onSubmit={submitPublicHost}>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{t("publicHostTitle")}</span>
+                  <Input
+                    className="mt-2 w-full"
+                    placeholder={t("publicHostPlaceholder")}
+                    value={publicHost || (settings.data?.publicHost ?? "")}
+                    onChange={(event) => setPublicHost(event.target.value)}
+                  />
+                </label>
+                {publicHostMessage ? <p className="text-sm text-slate-400">{publicHostMessage}</p> : null}
+                <Button className="w-full" type="submit" disabled={publicHostMutation.isPending}>
+                  {publicHostMutation.isPending ? t("saving") : t("saveButton")}
+                </Button>
+              </form>
             </div>
           </div>
         </Card>
