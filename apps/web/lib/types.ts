@@ -2,7 +2,47 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 
 export type ServerStatus = "creating" | "starting" | "running" | "stopping" | "stopped" | "restarting" | "deleting" | "errored";
 export type ServerMode = "vanilla" | "tmodloader";
-export type ProviderKey = "terraria-vanilla" | "terraria-tmodloader";
+export type GameKey = "terraria" | "palworld" | string;
+export type ProviderKey = "terraria-vanilla" | "terraria-tmodloader" | string;
+
+export type ProviderCapabilities = {
+  consoleCommands: boolean;
+  playerList: boolean;
+  kickPlayer: boolean;
+  banPlayer: boolean;
+  saveSnapshots: boolean;
+  backups: boolean;
+  mods: boolean;
+  versions: boolean;
+};
+
+export type ProviderConfigField = {
+  name: string;
+  label: string;
+  type: "text" | "password" | "number" | "select" | "boolean" | string;
+  required: boolean;
+  default?: unknown;
+  help?: string;
+  options?: Array<{ value: string; label: string }>;
+};
+
+export type ProviderCatalog = {
+  key: ProviderKey;
+  name: string;
+  description: string;
+  recommended: boolean;
+  versions: string[];
+  capabilities: ProviderCapabilities;
+  configSchema: ProviderConfigField[];
+};
+
+export type GameCatalogEntry = {
+  key: GameKey;
+  name: string;
+  description: string;
+  status: "available" | "planned" | string;
+  providers: ProviderCatalog[];
+};
 
 export type ResourceLimits = {
   cpuLimitCores: number;

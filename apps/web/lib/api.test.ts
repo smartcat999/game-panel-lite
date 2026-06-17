@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadWorldFile, getServer, listBackups, listWorlds, setModEnabled } from "./api";
+import { downloadWorldFile, getServer, listBackups, listGames, listWorlds, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -102,6 +102,54 @@ describe("api mappers", () => {
     const server = await getServer("server-1");
 
     expect(server.players).toBe(2);
+  });
+
+  it("loads game catalog entries with provider capabilities", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          {
+            key: "terraria",
+            name: "Terraria",
+            description: "Sandbox adventure",
+            status: "available",
+            providers: [
+              {
+                key: "terraria-vanilla",
+                name: "Terraria Vanilla",
+                description: "Official server",
+                recommended: true,
+                versions: ["1.4.5.6"],
+                capabilities: {
+                  consoleCommands: true,
+                  playerList: true,
+                  kickPlayer: true,
+                  banPlayer: true,
+                  saveSnapshots: true,
+                  backups: true,
+                  mods: false,
+                  versions: true
+                },
+                configSchema: [{ name: "serverName", label: "服务器名称", type: "text", required: true }]
+              }
+            ]
+          },
+          {
+            key: "palworld",
+            name: "Palworld",
+            description: "Survival crafting",
+            status: "planned",
+            providers: []
+          }
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const games = await listGames();
+
+    expect(games.find((game) => game.key === "terraria")?.providers[0]?.capabilities.consoleCommands).toBe(true);
+    expect(games.find((game) => game.key === "palworld")?.status).toBe("planned");
   });
 
   it("surfaces backend download errors before the browser navigates away", async () => {

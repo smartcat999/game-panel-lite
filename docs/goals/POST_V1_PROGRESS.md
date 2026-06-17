@@ -19,11 +19,13 @@ The work starts with user-facing product functionality rather than V1 UI polish:
 
 ## Active Goal
 
-Goal 1: Local Admin Account and Login
+Goal 2: Multi-Game Provider Foundation
 
-Status: Implemented, pending review in the running app
+Status: In progress
 
-## Goal 1 Scope
+## Completed Goals
+
+### Goal 1: Local Admin Account and Login
 
 - First-run admin setup.
 - Login.
@@ -33,9 +35,7 @@ Status: Implemented, pending review in the running app
 - API route protection for all non-health routes.
 - Frontend setup/login screens and route guard.
 
-## Goal 1 Progress
-
-Completed:
+Implemented:
 - Created the post-V1 product development plan.
 - Added milestone grouping and dependency notes to the development plan.
 - Created this post-V1 progress tracker.
@@ -48,11 +48,36 @@ Completed:
 - Added Settings password change form.
 - Updated server log SSE connections to send auth cookies.
 
+## Goal 2 Scope
+
+- Provider capabilities.
+- Generic game metadata.
+- Generic server config envelope.
+- Game-specific config payloads.
+- Game-specific join info.
+
+## Goal 2 Progress
+
+Completed:
+- Added domain types for game keys, provider capabilities, provider config schema, and game catalog entries.
+- Extended `GameProvider` with `GameKey`, description, capabilities, and config schema metadata.
+- Added provider registry game catalog generation.
+- Added available Terraria catalog metadata for Vanilla and tModLoader.
+- Added planned Palworld catalog stub without runtime/provider support yet.
+- Added protected backend APIs:
+  - `GET /api/games`
+  - `GET /api/games/{gameKey}`
+  - `GET /api/games/{gameKey}/versions`
+- Changed server creation to persist the provider's `GameKey` instead of hardcoding `terraria`.
+- Added frontend game catalog types and API client methods.
+- Added backend and frontend mapper tests for the game catalog contract.
+
 In progress:
-- Manual browser verification against a running app.
+- Frontend create-server flow still needs to consume the catalog.
 
 Not started:
-- Goal 2 multi-game provider foundation.
+- Capability-based hiding of unsupported server detail tabs/actions.
+- Full game-specific create-server flow.
 
 ## Verification Log
 
@@ -69,12 +94,33 @@ Result:
 - All commands passed.
 - `next build` emitted missing optional SWC binary fallback warnings, but completed successfully.
 
+2026-06-18 Goal 2 foundation:
+
+```bash
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+pnpm --filter @gamepanel-lite/web test
+```
+
+Result:
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed after `next build` generated `.next/types`.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed.
+- `pnpm --filter @gamepanel-lite/web test` could not start because local dependencies are missing Rollup's optional native package `@rollup/rollup-darwin-arm64`.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
 - No RBAC, OAuth, SaaS account system, or multi-user management is planned for this phase.
 - If no admin account exists, backend API routes remain open so a fresh instance can bootstrap; the frontend still forces setup before rendering the app.
+- Palworld is visible only as a planned catalog stub; it cannot be created until Goal 3.
+- The existing create-server page still uses the Terraria-specific flow and does not yet render from provider schema metadata.
 
 ## Next Work
 
-Run the app locally, verify the setup/login/logout/password-change flow in browser, then begin Goal 2 multi-game provider foundation.
+Use the game catalog in the create-server flow and start Goal 3 Palworld provider work once the game-first flow is ready.

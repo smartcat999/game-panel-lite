@@ -724,6 +724,9 @@ func TestServerLifecycleAndLogEndpoints(t *testing.T) {
 	if server.ID == "" || server.ContainerID != "" || server.ProviderKey != domain.ProviderTerrariaVanilla {
 		t.Fatalf("expected created vanilla server record without fixed container, got %+v", server)
 	}
+	if server.GameKey != domain.GameTerraria {
+		t.Fatalf("expected provider game key %q, got %q", domain.GameTerraria, server.GameKey)
+	}
 	if server.Port != 7777 || server.HostPort != 17777 {
 		t.Fatalf("expected fixed internal port and requested external port, got internal=%d external=%d", server.Port, server.HostPort)
 	}
@@ -880,6 +883,58 @@ func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
 	if recorder.Code != stdhttp.StatusBadRequest {
 		t.Fatalf("expected unsupported version 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestGameCatalogEndpoints(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected game catalog 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var games []domain.GameCatalogEntry
+	if err := json.Unmarshal(list.Body.Bytes(), &games); err != nil {
+		t.Fatal(err)
+	}
+	var terrariaGame *domain.GameCatalogEntry
+	var palworldGame *domain.GameCatalogEntry
+	for index := range games {
+		switch games[index].Key {
+		case domain.GameTerraria:
+			terrariaGame = &games[index]
+		case domain.GamePalworld:
+			palworldGame = &games[index]
+		}
+	}
+	if terrariaGame == nil || terrariaGame.Status != "available" || len(terrariaGame.Providers) != 2 {
+		t.Fatalf("expected available Terraria entry with two providers, got %+v", terrariaGame)
+	}
+	if palworldGame == nil || palworldGame.Status != "planned" || len(palworldGame.Providers) != 0 {
+		t.Fatalf("expected planned Palworld stub without providers, got %+v", palworldGame)
+	}
+	if len(terrariaGame.Providers[0].ConfigSchema) == 0 || !terrariaGame.Providers[0].Capabilities.ConsoleCommands {
+		t.Fatalf("expected provider schema and capabilities, got %+v", terrariaGame.Providers[0])
+	}
+
+	versions := httptest.NewRecorder()
+	router.ServeHTTP(versions, httptest.NewRequest(stdhttp.MethodGet, "/api/games/terraria/versions", nil))
+	if versions.Code != stdhttp.StatusOK {
+		t.Fatalf("expected game versions 200, got %d: %s", versions.Code, versions.Body.String())
+	}
+	var versionPayload map[domain.ProviderKey][]string
+	if err := json.Unmarshal(versions.Body.Bytes(), &versionPayload); err != nil {
+		t.Fatal(err)
+	}
+	if len(versionPayload[domain.ProviderTerrariaVanilla]) == 0 || len(versionPayload[domain.ProviderTerrariaTModLoader]) == 0 {
+		t.Fatalf("expected provider versions, got %+v", versionPayload)
+	}
+
+	missing := httptest.NewRecorder()
+	router.ServeHTTP(missing, httptest.NewRequest(stdhttp.MethodGet, "/api/games/unknown-game", nil))
+	if missing.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected unknown game 404, got %d: %s", missing.Code, missing.Body.String())
 	}
 }
 

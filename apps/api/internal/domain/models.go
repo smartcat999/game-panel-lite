@@ -4,6 +4,8 @@ import "time"
 
 type ProviderKey string
 
+type GameKey string
+
 type ServerStatus string
 
 type WorldSize string
@@ -18,7 +20,54 @@ type Player struct {
 
 type PlayerLogEvent string
 
+type ProviderCapabilities struct {
+	ConsoleCommands bool `json:"consoleCommands"`
+	PlayerList      bool `json:"playerList"`
+	KickPlayer      bool `json:"kickPlayer"`
+	BanPlayer       bool `json:"banPlayer"`
+	SaveSnapshots   bool `json:"saveSnapshots"`
+	Backups         bool `json:"backups"`
+	Mods            bool `json:"mods"`
+	Versions        bool `json:"versions"`
+}
+
+type ProviderConfigField struct {
+	Name     string                      `json:"name"`
+	Label    string                      `json:"label"`
+	Type     string                      `json:"type"`
+	Required bool                        `json:"required"`
+	Default  any                         `json:"default,omitempty"`
+	Options  []ProviderConfigFieldOption `json:"options,omitempty"`
+	Help     string                      `json:"help,omitempty"`
+}
+
+type ProviderConfigFieldOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type GameCatalogEntry struct {
+	Key         GameKey           `json:"key"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Status      string            `json:"status"`
+	Providers   []ProviderCatalog `json:"providers"`
+}
+
+type ProviderCatalog struct {
+	Key          ProviderKey           `json:"key"`
+	Name         string                `json:"name"`
+	Description  string                `json:"description"`
+	Recommended  bool                  `json:"recommended"`
+	Versions     []string              `json:"versions"`
+	Capabilities ProviderCapabilities  `json:"capabilities"`
+	ConfigSchema []ProviderConfigField `json:"configSchema"`
+}
+
 const (
+	GameTerraria GameKey = "terraria"
+	GamePalworld GameKey = "palworld"
+
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
 
@@ -38,7 +87,7 @@ const (
 type GameServerInstance struct {
 	ID                    string         `json:"id" gorm:"primaryKey"`
 	Name                  string         `json:"name"`
-	GameKey               string         `json:"gameKey"`
+	GameKey               GameKey        `json:"gameKey"`
 	ProviderKey           ProviderKey    `json:"providerKey"`
 	Status                ServerStatus   `json:"status"`
 	WorldName             string         `json:"worldName"`

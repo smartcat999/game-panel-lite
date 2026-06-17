@@ -20,10 +20,20 @@ var tmodloaderVersions = []string{"v2026.04.3.0", "v2026.02.3.1"}
 func NewVanillaProvider() VanillaProvider       { return VanillaProvider{} }
 func NewTModLoaderProvider() TModLoaderProvider { return TModLoaderProvider{} }
 
+func (VanillaProvider) GameKey() domain.GameKey { return domain.GameTerraria }
 func (VanillaProvider) Key() domain.ProviderKey { return domain.ProviderTerrariaVanilla }
 func (VanillaProvider) Name() string            { return "Terraria Vanilla" }
-func (VanillaProvider) Image() string           { return VanillaImageForVersion(vanillaVersions[0]) }
-func (VanillaProvider) Versions() []string      { return vanillaVersions }
+func (VanillaProvider) Description() string {
+	return "Official Terraria dedicated server for classic worlds."
+}
+func (VanillaProvider) Capabilities() domain.ProviderCapabilities {
+	return vanillaCapabilities()
+}
+func (VanillaProvider) ConfigSchema() []domain.ProviderConfigField {
+	return configSchema()
+}
+func (VanillaProvider) Image() string      { return VanillaImageForVersion(vanillaVersions[0]) }
+func (VanillaProvider) Versions() []string { return vanillaVersions }
 func (VanillaProvider) ImageFor(version string) string {
 	return VanillaImageForVersion(version)
 }
@@ -49,10 +59,22 @@ func (VanillaProvider) ParsePlayerLogEvent(line string) (domain.PlayerLogEvent, 
 	return parsePlayerLogEvent(line)
 }
 
+func (TModLoaderProvider) GameKey() domain.GameKey { return domain.GameTerraria }
 func (TModLoaderProvider) Key() domain.ProviderKey { return domain.ProviderTerrariaTModLoader }
 func (TModLoaderProvider) Name() string            { return "Terraria tModLoader" }
-func (TModLoaderProvider) Image() string           { return TModLoaderImageForVersion(tmodloaderVersions[0]) }
-func (TModLoaderProvider) Versions() []string      { return tmodloaderVersions }
+func (TModLoaderProvider) Description() string {
+	return "Terraria server with tModLoader mod support."
+}
+func (TModLoaderProvider) Capabilities() domain.ProviderCapabilities {
+	capabilities := vanillaCapabilities()
+	capabilities.Mods = true
+	return capabilities
+}
+func (TModLoaderProvider) ConfigSchema() []domain.ProviderConfigField {
+	return configSchema()
+}
+func (TModLoaderProvider) Image() string      { return TModLoaderImageForVersion(tmodloaderVersions[0]) }
+func (TModLoaderProvider) Versions() []string { return tmodloaderVersions }
 func (TModLoaderProvider) ImageFor(version string) string {
 	return TModLoaderImageForVersion(version)
 }
@@ -76,6 +98,54 @@ func (TModLoaderProvider) ParsePlayerListOutput(lines []string) []domain.Player 
 }
 func (TModLoaderProvider) ParsePlayerLogEvent(line string) (domain.PlayerLogEvent, bool) {
 	return parsePlayerLogEvent(line)
+}
+
+func vanillaCapabilities() domain.ProviderCapabilities {
+	return domain.ProviderCapabilities{
+		ConsoleCommands: true,
+		PlayerList:      true,
+		KickPlayer:      true,
+		BanPlayer:       true,
+		SaveSnapshots:   true,
+		Backups:         true,
+		Versions:        true,
+	}
+}
+
+func configSchema() []domain.ProviderConfigField {
+	return []domain.ProviderConfigField{
+		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Friends Server"},
+		{Name: "worldName", Label: "世界名称", Type: "text", Required: true, Default: "Friends World"},
+		{
+			Name: "worldSize", Label: "世界大小", Type: "select", Required: true, Default: "medium",
+			Options: []domain.ProviderConfigFieldOption{
+				{Value: "small", Label: "小型世界"},
+				{Value: "medium", Label: "中型世界"},
+				{Value: "large", Label: "大型世界"},
+			},
+		},
+		{
+			Name: "difficulty", Label: "难度", Type: "select", Required: true, Default: "classic",
+			Options: []domain.ProviderConfigFieldOption{
+				{Value: "classic", Label: "经典"},
+				{Value: "expert", Label: "专家"},
+				{Value: "master", Label: "大师"},
+				{Value: "journey", Label: "旅途"},
+			},
+		},
+		{
+			Name: "worldEvil", Label: "世界邪恶地形", Type: "select", Required: true, Default: "random",
+			Options: []domain.ProviderConfigFieldOption{
+				{Value: "random", Label: "随机"},
+				{Value: "corruption", Label: "腐化之地"},
+				{Value: "crimson", Label: "猩红之地"},
+			},
+		},
+		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 8},
+		{Name: "password", Label: "服务器密码", Type: "password", Required: false},
+		{Name: "motd", Label: "服务器公告", Type: "text", Required: false, Default: "Welcome to GamePanel Lite"},
+		{Name: "seed", Label: "世界种子", Type: "text", Required: false},
+	}
 }
 
 func RuntimeWorldFiles(providerKey domain.ProviderKey, config domain.TerrariaConfig) []string {

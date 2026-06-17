@@ -84,6 +84,9 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/runtime/stats", h.runtimeStats)
 		r.Get("/api/settings", h.getSettings)
 		r.Get("/api/activity", h.listActivity)
+		r.Get("/api/games", h.listGames)
+		r.Get("/api/games/{gameKey}", h.getGame)
+		r.Get("/api/games/{gameKey}/versions", h.gameVersions)
 		r.Get("/api/servers", h.listServers)
 		r.Post("/api/servers", h.createServer)
 		r.Get("/api/servers/{id}", h.getServer)
@@ -1944,6 +1947,32 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) listGames(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.provider.Games())
+}
+
+func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
+	game, ok := h.provider.Game(domain.GameKey(chi.URLParam(r, "gameKey")))
+	if !ok {
+		writeError(w, http.StatusNotFound, "game not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, game)
+}
+
+func (h *Handler) gameVersions(w http.ResponseWriter, r *http.Request) {
+	game, ok := h.provider.Game(domain.GameKey(chi.URLParam(r, "gameKey")))
+	if !ok {
+		writeError(w, http.StatusNotFound, "game not found")
+		return
+	}
+	versions := map[domain.ProviderKey][]string{}
+	for _, item := range game.Providers {
+		versions[item.Key] = item.Versions
+	}
+	writeJSON(w, http.StatusOK, versions)
+}
+
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 	servers, err := h.store.ListServers(r.Context())
 	if err != nil {
@@ -2060,7 +2089,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server := domain.GameServerInstance{
-		ID: id, Name: payload.Name, GameKey: "terraria", ProviderKey: payload.ProviderKey,
+		ID: id, Name: payload.Name, GameKey: gameProvider.GameKey(), ProviderKey: payload.ProviderKey,
 		Status: domain.StatusStopped, WorldName: payload.Config.WorldName, Port: payload.Config.Port,
 		MaxPlayers: payload.Config.MaxPlayers, Password: payload.Config.Password, DataDir: dataDir, HostPort: hostPort,
 		CPULimitCores: resources.CPULimitCores, MemoryLimitMB: resources.MemoryLimitMB,

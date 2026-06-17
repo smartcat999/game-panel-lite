@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ModFile, ModPack, RecommendedMod, ResourceLimits, Server, World } from "./types";
+import type { ActivityEvent, Backup, GameCatalogEntry, ModFile, ModPack, ProviderKey, RecommendedMod, ResourceLimits, Server, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -94,6 +94,21 @@ export async function changeAdminPassword(currentPassword: string, newPassword: 
   return readPayload<AuthAccount>(response, "Unable to change password");
 }
 
+export async function listGames(): Promise<GameCatalogEntry[]> {
+  const response = await apiFetch(`${API_BASE}/api/games`, { cache: "no-store" });
+  return readPayload<GameCatalogEntry[]>(response, "Unable to load game catalog");
+}
+
+export async function getGame(gameKey: string): Promise<GameCatalogEntry> {
+  const response = await apiFetch(`${API_BASE}/api/games/${gameKey}`, { cache: "no-store" });
+  return readPayload<GameCatalogEntry>(response, "Unable to load game");
+}
+
+export async function getGameVersions(gameKey: string): Promise<Record<ProviderKey, string[]>> {
+  const response = await apiFetch(`${API_BASE}/api/games/${gameKey}/versions`, { cache: "no-store" });
+  return readPayload<Record<ProviderKey, string[]>>(response, "Unable to load game versions");
+}
+
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
   const response = await apiFetch(`${API_BASE}/api/terraria/config/preview`, {
     method: "POST",
@@ -110,7 +125,7 @@ export async function previewTerrariaConfig(config: TerrariaConfig): Promise<str
 type ApiServer = {
   id: string;
   name: string;
-  providerKey: "terraria-vanilla" | "terraria-tmodloader";
+  providerKey: ProviderKey;
   status: Server["status"];
   worldName: string;
   playersOnline?: number;
@@ -132,7 +147,7 @@ type ApiServer = {
 type ApiWorld = {
   id: string;
   instanceId: string;
-  providerKey?: "terraria-vanilla" | "terraria-tmodloader";
+  providerKey?: ProviderKey;
   name: string;
   fileName: string;
   sizeBytes: number;
@@ -420,7 +435,7 @@ export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
 
 export async function createServer(input: {
   name: string;
-  providerKey: "terraria-vanilla" | "terraria-tmodloader";
+  providerKey: ProviderKey;
   config: TerrariaConfig;
   hostPort?: number;
   version?: string;
