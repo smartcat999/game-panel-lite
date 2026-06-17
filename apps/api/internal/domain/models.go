@@ -122,6 +122,7 @@ type ModFile struct {
 	SizeBytes        int64     `json:"sizeBytes"`
 	Enabled          bool      `json:"enabled"`
 	RuntimeEnabled   *bool     `json:"runtimeEnabled,omitempty" gorm:"-"`
+	RuntimePresent   *bool     `json:"runtimePresent,omitempty" gorm:"-"`
 	Dependencies     []string  `json:"dependencies,omitempty" gorm:"-"`
 	DependenciesJSON string    `json:"-" gorm:"column:dependencies_json"`
 	CreatedAt        time.Time `json:"createdAt"`

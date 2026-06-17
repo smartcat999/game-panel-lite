@@ -20,6 +20,7 @@ import {
   deleteWorld,
   downloadBackupFile,
   downloadWorldFile,
+  getDockerStatus,
   getServer,
   getServerLogSnapshot,
   getServerStats,
@@ -80,6 +81,7 @@ export default function ServerDetailPage() {
     enabled: Boolean(server && server.mode === "tmodloader"),
     retry: false
   });
+  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && server.mode === "tmodloader"), retry: false, refetchInterval: 5000 });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -367,6 +369,7 @@ export default function ServerDetailPage() {
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
   const modPacks = useMemo(() => modPacksQuery.data ?? [], [modPacksQuery.data]);
+  const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
   if (!server) {
     return (
       <>
@@ -592,6 +595,7 @@ export default function ServerDetailPage() {
               packInstalling={modPackAssign.isPending}
               serverStatus={server.status}
               toggling={modEnabled.isPending}
+              workshopUnsupported={workshopUnsupported}
               onAssignMod={setPendingModAssign}
               onDelete={setPendingModDelete}
               onInstallPack={setPendingModPackInstall}
@@ -1532,6 +1536,7 @@ function ModsTab({
   packInstalling,
   serverStatus,
   toggling,
+  workshopUnsupported,
   onAssignMod,
   onDelete,
   onInstallPack,
@@ -1549,6 +1554,7 @@ function ModsTab({
   packInstalling: boolean;
   serverStatus: Server["status"];
   toggling: boolean;
+  workshopUnsupported: boolean;
   onAssignMod: (mod: ModFile) => void;
   onDelete: (mod: ModFile) => void;
   onInstallPack: (pack: ModPack) => void;
@@ -1559,6 +1565,7 @@ function ModsTab({
   const [installSource, setInstallSource] = useState<ModInstallSource>("library");
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
   const blocked = modAction.disabled;
+  const workshopBlockReason = workshopUnsupported ? t("workshopArmUnsupported") : "";
   useEffect(() => {
     if (!installerOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1665,56 +1672,62 @@ function ModsTab({
                 {installSource === "library" ? (
                   availableMods.length > 0 ? (
                     <div className="divide-y divide-panel-line">
-                      {availableMods.map((mod) => (
-                        <ResourceRow
-                          className="rounded-none border-0 bg-transparent px-4"
-                          key={mod.id}
-                          title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{modDisplayName(mod, locale)}</Link>}
-                          meta={modInstallMeta(mod, locale, t)}
-                          actions={
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                setInstallerOpen(false);
-                                onAssignMod(mod);
-                              }}
-                              disabled={assigning || blocked}
-                              title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
-                            >
-                              <Package aria-hidden="true" />
-                              {t("installToServer")}
-                            </Button>
-                          }
-                        />
-                      ))}
+                      {availableMods.map((mod) => {
+                        const blockedByArchitecture = workshopUnsupported && isWorkshopBackedMod(mod);
+                        return (
+                          <ResourceRow
+                            className="rounded-none border-0 bg-transparent px-4"
+                            key={mod.id}
+                            title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{modDisplayName(mod, locale)}</Link>}
+                            meta={modInstallMeta(mod, locale, t)}
+                            actions={
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  setInstallerOpen(false);
+                                  onAssignMod(mod);
+                                }}
+                                disabled={assigning || blocked || blockedByArchitecture}
+                                title={blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                              >
+                                <Package aria-hidden="true" />
+                                {t("installToServer")}
+                              </Button>
+                            }
+                          />
+                        );
+                      })}
                     </div>
                   ) : (
                     <InstallerEmptyState message={t("noGlobalMods")} />
                   )
                 ) : modPacks.length > 0 ? (
                   <div className="divide-y divide-panel-line">
-                    {modPacks.map((pack) => (
-                      <ResourceRow
-                        className="rounded-none border-0 bg-transparent px-4"
-                        key={pack.id}
-                        title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                        meta={modPackInstallMeta(pack, locale, t)}
-                        actions={
-                          <Button
-                            variant="secondary"
-                            onClick={() => {
-                              setInstallerOpen(false);
-                              onInstallPack(pack);
-                            }}
-                            disabled={packInstalling || blocked || pack.modIds.length === 0}
-                            title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
-                          >
-                            <Package aria-hidden="true" />
-                            {t("installModPack")}
-                          </Button>
-                        }
-                      />
-                    ))}
+                    {modPacks.map((pack) => {
+                      const blockedByArchitecture = workshopUnsupported && modPackHasWorkshopMods(pack);
+                      return (
+                        <ResourceRow
+                          className="rounded-none border-0 bg-transparent px-4"
+                          key={pack.id}
+                          title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
+                          meta={modPackInstallMeta(pack, locale, t)}
+                          actions={
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                setInstallerOpen(false);
+                                onInstallPack(pack);
+                              }}
+                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture}
+                              title={blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                            >
+                              <Package aria-hidden="true" />
+                              {t("installModPack")}
+                            </Button>
+                          }
+                        />
+                      );
+                    })}
                   </div>
                 ) : (
                   <InstallerEmptyState message={t("noModPacks")} />
@@ -1857,9 +1870,25 @@ function dependencyNamesForMods(mods: ModFile[]) {
   return Array.from(new Set(mods.flatMap((mod) => mod.dependencies ?? [])));
 }
 
-function modRuntimeStatus(mod: ModFile): { labelKey: "enabled" | "disabled" | "notApplied" | "pendingRestart"; className: string } {
+function isWorkshopBackedMod(mod: ModFile) {
+  return mod.source === "workshop" || Boolean(mod.workshopId);
+}
+
+function modPackHasWorkshopMods(pack: ModPack) {
+  return pack.mods.some(isWorkshopBackedMod);
+}
+
+function isArmArchitecture(architecture: string | undefined) {
+  const value = (architecture ?? "").toLowerCase();
+  return value.startsWith("arm") || value.includes("aarch64");
+}
+
+function modRuntimeStatus(mod: ModFile): { labelKey: "enabled" | "disabled" | "notSynced" | "notApplied" | "pendingRestart"; className: string } {
   if (!mod.enabled) {
     return { labelKey: "disabled", className: "bg-slate-800 text-slate-400" };
+  }
+  if (mod.runtimePresent === false) {
+    return { labelKey: "notSynced", className: "bg-sky-500/10 text-sky-300" };
   }
   if (mod.runtimeEnabled === false) {
     return { labelKey: "notApplied", className: "bg-panel-gold/15 text-panel-gold" };

@@ -212,6 +212,10 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server lifecycle action already in progress")
 		return
 	}
+	if h.workshopSyncUnsupported() {
+		writeError(w, http.StatusConflict, "workshop mod sync is not supported on ARM Docker hosts; upload .tmod files instead")
+		return
+	}
 	workshopIDs, err := decodeWorkshopIDs(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -241,6 +245,10 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Request) {
+	if h.workshopSyncUnsupported() {
+		writeError(w, http.StatusConflict, "workshop mod import is not supported on ARM Docker hosts; upload .tmod files instead")
+		return
+	}
 	workshopIDs, err := decodeWorkshopIDs(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -467,6 +475,10 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Source == "workshop" {
+		if h.workshopSyncUnsupported() {
+			writeError(w, http.StatusConflict, "workshop mods are not supported on ARM Docker hosts; upload the .tmod file instead")
+			return
+		}
 		assigned, created, err := h.upsertWorkshopModRecord(r.Context(), targetServer.ID, item.WorkshopID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -687,6 +699,9 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 	if !ok || recommended.WorkshopID == "" {
 		return domain.ModFile{}, false, fmt.Errorf("missing dependency %s in mod library", dependencyName)
 	}
+	if h.workshopSyncUnsupported() {
+		return domain.ModFile{}, false, fmt.Errorf("missing dependency %s in mod library; upload the .tmod dependency file first", dependencyName)
+	}
 	assigned, created, err := h.upsertWorkshopModRecord(ctx, server.ID, recommended.WorkshopID)
 	return assigned, created, err
 }
@@ -718,15 +733,15 @@ func (h *Handler) findLibraryModByModName(ctx context.Context, modName string) (
 }
 
 func modIdentity(item domain.ModFile) string {
+	if item.WorkshopID != "" {
+		if recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(item.WorkshopID); ok && strings.TrimSpace(recommended.ModName) != "" {
+			return recommended.ModName
+		}
+	}
 	for _, value := range []string{item.ModName, item.Title, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName))} {
 		value = strings.TrimSpace(value)
 		if value != "" && !strings.HasPrefix(value, "workshop-") {
 			return value
-		}
-	}
-	if item.WorkshopID != "" {
-		if recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(item.WorkshopID); ok {
-			return recommended.ModName
 		}
 	}
 	return ""
@@ -948,10 +963,12 @@ func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServe
 		h.logger.Warn("failed to read runtime enabled mods", "server", server.ID, "error", err)
 		return visible, nil
 	}
-	if runtimeEnabled == nil {
-		return visible, nil
-	}
 	for index := range visible {
+		present := runtimeModPresent(server, visible[index])
+		visible[index].RuntimePresent = &present
+		if runtimeEnabled == nil {
+			continue
+		}
 		enabled := false
 		if _, ok := runtimeEnabled[modIdentity(visible[index])]; ok {
 			enabled = true
@@ -959,6 +976,22 @@ func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServe
 		visible[index].RuntimeEnabled = &enabled
 	}
 	return visible, nil
+}
+
+func runtimeModPresent(server domain.GameServerInstance, item domain.ModFile) bool {
+	if server.ProviderKey != domain.ProviderTerrariaTModLoader || strings.TrimSpace(server.DataDir) == "" {
+		return true
+	}
+	candidates := []string{filepath.Join(server.DataDir, "Mods", item.FileName)}
+	if identity := modIdentity(item); identity != "" {
+		candidates = append(candidates, filepath.Join(server.DataDir, "Mods", identity+".tmod"))
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func readRuntimeEnabledMods(server domain.GameServerInstance) (map[string]struct{}, error) {
@@ -1855,6 +1888,11 @@ func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) dockerStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.dockerMonitor.Status())
+}
+
+func (h *Handler) workshopSyncUnsupported() bool {
+	architecture := strings.ToLower(strings.TrimSpace(h.dockerMonitor.Status().Architecture))
+	return strings.HasPrefix(architecture, "arm") || strings.Contains(architecture, "aarch64")
 }
 
 func (h *Handler) runtimeStats(w http.ResponseWriter, r *http.Request) {

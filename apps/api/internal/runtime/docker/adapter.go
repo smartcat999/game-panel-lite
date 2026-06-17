@@ -45,7 +45,11 @@ func (a *Adapter) Check(ctx context.Context) runtime.DockerStatus {
 	if _, err := a.client.Ping(ctx); err != nil {
 		return runtime.DockerStatus{Available: false, Message: err.Error(), Host: a.host}
 	}
-	return runtime.DockerStatus{Available: true, Message: "Docker daemon is available", Host: a.host}
+	info, err := a.client.Info(ctx)
+	if err != nil {
+		return runtime.DockerStatus{Available: true, Message: "Docker daemon is available", Host: a.host}
+	}
+	return runtime.DockerStatus{Available: true, Message: "Docker daemon is available", Host: a.host, Architecture: info.Architecture}
 }
 
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {

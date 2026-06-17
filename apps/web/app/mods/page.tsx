@@ -8,7 +8,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, deleteGlobalMod, deleteModPack, importGlobalWorkshopMods, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
+import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,8 @@ export default function ModsPage() {
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const recommendedModsQuery = useQuery({ queryKey: ["recommended-mods"], queryFn: listRecommendedMods, retry: false });
+  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
+  const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
 
   const globalUpload = useMutation({
     mutationFn: (file: File) => uploadGlobalMod(file),
@@ -129,6 +131,11 @@ export default function ModsPage() {
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
   const requestWorkshopImport = (ids: string[]) => {
+    if (workshopUnsupported) {
+      setSuccessMessage("");
+      setErrorMessage(t("workshopArmUnsupported"));
+      return;
+    }
     const plan = buildDependencyImportPlan(ids, recommendedMods, globalMods);
     if (plan.dependencyIds.length > 0) {
       setPendingDependencyImport(plan);
@@ -199,7 +206,7 @@ export default function ModsPage() {
             hint={t("discoverModsHint")}
             count={filteredRecommendedMods.length}
             actions={(
-              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending}>
+              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                 <Download aria-hidden="true" />
                 {t("importWorkshopMods")}
               </Button>
@@ -211,7 +218,8 @@ export default function ModsPage() {
                 key={item.workshopId}
                 item={item}
                 locale={locale}
-                busy={workshopImport.isPending}
+                busy={workshopImport.isPending || workshopUnsupported}
+                disabledReason={workshopUnsupported ? t("workshopArmUnsupported") : ""}
                 onAdd={() => {
                   requestWorkshopImport([item.workshopId]);
                 }}
@@ -231,10 +239,10 @@ export default function ModsPage() {
                   <Upload aria-hidden="true" />
                   {globalUpload.isPending ? t("uploading") : t("uploadMod")}
                 </Button>
-                <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending}>
-                  <Download aria-hidden="true" />
-                  {t("importWorkshopMods")}
-                </Button>
+              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
+                <Download aria-hidden="true" />
+                {t("importWorkshopMods")}
+              </Button>
               </>
             )}
           />
@@ -329,7 +337,7 @@ export default function ModsPage() {
             <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIds.length })}</span>
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setWorkshopDialogOpen(false)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
-              <Button variant="secondary" onClick={() => requestWorkshopImport(workshopIds)} disabled={workshopImport.isPending || workshopIds.length === 0}>
+              <Button variant="secondary" onClick={() => requestWorkshopImport(workshopIds)} disabled={workshopImport.isPending || workshopIds.length === 0 || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                 <Download aria-hidden="true" />
                 {workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
               </Button>
@@ -559,6 +567,7 @@ function ModIdentity({ detail, item, locale }: { detail: string; item: ModFile; 
 
 function RecommendedModCard({
   busy,
+  disabledReason,
   item,
   locale,
   onAdd
@@ -566,6 +575,7 @@ function RecommendedModCard({
   item: RecommendedMod;
   locale: string;
   busy: boolean;
+  disabledReason: string;
   onAdd: () => void;
 }) {
   return (
@@ -616,7 +626,7 @@ function RecommendedModCard({
         {item.inLibrary ? (
           <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
         ) : (
-          <Button variant="secondary" onClick={onAdd} disabled={busy}>
+          <Button variant="secondary" onClick={onAdd} disabled={busy} title={disabledReason || undefined}>
             <Download aria-hidden="true" />
             {locale === "zh" ? "加入模组库" : "Add to library"}
           </Button>
@@ -668,6 +678,11 @@ function buildDependencyImportPlan(ids: string[], recommendedMods: RecommendedMo
 
 function modIdentity(mod: ModFile) {
   return mod.modName || mod.title || mod.fileName.replace(/\.[^.]+$/, "");
+}
+
+function isArmArchitecture(architecture: string | undefined) {
+  const value = (architecture ?? "").toLowerCase();
+  return value.startsWith("arm") || value.includes("aarch64");
 }
 
 function StatPill({ icon, label }: { icon: ReactNode; label: string }) {

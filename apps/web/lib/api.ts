@@ -113,6 +113,7 @@ type ApiModFile = {
   sizeBytes: number;
   enabled: boolean;
   runtimeEnabled?: boolean;
+  runtimePresent?: boolean;
   dependencies?: string[];
   createdAt: string;
 };
@@ -292,6 +293,7 @@ export type DockerStatus = {
   available: boolean;
   message: string;
   host: string;
+  architecture?: string;
   lastCheckedAt?: string;
 };
 
@@ -623,6 +625,7 @@ function toModFile(file: ApiModFile): ModFile {
     sizeBytes: file.sizeBytes,
     enabled: file.enabled,
     runtimeEnabled: file.runtimeEnabled,
+    runtimePresent: file.runtimePresent,
     dependencies: file.dependencies,
     created: formatRelative(file.createdAt)
   };

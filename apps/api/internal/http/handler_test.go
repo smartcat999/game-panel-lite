@@ -105,6 +105,14 @@ func (a availableMockAdapter) Check(context.Context) runtime.DockerStatus {
 	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock"}
 }
 
+type armMockAdapter struct {
+	availableMockAdapter
+}
+
+func (a armMockAdapter) Check(context.Context) runtime.DockerStatus {
+	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock", Architecture: "arm64"}
+}
+
 type captureCreateAdapter struct {
 	availableMockAdapter
 	created chan runtime.ContainerSpec
@@ -1320,6 +1328,20 @@ func TestTModLoaderWorkshopImportWritesInstallFile(t *testing.T) {
 	if string(runtimeInstall) != expected {
 		t.Fatalf("expected runtime install.txt %q, got %q", expected, string(runtimeInstall))
 	}
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/tmod/mods", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected mod list 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var mods []domain.ModFile
+	if err := json.Unmarshal(list.Body.Bytes(), &mods); err != nil {
+		t.Fatal(err)
+	}
+	for _, mod := range mods {
+		if mod.Source == "workshop" && (mod.RuntimePresent == nil || *mod.RuntimePresent) {
+			t.Fatalf("expected workshop mod to be marked unsynced until runtime file exists, got %+v", mod)
+		}
+	}
 }
 
 func TestGlobalWorkshopImportCreatesLibraryWorkshopRecords(t *testing.T) {
@@ -1351,6 +1373,18 @@ func TestGlobalWorkshopImportCreatesLibraryWorkshopRecords(t *testing.T) {
 	}
 	if len(mods) != 2 {
 		t.Fatalf("expected two global workshop mods, got %+v", mods)
+	}
+}
+
+func TestGlobalWorkshopImportRejectsArmRuntime(t *testing.T) {
+	router, _, _ := newTestRouterWithAdapter(t, armMockAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/workshop", bytes.NewBufferString(`{"workshopIds":["2563309347"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected global workshop import conflict on arm runtime, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -2059,6 +2093,33 @@ func TestAssignModCopiesKnownDependencies(t *testing.T) {
 		if !strings.Contains(string(enabled), name) {
 			t.Fatalf("expected enabled.json to contain %s, got %s", name, enabled)
 		}
+	}
+}
+
+func TestAssignWorkshopModRejectsArmRuntime(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, armMockAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
+	server := testServer("tmod", cfg.DataDir)
+	server.ProviderKey = domain.ProviderTerrariaTModLoader
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	item := domain.ModFile{
+		ID:         "magic",
+		InstanceID: "unassigned",
+		FileName:   "workshop-2563309347",
+		Source:     "workshop",
+		WorkshopID: "2563309347",
+		Enabled:    true,
+		CreatedAt:  time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &item); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/mods/magic/assign", bytes.NewBufferString(`{"instanceId":"tmod"}`)))
+	if recorder.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected workshop assign conflict on arm runtime, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 

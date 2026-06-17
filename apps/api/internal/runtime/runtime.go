@@ -30,6 +30,7 @@ type DockerStatus struct {
 	Available     bool      `json:"available"`
 	Message       string    `json:"message"`
 	Host          string    `json:"host"`
+	Architecture  string    `json:"architecture,omitempty"`
 	LastCheckedAt time.Time `json:"lastCheckedAt"`
 }
 

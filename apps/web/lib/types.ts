@@ -76,6 +76,7 @@ export type ModFile = {
   sizeBytes?: number;
   enabled: boolean;
   runtimeEnabled?: boolean;
+  runtimePresent?: boolean;
   dependencies?: string[];
   created: string;
 };

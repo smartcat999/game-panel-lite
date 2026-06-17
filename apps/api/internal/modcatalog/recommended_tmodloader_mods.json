@@ -50,6 +50,7 @@
   {
     "rank": 3,
     "workshopId": "2619954303",
+    "modName": "RecipeBrowser",
     "title": "Recipe Browser",
     "creatorSteamId": "76561198025715866",
     "previewUrl": "https://images.steamusercontent.com/ugc/1853809508481651551/19816B6CFAF6626FFD879C40DB8F00B6BB7A0B3B/",
@@ -74,6 +75,7 @@
   {
     "rank": 4,
     "workshopId": "2669644269",
+    "modName": "BossChecklist",
     "title": "Boss Checklist",
     "creatorSteamId": "76561198025715866",
     "previewUrl": "https://images.steamusercontent.com/ugc/2279448478986310855/161BFEA65680B162E5F5C8B987591901CB882670/",
@@ -153,6 +155,7 @@
   {
     "rank": 7,
     "workshopId": "2599842771",
+    "modName": "AlchemistNPCLite",
     "title": "AlchemistNPC Lite",
     "creatorSteamId": "76561197963807326",
     "previewUrl": "https://images.steamusercontent.com/ugc/53579707147804423/DDAC84C088CDC1B74BCF8FBB0D56837083109C0B/",
@@ -232,6 +235,7 @@
   {
     "rank": 10,
     "workshopId": "2570931073",
+    "modName": "Fargowiltas",
     "title": "Fargo's Mutant Mod",
     "creatorSteamId": "76561198096315536",
     "previewUrl": "https://images.steamusercontent.com/ugc/16331139479663403829/F22C59F76E39B8624BBAD03A35D8ACFD6A1EB8DB/",
