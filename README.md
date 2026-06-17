@@ -70,9 +70,9 @@ GOCACHE="$PWD/.cache/go-build" go vet ./...
 - `packages/contracts` - OpenAPI contract.
 - `packages/shared` - shared TypeScript schemas used by the frontend.
 
-Default local ports:
+Default Docker Compose ports:
 
-- Web app: `http://localhost:3000`
+- Web app: `http://localhost:3001`
 - API: `http://localhost:4000`
 
 ## V1 Scope

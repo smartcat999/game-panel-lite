@@ -26,6 +26,6 @@ services:
     depends_on:
       - api
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - .:/workspace
