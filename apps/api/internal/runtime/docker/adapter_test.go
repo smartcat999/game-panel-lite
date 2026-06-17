@@ -39,3 +39,10 @@ func TestDataBindsSupportsSubPathMounts(t *testing.T) {
 		t.Fatalf("expected container bind path, got %q", container)
 	}
 }
+
+func TestNatPortSetExposesContainerPort(t *testing.T) {
+	ports := natPortSet(7777)
+	if _, ok := ports["7777/tcp"]; !ok {
+		t.Fatalf("expected exposed 7777/tcp port, got %v", ports)
+	}
+}

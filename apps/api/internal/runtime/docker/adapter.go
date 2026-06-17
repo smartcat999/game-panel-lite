@@ -89,11 +89,12 @@ func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (strin
 		hostConfig.Resources.Memory = int64(spec.Resources.MemoryLimitMB) * 1024 * 1024
 	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
-		Image:       spec.Image,
-		Env:         spec.Options.Env,
-		Cmd:         spec.Options.Cmd,
-		OpenStdin:   true,
-		AttachStdin: true,
+		Image:        spec.Image,
+		Env:          spec.Options.Env,
+		Cmd:          spec.Options.Cmd,
+		ExposedPorts: natPortSet(spec.Port),
+		OpenStdin:    true,
+		AttachStdin:  true,
 		Labels: map[string]string{
 			"gamepanel.instance": spec.InstanceID,
 		},
@@ -404,4 +405,8 @@ func dataBindPaths(dataDir string, mount string) (string, string) {
 func natPortMap(containerPort int, hostPort int) nat.PortMap {
 	p := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
 	return nat.PortMap{p: []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", hostPort)}}}
+}
+
+func natPortSet(containerPort int) nat.PortSet {
+	return nat.PortSet{nat.Port(fmt.Sprintf("%d/tcp", containerPort)): struct{}{}}
 }

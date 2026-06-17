@@ -1208,6 +1208,30 @@ func TestGetServerClearsStaleMissingRuntimeErrorWithoutContainerID(t *testing.T)
 	}
 }
 
+func TestGetServerMarksStaleLifecyclePendingWithoutContainerAsErrored(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, inspectStatusAdapter{status: domain.StatusRunning})
+	server := testServer("stale-starting-without-container", cfg.DataDir)
+	server.Status = domain.StatusStarting
+	server.ContainerID = ""
+	server.UpdatedAt = time.Now().Add(-staleLifecyclePendingAfter - time.Second)
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/stale-starting-without-container", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server detail 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var got domain.GameServerInstance
+	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusErrored || got.LastError == "" {
+		t.Fatalf("expected stale pending server to be marked errored, got %+v", got)
+	}
+}
+
 func TestListServersRefreshesStoredStatusFromRuntime(t *testing.T) {
 	router, db, cfg := newTestRouterWithAdapter(t, inspectStatusAdapter{status: domain.StatusRunning})
 	server := testServer("status-list", cfg.DataDir)

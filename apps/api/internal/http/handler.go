@@ -45,6 +45,9 @@ type resourceLimitPayload struct {
 	MemoryLimitMB int     `json:"memoryLimitMb,omitempty"`
 }
 
+const serverLifecycleTimeout = 15 * time.Minute
+const staleLifecyclePendingAfter = 10 * time.Minute
+
 func NewHandler(
 	cfg config.Config,
 	logger *slog.Logger,
@@ -2073,7 +2076,7 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.start.queued", fmt.Sprintf("Queued start for server %s", server.Name))
-	go h.runStartServer(context.Background(), server.ID)
+	go h.runServerLifecycle(server.ID, h.runStartServer)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2101,7 +2104,7 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.stop.queued", fmt.Sprintf("Queued stop for server %s", server.Name))
-	go h.runStopServer(context.Background(), server.ID)
+	go h.runServerLifecycle(server.ID, h.runStopServer)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2123,7 +2126,7 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.restart.queued", fmt.Sprintf("Queued restart for server %s", server.Name))
-	go h.runRestartServer(context.Background(), server.ID)
+	go h.runServerLifecycle(server.ID, h.runRestartServer)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
@@ -2151,6 +2154,12 @@ func (h *Handler) runStartServer(ctx context.Context, id string) {
 		return
 	}
 	h.recordActivity(ctx, server.ID, "server.started", fmt.Sprintf("Started server %s", server.Name))
+}
+
+func (h *Handler) runServerLifecycle(id string, run func(context.Context, string)) {
+	ctx, cancel := context.WithTimeout(context.Background(), serverLifecycleTimeout)
+	defer cancel()
+	run(ctx, id)
 }
 
 func (h *Handler) runRestartServer(ctx context.Context, id string) {
@@ -2495,6 +2504,14 @@ func (h *Handler) applyServerConfig(ctx context.Context, server *domain.GameServ
 
 func (h *Handler) refreshServerStatus(ctx context.Context, server domain.GameServerInstance) domain.GameServerInstance {
 	if isLifecyclePending(server.Status) {
+		if server.ContainerID == "" && time.Since(server.UpdatedAt) > staleLifecyclePendingAfter {
+			server.Status = domain.StatusErrored
+			server.LastError = "server lifecycle action timed out before a Docker container was created"
+			server.UpdatedAt = time.Now()
+			if err := h.store.SaveServer(ctx, &server); err != nil {
+				h.logger.Warn("failed to persist stale lifecycle timeout", "server", server.ID, "error", err)
+			}
+		}
 		return server
 	}
 	if server.ContainerID == "" {
@@ -2615,7 +2632,7 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.delete.queued", fmt.Sprintf("Queued delete for server %s", server.Name))
-	go h.runDeleteServer(context.Background(), server.ID)
+	go h.runServerLifecycle(server.ID, h.runDeleteServer)
 	writeJSON(w, http.StatusAccepted, server)
 }
 
