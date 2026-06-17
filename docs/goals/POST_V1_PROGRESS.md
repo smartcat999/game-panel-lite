@@ -71,12 +71,14 @@ Completed:
 - Changed server creation to persist the provider's `GameKey` instead of hardcoding `terraria`.
 - Added frontend game catalog types and API client methods.
 - Added backend and frontend mapper tests for the game catalog contract.
+- Updated the create-server first step to render games from `GET /api/games`.
+- Updated create-server version loading to use `GET /api/games/terraria/versions`.
+- Shows planned games such as Palworld as roadmap-visible but not creatable yet.
 
 In progress:
-- Frontend create-server flow still needs to consume the catalog.
+- Capability-based hiding of unsupported server detail tabs/actions.
 
 Not started:
-- Capability-based hiding of unsupported server detail tabs/actions.
 - Full game-specific create-server flow.
 
 ## Verification Log
@@ -119,8 +121,8 @@ Result:
 - No RBAC, OAuth, SaaS account system, or multi-user management is planned for this phase.
 - If no admin account exists, backend API routes remain open so a fresh instance can bootstrap; the frontend still forces setup before rendering the app.
 - Palworld is visible only as a planned catalog stub; it cannot be created until Goal 3.
-- The existing create-server page still uses the Terraria-specific flow and does not yet render from provider schema metadata.
+- The create-server page now uses the game catalog for game selection, but the later setup steps still use the Terraria-specific form instead of rendering from provider schema metadata.
 
 ## Next Work
 
-Use the game catalog in the create-server flow and start Goal 3 Palworld provider work once the game-first flow is ready.
+Hide unsupported server detail tabs/actions by provider capability, then continue toward full game-specific create-server flows.

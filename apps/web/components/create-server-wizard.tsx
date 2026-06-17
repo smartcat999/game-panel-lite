@@ -11,11 +11,11 @@ import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
-import { getTerrariaVersions, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
+import { getGameVersions, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ModFile, ModPack, ResourceLimits } from "@/lib/types";
+import type { GameCatalogEntry, ModFile, ModPack, ResourceLimits } from "@/lib/types";
 
 const stepKeys = ["stepGame", "stepMode", "stepPreset", "stepConfig", "stepMods", "stepReview"] as const;
 const presets = [
@@ -58,7 +58,8 @@ export function CreateServerWizard() {
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [selectedModPackId, setSelectedModPackId] = useState("");
-  const versionsQuery = useQuery({ queryKey: ["terraria-versions"], queryFn: getTerrariaVersions, staleTime: 5 * 60 * 1000 });
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000 });
+  const versionsQuery = useQuery({ queryKey: ["game-versions", "terraria"], queryFn: () => getGameVersions("terraria"), staleTime: 5 * 60 * 1000 });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
   const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
@@ -70,6 +71,7 @@ export function CreateServerWizard() {
   const availableMods = modsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
+  const games = gamesQuery.data ?? [];
   const fallbackStepKey: (typeof stepKeys)[number] = "stepReview";
   const currentStepKey = stepKeys[step] ?? fallbackStepKey;
   const nextStepKey = stepKeys[Math.min(stepKeys.length - 1, step + 1)] ?? fallbackStepKey;
@@ -173,7 +175,7 @@ export function CreateServerWizard() {
             ))}
           </div>
           <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
-            {step === 0 && <Choice title={t("chooseGame")} icon={<Gamepad2 />} options={["Terraria"]} />}
+            {step === 0 && <GameStep games={games} isLoading={gamesQuery.isLoading} selectedGameKey="terraria" />}
             {step === 1 && <ModeStep mode={mode} setMode={chooseMode} />}
             {step === 2 && <PresetStep mode={mode} selectedPreset={selectedPreset} setPreset={choosePreset} />}
             {step === 3 && (
@@ -239,17 +241,46 @@ export function CreateServerWizard() {
   );
 }
 
-function Choice({ title, icon, options }: { title: string; icon: React.ReactNode; options: string[] }) {
+function GameStep({ games, isLoading, selectedGameKey }: { games: GameCatalogEntry[]; isLoading: boolean; selectedGameKey: string }) {
+  const { t } = useI18n();
+  const orderedGames = games.length > 0 ? games : [{ key: "terraria", name: "Terraria", description: "", status: "available", providers: [] }];
   return (
     <div>
-      <h2 className="text-lg font-semibold">{title}</h2>
+      <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
+      <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {options.map((option) => (
-          <Card key={option} className="border-panel-green p-4">
-            <div className="flex items-center gap-3 text-panel-green">{icon}{option}</div>
-          </Card>
-        ))}
+        {orderedGames.map((game) => {
+          const isSelected = game.key === selectedGameKey;
+          const isAvailable = game.status === "available";
+          return (
+            <Card key={game.key} className={cn("relative p-4", isSelected ? "border-panel-green bg-panel-green/10" : "bg-slate-950/40", !isAvailable && "opacity-75")}>
+              <div className="flex items-start gap-3">
+                <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-md border", isSelected ? "border-panel-green bg-panel-green/15 text-panel-green" : "border-panel-line text-slate-400")}>
+                  <Gamepad2 aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-white">{game.name}</p>
+                    <span className={cn("rounded px-2 py-0.5 text-xs", isAvailable ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>
+                      {isAvailable ? t("gameAvailable") : t("gamePlanned")}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">{game.description || t("terrariaGameDescription")}</p>
+                  {game.providers.length > 0 && (
+                    <p className="mt-3 text-xs text-slate-500">{t("providerCount", { count: game.providers.length })}</p>
+                  )}
+                </div>
+              </div>
+              {isSelected && (
+                <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
+                  <Check aria-hidden="true" className="size-4" />
+                </span>
+              )}
+            </Card>
+          );
+        })}
       </div>
+      {isLoading && <p className="mt-3 text-sm text-slate-500">{t("loading")}</p>}
     </div>
   );
 }
