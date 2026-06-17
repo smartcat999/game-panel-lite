@@ -31,6 +31,18 @@ pnpm dev:web
 
 The top-bar service badge checks the Go API `GET /healthz` endpoint. If only the web app is running, the badge will show unavailable until `pnpm dev:api` is started.
 
+Run both services with Docker Compose:
+
+```bash
+docker compose up
+```
+
+For OrbStack on macOS, keep the machine-specific socket path in your untracked `.env`:
+
+```bash
+GAMEPANEL_DOCKER_SOCKET_PATH="/Users/<you>/.orbstack/run/docker.sock"
+```
+
 Useful checks:
 
 ```bash
@@ -115,6 +127,8 @@ GAMEPANEL_DOCKER_HOST="tcp://127.0.0.1:2375"
 ```
 
 The Settings page displays the configured Docker Host and runtime status only. Docker Host changes should be made in the backend config or environment, then applied by restarting the backend process.
+
+When using `compose.yaml`, the API service always reads Docker through `unix:///var/run/docker.sock` inside the API container. Override `GAMEPANEL_DOCKER_SOCKET_PATH` in local `.env` to decide which host socket is mounted there.
 
 Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instances/{instanceId}`. World, backup, and mod files use separate per-instance directories.
 

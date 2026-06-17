@@ -1,0 +1,29 @@
+services:
+  api:
+    image: golang:1.25-bookworm
+    working_dir: /workspace
+    command: sh -lc "go run ./apps/api/cmd/server"
+    environment:
+      GAMEPANEL_HOST: 0.0.0.0
+      GAMEPANEL_PORT: 4000
+      GAMEPANEL_DATA_DIR: /workspace/data
+      GAMEPANEL_DB_PATH: /workspace/data/gamepanel.db
+      GAMEPANEL_DOCKER_HOST: unix:///var/run/docker.sock
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/workspace
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+
+  web:
+    image: node:20-bookworm
+    working_dir: /workspace
+    command: sh -lc "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @gamepanel-lite/web dev --hostname 0.0.0.0"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/workspace
