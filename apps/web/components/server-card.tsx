@@ -13,7 +13,7 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
   const { locale, t } = useI18n();
   return (
     <Card className="p-4">
-      <div className="flex gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row">
         <ServerGameArt mode={server.mode} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -32,7 +32,7 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
           </div>
           {!compact && (
             <div className="mt-4">
-              <ServerActions server={server} />
+              <ServerActions server={server} compact />
             </div>
           )}
         </div>

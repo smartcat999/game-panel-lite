@@ -11,8 +11,21 @@ import { formatServerDetailError } from "@/lib/server-detail-actions";
 import { serverInviteText } from "@/lib/server-join";
 import type { Server } from "@/lib/types";
 import { serverAction } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
-export function ServerActions({ server, showInvite = true }: { server: Server; showInvite?: boolean }) {
+export function ServerActions({
+  server,
+  showInvite = true,
+  showDelete = true,
+  compact = false,
+  className
+}: {
+  server: Server;
+  showInvite?: boolean;
+  showDelete?: boolean;
+  compact?: boolean;
+  className?: string;
+}) {
   const client = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -96,18 +109,22 @@ export function ServerActions({ server, showInvite = true }: { server: Server; s
   };
 
   const pendingLabel = pendingAction ? actionLabel(pendingAction) : "";
+  const buttonClassName = compact ? "h-11 min-w-0 px-2" : undefined;
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className={cn(compact ? "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" : "flex flex-wrap gap-2", className)}>
         {server.status === "running" || server.status === "stopping" ? (
-          <Button variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
+          <Button className={buttonClassName} variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
             <Square aria-hidden="true" />
             {stopLabel}
           </Button>
         ) : (
           <Button
-            className="border border-panel-green/30 bg-panel-green/10 text-panel-green hover:border-panel-green/50 hover:bg-panel-green/15 disabled:border-panel-line disabled:bg-slate-900/70 disabled:text-slate-500"
+            className={cn(
+              "border border-panel-green/30 bg-panel-green/10 text-panel-green hover:border-panel-green/50 hover:bg-panel-green/15 disabled:border-panel-line disabled:bg-slate-900/70 disabled:text-slate-500",
+              buttonClassName
+            )}
             variant="ghost"
             onClick={() => runAction("start")}
             disabled={controlsDisabled}
@@ -116,20 +133,22 @@ export function ServerActions({ server, showInvite = true }: { server: Server; s
             {startLabel}
           </Button>
         )}
-        <Button variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
+        <Button className={buttonClassName} variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
           <RotateCcw aria-hidden="true" />
           {restartLabel}
         </Button>
         {showInvite && (
-          <Button variant="secondary" onClick={() => void copyInvite()} disabled={server.status === "deleting"}>
+          <Button className={buttonClassName} variant="secondary" onClick={() => void copyInvite()} disabled={server.status === "deleting"}>
             <Copy aria-hidden="true" />
             {copiedInvite ? t("copied") : t("actionCopyInvite")}
           </Button>
         )}
-        <Button variant="danger" onClick={() => runAction("delete")} disabled={controlsDisabled}>
-          <Trash2 aria-hidden="true" />
-          {deleteLabel}
-        </Button>
+        {showDelete && (
+          <Button className={buttonClassName} variant="danger" onClick={() => runAction("delete")} disabled={controlsDisabled}>
+            <Trash2 aria-hidden="true" />
+            {deleteLabel}
+          </Button>
+        )}
       </div>
       {errorMessage && <p className="mt-2 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mt-2 text-sm text-panel-green">{successMessage}</p>}

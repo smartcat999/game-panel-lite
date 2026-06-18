@@ -542,8 +542,18 @@ export default function ServerDetailPage() {
             />
           </div>
         </div>
-        <ServerActions server={server} showInvite={false} />
+        <div className="hidden md:block">
+          <ServerActions server={server} showInvite={false} />
+        </div>
       </div>
+      <MobileServerControls
+        copied={copied}
+        invite={invite}
+        joinAddress={joinAddress}
+        joinPort={serverJoinPort(server)}
+        server={server}
+        onCopy={copy}
+      />
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="min-w-0 p-4">
@@ -2332,6 +2342,40 @@ function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label
       </div>
       <p className="mt-3 text-2xl font-semibold">{value}</p>
     </button>
+  );
+}
+
+function MobileServerControls({
+  copied,
+  invite,
+  joinAddress,
+  joinPort,
+  onCopy,
+  server
+}: {
+  copied: string;
+  invite: string;
+  joinAddress: string;
+  joinPort: number;
+  onCopy: (label: string, value: string) => void;
+  server: Server;
+}) {
+  const { t } = useI18n();
+  const joinValue = `${joinAddress}:${joinPort}`;
+  return (
+    <Card className="mt-4 p-3 md:hidden">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs text-slate-500">{t("joinServer")}</p>
+          <p className="mt-1 truncate text-sm font-medium text-slate-100">{joinValue}</p>
+        </div>
+        <Button className="h-10 shrink-0 px-3" variant="secondary" onClick={() => onCopy("Invite", invite)}>
+          <Copy aria-hidden="true" />
+          {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
+        </Button>
+      </div>
+      <ServerActions className="mt-3" compact server={server} showDelete={false} showInvite={false} />
+    </Card>
   );
 }
 

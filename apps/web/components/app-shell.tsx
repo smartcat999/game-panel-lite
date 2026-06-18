@@ -239,13 +239,14 @@ function AppChrome({ children }: { children: ReactNode }) {
               </div>
               <Link
                 href="/servers/new"
+                aria-label={t("createServer")}
                 className="shrink-0"
                 onClick={() => setCreatePending(true)}
                 onMouseEnter={() => router.prefetch("/servers/new")}
               >
-                <Button className="h-12 w-44 shrink-0 whitespace-nowrap">
+                <Button className="h-11 w-11 shrink-0 whitespace-nowrap sm:h-12 sm:w-44">
                   <Plus aria-hidden="true" />
-                  {createPending ? t("openingCreateServer") : t("createServer")}
+                  <span className="hidden sm:inline">{createPending ? t("openingCreateServer") : t("createServer")}</span>
                 </Button>
               </Link>
               <div ref={profileRef} className="relative hidden md:block">
@@ -297,7 +298,28 @@ function AppChrome({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="px-4 py-6 md:px-8">{children}</main>
+        <main className="px-4 py-6 pb-24 md:px-8 lg:pb-6">{children}</main>
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-line bg-panel-bg/95 px-2 py-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
+          <div className="grid grid-cols-5 gap-1">
+            {nav.slice(0, 5).map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium text-slate-500 transition hover:bg-slate-800 hover:text-white",
+                    active && "bg-panel-green/15 text-panel-green"
+                  )}
+                >
+                  <Icon aria-hidden="true" className="size-5" />
+                  <span className="max-w-full truncate">{t(item.labelKey)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </div>
   );

@@ -533,3 +533,18 @@ The post-V1 roadmap Goals 1-10 are implemented and Goal 13 has a complete first 
 - Goal 14 first additional game beyond the initial set, starting with Valheim unless product priority changes.
 - Manual Docker host verification for Palworld, DST, and Minecraft runtime images.
 - Curate and pin version lists per game.
+
+## Goal 11 Progress (Mobile-Friendly Controls)
+
+Status: completed.
+
+Implemented:
+- Server list cards collapse to a single-column mobile layout, with primary actions grouped into comfortable two-column touch targets.
+- Server detail desktop actions remain in the header, while mobile gets a first-screen control block for join address, copy invite, start/stop, and restart.
+- Mobile detail controls intentionally omit delete from the first-screen action block; destructive actions still use confirmation where they are exposed.
+- App chrome now has a compact mobile create button and bottom navigation for the primary sections hidden behind the desktop sidebar.
+
+Verification:
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
