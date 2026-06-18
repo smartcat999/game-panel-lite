@@ -42,6 +42,21 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC optional-package fallback warnings and ESLint plugin warning.
 - `pnpm --filter @gamepanel-lite/web test -- server-detail-resources.test.ts`: blocked before running tests because local optional Rollup package `@rollup/rollup-darwin-arm64` is missing.
 
+## Current Slice: Game Library Create Entry
+
+Status: Completed
+
+Completed:
+- Game library cards now link to the create-server flow with the selected game key.
+- Create-server wizard reads the `game` query parameter and preselects the matching available game before moving to the provider/mode step.
+- World-template and config-preset query entry points keep priority over the game-card entry point so they do not conflict.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC optional-package fallback warnings and ESLint plugin warning.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web test -- mod-filters.test.ts server-detail-resources.test.ts`: blocked before running tests because local optional Rollup package `@rollup/rollup-darwin-arm64` is missing.
+
 ## Completed Goals
 
 ### Goal 1: Local Admin Account and Login

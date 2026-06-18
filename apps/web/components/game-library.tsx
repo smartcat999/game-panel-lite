@@ -48,7 +48,7 @@ function GameCard({ game }: { game: GameCatalogEntry }) {
 
   return (
     <Link
-      href="/servers/new"
+      href={`/servers/new?game=${encodeURIComponent(game.key)}`}
       className="group relative flex flex-col overflow-hidden rounded-lg border border-panel-line bg-panel-card transition hover:border-panel-green/50 hover:bg-slate-900/70"
     >
       <div className="relative h-24 w-full overflow-hidden bg-slate-950">
