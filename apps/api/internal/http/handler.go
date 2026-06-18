@@ -2446,8 +2446,14 @@ func (h *Handler) prepareRuntimeImageAsync(image string) {
 	if err := h.runtime.PrepareImage(ctx, image); err != nil {
 		status.Status = runtime.ImageStatusFailed
 		status.Message = err.Error()
+		if h.logger != nil {
+			h.logger.Warn("runtime image prepare failed", "image", image, "error", err)
+		}
 	} else {
 		status.Status = runtime.ImageStatusReady
+		if h.logger != nil {
+			h.logger.Info("runtime image prepared", "image", image)
+		}
 	}
 	status.UpdatedAt = time.Now()
 	h.setRuntimeImageJob(status)

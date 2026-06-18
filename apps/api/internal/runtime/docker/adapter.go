@@ -145,10 +145,33 @@ func (a *Adapter) ensureImage(ctx context.Context, image string) error {
 		return err
 	}
 	defer pull.Close()
-	if _, err := io.Copy(io.Discard, pull); err != nil {
-		return err
+	return consumeImagePull(pull)
+}
+
+type imagePullEvent struct {
+	Error       string `json:"error"`
+	ErrorDetail struct {
+		Message string `json:"message"`
+	} `json:"errorDetail"`
+}
+
+func consumeImagePull(reader io.Reader) error {
+	decoder := json.NewDecoder(reader)
+	for {
+		var event imagePullEvent
+		if err := decoder.Decode(&event); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		if message := strings.TrimSpace(event.ErrorDetail.Message); message != "" {
+			return fmt.Errorf("image pull failed: %s", message)
+		}
+		if message := strings.TrimSpace(event.Error); message != "" {
+			return fmt.Errorf("image pull failed: %s", message)
+		}
 	}
-	return nil
 }
 
 func (a *Adapter) Start(ctx context.Context, instance domain.GameServerInstance) error {

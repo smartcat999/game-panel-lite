@@ -53,3 +53,34 @@ func TestNatPortSetSupportsUdp(t *testing.T) {
 		t.Fatalf("expected exposed 8211/udp port, got %v", ports)
 	}
 }
+
+func TestConsumeImagePullSuccess(t *testing.T) {
+	stream := strings.NewReader(`{"status":"Pulling from smartcat99999/terraria-vanilla"}
+{"status":"Digest: sha256:example"}
+`)
+	if err := consumeImagePull(stream); err != nil {
+		t.Fatalf("expected successful pull stream, got %v", err)
+	}
+}
+
+func TestConsumeImagePullReturnsStreamError(t *testing.T) {
+	stream := strings.NewReader(`{"error":"manifest unknown: manifest unknown"}`)
+	err := consumeImagePull(stream)
+	if err == nil {
+		t.Fatal("expected pull stream error")
+	}
+	if !strings.Contains(err.Error(), "manifest unknown") {
+		t.Fatalf("expected manifest error, got %v", err)
+	}
+}
+
+func TestConsumeImagePullReturnsErrorDetail(t *testing.T) {
+	stream := strings.NewReader(`{"errorDetail":{"message":"no matching manifest for linux/arm64/v8 in the manifest list entries"},"error":"no matching manifest"}`)
+	err := consumeImagePull(stream)
+	if err == nil {
+		t.Fatal("expected pull stream error detail")
+	}
+	if !strings.Contains(err.Error(), "no matching manifest") {
+		t.Fatalf("expected platform error, got %v", err)
+	}
+}
