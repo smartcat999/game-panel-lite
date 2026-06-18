@@ -194,15 +194,22 @@ Scope:
 - Copy invite from mobile.
 - View basic server status.
 
-### 12. Server Templates
+### 12. Configuration Presets
 
 Why:
-Users think in scenarios: friend server, hard mode server, modded server. Templates should turn repeated setup into one click.
+Users may want a fast way to reuse common setup choices such as max players, difficulty, resource limits, and mod pack selections.
+
+This must not duplicate world snapshots. A world snapshot already represents a reusable playable state: save data plus the configuration needed to create another server from that world.
 
 Scope:
-- Save server setup as a template.
-- Create server from template.
-- Include game, version, config, resources, and selected mod pack where applicable.
+- Save reusable configuration only.
+- Create server with a preset that pre-fills the create flow.
+- Include game, provider, version, friendly config values, resource limits, and selected mod pack where applicable.
+- Exclude world/save data.
+- Exclude runtime state, backups, logs, container IDs, and secrets.
+
+Product direction:
+Prioritize world snapshots for "make another server like this playable server." Only add configuration presets if users still need reusable non-world setup after the multi-game create flow matures.
 
 ### 13. Shareable Server Page
 

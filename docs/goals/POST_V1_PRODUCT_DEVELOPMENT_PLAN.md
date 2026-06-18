@@ -140,12 +140,12 @@ Add practical features that make the product easier to use repeatedly after the 
 
 Included goals:
 - Goal 11: Mobile-Friendly Controls.
-- Goal 12: Server Templates.
+- Goal 12: Configuration Presets.
 - Goal 13: Shareable Server Page.
 
 Exit criteria:
 - A user can start, stop, restart, and share a server comfortably from a phone.
-- A user can save a known-good setup and create another server from it.
+- A user can reuse common non-world setup choices without confusing them with world snapshots.
 - Friends can open a simple read-only page with join information.
 
 ### Milestone G: More Game Coverage
@@ -171,7 +171,7 @@ Exit criteria:
 - Goal 9 depends on provider join-info contracts from Goal 2.
 - Goal 10 should land after at least two games exist, so the game library has real content.
 - Goal 11 depends on the stable server list/detail action model from Goals 1-10.
-- Goal 12 depends on provider-specific config payloads from Goal 2 and the create flow from Goal 4.
+- Goal 12 depends on provider-specific config payloads from Goal 2, the create flow from Goal 4, and clear separation from world snapshots.
 - Goal 13 depends on join-info contracts and public host settings from Goal 9.
 - Goal 14 depends on the provider foundation, game-specific create flow, and cross-game save conventions.
 
@@ -866,16 +866,16 @@ Manual verification:
 
 `feat: add mobile server controls`
 
-## Goal 12: Server Templates
+## Goal 12: Configuration Presets
 
 ### User Value
 
-A user can save a known-good server setup and create another server from it without re-entering the same game settings.
+A user can reuse common setup choices without re-entering the same game settings, while still understanding that world snapshots are the way to reuse an actual played world/save.
 
 ### Scope
 
-- Save server setup as a template.
-- Create server from template.
+- Save reusable configuration only.
+- Pre-fill the create-server flow from a preset.
 - Include:
   - game
   - provider
@@ -883,11 +883,13 @@ A user can save a known-good server setup and create another server from it with
   - friendly config values
   - resource limits
   - selected mod pack when applicable
-- Do not include server-specific runtime state, container IDs, logs, backups, or secrets that should not be reused.
+- Do not include world/save data.
+- Do not include server-specific runtime state, container IDs, logs, backups, or secrets.
+- Keep "create from world/snapshot" as the product path for recreating a playable server state.
 
 ### Backend Tasks
 
-1. Add server template model:
+1. Add configuration preset model:
    - id
    - name
    - gameKey
@@ -899,30 +901,30 @@ A user can save a known-good server setup and create another server from it with
    - createdAt
    - updatedAt
 2. Add APIs:
-   - `GET /api/server-templates`
-   - `POST /api/server-templates`
-   - `GET /api/server-templates/{id}`
-   - `PUT /api/server-templates/{id}`
-   - `DELETE /api/server-templates/{id}`
-   - `POST /api/server-templates/{id}/create-server`
-3. Validate template payloads through the selected provider.
-4. Ensure secrets are either omitted or explicitly re-entered during create.
-5. Add tests for template create, validation, and create-from-template behavior.
+   - `GET /api/config-presets`
+   - `POST /api/config-presets`
+   - `GET /api/config-presets/{id}`
+   - `PUT /api/config-presets/{id}`
+   - `DELETE /api/config-presets/{id}`
+3. Validate preset payloads through the selected provider.
+4. Ensure secrets are omitted and re-entered during create.
+5. Add tests for preset create, update, validation, and secret stripping.
 
 ### Frontend Tasks
 
-1. Add template list page or game-library section.
-2. Add "Save as Template" from server detail.
-3. Add create-from-template flow.
-4. Let users review and override template fields before final creation.
-5. Show clear labels for which game/provider a template belongs to.
+1. Add preset selection as an optional start point in the create-server flow.
+2. Add "Save as Preset" only for configuration fields, not world/save state.
+3. Let users review and override preset fields before final creation.
+4. Show clear labels for which game/provider a preset belongs to.
+5. Keep world snapshot creation and create-from-world separate in the UI.
 
 ### Acceptance Criteria
 
-- User can save an existing server setup as a template.
-- User can create a new server from a template.
-- Provider validation still runs when creating from a template.
-- Server-specific state is not copied accidentally.
+- User can save reusable non-world server configuration as a preset.
+- User can start server creation from a preset and change fields before creating.
+- Provider validation still runs after applying a preset.
+- World/save data is never copied by configuration presets.
+- UI copy clearly distinguishes configuration presets from world snapshots.
 
 ### Verification
 
@@ -936,7 +938,7 @@ pnpm build
 
 ### Suggested Commit
 
-`feat: add server templates`
+`feat: add configuration presets`
 
 ## Goal 13: Shareable Server Page
 

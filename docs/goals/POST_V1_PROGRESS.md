@@ -529,7 +529,7 @@ Result:
 
 The post-V1 roadmap Goals 1-10 are implemented and Goal 13 has a complete first slice. Recommended next work:
 - Goal 11 mobile-friendly controls for server list/detail and invite actions.
-- Goal 12 server templates for saving and reusing known-good setups.
+- Goal 12 configuration presets, only after confirming they solve a need not already covered by world snapshots.
 - Goal 14 first additional game beyond the initial set, starting with Valheim unless product priority changes.
 - Manual Docker host verification for Palworld, DST, and Minecraft runtime images.
 - Curate and pin version lists per game.
