@@ -188,7 +188,6 @@ export function CreateServerWizard() {
       setAppliedWorldConfigId("");
       setSelectedModIds([]);
       setSelectedModPackId("");
-      setStep(1);
     }
   };
   const chooseProvider = (provider: ProviderCatalog) => {
