@@ -154,6 +154,7 @@ export type Backup = {
   name: string;
   instanceId?: string;
   gameKey?: GameKey;
+  providerKey?: ProviderKey;
   server: string;
   world: string;
   type: "Auto" | "Manual";

@@ -1362,7 +1362,7 @@ func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {
 			_ = h.store.DeleteWorld(r.Context(), world.ID)
 			continue
 		}
-		visible = append(visible, world)
+		visible = append(visible, h.hydrateWorldResource(r.Context(), world))
 	}
 	writeJSON(w, http.StatusOK, visible)
 }
@@ -1402,6 +1402,7 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	item = h.hydrateWorldResource(r.Context(), item)
 	h.recordActivity(r.Context(), instanceID, "world.imported", fmt.Sprintf("Imported world %s", item.Name))
 	status := http.StatusOK
 	if created {
@@ -1533,7 +1534,22 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), payload.InstanceID, "world.assigned", fmt.Sprintf("Assigned world %s to %s", item.Name, server.Name))
-	writeJSON(w, http.StatusOK, item)
+	writeJSON(w, http.StatusOK, h.hydrateWorldResource(r.Context(), item))
+}
+
+func (h *Handler) hydrateWorldResource(ctx context.Context, world domain.World) domain.World {
+	if world.ProviderKey == "" && world.InstanceID != "" && world.InstanceID != "unassigned" {
+		if server, err := h.store.GetServer(ctx, world.InstanceID); err == nil {
+			world.ProviderKey = server.ProviderKey
+			world.GameKey = server.GameKey
+		}
+	}
+	if world.GameKey == "" && world.ProviderKey != "" {
+		if gameProvider, ok := h.provider.Get(world.ProviderKey); ok {
+			world.GameKey = gameProvider.GameKey()
+		}
+	}
+	return world
 }
 
 func (h *Handler) materializeWorldForRuntime(world domain.World, server domain.GameServerInstance) error {
@@ -1752,7 +1768,7 @@ func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
 			_ = h.store.DeleteBackup(r.Context(), b.ID)
 			continue
 		}
-		visible = append(visible, b)
+		visible = append(visible, h.hydrateBackupResource(r.Context(), b))
 	}
 	writeJSON(w, http.StatusOK, visible)
 }
@@ -1774,7 +1790,20 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "backup.created", fmt.Sprintf("Created backup %s for %s", item.FileName, server.Name))
-	writeJSON(w, http.StatusCreated, item)
+	writeJSON(w, http.StatusCreated, h.hydrateBackupResource(r.Context(), item))
+}
+
+func (h *Handler) hydrateBackupResource(ctx context.Context, backup domain.Backup) domain.Backup {
+	if backup.InstanceID == "" {
+		return backup
+	}
+	server, err := h.store.GetServer(ctx, backup.InstanceID)
+	if err != nil {
+		return backup
+	}
+	backup.GameKey = server.GameKey
+	backup.ProviderKey = server.ProviderKey
+	return backup
 }
 
 func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
@@ -1866,7 +1895,7 @@ func (h *Handler) listServerSaves(w http.ResponseWriter, r *http.Request) {
 			_ = h.store.DeleteBackup(r.Context(), b.ID)
 			continue
 		}
-		visible = append(visible, b)
+		visible = append(visible, h.hydrateBackupResource(r.Context(), b))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"saveDisplayName": h.saveDisplayName(server.ProviderKey),
@@ -1894,7 +1923,7 @@ func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Reques
 	h.recordActivity(r.Context(), server.ID, "save.snapshot.created", fmt.Sprintf("Created %s snapshot %s for %s", saveName, item.FileName, server.Name))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"saveDisplayName": saveName,
-		"save":            item,
+		"save":            h.hydrateBackupResource(r.Context(), item),
 	})
 }
 

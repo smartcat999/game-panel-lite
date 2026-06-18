@@ -172,18 +172,21 @@ type TerrariaConfig struct {
 }
 
 type Backup struct {
-	ID         string    `json:"id" gorm:"primaryKey"`
-	InstanceID string    `json:"instanceId" gorm:"index"`
-	FileName   string    `json:"fileName"`
-	WorldName  string    `json:"worldName"`
-	SizeBytes  int64     `json:"sizeBytes"`
-	Type       string    `json:"type"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID          string      `json:"id" gorm:"primaryKey"`
+	InstanceID  string      `json:"instanceId" gorm:"index"`
+	GameKey     GameKey     `json:"gameKey,omitempty" gorm:"-"`
+	ProviderKey ProviderKey `json:"providerKey,omitempty" gorm:"-"`
+	FileName    string      `json:"fileName"`
+	WorldName   string      `json:"worldName"`
+	SizeBytes   int64       `json:"sizeBytes"`
+	Type        string      `json:"type"`
+	CreatedAt   time.Time   `json:"createdAt"`
 }
 
 type World struct {
 	ID               string         `json:"id" gorm:"primaryKey"`
 	InstanceID       string         `json:"instanceId" gorm:"index"`
+	GameKey          GameKey        `json:"gameKey,omitempty" gorm:"-"`
 	ProviderKey      ProviderKey    `json:"providerKey,omitempty" gorm:"index"`
 	Name             string         `json:"name"`
 	FileName         string         `json:"fileName"`

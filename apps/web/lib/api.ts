@@ -166,6 +166,7 @@ type ApiBackup = {
   id: string;
   instanceId: string;
   gameKey?: string;
+  providerKey?: ProviderKey;
   fileName: string;
   worldName: string;
   sizeBytes: number;
@@ -178,6 +179,7 @@ function toBackup(backup: ApiBackup): Backup {
     id: backup.id,
     instanceId: backup.instanceId,
     gameKey: backup.gameKey,
+    providerKey: backup.providerKey,
     name: backup.fileName,
     server: backup.instanceId,
     world: backup.worldName,

@@ -3087,6 +3087,79 @@ func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
 	}
 }
 
+func TestResourceListsIncludeGameMetadata(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("pal-resource", cfg.DataDir)
+	server.GameKey = domain.GamePalworld
+	server.ProviderKey = domain.ProviderPalworld
+	server.Port = palworld.DefaultInternalPort
+	server.Config = palworld.NewProvider().DefaultConfig()
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(server.DataDir, "serverconfig.txt"), []byte("palworld config"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := worldsvc.NewService(cfg.DataDir).Import(server.ID, "pal-save.wld", strings.NewReader("world-data")); err != nil {
+		t.Fatal(err)
+	}
+	world := domain.World{
+		ID:          "pal-world",
+		InstanceID:  server.ID,
+		ProviderKey: server.ProviderKey,
+		Name:        "Pal Save",
+		FileName:    "pal-save.wld",
+		SizeBytes:   int64(len("world-data")),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := db.CreateWorld(context.Background(), &world); err != nil {
+		t.Fatal(err)
+	}
+
+	listWorlds := httptest.NewRecorder()
+	router.ServeHTTP(listWorlds, httptest.NewRequest(stdhttp.MethodGet, "/api/worlds", nil))
+	if listWorlds.Code != stdhttp.StatusOK {
+		t.Fatalf("expected world list 200, got %d: %s", listWorlds.Code, listWorlds.Body.String())
+	}
+	var worlds []domain.World
+	if err := json.Unmarshal(listWorlds.Body.Bytes(), &worlds); err != nil {
+		t.Fatal(err)
+	}
+	if len(worlds) != 1 || worlds[0].GameKey != domain.GamePalworld || worlds[0].ProviderKey != domain.ProviderPalworld {
+		t.Fatalf("expected Palworld metadata on world list, got %+v", worlds)
+	}
+
+	createBackup := httptest.NewRecorder()
+	router.ServeHTTP(createBackup, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/backups", nil))
+	if createBackup.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected backup create 201, got %d: %s", createBackup.Code, createBackup.Body.String())
+	}
+	var createdBackup domain.Backup
+	if err := json.Unmarshal(createBackup.Body.Bytes(), &createdBackup); err != nil {
+		t.Fatal(err)
+	}
+	if createdBackup.GameKey != domain.GamePalworld || createdBackup.ProviderKey != domain.ProviderPalworld {
+		t.Fatalf("expected Palworld metadata on backup create, got %+v", createdBackup)
+	}
+
+	listBackups := httptest.NewRecorder()
+	router.ServeHTTP(listBackups, httptest.NewRequest(stdhttp.MethodGet, "/api/backups", nil))
+	if listBackups.Code != stdhttp.StatusOK {
+		t.Fatalf("expected backup list 200, got %d: %s", listBackups.Code, listBackups.Body.String())
+	}
+	var backups []domain.Backup
+	if err := json.Unmarshal(listBackups.Body.Bytes(), &backups); err != nil {
+		t.Fatal(err)
+	}
+	if len(backups) != 1 || backups[0].GameKey != domain.GamePalworld || backups[0].ProviderKey != domain.ProviderPalworld {
+		t.Fatalf("expected Palworld metadata on backup list, got %+v", backups)
+	}
+}
+
 func TestAssignWorldUpdatesServerConfigAndClearsContainer(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("world-target", cfg.DataDir)

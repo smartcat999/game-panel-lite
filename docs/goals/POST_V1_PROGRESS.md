@@ -576,16 +576,20 @@ Verification:
 
 ## Goal 10 / Multi-Game List Filtering Progress
 
-Status: in progress.
+Status: in progress. Current list-filtering slice complete.
 
 Implemented:
 - Server list game filters now come from the game catalog instead of a hardcoded Terraria-only list.
 - World, backup, and mod list game filters now use the game catalog plus resource data, so current and future supported games appear in the filter bar without per-page rewrites.
 - Server and backup type filters now treat "vanilla/modded" as Terraria-specific, avoiding Palworld, DST, or Minecraft being accidentally grouped under Terraria vanilla.
-- Frontend resource types can now carry optional `gameKey` for worlds and backups when the backend starts returning it; current data still falls back through provider/server mappings.
+- Backend world and backup list/create responses now include JSON-only game/provider metadata derived from the owning server/provider, so filters do not depend on frontend guessing.
+- Activity page now supports a game filter based on the game catalog and the current server mapping.
 
 Verification:
 - `git diff --check` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./apps/api/internal/http -run TestResourceListsIncludeGameMetadata -count=1` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./...` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
