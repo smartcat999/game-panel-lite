@@ -10,9 +10,21 @@ Build this image on a native amd64 Docker host:
 scripts/build-game-images.sh dst --platform linux/amd64 --load
 ```
 
-Docker buildx is supported, but the builder node must be native amd64. On Apple Silicon or other arm hosts, `--platform linux/amd64` normally runs through QEMU emulation, and SteamCMD can exit with a segmentation fault before the DST server files are downloaded.
+Docker buildx is supported. The build script passes `--platform` and `--builder` through to buildx, the same as the other runtime images. On Apple Silicon or other arm hosts, make sure the active buildx builder has an amd64 node. If the builder falls back to local QEMU emulation, SteamCMD can exit with a segmentation fault before the DST server files are downloaded.
 
-On an arm development machine, create or select a remote amd64 buildx builder and push the image:
+Check the selected builder:
+
+```bash
+docker buildx ls
+```
+
+If the active builder already includes a `linux/amd64` node, the build script can use it automatically:
+
+```bash
+scripts/build-game-images.sh dst --platform linux/amd64 --push
+```
+
+Otherwise, create or select a remote amd64 buildx builder and push the image:
 
 ```bash
 docker buildx create --name gamepanel-amd64 --driver docker-container --platform linux/amd64 ssh://user@amd64-host --use
