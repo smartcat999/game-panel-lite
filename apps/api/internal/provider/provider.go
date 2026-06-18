@@ -46,6 +46,12 @@ type PlayerCommandProvider interface {
 	BanCommand(player string) string
 }
 
+type WhitelistCommandProvider interface {
+	WhitelistAddCommand(player string) string
+	WhitelistRemoveCommand(player string) string
+	WhitelistListCommand() string
+}
+
 type PlayerActivityProvider interface {
 	ParsePlayerLogEvent(string) (domain.PlayerLogEvent, bool)
 }

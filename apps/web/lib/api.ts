@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, World } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -1018,4 +1018,19 @@ export async function kickServerPlayer(id: string, player: string): Promise<void
 export async function banServerPlayer(id: string, player: string): Promise<void> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/players/${encodeURIComponent(player)}/ban`, { method: "POST" });
   await readPayload<{ status: string }>(response, "Unable to ban player");
+}
+
+export async function getServerWhitelist(id: string): Promise<ServerWhitelistResponse> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist`, { cache: "no-store" });
+  return readPayload<ServerWhitelistResponse>(response, "Unable to load whitelist status");
+}
+
+export async function addServerWhitelistPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist/${encodeURIComponent(player)}`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to add player to whitelist");
+}
+
+export async function removeServerWhitelistPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist/${encodeURIComponent(player)}`, { method: "DELETE" });
+  await readPayload<{ status: string }>(response, "Unable to remove player from whitelist");
 }

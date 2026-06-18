@@ -187,6 +187,15 @@ func TestKickBanCommands(t *testing.T) {
 	if cmd := provider.BanCommand("Alex"); cmd != "ban Alex" {
 		t.Fatalf("expected minecraft ban command, got %q", cmd)
 	}
+	if cmd := provider.WhitelistAddCommand("Steve"); cmd != "whitelist add Steve" {
+		t.Fatalf("expected minecraft whitelist add command, got %q", cmd)
+	}
+	if cmd := provider.WhitelistRemoveCommand("Alex"); cmd != "whitelist remove Alex" {
+		t.Fatalf("expected minecraft whitelist remove command, got %q", cmd)
+	}
+	if cmd := provider.WhitelistListCommand(); cmd != "whitelist list" {
+		t.Fatalf("expected minecraft whitelist list command, got %q", cmd)
+	}
 	if cmd := provider.KickCommand("name\ninjection"); cmd != "kick nameinjection" {
 		t.Fatalf("expected sanitized kick command, got %q", cmd)
 	}

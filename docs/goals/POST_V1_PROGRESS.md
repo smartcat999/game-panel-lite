@@ -16,10 +16,13 @@ The work starts with user-facing product functionality rather than V1 UI polish:
 8. Player management by provider capability.
 9. Friend invite flows.
 10. Game library and version selection.
+11. Mobile-friendly controls.
+12. Configuration presets.
+13. Shareable server page.
 
 ## Active Goal
 
-All post-V1 roadmap goals (1-10) are implemented. Status: Complete
+Post-V1 roadmap goals 1-13 have implementation slices. Status: closing feature-completeness gaps before any additional providers.
 
 ## Completed Goals
 
@@ -433,7 +436,21 @@ Completed:
   - `POST /api/servers/{id}/players/{player}/ban`
 - All endpoints are gated by provider capability; unsupported games return `supported: false` / `400`.
 - Added a `PlayersPanel` frontend component shown only when `playerList` is supported, with confirmation dialogs for kick/ban.
+- Added provider-based whitelist capability and Minecraft whitelist commands for add/remove/list.
+- Added whitelist APIs for supported providers:
+  - `GET /api/servers/{id}/whitelist`
+  - `POST /api/servers/{id}/whitelist/{player}`
+  - `DELETE /api/servers/{id}/whitelist/{player}`
+- Added Minecraft whitelist controls in the player panel, gated by provider support and running server state.
 - Added backend provider command tests and an HTTP capability-gating test.
+
+Verification:
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./apps/api/internal/provider/minecraft ./apps/api/internal/http -run 'TestKickBanCommands|TestMinecraftWhitelistManagement|TestPlayerManagementGatedByProviderCapability' -count=1` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./...` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
 
 ## Goal 9 Progress (Friend Invite Experience)
 

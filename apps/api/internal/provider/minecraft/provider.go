@@ -30,6 +30,7 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 		PlayerList:      true,
 		KickPlayer:      true,
 		BanPlayer:       true,
+		Whitelist:       true,
 		SaveSnapshots:   true,
 		Backups:         true,
 		Mods:            false,
@@ -42,6 +43,15 @@ func (Provider) KickCommand(player string) string {
 }
 func (Provider) BanCommand(player string) string {
 	return "ban " + sanitizePlayerName(player)
+}
+func (Provider) WhitelistAddCommand(player string) string {
+	return "whitelist add " + sanitizePlayerName(player)
+}
+func (Provider) WhitelistRemoveCommand(player string) string {
+	return "whitelist remove " + sanitizePlayerName(player)
+}
+func (Provider) WhitelistListCommand() string {
+	return "whitelist list"
 }
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
 	return []domain.ProviderConfigField{

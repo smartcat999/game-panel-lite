@@ -128,6 +128,7 @@ describe("api mappers", () => {
                   playerList: true,
                   kickPlayer: true,
                   banPlayer: true,
+                  whitelist: false,
                   saveSnapshots: true,
                   backups: true,
                   mods: false,

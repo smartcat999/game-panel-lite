@@ -16,6 +16,7 @@ const provider: ProviderCatalog = {
     mods: false,
     playerList: false,
     saveSnapshots: true,
+    whitelist: false,
     versions: true
   },
   configSchema: [

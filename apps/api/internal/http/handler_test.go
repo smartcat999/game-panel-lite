@@ -116,6 +116,20 @@ func (a armMockAdapter) Check(context.Context) runtime.DockerStatus {
 	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock", Architecture: "arm64"}
 }
 
+type commandCaptureAdapter struct {
+	availableMockAdapter
+	commands []string
+}
+
+func newCommandCaptureAdapter() *commandCaptureAdapter {
+	return &commandCaptureAdapter{availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}}
+}
+
+func (a *commandCaptureAdapter) SendCommand(_ context.Context, _ domain.GameServerInstance, command string) error {
+	a.commands = append(a.commands, command)
+	return nil
+}
+
 type captureCreateAdapter struct {
 	availableMockAdapter
 	created chan runtime.ContainerSpec
@@ -4014,6 +4028,78 @@ func TestPlayerManagementGatedByProviderCapability(t *testing.T) {
 	router.ServeHTTP(terrariaKick, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/terraria-players/players/Alice/kick", nil))
 	if terrariaKick.Code != stdhttp.StatusConflict {
 		t.Fatalf("expected terraria kick conflict for stopped server, got %d: %s", terrariaKick.Code, terrariaKick.Body.String())
+	}
+}
+
+func TestMinecraftWhitelistManagement(t *testing.T) {
+	adapter := newCommandCaptureAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+
+	minecraftServer := testServer("minecraft-whitelist", cfg.DataDir)
+	minecraftServer.GameKey = domain.GameMinecraft
+	minecraftServer.ProviderKey = domain.ProviderMinecraft
+	minecraftServer.Status = domain.StatusRunning
+	minecraftServer.ContainerID = "container-minecraft-whitelist"
+	minecraftServer.Config = minecraft.NewProvider().DefaultConfig()
+	minecraftServer.ConfigPayload = minecraft.PayloadFromConfig(minecraftServer.Config, nil)
+	if err := db.CreateServer(context.Background(), &minecraftServer); err != nil {
+		t.Fatal(err)
+	}
+
+	status := httptest.NewRecorder()
+	router.ServeHTTP(status, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/minecraft-whitelist/whitelist", nil))
+	if status.Code != stdhttp.StatusOK {
+		t.Fatalf("expected whitelist status 200, got %d: %s", status.Code, status.Body.String())
+	}
+	var statusResp struct {
+		Supported bool `json:"supported"`
+		Running   bool `json:"running"`
+	}
+	if err := json.Unmarshal(status.Body.Bytes(), &statusResp); err != nil {
+		t.Fatal(err)
+	}
+	if !statusResp.Supported || !statusResp.Running {
+		t.Fatalf("expected supported running whitelist response, got %+v", statusResp)
+	}
+
+	add := httptest.NewRecorder()
+	router.ServeHTTP(add, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/minecraft-whitelist/whitelist/Steve", nil))
+	if add.Code != stdhttp.StatusOK {
+		t.Fatalf("expected whitelist add 200, got %d: %s", add.Code, add.Body.String())
+	}
+	remove := httptest.NewRecorder()
+	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/minecraft-whitelist/whitelist/Alex", nil))
+	if remove.Code != stdhttp.StatusOK {
+		t.Fatalf("expected whitelist remove 200, got %d: %s", remove.Code, remove.Body.String())
+	}
+	if !reflect.DeepEqual(adapter.commands, []string{"whitelist add Steve", "whitelist remove Alex"}) {
+		t.Fatalf("unexpected whitelist commands: %+v", adapter.commands)
+	}
+
+	palworldServer := testServer("palworld-whitelist", cfg.DataDir)
+	palworldServer.GameKey = domain.GamePalworld
+	palworldServer.ProviderKey = domain.ProviderPalworld
+	if err := db.CreateServer(context.Background(), &palworldServer); err != nil {
+		t.Fatal(err)
+	}
+	palworldStatus := httptest.NewRecorder()
+	router.ServeHTTP(palworldStatus, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/palworld-whitelist/whitelist", nil))
+	if palworldStatus.Code != stdhttp.StatusOK {
+		t.Fatalf("expected Palworld whitelist status 200, got %d: %s", palworldStatus.Code, palworldStatus.Body.String())
+	}
+	var palworldResp struct {
+		Supported bool `json:"supported"`
+	}
+	if err := json.Unmarshal(palworldStatus.Body.Bytes(), &palworldResp); err != nil {
+		t.Fatal(err)
+	}
+	if palworldResp.Supported {
+		t.Fatal("expected Palworld whitelist to be unsupported")
+	}
+	palworldAdd := httptest.NewRecorder()
+	router.ServeHTTP(palworldAdd, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/palworld-whitelist/whitelist/Alice", nil))
+	if palworldAdd.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected unsupported Palworld whitelist add 400, got %d: %s", palworldAdd.Code, palworldAdd.Body.String())
 	}
 }
 

@@ -127,6 +127,9 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/servers/{id}/players", h.listServerPlayers)
 		r.Post("/api/servers/{id}/players/{player}/kick", h.kickServerPlayer)
 		r.Post("/api/servers/{id}/players/{player}/ban", h.banServerPlayer)
+		r.Get("/api/servers/{id}/whitelist", h.getServerWhitelist)
+		r.Post("/api/servers/{id}/whitelist/{player}", h.addServerWhitelistPlayer)
+		r.Delete("/api/servers/{id}/whitelist/{player}", h.removeServerWhitelistPlayer)
 		r.Get("/api/servers/{id}/join-info", h.getServerJoinInfo)
 		r.Get("/api/servers/{id}/share", h.getServerShare)
 		r.Post("/api/servers/{id}/share", h.enableServerShare)
@@ -2131,6 +2134,102 @@ func (h *Handler) banServerPlayer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "player.banned", fmt.Sprintf("Banned player %s from %s", player, server.Name))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "banned", "player": player})
+}
+
+func (h *Handler) getServerWhitelist(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok || !gameProvider.Capabilities().Whitelist {
+		writeJSON(w, http.StatusOK, map[string]any{"supported": false, "running": server.Status == domain.StatusRunning})
+		return
+	}
+	_, ok = gameProvider.(provider.WhitelistCommandProvider)
+	writeJSON(w, http.StatusOK, map[string]any{"supported": ok, "running": server.Status == domain.StatusRunning})
+}
+
+func (h *Handler) addServerWhitelistPlayer(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	commandProvider, err := h.requireWhitelistCapability(server)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	player := strings.TrimSpace(chi.URLParam(r, "player"))
+	if player == "" {
+		writeError(w, http.StatusBadRequest, "player name is required")
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeError(w, http.StatusConflict, "server must be running to edit the whitelist")
+		return
+	}
+	server, _, err = h.ensureRuntimeContainer(r.Context(), server)
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	if err := h.runtime.SendCommand(r.Context(), server, commandProvider.WhitelistAddCommand(player)); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "player.whitelisted", fmt.Sprintf("Added player %s to %s whitelist", player, server.Name))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "added", "player": player})
+}
+
+func (h *Handler) removeServerWhitelistPlayer(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	commandProvider, err := h.requireWhitelistCapability(server)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	player := strings.TrimSpace(chi.URLParam(r, "player"))
+	if player == "" {
+		writeError(w, http.StatusBadRequest, "player name is required")
+		return
+	}
+	if server.Status != domain.StatusRunning {
+		writeError(w, http.StatusConflict, "server must be running to edit the whitelist")
+		return
+	}
+	server, _, err = h.ensureRuntimeContainer(r.Context(), server)
+	if err != nil {
+		writeError(w, statusCodeForRuntimeError(err), err.Error())
+		return
+	}
+	if err := h.runtime.SendCommand(r.Context(), server, commandProvider.WhitelistRemoveCommand(player)); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "player.whitelist.removed", fmt.Sprintf("Removed player %s from %s whitelist", player, server.Name))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "player": player})
+}
+
+func (h *Handler) requireWhitelistCapability(server domain.GameServerInstance) (provider.WhitelistCommandProvider, error) {
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return nil, fmt.Errorf("unknown provider")
+	}
+	if !gameProvider.Capabilities().Whitelist {
+		return nil, fmt.Errorf("whitelist is not supported by this game")
+	}
+	commandProvider, ok := gameProvider.(provider.WhitelistCommandProvider)
+	if !ok {
+		return nil, fmt.Errorf("whitelist is not supported by this game")
+	}
+	return commandProvider, nil
 }
 
 func (h *Handler) syncRestoredServerConfig(ctx context.Context, server *domain.GameServerInstance) error {

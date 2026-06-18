@@ -1,11 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Users, UserX } from "lucide-react";
+import { Ban, ShieldCheck, UserMinus, UserPlus, Users, UserX } from "lucide-react";
 import { useState } from "react";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Input } from "@/components/ui";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { banServerPlayer, kickServerPlayer, listServerPlayers } from "@/lib/api";
+import { addServerWhitelistPlayer, banServerPlayer, getServerWhitelist, kickServerPlayer, listServerPlayers, removeServerWhitelistPlayer } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 type PendingAction = { player: string; kind: "kick" | "ban" };
@@ -14,9 +14,17 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [whitelistPlayer, setWhitelistPlayer] = useState("");
+  const [whitelistMessage, setWhitelistMessage] = useState("");
   const playersQuery = useQuery({
     queryKey: ["server-players", serverId],
     queryFn: () => listServerPlayers(serverId),
+    retry: false,
+    refetchInterval: 10000,
+  });
+  const whitelistQuery = useQuery({
+    queryKey: ["server-whitelist", serverId],
+    queryFn: () => getServerWhitelist(serverId),
     retry: false,
     refetchInterval: 10000,
   });
@@ -36,6 +44,25 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
       setPending(null);
     },
   });
+  const whitelistInvalidate = () => queryClient.invalidateQueries({ queryKey: ["server-whitelist", serverId] });
+  const addWhitelistMutation = useMutation({
+    mutationFn: (player: string) => addServerWhitelistPlayer(serverId, player),
+    onSuccess: async () => {
+      setWhitelistMessage(t("whitelistPlayerAdded", { name: whitelistPlayer.trim() }));
+      setWhitelistPlayer("");
+      await whitelistInvalidate();
+    },
+    onError: (error) => setWhitelistMessage(error instanceof Error ? error.message : t("whitelistActionFailed")),
+  });
+  const removeWhitelistMutation = useMutation({
+    mutationFn: (player: string) => removeServerWhitelistPlayer(serverId, player),
+    onSuccess: async () => {
+      setWhitelistMessage(t("whitelistPlayerRemoved", { name: whitelistPlayer.trim() }));
+      setWhitelistPlayer("");
+      await whitelistInvalidate();
+    },
+    onError: (error) => setWhitelistMessage(error instanceof Error ? error.message : t("whitelistActionFailed")),
+  });
 
   const confirmAction = () => {
     if (!pending) return;
@@ -46,6 +73,20 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
     }
   };
   const busy = kickMutation.isPending || banMutation.isPending;
+  const whitelistBusy = addWhitelistMutation.isPending || removeWhitelistMutation.isPending;
+  const whitelistSupported = Boolean(whitelistQuery.data?.supported);
+  const whitelistRunning = Boolean(whitelistQuery.data?.running);
+  const whitelistDisabled = whitelistBusy || !whitelistRunning || whitelistPlayer.trim() === "";
+  const submitWhitelist = (kind: "add" | "remove") => {
+    const player = whitelistPlayer.trim();
+    if (!player) return;
+    setWhitelistMessage("");
+    if (kind === "add") {
+      addWhitelistMutation.mutate(player);
+    } else {
+      removeWhitelistMutation.mutate(player);
+    }
+  };
 
   if (!playersQuery.data?.supported) {
     return (
@@ -61,7 +102,7 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
   const players = playersQuery.data.players ?? [];
 
   return (
-    <Card className="p-4">
+    <Card className="space-y-4 p-4">
       <div className="mb-3 flex items-center gap-2">
         <Users aria-hidden="true" className="size-4 text-panel-green" />
         <h3 className="text-sm font-semibold text-white">{t("playersPanelTitle")}</h3>
@@ -98,6 +139,32 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
           })}
         </ul>
       )}
+      {whitelistSupported ? (
+        <div className="border-t border-panel-line pt-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheck aria-hidden="true" className="size-4 text-panel-green" />
+            <h3 className="text-sm font-semibold text-white">{t("whitelistPanelTitle")}</h3>
+          </div>
+          <p className="mb-3 text-sm text-slate-400">{whitelistRunning ? t("whitelistPanelDescription") : t("whitelistRequiresRunning")}</p>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+            <Input
+              value={whitelistPlayer}
+              placeholder={t("whitelistPlayerPlaceholder")}
+              onChange={(event) => setWhitelistPlayer(event.target.value)}
+              disabled={whitelistBusy}
+            />
+            <Button variant="secondary" disabled={whitelistDisabled} onClick={() => submitWhitelist("add")}>
+              <UserPlus aria-hidden="true" className="size-4" />
+              {addWhitelistMutation.isPending ? t("actionWorking") : t("whitelistAdd")}
+            </Button>
+            <Button variant="secondary" disabled={whitelistDisabled} onClick={() => submitWhitelist("remove")}>
+              <UserMinus aria-hidden="true" className="size-4" />
+              {removeWhitelistMutation.isPending ? t("actionWorking") : t("whitelistRemove")}
+            </Button>
+          </div>
+          {whitelistMessage ? <p className="mt-2 text-sm text-slate-400">{whitelistMessage}</p> : null}
+        </div>
+      ) : null}
       <ConfirmDialog
         open={Boolean(pending)}
         eyebrow={t("confirmActionEyebrow")}

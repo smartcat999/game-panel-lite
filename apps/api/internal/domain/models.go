@@ -25,6 +25,7 @@ type ProviderCapabilities struct {
 	PlayerList      bool `json:"playerList"`
 	KickPlayer      bool `json:"kickPlayer"`
 	BanPlayer       bool `json:"banPlayer"`
+	Whitelist       bool `json:"whitelist"`
 	SaveSnapshots   bool `json:"saveSnapshots"`
 	Backups         bool `json:"backups"`
 	Mods            bool `json:"mods"`

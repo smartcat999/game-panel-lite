@@ -10,6 +10,7 @@ export type ProviderCapabilities = {
   playerList: boolean;
   kickPlayer: boolean;
   banPlayer: boolean;
+  whitelist: boolean;
   saveSnapshots: boolean;
   backups: boolean;
   mods: boolean;
@@ -51,6 +52,11 @@ export type GameCatalogEntry = {
 export type ServerPlayerListResponse = {
   supported: boolean;
   players: Array<{ name?: string }>;
+};
+
+export type ServerWhitelistResponse = {
+  supported: boolean;
+  running: boolean;
 };
 
 export type SaveSnapshotListResponse = {
