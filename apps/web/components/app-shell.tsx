@@ -15,11 +15,12 @@ import { serverJoinPort } from "@/lib/server-join";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
+  { href: "/games", labelKey: "navGames", icon: Gamepad2 },
   { href: "/servers", labelKey: "navServers", icon: HardDrive },
   { href: "/worlds", labelKey: "navWorlds", icon: Globe2 },
-  { href: "/backups", labelKey: "navBackups", icon: Archive },
   { href: "/mods", labelKey: "navMods", icon: Box },
   { href: "/presets", labelKey: "navPresets", icon: Bookmark },
+  { href: "/backups", labelKey: "navBackups", icon: Archive },
   { href: "/activity", labelKey: "navActivity", icon: Activity },
   { href: "/settings", labelKey: "navSettings", icon: Settings }
 ] as const;

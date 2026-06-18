@@ -27,6 +27,13 @@ export type ProviderConfigField = {
   options?: Array<{ value: string; label: string }>;
 };
 
+export type RuntimeImageStatus = {
+  image: string;
+  status: "ready" | "missing" | "preparing" | "failed" | "unsupported" | string;
+  message?: string;
+  updatedAt?: string;
+};
+
 export type ProviderCatalog = {
   key: ProviderKey;
   name: string;
@@ -37,6 +44,7 @@ export type ProviderCatalog = {
   capabilities: ProviderCapabilities;
   configSchema: ProviderConfigField[];
   saveDisplayName?: string;
+  runtimeImage?: RuntimeImageStatus;
 };
 
 export type GameCatalogEntry = {

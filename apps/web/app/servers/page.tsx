@@ -3,8 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { ServerCard } from "@/components/server-card";
-import { Button, Input } from "@/components/ui";
 import { listBackups, listGames, listServers } from "@/lib/api";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { useI18n } from "@/lib/i18n";
@@ -12,7 +12,6 @@ import type { MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
 import { filterServers, type ServerGameFilter, type ServerProviderFilter, type ServerStatusFilter } from "@/lib/server-filters";
 import { attachLatestBackupTimes } from "@/lib/server-metrics";
-import { cn } from "@/lib/utils";
 
 const statusFilters = [
   { key: "all", labelKey: "filterAll" },
@@ -49,22 +48,35 @@ export default function ServersPage() {
   const filteredServers = useMemo(() => {
     return filterServers(servers, { game: gameFilter, provider: providerFilter, query: search, status: statusFilter });
   }, [gameFilter, providerFilter, search, servers, statusFilter]);
+  const activeFilterChips = [
+    search.trim(),
+    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : "",
+    statusFilter !== "all" ? filterOptionLabel(statusFilters, statusFilter, t) : "",
+    providerFilter !== "all" ? filterOptionLabel(providerFilters, providerFilter, t) : ""
+  ].filter(Boolean);
   return (
     <>
-      <PageHeader
-        title={t("serversTitle")}
-        description={t("serversDescription")}
+      <PageHeader title={t("serversTitle")} />
+      <ResourceFilterBar
+        activeChips={activeFilterChips}
+        clearLabel={t("clearFilters")}
+        density="compact"
+        filters={[
+          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) },
+          { label: t("filterStatus"), options: statusFilters, value: statusFilter, onChange: (value) => setStatusFilter(value as ServerStatusFilter) },
+          { label: t("filterType"), options: providerFilters, value: providerFilter, onChange: (value) => setProviderFilter(value) }
+        ]}
+        onClear={() => {
+          setGameFilter("all");
+          setStatusFilter("all");
+          setProviderFilter("all");
+          setSearch("");
+        }}
+        onSearchChange={setSearch}
+        resultLabel={t("searchResultsCount", { count: filteredServers.length })}
+        search={search}
+        searchPlaceholder={t("searchServers")}
       />
-      <div className="mb-4 rounded-lg border border-panel-line bg-panel-card p-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <Input className="xl:max-w-xs" placeholder={t("searchServers")} value={search} onChange={(event) => setSearch(event.target.value)} />
-          <div className="flex flex-wrap gap-3">
-            <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
-            <FilterGroup label={t("filterStatus")} options={statusFilters} value={statusFilter} onChange={setStatusFilter} t={t} />
-            <FilterGroup label={t("filterType")} options={providerFilters} value={providerFilter} onChange={setProviderFilter} t={t} />
-          </div>
-        </div>
-      </div>
       {(query.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{query.isError ? t("apiServersUnavailable") : t("apiBackupsUnavailable")}</p>}
       <div className="grid gap-4 xl:grid-cols-2">
         {filteredServers.map((server) => <ServerCard key={server.id} server={server} />)}
@@ -74,34 +86,11 @@ export default function ServersPage() {
   );
 }
 
-function FilterGroup<T extends string>({
-  label,
-  onChange,
-  options,
-  t,
-  value
-}: {
-  label: string;
-  onChange: (value: T) => void;
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
-  t: (key: MessageKey) => string;
-  value: T;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
-        {options.map((item) => (
-          <Button
-            key={item.key}
-            variant="ghost"
-            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
-            onClick={() => onChange(item.key)}
-          >
-            {item.labelKey ? t(item.labelKey) : item.label}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+function filterOptionLabel<T extends string>(
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
+  value: T,
+  t: (key: MessageKey) => string
+) {
+  const option = options.find((item) => item.key === value);
+  return option?.labelKey ? t(option.labelKey) : option?.label ?? value;
 }

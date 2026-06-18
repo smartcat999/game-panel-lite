@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -107,6 +107,15 @@ export async function getGame(gameKey: string): Promise<GameCatalogEntry> {
 export async function getGameVersions(gameKey: string): Promise<Record<ProviderKey, string[]>> {
   const response = await apiFetch(`${API_BASE}/api/games/${gameKey}/versions`, { cache: "no-store" });
   return readPayload<Record<ProviderKey, string[]>>(response, "Unable to load game versions");
+}
+
+export async function prepareRuntimeImage(providerKey: ProviderKey, version?: string): Promise<RuntimeImageStatus> {
+  const response = await apiFetch(`${API_BASE}/api/runtime/images/prepare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ providerKey, version })
+  });
+  return readPayload<RuntimeImageStatus>(response, "Unable to install server runtime");
 }
 
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {

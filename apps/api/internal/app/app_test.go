@@ -18,7 +18,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
-func TestInvalidDockerHostKeepsAPIAvailableButStartFails(t *testing.T) {
+func TestInvalidDockerHostKeepsAPIAvailableButCreateFails(t *testing.T) {
 	root := t.TempDir()
 	api, err := New(config.Config{
 		Host:       "127.0.0.1",
@@ -50,25 +50,11 @@ func TestInvalidDockerHostKeepsAPIAvailableButStartFails(t *testing.T) {
 	}`
 	create := httptest.NewRecorder()
 	api.Routes().ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
-	if create.Code != http.StatusCreated {
-		t.Fatalf("expected create server to keep working without Docker, got %d: %s", create.Code, create.Body.String())
+	if create.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected create server to fail fast without Docker, got %d: %s", create.Code, create.Body.String())
 	}
-	var server domain.GameServerInstance
-	if err := json.Unmarshal(create.Body.Bytes(), &server); err != nil {
-		t.Fatal(err)
-	}
-
-	start := httptest.NewRecorder()
-	api.Routes().ServeHTTP(start, httptest.NewRequest(http.MethodPost, "/api/servers/"+server.ID+"/start", nil))
-	if start.Code != http.StatusAccepted {
-		t.Fatalf("expected async start to be accepted without blocking on Docker runtime, got %d: %s", start.Code, start.Body.String())
-	}
-	failed := waitForAPIServerStatus(t, api, server.ID, domain.StatusErrored)
-	if failed.ContainerID != "" {
-		t.Fatalf("expected failed start to keep an empty container id, got %+v", failed)
-	}
-	if failed.LastError == "" || !strings.Contains(failed.LastError, "Docker runtime unavailable") {
-		t.Fatalf("expected failed start to persist runtime error, got %+v", failed)
+	if !strings.Contains(create.Body.String(), "Docker runtime unavailable") {
+		t.Fatalf("expected runtime availability error, got %s", create.Body.String())
 	}
 }
 

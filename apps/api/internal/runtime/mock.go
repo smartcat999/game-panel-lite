@@ -16,6 +16,14 @@ func (m *MockAdapter) Check(context.Context) DockerStatus {
 	return DockerStatus{Available: false, Message: "Docker runtime not connected in mock adapter", Host: "mock"}
 }
 
+func (m *MockAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: ImageStatusReady}
+}
+
+func (m *MockAdapter) PrepareImage(context.Context, string) error {
+	return nil
+}
+
 func (m *MockAdapter) Create(_ context.Context, spec ContainerSpec) (string, error) {
 	return "mock-" + spec.InstanceID, nil
 }

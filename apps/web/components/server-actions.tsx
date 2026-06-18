@@ -109,7 +109,7 @@ export function ServerActions({
   };
 
   const pendingLabel = pendingAction ? actionLabel(pendingAction) : "";
-  const buttonClassName = compact ? "h-11 min-w-0 px-2" : undefined;
+  const buttonClassName = compact ? "h-10 w-full min-w-0 whitespace-nowrap px-3 sm:w-32 sm:shrink-0" : undefined;
 
   return (
     <>

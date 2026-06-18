@@ -6,7 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Button, Card, Input } from "@/components/ui";
+import { ResourceFilterBar } from "@/components/resource-filter-bar";
+import { Button, Card } from "@/components/ui";
 import { deleteWorld, downloadWorldFile, listGames, listServers, listWorlds } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { gameFilterOptions, gameKeyFromProvider } from "@/lib/game-filters";
@@ -14,7 +15,6 @@ import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
 import { getWorldSourceServerId } from "@/lib/server-detail-resources";
-import { cn } from "@/lib/utils";
 import type { Server } from "@/lib/types";
 import type { World } from "@/lib/types";
 
@@ -74,6 +74,11 @@ export default function WorldsPage() {
       return matchesSearch && matchesGame && matchesProvider;
     });
   }, [gameFilter, providerFilter, search, servers, worlds]);
+  const activeFilterChips = [
+    search.trim(),
+    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : "",
+    providerFilter !== "all" ? filterOptionLabel(providerFilters, providerFilter, t) : ""
+  ].filter(Boolean);
   const remove = useMutation({
     mutationFn: deleteWorld,
     onSuccess: async () => {
@@ -124,19 +129,25 @@ export default function WorldsPage() {
 
   return (
     <>
-      <PageHeader
-        title={t("worldsTitle")}
-        description={t("worldsDescription")}
+      <PageHeader title={t("worldsTitle")} />
+      <ResourceFilterBar
+        activeChips={activeFilterChips}
+        clearLabel={t("clearFilters")}
+        density="compact"
+        filters={[
+          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) },
+          { label: t("filterType"), options: providerFilters, value: providerFilter, onChange: (value) => setProviderFilter(value) }
+        ]}
+        onClear={() => {
+          setGameFilter("all");
+          setProviderFilter("all");
+          setSearch("");
+        }}
+        onSearchChange={setSearch}
+        resultLabel={t("filteredResultsCount", { count: filteredWorlds.length })}
+        search={search}
+        searchPlaceholder={t("searchWorlds")}
       />
-      <div className="mb-4 rounded-lg border border-panel-line bg-panel-card p-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <Input className="xl:max-w-xs" placeholder={t("searchWorlds")} value={search} onChange={(event) => setSearch(event.target.value)} />
-          <div className="flex flex-wrap gap-3">
-            <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
-            <FilterGroup label={t("filterType")} options={providerFilters} value={providerFilter} onChange={setProviderFilter} t={t} />
-          </div>
-        </div>
-      </div>
       {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
@@ -145,7 +156,6 @@ export default function WorldsPage() {
           const sourceServerId = getWorldSourceServerId(world);
           const sourceServerName = sourceServerId ? serverNameById.get(sourceServerId) ?? sourceServerId : "";
           const usingServers = serversUsingWorld(world, servers);
-          const worldFileName = world.size.endsWith(".wld") ? world.size : `${world.name}.wld`;
           return (
             <Card key={world.id} className="group p-4 transition hover:border-panel-green/40">
               <div className="flex items-start justify-between gap-4">
@@ -156,7 +166,6 @@ export default function WorldsPage() {
                   <div className="min-w-0">
                     <Link href={`/worlds/${world.id}`} className="block min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
                       <h2 className="truncate font-semibold text-white transition group-hover:text-panel-green">{world.name}</h2>
-                      <p className="mt-1 truncate text-xs text-slate-500">{worldFileName}</p>
                     </Link>
                   </div>
                 </div>
@@ -272,34 +281,12 @@ export default function WorldsPage() {
   );
 }
 
-function FilterGroup<T extends string>({
-  label,
-  onChange,
-  options,
-  t,
-  value
-}: {
-  label: string;
-  onChange: (value: T) => void;
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
-  t: (key: MessageKey, params?: Record<string, string | number>) => string;
-  value: T;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
-        {options.map((item) => (
-          <Button
-            key={item.key}
-            variant="ghost"
-            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
-            onClick={() => onChange(item.key)}
-          >
-            {item.labelKey ? t(item.labelKey) : item.label}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+function filterOptionLabel<T extends string>(
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
+  value: T,
+  t: (key: MessageKey, params?: Record<string, string | number>) => string
+) {
+  const option = options.find((item) => item.key === value);
+  if (!option) return value;
+  return option.labelKey ? t(option.labelKey) : option.label ?? value;
 }

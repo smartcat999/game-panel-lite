@@ -52,6 +52,26 @@ func (a *Adapter) Check(ctx context.Context) runtime.DockerStatus {
 	return runtime.DockerStatus{Available: true, Message: "Docker daemon is available", Host: a.host, Architecture: info.Architecture}
 }
 
+func (a *Adapter) ImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return domain.RuntimeImageStatus{Status: runtime.ImageStatusFailed, Message: "image is empty", UpdatedAt: time.Now()}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if _, _, err := a.client.ImageInspectWithRaw(ctx, image); err == nil {
+		return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusReady, UpdatedAt: time.Now()}
+	} else if client.IsErrNotFound(err) {
+		return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusMissing, UpdatedAt: time.Now()}
+	} else {
+		return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}
+	}
+}
+
+func (a *Adapter) PrepareImage(ctx context.Context, image string) error {
+	return a.ensureImage(ctx, image)
+}
+
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
 	containerName := "gamepanel-" + spec.InstanceID
 	if err := a.removeContainerByNameIfExists(ctx, containerName); err != nil {

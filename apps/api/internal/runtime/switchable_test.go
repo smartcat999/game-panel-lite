@@ -14,6 +14,10 @@ type testAdapter struct {
 }
 
 func (a testAdapter) Check(context.Context) DockerStatus { return a.status }
+func (a testAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: ImageStatusReady}
+}
+func (a testAdapter) PrepareImage(context.Context, string) error { return nil }
 func (a testAdapter) Create(context.Context, ContainerSpec) (string, error) {
 	return "", nil
 }

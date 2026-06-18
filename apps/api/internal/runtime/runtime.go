@@ -54,8 +54,18 @@ type HostStats struct {
 	MemoryLimitMB     int64   `json:"memoryLimitMb"`
 }
 
+const (
+	ImageStatusReady       = "ready"
+	ImageStatusMissing     = "missing"
+	ImageStatusPreparing   = "preparing"
+	ImageStatusFailed      = "failed"
+	ImageStatusUnsupported = "unsupported"
+)
+
 type Adapter interface {
 	Check(ctx context.Context) DockerStatus
+	ImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus
+	PrepareImage(ctx context.Context, image string) error
 	Create(ctx context.Context, spec ContainerSpec) (string, error)
 	Start(ctx context.Context, instance domain.GameServerInstance) error
 	Stop(ctx context.Context, instance domain.GameServerInstance) error

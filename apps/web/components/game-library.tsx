@@ -8,6 +8,7 @@ import { getGameArt } from "@/lib/game-art";
 import { gameDescription, gameDisplayName } from "@/lib/game-display";
 import { listGames } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { isRuntimeImageReady } from "@/lib/runtime-image";
 import { cn } from "@/lib/utils";
 import type { GameCatalogEntry } from "@/lib/types";
 
@@ -42,10 +43,11 @@ function GameCard({ game }: { game: GameCatalogEntry }) {
   const art = getGameArt(game.coverImage ?? game.key);
   const Icon = art.icon;
   const count = game.serverCount ?? 0;
+  const readyProviders = game.providers.filter((provider) => isRuntimeImageReady(provider.runtimeImage)).length;
 
   return (
     <Link
-      href={`/servers/new?game=${encodeURIComponent(game.key)}`}
+      href="/games"
       className="group relative flex flex-col overflow-hidden rounded-lg border border-panel-line bg-panel-card transition hover:border-panel-green/50 hover:bg-slate-900/70"
     >
       <div className="relative h-24 w-full overflow-hidden bg-slate-950">
@@ -77,6 +79,9 @@ function GameCard({ game }: { game: GameCatalogEntry }) {
         <div className="mt-auto flex items-center gap-2 text-xs text-slate-500">
           <span className="rounded border border-panel-line bg-slate-950/50 px-1.5 py-0.5">
             {t("gameLibraryServers", { count })}
+          </span>
+          <span className={cn("rounded border px-1.5 py-0.5", readyProviders > 0 ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-line bg-slate-950/50 text-slate-500")}>
+            {readyProviders > 0 ? t("gameLibraryInstalled") : t("gameLibraryNotInstalled")}
           </span>
         </div>
       </div>

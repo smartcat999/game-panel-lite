@@ -57,6 +57,13 @@ type GameCatalogEntry struct {
 	Providers   []ProviderCatalog `json:"providers"`
 }
 
+type RuntimeImageStatus struct {
+	Image     string    `json:"image"`
+	Status    string    `json:"status"`
+	Message   string    `json:"message,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+}
+
 type ProviderCatalog struct {
 	Key                ProviderKey           `json:"key"`
 	Name               string                `json:"name"`
@@ -67,6 +74,7 @@ type ProviderCatalog struct {
 	Capabilities       ProviderCapabilities  `json:"capabilities"`
 	ConfigSchema       []ProviderConfigField `json:"configSchema"`
 	SaveDisplayName    string                `json:"saveDisplayName,omitempty"`
+	RuntimeImage       RuntimeImageStatus    `json:"runtimeImage,omitempty"`
 }
 
 const (

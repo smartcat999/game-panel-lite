@@ -16,7 +16,7 @@ import { Sparkline, useTimeSeries } from "@/lib/sparkline";
 
 export default function DashboardPage() {
   const { locale, t } = useI18n();
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const activityQuery = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, refetchInterval: 5000, retry: false });
@@ -26,8 +26,8 @@ export default function DashboardPage() {
   const servers = attachLatestBackupTimes(serversQuery.data ?? [], backups);
   const activity = activityQuery.data ?? [];
   const running = servers.filter((server) => server.status === "running");
-  const players = servers.reduce((sum, server) => sum + server.players, 0);
-  const playerCapacity = servers.reduce((sum, server) => sum + server.maxPlayers, 0);
+  const players = running.reduce((sum, server) => sum + server.players, 0);
+  const playerCapacity = running.reduce((sum, server) => sum + server.maxPlayers, 0);
   const totalBackupBytes = backups.reduce((sum, backup) => sum + backup.sizeBytes, 0);
   const latestBackup = backups[0];
   const memMax = Math.max(1024, runtimeStatsQuery.data?.memoryLimitMb ?? 1024);
@@ -42,7 +42,7 @@ export default function DashboardPage() {
       {(serversQuery.isError || backupsQuery.isError || activityQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiDataUnavailable")}</p>}
       <div className="grid gap-4 md:grid-cols-4">
         <Stat icon={<HardDrive />} label={t("runningServers")} value={`${running.length} / ${servers.length}`} hint={t("runningHint", { count: running.length })} />
-        <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players} / ${playerCapacity}`} hint={t("playersOnlineHint", { count: players })} />
+        <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players}`} hint={t("playersOnlineHint", { count: players, capacity: playerCapacity })} />
         <Stat icon={<Archive />} label={t("latestBackup")} value={latestBackup ? localizeRelativeTime(latestBackup.created, locale) : t("none")} hint={latestBackup?.world ?? t("none")} />
         <Stat icon={<HardDrive />} label={t("storageUsed")} value={formatBytes(totalBackupBytes)} hint={t("storageHint", { count: backups.length })} />
       </div>

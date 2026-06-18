@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -41,6 +42,9 @@ type Handler struct {
 	runtime        *runtime.SwitchableAdapter
 	dockerMonitor  *runtime.DockerMonitor
 	runtimeFactory func(string) (runtime.Adapter, error)
+
+	runtimeImageJobsMu sync.Mutex
+	runtimeImageJobs   map[string]domain.RuntimeImageStatus
 }
 
 type resourceLimitPayload struct {
@@ -61,13 +65,14 @@ func NewHandler(
 	runtimeFactory func(string) (runtime.Adapter, error),
 ) *Handler {
 	return &Handler{
-		cfg:            cfg,
-		logger:         logger,
-		store:          store,
-		provider:       providers,
-		runtime:        adapter,
-		dockerMonitor:  dockerMonitor,
-		runtimeFactory: runtimeFactory,
+		cfg:              cfg,
+		logger:           logger,
+		store:            store,
+		provider:         providers,
+		runtime:          adapter,
+		dockerMonitor:    dockerMonitor,
+		runtimeFactory:   runtimeFactory,
+		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
 	}
 }
 
@@ -86,6 +91,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/version", h.version)
 		r.Get("/api/runtime/docker", h.dockerStatus)
 		r.Get("/api/runtime/stats", h.runtimeStats)
+		r.Post("/api/runtime/images/prepare", h.prepareRuntimeImage)
 		r.Get("/api/settings", h.getSettings)
 		r.Put("/api/settings/public-host", h.updatePublicHost)
 		r.Get("/api/activity", h.listActivity)
@@ -2394,6 +2400,90 @@ func (h *Handler) dockerStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.dockerMonitor.Status())
 }
 
+type prepareRuntimeImageRequest struct {
+	ProviderKey domain.ProviderKey `json:"providerKey"`
+	Version     string             `json:"version,omitempty"`
+}
+
+func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
+	var payload prepareRuntimeImageRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	gameProvider, ok := h.provider.Get(payload.ProviderKey)
+	if !ok {
+		writeError(w, http.StatusNotFound, "provider not found")
+		return
+	}
+	if err := h.requireProviderRuntimeSupported(payload.ProviderKey); err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	if err := h.requireRuntimeAvailable(r.Context()); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	version := normalizeStoredProviderVersion(gameProvider, payload.Version)
+	image := gameProvider.ImageFor(version)
+	if status := h.runtimeImageStatus(r.Context(), image); status.Status == runtime.ImageStatusReady {
+		writeJSON(w, http.StatusOK, status)
+		return
+	} else if status.Status == runtime.ImageStatusPreparing {
+		writeJSON(w, http.StatusAccepted, status)
+		return
+	}
+	status := domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusPreparing, UpdatedAt: time.Now()}
+	h.setRuntimeImageJob(status)
+	go h.prepareRuntimeImageAsync(image)
+	writeJSON(w, http.StatusAccepted, status)
+}
+
+func (h *Handler) prepareRuntimeImageAsync(image string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	status := domain.RuntimeImageStatus{Image: image, UpdatedAt: time.Now()}
+	if err := h.runtime.PrepareImage(ctx, image); err != nil {
+		status.Status = runtime.ImageStatusFailed
+		status.Message = err.Error()
+	} else {
+		status.Status = runtime.ImageStatusReady
+	}
+	status.UpdatedAt = time.Now()
+	h.setRuntimeImageJob(status)
+}
+
+func (h *Handler) runtimeImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus {
+	if job, ok := h.getRuntimeImageJob(image); ok && job.Status == runtime.ImageStatusPreparing {
+		return job
+	}
+	status := h.runtime.ImageStatus(ctx, image)
+	if status.Status == runtime.ImageStatusReady {
+		h.setRuntimeImageJob(status)
+		return status
+	}
+	if job, ok := h.getRuntimeImageJob(image); ok && job.Status == runtime.ImageStatusFailed {
+		return job
+	}
+	return status
+}
+
+func (h *Handler) getRuntimeImageJob(image string) (domain.RuntimeImageStatus, bool) {
+	h.runtimeImageJobsMu.Lock()
+	defer h.runtimeImageJobsMu.Unlock()
+	status, ok := h.runtimeImageJobs[image]
+	return status, ok
+}
+
+func (h *Handler) setRuntimeImageJob(status domain.RuntimeImageStatus) {
+	if status.Image == "" {
+		return
+	}
+	h.runtimeImageJobsMu.Lock()
+	defer h.runtimeImageJobsMu.Unlock()
+	h.runtimeImageJobs[status.Image] = status
+}
+
 func (h *Handler) workshopSyncUnsupported() bool {
 	architecture := strings.ToLower(strings.TrimSpace(h.dockerMonitor.Status().Architecture))
 	return strings.HasPrefix(architecture, "arm") || strings.Contains(architecture, "aarch64")
@@ -2618,6 +2708,7 @@ func stripInvitePassword(invite string) string {
 func (h *Handler) listGames(w http.ResponseWriter, r *http.Request) {
 	games := h.provider.Games()
 	h.applyRuntimeGameAvailability(games)
+	h.attachRuntimeImageStatuses(r.Context(), games)
 	servers, err := h.store.ListServers(r.Context())
 	if err == nil {
 		counts := map[domain.GameKey]int{}
@@ -2639,6 +2730,7 @@ func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
 	}
 	games := []domain.GameCatalogEntry{game}
 	h.applyRuntimeGameAvailability(games)
+	h.attachRuntimeImageStatuses(r.Context(), games)
 	writeJSON(w, http.StatusOK, games[0])
 }
 
@@ -2649,6 +2741,33 @@ func (h *Handler) applyRuntimeGameAvailability(games []domain.GameCatalogEntry) 
 	for index := range games {
 		if games[index].Key == domain.GameDST {
 			games[index].Status = "unsupported"
+		}
+	}
+}
+
+func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain.GameCatalogEntry) {
+	for gameIndex := range games {
+		for providerIndex := range games[gameIndex].Providers {
+			providerCatalog := &games[gameIndex].Providers[providerIndex]
+			gameProvider, ok := h.provider.Get(providerCatalog.Key)
+			if !ok {
+				continue
+			}
+			version := providerCatalog.RecommendedVersion
+			if version == "" {
+				version = normalizeStoredProviderVersion(gameProvider, "")
+			}
+			image := gameProvider.ImageFor(version)
+			if h.providerRuntimeUnsupported(providerCatalog.Key) {
+				providerCatalog.RuntimeImage = domain.RuntimeImageStatus{
+					Image:     image,
+					Status:    runtime.ImageStatusUnsupported,
+					Message:   "server runtime is not supported on this Docker architecture",
+					UpdatedAt: time.Now(),
+				}
+				continue
+			}
+			providerCatalog.RuntimeImage = h.runtimeImageStatus(ctx, image)
 		}
 	}
 }
@@ -2775,6 +2894,15 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if !providerSupportsVersion(gameProvider, payload.Version) {
 		writeError(w, http.StatusBadRequest, "unsupported provider version")
+		return
+	}
+	if err := h.requireRuntimeAvailable(r.Context()); err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	imageStatus := h.runtimeImageStatus(r.Context(), gameProvider.ImageFor(payload.Version))
+	if imageStatus.Status != runtime.ImageStatusReady {
+		writeError(w, http.StatusConflict, "server runtime is not installed; install it from Game Library first")
 		return
 	}
 	if err := gameProvider.ValidateConfig(config); err != nil {

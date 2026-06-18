@@ -22,9 +22,7 @@ export function modGameFilterKeys(games: GameCatalogEntry[], resources: ModResou
   const keys = new Set<string>();
   for (const game of games) {
     if (game.status !== "available") continue;
-    if (game.providers.some((provider) => provider.capabilities.mods)) {
-      keys.add(game.key);
-    }
+    keys.add(game.key);
   }
   for (const resource of resources) {
     const key = modResourceGame(resource);

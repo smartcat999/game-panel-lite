@@ -33,6 +33,14 @@ func (s *SwitchableAdapter) Check(ctx context.Context) DockerStatus {
 	return s.current().Check(ctx)
 }
 
+func (s *SwitchableAdapter) ImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus {
+	return s.current().ImageStatus(ctx, image)
+}
+
+func (s *SwitchableAdapter) PrepareImage(ctx context.Context, image string) error {
+	return s.current().PrepareImage(ctx, image)
+}
+
 func (s *SwitchableAdapter) Create(ctx context.Context, spec ContainerSpec) (string, error) {
 	return s.current().Create(ctx, spec)
 }

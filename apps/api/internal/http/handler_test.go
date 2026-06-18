@@ -277,6 +277,12 @@ func (a inspectStatusAdapter) Stats(context.Context, domain.GameServerInstance) 
 func (a inspectStatusAdapter) HostStats(context.Context) (runtime.HostStats, error) {
 	return runtime.HostStats{}, nil
 }
+func (a inspectStatusAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusReady}
+}
+func (a inspectStatusAdapter) PrepareImage(context.Context, string) error {
+	return nil
+}
 func (a inspectStatusAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
@@ -315,6 +321,12 @@ func (a *unavailableInspectAdapter) Stats(context.Context, domain.GameServerInst
 }
 func (a *unavailableInspectAdapter) HostStats(context.Context) (runtime.HostStats, error) {
 	return runtime.HostStats{}, fmt.Errorf("docker unavailable")
+}
+func (a *unavailableInspectAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusFailed, Message: "docker unavailable"}
+}
+func (a *unavailableInspectAdapter) PrepareImage(context.Context, string) error {
+	return fmt.Errorf("docker unavailable")
 }
 func (a *unavailableInspectAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
 	return nil, fmt.Errorf("docker unavailable")
@@ -362,6 +374,12 @@ func (a *staleContainerAdapter) Stats(context.Context, domain.GameServerInstance
 }
 func (a *staleContainerAdapter) HostStats(context.Context) (runtime.HostStats, error) {
 	return runtime.HostStats{}, nil
+}
+func (a *staleContainerAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusReady}
+}
+func (a *staleContainerAdapter) PrepareImage(context.Context, string) error {
+	return nil
 }
 func (a *staleContainerAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
 	a.logsContainer = instance.ContainerID

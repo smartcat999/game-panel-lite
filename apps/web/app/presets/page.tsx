@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Cpu, MemoryStick, Plus, Search, Trash2 } from "lucide-react";
+import { Bookmark, Cpu, MemoryStick, Plus, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
-import { Badge, Button, Card, Input } from "@/components/ui";
+import { Badge, Button, Card } from "@/components/ui";
 import { deleteConfigPreset, listConfigPresets, listGames, listModPacks } from "@/lib/api";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import { providerFilterOptions } from "@/lib/provider-filters";
 import type { ConfigPreset, GameCatalogEntry, ModPack, ProviderCatalog } from "@/lib/types";
 
 type PresetGameFilter = "all" | string;
+type PresetProviderFilter = "all" | string;
 
 export default function PresetsPage() {
   const { locale, t } = useI18n();
@@ -23,6 +25,7 @@ export default function PresetsPage() {
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState<PresetGameFilter>("all");
+  const [providerFilter, setProviderFilter] = useState<PresetProviderFilter>("all");
   const [pendingDelete, setPendingDelete] = useState<ConfigPreset | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -33,6 +36,15 @@ export default function PresetsPage() {
     () => gameFilterOptions(games, t("filterAll"), presets.map((preset) => preset.gameKey)),
     [games, presets, t]
   );
+  const providerFilters = useMemo(
+    () => providerFilterOptions(games, t("filterAll"), presets.map((preset) => preset.providerKey), gameFilter),
+    [gameFilter, games, presets, t]
+  );
+  useEffect(() => {
+    if (providerFilter !== "all" && !providerFilters.some((option) => option.key === providerFilter)) {
+      setProviderFilter("all");
+    }
+  }, [providerFilter, providerFilters]);
   const context = useMemo(() => buildPresetContext(games, modPacks), [games, modPacks]);
   const filteredPresets = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -40,11 +52,17 @@ export default function PresetsPage() {
       .filter((preset) => {
         const meta = presetMeta(preset, context);
         const matchesGame = gameFilter === "all" || preset.gameKey === gameFilter;
+        const matchesProvider = providerFilter === "all" || preset.providerKey === providerFilter;
         const matchesSearch = !term || [preset.name, meta.gameName, meta.providerName, meta.modPackName, preset.version ?? ""].some((value) => value.toLowerCase().includes(term));
-        return matchesGame && matchesSearch;
+        return matchesGame && matchesProvider && matchesSearch;
       })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  }, [context, gameFilter, presets, search]);
+  }, [context, gameFilter, presets, providerFilter, search]);
+  const activeFilterChips = [
+    search.trim(),
+    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : "",
+    providerFilter !== "all" ? filterOptionLabel(providerFilters, providerFilter, t) : ""
+  ].filter(Boolean);
 
   const remove = useMutation({
     mutationFn: deleteConfigPreset,
@@ -62,30 +80,29 @@ export default function PresetsPage() {
 
   return (
     <>
-      <PageHeader
-        title={t("configurationPresets")}
-        description={t("configurationPresetsPageDescription")}
-        action={(
-          <Link className="inline-flex items-center gap-2 rounded-md bg-panel-green px-3 py-2 text-sm font-medium text-slate-950 transition hover:bg-panel-green/90" href="/servers/new">
-            <Plus aria-hidden="true" className="size-4" />
-            {t("createServer")}
-          </Link>
-        )}
-      />
+      <PageHeader title={t("configurationPresets")} />
       {(presetsQuery.isError || gamesQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiConfigurationPresetsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
 
-      <Card className="mb-4 p-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="relative min-w-0 xl:max-w-sm xl:flex-1">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 size-4 text-slate-500" />
-            <Input className="pl-9" placeholder={t("searchConfigurationPresets")} value={search} onChange={(event) => setSearch(event.target.value)} />
-          </div>
-          <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
-        </div>
-        <p className="mt-3 text-xs text-slate-500">{t("configurationPresetFilterSummary", { shown: filteredPresets.length, total: presets.length })}</p>
-      </Card>
+      <ResourceFilterBar
+        activeChips={activeFilterChips}
+        clearLabel={t("clearFilters")}
+        density="compact"
+        filters={[
+          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) },
+          { label: t("filterType"), options: providerFilters, value: providerFilter, onChange: (value) => setProviderFilter(value) }
+        ]}
+        onClear={() => {
+          setGameFilter("all");
+          setProviderFilter("all");
+          setSearch("");
+        }}
+        onSearchChange={setSearch}
+        resultLabel={t("configurationPresetFilterSummary", { shown: filteredPresets.length, total: presets.length })}
+        search={search}
+        searchPlaceholder={t("searchConfigurationPresets")}
+      />
 
       {filteredPresets.length > 0 ? (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -185,37 +202,13 @@ function DetailTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FilterGroup<T extends string>({
-  label,
-  onChange,
-  options,
-  t,
-  value
-}: {
-  label: string;
-  onChange: (value: T) => void;
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
-  t: (key: MessageKey) => string;
-  value: T;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
-        {options.map((item) => (
-          <Button
-            key={item.key}
-            type="button"
-            variant="ghost"
-            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
-            onClick={() => onChange(item.key)}
-          >
-            {item.labelKey ? t(item.labelKey) : item.label}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+function filterOptionLabel<T extends string>(
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
+  value: T,
+  t: (key: MessageKey) => string
+) {
+  const option = options.find((item) => item.key === value);
+  return option?.labelKey ? t(option.labelKey) : option?.label ?? value;
 }
 
 function buildPresetContext(games: GameCatalogEntry[], modPacks: ModPack[]) {

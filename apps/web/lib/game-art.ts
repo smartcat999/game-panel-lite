@@ -35,6 +35,7 @@ export const gameArtConfig: Record<string, GameArtConfig> = {
     alt: "Don't Starve Together",
   },
   minecraft: {
+    imageSrc: "/images/minecraft-cover.jpg",
     gradient: "from-emerald-600/45 via-green-900/20 to-slate-950/50",
     icon: Blocks,
     alt: "Minecraft",

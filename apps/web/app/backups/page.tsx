@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Clock, Download, Search, Trash2 } from "lucide-react";
+import { Clock, Download, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { deleteBackup, downloadBackupFile, listBackups, listGames, listServers } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
 import { gameFilterOptions } from "@/lib/game-filters";
@@ -15,7 +16,6 @@ import { providerFilterOptions } from "@/lib/provider-filters";
 import { cn } from "@/lib/utils";
 import type { Backup } from "@/lib/types";
 
-type BackupServerFilter = "all" | string;
 type BackupTypeFilter = "all" | Backup["type"];
 type BackupGameFilter = "all" | string;
 type BackupProviderFilter = "all" | string;
@@ -34,7 +34,6 @@ export default function BackupsPage() {
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState<BackupGameFilter>("all");
-  const [serverFilter, setServerFilter] = useState<BackupServerFilter>("all");
   const [providerFilter, setProviderFilter] = useState<BackupProviderFilter>("all");
   const [backupTypeFilter, setBackupTypeFilter] = useState<BackupTypeFilter>("all");
   const [errorMessage, setErrorMessage] = useState("");
@@ -66,12 +65,17 @@ export default function BackupsPage() {
       const matchesSearch = !term || [backup.name, backup.world, backup.type, serverName].some((value) => value.toLowerCase().includes(term));
       const backupGame = backup.gameKey ?? server?.gameKey;
       const matchesGame = gameFilter === "all" || backupGame === gameFilter;
-      const matchesServer = serverFilter === "all" || backup.instanceId === serverFilter;
       const matchesProvider = providerFilter === "all" || server?.providerKey === providerFilter;
       const matchesBackupType = backupTypeFilter === "all" || backup.type === backupTypeFilter;
-      return matchesSearch && matchesGame && matchesServer && matchesProvider && matchesBackupType;
+      return matchesSearch && matchesGame && matchesProvider && matchesBackupType;
     }).sort(sortBackupsNewestFirst);
-  }, [backupTypeFilter, backups, gameFilter, providerFilter, search, serverById, serverFilter, serverNameById]);
+  }, [backupTypeFilter, backups, gameFilter, providerFilter, search, serverById, serverNameById]);
+  const activeFilterChips = [
+    search.trim(),
+    gameFilter !== "all" ? filterOptionLabel(backupGameFilters, gameFilter, t) : "",
+    providerFilter !== "all" ? filterOptionLabel(providerFilters, providerFilter, t) : "",
+    backupTypeFilter !== "all" ? filterOptionLabel(backupTypeFilters, backupTypeFilter, t) : ""
+  ].filter(Boolean);
 
   const remove = useMutation({
     mutationFn: deleteBackup,
@@ -103,38 +107,30 @@ export default function BackupsPage() {
 
   return (
     <>
-      <PageHeader
-        title={t("backupsTitle")}
-        description={t("backupsDescription")}
-      />
+      <PageHeader title={t("backupsTitle")} />
       {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
-      <Card className="mb-4 p-3">
-        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-          <div className="relative min-w-0 2xl:max-w-sm 2xl:flex-1">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 size-4 text-slate-500" />
-            <Input className="pl-9" placeholder={t("searchBackups")} value={search} onChange={(event) => setSearch(event.target.value)} />
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <FilterGroup label={t("filterGame")} options={backupGameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
-            <label className="flex items-center gap-2">
-              <span className="text-xs font-medium text-slate-500">{t("server")}</span>
-              <select
-                className="h-9 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
-                value={serverFilter}
-                onChange={(event) => setServerFilter(event.target.value)}
-              >
-                <option value="all">{t("filterAll")}</option>
-                {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
-              </select>
-            </label>
-            <FilterGroup label={t("serverType")} options={providerFilters} value={providerFilter} onChange={setProviderFilter} t={t} />
-            <FilterGroup label={t("backupType")} options={backupTypeFilters} value={backupTypeFilter} onChange={setBackupTypeFilter} t={t} />
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">{t("backupFilterSummary", { shown: filteredBackups.length, total: backups.length })}</p>
-      </Card>
+      <ResourceFilterBar
+        activeChips={activeFilterChips}
+        clearLabel={t("clearFilters")}
+        density="compact"
+        filters={[
+          { label: t("filterGame"), options: backupGameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) },
+          { label: t("serverType"), options: providerFilters, value: providerFilter, onChange: (value) => setProviderFilter(value) },
+          { label: t("backupType"), options: backupTypeFilters, value: backupTypeFilter, onChange: (value) => setBackupTypeFilter(value as BackupTypeFilter) }
+        ]}
+        onClear={() => {
+          setGameFilter("all");
+          setProviderFilter("all");
+          setBackupTypeFilter("all");
+          setSearch("");
+        }}
+        onSearchChange={setSearch}
+        resultLabel={t("backupFilterSummary", { shown: filteredBackups.length, total: backups.length })}
+        search={search}
+        searchPlaceholder={t("searchBackups")}
+      />
       {filteredBackups.length > 0 ? (
         <Card className="overflow-hidden">
           <div className="divide-y divide-panel-line">
@@ -237,35 +233,11 @@ function formatBackupDate(value: string, locale: string) {
   }).format(new Date(value));
 }
 
-function FilterGroup<T extends string>({
-  label,
-  onChange,
-  options,
-  t,
-  value
-}: {
-  label: string;
-  onChange: (value: T) => void;
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
-  t: (key: MessageKey) => string;
-  value: T;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
-        {options.map((item) => (
-          <Button
-            key={item.key}
-            type="button"
-            variant="ghost"
-            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
-            onClick={() => onChange(item.key)}
-          >
-            {item.labelKey ? t(item.labelKey) : item.label}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+function filterOptionLabel<T extends string>(
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
+  value: T,
+  t: (key: MessageKey) => string
+) {
+  const option = options.find((item) => item.key === value);
+  return option?.labelKey ? t(option.labelKey) : option?.label ?? value;
 }

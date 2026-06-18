@@ -121,7 +121,7 @@ describe("mod filters", () => {
     expect(filterModResources(packs, "terraria").map((pack) => pack.id)).toEqual(["pack-1"]);
   });
 
-  it("includes games with mod capability plus games from existing resources", () => {
-    expect(modGameFilterKeys(games, mods)).toEqual(["terraria", "future-game"]);
+  it("includes all available games plus games from existing resources", () => {
+    expect(modGameFilterKeys(games, mods)).toEqual(["terraria", "palworld", "future-game"]);
   });
 });

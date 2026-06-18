@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
+import { Bookmark, Check, ChevronLeft, ChevronRight, FileArchive, FileText, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
@@ -12,6 +12,7 @@ import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { getGameArt } from "@/lib/game-art";
 import { gameDescription, gameDisplayName } from "@/lib/game-display";
+import { providerDescription, providerDisplayName } from "@/lib/provider-display";
 import { cn } from "@/lib/utils";
 import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
@@ -19,8 +20,9 @@ import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey, reviewResourceSummaryKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
+import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits, RuntimeImageStatus } from "@/lib/types";
 
 const stepLabelKeys = {
   game: "stepGame",
@@ -35,10 +37,10 @@ const presets = [
   { key: "friends-casual", labelKey: "presetFriendsCasual", descriptionKey: "presetFriendsCasualDescription", tags: ["tagClassic", "tagMediumWorld", "8"] },
   { key: "building-world", labelKey: "presetBuildingWorld", descriptionKey: "presetBuildingWorldDescription", tags: ["tagClassic", "tagLargeWorld", "12"] },
   { key: "expert-adventure", labelKey: "presetExpertAdventure", descriptionKey: "presetExpertAdventureDescription", tags: ["tagExpert", "tagLargeWorld", "8"] },
-  { key: "modded-starter", labelKey: "presetModdedStarter", descriptionKey: "presetModdedStarterDescription", tags: ["tModLoader", "tagMediumWorld", "8"] },
   { key: "master-challenge", labelKey: "presetMasterChallenge", descriptionKey: "presetMasterChallengeDescription", tags: ["tagMaster", "tagLargeWorld", "6"] }
 ] as const;
 const customPreset = { key: "custom", labelKey: "presetCustom", descriptionKey: "presetCustomDescription", tags: ["tagCustom"] } as const;
+const tmodLoaderBasePreset = "modded-starter" as const;
 
 type BuiltInPresetKey = (typeof presets)[number]["key"];
 type PresetKey = BuiltInPresetKey | typeof customPreset.key;
@@ -46,6 +48,36 @@ type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
+
+function createNameSuffix(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+function appendNameSuffix(name: string, suffix: string) {
+  const nextName = `${name} ${suffix}`;
+  if (nextName.length <= 80) return nextName;
+  return `${name.slice(0, Math.max(1, 79 - suffix.length)).trim()} ${suffix}`;
+}
+
+function createNamedTerrariaConfig(presetKey: BuiltInPresetKey | typeof tmodLoaderBasePreset) {
+  const suffix = createNameSuffix();
+  const presetConfig = getTerrariaPreset(presetKey).config;
+  return {
+    ...presetConfig,
+    serverName: appendNameSuffix(presetConfig.serverName || "Terraria Server", suffix),
+    worldName: appendNameSuffix(presetConfig.worldName || "Terraria World", suffix)
+  };
+}
+
+function createGameDefaultNames(gameName: string) {
+  const suffix = createNameSuffix();
+  return {
+    clusterName: appendNameSuffix(`${gameName} Cluster`, suffix),
+    saveName: appendNameSuffix(`${gameName} Save`, suffix),
+    serverName: appendNameSuffix(`${gameName} Server`, suffix)
+  };
+}
 
 function formatCpuLimitLabel(value: number, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
   return value > 0 ? t("cpuCoresValue", { cores: value }) : t("unlimited");
@@ -64,7 +96,7 @@ export function CreateServerWizard() {
   const [selectedProviderKey, setSelectedProviderKey] = useState<ProviderKey>("terraria-vanilla");
   const [mode, setMode] = useState<"vanilla" | "tmodloader">(defaultCreateServerMode);
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>(defaultCreateServerPreset);
-  const [config, setConfig] = useState<TerrariaConfig>(defaultCreateServerConfig);
+  const [config, setConfig] = useState<TerrariaConfig>(() => createNamedTerrariaConfig(defaultCreateServerPreset));
   const [providerConfigPayload, setProviderConfigPayload] = useState<ProviderConfigPayload>({});
   const [hostPortMode, setHostPortMode] = useState<"auto" | "manual">("auto");
   const [hostPort, setHostPort] = useState(terrariaInternalPort);
@@ -105,6 +137,7 @@ export function CreateServerWizard() {
   const availableMods = filterModResources(allMods, selectedGameKey);
   const modPacks = filterModResources(allModPacks, selectedGameKey);
   const configPresets = configPresetsQuery.data ?? [];
+  const gameConfigPresets = configPresets.filter((preset) => preset.gameKey === selectedGameKey);
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
   const effectiveConfig = selectedGameKey === "terraria" ? config : providerPayloadToTerrariaConfig(providerKey, providerConfigPayload, config);
   const fallbackStepId: StepId = "review";
@@ -113,7 +146,14 @@ export function CreateServerWizard() {
   const currentStepKey = stepLabelKeys[currentStepId];
   const nextStepKey = stepLabelKeys[nextStepId];
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
-  const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider);
+  const selectedProviderReady = isRuntimeImageReady(selectedProvider?.runtimeImage);
+  const selectedGameHasReadyProvider = Boolean(selectedGame?.providers.some((provider) => isRuntimeImageReady(provider.runtimeImage)));
+  const canContinueCurrentStep = currentStepId === "game"
+    ? selectedGame?.status === "available" && selectedGameHasReadyProvider
+    : currentStepId === "mode"
+      ? selectedProviderReady
+      : true;
+  const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider) && selectedProviderReady;
   const create = useMutation({
     mutationFn: () => createTerrariaServerWithWorld({
       config: { ...effectiveConfig, port: terrariaInternalPort },
@@ -150,39 +190,41 @@ export function CreateServerWizard() {
     }
   });
   const chooseMode = (nextMode: "vanilla" | "tmodloader") => {
-    const nextPreset = nextMode === "tmodloader" ? "modded-starter" : "friends-casual";
+    const basePreset = nextMode === "tmodloader" ? tmodLoaderBasePreset : "friends-casual";
+    const visiblePreset: PresetKey = nextMode === "tmodloader" ? "custom" : "friends-casual";
     setSelectedProviderKey(nextMode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla");
     setMode(nextMode);
-    setSelectedPreset(nextPreset);
-    setConfig(getTerrariaPreset(nextPreset).config);
+    setSelectedPreset(visiblePreset);
+    setConfig(createNamedTerrariaConfig(basePreset));
     setProviderConfigPayload({});
     setSelectedWorldId("");
     setAppliedWorldConfigId("");
     setSelectedModIds([]);
     setSelectedModPackId("");
   };
-  const chooseGame = (game: GameCatalogEntry) => {
+  const chooseGame = (game: GameCatalogEntry, preferredProviderKey?: ProviderKey | null) => {
     if (game.status !== "available" || game.providers.length === 0) return;
     setSelectedGameKey(game.key);
-    const nextProvider = game.providers.find((provider) => provider.recommended) ?? game.providers[0];
+    const nextProvider = game.providers.find((provider) => provider.key === preferredProviderKey) ?? game.providers.find((provider) => provider.recommended) ?? game.providers[0];
     if (!nextProvider) return;
     setSelectedProviderKey(nextProvider.key);
     if (game.key === "terraria") {
       chooseMode(nextProvider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
+      const names = createGameDefaultNames(game.name);
       setSelectedPreset("custom");
       setConfig({
         ...defaultCreateServerConfig,
-        serverName: `${game.name} Server`,
-        worldName: `${game.name} Save`,
+        serverName: names.serverName,
+        worldName: names.saveName,
         maxPlayers: 8,
         password: "",
         motd: ""
       });
       setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, {
-        clusterName: `${game.name} Cluster`,
-        serverName: `${game.name} Server`,
-        saveName: `${game.name} Save`
+        clusterName: names.clusterName,
+        serverName: names.serverName,
+        saveName: names.saveName
       }));
       setSelectedWorldId("");
       setAppliedWorldConfigId("");
@@ -195,8 +237,13 @@ export function CreateServerWizard() {
     if (provider.key === "terraria-tmodloader" || provider.key === "terraria-vanilla") {
       chooseMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
+      const names = createGameDefaultNames(selectedGame?.name ?? provider.name);
       setSelectedPreset("custom");
-      setProviderConfigPayload(createDefaultProviderConfigPayload(provider));
+      setProviderConfigPayload(createDefaultProviderConfigPayload(provider, {
+        clusterName: names.clusterName,
+        serverName: names.serverName,
+        saveName: names.saveName
+      }));
       setSelectedModIds([]);
       setSelectedModPackId("");
     }
@@ -204,7 +251,7 @@ export function CreateServerWizard() {
   const choosePreset = (preset: PresetKey) => {
     setSelectedPreset(preset);
     if (preset === "custom") return;
-    setConfig(getTerrariaPreset(preset).config);
+    setConfig(createNamedTerrariaConfig(preset));
   };
   const chooseModPack = (packId: string) => {
     setSelectedModPackId(packId);
@@ -240,13 +287,16 @@ export function CreateServerWizard() {
 
   useEffect(() => {
     if (typeof window === "undefined" || games.length === 0) return;
-    const gameKey = new URLSearchParams(window.location.search).get("game");
-    if (!gameKey || appliedGameQueryKey === gameKey || selectedWorldId || appliedConfigPresetId) return;
+    const params = new URLSearchParams(window.location.search);
+    const gameKey = params.get("game");
+    const providerKey = params.get("provider") as ProviderKey | null;
+    const queryKey = `${gameKey ?? ""}:${providerKey ?? ""}`;
+    if (!gameKey || appliedGameQueryKey === queryKey || selectedWorldId || appliedConfigPresetId) return;
     const game = games.find((item) => item.key === gameKey);
     if (!game || game.status !== "available") return;
-    chooseGame(game);
+    chooseGame(game, providerKey);
     setStep(1);
-    setAppliedGameQueryKey(gameKey);
+    setAppliedGameQueryKey(queryKey);
   }, [appliedConfigPresetId, appliedGameQueryKey, games, selectedWorldId]);
 
   useEffect(() => {
@@ -262,8 +312,8 @@ export function CreateServerWizard() {
   useEffect(() => {
     if (!selectedWorld || appliedWorldConfigId === selectedWorld.id) return;
     const nextMode = selectedWorld.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla";
-    const nextPreset = nextMode === "tmodloader" ? "modded-starter" : "friends-casual";
-    const presetConfig = getTerrariaPreset(nextPreset).config;
+    const basePreset = nextMode === "tmodloader" ? tmodLoaderBasePreset : "friends-casual";
+    const presetConfig = getTerrariaPreset(basePreset).config;
     setMode(nextMode);
     setSelectedPreset("custom");
     setConfig(selectedWorld.config ? { ...presetConfig, ...selectedWorld.config } : { ...presetConfig, worldName: selectedWorld.name });
@@ -326,16 +376,24 @@ export function CreateServerWizard() {
           <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
             {currentStepId === "game" && (
               <GameStep
-                configPresets={configPresets}
                 games={games}
                 isLoading={gamesQuery.isLoading}
                 selectedGameKey={selectedGameKey}
-                onSelectConfigPreset={applyConfigPreset}
                 onSelectGame={chooseGame}
               />
             )}
-            {currentStepId === "mode" && <ModeStep mode={mode} providers={selectedGame?.providers ?? []} selectedProviderKey={providerKey} setMode={chooseMode} onSelectProvider={chooseProvider} />}
-            {currentStepId === "preset" && <PresetStep mode={mode} selectedPreset={selectedPreset} setPreset={choosePreset} />}
+            {currentStepId === "mode" && (
+              <ModeStep
+                configPresets={gameConfigPresets}
+                mode={mode}
+                providers={selectedGame?.providers ?? []}
+                selectedProviderKey={providerKey}
+                setMode={chooseMode}
+                onSelectConfigPreset={applyConfigPreset}
+                onSelectProvider={chooseProvider}
+              />
+            )}
+            {currentStepId === "preset" && <PresetStep selectedPreset={selectedPreset} setPreset={choosePreset} />}
             {currentStepId === "config" && (
               <ConfigStep
                 config={config}
@@ -355,6 +413,7 @@ export function CreateServerWizard() {
                 version={selectedVersion}
                 setVersion={setVersion}
                 onSavePreset={(name) => saveConfigPreset.mutate(name)}
+                onResetPresetSave={() => saveConfigPreset.reset()}
                 presetSaveError={saveConfigPreset.error instanceof Error ? saveConfigPreset.error.message : ""}
                 presetSavePending={saveConfigPreset.isPending}
                 presetSaveSuccess={saveConfigPreset.isSuccess}
@@ -380,9 +439,9 @@ export function CreateServerWizard() {
               <ReviewStep
                 config={effectiveConfig}
                 gameKey={selectedGameKey}
-                gameName={selectedGame?.name ?? "Terraria"}
+                gameName={selectedGame ? gameDisplayName(selectedGame.key, selectedGame.name, t) : t("gameNameTerraria")}
                 hostPortLabel={hostPortMode === "manual" ? String(hostPort) : t("automaticPort")}
-                providerName={selectedProvider?.name ?? (mode === "tmodloader" ? "tModLoader" : t("modeVanilla"))}
+                providerName={selectedProvider ? providerDisplayName(selectedProvider.key, selectedProvider.name, t) : mode === "tmodloader" ? t("providerNameTerrariaTmodloader") : t("modeVanilla")}
                 version={selectedVersion}
                 resourceLimits={resourceLimits}
                 selectedWorldName={selectedWorld?.name}
@@ -395,11 +454,22 @@ export function CreateServerWizard() {
               <ChevronLeft aria-hidden="true" />
               {t("back")}
             </Button>
-            <Button onClick={() => step === stepIds.length - 1 ? create.mutate() : setStep((value) => Math.min(stepIds.length - 1, value + 1))} disabled={create.isPending || (step === stepIds.length - 1 && !canCreateSelectedProvider)}>
+            <Button
+              onClick={() => step === stepIds.length - 1 ? create.mutate() : setStep((value) => Math.min(stepIds.length - 1, value + 1))}
+              disabled={create.isPending || !canContinueCurrentStep || (step === stepIds.length - 1 && !canCreateSelectedProvider)}
+            >
               {step === stepIds.length - 1 ? create.isPending ? t("creating") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
+          {!canContinueCurrentStep && currentStepId !== "review" && (
+            <p className="mt-4 text-sm text-panel-gold">
+              {t("runtimeNotInstalledForCreate")}{" "}
+              <Link href="/games" className="font-medium text-panel-green hover:text-panel-green/80">
+                {t("openGameLibrary")}
+              </Link>
+            </p>
+          )}
           {!canCreateSelectedProvider && currentStepId === "review" && <p className="mt-4 text-sm text-panel-gold">{t("providerNotCreatableYet")}</p>}
           {create.isError && <p className="mt-4 text-sm text-red-200">{create.error.message}</p>}
           {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.server.name })}</p>}
@@ -411,58 +481,28 @@ export function CreateServerWizard() {
 }
 
 function GameStep({
-  configPresets,
   games,
   isLoading,
-  onSelectConfigPreset,
   selectedGameKey,
   onSelectGame
 }: {
-  configPresets: ConfigPreset[];
   games: GameCatalogEntry[];
   isLoading: boolean;
-  onSelectConfigPreset: (preset: ConfigPreset) => void;
   selectedGameKey: string;
   onSelectGame: (game: GameCatalogEntry) => void;
 }) {
   const { t } = useI18n();
   const orderedGames = games.length > 0 ? games : [{ key: "terraria", name: "Terraria", description: "", status: "available", providers: [] }];
   return (
-    <div className="space-y-6">
-      {configPresets.length > 0 && (
-        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-          <div className="flex items-start gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
-              <Bookmark aria-hidden="true" className="size-4" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold">{t("configurationPresets")}</h2>
-              <p className="mt-1 text-sm text-slate-400">{t("configurationPresetsDescription")}</p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {configPresets.slice(0, 4).map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="rounded-md border border-panel-line bg-slate-950/50 p-3 text-left transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-                onClick={() => onSelectConfigPreset(preset)}
-              >
-                <p className="font-medium text-slate-100">{preset.name}</p>
-                <p className="mt-1 text-xs text-slate-500">{preset.gameKey} · {preset.providerKey}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <div>
-        <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
-        <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <div>
+      <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
+      <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
         {orderedGames.map((game) => {
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
           const isUnsupported = game.status === "unsupported";
+          const hasReadyProvider = game.providers.some((provider) => isRuntimeImageReady(provider.runtimeImage));
           return (
             <button
               key={game.key}
@@ -488,7 +528,10 @@ function GameStep({
                   </div>
                   <p className="mt-1 text-sm leading-6 text-slate-400">{gameDescription(game.key, game.description || t("terrariaGameDescription"), t)}</p>
                   {game.providers.length > 0 && (
-                    <p className="mt-3 text-xs text-slate-500">{t("providerCount", { count: game.providers.length })}</p>
+                    <p className="mt-3 text-xs text-slate-500">
+                      {t("providerCount", { count: game.providers.length })}
+                      {isAvailable ? ` · ${hasReadyProvider ? t("gameLibraryInstalled") : t("gameLibraryNotInstalled")}` : ""}
+                    </p>
                   )}
                   {!isAvailable && <p className="mt-3 text-xs text-slate-500">{isUnsupported ? t("unsupportedGameHint") : t("plannedGameHint")}</p>}
                 </div>
@@ -504,123 +547,182 @@ function GameStep({
       </div>
       {isLoading && <p className="mt-3 text-sm text-slate-500">{t("loading")}</p>}
     </div>
-    </div>
   );
 }
 
 function ModeStep({
+  configPresets,
   mode,
   providers,
   selectedProviderKey,
   setMode,
+  onSelectConfigPreset,
   onSelectProvider
 }: {
+  configPresets: ConfigPreset[];
   mode: "vanilla" | "tmodloader";
   providers: ProviderCatalog[];
   selectedProviderKey: ProviderKey;
   setMode: (mode: "vanilla" | "tmodloader") => void;
+  onSelectConfigPreset: (preset: ConfigPreset) => void;
   onSelectProvider: (provider: ProviderCatalog) => void;
 }) {
   const { t } = useI18n();
+  const visibleConfigPresets = configPresets.slice(0, 4);
+  const configPresetSection = visibleConfigPresets.length > 0 && (
+    <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
+          <Bookmark aria-hidden="true" className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold">{t("configurationPresets")}</h2>
+          <p className="mt-1 text-sm text-slate-400">{t("gameConfigurationPresetsDescription")}</p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {visibleConfigPresets.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            className="rounded-md border border-panel-line bg-slate-950/50 p-3 text-left transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+            onClick={() => onSelectConfigPreset(preset)}
+          >
+            <p className="font-medium text-slate-100">{preset.name}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {providerDisplayName(preset.providerKey, preset.providerKey, t)}
+              {preset.version ? ` · ${preset.version}` : ""}
+            </p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
   if (providers.length > 0) {
     return (
-      <div>
-        <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {providers.map((provider) => {
-            const isSelected = selectedProviderKey === provider.key;
-            const isModded = provider.capabilities.mods;
-            return (
-              <button
-                key={provider.key}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => onSelectProvider(provider)}
-                className={cn(
-                  "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-                  isSelected
-                    ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-                    : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
-                )}
-              >
-                {isSelected && (
-                  <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
-                    <Check aria-hidden="true" className="size-4" />
-                  </span>
-                )}
-                {isModded ? <Package aria-hidden="true" className="text-panel-green" /> : <Hammer aria-hidden="true" className="text-panel-green" />}
-                <p className="mt-3 pr-8 font-medium">{provider.name}</p>
-                <p className="mt-1 text-sm text-slate-400">{provider.description}</p>
-                {provider.recommended && <span className="mt-4 inline-flex rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("recommended")}</span>}
-              </button>
-            );
-          })}
+      <div className="space-y-6">
+        {configPresetSection}
+        <div>
+          <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {providers.map((provider) => {
+              const isSelected = selectedProviderKey === provider.key;
+              const isModded = provider.capabilities.mods;
+              const displayName = providerDisplayName(provider.key, provider.name, t);
+              const displayDescription = providerDescription(provider.key, provider.description, t);
+              return (
+                <button
+                  key={provider.key}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => onSelectProvider(provider)}
+                  className={cn(
+                    "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+                    isSelected
+                      ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+                      : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
+                  )}
+                >
+                  {isSelected && (
+                    <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
+                      <Check aria-hidden="true" className="size-4" />
+                    </span>
+                  )}
+                  {isModded ? <Package aria-hidden="true" className="text-panel-green" /> : <Hammer aria-hidden="true" className="text-panel-green" />}
+                  <p className="mt-3 pr-8 font-medium">{displayName}</p>
+                  <p className="mt-1 text-sm text-slate-400">{displayDescription}</p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <RuntimeImagePill status={provider.runtimeImage} />
+                    {provider.recommended && <span className="inline-flex rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("recommended")}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
   }
   return (
-    <div>
-      <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <button
-          type="button"
-          aria-pressed={mode === "vanilla"}
-          onClick={() => setMode("vanilla")}
-          className={cn(
-            "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-            mode === "vanilla"
-              ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-              : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
-          )}
-        >
-          {mode === "vanilla" && (
-            <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
-              <Check aria-hidden="true" className="size-4" />
-            </span>
-          )}
-          <Hammer aria-hidden="true" className="text-panel-green" />
-          <p className="mt-3 font-medium">{t("vanillaTerraria")}</p>
-          <p className="mt-1 text-sm text-slate-400">{t("vanillaTerrariaDescription")}</p>
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "tmodloader"}
-          onClick={() => setMode("tmodloader")}
-          className={cn(
-            "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-            mode === "tmodloader"
-              ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-              : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
-          )}
-        >
-          {mode === "tmodloader" && (
-            <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-white">
-              <Check aria-hidden="true" className="size-4" />
-            </span>
-          )}
-          <Package aria-hidden="true" className="text-panel-green" />
-          <p className="mt-3 font-medium">tModLoader</p>
-          <p className="mt-1 text-sm text-slate-400">{t("tmodLoaderDescription")}</p>
-        </button>
+    <div className="space-y-6">
+      {configPresetSection}
+      <div>
+        <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            aria-pressed={mode === "vanilla"}
+            onClick={() => setMode("vanilla")}
+            className={cn(
+              "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+              mode === "vanilla"
+                ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+                : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
+            )}
+          >
+            {mode === "vanilla" && (
+              <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
+                <Check aria-hidden="true" className="size-4" />
+              </span>
+            )}
+            <Hammer aria-hidden="true" className="text-panel-green" />
+            <p className="mt-3 font-medium">{t("vanillaTerraria")}</p>
+            <p className="mt-1 text-sm text-slate-400">{t("vanillaTerrariaDescription")}</p>
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === "tmodloader"}
+            onClick={() => setMode("tmodloader")}
+            className={cn(
+              "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+              mode === "tmodloader"
+                ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
+                : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
+            )}
+          >
+            {mode === "tmodloader" && (
+              <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-white">
+                <Check aria-hidden="true" className="size-4" />
+              </span>
+            )}
+            <Package aria-hidden="true" className="text-panel-green" />
+            <p className="mt-3 font-medium">tModLoader</p>
+            <p className="mt-1 text-sm text-slate-400">{t("tmodLoaderDescription")}</p>
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+function RuntimeImagePill({ status }: { status?: RuntimeImageStatus }) {
+  const { t } = useI18n();
+  const tone = runtimeImageTone(status);
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded px-2 py-1 text-xs",
+        tone === "success" && "bg-panel-green/15 text-panel-green",
+        tone === "info" && "bg-sky-500/15 text-sky-300",
+        tone === "warning" && "bg-panel-gold/15 text-panel-gold",
+        tone === "neutral" && "bg-slate-800 text-slate-400"
+      )}
+    >
+      {t(runtimeImageLabelKey(status))}
+    </span>
+  );
+}
+
 function PresetStep({
-  mode,
   selectedPreset,
   setPreset
 }: {
-  mode: "vanilla" | "tmodloader";
   selectedPreset: PresetKey;
   setPreset: (preset: PresetKey) => void;
 }) {
   const { t } = useI18n();
-  const presetOptions = [customPreset, ...presets].filter((preset) => mode === "tmodloader" || preset.key !== "modded-starter");
+  const presetOptions = [customPreset, ...presets];
   const renderTag = (tag: PresetTag) => {
-    if (tag === "tModLoader") return tag;
     if (tag === "6" || tag === "8" || tag === "12") return t("tagPlayers", { count: tag });
     return t(tag as MessageKey);
   };
@@ -632,41 +734,39 @@ function PresetStep({
         {presetOptions.map((preset) => {
           const presetKey = preset.key as PresetKey;
           const isSelected = selectedPreset === presetKey;
-          const isModded = presetKey === "modded-starter";
           const isCustom = presetKey === "custom";
           return (
-          <button
-            key={preset.key}
-            type="button"
-            aria-pressed={isSelected}
-            onClick={() => setPreset(presetKey)}
-            className={cn(
-              "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2",
-              isSelected && !isModded && !isCustom && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
-              isSelected && isModded && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
-              isSelected && isCustom && "border-slate-400 bg-slate-800/60 ring-1 ring-slate-500/50 focus:ring-slate-400/50",
-              !isSelected && "border-panel-line bg-slate-950/40 hover:bg-slate-900/55 focus:ring-panel-green/40"
-            )}
-          >
-            {isSelected && (
-              <span className={cn("absolute right-3 top-3 flex size-6 items-center justify-center rounded-full", isModded ? "bg-panel-green text-white" : isCustom ? "bg-slate-300 text-slate-950" : "bg-panel-green text-slate-950")}>
-                <Check aria-hidden="true" className="size-4" />
-              </span>
-            )}
-            <p className="pr-8 font-medium">{t(preset.labelKey)}</p>
-            <p className="mt-1 text-sm text-slate-400">{t(preset.descriptionKey)}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {preset.tags.map((tag) => (
-                <span key={tag} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
-                  {renderTag(tag)}
+            <button
+              key={preset.key}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => setPreset(presetKey)}
+              className={cn(
+                "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2",
+                isSelected && !isCustom && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
+                isSelected && isCustom && "border-slate-400 bg-slate-800/60 ring-1 ring-slate-500/50 focus:ring-slate-400/50",
+                !isSelected && "border-panel-line bg-slate-950/40 hover:bg-slate-900/55 focus:ring-panel-green/40"
+              )}
+            >
+              {isSelected && (
+                <span className={cn("absolute right-3 top-3 flex size-6 items-center justify-center rounded-full", isCustom ? "bg-slate-300 text-slate-950" : "bg-panel-green text-slate-950")}>
+                  <Check aria-hidden="true" className="size-4" />
                 </span>
-              ))}
-            </div>
-          </button>
+              )}
+              <p className="pr-8 font-medium">{t(preset.labelKey)}</p>
+              <p className="mt-1 text-sm text-slate-400">{t(preset.descriptionKey)}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {preset.tags.map((tag) => (
+                  <span key={tag} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
+                    {renderTag(tag)}
+                  </span>
+                ))}
+              </div>
+            </button>
           );
         })}
-        </div>
       </div>
+    </div>
   );
 }
 
@@ -688,6 +788,7 @@ function ConfigStep({
   version,
   setVersion,
   onSavePreset,
+  onResetPresetSave,
   presetSaveError,
   presetSavePending,
   presetSaveSuccess
@@ -709,15 +810,23 @@ function ConfigStep({
   version: string;
   setVersion: (version: string) => void;
   onSavePreset: (name: string) => void;
+  onResetPresetSave: () => void;
   presetSaveError: string;
   presetSavePending: boolean;
   presetSaveSuccess: boolean;
 }) {
   const { t } = useI18n();
   const [presetName, setPresetName] = useState(config.serverName ? `${config.serverName} ${t("configurationPreset")}` : "");
-  const preview = useMutation({
-    mutationFn: () => previewTerrariaConfig(config)
-  });
+  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+  const openPresetDialog = () => {
+    onResetPresetSave();
+    setPresetDialogOpen(true);
+  };
+  const closePresetDialog = () => {
+    if (presetSavePending) return;
+    onResetPresetSave();
+    setPresetDialogOpen(false);
+  };
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => {
     onCustomize();
     setConfig({ ...config, [key]: value });
@@ -731,17 +840,22 @@ function ConfigStep({
     if (!name) return;
     onSavePreset(name);
   };
-  const secretSeed = secretSeedKeyFor(config.seed);
+  const selectedSecretSeed = terrariaSecretSeeds.find((seed) => seed.key === secretSeedKeyFor(config.seed));
   if (gameKey !== "terraria") {
     return (
       <div>
-        <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
-        <PresetSavePanel
+        <ConfigStepHeader
+          onOpenPreset={openPresetDialog}
+          presetDialogOpen={presetDialogOpen}
+        />
+        <PresetSaveDialog
           error={presetSaveError}
           name={presetName}
+          open={presetDialogOpen}
           pending={presetSavePending}
           success={presetSaveSuccess}
           onChangeName={setPresetName}
+          onClose={closePresetDialog}
           onSave={submitPreset}
         />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -790,41 +904,25 @@ function ConfigStep({
               <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
             </WizardField>
           )}
-          <details className="rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
-            <summary className="cursor-pointer select-none text-sm font-semibold text-slate-200 outline-none transition hover:text-panel-green focus:text-panel-green">
-              {t("advancedRuntimeResources")}
-            </summary>
-            <p className="mt-2 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <WizardField label={t("cpuLimit")}>
-                <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => updateResources({ ...resourceLimits, cpuLimitCores: Number(value) })}>
-                  {cpuLimitOptions.map((value) => (
-                    <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
-                  ))}
-                </WizardSelect>
-              </WizardField>
-              <WizardField label={t("memoryLimit")}>
-                <WizardSelect value={String(resourceLimits.memoryLimitMb)} onChange={(value) => updateResources({ ...resourceLimits, memoryLimitMb: Number(value) })}>
-                  {memoryLimitOptions.map((value) => (
-                    <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
-                  ))}
-                </WizardSelect>
-              </WizardField>
-            </div>
-          </details>
+          <RuntimeResourceSection resourceLimits={resourceLimits} onChange={updateResources} />
         </div>
       </div>
     );
   }
   return (
     <div>
-      <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
-      <PresetSavePanel
+      <ConfigStepHeader
+        onOpenPreset={openPresetDialog}
+        presetDialogOpen={presetDialogOpen}
+      />
+      <PresetSaveDialog
         error={presetSaveError}
         name={presetName}
+        open={presetDialogOpen}
         pending={presetSavePending}
         success={presetSaveSuccess}
         onChangeName={setPresetName}
+        onClose={closePresetDialog}
         onSave={submitPreset}
       />
       <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -883,96 +981,190 @@ function ConfigStep({
         <WizardField label={t("motd")}>
           <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
         </WizardField>
-        <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
-          <WizardField label={t("secretSeed")}>
-            <WizardSelect value={secretSeed} onChange={(value) => update("seed", value)}>
-              <option value="">{t("noSecretSeed")}</option>
-              {terrariaSecretSeeds.map((seed) => (
-                <option key={seed.key} value={seed.key}>{seed.label} — {seed.description}</option>
-              ))}
-            </WizardSelect>
-          </WizardField>
-          <WizardField label={t("customSeed")}>
+        <div className="md:col-span-2">
+          <WizardField label={t("worldSeed")}>
             <Input
-              value={secretSeed ? "" : (config.seed ?? "")}
-              placeholder={secretSeed ? t("customSeedDisabledHint") : t("customSeedPlaceholder")}
+              list="terraria-secret-seeds"
+              value={config.seed ?? ""}
+              placeholder={t("worldSeedPlaceholder")}
               onChange={(event) => update("seed", event.target.value)}
-              disabled={Boolean(secretSeed)}
             />
+            <datalist id="terraria-secret-seeds">
+              {terrariaSecretSeeds.map((seed) => (
+                <option key={seed.key} label={seed.label} value={seed.key} />
+              ))}
+            </datalist>
+            <span className="text-xs text-slate-500">
+              {selectedSecretSeed ? t("secretSeedDetected", { name: selectedSecretSeed.label }) : t("worldSeedHint")}
+            </span>
           </WizardField>
         </div>
         <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
           <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
           <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
         </div>
-        <details className="rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
-          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-200 outline-none transition hover:text-panel-green focus:text-panel-green">
-            {t("advancedRuntimeResources")}
-          </summary>
-          <p className="mt-2 text-xs text-slate-500">{t("resourceLimitsHint")}</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <WizardField label={t("cpuLimit")}>
-              <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => updateResources({ ...resourceLimits, cpuLimitCores: Number(value) })}>
-                {cpuLimitOptions.map((value) => (
-                  <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
-                ))}
-              </WizardSelect>
-            </WizardField>
-            <WizardField label={t("memoryLimit")}>
-              <WizardSelect value={String(resourceLimits.memoryLimitMb)} onChange={(value) => updateResources({ ...resourceLimits, memoryLimitMb: Number(value) })}>
-                {memoryLimitOptions.map((value) => (
-                  <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
-                ))}
-              </WizardSelect>
-            </WizardField>
-          </div>
-        </details>
+        <RuntimeResourceSection resourceLimits={resourceLimits} onChange={updateResources} />
       </div>
-      <div className="mt-4 flex items-center gap-3">
-        <Button variant="secondary" onClick={() => preview.mutate()} disabled={preview.isPending}>
-          {preview.isPending ? t("rendering") : t("previewServerConfig")}
-        </Button>
-        {preview.isError && <p className="text-sm text-red-200">{preview.error.message}</p>}
-      </div>
-      {preview.data && (
-        <pre className="mt-4 overflow-auto rounded-md border border-panel-line bg-slate-950 p-4 text-xs leading-6 text-slate-300">
-          {preview.data}
-        </pre>
-      )}
     </div>
   );
 }
 
-function PresetSavePanel({
+function ConfigStepHeader({
+  onOpenPreset,
+  presetDialogOpen
+}: {
+  onOpenPreset: () => void;
+  presetDialogOpen: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
+        <p className="mt-1 text-sm text-slate-500">{t("serverConfigDescription")}</p>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        className="sm:mt-0"
+        aria-expanded={presetDialogOpen}
+        aria-haspopup="dialog"
+        onClick={onOpenPreset}
+      >
+        <Bookmark aria-hidden="true" />
+        {t("saveConfigurationPreset")}
+      </Button>
+    </div>
+  );
+}
+
+function RuntimeResourceSection({
+  onChange,
+  resourceLimits
+}: {
+  onChange: (limits: ResourceLimits) => void;
+  resourceLimits: ResourceLimits;
+}) {
+  const { t } = useI18n();
+  return (
+    <section className="rounded-lg border border-panel-line bg-slate-950/35 p-4 md:col-span-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-100">{t("runtimeResources")}</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{t("resourceLimitsHint")}</p>
+        </div>
+        <div className="shrink-0 rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-xs font-medium text-slate-300">
+          {formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <WizardField label={t("cpuLimit")}>
+          <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => onChange({ ...resourceLimits, cpuLimitCores: Number(value) })}>
+            {cpuLimitOptions.map((value) => (
+              <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
+            ))}
+          </WizardSelect>
+        </WizardField>
+        <WizardField label={t("memoryLimit")}>
+          <WizardSelect value={String(resourceLimits.memoryLimitMb)} onChange={(value) => onChange({ ...resourceLimits, memoryLimitMb: Number(value) })}>
+            {memoryLimitOptions.map((value) => (
+              <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
+            ))}
+          </WizardSelect>
+        </WizardField>
+      </div>
+    </section>
+  );
+}
+
+function PresetSaveDialog({
   error,
   name,
   onChangeName,
+  onClose,
   onSave,
+  open,
   pending,
   success
 }: {
   error: string;
   name: string;
   onChangeName: (name: string) => void;
+  onClose: () => void;
   onSave: () => void;
+  open: boolean;
   pending: boolean;
   success: boolean;
 }) {
   const { t } = useI18n();
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pending) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open, pending]);
+
+  if (!open) return null;
+
   return (
-    <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 p-3">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end">
-        <WizardField label={t("configurationPresetName")}>
-          <Input value={name} placeholder={t("configurationPresetNamePlaceholder")} onChange={(event) => onChangeName(event.target.value)} />
-        </WizardField>
-        <Button className="md:mb-[1px]" variant="secondary" onClick={onSave} disabled={pending || name.trim().length === 0}>
-          <Bookmark aria-hidden="true" />
-          {pending ? t("saving") : t("saveConfigurationPreset")}
-        </Button>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-8 backdrop-blur-sm"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !pending) onClose();
+      }}
+    >
+      <div
+        aria-describedby="preset-save-dialog-description"
+        aria-labelledby="preset-save-dialog-title"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-lg border border-panel-line bg-panel-card shadow-[0_16px_48px_rgba(0,0,0,0.4)]"
+        role="dialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-panel-line p-5">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-white" id="preset-save-dialog-title">{t("saveConfigurationPreset")}</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-500" id="preset-save-dialog-description">{t("configurationPresetSaveHint")}</p>
+          </div>
+          <button
+            aria-label={t("cancel")}
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={pending}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+        <div className="p-5">
+          <WizardField label={t("configurationPresetName")}>
+            <Input
+              autoFocus
+              value={name}
+              placeholder={t("configurationPresetNamePlaceholder")}
+              onChange={(event) => onChangeName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !pending && name.trim().length > 0) {
+                  onSave();
+                }
+              }}
+            />
+          </WizardField>
+          {success && <p className="mt-3 text-xs text-panel-green">{t("configurationPresetSaved")}</p>}
+          {error && <p className="mt-3 text-xs text-panel-gold">{error}</p>}
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="secondary" onClick={onClose} disabled={pending}>{t("cancel")}</Button>
+            <Button variant="primary" onClick={onSave} disabled={pending || name.trim().length === 0}>
+              <Bookmark aria-hidden="true" />
+              {pending ? t("saving") : t("saveConfigurationPreset")}
+            </Button>
+          </div>
+        </div>
       </div>
-      <p className="mt-2 text-xs text-slate-500">{t("configurationPresetSaveHint")}</p>
-      {success && <p className="mt-2 text-xs text-panel-green">{t("configurationPresetSaved")}</p>}
-      {error && <p className="mt-2 text-xs text-panel-gold">{error}</p>}
     </div>
   );
 }
@@ -1161,6 +1353,17 @@ function ReviewStep({
   selectedModNames: string[];
 }) {
   const { t } = useI18n();
+  const preview = useMutation({
+    mutationFn: () => previewTerrariaConfig(config)
+  });
+  const previewVisible = Boolean(preview.data);
+  const togglePreview = () => {
+    if (previewVisible) {
+      preview.reset();
+      return;
+    }
+    preview.mutate();
+  };
   const invitePreview = createReviewInvitePreview({
     gameKey,
     gameName,
@@ -1180,6 +1383,34 @@ function ReviewStep({
           {t("resourceLimits")}: <span className="text-slate-200">{formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}</span>
         </p>
         {version && <p className="mt-2 text-sm text-slate-400">{t("gameVersion")}: <span className="text-slate-200">{version}</span></p>}
+        {gameKey === "terraria" && (
+          <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2 font-medium text-slate-100">
+                  <FileText aria-hidden="true" className="size-4 text-panel-green" />
+                  serverconfig.txt
+                </div>
+                <p className="mt-2 text-slate-400">{t("configPreviewHint")}</p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded={previewVisible}
+                onClick={togglePreview}
+                disabled={preview.isPending}
+              >
+                {preview.isPending ? t("rendering") : previewVisible ? t("hidePreview") : t("previewServerConfig")}
+              </Button>
+            </div>
+            {preview.isError && <p className="mt-3 text-sm text-red-200">{preview.error.message}</p>}
+            {previewVisible && (
+              <pre className="mt-3 max-h-64 overflow-auto rounded-md border border-panel-line bg-slate-950 p-4 text-xs leading-6 text-slate-300">
+                {preview.data}
+              </pre>
+            )}
+          </div>
+        )}
         <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
           <div className="flex items-center gap-2 font-medium text-slate-100">
             <Globe aria-hidden="true" className="size-4 text-panel-green" />

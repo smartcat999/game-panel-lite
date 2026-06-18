@@ -19,6 +19,10 @@ func (a *countingAdapter) Check(context.Context) DockerStatus {
 	atomic.AddInt32(&a.checks, 1)
 	return a.status
 }
+func (a *countingAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: ImageStatusReady}
+}
+func (a *countingAdapter) PrepareImage(context.Context, string) error { return nil }
 func (a *countingAdapter) Create(context.Context, ContainerSpec) (string, error) {
 	return "", nil
 }

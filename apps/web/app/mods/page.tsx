@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Check, Clock3, Compass, Download, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
@@ -34,6 +35,7 @@ export default function ModsPage() {
   const [pendingPackDelete, setPendingPackDelete] = useState<ModPack | null>(null);
   const [activeView, setActiveView] = useState<ModsView>("discover");
   const [gameFilter, setGameFilter] = useState<ModGameFilter>("all");
+  const [search, setSearch] = useState("");
   const [workshopDialogOpen, setWorkshopDialogOpen] = useState(false);
   const [packDialogOpen, setPackDialogOpen] = useState(false);
   const [packName, setPackName] = useState("");
@@ -142,6 +144,24 @@ export default function ModsPage() {
   const filteredGlobalMods = filterModResources(globalMods, gameFilter);
   const filteredModPacks = filterModResources(modPacks, gameFilter);
   const filteredRecommendedMods = filterModResources(recommendedMods, gameFilter);
+  const searchTerm = search.trim().toLowerCase();
+  const searchedGlobalMods = useMemo(
+    () => filteredGlobalMods.filter((mod) => modMatchesSearch(mod, searchTerm)),
+    [filteredGlobalMods, searchTerm]
+  );
+  const searchedModPacks = useMemo(
+    () => filteredModPacks.filter((pack) => !searchTerm || [pack.name, pack.description ?? "", ...pack.mods.map((mod) => modDisplayName(mod, locale))].some((value) => value.toLowerCase().includes(searchTerm))),
+    [filteredModPacks, locale, searchTerm]
+  );
+  const searchedRecommendedMods = useMemo(
+    () => filteredRecommendedMods.filter((mod) => modMatchesSearch(mod, searchTerm)),
+    [filteredRecommendedMods, searchTerm]
+  );
+  const activeViewCount = activeView === "discover" ? searchedRecommendedMods.length : activeView === "library" ? searchedGlobalMods.length : searchedModPacks.length;
+  const activeFilterChips = [
+    search.trim(),
+    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : ""
+  ].filter(Boolean);
   const selectedPackModCount = selectedPackModIds.length;
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
@@ -164,10 +184,7 @@ export default function ModsPage() {
 
   return (
     <>
-      <PageHeader
-        title={t("modsTitle")}
-        description={t("modsDescription")}
-      />
+      <PageHeader title={t("modsTitle")} />
       <input
         ref={globalInputRef}
         className="hidden"
@@ -185,30 +202,41 @@ export default function ModsPage() {
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
 
-      <Card className="mb-4 p-3">
-        <div className="flex flex-wrap gap-3">
-          <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
-        </div>
-      </Card>
+      <ResourceFilterBar
+        activeChips={activeFilterChips}
+        clearLabel={t("clearFilters")}
+        density="compact"
+        filters={[
+          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) }
+        ]}
+        onClear={() => {
+          setGameFilter("all");
+          setSearch("");
+        }}
+        onSearchChange={setSearch}
+        resultLabel={t("filteredResultsCount", { count: activeViewCount })}
+        search={search}
+        searchPlaceholder={t("searchMods")}
+      />
 
       <div className="mt-6 flex flex-wrap gap-2 border-b border-panel-line pb-3">
         <ViewTab
           active={activeView === "discover"}
-          count={filteredRecommendedMods.length}
+          count={searchedRecommendedMods.length}
           icon={<Compass aria-hidden="true" />}
           label={t("discoverMods")}
           onClick={() => setActiveView("discover")}
         />
         <ViewTab
           active={activeView === "library"}
-          count={filteredGlobalMods.length}
+          count={searchedGlobalMods.length}
           icon={<Library aria-hidden="true" />}
           label={t("modLibrary")}
           onClick={() => setActiveView("library")}
         />
         <ViewTab
           active={activeView === "packs"}
-          count={filteredModPacks.length}
+          count={searchedModPacks.length}
           icon={<Package aria-hidden="true" />}
           label={t("modPacks")}
           onClick={() => setActiveView("packs")}
@@ -220,7 +248,7 @@ export default function ModsPage() {
           <SectionToolbar
             title={t("discoverMods")}
             hint={t("discoverModsHint")}
-            count={filteredRecommendedMods.length}
+            count={searchedRecommendedMods.length}
             actions={(
               <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                 <Download aria-hidden="true" />
@@ -229,7 +257,7 @@ export default function ModsPage() {
             )}
           />
           <div className="mt-4 grid gap-3 2xl:grid-cols-2">
-            {filteredRecommendedMods.map((item) => (
+            {searchedRecommendedMods.map((item) => (
               <RecommendedModCard
                 key={item.workshopId}
                 item={item}
@@ -248,7 +276,7 @@ export default function ModsPage() {
           <SectionToolbar
             title={t("modLibrary")}
             hint={t("modLibraryHint")}
-            count={filteredGlobalMods.length}
+            count={searchedGlobalMods.length}
             actions={(
               <>
                 <Button variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
@@ -263,7 +291,7 @@ export default function ModsPage() {
             )}
           />
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {filteredGlobalMods.map((item) => (
+            {searchedGlobalMods.map((item) => (
               <Card key={item.id} className="p-4 transition hover:border-panel-green/25">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} locale={locale} />
@@ -277,7 +305,7 @@ export default function ModsPage() {
                 </div>
               </Card>
             ))}
-            {!globalModsQuery.isLoading && filteredGlobalMods.length === 0 && (
+            {!globalModsQuery.isLoading && searchedGlobalMods.length === 0 && (
               <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
@@ -292,7 +320,7 @@ export default function ModsPage() {
           <SectionToolbar
             title={t("modPacks")}
             hint={t("modPacksHint")}
-            count={filteredModPacks.length}
+            count={searchedModPacks.length}
             actions={(
               <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
                 <Package aria-hidden="true" />
@@ -301,7 +329,7 @@ export default function ModsPage() {
             )}
           />
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {filteredModPacks.map((pack) => (
+            {searchedModPacks.map((pack) => (
               <Card key={pack.id} className="p-4 transition hover:border-panel-green/25">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -325,7 +353,7 @@ export default function ModsPage() {
                 </div>
               </Card>
             ))}
-            {!modPacksQuery.isLoading && filteredModPacks.length === 0 && (
+            {!modPacksQuery.isLoading && searchedModPacks.length === 0 && (
               <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
@@ -758,35 +786,35 @@ function sanitizeWorkshopDescription(value: string) {
     .trim();
 }
 
-function FilterGroup<T extends string>({
-  label,
-  onChange,
-  options,
-  t,
-  value
-}: {
-  label: string;
-  onChange: (value: T) => void;
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
-  t: (key: MessageKey) => string;
-  value: T;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <div className="flex rounded-md border border-panel-line bg-slate-950/50 p-0.5">
-        {options.map((item) => (
-          <Button
-            key={item.key}
-            type="button"
-            variant="ghost"
-            className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
-            onClick={() => onChange(item.key)}
-          >
-            {item.labelKey ? t(item.labelKey) : item.label}
-          </Button>
-        ))}
-      </div>
-    </div>
-  );
+function modMatchesSearch(
+  item: {
+    dependencies?: string[];
+    description?: string;
+    fileName?: string;
+    modName?: string;
+    tags?: string[];
+    title?: string;
+    workshopId?: string;
+  },
+  term: string
+) {
+  if (!term) return true;
+  return [
+    item.title,
+    item.modName,
+    item.fileName,
+    item.workshopId,
+    item.description,
+    ...(item.tags ?? []),
+    ...(item.dependencies ?? [])
+  ].some((value) => value && value.toLowerCase().includes(term));
+}
+
+function filterOptionLabel<T extends string>(
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
+  value: T,
+  t: (key: MessageKey) => string
+) {
+  const option = options.find((item) => item.key === value);
+  return option?.labelKey ? t(option.labelKey) : option?.label ?? value;
 }
