@@ -604,13 +604,17 @@ Implemented:
 - Server and backup type filters now treat "vanilla/modded" as Terraria-specific, avoiding Palworld, DST, or Minecraft being accidentally grouped under Terraria vanilla.
 - Backend world and backup list/create responses now include JSON-only game/provider metadata derived from the owning server/provider, so filters do not depend on frontend guessing.
 - Activity page now supports a game filter based on the game catalog and the current server mapping.
+- Mod resources now expose JSON-only `gameKey` and `providerKey` metadata for global mods, recommended mods, server mods, and mod packs.
+- The mod list page now builds game filters from mod-capable catalog providers plus existing resource metadata, so non-mod games no longer appear as misleading empty filters while future mod-capable games can opt in through provider capabilities.
+- Mod pack responses derive their game/provider metadata from the contained mods, keeping mod pack filters aligned with library resources.
 
 Verification:
 - `git diff --check` passed.
 - `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./apps/api/internal/http -run TestResourceListsIncludeGameMetadata -count=1` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./apps/api/internal/http -run 'TestRecommendedModsMarksExistingLibraryItems|TestGlobalModUploadHydratesKnownDependencies|TestModPackCreateListAndDelete' -count=1` passed.
 - `GOCACHE=/private/tmp/game-panel-lite-go-cache go test ./...` passed.
 - `GOCACHE=/private/tmp/game-panel-lite-go-cache go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
-- `pnpm --filter @gamepanel-lite/web test -- game-filters.test.ts server-filters.test.ts` could not start because the local optional Rollup native package `@rollup/rollup-darwin-arm64` is missing from `node_modules`; this matches the existing known local test limitation.
+- `pnpm --filter @gamepanel-lite/web test -- game-filters.test.ts mod-filters.test.ts` could not start because the local optional Rollup native package `@rollup/rollup-darwin-arm64` is missing from `node_modules`; this matches the existing known local test limitation.

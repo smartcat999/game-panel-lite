@@ -2137,11 +2137,13 @@ func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
 		t.Fatalf("expected recommended mods 200, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 	var items []struct {
-		WorkshopID   string   `json:"workshopId"`
-		ModName      string   `json:"modName"`
-		Dependencies []string `json:"dependencies"`
-		InLibrary    bool     `json:"inLibrary"`
-		ModID        string   `json:"modId"`
+		WorkshopID   string             `json:"workshopId"`
+		GameKey      domain.GameKey     `json:"gameKey"`
+		ProviderKey  domain.ProviderKey `json:"providerKey"`
+		ModName      string             `json:"modName"`
+		Dependencies []string           `json:"dependencies"`
+		InLibrary    bool               `json:"inLibrary"`
+		ModID        string             `json:"modId"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
 		t.Fatal(err)
@@ -2152,6 +2154,9 @@ func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
 			found = true
 			if item.ModName != "MagicStorage" || !reflect.DeepEqual(item.Dependencies, []string{"SerousCommonLib"}) {
 				t.Fatalf("expected Magic Storage dependency metadata, got %+v", item)
+			}
+			if item.GameKey != domain.GameTerraria || item.ProviderKey != domain.ProviderTerrariaTModLoader {
+				t.Fatalf("expected recommended mod game metadata, got %+v", item)
 			}
 			if !item.InLibrary || item.ModID != "existing-workshop" {
 				t.Fatalf("expected recommended workshop mod marked as in library, got %+v", item)
@@ -2542,6 +2547,9 @@ func TestGlobalModUploadHydratesKnownDependencies(t *testing.T) {
 	if len(mods) != 1 || !reflect.DeepEqual(mods[0].Dependencies, []string{"SilkyUIFramework"}) {
 		t.Fatalf("expected listed ImproveGame dependency metadata, got %+v", mods)
 	}
+	if mods[0].GameKey != domain.GameTerraria || mods[0].ProviderKey != domain.ProviderTerrariaTModLoader {
+		t.Fatalf("expected listed mod game metadata, got %+v", mods[0])
+	}
 }
 
 func TestModPackCreateListAndDelete(t *testing.T) {
@@ -2569,11 +2577,13 @@ func TestModPackCreateListAndDelete(t *testing.T) {
 		t.Fatalf("expected mod pack create 201, got %d: %s", create.Code, create.Body.String())
 	}
 	var created struct {
-		ID          string           `json:"id"`
-		Name        string           `json:"name"`
-		Description string           `json:"description"`
-		ModIDs      []string         `json:"modIds"`
-		Mods        []domain.ModFile `json:"mods"`
+		ID          string             `json:"id"`
+		Name        string             `json:"name"`
+		Description string             `json:"description"`
+		GameKey     domain.GameKey     `json:"gameKey"`
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		ModIDs      []string           `json:"modIds"`
+		Mods        []domain.ModFile   `json:"mods"`
 	}
 	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
@@ -2587,6 +2597,9 @@ func TestModPackCreateListAndDelete(t *testing.T) {
 	if len(created.Mods) != 2 {
 		t.Fatalf("expected resolved mods in response, got %+v", created.Mods)
 	}
+	if created.GameKey != domain.GameTerraria || created.ProviderKey != domain.ProviderTerrariaTModLoader {
+		t.Fatalf("expected created mod pack game metadata, got %+v", created)
+	}
 
 	list := httptest.NewRecorder()
 	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/mod-packs", nil))
@@ -2594,15 +2607,20 @@ func TestModPackCreateListAndDelete(t *testing.T) {
 		t.Fatalf("expected mod pack list 200, got %d: %s", list.Code, list.Body.String())
 	}
 	var packs []struct {
-		ID     string           `json:"id"`
-		ModIDs []string         `json:"modIds"`
-		Mods   []domain.ModFile `json:"mods"`
+		ID          string             `json:"id"`
+		GameKey     domain.GameKey     `json:"gameKey"`
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		ModIDs      []string           `json:"modIds"`
+		Mods        []domain.ModFile   `json:"mods"`
 	}
 	if err := json.Unmarshal(list.Body.Bytes(), &packs); err != nil {
 		t.Fatal(err)
 	}
 	if len(packs) != 1 || packs[0].ID != created.ID || len(packs[0].Mods) != 2 {
 		t.Fatalf("expected listed mod pack with resolved mods, got %+v", packs)
+	}
+	if packs[0].GameKey != domain.GameTerraria || packs[0].ProviderKey != domain.ProviderTerrariaTModLoader {
+		t.Fatalf("expected listed mod pack game metadata, got %+v", packs[0])
 	}
 
 	remove := httptest.NewRecorder()

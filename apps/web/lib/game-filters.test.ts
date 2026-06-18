@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameFilterOptions, gameKeyFromProvider } from "./game-filters";
+import { gameFilterOptions, gameFilterOptionsForKeys, gameKeyFromProvider } from "./game-filters";
 import type { GameCatalogEntry } from "./types";
 
 const games: GameCatalogEntry[] = [
@@ -37,5 +37,9 @@ describe("game filter options", () => {
   it("maps known providers to their game key", () => {
     expect(gameKeyFromProvider("terraria-tmodloader")).toBe("terraria");
     expect(gameKeyFromProvider("dont-starve-together")).toBe("dont-starve-together");
+  });
+
+  it("can build options only for explicit resource games", () => {
+    expect(gameFilterOptionsForKeys(games, "All", ["terraria", "minecraft", "terraria"]).map((item) => item.key)).toEqual(["all", "minecraft", "terraria"]);
   });
 });

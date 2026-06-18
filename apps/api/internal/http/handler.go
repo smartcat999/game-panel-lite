@@ -424,8 +424,10 @@ func (h *Handler) listGlobalMods(w http.ResponseWriter, r *http.Request) {
 
 type recommendedModResponse struct {
 	modcatalog.RecommendedMod
-	InLibrary bool   `json:"inLibrary"`
-	ModID     string `json:"modId,omitempty"`
+	GameKey     domain.GameKey     `json:"gameKey"`
+	ProviderKey domain.ProviderKey `json:"providerKey"`
+	InLibrary   bool               `json:"inLibrary"`
+	ModID       string             `json:"modId,omitempty"`
 }
 
 func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
@@ -447,7 +449,11 @@ func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
 	}
 	response := make([]recommendedModResponse, 0, len(items))
 	for _, item := range items {
-		entry := recommendedModResponse{RecommendedMod: item}
+		entry := recommendedModResponse{
+			RecommendedMod: item,
+			GameKey:        domain.GameTerraria,
+			ProviderKey:    domain.ProviderTerrariaTModLoader,
+		}
 		if mod, ok := byWorkshopID[item.WorkshopID]; ok {
 			entry.InLibrary = true
 			entry.ModID = mod.ID
@@ -850,6 +856,7 @@ func applyRecommendedModMetadata(item *domain.ModFile, workshopID string) {
 }
 
 func hydrateModMetadata(item *domain.ModFile) {
+	hydrateModGameMetadata(item)
 	if item.TagsJSON != "" {
 		_ = json.Unmarshal([]byte(item.TagsJSON), &item.Tags)
 	}
@@ -864,6 +871,15 @@ func hydrateModMetadata(item *domain.ModFile) {
 	}
 	if len(item.Dependencies) == 0 {
 		item.Dependencies = modDependencies(*item)
+	}
+}
+
+func hydrateModGameMetadata(item *domain.ModFile) {
+	if item.GameKey == "" {
+		item.GameKey = domain.GameTerraria
+	}
+	if item.ProviderKey == "" {
+		item.ProviderKey = domain.ProviderTerrariaTModLoader
 	}
 }
 
@@ -1016,6 +1032,8 @@ func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServe
 		return visible, nil
 	}
 	for index := range visible {
+		visible[index].GameKey = server.GameKey
+		visible[index].ProviderKey = server.ProviderKey
 		present := runtimeModPresent(server, visible[index])
 		visible[index].RuntimePresent = &present
 		if runtimeEnabled == nil {
@@ -1141,13 +1159,15 @@ func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
 }
 
 type modPackResponse struct {
-	ID          string           `json:"id"`
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	ModIDs      []string         `json:"modIds"`
-	Mods        []domain.ModFile `json:"mods"`
-	CreatedAt   time.Time        `json:"createdAt"`
-	UpdatedAt   time.Time        `json:"updatedAt"`
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	GameKey     domain.GameKey     `json:"gameKey,omitempty"`
+	ProviderKey domain.ProviderKey `json:"providerKey,omitempty"`
+	ModIDs      []string           `json:"modIds"`
+	Mods        []domain.ModFile   `json:"mods"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	UpdatedAt   time.Time          `json:"updatedAt"`
 }
 
 func (h *Handler) listModPacks(w http.ResponseWriter, r *http.Request) {
@@ -1296,15 +1316,35 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 		hydrateModMetadata(&item)
 		mods = append(mods, item)
 	}
+	gameKey, providerKey := modPackGameMetadata(mods)
 	return modPackResponse{
 		ID:          pack.ID,
 		Name:        pack.Name,
 		Description: pack.Description,
+		GameKey:     gameKey,
+		ProviderKey: providerKey,
 		ModIDs:      modIDs,
 		Mods:        mods,
 		CreatedAt:   pack.CreatedAt,
 		UpdatedAt:   pack.UpdatedAt,
 	}, nil
+}
+
+func modPackGameMetadata(mods []domain.ModFile) (domain.GameKey, domain.ProviderKey) {
+	if len(mods) == 0 {
+		return "", ""
+	}
+	gameKey := mods[0].GameKey
+	providerKey := mods[0].ProviderKey
+	for _, item := range mods[1:] {
+		if item.GameKey != gameKey {
+			gameKey = ""
+		}
+		if item.ProviderKey != providerKey {
+			providerKey = ""
+		}
+	}
+	return gameKey, providerKey
 }
 
 func decodeModPackIDs(value string) ([]string, error) {

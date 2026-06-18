@@ -194,6 +194,8 @@ function toBackup(backup: ApiBackup): Backup {
 type ApiModFile = {
   id: string;
   instanceId: string;
+  gameKey?: string;
+  providerKey?: string;
   fileName: string;
   source?: string;
   workshopId?: string;
@@ -220,6 +222,8 @@ type ApiModFile = {
 type ApiRecommendedMod = {
   rank: number;
   workshopId: string;
+  gameKey?: string;
+  providerKey?: string;
   modName?: string;
   title: string;
   creatorSteamId?: string;
@@ -241,6 +245,8 @@ type ApiModPack = {
   id: string;
   name: string;
   description: string;
+  gameKey?: string;
+  providerKey?: string;
   modIds: string[];
   mods: ApiModFile[];
   createdAt: string;
@@ -704,6 +710,8 @@ function toModFile(file: ApiModFile): ModFile {
   return {
     id: file.id,
     instanceId: file.instanceId,
+    gameKey: file.gameKey,
+    providerKey: file.providerKey,
     fileName: file.fileName,
     source: file.source,
     workshopId: file.workshopId,
@@ -733,6 +741,8 @@ function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
   return {
     rank: mod.rank,
     workshopId: mod.workshopId,
+    gameKey: mod.gameKey,
+    providerKey: mod.providerKey,
     modName: mod.modName,
     title: mod.title,
     creatorSteamId: mod.creatorSteamId,
@@ -757,6 +767,8 @@ function toModPack(pack: ApiModPack): ModPack {
     id: pack.id,
     name: pack.name,
     description: pack.description,
+    gameKey: pack.gameKey,
+    providerKey: pack.providerKey,
     modIds: pack.modIds,
     mods: pack.mods.map(toModFile),
     created: formatRelative(pack.createdAt)

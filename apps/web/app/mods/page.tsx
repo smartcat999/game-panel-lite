@@ -9,9 +9,10 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
-import { gameFilterOptions } from "@/lib/game-filters";
+import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
+import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack, RecommendedMod } from "@/lib/types";
 
@@ -136,10 +137,11 @@ export default function ModsPage() {
   const globalMods = globalModsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const recommendedMods = recommendedModsQuery.data ?? [];
-  const gameFilters = gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), ["terraria"]);
-  const filteredGlobalMods = gameFilter === "all" || gameFilter === "terraria" ? globalMods : [];
-  const filteredModPacks = gameFilter === "all" || gameFilter === "terraria" ? modPacks : [];
-  const filteredRecommendedMods = gameFilter === "all" || gameFilter === "terraria" ? recommendedMods : [];
+  const modGameKeys = modGameFilterKeys(gamesQuery.data ?? [], [...globalMods, ...modPacks, ...recommendedMods]);
+  const gameFilters = gameFilterOptionsForKeys(gamesQuery.data ?? [], t("filterAll"), modGameKeys);
+  const filteredGlobalMods = filterModResources(globalMods, gameFilter);
+  const filteredModPacks = filterModResources(modPacks, gameFilter);
+  const filteredRecommendedMods = filterModResources(recommendedMods, gameFilter);
   const selectedPackModCount = selectedPackModIds.length;
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);

@@ -173,6 +173,8 @@ export type Backup = {
 export type ModFile = {
   id: string;
   instanceId: string;
+  gameKey?: GameKey;
+  providerKey?: ProviderKey;
   fileName: string;
   source?: "upload" | "workshop" | string;
   workshopId?: string;
@@ -200,6 +202,8 @@ export type ModFile = {
 export type RecommendedMod = {
   rank: number;
   workshopId: string;
+  gameKey?: GameKey;
+  providerKey?: ProviderKey;
   modName?: string;
   title: string;
   creatorSteamId?: string;
@@ -222,6 +226,8 @@ export type ModPack = {
   id: string;
   name: string;
   description: string;
+  gameKey?: GameKey;
+  providerKey?: ProviderKey;
   modIds: string[];
   mods: ModFile[];
   created: string;
