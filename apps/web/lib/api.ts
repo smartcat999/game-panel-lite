@@ -150,6 +150,7 @@ type ApiServer = {
 type ApiWorld = {
   id: string;
   instanceId: string;
+  gameKey?: string;
   providerKey?: ProviderKey;
   name: string;
   fileName: string;
@@ -164,6 +165,7 @@ type ApiWorld = {
 type ApiBackup = {
   id: string;
   instanceId: string;
+  gameKey?: string;
   fileName: string;
   worldName: string;
   sizeBytes: number;
@@ -175,6 +177,7 @@ function toBackup(backup: ApiBackup): Backup {
   return {
     id: backup.id,
     instanceId: backup.instanceId,
+    gameKey: backup.gameKey,
     name: backup.fileName,
     server: backup.instanceId,
     world: backup.worldName,
@@ -329,6 +332,7 @@ function toWorld(world: ApiWorld): World {
     id: world.id,
     instanceId: world.instanceId,
     activeInstanceId: world.activeInstanceId,
+    gameKey: world.gameKey,
     providerKey: world.providerKey,
     name: world.name,
     size: world.fileName,

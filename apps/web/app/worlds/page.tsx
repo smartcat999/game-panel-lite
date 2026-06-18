@@ -7,8 +7,9 @@ import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
-import { deleteWorld, downloadWorldFile, listServers, listWorlds } from "@/lib/api";
+import { deleteWorld, downloadWorldFile, listGames, listServers, listWorlds } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
+import { gameFilterOptions, gameKeyFromProvider } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
 import { getWorldSourceServerId } from "@/lib/server-detail-resources";
@@ -20,13 +21,8 @@ type PendingWorldAction =
   | { kind: "download"; world: World }
   | { kind: "delete"; world: World };
 
-type WorldGameFilter = "all" | "terraria";
+type WorldGameFilter = "all" | string;
 type WorldTypeFilter = "all" | "vanilla" | "modded";
-
-const gameFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "terraria", labelKey: "gameTerraria" }
-] as const satisfies readonly { key: WorldGameFilter; labelKey: MessageKey }[];
 
 const typeFilters = [
   { key: "all", labelKey: "filterAll" },
@@ -42,7 +38,7 @@ function worldModeLabel(world: World, vanillaLabel: string) {
 function worldMatchesType(world: World, type: WorldTypeFilter) {
   if (type === "all") return true;
   if (type === "modded") return world.providerKey === "terraria-tmodloader";
-  return world.providerKey !== "terraria-tmodloader";
+  return world.providerKey === "terraria-vanilla";
 }
 
 function serversUsingWorld(world: World, servers: Server[]) {
@@ -54,6 +50,7 @@ export default function WorldsPage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingWorldAction | null>(null);
@@ -64,12 +61,17 @@ export default function WorldsPage() {
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
+  const gameFilters = useMemo(
+    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.gameKey ?? gameKeyFromProvider(world.providerKey))),
+    [gamesQuery.data, t, worlds]
+  );
   const filteredWorlds = useMemo(() => {
     const term = search.trim().toLowerCase();
     return worlds.filter((world) => {
       const usingServers = serversUsingWorld(world, servers);
       const matchesSearch = !term || [world.name, world.size, worldModeLabel(world, "vanilla"), ...usingServers.map((server) => server.name)].some((value) => value.toLowerCase().includes(term));
-      const matchesGame = gameFilter === "all" || world.providerKey === "terraria-vanilla" || world.providerKey === "terraria-tmodloader";
+      const worldGame = world.gameKey ?? gameKeyFromProvider(world.providerKey);
+      const matchesGame = gameFilter === "all" || worldGame === gameFilter;
       return matchesSearch && matchesGame && worldMatchesType(world, typeFilter);
     });
   }, [gameFilter, search, servers, typeFilter, worlds]);
@@ -280,7 +282,7 @@ function FilterGroup<T extends string>({
 }: {
   label: string;
   onChange: (value: T) => void;
-  options: readonly { key: T; labelKey: MessageKey }[];
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
   t: (key: MessageKey, params?: Record<string, string | number>) => string;
   value: T;
 }) {
@@ -295,7 +297,7 @@ function FilterGroup<T extends string>({
             className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
             onClick={() => onChange(item.key)}
           >
-            {t(item.labelKey)}
+            {item.labelKey ? t(item.labelKey) : item.label}
           </Button>
         ))}
       </div>

@@ -137,6 +137,7 @@ export type World = {
   id: string;
   instanceId?: string;
   activeInstanceId?: string;
+  gameKey?: GameKey;
   providerKey?: ProviderKey;
   name: string;
   size: string;
@@ -152,6 +153,7 @@ export type Backup = {
   id: string;
   name: string;
   instanceId?: string;
+  gameKey?: GameKey;
   server: string;
   world: string;
   type: "Auto" | "Manual";

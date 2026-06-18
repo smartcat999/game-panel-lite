@@ -527,8 +527,10 @@ Result:
 
 ## Next Work
 
-The post-V1 roadmap Goals 1-10 are implemented and Goal 13 has a complete first slice. Recommended next work:
-- Goal 14 first additional game beyond the initial set, starting with Valheim unless product priority changes.
+The post-V1 roadmap Goals 1-13 have implementation slices. Product direction has paused adding more game providers until the existing multi-game surfaces are complete enough for current Palworld, DST, and Minecraft support.
+
+Recommended next work:
+- Continue closing existing multi-game feature gaps across list/detail/resource pages before adding another provider.
 - Manual Docker host verification for Palworld, DST, and Minecraft runtime images.
 - Curate and pin version lists per game.
 
@@ -571,3 +573,20 @@ Verification:
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
+
+## Goal 10 / Multi-Game List Filtering Progress
+
+Status: in progress.
+
+Implemented:
+- Server list game filters now come from the game catalog instead of a hardcoded Terraria-only list.
+- World, backup, and mod list game filters now use the game catalog plus resource data, so current and future supported games appear in the filter bar without per-page rewrites.
+- Server and backup type filters now treat "vanilla/modded" as Terraria-specific, avoiding Palworld, DST, or Minecraft being accidentally grouped under Terraria vanilla.
+- Frontend resource types can now carry optional `gameKey` for worlds and backups when the backend starts returning it; current data still falls back through provider/server mappings.
+
+Verification:
+- `git diff --check` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
+- `pnpm --filter @gamepanel-lite/web test -- game-filters.test.ts server-filters.test.ts` could not start because the local optional Rollup native package `@rollup/rollup-darwin-arm64` is missing from `node_modules`; this matches the existing known local test limitation.

@@ -5,6 +5,8 @@ import type { Server } from "./types";
 const baseServer: Server = {
   id: "server-1",
   name: "Friends",
+  gameKey: "terraria",
+  providerKey: "terraria-vanilla",
   mode: "vanilla",
   status: "stopped",
   world: "Classic World",
@@ -42,11 +44,24 @@ const servers: Server[] = [
     ...baseServer,
     id: "server-2",
     name: "Mods",
+    providerKey: "terraria-tmodloader",
     mode: "tmodloader",
     status: "running",
     world: "Modded World",
     port: 7788,
     hostPort: 7788
+  },
+  {
+    ...baseServer,
+    id: "server-3",
+    name: "Pal Friends",
+    gameKey: "palworld",
+    providerKey: "palworld",
+    mode: "vanilla",
+    status: "running",
+    world: "Pal Save",
+    port: 8211,
+    hostPort: 18211
   }
 ];
 
@@ -60,8 +75,10 @@ const defaultFilters: ServerFilters = {
 describe("server filters", () => {
   it("combines game, status, type, and search filters", () => {
     expect(filterServers(servers, { ...defaultFilters, game: "terraria" }).map((server) => server.id)).toEqual(["server-1", "server-2"]);
-    expect(filterServers(servers, { ...defaultFilters, status: "running" }).map((server) => server.id)).toEqual(["server-2"]);
+    expect(filterServers(servers, { ...defaultFilters, game: "palworld" }).map((server) => server.id)).toEqual(["server-3"]);
+    expect(filterServers(servers, { ...defaultFilters, status: "running" }).map((server) => server.id)).toEqual(["server-2", "server-3"]);
     expect(filterServers(servers, { ...defaultFilters, type: "modded" }).map((server) => server.id)).toEqual(["server-2"]);
     expect(filterServers(servers, { ...defaultFilters, query: "7777", type: "vanilla" }).map((server) => server.id)).toEqual(["server-1"]);
+    expect(filterServers(servers, { ...defaultFilters, type: "vanilla" }).map((server) => server.id)).toEqual(["server-1"]);
   });
 });

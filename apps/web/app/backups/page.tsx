@@ -7,21 +7,17 @@ import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
-import { deleteBackup, downloadBackupFile, listBackups, listServers } from "@/lib/api";
+import { deleteBackup, downloadBackupFile, listBackups, listGames, listServers } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
+import { gameFilterOptions } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { Backup, Server } from "@/lib/types";
 
 type BackupServerFilter = "all" | string;
 type BackupTypeFilter = "all" | Backup["type"];
-type BackupGameFilter = "all" | "terraria";
+type BackupGameFilter = "all" | string;
 type BackupServerTypeFilter = "all" | Server["mode"];
-
-const backupGameFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "terraria", labelKey: "gameTerraria" }
-] as const satisfies readonly { key: BackupGameFilter; labelKey: MessageKey }[];
 
 const backupTypeFilters = [
   { key: "all", labelKey: "filterAll" },
@@ -40,6 +36,7 @@ export default function BackupsPage() {
   const client = useQueryClient();
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState<BackupGameFilter>("all");
   const [serverFilter, setServerFilter] = useState<BackupServerFilter>("all");
@@ -53,15 +50,20 @@ export default function BackupsPage() {
   const backups = backupsQuery.data ?? [];
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
   const serverById = useMemo(() => new Map(servers.map((server) => [server.id, server])), [servers]);
+  const backupGameFilters = useMemo(
+    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), backups.map((backup) => backup.gameKey ?? serverById.get(backup.instanceId ?? "")?.gameKey)),
+    [backups, gamesQuery.data, serverById, t]
+  );
   const filteredBackups = useMemo(() => {
     const term = search.trim().toLowerCase();
     return backups.filter((backup) => {
       const server = backup.instanceId ? serverById.get(backup.instanceId) : undefined;
       const serverName = backup.instanceId ? serverNameById.get(backup.instanceId) ?? backup.instanceId : backup.server;
       const matchesSearch = !term || [backup.name, backup.world, backup.type, serverName].some((value) => value.toLowerCase().includes(term));
-      const matchesGame = gameFilter === "all" || server?.mode === "vanilla" || server?.mode === "tmodloader";
+      const backupGame = backup.gameKey ?? server?.gameKey;
+      const matchesGame = gameFilter === "all" || backupGame === gameFilter;
       const matchesServer = serverFilter === "all" || backup.instanceId === serverFilter;
-      const matchesServerType = serverTypeFilter === "all" || server?.mode === serverTypeFilter;
+      const matchesServerType = serverTypeFilter === "all" || (backupGame === "terraria" && server?.mode === serverTypeFilter);
       const matchesBackupType = backupTypeFilter === "all" || backup.type === backupTypeFilter;
       return matchesSearch && matchesGame && matchesServer && matchesServerType && matchesBackupType;
     }).sort(sortBackupsNewestFirst);
@@ -240,7 +242,7 @@ function FilterGroup<T extends string>({
 }: {
   label: string;
   onChange: (value: T) => void;
-  options: readonly { key: T; labelKey: MessageKey }[];
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
   t: (key: MessageKey) => string;
   value: T;
 }) {
@@ -256,7 +258,7 @@ function FilterGroup<T extends string>({
             className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
             onClick={() => onChange(item.key)}
           >
-            {t(item.labelKey)}
+            {item.labelKey ? t(item.labelKey) : item.label}
           </Button>
         ))}
       </div>

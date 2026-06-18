@@ -5,17 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { ServerCard } from "@/components/server-card";
 import { Button, Input } from "@/components/ui";
-import { listBackups, listServers } from "@/lib/api";
+import { listBackups, listGames, listServers } from "@/lib/api";
+import { gameFilterOptions } from "@/lib/game-filters";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
 import { filterServers, type ServerGameFilter, type ServerStatusFilter, type ServerTypeFilter } from "@/lib/server-filters";
 import { attachLatestBackupTimes } from "@/lib/server-metrics";
 import { cn } from "@/lib/utils";
-
-const gameFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "terraria", labelKey: "gameTerraria" }
-] as const satisfies readonly { key: ServerGameFilter; labelKey: MessageKey }[];
 
 const statusFilters = [
   { key: "all", labelKey: "filterAll" },
@@ -32,12 +28,17 @@ const typeFilters = [
 export default function ServersPage() {
   const query = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const { t } = useI18n();
   const [gameFilter, setGameFilter] = useState<ServerGameFilter>("all");
   const [statusFilter, setStatusFilter] = useState<ServerStatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<ServerTypeFilter>("all");
   const [search, setSearch] = useState("");
   const servers = useMemo(() => attachLatestBackupTimes(query.data ?? [], backupsQuery.data ?? []), [backupsQuery.data, query.data]);
+  const gameFilters = useMemo(
+    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), servers.map((server) => server.gameKey)),
+    [gamesQuery.data, servers, t]
+  );
   useEffect(() => {
     setSearch(new URLSearchParams(window.location.search).get("search") ?? "");
   }, []);
@@ -78,7 +79,7 @@ function FilterGroup<T extends string>({
 }: {
   label: string;
   onChange: (value: T) => void;
-  options: readonly { key: T; labelKey: MessageKey }[];
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
   t: (key: MessageKey) => string;
   value: T;
 }) {
@@ -93,7 +94,7 @@ function FilterGroup<T extends string>({
             className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
             onClick={() => onChange(item.key)}
           >
-            {t(item.labelKey)}
+            {item.labelKey ? t(item.labelKey) : item.label}
           </Button>
         ))}
       </div>

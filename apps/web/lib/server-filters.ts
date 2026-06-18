@@ -1,7 +1,8 @@
 import { serverJoinPort } from "./server-join";
+import { gameKeyFromProvider } from "./game-filters";
 import type { Server } from "./types";
 
-export type ServerGameFilter = "all" | "terraria";
+export type ServerGameFilter = "all" | string;
 export type ServerStatusFilter = "all" | "running" | "stopped";
 export type ServerTypeFilter = "all" | "vanilla" | "modded";
 
@@ -13,7 +14,7 @@ export type ServerFilters = {
 };
 
 export function serverGame(server: Server): ServerGameFilter {
-  return server.mode === "vanilla" || server.mode === "tmodloader" ? "terraria" : "all";
+  return server.gameKey ?? gameKeyFromProvider(server.providerKey) ?? "all";
 }
 
 export function filterServers(servers: Server[], filters: ServerFilters) {
@@ -22,10 +23,11 @@ export function filterServers(servers: Server[], filters: ServerFilters) {
     const matchesSearch = !term || [server.name, server.world, String(serverJoinPort(server)), String(server.port), server.mode].some((value) => value.toLowerCase().includes(term));
     const matchesGame = filters.game === "all" || serverGame(server) === filters.game;
     const matchesStatus = filters.status === "all" || server.status === filters.status;
+    const isTerraria = serverGame(server) === "terraria";
     const matchesType =
       filters.type === "all" ||
-      (filters.type === "vanilla" && server.mode === "vanilla") ||
-      (filters.type === "modded" && server.mode === "tmodloader");
+      (isTerraria && filters.type === "vanilla" && server.providerKey === "terraria-vanilla") ||
+      (isTerraria && filters.type === "modded" && server.providerKey === "terraria-tmodloader");
     return matchesSearch && matchesGame && matchesStatus && matchesType;
   });
 }

@@ -8,24 +8,20 @@ import { useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
+import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
+import { gameFilterOptions } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack, RecommendedMod } from "@/lib/types";
 
 type ModsView = "discover" | "library" | "packs";
-type ModGameFilter = "all" | "terraria";
+type ModGameFilter = "all" | string;
 type DependencyImportPlan = {
   primaryIds: string[];
   dependencyIds: string[];
   dependencyNames: string[];
 };
-
-const gameFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "terraria", labelKey: "gameTerraria" }
-] as const satisfies readonly { key: ModGameFilter; labelKey: MessageKey }[];
 
 export default function ModsPage() {
   const { locale, t } = useI18n();
@@ -47,6 +43,7 @@ export default function ModsPage() {
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const recommendedModsQuery = useQuery({ queryKey: ["recommended-mods"], queryFn: listRecommendedMods, retry: false });
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
 
@@ -139,6 +136,7 @@ export default function ModsPage() {
   const globalMods = globalModsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const recommendedMods = recommendedModsQuery.data ?? [];
+  const gameFilters = gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), ["terraria"]);
   const filteredGlobalMods = gameFilter === "all" || gameFilter === "terraria" ? globalMods : [];
   const filteredModPacks = gameFilter === "all" || gameFilter === "terraria" ? modPacks : [];
   const filteredRecommendedMods = gameFilter === "all" || gameFilter === "terraria" ? recommendedMods : [];
@@ -767,7 +765,7 @@ function FilterGroup<T extends string>({
 }: {
   label: string;
   onChange: (value: T) => void;
-  options: readonly { key: T; labelKey: MessageKey }[];
+  options: readonly { key: T; labelKey?: MessageKey; label?: string }[];
   t: (key: MessageKey) => string;
   value: T;
 }) {
@@ -783,7 +781,7 @@ function FilterGroup<T extends string>({
             className={cn("h-8 px-2.5 py-1 text-xs hover:bg-slate-800", value === item.key && "bg-panel-green/10 text-panel-green hover:bg-panel-green/15")}
             onClick={() => onChange(item.key)}
           >
-            {t(item.labelKey)}
+            {item.labelKey ? t(item.labelKey) : item.label}
           </Button>
         ))}
       </div>
