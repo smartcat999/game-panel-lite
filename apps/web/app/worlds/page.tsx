@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Download, FileArchive, Server as ServerIcon, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
@@ -12,6 +12,7 @@ import { saveBlob } from "@/lib/download";
 import { gameFilterOptions, gameKeyFromProvider } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
+import { providerFilterOptions } from "@/lib/provider-filters";
 import { getWorldSourceServerId } from "@/lib/server-detail-resources";
 import { cn } from "@/lib/utils";
 import type { Server } from "@/lib/types";
@@ -22,23 +23,11 @@ type PendingWorldAction =
   | { kind: "delete"; world: World };
 
 type WorldGameFilter = "all" | string;
-type WorldTypeFilter = "all" | "vanilla" | "modded";
-
-const typeFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "vanilla", labelKey: "filterVanilla" },
-  { key: "modded", labelKey: "filterModded" }
-] as const satisfies readonly { key: WorldTypeFilter; labelKey: MessageKey }[];
+type WorldProviderFilter = "all" | string;
 
 function worldModeLabel(world: World, vanillaLabel: string) {
   if (world.providerKey === "terraria-tmodloader") return "tModLoader";
   return vanillaLabel;
-}
-
-function worldMatchesType(world: World, type: WorldTypeFilter) {
-  if (type === "all") return true;
-  if (type === "modded") return world.providerKey === "terraria-tmodloader";
-  return world.providerKey === "terraria-vanilla";
 }
 
 function serversUsingWorld(world: World, servers: Server[]) {
@@ -56,7 +45,7 @@ export default function WorldsPage() {
   const [pendingAction, setPendingAction] = useState<PendingWorldAction | null>(null);
   const [downloadingWorldId, setDownloadingWorldId] = useState("");
   const [gameFilter, setGameFilter] = useState<WorldGameFilter>("all");
-  const [typeFilter, setTypeFilter] = useState<WorldTypeFilter>("all");
+  const [providerFilter, setProviderFilter] = useState<WorldProviderFilter>("all");
   const [search, setSearch] = useState("");
   const worlds = query.data ?? [];
   const servers = serversQuery.data ?? [];
@@ -65,6 +54,15 @@ export default function WorldsPage() {
     () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.gameKey ?? gameKeyFromProvider(world.providerKey))),
     [gamesQuery.data, t, worlds]
   );
+  const providerFilters = useMemo(
+    () => providerFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.providerKey), gameFilter),
+    [gameFilter, gamesQuery.data, t, worlds]
+  );
+  useEffect(() => {
+    if (providerFilter !== "all" && !providerFilters.some((option) => option.key === providerFilter)) {
+      setProviderFilter("all");
+    }
+  }, [providerFilter, providerFilters]);
   const filteredWorlds = useMemo(() => {
     const term = search.trim().toLowerCase();
     return worlds.filter((world) => {
@@ -72,9 +70,10 @@ export default function WorldsPage() {
       const matchesSearch = !term || [world.name, world.size, worldModeLabel(world, "vanilla"), ...usingServers.map((server) => server.name)].some((value) => value.toLowerCase().includes(term));
       const worldGame = world.gameKey ?? gameKeyFromProvider(world.providerKey);
       const matchesGame = gameFilter === "all" || worldGame === gameFilter;
-      return matchesSearch && matchesGame && worldMatchesType(world, typeFilter);
+      const matchesProvider = providerFilter === "all" || world.providerKey === providerFilter;
+      return matchesSearch && matchesGame && matchesProvider;
     });
-  }, [gameFilter, search, servers, typeFilter, worlds]);
+  }, [gameFilter, providerFilter, search, servers, worlds]);
   const remove = useMutation({
     mutationFn: deleteWorld,
     onSuccess: async () => {
@@ -134,7 +133,7 @@ export default function WorldsPage() {
           <Input className="xl:max-w-xs" placeholder={t("searchWorlds")} value={search} onChange={(event) => setSearch(event.target.value)} />
           <div className="flex flex-wrap gap-3">
             <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
-            <FilterGroup label={t("filterType")} options={typeFilters} value={typeFilter} onChange={setTypeFilter} t={t} />
+            <FilterGroup label={t("filterType")} options={providerFilters} value={providerFilter} onChange={setProviderFilter} t={t} />
           </div>
         </div>
       </div>

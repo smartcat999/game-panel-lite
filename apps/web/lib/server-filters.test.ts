@@ -67,18 +67,19 @@ const servers: Server[] = [
 
 const defaultFilters: ServerFilters = {
   game: "all",
+  provider: "all",
   query: "",
-  status: "all",
-  type: "all"
+  status: "all"
 };
 
 describe("server filters", () => {
-  it("combines game, status, type, and search filters", () => {
+  it("combines game, status, provider, and search filters", () => {
     expect(filterServers(servers, { ...defaultFilters, game: "terraria" }).map((server) => server.id)).toEqual(["server-1", "server-2"]);
     expect(filterServers(servers, { ...defaultFilters, game: "palworld" }).map((server) => server.id)).toEqual(["server-3"]);
     expect(filterServers(servers, { ...defaultFilters, status: "running" }).map((server) => server.id)).toEqual(["server-2", "server-3"]);
-    expect(filterServers(servers, { ...defaultFilters, type: "modded" }).map((server) => server.id)).toEqual(["server-2"]);
-    expect(filterServers(servers, { ...defaultFilters, query: "7777", type: "vanilla" }).map((server) => server.id)).toEqual(["server-1"]);
-    expect(filterServers(servers, { ...defaultFilters, type: "vanilla" }).map((server) => server.id)).toEqual(["server-1"]);
+    expect(filterServers(servers, { ...defaultFilters, provider: "terraria-tmodloader" }).map((server) => server.id)).toEqual(["server-2"]);
+    expect(filterServers(servers, { ...defaultFilters, query: "7777", provider: "terraria-vanilla" }).map((server) => server.id)).toEqual(["server-1"]);
+    expect(filterServers(servers, { ...defaultFilters, provider: "palworld" }).map((server) => server.id)).toEqual(["server-3"]);
+    expect(filterServers(servers, { ...defaultFilters, query: "Palworld" }).map((server) => server.id)).toEqual(["server-3"]);
   });
 });

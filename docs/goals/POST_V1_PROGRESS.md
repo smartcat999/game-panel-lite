@@ -57,6 +57,25 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
 - `pnpm --filter @gamepanel-lite/web test -- mod-filters.test.ts server-detail-resources.test.ts`: blocked before running tests because local optional Rollup package `@rollup/rollup-darwin-arm64` is missing.
 
+## Current Slice: Multi-Game Server Display
+
+Status: Completed
+
+Completed:
+- Added shared server display helpers for provider badges and game-specific resource nouns.
+- Added shared provider filter helpers so list pages can expose game-specific provider filters.
+- Server cards now show provider labels such as Palworld, Minecraft Java, and Don't Starve Together instead of labeling every non-tModLoader server as Vanilla.
+- Server cards and global search results now use game-specific resource nouns: world, save, and cluster save.
+- Global server search also matches provider labels and resource nouns.
+- Server card artwork badges are provider-aware instead of tModLoader-only.
+- Server, world, and backup list pages now use dynamic provider filters instead of hardcoded Terraria-only Vanilla/Modded filters.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC optional-package fallback warnings and ESLint plugin warning.
+- `pnpm --filter @gamepanel-lite/web test -- server-display.test.ts provider-filters.test.ts server-filters.test.ts`: blocked before running tests because local optional Rollup package `@rollup/rollup-darwin-arm64` is missing.
+
 ## Completed Goals
 
 ### Goal 1: Local Admin Account and Login

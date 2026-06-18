@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
 import { getApiHealth, getAuthBootstrap, listServers, logoutAdmin } from "@/lib/api";
+import { serverProviderDisplay, serverResourceLabelKey } from "@/lib/server-display";
 import { serverJoinPort } from "@/lib/server-join";
 
 const nav = [
@@ -60,9 +61,14 @@ function AppChrome({ children }: { children: ReactNode }) {
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];
     return (serversQuery.data ?? [])
-      .filter((server) => [server.name, server.world, String(serverJoinPort(server)), String(server.port), server.mode].some((value) => value.toLowerCase().includes(searchTerm)))
+      .filter((server) => {
+        const provider = serverProviderDisplay(server);
+        const resourceLabel = t(serverResourceLabelKey(server));
+        return [server.name, server.world, String(serverJoinPort(server)), String(server.port), server.mode, provider.label, resourceLabel]
+          .some((value) => value.toLowerCase().includes(searchTerm));
+      })
       .slice(0, 5);
-  }, [searchTerm, serversQuery.data]);
+  }, [searchTerm, serversQuery.data, t]);
 
   useEffect(() => {
     setCreatePending(false);
@@ -183,18 +189,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                   ) : (
                     <div className="py-1">
                       {searchResults.map((server) => (
-                        <button
-                          key={server.id}
-                          type="button"
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-slate-800/80"
-                          onClick={() => openServer(server.id)}
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium text-white">{server.name}</span>
-                            <span className="block truncate text-xs text-slate-500">{server.world} · {serverJoinPort(server)}</span>
-                          </span>
-                          <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{server.mode === "tmodloader" ? "tModLoader" : t("modeVanilla")}</span>
-                        </button>
+                        <SearchServerResult key={server.id} server={server} onOpen={openServer} />
                       ))}
                     </div>
                   )}
@@ -323,5 +318,24 @@ function AppChrome({ children }: { children: ReactNode }) {
         </nav>
       </div>
     </div>
+  );
+}
+
+function SearchServerResult({ server, onOpen }: { server: Awaited<ReturnType<typeof listServers>>[number]; onOpen: (id: string) => void }) {
+  const { t } = useI18n();
+  const provider = serverProviderDisplay(server);
+  const resourceLabel = t(serverResourceLabelKey(server));
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-slate-800/80"
+      onClick={() => onOpen(server.id)}
+    >
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium text-white">{server.name}</span>
+        <span className="block truncate text-xs text-slate-500">{resourceLabel}: {server.world} · {serverJoinPort(server)}</span>
+      </span>
+      <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{provider.label}</span>
+    </button>
   );
 }

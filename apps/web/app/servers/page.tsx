@@ -9,7 +9,8 @@ import { listBackups, listGames, listServers } from "@/lib/api";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
-import { filterServers, type ServerGameFilter, type ServerStatusFilter, type ServerTypeFilter } from "@/lib/server-filters";
+import { providerFilterOptions } from "@/lib/provider-filters";
+import { filterServers, type ServerGameFilter, type ServerProviderFilter, type ServerStatusFilter } from "@/lib/server-filters";
 import { attachLatestBackupTimes } from "@/lib/server-metrics";
 import { cn } from "@/lib/utils";
 
@@ -19,12 +20,6 @@ const statusFilters = [
   { key: "stopped", labelKey: "filterStopped" }
 ] as const satisfies readonly { key: ServerStatusFilter; labelKey: MessageKey }[];
 
-const typeFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "vanilla", labelKey: "filterVanilla" },
-  { key: "modded", labelKey: "filterModded" }
-] as const satisfies readonly { key: ServerTypeFilter; labelKey: MessageKey }[];
-
 export default function ServersPage() {
   const query = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
@@ -32,19 +27,28 @@ export default function ServersPage() {
   const { t } = useI18n();
   const [gameFilter, setGameFilter] = useState<ServerGameFilter>("all");
   const [statusFilter, setStatusFilter] = useState<ServerStatusFilter>("all");
-  const [typeFilter, setTypeFilter] = useState<ServerTypeFilter>("all");
+  const [providerFilter, setProviderFilter] = useState<ServerProviderFilter>("all");
   const [search, setSearch] = useState("");
   const servers = useMemo(() => attachLatestBackupTimes(query.data ?? [], backupsQuery.data ?? []), [backupsQuery.data, query.data]);
   const gameFilters = useMemo(
     () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), servers.map((server) => server.gameKey)),
     [gamesQuery.data, servers, t]
   );
+  const providerFilters = useMemo(
+    () => providerFilterOptions(gamesQuery.data ?? [], t("filterAll"), servers.map((server) => server.providerKey), gameFilter),
+    [gameFilter, gamesQuery.data, servers, t]
+  );
+  useEffect(() => {
+    if (providerFilter !== "all" && !providerFilters.some((option) => option.key === providerFilter)) {
+      setProviderFilter("all");
+    }
+  }, [providerFilter, providerFilters]);
   useEffect(() => {
     setSearch(new URLSearchParams(window.location.search).get("search") ?? "");
   }, []);
   const filteredServers = useMemo(() => {
-    return filterServers(servers, { game: gameFilter, query: search, status: statusFilter, type: typeFilter });
-  }, [gameFilter, search, servers, statusFilter, typeFilter]);
+    return filterServers(servers, { game: gameFilter, provider: providerFilter, query: search, status: statusFilter });
+  }, [gameFilter, providerFilter, search, servers, statusFilter]);
   return (
     <>
       <PageHeader
@@ -57,7 +61,7 @@ export default function ServersPage() {
           <div className="flex flex-wrap gap-3">
             <FilterGroup label={t("filterGame")} options={gameFilters} value={gameFilter} onChange={setGameFilter} t={t} />
             <FilterGroup label={t("filterStatus")} options={statusFilters} value={statusFilter} onChange={setStatusFilter} t={t} />
-            <FilterGroup label={t("filterType")} options={typeFilters} value={typeFilter} onChange={setTypeFilter} t={t} />
+            <FilterGroup label={t("filterType")} options={providerFilters} value={providerFilter} onChange={setProviderFilter} t={t} />
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Clock, Download, Search, Trash2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
@@ -11,25 +11,20 @@ import { deleteBackup, downloadBackupFile, listBackups, listGames, listServers }
 import { saveBlob } from "@/lib/download";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
+import { providerFilterOptions } from "@/lib/provider-filters";
 import { cn } from "@/lib/utils";
-import type { Backup, Server } from "@/lib/types";
+import type { Backup } from "@/lib/types";
 
 type BackupServerFilter = "all" | string;
 type BackupTypeFilter = "all" | Backup["type"];
 type BackupGameFilter = "all" | string;
-type BackupServerTypeFilter = "all" | Server["mode"];
+type BackupProviderFilter = "all" | string;
 
 const backupTypeFilters = [
   { key: "all", labelKey: "filterAll" },
   { key: "Manual", labelKey: "typeManual" },
   { key: "Auto", labelKey: "typeAuto" }
 ] as const satisfies readonly { key: BackupTypeFilter; labelKey: MessageKey }[];
-
-const backupServerTypeFilters = [
-  { key: "all", labelKey: "filterAll" },
-  { key: "vanilla", labelKey: "filterVanilla" },
-  { key: "tmodloader", labelKey: "filterModded" }
-] as const satisfies readonly { key: BackupServerTypeFilter; labelKey: MessageKey }[];
 
 export default function BackupsPage() {
   const { locale, t } = useI18n();
@@ -40,7 +35,7 @@ export default function BackupsPage() {
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState<BackupGameFilter>("all");
   const [serverFilter, setServerFilter] = useState<BackupServerFilter>("all");
-  const [serverTypeFilter, setServerTypeFilter] = useState<BackupServerTypeFilter>("all");
+  const [providerFilter, setProviderFilter] = useState<BackupProviderFilter>("all");
   const [backupTypeFilter, setBackupTypeFilter] = useState<BackupTypeFilter>("all");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -54,6 +49,15 @@ export default function BackupsPage() {
     () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), backups.map((backup) => backup.gameKey ?? serverById.get(backup.instanceId ?? "")?.gameKey)),
     [backups, gamesQuery.data, serverById, t]
   );
+  const providerFilters = useMemo(
+    () => providerFilterOptions(gamesQuery.data ?? [], t("filterAll"), servers.map((server) => server.providerKey), gameFilter),
+    [gameFilter, gamesQuery.data, servers, t]
+  );
+  useEffect(() => {
+    if (providerFilter !== "all" && !providerFilters.some((option) => option.key === providerFilter)) {
+      setProviderFilter("all");
+    }
+  }, [providerFilter, providerFilters]);
   const filteredBackups = useMemo(() => {
     const term = search.trim().toLowerCase();
     return backups.filter((backup) => {
@@ -63,11 +67,11 @@ export default function BackupsPage() {
       const backupGame = backup.gameKey ?? server?.gameKey;
       const matchesGame = gameFilter === "all" || backupGame === gameFilter;
       const matchesServer = serverFilter === "all" || backup.instanceId === serverFilter;
-      const matchesServerType = serverTypeFilter === "all" || (backupGame === "terraria" && server?.mode === serverTypeFilter);
+      const matchesProvider = providerFilter === "all" || server?.providerKey === providerFilter;
       const matchesBackupType = backupTypeFilter === "all" || backup.type === backupTypeFilter;
-      return matchesSearch && matchesGame && matchesServer && matchesServerType && matchesBackupType;
+      return matchesSearch && matchesGame && matchesServer && matchesProvider && matchesBackupType;
     }).sort(sortBackupsNewestFirst);
-  }, [backupTypeFilter, backups, gameFilter, search, serverById, serverFilter, serverNameById, serverTypeFilter]);
+  }, [backupTypeFilter, backups, gameFilter, providerFilter, search, serverById, serverFilter, serverNameById]);
 
   const remove = useMutation({
     mutationFn: deleteBackup,
@@ -125,7 +129,7 @@ export default function BackupsPage() {
                 {servers.map((server) => <option key={server.id} value={server.id}>{server.name}</option>)}
               </select>
             </label>
-            <FilterGroup label={t("serverType")} options={backupServerTypeFilters} value={serverTypeFilter} onChange={setServerTypeFilter} t={t} />
+            <FilterGroup label={t("serverType")} options={providerFilters} value={providerFilter} onChange={setProviderFilter} t={t} />
             <FilterGroup label={t("backupType")} options={backupTypeFilters} value={backupTypeFilter} onChange={setBackupTypeFilter} t={t} />
           </div>
         </div>

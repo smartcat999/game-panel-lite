@@ -2,7 +2,8 @@
 
 import { Badge } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
-import type { ServerMode, ServerStatus } from "@/lib/types";
+import { serverProviderDisplay } from "@/lib/server-display";
+import type { Server, ServerMode, ServerStatus } from "@/lib/types";
 
 export function ServerStatusBadge({ status }: { status: ServerStatus }) {
   const { t } = useI18n();
@@ -42,4 +43,19 @@ export function ServerModeBadge({ mode }: { mode: ServerMode }) {
   ) : (
     <Badge className="bg-panel-green/15 text-panel-green">{t("modeVanilla")}</Badge>
   );
+}
+
+export function ServerProviderBadge({ server }: { server: Pick<Server, "mode" | "providerKey"> }) {
+  const display = serverProviderDisplay(server);
+  const className =
+    display.tone === "purple"
+      ? "bg-panel-purple/20 text-panel-purple"
+      : display.tone === "sky"
+        ? "bg-sky-500/15 text-sky-300"
+        : display.tone === "amber"
+          ? "bg-panel-gold/15 text-panel-gold"
+          : display.tone === "slate"
+            ? "bg-slate-700 text-slate-300"
+            : "bg-panel-green/15 text-panel-green";
+  return <Badge className={className}>{display.label}</Badge>;
 }
