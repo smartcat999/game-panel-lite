@@ -439,20 +439,15 @@ export default function ServerDetailPage() {
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
   const modPacks = useMemo(() => modPacksQuery.data ?? [], [modPacksQuery.data]);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
-  const saveNoun = providerCatalog?.saveDisplayName ?? "";
-  const savesLabel = useMemo(() => {
-    const noun = saveNoun.charAt(0).toUpperCase() + saveNoun.slice(1);
-    return noun ? `${t("savesTabLabel")} (${noun})` : t("tabBackups");
-  }, [saveNoun, t]);
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
     { id: "overview", label: t("tabOverview") },
     ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
     { id: "logs", label: t("tabLogs") },
     { id: "config", label: t("tabConfig") },
     ...(capabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
-    ...(capabilities.backups ? [{ id: "backups" as const, label: savesLabel }] : []),
+    ...(capabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
     ...(capabilities.mods ? [{ id: "mods" as const, label: t("tabMods") }] : [])
-  ], [capabilities.backups, capabilities.consoleCommands, capabilities.mods, capabilities.saveSnapshots, savesLabel, t]);
+  ], [capabilities.backups, capabilities.consoleCommands, capabilities.mods, capabilities.saveSnapshots, t]);
   useEffect(() => {
     if (server && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
