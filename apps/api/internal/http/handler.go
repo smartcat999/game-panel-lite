@@ -78,6 +78,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/auth/setup", h.setupAdmin)
 	r.Post("/api/auth/login", h.login)
 	r.Post("/api/auth/logout", h.logout)
+	r.Get("/api/public/servers/{token}", h.getPublicServerShare)
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireAuth)
 		r.Get("/api/auth/me", h.currentAccount)
@@ -122,6 +123,9 @@ func (h *Handler) Register(r chi.Router) {
 		r.Post("/api/servers/{id}/players/{player}/kick", h.kickServerPlayer)
 		r.Post("/api/servers/{id}/players/{player}/ban", h.banServerPlayer)
 		r.Get("/api/servers/{id}/join-info", h.getServerJoinInfo)
+		r.Get("/api/servers/{id}/share", h.getServerShare)
+		r.Post("/api/servers/{id}/share", h.enableServerShare)
+		r.Delete("/api/servers/{id}/share", h.disableServerShare)
 		r.Get("/api/servers/{id}/mods", h.listMods)
 		r.Post("/api/servers/{id}/mods/upload", h.uploadMod)
 		r.Post("/api/servers/{id}/mods/workshop", h.importWorkshopMods)
@@ -2279,6 +2283,150 @@ func (h *Handler) getServerJoinInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, server.JoinInfo)
 }
 
+type serverShareResponse struct {
+	Enabled         bool      `json:"enabled"`
+	Token           string    `json:"token,omitempty"`
+	SharePath       string    `json:"sharePath,omitempty"`
+	IncludePassword bool      `json:"includePassword"`
+	CreatedAt       time.Time `json:"createdAt,omitempty"`
+	UpdatedAt       time.Time `json:"updatedAt,omitempty"`
+}
+
+type publicServerShareResponse struct {
+	Name        string                `json:"name"`
+	GameKey     domain.GameKey        `json:"gameKey"`
+	ProviderKey domain.ProviderKey    `json:"providerKey"`
+	Status      domain.ServerStatus   `json:"status"`
+	Players     int                   `json:"players"`
+	MaxPlayers  int                   `json:"maxPlayers"`
+	JoinInfo    domain.ServerJoinInfo `json:"joinInfo"`
+}
+
+func (h *Handler) getServerShare(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	share, err := h.store.GetServerShareByInstance(r.Context(), server.ID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeJSON(w, http.StatusOK, serverShareResponse{Enabled: false})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, shareResponse(share))
+}
+
+func (h *Handler) enableServerShare(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	var payload struct {
+		IncludePassword bool `json:"includePassword"`
+	}
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+	}
+	now := time.Now()
+	share, err := h.store.GetServerShareByInstance(r.Context(), server.ID)
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		share = domain.ServerShare{
+			Token:      strings.ReplaceAll(uuid.NewString(), "-", ""),
+			InstanceID: server.ID,
+			CreatedAt:  now,
+		}
+	}
+	share.IncludePassword = payload.IncludePassword
+	share.UpdatedAt = now
+	if err := h.store.SaveServerShare(r.Context(), &share); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "server.share.enabled", fmt.Sprintf("Enabled share page for %s", server.Name))
+	writeJSON(w, http.StatusOK, shareResponse(share))
+}
+
+func (h *Handler) disableServerShare(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if err := h.store.DeleteServerShareByInstance(r.Context(), server.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "server.share.disabled", fmt.Sprintf("Disabled share page for %s", server.Name))
+	writeJSON(w, http.StatusOK, serverShareResponse{Enabled: false})
+}
+
+func (h *Handler) getPublicServerShare(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(chi.URLParam(r, "token"))
+	if token == "" {
+		writeError(w, http.StatusNotFound, "share page not found")
+		return
+	}
+	share, err := h.store.GetServerShareByToken(r.Context(), token)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "share page not found")
+		return
+	}
+	server, err := h.store.GetServer(r.Context(), share.InstanceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "share page not found")
+		return
+	}
+	server = h.refreshServerStatus(r.Context(), server)
+	h.attachServerJoinInfo(&server)
+	if !share.IncludePassword {
+		server.JoinInfo.Password = ""
+		server.JoinInfo.InviteText = stripInvitePassword(server.JoinInfo.InviteText)
+	}
+	writeJSON(w, http.StatusOK, publicServerShareResponse{
+		Name:        server.Name,
+		GameKey:     server.GameKey,
+		ProviderKey: server.ProviderKey,
+		Status:      server.Status,
+		Players:     server.PlayersOnline,
+		MaxPlayers:  server.MaxPlayers,
+		JoinInfo:    server.JoinInfo,
+	})
+}
+
+func shareResponse(share domain.ServerShare) serverShareResponse {
+	return serverShareResponse{
+		Enabled:         true,
+		Token:           share.Token,
+		SharePath:       "/share/" + share.Token,
+		IncludePassword: share.IncludePassword,
+		CreatedAt:       share.CreatedAt,
+		UpdatedAt:       share.UpdatedAt,
+	}
+}
+
+func stripInvitePassword(invite string) string {
+	if invite == "" {
+		return invite
+	}
+	index := strings.Index(strings.ToLower(invite), " password:")
+	if index < 0 {
+		return invite
+	}
+	return strings.TrimSpace(invite[:index])
+}
+
 func (h *Handler) listGames(w http.ResponseWriter, r *http.Request) {
 	games := h.provider.Games()
 	servers, err := h.store.ListServers(r.Context())
@@ -3092,6 +3240,10 @@ func (h *Handler) runDeleteServer(ctx context.Context, id string) {
 		}
 	}
 	if err := h.cleanupOwnedServerResources(ctx, server); err != nil {
+		h.markServerLifecycleFailed(ctx, server.ID, "server.delete.failed", err)
+		return
+	}
+	if err := h.store.DeleteServerShareByInstance(ctx, server.ID); err != nil {
 		h.markServerLifecycleFailed(ctx, server.ID, "server.delete.failed", err)
 		return
 	}

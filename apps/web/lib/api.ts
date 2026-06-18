@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, GameCatalogEntry, ModFile, ModPack, ProviderKey, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, World } from "./types";
+import type { ActivityEvent, Backup, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -909,6 +909,30 @@ export async function updatePublicHost(publicHost: string): Promise<{ publicHost
 export async function getServerJoinInfo(id: string): Promise<ServerJoinInfo> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/join-info`, { cache: "no-store" });
   return readPayload<ServerJoinInfo>(response, "Unable to load join info");
+}
+
+export async function getServerShare(id: string): Promise<ServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/share`, { cache: "no-store" });
+  return readPayload<ServerShare>(response, "Unable to load share settings");
+}
+
+export async function enableServerShare(id: string, includePassword: boolean): Promise<ServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ includePassword })
+  });
+  return readPayload<ServerShare>(response, "Unable to enable share page");
+}
+
+export async function disableServerShare(id: string): Promise<ServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/share`, { method: "DELETE" });
+  return readPayload<ServerShare>(response, "Unable to disable share page");
+}
+
+export async function getPublicServerShare(token: string): Promise<PublicServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/public/servers/${token}`, { cache: "no-store" });
+  return readPayload<PublicServerShare>(response, "Unable to load shared server");
 }
 
 export async function listServerSaves(id: string): Promise<SaveSnapshotListResponse> {

@@ -25,7 +25,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
@@ -218,6 +218,32 @@ func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
 func (s *Store) SetSetting(ctx context.Context, key string, value string) error {
 	setting := domain.Setting{Key: key, Value: value}
 	return s.db.WithContext(ctx).Save(&setting).Error
+}
+
+func (s *Store) SaveServerShare(ctx context.Context, share *domain.ServerShare) error {
+	return s.db.WithContext(ctx).Save(share).Error
+}
+
+func (s *Store) GetServerShareByInstance(ctx context.Context, instanceID string) (domain.ServerShare, error) {
+	var share domain.ServerShare
+	err := s.db.WithContext(ctx).First(&share, "instance_id = ?", instanceID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return share, ErrNotFound
+	}
+	return share, err
+}
+
+func (s *Store) GetServerShareByToken(ctx context.Context, token string) (domain.ServerShare, error) {
+	var share domain.ServerShare
+	err := s.db.WithContext(ctx).First(&share, "token = ?", token).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return share, ErrNotFound
+	}
+	return share, err
+}
+
+func (s *Store) DeleteServerShareByInstance(ctx context.Context, instanceID string) error {
+	return s.db.WithContext(ctx).Delete(&domain.ServerShare{}, "instance_id = ?", instanceID).Error
 }
 
 func (s *Store) CreateMod(ctx context.Context, mod *domain.ModFile) error {

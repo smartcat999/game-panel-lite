@@ -2,12 +2,21 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gamepad2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { getAuthBootstrap, loginAdmin, setupAdmin } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  if (pathname.startsWith("/share/")) {
+    return children;
+  }
+  return <ProtectedAuthGate>{children}</ProtectedAuthGate>;
+}
+
+function ProtectedAuthGate({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false });

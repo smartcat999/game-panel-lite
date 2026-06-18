@@ -24,6 +24,14 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  if (pathname.startsWith("/share/")) {
+    return <>{children}</>;
+  }
+  return <AppChrome>{children}</AppChrome>;
+}
+
+function AppChrome({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { locale, setLocale, t } = useI18n();
@@ -36,6 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
   const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
+
   const logoutMutation = useMutation({
     mutationFn: logoutAdmin,
     onSuccess: async () => {

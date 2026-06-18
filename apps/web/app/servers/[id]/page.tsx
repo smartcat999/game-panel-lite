@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
+import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds } from "@gamepanel-lite/shared";
@@ -17,14 +17,17 @@ import {
   createBackup,
   createWorldSnapshot,
   deleteBackup,
+  disableServerShare,
   deleteMod,
   deleteWorld,
   downloadBackupFile,
   downloadWorldFile,
+  enableServerShare,
   getDockerStatus,
   listGames,
   getServer,
   getServerLogSnapshot,
+  getServerShare,
   getServerStats,
   listBackups,
   listGlobalMods,
@@ -115,10 +118,12 @@ export default function ServerDetailPage() {
     retry: false
   });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && capabilities.mods), retry: false, refetchInterval: 5000 });
+  const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(server), retry: false });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
+  const [shareIncludePassword, setShareIncludePassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
@@ -231,6 +236,22 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["servers"] });
     },
     onError: (error) => showError(formatActionError(error, t("unableAction", { action: t("actionRestart") })))
+  });
+  const shareEnable = useMutation({
+    mutationFn: () => enableServerShare(id, shareIncludePassword),
+    onSuccess: async () => {
+      showSuccess(t("sharePageEnabled"));
+      await client.invalidateQueries({ queryKey: ["server-share", id] });
+    },
+    onError: (error) => showError(error instanceof Error ? error.message : t("sharePageUnavailable"))
+  });
+  const shareDisable = useMutation({
+    mutationFn: () => disableServerShare(id),
+    onSuccess: async () => {
+      showSuccess(t("sharePageDisabled"));
+      await client.invalidateQueries({ queryKey: ["server-share", id] });
+    },
+    onError: (error) => showError(error instanceof Error ? error.message : t("sharePageUnavailable"))
   });
   const worldDelete = useMutation({
     mutationFn: deleteWorld,
@@ -436,6 +457,11 @@ export default function ServerDetailPage() {
       setActiveTab("overview");
     }
   }, [activeTab, server, tabs]);
+  useEffect(() => {
+    if (shareQuery.data) {
+      setShareIncludePassword(shareQuery.data.includePassword);
+    }
+  }, [shareQuery.data]);
   if (!server) {
     return (
       <>
@@ -448,6 +474,9 @@ export default function ServerDetailPage() {
   const invite = serverInviteText(server);
   const joinAddress = serverJoinAddress(server);
   const joinPassword = serverJoinPassword(server);
+  const share = shareQuery.data;
+  const sharePath = share?.sharePath ?? "";
+  const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const copy = async (label: string, value: string) => {
     try {
@@ -653,6 +682,46 @@ export default function ServerDetailPage() {
               <Copy aria-hidden="true" />
               {copied === "Invite" ? t("copied") : t("copyInviteText")}
             </Button>
+          </Card>
+          <Card className="p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
+                <Share2 aria-hidden="true" className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-semibold">{t("shareServer")}</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t("shareServerDescription")}</p>
+              </div>
+            </div>
+            <label className="mt-4 flex items-center gap-2 rounded-md border border-panel-line bg-slate-950/35 px-3 py-2 text-sm text-slate-300">
+              <input
+                className="size-4 accent-panel-green"
+                type="checkbox"
+                checked={shareIncludePassword}
+                onChange={(event) => setShareIncludePassword(event.target.checked)}
+              />
+              {t("includePasswordInShare")}
+            </label>
+            <div className="mt-3 grid gap-2">
+              <Button className="w-full" variant={share?.enabled ? "secondary" : "primary"} onClick={() => shareEnable.mutate()} disabled={shareEnable.isPending || shareQuery.isLoading}>
+                {shareEnable.isPending ? t("saving") : share?.enabled ? t("saveButton") : t("enableSharePage")}
+              </Button>
+              {share?.enabled && shareUrl && (
+                <>
+                  <Button className="w-full" variant="secondary" onClick={() => void copy("ShareLink", shareUrl)}>
+                    <Copy aria-hidden="true" />
+                    {copied === "ShareLink" ? t("shareLinkCopied") : t("copyShareLink")}
+                  </Button>
+                  <Link className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-950/45 px-3 text-sm font-medium text-slate-200 transition hover:border-panel-green/40 hover:text-panel-green" href={sharePath} target="_blank">
+                    <ExternalLink aria-hidden="true" className="size-4" />
+                    {t("openSharePage")}
+                  </Link>
+                  <Button className="w-full" variant="danger" onClick={() => shareDisable.mutate()} disabled={shareDisable.isPending}>
+                    {shareDisable.isPending ? t("saving") : t("disableSharePage")}
+                  </Button>
+                </>
+              )}
+            </div>
           </Card>
           {capabilities.playerList && <PlayersPanel serverId={server.id} />}
           <ResourceLimitsCard

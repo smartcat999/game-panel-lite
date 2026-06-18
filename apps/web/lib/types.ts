@@ -71,6 +71,25 @@ export type ServerJoinInfo = {
   instructions?: string[];
 };
 
+export type ServerShare = {
+  enabled: boolean;
+  token?: string;
+  sharePath?: string;
+  includePassword: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type PublicServerShare = {
+  name: string;
+  gameKey: GameKey;
+  providerKey: ProviderKey;
+  status: ServerStatus;
+  players: number;
+  maxPlayers: number;
+  joinInfo: ServerJoinInfo;
+};
+
 export type Server = {
   id: string;
   name: string;

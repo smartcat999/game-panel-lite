@@ -454,6 +454,22 @@ Completed:
 - Frontend dashboard now renders a Game Library section with game cards, server counts, and create-server links.
 - Added HTTP test verifying server counts, cover image keys, and recommended version.
 
+## Goal 13 Progress (Shareable Server Page)
+
+Completed:
+- Added `ServerShare` domain model and migration support.
+- Added share-page APIs:
+  - `GET /api/servers/{id}/share`
+  - `POST /api/servers/{id}/share`
+  - `DELETE /api/servers/{id}/share`
+  - `GET /api/public/servers/{token}`
+- Public share responses expose only join-safe fields: server name, game/provider, status, player count, and join info.
+- Passwords are hidden on public pages unless the admin explicitly enables password visibility.
+- Server deletion now removes associated share records.
+- Added server-detail share controls for enabling/disabling share pages, copying share links, opening the public page, and choosing whether to include the password.
+- Added `/share/[token]` public frontend route that bypasses the admin login gate and app shell.
+- Added HTTP coverage for enable/status/public/hide-password/include-password/disable flows.
+
 ## Verification Log
 
 2026-06-18 Goals 6-10 full implementation:
@@ -475,6 +491,25 @@ Result:
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
 
+2026-06-18 Goal 13 shareable server page:
+
+```bash
+git diff --check
+go test ./...
+go vet ./...
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+```
+
+Result:
+- `git diff --check` passed.
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
 ## Known Limitations
 
 - Only one local administrator account is supported.
@@ -487,11 +522,14 @@ Result:
 - Non-Terraria create flow still uses a compatibility config envelope internally while the backend provider payload model is being phased in.
 - Don't Starve Together is wired through catalog/create/runtime spec generation, including caves and Workshop setup files. The runtime image has a build script, but still needs a real Docker host build/start verification before claiming full runtime support.
 - Player kick/ban and save snapshot restore require the server to be running/stopped respectively; the UI enforces these preconditions.
+- Share pages are read-only and token-based. They intentionally do not support lifecycle controls or admin-only server data.
 - Frontend unit tests (`pnpm test`) cannot run locally because optional native Rollup binaries are missing on this machine; backend and frontend type/lint/build checks all pass.
 
 ## Next Work
 
-The post-V1 roadmap (Goals 1-10) is fully implemented and verified. Recommended next work:
+The post-V1 roadmap Goals 1-10 are implemented and Goal 13 has a complete first slice. Recommended next work:
+- Goal 11 mobile-friendly controls for server list/detail and invite actions.
+- Goal 12 server templates for saving and reusing known-good setups.
+- Goal 14 first additional game beyond the initial set, starting with Valheim unless product priority changes.
 - Manual Docker host verification for Palworld, DST, and Minecraft runtime images.
 - Curate and pin version lists per game.
-- V1 UI polish and the deferred items (monitoring charts, backup retention, generic file manager).

@@ -131,6 +131,14 @@ type ServerJoinInfo struct {
 	Instructions []string `json:"instructions,omitempty"`
 }
 
+type ServerShare struct {
+	Token           string    `json:"token" gorm:"primaryKey"`
+	InstanceID      string    `json:"instanceId" gorm:"uniqueIndex"`
+	IncludePassword bool      `json:"includePassword"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
 type TerrariaConfig struct {
 	ServerName      string     `json:"serverName"`
 	WorldName       string     `json:"worldName"`
