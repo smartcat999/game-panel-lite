@@ -15,6 +15,7 @@ import { createConfigPreset, getGameVersions, listConfigPresets, listGames, list
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey, reviewResourceSummaryKey } from "@/lib/create-server-review";
+import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
 import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
@@ -94,8 +95,10 @@ export function CreateServerWizard() {
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = worldsQuery.data ?? [];
   const selectedWorld = allWorlds.find((w) => w.id === selectedWorldId);
-  const availableMods = modsQuery.data ?? [];
-  const modPacks = modPacksQuery.data ?? [];
+  const allMods = modsQuery.data ?? [];
+  const allModPacks = modPacksQuery.data ?? [];
+  const availableMods = filterModResources(allMods, selectedGameKey);
+  const modPacks = filterModResources(allModPacks, selectedGameKey);
   const configPresets = configPresetsQuery.data ?? [];
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
   const effectiveConfig = selectedGameKey === "terraria" ? config : providerPayloadToTerrariaConfig(providerKey, providerConfigPayload, config);
@@ -219,7 +222,7 @@ export function CreateServerWizard() {
     setSelectedWorldId("");
     setAppliedWorldConfigId("");
     setSelectedModPackId(preset.modPackId ?? "");
-    const pack = modPacks.find((item) => item.id === preset.modPackId);
+    const pack = allModPacks.find((item) => item.id === preset.modPackId);
     setSelectedModIds(pack?.modIds ?? []);
     setStep(preset.gameKey === "terraria" ? 3 : 2);
   };

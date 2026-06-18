@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { filterModResources, modGameFilterKeys, modResourceGame } from "./mod-filters";
-import type { GameCatalogEntry, ModFile } from "./types";
+import type { GameCatalogEntry, ModFile, ModPack } from "./types";
 
 const games: GameCatalogEntry[] = [
   {
@@ -94,6 +94,31 @@ describe("mod filters", () => {
     expect(filterModResources(mods, "terraria").map((item) => item.id)).toEqual(["mod-1"]);
     expect(filterModResources(mods, "future-game").map((item) => item.id)).toEqual(["mod-2"]);
     expect(filterModResources(mods, "all").map((item) => item.id)).toEqual(["mod-1", "mod-2"]);
+  });
+
+  it("infers a mod pack game from contained mods when pack metadata is missing", () => {
+    const packs: ModPack[] = [
+      {
+        id: "pack-1",
+        name: "Terraria Pack",
+        description: "",
+        modIds: ["mod-1"],
+        mods: [mods[0]!],
+        created: "just now"
+      },
+      {
+        id: "pack-2",
+        name: "Mixed Pack",
+        description: "",
+        modIds: ["mod-1", "mod-2"],
+        mods,
+        created: "just now"
+      }
+    ];
+
+    expect(modResourceGame(packs[0]!)).toBe("terraria");
+    expect(modResourceGame(packs[1]!)).toBeUndefined();
+    expect(filterModResources(packs, "terraria").map((pack) => pack.id)).toEqual(["pack-1"]);
   });
 
   it("includes games with mod capability plus games from existing resources", () => {

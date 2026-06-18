@@ -31,7 +31,10 @@ Status: Completed
 Completed:
 - Fixed server-detail resource compatibility helpers to prefer explicit `providerKey` and `gameKey` metadata instead of inferring every non-tModLoader server as Terraria Vanilla.
 - Updated mod detail lookup to scan servers by provider `mods` capability from the game catalog, with a legacy tModLoader fallback for older records.
+- Filtered create-server wizard mod and mod-pack candidates by the selected game so newly added games do not see unrelated Terraria resources.
+- Allowed legacy mod packs to infer their game from contained mods when the pack itself has no metadata.
 - Added frontend unit coverage for provider-first and game-key fallback world compatibility.
+- Added frontend unit coverage for mod-pack game inference.
 
 Checks:
 - `pnpm --filter @gamepanel-lite/web typecheck`: passed.
