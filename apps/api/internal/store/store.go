@@ -25,7 +25,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
@@ -129,6 +129,51 @@ func hydrateServerConfigPayload(server *domain.GameServerInstance) {
 	if err := json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload); err == nil {
 		server.ConfigPayload = payload
 	}
+}
+
+func hydratePresetConfigPayload(preset *domain.ConfigPreset) {
+	if preset == nil || preset.ConfigPayloadJSON == "" {
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(preset.ConfigPayloadJSON), &payload); err == nil {
+		preset.ConfigPayload = payload
+	}
+}
+
+func (s *Store) CreateConfigPreset(ctx context.Context, preset *domain.ConfigPreset) error {
+	return s.db.WithContext(ctx).Create(preset).Error
+}
+
+func (s *Store) ListConfigPresets(ctx context.Context) ([]domain.ConfigPreset, error) {
+	var presets []domain.ConfigPreset
+	if err := s.db.WithContext(ctx).Order("created_at desc").Find(&presets).Error; err != nil {
+		return nil, err
+	}
+	for index := range presets {
+		hydratePresetConfigPayload(&presets[index])
+	}
+	return presets, nil
+}
+
+func (s *Store) GetConfigPreset(ctx context.Context, id string) (domain.ConfigPreset, error) {
+	var preset domain.ConfigPreset
+	err := s.db.WithContext(ctx).First(&preset, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return preset, ErrNotFound
+	}
+	if err == nil {
+		hydratePresetConfigPayload(&preset)
+	}
+	return preset, err
+}
+
+func (s *Store) SaveConfigPreset(ctx context.Context, preset *domain.ConfigPreset) error {
+	return s.db.WithContext(ctx).Save(preset).Error
+}
+
+func (s *Store) DeleteConfigPreset(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.ConfigPreset{}, "id = ?", id).Error
 }
 
 func (s *Store) CreateWorld(ctx context.Context, world *domain.World) error {

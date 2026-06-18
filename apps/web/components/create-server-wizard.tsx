@@ -4,20 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
+import { Bookmark, Check, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { cn } from "@/lib/utils";
-import { getGameVersions, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
+import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
 import { createReviewInvitePreview } from "@/lib/create-server-review";
 import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
+import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
 
 const stepLabelKeys = {
   game: "stepGame",
@@ -76,6 +76,7 @@ export function CreateServerWizard() {
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
   const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
+  const configPresetsQuery = useQuery({ queryKey: ["config-presets"], queryFn: listConfigPresets, retry: false });
   const games = gamesQuery.data ?? [];
   const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games.find((game) => game.key === "terraria");
   const selectedProvider = selectedGame?.providers.find((provider) => provider.key === selectedProviderKey) ?? selectedGame?.providers.find((provider) => provider.recommended) ?? selectedGame?.providers[0];
@@ -94,6 +95,7 @@ export function CreateServerWizard() {
   const selectedWorld = allWorlds.find((w) => w.id === selectedWorldId);
   const availableMods = modsQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
+  const configPresets = configPresetsQuery.data ?? [];
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
   const effectiveConfig = selectedGameKey === "terraria" ? config : providerPayloadToTerrariaConfig(providerKey, providerConfigPayload, config);
   const fallbackStepId: StepId = "review";
@@ -123,6 +125,19 @@ export function CreateServerWizard() {
       await queryClient.invalidateQueries({ queryKey: ["server", server.id] });
       queryClient.setQueryData(["server", server.id], server);
       router.push(`/servers/${server.id}`);
+    }
+  });
+  const saveConfigPreset = useMutation({
+    mutationFn: (name: string) => createConfigPreset({
+      name,
+      providerKey,
+      config: selectedGameKey === "terraria" ? effectiveConfig : providerConfigPayload,
+      resources: resourceLimits,
+      version: selectedVersion,
+      modPackId: selectedModPackId || undefined
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["config-presets"] });
     }
   });
   const chooseMode = (nextMode: "vanilla" | "tmodloader") => {
@@ -187,6 +202,25 @@ export function CreateServerWizard() {
     setSelectedModPackId(packId);
     const pack = modPacks.find((item) => item.id === packId);
     setSelectedModIds(pack?.modIds ?? []);
+  };
+  const applyConfigPreset = (preset: ConfigPreset) => {
+    const game = games.find((item) => item.key === preset.gameKey);
+    const provider = game?.providers.find((item) => item.key === preset.providerKey);
+    if (!game || !provider) return;
+    setSelectedGameKey(game.key);
+    setSelectedProviderKey(provider.key);
+    setMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
+    setSelectedPreset("custom");
+    setConfig({ ...preset.config, password: "" });
+    setProviderConfigPayload(preset.configPayload ?? createDefaultProviderConfigPayload(provider));
+    setResourceLimits({ cpuLimitCores: preset.cpuLimitCores ?? 0, memoryLimitMb: preset.memoryLimitMb ?? 0 });
+    setVersion(preset.version ?? "");
+    setSelectedWorldId("");
+    setAppliedWorldConfigId("");
+    setSelectedModPackId(preset.modPackId ?? "");
+    const pack = modPacks.find((item) => item.id === preset.modPackId);
+    setSelectedModIds(pack?.modIds ?? []);
+    setStep(preset.gameKey === "terraria" ? 3 : 2);
   };
 
   useEffect(() => {
@@ -255,7 +289,16 @@ export function CreateServerWizard() {
             })}
           </div>
           <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
-            {currentStepId === "game" && <GameStep games={games} isLoading={gamesQuery.isLoading} selectedGameKey={selectedGameKey} onSelectGame={chooseGame} />}
+            {currentStepId === "game" && (
+              <GameStep
+                configPresets={configPresets}
+                games={games}
+                isLoading={gamesQuery.isLoading}
+                selectedGameKey={selectedGameKey}
+                onSelectConfigPreset={applyConfigPreset}
+                onSelectGame={chooseGame}
+              />
+            )}
             {currentStepId === "mode" && <ModeStep mode={mode} providers={selectedGame?.providers ?? []} selectedProviderKey={providerKey} setMode={chooseMode} onSelectProvider={chooseProvider} />}
             {currentStepId === "preset" && <PresetStep mode={mode} selectedPreset={selectedPreset} setPreset={choosePreset} />}
             {currentStepId === "config" && (
@@ -276,6 +319,10 @@ export function CreateServerWizard() {
                 versions={availableVersions}
                 version={selectedVersion}
                 setVersion={setVersion}
+                onSavePreset={(name) => saveConfigPreset.mutate(name)}
+                presetSaveError={saveConfigPreset.error instanceof Error ? saveConfigPreset.error.message : ""}
+                presetSavePending={saveConfigPreset.isPending}
+                presetSaveSuccess={saveConfigPreset.isSuccess}
               />
             )}
             {currentStepId === "mods" && (
@@ -329,23 +376,54 @@ export function CreateServerWizard() {
 }
 
 function GameStep({
+  configPresets,
   games,
   isLoading,
+  onSelectConfigPreset,
   selectedGameKey,
   onSelectGame
 }: {
+  configPresets: ConfigPreset[];
   games: GameCatalogEntry[];
   isLoading: boolean;
+  onSelectConfigPreset: (preset: ConfigPreset) => void;
   selectedGameKey: string;
   onSelectGame: (game: GameCatalogEntry) => void;
 }) {
   const { t } = useI18n();
   const orderedGames = games.length > 0 ? games : [{ key: "terraria", name: "Terraria", description: "", status: "available", providers: [] }];
   return (
-    <div>
-      <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
-      <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <div className="space-y-6">
+      {configPresets.length > 0 && (
+        <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
+              <Bookmark aria-hidden="true" className="size-4" />
+            </span>
+            <div>
+              <h2 className="text-lg font-semibold">{t("configurationPresets")}</h2>
+              <p className="mt-1 text-sm text-slate-400">{t("configurationPresetsDescription")}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {configPresets.slice(0, 4).map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="rounded-md border border-panel-line bg-slate-950/50 p-3 text-left transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                onClick={() => onSelectConfigPreset(preset)}
+              >
+                <p className="font-medium text-slate-100">{preset.name}</p>
+                <p className="mt-1 text-xs text-slate-500">{preset.gameKey} · {preset.providerKey}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div>
+        <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
+        <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
         {orderedGames.map((game) => {
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
@@ -389,6 +467,7 @@ function GameStep({
         })}
       </div>
       {isLoading && <p className="mt-3 text-sm text-slate-500">{t("loading")}</p>}
+    </div>
     </div>
   );
 }
@@ -550,8 +629,8 @@ function PresetStep({
           </button>
           );
         })}
+        </div>
       </div>
-    </div>
   );
 }
 
@@ -571,7 +650,11 @@ function ConfigStep({
   setResourceLimits,
   versions,
   version,
-  setVersion
+  setVersion,
+  onSavePreset,
+  presetSaveError,
+  presetSavePending,
+  presetSaveSuccess
 }: {
   config: TerrariaConfig;
   gameKey: string;
@@ -589,8 +672,13 @@ function ConfigStep({
   versions: string[];
   version: string;
   setVersion: (version: string) => void;
+  onSavePreset: (name: string) => void;
+  presetSaveError: string;
+  presetSavePending: boolean;
+  presetSaveSuccess: boolean;
 }) {
   const { t } = useI18n();
+  const [presetName, setPresetName] = useState(config.serverName ? `${config.serverName} ${t("configurationPreset")}` : "");
   const preview = useMutation({
     mutationFn: () => previewTerrariaConfig(config)
   });
@@ -602,11 +690,24 @@ function ConfigStep({
     onCustomize();
     setResourceLimits(limits);
   };
+  const submitPreset = () => {
+    const name = presetName.trim();
+    if (!name) return;
+    onSavePreset(name);
+  };
   const secretSeed = secretSeedKeyFor(config.seed);
   if (gameKey !== "terraria") {
     return (
       <div>
         <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
+        <PresetSavePanel
+          error={presetSaveError}
+          name={presetName}
+          pending={presetSavePending}
+          success={presetSaveSuccess}
+          onChangeName={setPresetName}
+          onSave={submitPreset}
+        />
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {(provider?.configSchema ?? []).map((field) => {
             const value = providerConfigPayload[field.name];
@@ -682,6 +783,14 @@ function ConfigStep({
   return (
     <div>
       <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
+      <PresetSavePanel
+        error={presetSaveError}
+        name={presetName}
+        pending={presetSavePending}
+        success={presetSaveSuccess}
+        onChangeName={setPresetName}
+        onSave={submitPreset}
+      />
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <WizardField label={t("serverName")}>
           <Input value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
@@ -794,6 +903,40 @@ function ConfigStep({
           {preview.data}
         </pre>
       )}
+    </div>
+  );
+}
+
+function PresetSavePanel({
+  error,
+  name,
+  onChangeName,
+  onSave,
+  pending,
+  success
+}: {
+  error: string;
+  name: string;
+  onChangeName: (name: string) => void;
+  onSave: () => void;
+  pending: boolean;
+  success: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 p-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
+        <WizardField label={t("configurationPresetName")}>
+          <Input value={name} placeholder={t("configurationPresetNamePlaceholder")} onChange={(event) => onChangeName(event.target.value)} />
+        </WizardField>
+        <Button className="md:mb-[1px]" variant="secondary" onClick={onSave} disabled={pending || name.trim().length === 0}>
+          <Bookmark aria-hidden="true" />
+          {pending ? t("saving") : t("saveConfigurationPreset")}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{t("configurationPresetSaveHint")}</p>
+      {success && <p className="mt-2 text-xs text-panel-green">{t("configurationPresetSaved")}</p>}
+      {error && <p className="mt-2 text-xs text-panel-gold">{error}</p>}
     </div>
   );
 }

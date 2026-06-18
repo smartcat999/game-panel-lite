@@ -139,6 +139,22 @@ type ServerShare struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+type ConfigPreset struct {
+	ID                string         `json:"id" gorm:"primaryKey"`
+	Name              string         `json:"name"`
+	GameKey           GameKey        `json:"gameKey" gorm:"index"`
+	ProviderKey       ProviderKey    `json:"providerKey" gorm:"index"`
+	Version           string         `json:"version,omitempty"`
+	Config            TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
+	ConfigPayloadJSON string         `json:"-" gorm:"column:config_payload_json"`
+	ConfigPayload     map[string]any `json:"configPayload,omitempty" gorm:"-"`
+	CPULimitCores     float64        `json:"cpuLimitCores,omitempty"`
+	MemoryLimitMB     int            `json:"memoryLimitMb,omitempty"`
+	ModPackID         string         `json:"modPackId,omitempty" gorm:"index"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
+}
+
 type TerrariaConfig struct {
 	ServerName      string     `json:"serverName"`
 	WorldName       string     `json:"worldName"`

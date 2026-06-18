@@ -57,7 +57,7 @@ Keep the existing architecture, but make it multi-game ready:
 9. Friend invite pages and copy text.
 10. Game library presentation.
 11. Mobile-friendly controls.
-12. Server templates.
+12. Configuration presets.
 13. Shareable server page.
 14. More games.
 

@@ -1,5 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, World } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -475,6 +475,42 @@ export async function createServer(input: {
   }
   const server = (await response.json()) as ApiServer;
   return toServer(server);
+}
+
+export async function listConfigPresets(): Promise<ConfigPreset[]> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load configuration presets");
+  }
+  return (await response.json()) as ConfigPreset[];
+}
+
+export async function createConfigPreset(input: {
+  name: string;
+  providerKey: ProviderKey;
+  config: TerrariaConfig | Record<string, unknown>;
+  version?: string;
+  resources?: ResourceLimits;
+  modPackId?: string;
+}): Promise<ConfigPreset> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  const payload = (await response.json().catch(() => ({}))) as ConfigPreset & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to save configuration preset");
+  }
+  return payload;
+}
+
+export async function deleteConfigPreset(id: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete configuration preset");
+  }
 }
 
 export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<Server | null> {

@@ -528,8 +528,6 @@ Result:
 ## Next Work
 
 The post-V1 roadmap Goals 1-10 are implemented and Goal 13 has a complete first slice. Recommended next work:
-- Goal 11 mobile-friendly controls for server list/detail and invite actions.
-- Goal 12 configuration presets, only after confirming they solve a need not already covered by world snapshots.
 - Goal 14 first additional game beyond the initial set, starting with Valheim unless product priority changes.
 - Manual Docker host verification for Palworld, DST, and Minecraft runtime images.
 - Curate and pin version lists per game.
@@ -545,6 +543,31 @@ Implemented:
 - App chrome now has a compact mobile create button and bottom navigation for the primary sections hidden behind the desktop sidebar.
 
 Verification:
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.
+
+## Goal 12 Progress (Configuration Presets)
+
+Status: completed.
+
+Implemented:
+- Added a `ConfigPreset` domain model and SQLite migration coverage through `AutoMigrate`.
+- Added configuration preset APIs:
+  - `GET /api/config-presets`
+  - `POST /api/config-presets`
+  - `GET /api/config-presets/{id}`
+  - `PUT /api/config-presets/{id}`
+  - `DELETE /api/config-presets/{id}`
+- Preset create/update validates payloads through the selected provider and preserves game, provider, version, friendly config values, resource limits, and optional mod pack reference.
+- Preset persistence strips secrets before saving: generic server passwords plus provider password fields such as Palworld admin password and DST cluster token.
+- Create-server flow now shows saved configuration presets on the first step and applies them as editable form defaults.
+- Config step can save the current non-world configuration as a preset, with copy clarifying that worlds/saves, passwords, and runtime state are excluded.
+- Updated development-plan wording from "server templates" to "configuration presets" to keep the feature separate from world snapshots.
+
+Verification:
+- `go test ./...` passed.
+- `GOCACHE=/private/tmp/game-panel-lite-go-cache go vet ./...` passed.
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.

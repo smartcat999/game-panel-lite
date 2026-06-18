@@ -80,6 +80,21 @@ export type ServerShare = {
   updatedAt?: string;
 };
 
+export type ConfigPreset = {
+  id: string;
+  name: string;
+  gameKey: GameKey;
+  providerKey: ProviderKey;
+  version?: string;
+  config: TerrariaConfig;
+  configPayload?: Record<string, unknown>;
+  cpuLimitCores: number;
+  memoryLimitMb: number;
+  modPackId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PublicServerShare = {
   name: string;
   gameKey: GameKey;
