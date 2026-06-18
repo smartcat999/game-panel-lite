@@ -56,6 +56,10 @@ Keep the existing architecture, but make it multi-game ready:
 8. Player management by provider capability.
 9. Friend invite pages and copy text.
 10. Game library presentation.
+11. Mobile-friendly controls.
+12. Server templates.
+13. Shareable server page.
+14. More games.
 
 ## Milestones
 
@@ -129,6 +133,33 @@ Exit criteria:
 - Saves, players, invite text, versions, and game library presentation work consistently across supported games.
 - Unsupported provider capabilities are hidden instead of shown as broken controls.
 
+### Milestone F: Everyday Use Expansion
+
+Goal:
+Add practical features that make the product easier to use repeatedly after the first server is running.
+
+Included goals:
+- Goal 11: Mobile-Friendly Controls.
+- Goal 12: Server Templates.
+- Goal 13: Shareable Server Page.
+
+Exit criteria:
+- A user can start, stop, restart, and share a server comfortably from a phone.
+- A user can save a known-good setup and create another server from it.
+- Friends can open a simple read-only page with join information.
+
+### Milestone G: More Game Coverage
+
+Goal:
+Grow GamePanel Lite into a useful small game server launcher beyond the initial Terraria, Palworld, DST, and Minecraft set.
+
+Included goals:
+- Goal 14: More Games.
+
+Exit criteria:
+- New games can be added through provider packages without leaking Docker concepts into the UI.
+- Each added game has game-specific labels, join information, save paths, and a minimal friendly create flow.
+
 ## Dependency Notes
 
 - Goal 1 can start immediately.
@@ -139,6 +170,10 @@ Exit criteria:
 - Goal 8 depends on provider capability metadata from Goal 2.
 - Goal 9 depends on provider join-info contracts from Goal 2.
 - Goal 10 should land after at least two games exist, so the game library has real content.
+- Goal 11 depends on the stable server list/detail action model from Goals 1-10.
+- Goal 12 depends on provider-specific config payloads from Goal 2 and the create flow from Goal 4.
+- Goal 13 depends on join-info contracts and public host settings from Goal 9.
+- Goal 14 depends on the provider foundation, game-specific create flow, and cross-game save conventions.
 
 ## Development Rules
 
@@ -699,7 +734,6 @@ After a server starts, the owner can quickly send friends clear joining instruct
 3. Add copy address.
 4. Add copy password when present.
 5. Add game-specific instructions.
-6. Add shareable read-only server page if enabled.
 
 ### Acceptance Criteria
 
@@ -777,6 +811,258 @@ pnpm build
 ### Suggested Commit
 
 `feat: add game library and version selection`
+
+## Goal 11: Mobile-Friendly Controls
+
+### User Value
+
+A user can start, stop, restart, and share a server from a phone without opening a desktop-sized admin interface.
+
+### Scope
+
+- Responsive server list.
+- Mobile-friendly server detail actions.
+- Copy invite from mobile.
+- View basic server status.
+- Keep advanced management on desktop-friendly screens where needed.
+
+### Frontend Tasks
+
+1. Audit the server list, server detail header, join info panel, and primary action buttons on common mobile widths.
+2. Add mobile action grouping for:
+   - start
+   - stop
+   - restart
+   - copy invite
+3. Keep destructive actions behind confirmation.
+4. Ensure server cards, tabs, and right-side panels collapse into a readable single-column layout.
+5. Verify touch targets are comfortable and text does not overflow.
+
+### Backend Tasks
+
+No new backend domain work is expected. Use existing lifecycle and join-info APIs.
+
+### Acceptance Criteria
+
+- A user can start, stop, restart, and copy invite text on a phone-width viewport.
+- The server list remains scannable on mobile.
+- Destructive actions still require confirmation.
+- No desktop-only hover interaction is required for critical actions.
+
+### Verification
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+Manual verification:
+
+- Test server list and server detail at 390px, 430px, and tablet width.
+- Confirm copy invite works on mobile.
+
+### Suggested Commit
+
+`feat: add mobile server controls`
+
+## Goal 12: Server Templates
+
+### User Value
+
+A user can save a known-good server setup and create another server from it without re-entering the same game settings.
+
+### Scope
+
+- Save server setup as a template.
+- Create server from template.
+- Include:
+  - game
+  - provider
+  - version
+  - friendly config values
+  - resource limits
+  - selected mod pack when applicable
+- Do not include server-specific runtime state, container IDs, logs, backups, or secrets that should not be reused.
+
+### Backend Tasks
+
+1. Add server template model:
+   - id
+   - name
+   - gameKey
+   - providerKey
+   - version
+   - config payload
+   - resource limits
+   - mod pack reference when applicable
+   - createdAt
+   - updatedAt
+2. Add APIs:
+   - `GET /api/server-templates`
+   - `POST /api/server-templates`
+   - `GET /api/server-templates/{id}`
+   - `PUT /api/server-templates/{id}`
+   - `DELETE /api/server-templates/{id}`
+   - `POST /api/server-templates/{id}/create-server`
+3. Validate template payloads through the selected provider.
+4. Ensure secrets are either omitted or explicitly re-entered during create.
+5. Add tests for template create, validation, and create-from-template behavior.
+
+### Frontend Tasks
+
+1. Add template list page or game-library section.
+2. Add "Save as Template" from server detail.
+3. Add create-from-template flow.
+4. Let users review and override template fields before final creation.
+5. Show clear labels for which game/provider a template belongs to.
+
+### Acceptance Criteria
+
+- User can save an existing server setup as a template.
+- User can create a new server from a template.
+- Provider validation still runs when creating from a template.
+- Server-specific state is not copied accidentally.
+
+### Verification
+
+```bash
+go test ./...
+go vet ./...
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+### Suggested Commit
+
+`feat: add server templates`
+
+## Goal 13: Shareable Server Page
+
+### User Value
+
+A server owner can send friends a simple link that explains how to join without giving them access to the admin panel.
+
+### Scope
+
+- Read-only server join page.
+- Server name, game, status, player count when available.
+- Join address and instructions.
+- Optional password visibility controlled by the admin.
+- No lifecycle controls or admin actions.
+
+### Backend Tasks
+
+1. Add share token or public slug model for a server.
+2. Add APIs:
+   - `POST /api/servers/{id}/share`
+   - `DELETE /api/servers/{id}/share`
+   - `GET /api/public/servers/{shareToken}`
+3. Public endpoint returns only safe join information.
+4. Add option to include or hide password in the shared response.
+5. Add tests to ensure public pages do not expose admin-only data.
+
+### Frontend Tasks
+
+1. Add share controls in the invite panel.
+2. Add read-only public server page.
+3. Add copy share link action.
+4. Add password visibility toggle for the share page.
+5. Show a clear disabled/unpublished state when sharing is off.
+
+### Acceptance Criteria
+
+- Admin can enable and disable a share page.
+- Friend can open the share link without logging in.
+- Share page shows only join-safe information.
+- Password is hidden unless the admin explicitly enables it.
+
+### Verification
+
+```bash
+go test ./...
+go vet ./...
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+### Suggested Commit
+
+`feat: add shareable server page`
+
+## Goal 14: More Games
+
+### User Value
+
+Users can run more popular friend-group games through the same simple GamePanel Lite flow.
+
+### Candidate Order
+
+1. Valheim.
+2. Project Zomboid.
+3. Enshrouded.
+4. Satisfactory.
+5. Core Keeper.
+
+### Selection Criteria
+
+- Popular with small groups.
+- Dedicated server is stable enough for self-hosting.
+- Docker runtime is practical.
+- Join information is clear.
+- Save data can be isolated under the server instance directory.
+- Configuration can be reduced to a friendly first-run form.
+
+### Standard Provider Tasks Per Game
+
+1. Add provider package under `apps/api/internal/provider/<game>`.
+2. Add game metadata and catalog entry.
+3. Add version metadata with a recommended default.
+4. Add config schema with friendly fields.
+5. Add provider validation.
+6. Add config renderer.
+7. Add runtime options.
+8. Add join-info provider behavior.
+9. Add save metadata.
+10. Add player management only when reliable.
+11. Add provider tests and HTTP create/runtime tests.
+12. Add frontend create flow coverage through provider metadata.
+
+### Acceptance Criteria Per Game
+
+- User can select the game from the game library.
+- User can create a server with recommended defaults.
+- User can start, stop, restart, and delete the server.
+- Join information is clear for friends.
+- Save data location is known and snapshot-ready.
+- Unsupported actions are hidden.
+
+### Verification
+
+```bash
+go test ./...
+go vet ./...
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+Manual verification per game:
+
+- Build or pull the runtime image.
+- Create a server.
+- Start the server.
+- Confirm container remains running.
+- Confirm save directory exists.
+- Confirm join information matches the game.
+
+### Suggested Commit Pattern
+
+`feat: add <game> provider`
+
+`feat: add <game> runtime support`
 
 ## Deferred Items
 
