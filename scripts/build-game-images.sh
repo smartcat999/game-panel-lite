@@ -28,6 +28,7 @@ Examples:
   scripts/build-game-images.sh vanilla --platform linux/arm64 --load
   scripts/build-game-images.sh all --platform linux/amd64,linux/arm64 --push
   scripts/build-game-images.sh dst --platform linux/amd64 --load
+  scripts/build-game-images.sh dst --builder amd64-builder --platform linux/amd64 --push
 USAGE
 }
 
@@ -147,8 +148,11 @@ build_dst() {
     local docker_arch
     docker_arch="$(docker info --format '{{.Architecture}}' 2>/dev/null || true)"
     if [[ "$docker_arch" != "x86_64" && "$docker_arch" != "amd64" ]]; then
-      echo "Don't Starve Together image builds must run on an amd64 Docker host." >&2
-      echo "SteamCMD currently crashes under amd64 emulation on arm hosts; use an amd64 machine or a remote amd64 buildx builder." >&2
+      echo "Don't Starve Together image builds need a native amd64 build node." >&2
+      echo "Your local Docker daemon is ${docker_arch:-unknown}; Docker buildx support alone is not enough when it uses QEMU emulation." >&2
+      echo "SteamCMD currently crashes under amd64 emulation on arm hosts." >&2
+      echo "Use an amd64 Docker host, or pass a remote native amd64 buildx builder with:" >&2
+      echo "  scripts/build-game-images.sh dst --builder <amd64-builder> --platform linux/amd64 --push" >&2
       exit 1
     fi
   fi

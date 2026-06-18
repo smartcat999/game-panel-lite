@@ -4,23 +4,23 @@ This image packages the Don't Starve Together dedicated server for GamePanel Lit
 
 ## Build
 
+Build this image on a native amd64 Docker host:
+
 ```bash
 scripts/build-game-images.sh dst --platform linux/amd64 --load
 ```
 
-Build this image on an amd64 Docker host. Building the amd64 image through emulation on arm hosts can make SteamCMD exit with a segmentation fault before the DST server files are downloaded.
+Docker buildx is supported, but the builder node must be native amd64. On Apple Silicon or other arm hosts, `--platform linux/amd64` normally runs through QEMU emulation, and SteamCMD can exit with a segmentation fault before the DST server files are downloaded.
 
-On an arm development machine, use a remote amd64 buildx builder and push the image:
-
-```bash
-scripts/build-game-images.sh dst --builder <amd64-builder> --platform linux/amd64 --push
-```
-
-To push the image:
+On an arm development machine, create or select a remote amd64 buildx builder and push the image:
 
 ```bash
-scripts/build-game-images.sh dst --platform linux/amd64 --push
+docker buildx create --name gamepanel-amd64 --driver docker-container --platform linux/amd64 ssh://user@amd64-host --use
+docker buildx inspect --bootstrap
+scripts/build-game-images.sh dst --builder gamepanel-amd64 --platform linux/amd64 --push
 ```
+
+Use `--push` with a remote builder so the image is available to the host running GamePanel Lite.
 
 ## Runtime layout
 
