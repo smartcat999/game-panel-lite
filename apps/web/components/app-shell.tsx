@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Box, Gauge, Gamepad2, Globe2, HardDrive, LogOut, Plus, Search, Settings, ShieldCheck } from "lucide-react";
+import { Activity, Archive, Bookmark, Box, Gauge, Gamepad2, Globe2, HardDrive, LogOut, Plus, Search, Settings, ShieldCheck } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
@@ -18,6 +18,7 @@ const nav = [
   { href: "/worlds", labelKey: "navWorlds", icon: Globe2 },
   { href: "/backups", labelKey: "navBackups", icon: Archive },
   { href: "/mods", labelKey: "navMods", icon: Box },
+  { href: "/presets", labelKey: "navPresets", icon: Bookmark },
   { href: "/activity", labelKey: "navActivity", icon: Activity },
   { href: "/settings", labelKey: "navSettings", icon: Settings }
 ] as const;

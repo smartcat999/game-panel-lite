@@ -564,12 +564,15 @@ Implemented:
 - Preset create/update validates payloads through the selected provider and preserves game, provider, version, friendly config values, resource limits, and optional mod pack reference.
 - Preset persistence strips secrets before saving: generic server passwords plus provider password fields such as Palworld admin password and DST cluster token.
 - Create-server flow now shows saved configuration presets on the first step and applies them as editable form defaults.
+- Added a configuration preset management page with search, game filtering, delete confirmation, and create-from-preset entry points.
+- Create-server flow now accepts `presetId` in the URL and automatically applies the selected saved preset.
 - Config step can save the current non-world configuration as a preset, with copy clarifying that worlds/saves, passwords, and runtime state are excluded.
 - Updated development-plan wording from "server templates" to "configuration presets" to keep the feature separate from world snapshots.
 
 Verification:
 - `go test ./...` passed.
 - `GOCACHE=/private/tmp/game-panel-lite-go-cache go vet ./...` passed.
+- `git diff --check` passed.
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted the existing optional SWC fallback warnings, but the production build completed successfully.

@@ -69,6 +69,7 @@ export function CreateServerWizard() {
   const [version, setVersion] = useState("");
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
+  const [appliedConfigPresetId, setAppliedConfigPresetId] = useState("");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [selectedModPackId, setSelectedModPackId] = useState("");
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000 });
@@ -229,6 +230,16 @@ export function CreateServerWizard() {
     if (!worldId) return;
     setSelectedWorldId(worldId);
   }, [selectedWorldId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const presetId = new URLSearchParams(window.location.search).get("presetId");
+    if (!presetId || appliedConfigPresetId === presetId || games.length === 0 || configPresets.length === 0) return;
+    const preset = configPresets.find((item) => item.id === presetId);
+    if (!preset) return;
+    applyConfigPreset(preset);
+    setAppliedConfigPresetId(presetId);
+  }, [appliedConfigPresetId, configPresets, games.length]);
 
   useEffect(() => {
     if (!selectedWorld || appliedWorldConfigId === selectedWorld.id) return;
