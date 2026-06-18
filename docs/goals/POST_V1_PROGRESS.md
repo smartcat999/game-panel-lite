@@ -34,8 +34,9 @@ Completed:
 - Create-server game names and descriptions now resolve through the i18n layer, including Chinese labels for Terraria, Don't Starve Together, Palworld, and Minecraft Java.
 - Don't Starve Together is marked unsupported on arm Docker hosts because SteamCMD crashes when the amd64 DST server install runs through arm emulation.
 - Backend create/start paths now reject DST on unsupported arm Docker hosts before trying to pull or create the unavailable runtime image.
-- DST image build script now stops early on non-amd64 local Docker hosts and points users to an amd64 host or remote amd64 buildx builder.
-- DST image documentation now records the amd64-only build requirement and remote-builder command pattern.
+- DST image build script now passes `--platform` and the selected buildx builder through like the other runtime image builds.
+- DST image documentation now records the amd64-only runtime image target, active-builder requirements, and remote-builder command pattern.
+- DST image build now supports SteamCMD credentials through BuildKit secrets (`STEAM_USERNAME` / `STEAM_PASSWORD`) because app `343050` currently reports `section_type=ownersonly` and anonymous installs fail with `Missing configuration`.
 
 Checks:
 - `go test ./apps/api/internal/http`: passed.
@@ -44,6 +45,7 @@ Checks:
 - `pnpm --filter @gamepanel-lite/web lint`: passed.
 - `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC optional-package fallback warnings and ESLint plugin warning.
 - `bash -n scripts/build-game-images.sh docker/dst/gamepanel-dst-entrypoint.sh`: passed.
+- `docker buildx build --check --platform linux/amd64 -f docker/dst/Dockerfile .`: passed.
 
 ## Current Slice: Multi-Game Resource Filtering
 

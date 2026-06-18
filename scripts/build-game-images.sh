@@ -139,14 +139,25 @@ build_tmodloader() {
 build_dst() {
   local version="$1"
   local image="${registry}/dst-server:${version}"
+  local dst_buildx_args=("${buildx_args[@]}")
 
   if [[ -n "$platform" && "$platform" != "linux/amd64" ]]; then
     echo "Don't Starve Together image builds are currently supported only for linux/amd64." >&2
     exit 1
   fi
+  if [[ -n "${STEAM_USERNAME:-}" && -z "${STEAM_PASSWORD:-}" || -z "${STEAM_USERNAME:-}" && -n "${STEAM_PASSWORD:-}" ]]; then
+    echo "Set both STEAM_USERNAME and STEAM_PASSWORD when building the Don't Starve Together image with Steam credentials." >&2
+    exit 1
+  fi
+  if [[ -n "${STEAM_USERNAME:-}" ]]; then
+    dst_buildx_args+=(--secret id=steam_username,env=STEAM_USERNAME)
+  fi
+  if [[ -n "${STEAM_PASSWORD:-}" ]]; then
+    dst_buildx_args+=(--secret id=steam_password,env=STEAM_PASSWORD)
+  fi
 
   echo "==> Building ${image}"
-  docker "${buildx_args[@]}" \
+  docker "${dst_buildx_args[@]}" \
     -f docker/dst/Dockerfile \
     -t "${image}" \
     "${root_dir}"
