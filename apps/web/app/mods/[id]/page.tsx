@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Package } from "lucide-react";
 import { useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Card } from "@/components/ui";
-import { listGlobalMods, listModPacks, listMods, listServers } from "@/lib/api";
+import { listGames, listGlobalMods, listModPacks, listMods, listServers } from "@/lib/api";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import type { ModFile, Server } from "@/lib/types";
@@ -24,28 +24,43 @@ export default function ModDetailPage() {
   const id = params.id;
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000, retry: false });
   const packsQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
-  const tmodServers = useMemo(() => (serversQuery.data ?? []).filter((server) => server.mode === "tmodloader"), [serversQuery.data]);
+  const modProviderKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const game of gamesQuery.data ?? []) {
+      for (const provider of game.providers) {
+        if (provider.capabilities.mods) {
+          keys.add(provider.key);
+        }
+      }
+    }
+    return keys;
+  }, [gamesQuery.data]);
+  const modCapableServers = useMemo(
+    () => (serversQuery.data ?? []).filter((server) => modProviderKeys.has(server.providerKey ?? "") || server.mode === "tmodloader"),
+    [modProviderKeys, serversQuery.data]
+  );
   const serverModQueries = useQueries({
-    queries: tmodServers.map((server) => ({
+    queries: modCapableServers.map((server) => ({
       queryKey: ["mods", server.id],
       queryFn: () => listMods(server.id),
       retry: false,
-      enabled: serversQuery.isSuccess
+      enabled: serversQuery.isSuccess && (gamesQuery.isSuccess || server.mode === "tmodloader")
     }))
   });
   const sources = useMemo<ModSource[]>(() => {
     const librarySource = (globalModsQuery.data ?? []).find((mod) => mod.id === id);
     const serverSources = serverModQueries.flatMap((query, index) => {
-      const server = tmodServers[index];
+      const server = modCapableServers[index];
       return (query.data ?? []).filter((mod) => mod.id === id).map((mod) => ({ mod, server, scope: "server" as const }));
     });
     return librarySource ? [{ mod: librarySource, scope: "library" }, ...serverSources] : serverSources;
-  }, [globalModsQuery.data, id, serverModQueries, tmodServers]);
+  }, [globalModsQuery.data, id, serverModQueries, modCapableServers]);
   const source = sources[0];
   const relatedPacks = useMemo(() => (packsQuery.data ?? []).filter((pack) => pack.modIds.includes(id)), [id, packsQuery.data]);
-  const loading = globalModsQuery.isLoading || serversQuery.isLoading || serverModQueries.some((query) => query.isLoading);
-  const errored = globalModsQuery.isError || serversQuery.isError || serverModQueries.some((query) => query.isError);
+  const loading = globalModsQuery.isLoading || serversQuery.isLoading || gamesQuery.isLoading || serverModQueries.some((query) => query.isLoading);
+  const errored = globalModsQuery.isError || serversQuery.isError || gamesQuery.isError || serverModQueries.some((query) => query.isError);
 
   if (loading) {
     return <p className="text-sm text-slate-400">{t("loading")}</p>;

@@ -24,6 +24,21 @@ The work starts with user-facing product functionality rather than V1 UI polish:
 
 Post-V1 roadmap goals 1-13 have implementation slices. Status: closing feature-completeness gaps before any additional providers.
 
+## Current Slice: Multi-Game Resource Filtering
+
+Status: Completed
+
+Completed:
+- Fixed server-detail resource compatibility helpers to prefer explicit `providerKey` and `gameKey` metadata instead of inferring every non-tModLoader server as Terraria Vanilla.
+- Updated mod detail lookup to scan servers by provider `mods` capability from the game catalog, with a legacy tModLoader fallback for older records.
+- Added frontend unit coverage for provider-first and game-key fallback world compatibility.
+
+Checks:
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC optional-package fallback warnings and ESLint plugin warning.
+- `pnpm --filter @gamepanel-lite/web test -- server-detail-resources.test.ts`: blocked before running tests because local optional Rollup package `@rollup/rollup-darwin-arm64` is missing.
+
 ## Completed Goals
 
 ### Goal 1: Local Admin Account and Login

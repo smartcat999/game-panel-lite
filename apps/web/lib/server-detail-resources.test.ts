@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  gameKeyForServer,
+  gameKeyForWorld,
   getWorldSourceServerId,
   isWorldCompatibleWithServer,
   isWorldActiveOnServer,
@@ -57,6 +59,59 @@ describe("server detail resource helpers", () => {
     expect(providerKeyForServer(baseServer)).toBe("terraria-vanilla");
     expect(isWorldCompatibleWithServer(vanillaWorld, baseServer)).toBe(true);
     expect(isWorldCompatibleWithServer(vanillaWorld, { ...baseServer, mode: "tmodloader" })).toBe(false);
+  });
+
+  it("uses explicit provider metadata before legacy Terraria mode fallback", () => {
+    const palworldServer: Server = {
+      ...baseServer,
+      gameKey: "palworld",
+      providerKey: "palworld",
+      mode: "vanilla",
+      world: "Pal Save"
+    };
+    const palworldSave: World = {
+      id: "save-1",
+      instanceId: "source-server",
+      gameKey: "palworld",
+      providerKey: "palworld",
+      name: "Pal Save",
+      size: "Pal Save",
+      difficulty: "Saved",
+      modified: "Just now",
+      bytes: "1 KB"
+    };
+    const terrariaWorld: World = {
+      ...palworldSave,
+      id: "world-2",
+      gameKey: "terraria",
+      providerKey: "terraria-vanilla"
+    };
+
+    expect(providerKeyForServer(palworldServer)).toBe("palworld");
+    expect(gameKeyForServer(palworldServer)).toBe("palworld");
+    expect(gameKeyForWorld(palworldSave)).toBe("palworld");
+    expect(isWorldCompatibleWithServer(palworldSave, palworldServer)).toBe(true);
+    expect(isWorldCompatibleWithServer(terrariaWorld, palworldServer)).toBe(false);
+  });
+
+  it("can fall back to game metadata for older world records without provider keys", () => {
+    const minecraftServer: Server = {
+      ...baseServer,
+      gameKey: "minecraft",
+      providerKey: "minecraft"
+    };
+    const minecraftSave: World = {
+      id: "save-1",
+      instanceId: "source-server",
+      gameKey: "minecraft",
+      name: "Block Save",
+      size: "Block Save",
+      difficulty: "Saved",
+      modified: "Just now",
+      bytes: "1 KB"
+    };
+
+    expect(isWorldCompatibleWithServer(minecraftSave, minecraftServer)).toBe(true);
   });
 
   it("keeps world ownership separate from active world state", () => {
