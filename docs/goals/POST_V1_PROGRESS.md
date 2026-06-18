@@ -462,6 +462,9 @@ Completed:
 - Join info now resolves the public host and rewrites invite text/addresses accordingly.
 - Settings page now includes a Public Host card.
 - Added HTTP test covering join-info, public host update, and settings exposure.
+- Create-server review now uses game-specific join guidance for Terraria, Palworld, Don't Starve Together, and Minecraft instead of falling back to Terraria copy.
+- Create-server review now uses game-specific resource labels: Terraria/Minecraft world, Palworld save, and DST cluster save.
+- Added frontend helper coverage for Minecraft invite previews and game-specific review message selection. Local Vitest execution is still blocked by the missing Rollup optional native package noted below.
 
 ## Goal 10 Progress (Game Version Selection and Library Presentation)
 
@@ -526,6 +529,23 @@ Result:
 - `pnpm --filter @gamepanel-lite/web typecheck` passed.
 - `pnpm --filter @gamepanel-lite/web lint` passed.
 - `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+
+2026-06-18 Goal 9 create-review multi-game copy:
+
+```bash
+git diff --check
+pnpm --filter @gamepanel-lite/web typecheck
+pnpm --filter @gamepanel-lite/web lint
+pnpm --filter @gamepanel-lite/web build
+pnpm --filter @gamepanel-lite/web test -- create-server-review.test.ts
+```
+
+Result:
+- `git diff --check` passed.
+- `pnpm --filter @gamepanel-lite/web typecheck` passed.
+- `pnpm --filter @gamepanel-lite/web lint` passed.
+- `pnpm --filter @gamepanel-lite/web build` passed. Next.js emitted missing optional SWC binary fallback warnings, but completed successfully.
+- `pnpm --filter @gamepanel-lite/web test -- create-server-review.test.ts` could not start because the local optional Rollup native package `@rollup/rollup-darwin-arm64` is missing from `node_modules`; this matches the existing known local test limitation.
 
 ## Known Limitations
 

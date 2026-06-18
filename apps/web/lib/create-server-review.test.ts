@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createReviewInvitePreview } from "./create-server-review";
+import { createReviewInvitePreview, reviewJoinInstructionKey, reviewResourceSummaryKey } from "./create-server-review";
 
 describe("createReviewInvitePreview", () => {
   it("creates Terraria invite preview text", () => {
@@ -18,5 +18,25 @@ describe("createReviewInvitePreview", () => {
     expect(createReviewInvitePreview({ gameKey: "dont-starve-together", hostPortLabel: "11099", password: "secret", serverName: "DST Friends" })).toBe(
       "Join DST Friends in Don't Starve Together at 127.0.0.1:11099 password: secret"
     );
+  });
+
+  it("creates Minecraft invite preview text", () => {
+    expect(createReviewInvitePreview({ gameKey: "minecraft", hostPortLabel: "25565", serverName: "Block Friends" })).toBe(
+      "Join Block Friends in Minecraft at 127.0.0.1:25565"
+    );
+  });
+
+  it("uses game-specific review join instructions", () => {
+    expect(reviewJoinInstructionKey("terraria")).toBe("reviewTerrariaJoinInstruction");
+    expect(reviewJoinInstructionKey("palworld")).toBe("reviewPalworldJoinInstruction");
+    expect(reviewJoinInstructionKey("dont-starve-together")).toBe("reviewDstJoinInstruction");
+    expect(reviewJoinInstructionKey("minecraft")).toBe("reviewMinecraftJoinInstruction");
+  });
+
+  it("uses game-specific resource summary labels", () => {
+    expect(reviewResourceSummaryKey("terraria")).toBe("reviewWorldPlayers");
+    expect(reviewResourceSummaryKey("palworld")).toBe("reviewSavePlayers");
+    expect(reviewResourceSummaryKey("dont-starve-together")).toBe("reviewClusterPlayers");
+    expect(reviewResourceSummaryKey("minecraft")).toBe("reviewMinecraftWorldPlayers");
   });
 });

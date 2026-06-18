@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
-import { createReviewInvitePreview } from "@/lib/create-server-review";
+import { createReviewInvitePreview, reviewJoinInstructionKey, reviewResourceSummaryKey } from "@/lib/create-server-review";
 import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
 import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits } from "@/lib/types";
@@ -1143,13 +1143,14 @@ function ReviewStep({
     password: config.password,
     serverName: config.serverName || gameName
   });
-  const joinInstruction = gameKey === "palworld" ? t("reviewPalworldJoinInstruction") : t("reviewTerrariaJoinInstruction");
+  const joinInstruction = t(reviewJoinInstructionKey(gameKey));
+  const resourceSummary = t(reviewResourceSummaryKey(gameKey), { world: config.worldName, players: config.maxPlayers });
   return (
     <div>
       <h2 className="text-lg font-semibold">{t("review")}</h2>
       <Card className="mt-4 p-4">
         <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { game: gameName, mode: providerName, port: hostPortLabel })}</div>
-        <p className="mt-3 text-sm text-slate-400">{t(gameKey === "palworld" ? "reviewSavePlayers" : "reviewWorldPlayers", { world: config.worldName, players: config.maxPlayers })}</p>
+        <p className="mt-3 text-sm text-slate-400">{resourceSummary}</p>
         <p className="mt-2 text-sm text-slate-400">
           {t("resourceLimits")}: <span className="text-slate-200">{formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}</span>
         </p>
