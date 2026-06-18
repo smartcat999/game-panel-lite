@@ -1171,7 +1171,7 @@ function PresetSaveDialog({
 
 function WizardField({ children, label }: { children: React.ReactNode; label: string }) {
   return (
-    <label className="grid gap-1.5">
+    <label className="grid w-full min-w-0 self-start content-start gap-1.5">
       <span className="text-xs font-medium text-slate-500">{label}</span>
       {children}
     </label>
@@ -1181,7 +1181,7 @@ function WizardField({ children, label }: { children: React.ReactNode; label: st
 function WizardSelect({ children, onChange, value }: { children: React.ReactNode; onChange: (value: string) => void; value: string }) {
   return (
     <select
-      className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
+      className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
