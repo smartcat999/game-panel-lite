@@ -2442,21 +2442,47 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) prepareRuntimeImageAsync(image string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	status := domain.RuntimeImageStatus{Image: image, UpdatedAt: time.Now()}
-	if err := h.runtime.PrepareImage(ctx, image); err != nil {
+	lastProgress := 0
+	status := domain.RuntimeImageStatus{Image: image, Progress: lastProgress, UpdatedAt: time.Now()}
+	if err := h.runtime.PrepareImageWithProgress(ctx, image, func(progress runtime.ImagePrepareProgress) {
+		nextProgress := clampRuntimeImageProgress(progress.Progress)
+		if nextProgress < lastProgress {
+			nextProgress = lastProgress
+		}
+		lastProgress = nextProgress
+		h.setRuntimeImageJob(domain.RuntimeImageStatus{
+			Image:     image,
+			Status:    runtime.ImageStatusPreparing,
+			Message:   progress.Message,
+			Progress:  nextProgress,
+			UpdatedAt: time.Now(),
+		})
+	}); err != nil {
 		status.Status = runtime.ImageStatusFailed
 		status.Message = err.Error()
+		status.Progress = lastProgress
 		if h.logger != nil {
 			h.logger.Warn("runtime image prepare failed", "image", image, "error", err)
 		}
 	} else {
 		status.Status = runtime.ImageStatusReady
+		status.Progress = 100
 		if h.logger != nil {
 			h.logger.Info("runtime image prepared", "image", image)
 		}
 	}
 	status.UpdatedAt = time.Now()
 	h.setRuntimeImageJob(status)
+}
+
+func clampRuntimeImageProgress(progress int) int {
+	if progress < 0 {
+		return 0
+	}
+	if progress > 100 {
+		return 100
+	}
+	return progress
 }
 
 func (h *Handler) runtimeImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus {

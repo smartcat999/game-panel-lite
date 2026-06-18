@@ -41,6 +41,14 @@ func (s *SwitchableAdapter) PrepareImage(ctx context.Context, image string) erro
 	return s.current().PrepareImage(ctx, image)
 }
 
+func (s *SwitchableAdapter) PrepareImageWithProgress(ctx context.Context, image string, onProgress ImagePrepareProgressFunc) error {
+	current := s.current()
+	if preparer, ok := current.(ImageProgressPreparer); ok {
+		return preparer.PrepareImageWithProgress(ctx, image, onProgress)
+	}
+	return current.PrepareImage(ctx, image)
+}
+
 func (s *SwitchableAdapter) Create(ctx context.Context, spec ContainerSpec) (string, error) {
 	return s.current().Create(ctx, spec)
 }

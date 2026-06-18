@@ -22,7 +22,7 @@ export default function GamesPage() {
     queryKey: ["games"],
     queryFn: listGames,
     retry: false,
-    refetchInterval: (query) => hasPreparingRuntime(query.state.data) ? 2500 : false
+    refetchInterval: (query) => hasPreparingRuntime(query.state.data) ? 1000 : false
   });
   const install = useMutation({
     mutationFn: ({ providerKey, version }: { providerKey: ProviderKey; version?: string }) => prepareRuntimeImage(providerKey, version),
@@ -143,20 +143,27 @@ function ProviderRuntimeRow({
   const unsupported = status?.status === "unsupported";
   const failed = status?.status === "failed";
   const displayStatus: RuntimeImageStatus | undefined = preparing
-    ? { image: status?.image ?? provider.key, message: status?.message, status: "preparing", updatedAt: status?.updatedAt }
+    ? { image: status?.image ?? provider.key, message: status?.message, progress: status?.progress, status: "preparing", updatedAt: status?.updatedAt }
     : status;
+  const progress = preparing ? normalizedRuntimeProgress(displayStatus?.progress) : 0;
+  const statusHint = preparing
+    ? progress > 0
+      ? t("gameLibraryInstallProgress", { progress })
+      : t("gameLibraryInstallStarting")
+    : ready
+      ? t("gameLibraryReadyHint")
+      : t("gameLibraryInstallHint");
   return (
     <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p>
           <RuntimeStatusBadge status={displayStatus} />
           {provider.recommended && <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs text-panel-green">{t("recommended")}</span>}
         </div>
         <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p>
-        <p className="mt-2 text-xs text-slate-500">
-          {ready ? t("gameLibraryReadyHint") : t("gameLibraryInstallHint")}
-        </p>
+        <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
+        {preparing ? <RuntimeInstallProgress progress={progress} /> : null}
         {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{status.message}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
@@ -186,6 +193,21 @@ function ProviderRuntimeRow({
   );
 }
 
+function RuntimeInstallProgress({ progress }: { progress: number }) {
+  const hasProgress = progress > 0;
+  return (
+    <div className="mt-3 h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-slate-800/80">
+      <div
+        className={cn(
+          "h-full rounded-full bg-sky-300 transition-all duration-500",
+          hasProgress ? "" : "w-1/3 animate-pulse"
+        )}
+        style={hasProgress ? { width: `${progress}%` } : undefined}
+      />
+    </div>
+  );
+}
+
 function RuntimeStatusBadge({ status }: { status?: RuntimeImageStatus }) {
   const { t } = useI18n();
   const tone = runtimeImageTone(status);
@@ -208,4 +230,9 @@ function RuntimeStatusBadge({ status }: { status?: RuntimeImageStatus }) {
 
 function hasPreparingRuntime(games?: GameCatalogEntry[]) {
   return Boolean(games?.some((game) => game.providers.some((provider) => provider.runtimeImage?.status === "preparing")));
+}
+
+function normalizedRuntimeProgress(progress?: number) {
+  if (typeof progress !== "number" || Number.isNaN(progress)) return 0;
+  return Math.max(0, Math.min(100, Math.round(progress)));
 }

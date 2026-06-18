@@ -54,6 +54,17 @@ type HostStats struct {
 	MemoryLimitMB     int64   `json:"memoryLimitMb"`
 }
 
+type ImagePrepareProgress struct {
+	Message  string
+	Progress int
+}
+
+type ImagePrepareProgressFunc func(ImagePrepareProgress)
+
+type ImageProgressPreparer interface {
+	PrepareImageWithProgress(ctx context.Context, image string, onProgress ImagePrepareProgressFunc) error
+}
+
 const (
 	ImageStatusReady       = "ready"
 	ImageStatusMissing     = "missing"

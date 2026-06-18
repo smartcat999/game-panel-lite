@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
 func TestDataBindsUsesAbsoluteHostPath(t *testing.T) {
@@ -82,5 +84,29 @@ func TestConsumeImagePullReturnsErrorDetail(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no matching manifest") {
 		t.Fatalf("expected platform error, got %v", err)
+	}
+}
+
+func TestConsumeImagePullReportsProgress(t *testing.T) {
+	stream := strings.NewReader(`{"id":"layer-a","status":"Downloading","progressDetail":{"current":25,"total":100}}
+{"id":"layer-b","status":"Downloading","progressDetail":{"current":50,"total":100}}
+{"id":"layer-a","status":"Downloading","progressDetail":{"current":100,"total":100}}
+`)
+	var progresses []int
+	if err := consumeImagePullWithProgress(stream, func(progress runtime.ImagePrepareProgress) {
+		progresses = append(progresses, progress.Progress)
+	}); err != nil {
+		t.Fatalf("expected successful pull stream, got %v", err)
+	}
+	if len(progresses) == 0 {
+		t.Fatal("expected progress callbacks")
+	}
+	for i := 1; i < len(progresses); i++ {
+		if progresses[i] < progresses[i-1] {
+			t.Fatalf("expected monotonic progress, got %v", progresses)
+		}
+	}
+	if progresses[len(progresses)-1] != 100 {
+		t.Fatalf("expected final progress to be 100, got %v", progresses)
 	}
 }

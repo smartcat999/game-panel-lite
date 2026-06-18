@@ -31,6 +31,7 @@ export type RuntimeImageStatus = {
   image: string;
   status: "ready" | "missing" | "preparing" | "failed" | "unsupported" | string;
   message?: string;
+  progress?: number;
   updatedAt?: string;
 };
 

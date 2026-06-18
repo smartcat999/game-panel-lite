@@ -72,6 +72,10 @@ func (a *Adapter) PrepareImage(ctx context.Context, image string) error {
 	return a.ensureImage(ctx, image)
 }
 
+func (a *Adapter) PrepareImageWithProgress(ctx context.Context, image string, onProgress runtime.ImagePrepareProgressFunc) error {
+	return a.ensureImageWithProgress(ctx, image, onProgress)
+}
+
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
 	containerName := "gamepanel-" + spec.InstanceID
 	if err := a.removeContainerByNameIfExists(ctx, containerName); err != nil {
@@ -137,7 +141,14 @@ func (a *Adapter) removeContainerByNameIfExists(ctx context.Context, name string
 }
 
 func (a *Adapter) ensureImage(ctx context.Context, image string) error {
+	return a.ensureImageWithProgress(ctx, image, nil)
+}
+
+func (a *Adapter) ensureImageWithProgress(ctx context.Context, image string, onProgress runtime.ImagePrepareProgressFunc) error {
 	if _, _, err := a.client.ImageInspectWithRaw(ctx, image); err == nil {
+		if onProgress != nil {
+			onProgress(runtime.ImagePrepareProgress{Message: "image already installed", Progress: 100})
+		}
 		return nil
 	}
 	pull, err := a.client.ImagePull(ctx, image, types.ImagePullOptions{})
@@ -145,22 +156,42 @@ func (a *Adapter) ensureImage(ctx context.Context, image string) error {
 		return err
 	}
 	defer pull.Close()
-	return consumeImagePull(pull)
+	return consumeImagePullWithProgress(pull, onProgress)
 }
 
 type imagePullEvent struct {
+	ID          string `json:"id"`
+	Status      string `json:"status"`
 	Error       string `json:"error"`
 	ErrorDetail struct {
 		Message string `json:"message"`
 	} `json:"errorDetail"`
+	ProgressDetail struct {
+		Current int64 `json:"current"`
+		Total   int64 `json:"total"`
+	} `json:"progressDetail"`
+}
+
+type imagePullLayerProgress struct {
+	current int64
+	total   int64
 }
 
 func consumeImagePull(reader io.Reader) error {
+	return consumeImagePullWithProgress(reader, nil)
+}
+
+func consumeImagePullWithProgress(reader io.Reader, onProgress runtime.ImagePrepareProgressFunc) error {
 	decoder := json.NewDecoder(reader)
+	layers := map[string]imagePullLayerProgress{}
+	maxProgress := 0
 	for {
 		var event imagePullEvent
 		if err := decoder.Decode(&event); err != nil {
 			if err == io.EOF {
+				if onProgress != nil {
+					onProgress(runtime.ImagePrepareProgress{Message: "image ready", Progress: 100})
+				}
 				return nil
 			}
 			return err
@@ -171,7 +202,61 @@ func consumeImagePull(reader io.Reader) error {
 		if message := strings.TrimSpace(event.Error); message != "" {
 			return fmt.Errorf("image pull failed: %s", message)
 		}
+		if onProgress == nil {
+			continue
+		}
+		message := strings.TrimSpace(event.Status)
+		if event.ID != "" {
+			message = strings.TrimSpace(strings.Join([]string{event.ID, event.Status}, " "))
+		}
+		if event.ProgressDetail.Total > 0 && event.ID != "" {
+			layers[event.ID] = imagePullLayerProgress{
+				current: event.ProgressDetail.Current,
+				total:   event.ProgressDetail.Total,
+			}
+			progress := aggregateImagePullProgress(layers)
+			if progress < maxProgress {
+				progress = maxProgress
+			} else {
+				maxProgress = progress
+			}
+			onProgress(runtime.ImagePrepareProgress{Message: message, Progress: progress})
+			continue
+		}
+		if message != "" {
+			onProgress(runtime.ImagePrepareProgress{Message: message, Progress: maxProgress})
+		}
 	}
+}
+
+func aggregateImagePullProgress(layers map[string]imagePullLayerProgress) int {
+	var current int64
+	var total int64
+	for _, layer := range layers {
+		if layer.total <= 0 {
+			continue
+		}
+		layerCurrent := layer.current
+		if layerCurrent < 0 {
+			layerCurrent = 0
+		}
+		if layerCurrent > layer.total {
+			layerCurrent = layer.total
+		}
+		current += layerCurrent
+		total += layer.total
+	}
+	if total <= 0 {
+		return 0
+	}
+	progress := int(float64(current) / float64(total) * 100)
+	if progress <= 0 && current > 0 {
+		return 1
+	}
+	if progress >= 100 {
+		return 99
+	}
+	return progress
 }
 
 func (a *Adapter) Start(ctx context.Context, instance domain.GameServerInstance) error {
