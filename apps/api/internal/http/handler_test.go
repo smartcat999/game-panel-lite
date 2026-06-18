@@ -1145,6 +1145,29 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 }
 
+func TestCreateDSTServerRejectsArmRuntime(t *testing.T) {
+	router, _, _ := newTestRouterWithAdapter(t, armMockAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
+	payload := `{
+		"name":"DST Friends",
+		"providerKey":"dont-starve-together",
+		"hostPort":11099,
+		"config":{
+			"serverName":"DST Friends",
+			"clusterName":"FriendsCluster",
+			"maxPlayers":6,
+			"clusterToken":"klei-token"
+		}
+	}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(payload)))
+	if create.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected create server 400 on arm runtime, got %d: %s", create.Code, create.Body.String())
+	}
+	if !strings.Contains(create.Body.String(), "amd64 Docker hosts") {
+		t.Fatalf("expected arm runtime rejection detail, got %s", create.Body.String())
+	}
+}
+
 func TestCreateMinecraftServerUsesMinecraftRuntimeSpec(t *testing.T) {
 	adapter := newCaptureCreateAdapter()
 	router, db, _ := newTestRouterWithAdapter(t, adapter)
@@ -1310,6 +1333,43 @@ func TestGameCatalogEndpoints(t *testing.T) {
 	router.ServeHTTP(missing, httptest.NewRequest(stdhttp.MethodGet, "/api/games/unknown-game", nil))
 	if missing.Code != stdhttp.StatusNotFound {
 		t.Fatalf("expected unknown game 404, got %d: %s", missing.Code, missing.Body.String())
+	}
+}
+
+func TestGameCatalogMarksDSTUnsupportedOnArmRuntime(t *testing.T) {
+	router, _, _ := newTestRouterWithAdapter(t, armMockAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected game catalog 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var games []domain.GameCatalogEntry
+	if err := json.Unmarshal(list.Body.Bytes(), &games); err != nil {
+		t.Fatal(err)
+	}
+	var dstGame *domain.GameCatalogEntry
+	for index := range games {
+		if games[index].Key == domain.GameDST {
+			dstGame = &games[index]
+			break
+		}
+	}
+	if dstGame == nil || dstGame.Status != "unsupported" {
+		t.Fatalf("expected DST to be marked unsupported on arm runtime, got %+v", dstGame)
+	}
+
+	detail := httptest.NewRecorder()
+	router.ServeHTTP(detail, httptest.NewRequest(stdhttp.MethodGet, "/api/games/dont-starve-together", nil))
+	if detail.Code != stdhttp.StatusOK {
+		t.Fatalf("expected DST game detail 200, got %d: %s", detail.Code, detail.Body.String())
+	}
+	var got domain.GameCatalogEntry
+	if err := json.Unmarshal(detail.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "unsupported" {
+		t.Fatalf("expected DST game detail to be unsupported on arm runtime, got %+v", got)
 	}
 }
 

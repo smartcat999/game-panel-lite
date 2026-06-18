@@ -2399,6 +2399,21 @@ func (h *Handler) workshopSyncUnsupported() bool {
 	return strings.HasPrefix(architecture, "arm") || strings.Contains(architecture, "aarch64")
 }
 
+func (h *Handler) providerRuntimeUnsupported(providerKey domain.ProviderKey) bool {
+	if providerKey != domain.ProviderDST || h.dockerMonitor == nil {
+		return false
+	}
+	architecture := strings.ToLower(strings.TrimSpace(h.dockerMonitor.Status().Architecture))
+	return strings.HasPrefix(architecture, "arm") || strings.Contains(architecture, "aarch64")
+}
+
+func (h *Handler) requireProviderRuntimeSupported(providerKey domain.ProviderKey) error {
+	if h.providerRuntimeUnsupported(providerKey) {
+		return fmt.Errorf("Don't Starve Together server runtime is currently supported only on amd64 Docker hosts")
+	}
+	return nil
+}
+
 func (h *Handler) runtimeStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.runtime.HostStats(r.Context())
 	if err != nil {
@@ -2602,6 +2617,7 @@ func stripInvitePassword(invite string) string {
 
 func (h *Handler) listGames(w http.ResponseWriter, r *http.Request) {
 	games := h.provider.Games()
+	h.applyRuntimeGameAvailability(games)
 	servers, err := h.store.ListServers(r.Context())
 	if err == nil {
 		counts := map[domain.GameKey]int{}
@@ -2621,7 +2637,20 @@ func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "game not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, game)
+	games := []domain.GameCatalogEntry{game}
+	h.applyRuntimeGameAvailability(games)
+	writeJSON(w, http.StatusOK, games[0])
+}
+
+func (h *Handler) applyRuntimeGameAvailability(games []domain.GameCatalogEntry) {
+	if !h.providerRuntimeUnsupported(domain.ProviderDST) {
+		return
+	}
+	for index := range games {
+		if games[index].Key == domain.GameDST {
+			games[index].Status = "unsupported"
+		}
+	}
 }
 
 func (h *Handler) gameVersions(w http.ResponseWriter, r *http.Request) {
@@ -2727,6 +2756,10 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	gameProvider, ok := h.provider.Get(payload.ProviderKey)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unknown provider")
+		return
+	}
+	if err := h.requireProviderRuntimeSupported(payload.ProviderKey); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	config, configPayloadJSON, err := decodeProviderRuntimeConfig(payload.ProviderKey, payload.Config, gameProvider.DefaultConfig())
@@ -3174,6 +3207,9 @@ func (h *Handler) serverWithRuntimeContainer(ctx context.Context, id string) (do
 
 func (h *Handler) ensureRuntimeContainer(ctx context.Context, server domain.GameServerInstance) (domain.GameServerInstance, bool, error) {
 	if err := h.requireRuntimeAvailable(ctx); err != nil {
+		return domain.GameServerInstance{}, false, err
+	}
+	if err := h.requireProviderRuntimeSupported(server.ProviderKey); err != nil {
 		return domain.GameServerInstance{}, false, err
 	}
 	if server.ContainerID != "" {

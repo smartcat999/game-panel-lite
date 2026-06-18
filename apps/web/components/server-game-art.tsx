@@ -2,35 +2,40 @@
 
 import Image from "next/image";
 import { Box, Hammer } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
+import { getGameArt } from "@/lib/game-art";
 import { serverProviderDisplay } from "@/lib/server-display";
 import { cn } from "@/lib/utils";
 import type { Server } from "@/lib/types";
 
-const gameArt = {
-  terraria: {
-    src: "/images/terraria-official-cover.jpg",
-    accent: "from-panel-green/30 via-slate-950/0 to-slate-950/45"
-  }
-} as const;
-
-export function ServerGameArt({ server, className }: { server: Pick<Server, "mode" | "providerKey">; className?: string }) {
-  const { t } = useI18n();
-  const art = gameArt.terraria;
+export function ServerGameArt({ server, className }: { server: Pick<Server, "mode" | "providerKey" | "gameKey">; className?: string }) {
+  const art = getGameArt(server.gameKey ?? server.providerKey);
   const provider = serverProviderDisplay(server);
   const showProviderMark = provider.label !== "Terraria";
+  const Icon = art.icon;
 
   return (
     <div className={cn("group relative size-16 shrink-0 overflow-hidden rounded-md border border-panel-line bg-slate-950", className)}>
-      <Image
-        src={art.src}
-        alt={t("terrariaCoverAlt")}
-        fill
-        sizes="64px"
-        className="object-cover object-[50%_38%] transition duration-200 group-hover:scale-105"
-      />
-      <div className={cn("absolute inset-0 bg-gradient-to-br", art.accent)} />
-      <div className="absolute inset-x-0 bottom-0 h-7 bg-gradient-to-t from-slate-950/85 to-transparent" />
+      {art.imageSrc ? (
+        <>
+          <Image
+            src={art.imageSrc}
+            alt={art.alt}
+            fill
+            sizes="64px"
+            className="object-cover object-[50%_38%] transition duration-200 group-hover:scale-105"
+          />
+          <div className={cn("absolute inset-0 bg-gradient-to-br", art.gradient)} />
+          <div className="absolute inset-x-0 bottom-0 h-7 bg-gradient-to-t from-slate-950/85 to-transparent" />
+        </>
+      ) : (
+        <>
+          <div className={cn("absolute inset-0 bg-gradient-to-br transition duration-200 group-hover:scale-110", art.gradient)} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Icon aria-hidden="true" className="size-8 text-white/85 drop-shadow-lg" />
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-950/90 to-transparent" />
+        </>
+      )}
       {showProviderMark && (
         <span
           aria-label={provider.label}

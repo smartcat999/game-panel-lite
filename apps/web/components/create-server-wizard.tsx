@@ -10,6 +10,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
+import { getGameArt } from "@/lib/game-art";
+import { gameDescription, gameDisplayName } from "@/lib/game-display";
 import { cn } from "@/lib/utils";
 import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
@@ -82,6 +84,8 @@ export function CreateServerWizard() {
   const configPresetsQuery = useQuery({ queryKey: ["config-presets"], queryFn: listConfigPresets, retry: false });
   const games = gamesQuery.data ?? [];
   const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games.find((game) => game.key === "terraria");
+  const selectedGameArt = getGameArt(selectedGame?.coverImage ?? selectedGame?.key ?? selectedGameKey);
+  const SelectedGameIcon = selectedGameArt.icon;
   const selectedProvider = selectedGame?.providers.find((provider) => provider.key === selectedProviderKey) ?? selectedGame?.providers.find((provider) => provider.recommended) ?? selectedGame?.providers[0];
   const providerKey = selectedProvider?.key ?? selectedProviderKey;
   const stepIds: StepId[] = useMemo(() => [
@@ -278,14 +282,20 @@ export function CreateServerWizard() {
       <div className="grid min-h-[640px] lg:grid-cols-[280px_1fr]">
         <aside className="hidden border-r border-panel-line bg-[linear-gradient(180deg,#111827,#07111b)] p-6 lg:block">
           <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950 shadow-[0_0_0_1px_rgba(123,217,120,0.08)]">
-            <Image
-              src="/images/terraria-official-cover.jpg"
-              alt={t("terrariaCoverAlt")}
-              width={1200}
-              height={1800}
-              className="aspect-[2/3] w-full object-cover"
-              priority
-            />
+            {selectedGameArt.imageSrc ? (
+              <Image
+                src={selectedGameArt.imageSrc}
+                alt={selectedGameArt.alt}
+                width={1200}
+                height={1800}
+                className="aspect-[2/3] w-full object-cover"
+                priority
+              />
+            ) : (
+              <div className={cn("flex aspect-[2/3] w-full items-center justify-center bg-gradient-to-br", selectedGameArt.gradient)}>
+                <SelectedGameIcon aria-hidden="true" className="size-20 text-white/75" />
+              </div>
+            )}
           </div>
         </aside>
         <div className="p-6">
@@ -453,6 +463,7 @@ function GameStep({
         {orderedGames.map((game) => {
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
+          const isUnsupported = game.status === "unsupported";
           return (
             <button
               key={game.key}
@@ -471,16 +482,16 @@ function GameStep({
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-white">{game.name}</p>
+                    <p className="font-medium text-white">{gameDisplayName(game.key, game.name, t)}</p>
                     <span className={cn("rounded px-2 py-0.5 text-xs", isAvailable ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>
-                      {isAvailable ? t("gameAvailable") : t("gamePlanned")}
+                      {isAvailable ? t("gameAvailable") : isUnsupported ? t("gameUnsupported") : t("gamePlanned")}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-slate-400">{game.description || t("terrariaGameDescription")}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">{gameDescription(game.key, game.description || t("terrariaGameDescription"), t)}</p>
                   {game.providers.length > 0 && (
                     <p className="mt-3 text-xs text-slate-500">{t("providerCount", { count: game.providers.length })}</p>
                   )}
-                  {!isAvailable && <p className="mt-3 text-xs text-slate-500">{t("plannedGameHint")}</p>}
+                  {!isAvailable && <p className="mt-3 text-xs text-slate-500">{isUnsupported ? t("unsupportedGameHint") : t("plannedGameHint")}</p>}
                 </div>
               </div>
               {isSelected && (

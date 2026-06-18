@@ -24,6 +24,27 @@ The work starts with user-facing product functionality rather than V1 UI polish:
 
 Post-V1 roadmap goals 1-13 have implementation slices. Status: closing feature-completeness gaps before any additional providers.
 
+## Current Slice: Game Artwork Localization and DST Runtime Guard
+
+Status: Completed
+
+Completed:
+- Server cards and game-library cards now use game-specific artwork instead of the fixed Terraria cover.
+- Create-server wizard sidebar artwork now follows the selected game.
+- Create-server game names and descriptions now resolve through the i18n layer, including Chinese labels for Terraria, Don't Starve Together, Palworld, and Minecraft Java.
+- Don't Starve Together is marked unsupported on arm Docker hosts because SteamCMD crashes when the amd64 DST server install runs through arm emulation.
+- Backend create/start paths now reject DST on unsupported arm Docker hosts before trying to pull or create the unavailable runtime image.
+- DST image build script now stops early on non-amd64 local Docker hosts and points users to an amd64 host or remote amd64 buildx builder.
+- DST image documentation now records the amd64-only build requirement and remote-builder command pattern.
+
+Checks:
+- `go test ./apps/api/internal/http`: passed.
+- `go test ./apps/api/internal/provider/dst`: passed.
+- `pnpm --filter @gamepanel-lite/web typecheck`: passed.
+- `pnpm --filter @gamepanel-lite/web lint`: passed.
+- `pnpm --filter @gamepanel-lite/web build`: passed with existing Next.js SWC optional-package fallback warnings and ESLint plugin warning.
+- `bash -n scripts/build-game-images.sh docker/dst/gamepanel-dst-entrypoint.sh`: passed.
+
 ## Current Slice: Multi-Game Resource Filtering
 
 Status: Completed

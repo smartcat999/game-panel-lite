@@ -143,6 +143,15 @@ build_dst() {
     echo "Don't Starve Together image builds are currently supported only for linux/amd64." >&2
     exit 1
   fi
+  if [[ -z "$builder" ]]; then
+    local docker_arch
+    docker_arch="$(docker info --format '{{.Architecture}}' 2>/dev/null || true)"
+    if [[ "$docker_arch" != "x86_64" && "$docker_arch" != "amd64" ]]; then
+      echo "Don't Starve Together image builds must run on an amd64 Docker host." >&2
+      echo "SteamCMD currently crashes under amd64 emulation on arm hosts; use an amd64 machine or a remote amd64 buildx builder." >&2
+      exit 1
+    fi
+  fi
 
   echo "==> Building ${image}"
   docker "${buildx_args[@]}" \
