@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
+      network: host
     image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-latest}
     environment:
       GAMEPANEL_HOST: 0.0.0.0
@@ -21,6 +22,7 @@ services:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+      network: host
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
     image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-latest}
