@@ -170,7 +170,7 @@ function ProviderRuntimeRow({
       <div className="flex shrink-0 items-center gap-2">
         {ready ? (
           <Link
-            href={`/servers/new?game=${encodeURIComponent(game.key)}&provider=${encodeURIComponent(provider.key)}`}
+            href={`/servers/new?game=${encodeURIComponent(game.key)}&provider=${encodeURIComponent(provider.key)}${provider.recommendedVersion ? `&version=${encodeURIComponent(provider.recommendedVersion)}` : ""}`}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-panel-green px-4 text-sm font-semibold text-slate-950 transition hover:bg-panel-green/90 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
           >
             <Plus aria-hidden="true" className="size-4" />

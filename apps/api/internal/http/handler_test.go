@@ -70,6 +70,10 @@ func tmodBinaryString(value string) []byte {
 }
 
 func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Handler, *store.Store, config.Config) {
+	return newTestRouterWithAdapterAndInstallMarkers(t, adapter, true)
+}
+
+func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Adapter, seedInstallMarkers bool) (stdhttp.Handler, *store.Store, config.Config) {
 	t.Helper()
 	root := t.TempDir()
 	cfg := config.Config{
@@ -95,9 +99,35 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 		monitor,
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
 	)
+	if seedInstallMarkers {
+		seedRuntimeInstallMarkers(t, handler)
+	}
 	router := chi.NewRouter()
 	handler.Register(router)
 	return router, db, cfg
+}
+
+func seedRuntimeInstallMarkers(t *testing.T, handler *Handler) {
+	t.Helper()
+	for _, game := range handler.provider.Games() {
+		for _, providerCatalog := range game.Providers {
+			gameProvider, ok := handler.provider.Get(providerCatalog.Key)
+			if !ok {
+				continue
+			}
+			for _, versionValue := range gameProvider.Versions() {
+				version := normalizeStoredProviderVersion(gameProvider, versionValue)
+				ref := runtimeInstallRef{
+					ProviderKey: providerCatalog.Key,
+					Version:     version,
+					Image:       gameProvider.ImageFor(version),
+				}
+				if err := handler.writeRuntimeInstallMarker(ref); err != nil {
+					t.Fatalf("seed runtime install marker: %v", err)
+				}
+			}
+		}
+	}
 }
 
 type availableMockAdapter struct {
@@ -1352,6 +1382,82 @@ func TestGameCatalogEndpoints(t *testing.T) {
 	if missing.Code != stdhttp.StatusNotFound {
 		t.Fatalf("expected unknown game 404, got %d: %s", missing.Code, missing.Body.String())
 	}
+}
+
+func TestRuntimeInstallStateUsesLocalMarkerInsteadOfDockerImage(t *testing.T) {
+	router, _, _ := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
+
+	runtimeStatus := func() domain.RuntimeImageStatus {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
+		if recorder.Code != stdhttp.StatusOK {
+			t.Fatalf("expected game catalog 200, got %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var games []domain.GameCatalogEntry
+		if err := json.Unmarshal(recorder.Body.Bytes(), &games); err != nil {
+			t.Fatal(err)
+		}
+		for _, game := range games {
+			if game.Key != domain.GameTerraria {
+				continue
+			}
+			for _, providerCatalog := range game.Providers {
+				if providerCatalog.Key == domain.ProviderTerrariaVanilla {
+					return providerCatalog.RuntimeImage
+				}
+			}
+		}
+		t.Fatal("expected Terraria vanilla provider in catalog")
+		return domain.RuntimeImageStatus{}
+	}
+
+	if status := runtimeStatus(); status.Status != runtime.ImageStatusMissing {
+		t.Fatalf("expected missing without local install marker even when Docker mock reports ready, got %+v", status)
+	}
+
+	createPayload := `{
+		"name":"Vanilla Test",
+		"providerKey":"terraria-vanilla",
+		"version":"1.4.4.9",
+		"hostPort":17777,
+		"config":{
+			"serverName":"Vanilla Test",
+			"worldName":"TestWorld",
+			"worldSize":"medium",
+			"difficulty":"classic",
+			"maxPlayers":8,
+			"port":7777,
+			"secure":true,
+			"language":"zh-Hans",
+			"autoCreateWorld":true
+		}
+	}`
+	blockedCreate := httptest.NewRecorder()
+	router.ServeHTTP(blockedCreate, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
+	if blockedCreate.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected create server to require local install marker, got %d: %s", blockedCreate.Code, blockedCreate.Body.String())
+	}
+
+	prepare := httptest.NewRecorder()
+	router.ServeHTTP(prepare, httptest.NewRequest(stdhttp.MethodPost, "/api/runtime/images/prepare", bytes.NewBufferString(`{"providerKey":"terraria-vanilla","version":"1.4.4.9"}`)))
+	if prepare.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected prepare runtime 202, got %d: %s", prepare.Code, prepare.Body.String())
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if status := runtimeStatus(); status.Status == runtime.ImageStatusReady {
+			allowedCreate := httptest.NewRecorder()
+			router.ServeHTTP(allowedCreate, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
+			if allowedCreate.Code != stdhttp.StatusCreated {
+				t.Fatalf("expected create server after local install marker, got %d: %s", allowedCreate.Code, allowedCreate.Body.String())
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("expected runtime status to become ready after local install marker, got %+v", runtimeStatus())
 }
 
 func TestGameCatalogMarksDSTUnsupportedOnArmRuntime(t *testing.T) {

@@ -2405,6 +2405,19 @@ type prepareRuntimeImageRequest struct {
 	Version     string             `json:"version,omitempty"`
 }
 
+type runtimeInstallRef struct {
+	ProviderKey domain.ProviderKey `json:"providerKey"`
+	Version     string             `json:"version"`
+	Image       string             `json:"image"`
+}
+
+type runtimeInstallMarker struct {
+	ProviderKey domain.ProviderKey `json:"providerKey"`
+	Version     string             `json:"version"`
+	Image       string             `json:"image"`
+	InstalledAt time.Time          `json:"installedAt"`
+}
+
 func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 	var payload prepareRuntimeImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -2426,7 +2439,8 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 	}
 	version := normalizeStoredProviderVersion(gameProvider, payload.Version)
 	image := gameProvider.ImageFor(version)
-	if status := h.runtimeImageStatus(r.Context(), image); status.Status == runtime.ImageStatusReady {
+	ref := runtimeInstallRef{ProviderKey: payload.ProviderKey, Version: version, Image: image}
+	if status := h.runtimeInstallStatus(ref); status.Status == runtime.ImageStatusReady {
 		writeJSON(w, http.StatusOK, status)
 		return
 	} else if status.Status == runtime.ImageStatusPreparing {
@@ -2435,23 +2449,23 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 	}
 	status := domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusPreparing, UpdatedAt: time.Now()}
 	h.setRuntimeImageJob(status)
-	go h.prepareRuntimeImageAsync(image)
+	go h.prepareRuntimeImageAsync(ref)
 	writeJSON(w, http.StatusAccepted, status)
 }
 
-func (h *Handler) prepareRuntimeImageAsync(image string) {
+func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	lastProgress := 0
-	status := domain.RuntimeImageStatus{Image: image, Progress: lastProgress, UpdatedAt: time.Now()}
-	if err := h.runtime.PrepareImageWithProgress(ctx, image, func(progress runtime.ImagePrepareProgress) {
+	status := domain.RuntimeImageStatus{Image: ref.Image, Progress: lastProgress, UpdatedAt: time.Now()}
+	if err := h.runtime.PrepareImageWithProgress(ctx, ref.Image, func(progress runtime.ImagePrepareProgress) {
 		nextProgress := clampRuntimeImageProgress(progress.Progress)
 		if nextProgress < lastProgress {
 			nextProgress = lastProgress
 		}
 		lastProgress = nextProgress
 		h.setRuntimeImageJob(domain.RuntimeImageStatus{
-			Image:     image,
+			Image:     ref.Image,
 			Status:    runtime.ImageStatusPreparing,
 			Message:   progress.Message,
 			Progress:  nextProgress,
@@ -2462,13 +2476,22 @@ func (h *Handler) prepareRuntimeImageAsync(image string) {
 		status.Message = err.Error()
 		status.Progress = lastProgress
 		if h.logger != nil {
-			h.logger.Warn("runtime image prepare failed", "image", image, "error", err)
+			h.logger.Warn("runtime image prepare failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
 		}
 	} else {
-		status.Status = runtime.ImageStatusReady
-		status.Progress = 100
-		if h.logger != nil {
-			h.logger.Info("runtime image prepared", "image", image)
+		if err := h.writeRuntimeInstallMarker(ref); err != nil {
+			status.Status = runtime.ImageStatusFailed
+			status.Message = err.Error()
+			status.Progress = lastProgress
+			if h.logger != nil {
+				h.logger.Warn("runtime install marker write failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
+			}
+		} else {
+			status.Status = runtime.ImageStatusReady
+			status.Progress = 100
+			if h.logger != nil {
+				h.logger.Info("runtime image prepared", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version)
+			}
 		}
 	}
 	status.UpdatedAt = time.Now()
@@ -2485,19 +2508,79 @@ func clampRuntimeImageProgress(progress int) int {
 	return progress
 }
 
-func (h *Handler) runtimeImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus {
-	if job, ok := h.getRuntimeImageJob(image); ok && job.Status == runtime.ImageStatusPreparing {
+func (h *Handler) runtimeInstallStatus(ref runtimeInstallRef) domain.RuntimeImageStatus {
+	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusPreparing {
 		return job
 	}
-	status := h.runtime.ImageStatus(ctx, image)
-	if status.Status == runtime.ImageStatusReady {
-		h.setRuntimeImageJob(status)
+	status, ok := h.runtimeInstallMarkerStatus(ref)
+	if ok {
 		return status
 	}
-	if job, ok := h.getRuntimeImageJob(image); ok && job.Status == runtime.ImageStatusFailed {
+	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusFailed {
 		return job
 	}
-	return status
+	return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusMissing, UpdatedAt: time.Now()}
+}
+
+func (h *Handler) runtimeInstallMarkerStatus(ref runtimeInstallRef) (domain.RuntimeImageStatus, bool) {
+	path := h.runtimeInstallMarkerPath(ref)
+	stat, err := os.Stat(path)
+	if err == nil {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusReady, UpdatedAt: stat.ModTime()}, true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.RuntimeImageStatus{}, false
+	}
+	return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}, true
+}
+
+func (h *Handler) writeRuntimeInstallMarker(ref runtimeInstallRef) error {
+	if ref.ProviderKey == "" || strings.TrimSpace(ref.Version) == "" || strings.TrimSpace(ref.Image) == "" {
+		return fmt.Errorf("runtime install marker is missing provider, version, or image")
+	}
+	path := h.runtimeInstallMarkerPath(ref)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	marker := runtimeInstallMarker{
+		ProviderKey: ref.ProviderKey,
+		Version:     ref.Version,
+		Image:       ref.Image,
+		InstalledAt: time.Now(),
+	}
+	data, err := json.MarshalIndent(marker, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(path, data, 0o644)
+}
+
+func (h *Handler) runtimeInstallMarkerPath(ref runtimeInstallRef) string {
+	return filepath.Join(h.cfg.DataDir, "runtime-installs", safeRuntimeInstallPathPart(string(ref.ProviderKey)), safeRuntimeInstallPathPart(ref.Version)+".json")
+}
+
+func safeRuntimeInstallPathPart(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "_"
+	}
+	var builder strings.Builder
+	for _, char := range value {
+		switch {
+		case char >= 'a' && char <= 'z':
+			builder.WriteRune(char)
+		case char >= 'A' && char <= 'Z':
+			builder.WriteRune(char)
+		case char >= '0' && char <= '9':
+			builder.WriteRune(char)
+		case char == '.', char == '-', char == '_':
+			builder.WriteRune(char)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+	return builder.String()
 }
 
 func (h *Handler) getRuntimeImageJob(image string) (domain.RuntimeImageStatus, bool) {
@@ -2777,7 +2860,7 @@ func (h *Handler) applyRuntimeGameAvailability(games []domain.GameCatalogEntry) 
 	}
 }
 
-func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain.GameCatalogEntry) {
+func (h *Handler) attachRuntimeImageStatuses(_ context.Context, games []domain.GameCatalogEntry) {
 	for gameIndex := range games {
 		for providerIndex := range games[gameIndex].Providers {
 			providerCatalog := &games[gameIndex].Providers[providerIndex]
@@ -2799,7 +2882,7 @@ func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain
 				}
 				continue
 			}
-			providerCatalog.RuntimeImage = h.runtimeImageStatus(ctx, image)
+			providerCatalog.RuntimeImage = h.runtimeInstallStatus(runtimeInstallRef{ProviderKey: providerCatalog.Key, Version: version, Image: image})
 		}
 	}
 }
@@ -2932,7 +3015,11 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	imageStatus := h.runtimeImageStatus(r.Context(), gameProvider.ImageFor(payload.Version))
+	imageStatus := h.runtimeInstallStatus(runtimeInstallRef{
+		ProviderKey: payload.ProviderKey,
+		Version:     payload.Version,
+		Image:       gameProvider.ImageFor(payload.Version),
+	})
 	if imageStatus.Status != runtime.ImageStatusReady {
 		writeError(w, http.StatusConflict, "server runtime is not installed; install it from Game Library first")
 		return

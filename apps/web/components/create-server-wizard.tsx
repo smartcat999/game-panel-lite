@@ -290,11 +290,13 @@ export function CreateServerWizard() {
     const params = new URLSearchParams(window.location.search);
     const gameKey = params.get("game");
     const providerKey = params.get("provider") as ProviderKey | null;
-    const queryKey = `${gameKey ?? ""}:${providerKey ?? ""}`;
+    const requestedVersion = params.get("version") ?? "";
+    const queryKey = `${gameKey ?? ""}:${providerKey ?? ""}:${requestedVersion}`;
     if (!gameKey || appliedGameQueryKey === queryKey || selectedWorldId || appliedConfigPresetId) return;
     const game = games.find((item) => item.key === gameKey);
     if (!game || game.status !== "available") return;
     chooseGame(game, providerKey);
+    setVersion(requestedVersion);
     setStep(1);
     setAppliedGameQueryKey(queryKey);
   }, [appliedConfigPresetId, appliedGameQueryKey, games, selectedWorldId]);
