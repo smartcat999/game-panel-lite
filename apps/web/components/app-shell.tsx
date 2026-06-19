@@ -159,7 +159,6 @@ function AppChrome({ children }: { children: ReactNode }) {
             />
           </div>
           <p className="mt-3 text-sm font-medium">{t("terrariaReady")}</p>
-          <p className="text-xs text-slate-500">v1.0.0</p>
         </div>
       </aside>
       <div className="lg:pl-64">
