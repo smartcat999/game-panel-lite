@@ -22,7 +22,6 @@ RUN --mount=type=secret,id=steam_username,required=false \
           +@ShutdownOnFailedCommand 1 \
           +@NoPromptForPassword 1 \
           +@sSteamCmdForcePlatformType linux \
-          +@sSteamCmdForcePlatformBitness 64 \
           +force_install_dir /opt/dst \
           +login "${steam_user}" "${steam_password}" \
           +app_update "${DST_APP_ID}" validate \
@@ -32,7 +31,6 @@ RUN --mount=type=secret,id=steam_username,required=false \
         +@ShutdownOnFailedCommand 1 \
         +@NoPromptForPassword 1 \
         +@sSteamCmdForcePlatformType linux \
-        +@sSteamCmdForcePlatformBitness 64 \
         +force_install_dir /opt/dst \
         +login anonymous \
         +app_update "${DST_APP_ID}" validate \
