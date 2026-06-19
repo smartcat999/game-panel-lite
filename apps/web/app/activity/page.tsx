@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity as ActivityIcon, AlertTriangle, Cpu, Gauge, MemoryStick, RadioTower, Users } from "lucide-react";
+import { Activity as ActivityIcon, AlertTriangle, Cpu, Gauge, MemoryStick, RadioTower, Server, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
@@ -74,64 +74,70 @@ export default function ActivityPage() {
       />
       {(query.isError || serversQuery.isError || gamesQuery.isError || metricsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiActivityUnavailable")}</p>}
 
-      <section className="mb-5 grid gap-3 md:grid-cols-4">
-        <MetricTile
-          icon={<Cpu aria-hidden="true" className="size-4" />}
-          label={t("metricRuntimeCpu")}
-          value={host ? `${host.totalCpuPercent.toFixed(1)}%` : "—"}
-          hint={t("metricScrapeHint")}
-          sparkline={<Sparkline data={cpuSeries} width={94} height={28} color="#7bd978" max={400} />}
-        />
-        <MetricTile
-          icon={<MemoryStick aria-hidden="true" className="size-4" />}
-          label={t("metricRuntimeMemory")}
-          value={host ? `${host.totalMemoryMb} MB` : "—"}
-          hint={host?.memoryLimitMb ? t("metricMemoryLimit", { limit: `${host.memoryLimitMb} MB` }) : t("metricNoLimit")}
-          sparkline={<Sparkline data={memorySeries} width={94} height={28} color="#a78bfa" max={memoryLimit} />}
-          tone="purple"
-        />
-        <MetricTile
-          icon={<Gauge aria-hidden="true" className="size-4" />}
-          label={t("metricRunningServers")}
-          value={`${runningServers} / ${metrics?.servers.length ?? 0}`}
-          hint={t("metricDockerContainers", { count: host?.runningContainers ?? 0 })}
-        />
-        <MetricTile
-          icon={<Users aria-hidden="true" className="size-4" />}
-          label={t("metricOnlinePlayers")}
-          value={`${totalPlayers}`}
-          hint={t("playersOnlineHint", { count: totalPlayers, capacity: playerCapacity })}
-        />
+      <section className="mb-5 overflow-hidden rounded-lg border border-panel-line bg-[#080d14]">
+        <div className="flex flex-col gap-3 border-b border-panel-line bg-slate-950/35 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-md bg-panel-green/15 text-panel-green">
+              <Gauge aria-hidden="true" className="size-4" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100">{t("metricsOverviewTitle")}</h2>
+              <p className="text-xs text-slate-500">{t("metricScrapeHint")}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+            <StatusPill icon={<Server aria-hidden="true" className="size-3.5" />} label={t("metricRunningServers")} value={`${runningServers}/${metrics?.servers.length ?? 0}`} />
+            <StatusPill icon={<Users aria-hidden="true" className="size-3.5" />} label={t("metricOnlinePlayers")} value={`${totalPlayers}/${playerCapacity}`} />
+            <StatusPill icon={<RadioTower aria-hidden="true" className="size-3.5" />} label="Docker" value={`${host?.runningContainers ?? 0}`} />
+          </div>
+        </div>
+
+        <div className="grid gap-px bg-panel-line xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.55fr)]">
+          <div className="grid gap-px bg-panel-line md:grid-cols-2">
+            <TelemetryChart
+              color="#7bd978"
+              icon={<Cpu aria-hidden="true" className="size-4" />}
+              label={t("metricRuntimeCpu")}
+              max={400}
+              series={cpuSeries}
+              value={host ? `${host.totalCpuPercent.toFixed(1)}%` : "—"}
+            />
+            <TelemetryChart
+              color="#a78bfa"
+              icon={<MemoryStick aria-hidden="true" className="size-4" />}
+              label={t("metricRuntimeMemory")}
+              max={memoryLimit}
+              series={memorySeries}
+              sublabel={host?.memoryLimitMb ? t("metricMemoryLimit", { limit: `${host.memoryLimitMb} MB` }) : t("metricNoLimit")}
+              value={host ? `${host.totalMemoryMb} MB` : "—"}
+            />
+          </div>
+
+          <div className="bg-[#080d14] p-4">
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-panel-line bg-panel-line">
+              <SignalReadout icon={<ActivityIcon aria-hidden="true" className="size-4" />} label={t("activityEventsTotal")} value={metrics?.activity.total ?? 0} />
+              <SignalReadout icon={<AlertTriangle aria-hidden="true" className="size-4" />} label={t("activityFailures")} tone="gold" value={metrics?.activity.failures ?? 0} />
+            </div>
+            <div className="mt-4">
+              <p className="mb-3 text-xs text-slate-500">{t("activityEventMixDescription", { hours: metrics?.activity.windowHours ?? 24 })}</p>
+              <EventMixTracks items={metrics?.activity.byType ?? []} />
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(300px,0.75fr)]">
-        <Card className="overflow-hidden">
-          <div className="border-b border-panel-line px-4 py-4">
-            <h2 className="font-semibold">{t("serverLoadTitle")}</h2>
-            <p className="mt-1 text-xs text-slate-500">{t("serverLoadDescription")}</p>
-          </div>
-          <div className="divide-y divide-panel-line">
-            {topServers.length > 0 ? (
-              topServers.map((server) => <ServerLoadRow key={server.id} server={server} />)
-            ) : (
-              <div className="p-4 text-sm text-slate-400">{metricsQuery.isLoading ? t("loading") : t("noServersYet")}</div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <div className="border-b border-panel-line px-4 py-4">
-            <h2 className="font-semibold">{t("activityEventMixTitle")}</h2>
-            <p className="mt-1 text-xs text-slate-500">{t("activityEventMixDescription", { hours: metrics?.activity.windowHours ?? 24 })}</p>
-          </div>
-          <div className="space-y-4 p-4">
-            <div className="grid grid-cols-2 gap-3">
-              <EventCount icon={<ActivityIcon aria-hidden="true" className="size-4" />} label={t("activityEventsTotal")} value={metrics?.activity.total ?? 0} />
-              <EventCount icon={<AlertTriangle aria-hidden="true" className="size-4" />} label={t("activityFailures")} value={metrics?.activity.failures ?? 0} tone="gold" />
-            </div>
-            <EventMixBars items={metrics?.activity.byType ?? []} />
-          </div>
-        </Card>
+      <section className="mb-5 overflow-hidden rounded-lg border border-panel-line bg-[#080d14]">
+        <div className="border-b border-panel-line px-4 py-4">
+          <h2 className="font-semibold">{t("serverLoadTitle")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("serverLoadDescription")}</p>
+        </div>
+        <div className="divide-y divide-panel-line">
+          {topServers.length > 0 ? (
+            topServers.map((server) => <ServerLoadRow key={server.id} server={server} />)
+          ) : (
+            <div className="p-4 text-sm text-slate-400">{metricsQuery.isLoading ? t("loading") : t("noServersYet")}</div>
+          )}
+        </div>
       </section>
 
       <ResourceFilterBar
@@ -185,34 +191,52 @@ export default function ActivityPage() {
   );
 }
 
-function MetricTile({
-  hint,
+function StatusPill({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <span className="inline-flex h-8 items-center gap-2 rounded-md border border-panel-line bg-slate-900/60 px-2.5">
+      <span className="text-panel-green">{icon}</span>
+      <span className="text-slate-500">{label}</span>
+      <span className="font-mono text-slate-200">{value}</span>
+    </span>
+  );
+}
+
+function TelemetryChart({
+  color,
   icon,
   label,
-  sparkline,
-  tone = "green",
+  max,
+  series,
+  sublabel,
   value
 }: {
-  hint: string;
+  color: string;
   icon: React.ReactNode;
   label: string;
-  sparkline?: React.ReactNode;
-  tone?: "green" | "purple";
+  max: number;
+  series: ReturnType<typeof useTimeSeries>;
+  sublabel?: string;
   value: string;
 }) {
-  const toneClass = tone === "purple" ? "text-panel-purple bg-panel-purple/10 border-panel-purple/25" : "text-panel-green bg-panel-green/10 border-panel-green/25";
   return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span className={cn("mb-3 flex size-8 items-center justify-center rounded-md border", toneClass)}>{icon}</span>
-          <p className="text-xs text-slate-500">{label}</p>
-          <p className="mt-1 font-mono text-xl font-semibold text-slate-100">{value}</p>
-          <p className="mt-1 text-xs text-slate-500">{hint}</p>
+    <div className="min-h-56 bg-[#080d14] p-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+            <span className="text-slate-500" style={{ color }}>{icon}</span>
+            <span>{label}</span>
+          </div>
+          <p className="font-mono text-3xl font-semibold tracking-normal text-slate-100">{value}</p>
         </div>
-        {sparkline ? <div className="shrink-0 pt-1">{sparkline}</div> : null}
+        {sublabel ? <p className="max-w-36 text-right text-xs text-slate-500">{sublabel}</p> : null}
       </div>
-    </Card>
+      <div className="relative h-32 overflow-hidden rounded-md border border-panel-line bg-slate-950/45 p-3">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_32px]" />
+        <div className="relative h-full w-full">
+          <Sparkline data={series} width={420} height={104} color={color} max={max} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -252,32 +276,34 @@ function LoadBar({ label, percent, tone = "green", value }: { label: string; per
   );
 }
 
-function EventCount({ icon, label, tone = "green", value }: { icon: React.ReactNode; label: string; tone?: "green" | "gold"; value: number }) {
+function SignalReadout({ icon, label, tone = "green", value }: { icon: React.ReactNode; label: string; tone?: "green" | "gold"; value: number }) {
   return (
-    <div className="rounded-md border border-panel-line bg-slate-950/35 p-3">
-      <div className={cn("mb-2 flex size-7 items-center justify-center rounded", tone === "gold" ? "bg-panel-gold/15 text-panel-gold" : "bg-panel-green/15 text-panel-green")}>{icon}</div>
+    <div className="bg-[#080d14] p-3">
+      <div className={cn("mb-2 flex size-7 items-center justify-center rounded", tone === "gold" ? "bg-panel-gold/15 text-panel-gold" : "bg-panel-green/15 text-panel-green")}>
+        {icon}
+      </div>
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 font-mono text-lg font-semibold text-slate-100">{value}</p>
     </div>
   );
 }
 
-function EventMixBars({ items }: { items: { type: string; count: number }[] }) {
+function EventMixTracks({ items }: { items: { type: string; count: number }[] }) {
   const { t } = useI18n();
   const max = Math.max(1, ...items.map((item) => item.count));
   if (items.length === 0) {
     return <p className="text-sm text-slate-400">{t("noActivityYet")}</p>;
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {items.map((item) => (
         <div key={item.type}>
           <div className="mb-1 flex justify-between gap-2 text-xs">
             <span className="text-slate-400">{eventTypeLabel(item.type, t)}</span>
             <span className="font-mono text-slate-500">{item.count}</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full rounded-full bg-panel-green" style={{ width: `${Math.max(5, item.count / max * 100)}%` }} />
+          <div className="relative h-2 overflow-hidden rounded-full bg-slate-900">
+            <div className="absolute inset-y-0 left-0 rounded-full bg-panel-green" style={{ width: `${Math.max(5, item.count / max * 100)}%` }} />
           </div>
         </div>
       ))}
