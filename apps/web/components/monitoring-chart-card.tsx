@@ -119,9 +119,10 @@ function createChartOption({
       confine: true,
       formatter: (params: unknown) => {
         const item = (Array.isArray(params) ? params[0] : params) as { axisValue?: string | number; value?: unknown } | undefined;
+        const rawTime = Array.isArray(item?.value) ? item.value[0] : item?.axisValue;
         const rawValue = Array.isArray(item?.value) ? item.value[1] : item?.value;
         const value = Number(rawValue ?? 0);
-        return `<div style="font-size:12px;color:#cbd5e1;">${formatTimeLabel(String(item?.axisValue ?? ""))}</div><div style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#f8fafc;">${formatValue(value, unit)}</div>`;
+        return `<div style="font-size:12px;color:#cbd5e1;">${formatTimeLabel(rawTime)}</div><div style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#f8fafc;">${formatValue(value, unit)}</div>`;
       },
       padding: [8, 10],
       textStyle: { color: "#e2e8f0", fontFamily: "Inter, ui-sans-serif, system-ui" }
@@ -129,7 +130,7 @@ function createChartOption({
     xAxis: {
       axisLabel: {
         color: "#64748b",
-        formatter: (value: string) => formatTimeLabel(value),
+        formatter: (value: string | number) => formatTimeLabel(value),
         hideOverlap: true,
         margin: 12
       },
@@ -180,8 +181,13 @@ function createChartOption({
   };
 }
 
-function formatTimeLabel(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function formatTimeLabel(value: unknown) {
+  if (value === undefined || value === null || value === "") return "-";
+  const date = new Date(typeof value === "number" || typeof value === "string" ? value : String(value));
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatValue(value: number, unit: "" | "%" | "MB") {
