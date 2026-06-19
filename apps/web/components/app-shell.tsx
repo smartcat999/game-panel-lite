@@ -147,18 +147,17 @@ function AppChrome({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="m-4 rounded-lg border border-panel-line bg-slate-950/40 p-4">
+        <div className="m-4 overflow-hidden rounded-lg border border-panel-line bg-slate-950/40 p-3">
           <div className="h-20 overflow-hidden rounded-md border border-panel-line bg-slate-950">
             <Image
               src="/images/terraria-official-cover.jpg"
-              alt={t("terrariaCoverAlt")}
+              alt=""
               width={1200}
               height={1800}
               className="h-full w-full object-cover object-[50%_42%]"
               priority
             />
           </div>
-          <p className="mt-3 text-sm font-medium">{t("terrariaReady")}</p>
         </div>
       </aside>
       <div className="lg:pl-64">

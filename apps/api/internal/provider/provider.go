@@ -172,6 +172,9 @@ func recommendedVersion(versions []string) string {
 	if len(versions) == 0 {
 		return ""
 	}
+	if versions[0] != "latest" {
+		return versions[0]
+	}
 	for _, v := range versions[1:] {
 		if v != "latest" {
 			return v

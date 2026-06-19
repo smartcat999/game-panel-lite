@@ -11,12 +11,68 @@ services:
       GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
       GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
       GAMEPANEL_DOCKER_HOST: unix:///var/run/docker.sock
+      GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
+      GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
     ports:
       - "4000:4000"
     stop_grace_period: 5s
     volumes:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+
+  gamepanel-exporter:
+    build:
+      context: .
+      dockerfile: docker/exporter/Dockerfile
+      network: host
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-latest}
+    environment:
+      GAMEPANEL_HOST: 0.0.0.0
+      GAMEPANEL_PORT: 4010
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
+    depends_on:
+      - api
+    ports:
+      - "4010:4010"
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${GAMEPANEL_PROMETHEUS_DATA_DIR:-./data/prometheus}:/prometheus
+    depends_on:
+      - api
+      - gamepanel-exporter
+      - cadvisor
+      - node-exporter
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    privileged: true
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+
+  node-exporter:
+    image: prom/node-exporter:v1.10.2
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
 
   web:
     build:

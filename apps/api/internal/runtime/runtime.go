@@ -52,6 +52,7 @@ type HostStats struct {
 	TotalCPUPercent   float64 `json:"totalCpuPercent"`
 	TotalMemoryMB     int64   `json:"totalMemoryMb"`
 	MemoryLimitMB     int64   `json:"memoryLimitMb"`
+	StorageUsedBytes  int64   `json:"storageUsedBytes"`
 }
 
 type ImagePrepareProgress struct {

@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -84,6 +85,21 @@ func TestConsumeImagePullReturnsErrorDetail(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no matching manifest") {
 		t.Fatalf("expected platform error, got %v", err)
+	}
+}
+
+func TestImagePullErrorExplainsMissingDSTRegistryImage(t *testing.T) {
+	err := imagePullError(
+		"smartcat99999/dst-server:latest",
+		errors.New("pull access denied for smartcat99999/dst-server, repository does not exist or may require 'docker login': denied: requested access to the resource is denied"),
+	)
+	if err == nil {
+		t.Fatal("expected image pull error")
+	}
+	for _, want := range []string{"DST runtime image", "scripts/build-game-images.sh dst", "Original error"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected error to contain %q, got %v", want, err)
+		}
 	}
 }
 

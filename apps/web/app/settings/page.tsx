@@ -2,13 +2,12 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Database, Globe, HardDrive, KeyRound, Network, ShieldCheck } from "lucide-react";
+import { Database, Globe, HardDrive, KeyRound, Network } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
-import { changeAdminPassword, getDockerStatus, getSettings, updatePublicHost } from "@/lib/api";
+import { changeAdminPassword, getSettings, updatePublicHost } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -17,11 +16,9 @@ export default function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [publicHost, setPublicHost] = useState<string | null>(null);
   const [publicHostMessage, setPublicHostMessage] = useState("");
-  const docker = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false });
-  const configuredHost = settings.data?.dockerHost ?? docker.data?.host ?? "GAMEPANEL_DOCKER_HOST";
+  const configuredHost = settings.data?.dockerHost ?? "GAMEPANEL_DOCKER_HOST";
   const publicHostValue = publicHost ?? settings.data?.publicHost ?? "";
-  const dockerReady = Boolean(docker.data?.available);
   const passwordMutation = useMutation({
     mutationFn: () => changeAdminPassword(currentPassword, newPassword),
     onSuccess: () => {
@@ -56,42 +53,10 @@ export default function SettingsPage() {
     <>
       <PageHeader title={t("settingsTitle")} description={t("settingsDescription")} />
 
-      <Card className="mb-5 overflow-hidden">
-        <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <span
-              className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-md border",
-                dockerReady ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold"
-              )}
-            >
-              <ShieldCheck aria-hidden="true" className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-semibold text-white">{t("dockerRuntime")}</h2>
-                <StatusBadge ready={dockerReady} />
-              </div>
-              <p className="mt-1 text-sm text-slate-400">
-                {docker.data
-                  ? docker.data.available ? t("dockerRuntimeReady") : t("dockerRuntimeUnavailable")
-                  : docker.isError ? t("dockerStatusUnavailable")
-                  : t("dockerStatusLoading")}
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-3 text-sm sm:grid-cols-3 md:min-w-[520px]">
-            <RuntimeSummaryItem label={t("currentDockerHost")} value={configuredHost} mono />
-            <RuntimeSummaryItem label={t("dockerArchitecture")} value={docker.data?.architecture || t("unknown")} />
-            <RuntimeSummaryItem label={t("lastChecked")} value={formatCheckedAt(docker.data?.lastCheckedAt, t("unknown"))} />
-          </div>
-        </div>
-      </Card>
-
       <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
         <Card className="h-fit p-2 xl:sticky xl:top-24">
           <nav aria-label={t("settingsTitle")} className="flex gap-1 overflow-x-auto xl:flex-col xl:overflow-visible">
-            <SettingsNavItem href="#runtime" icon={<ShieldCheck aria-hidden="true" className="size-4" />} label={t("dockerRuntime")} />
+            <SettingsNavItem href="#docker-host" icon={<Network aria-hidden="true" className="size-4" />} label={t("dockerSockTitle")} />
             <SettingsNavItem href="#network" icon={<Network aria-hidden="true" className="size-4" />} label={t("publicHostTitle")} />
             <SettingsNavItem href="#storage" icon={<HardDrive aria-hidden="true" className="size-4" />} label={t("dataDirectories")} />
             <SettingsNavItem href="#security" icon={<KeyRound aria-hidden="true" className="size-4" />} label={t("localAdmin")} />
@@ -100,19 +65,13 @@ export default function SettingsPage() {
 
         <Card className="overflow-hidden">
           <SettingsSection
-            id="runtime"
-            icon={<ShieldCheck aria-hidden="true" className={dockerReady ? "size-5 text-panel-green" : "size-5 text-panel-gold"} />}
-            title={t("dockerRuntime")}
-            description={t("dockerHostConfigNote")}
+            id="docker-host"
+            icon={<Network aria-hidden="true" className="size-5 text-slate-400" />}
+            title={t("dockerSockTitle")}
+            description={t("dockerSockDescription")}
           >
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+            <div className="grid gap-3">
               <SettingValue label={t("configuredDockerHost")} value={configuredHost} />
-              <div className="rounded-md border border-panel-line bg-slate-950/35 px-3 py-2">
-                <p className="text-xs text-slate-500">{t("runtimeStatus")}</p>
-                <div className="mt-1">
-                  <StatusBadge ready={dockerReady} />
-                </div>
-              </div>
             </div>
           </SettingsSection>
 
@@ -196,29 +155,6 @@ export default function SettingsPage() {
   );
 }
 
-function StatusBadge({ ready }: { ready: boolean }) {
-  const { t } = useI18n();
-  return (
-    <span
-      className={cn(
-        "inline-flex min-w-14 items-center justify-center rounded px-2 py-0.5 text-xs font-medium",
-        ready ? "bg-panel-green/15 text-panel-green" : "bg-panel-gold/15 text-panel-gold"
-      )}
-    >
-      {ready ? t("available") : t("unavailable")}
-    </span>
-  );
-}
-
-function RuntimeSummaryItem({ label, mono = false, value }: { label: string; mono?: boolean; value: string }) {
-  return (
-    <div className="min-w-0 rounded-md border border-panel-line bg-slate-950/35 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={cn("mt-1 truncate text-sm text-slate-200", mono && "font-mono")}>{value}</p>
-    </div>
-  );
-}
-
 function SettingsNavItem({ href, icon, label }: { href: string; icon: ReactNode; label: string }) {
   return (
     <a
@@ -258,17 +194,6 @@ function SettingsSection({
       {children}
     </section>
   );
-}
-
-function formatCheckedAt(value: string | undefined, fallback: string) {
-  if (!value) return fallback;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return fallback;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(date);
 }
 
 function SettingValue({ label, value }: { label: string; value: string }) {

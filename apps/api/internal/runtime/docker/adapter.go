@@ -153,10 +153,35 @@ func (a *Adapter) ensureImageWithProgress(ctx context.Context, image string, onP
 	}
 	pull, err := a.client.ImagePull(ctx, image, types.ImagePullOptions{})
 	if err != nil {
-		return err
+		return imagePullError(image, err)
 	}
 	defer pull.Close()
-	return consumeImagePullWithProgress(pull, onProgress)
+	if err := consumeImagePullWithProgress(pull, onProgress); err != nil {
+		return imagePullError(image, err)
+	}
+	return nil
+}
+
+func imagePullError(image string, err error) error {
+	if err == nil {
+		return nil
+	}
+	message := err.Error()
+	if isDSTImage(image) && isImageAccessDenied(message) {
+		return fmt.Errorf("DST runtime image %s is not available from the registry. Build and load it on this Docker host with scripts/build-game-images.sh dst --platform linux/amd64 --load, or push it to a registry this host can pull from. Original error: %w", image, err)
+	}
+	return err
+}
+
+func isDSTImage(image string) bool {
+	return strings.Contains(image, "/dst-server:")
+}
+
+func isImageAccessDenied(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, "pull access denied") ||
+		strings.Contains(message, "repository does not exist") ||
+		strings.Contains(message, "requested access to the resource is denied")
 }
 
 type imagePullEvent struct {

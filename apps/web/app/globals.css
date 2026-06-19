@@ -23,3 +23,24 @@ body {
 * {
   box-sizing: border-box;
 }
+
+.runtime-install-indeterminate {
+  animation: runtime-install-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes runtime-install-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(900%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runtime-install-indeterminate {
+    animation: none;
+    opacity: 0.7;
+  }
+}

@@ -442,6 +442,7 @@ export type HostStats = {
   totalCpuPercent: number;
   totalMemoryMb: number;
   memoryLimitMb: number;
+  storageUsedBytes: number;
 };
 
 export type ObservabilityServerMetric = {

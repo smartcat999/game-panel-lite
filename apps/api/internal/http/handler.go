@@ -21,8 +21,10 @@ import (
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
@@ -43,6 +45,7 @@ type Handler struct {
 	runtime        *runtime.SwitchableAdapter
 	dockerMonitor  *runtime.DockerMonitor
 	runtimeFactory func(string) (runtime.Adapter, error)
+	apiMetrics     *metrics.Registry
 
 	runtimeImageJobsMu sync.Mutex
 	runtimeImageJobs   map[string]domain.RuntimeImageStatus
@@ -64,7 +67,11 @@ func NewHandler(
 	adapter *runtime.SwitchableAdapter,
 	dockerMonitor *runtime.DockerMonitor,
 	runtimeFactory func(string) (runtime.Adapter, error),
+	apiMetrics *metrics.Registry,
 ) *Handler {
+	if apiMetrics == nil {
+		apiMetrics = metrics.NewRegistry()
+	}
 	return &Handler{
 		cfg:              cfg,
 		logger:           logger,
@@ -73,12 +80,14 @@ func NewHandler(
 		runtime:          adapter,
 		dockerMonitor:    dockerMonitor,
 		runtimeFactory:   runtimeFactory,
+		apiMetrics:       apiMetrics,
 		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
 	}
 }
 
 func (h *Handler) Register(r chi.Router) {
 	r.Use(h.cors)
+	r.Use(h.apiMetrics.Middleware)
 	r.Get("/healthz", h.health)
 	r.With(h.optionalAuth).Get("/api/auth/bootstrap", h.authBootstrap)
 	r.Post("/api/auth/setup", h.setupAdmin)
@@ -95,6 +104,10 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/runtime/stats", h.runtimeStats)
 		r.Get("/api/observability/metrics", h.observabilityMetrics)
 		r.Get("/api/observability/prometheus", h.prometheusMetrics)
+		monitoring.NewHandler(monitoring.NewService(
+			h.store,
+			monitoring.NewPrometheusClient(h.cfg.PrometheusURL, h.cfg.PrometheusQueryTimeout, h.apiMetrics),
+		)).Register(r)
 		r.Post("/api/runtime/images/prepare", h.prepareRuntimeImage)
 		r.Get("/api/settings", h.getSettings)
 		r.Put("/api/settings/public-host", h.updatePublicHost)
@@ -2444,7 +2457,7 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 	version := normalizeStoredProviderVersion(gameProvider, payload.Version)
 	image := gameProvider.ImageFor(version)
 	ref := runtimeInstallRef{ProviderKey: payload.ProviderKey, Version: version, Image: image}
-	if status := h.runtimeInstallStatus(ref); status.Status == runtime.ImageStatusReady {
+	if status := h.runtimeInstallStatus(r.Context(), ref); status.Status == runtime.ImageStatusReady {
 		writeJSON(w, http.StatusOK, status)
 		return
 	} else if status.Status == runtime.ImageStatusPreparing {
@@ -2512,18 +2525,25 @@ func clampRuntimeImageProgress(progress int) int {
 	return progress
 }
 
-func (h *Handler) runtimeInstallStatus(ref runtimeInstallRef) domain.RuntimeImageStatus {
+func (h *Handler) runtimeInstallStatus(ctx context.Context, ref runtimeInstallRef) domain.RuntimeImageStatus {
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusPreparing {
 		return job
 	}
-	status, ok := h.runtimeInstallMarkerStatus(ref)
-	if ok {
-		return status
+	imageStatus := h.runtime.ImageStatus(ctx, ref.Image)
+	if imageStatus.Status == runtime.ImageStatusReady {
+		if markerStatus, ok := h.runtimeInstallMarkerStatus(ref); ok {
+			if markerStatus.Status == runtime.ImageStatusReady {
+				imageStatus.UpdatedAt = markerStatus.UpdatedAt
+			}
+		} else if err := h.writeRuntimeInstallMarker(ref); err != nil {
+			imageStatus.Message = err.Error()
+		}
+		return imageStatus
 	}
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusFailed {
 		return job
 	}
-	return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusMissing, UpdatedAt: time.Now()}
+	return imageStatus
 }
 
 func (h *Handler) runtimeInstallMarkerStatus(ref runtimeInstallRef) (domain.RuntimeImageStatus, bool) {
@@ -2626,10 +2646,34 @@ func (h *Handler) requireProviderRuntimeSupported(providerKey domain.ProviderKey
 func (h *Handler) runtimeStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.runtime.HostStats(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusOK, runtime.HostStats{})
-		return
+		stats = runtime.HostStats{}
+	}
+	if used, usageErr := dataDirUsageBytes(h.cfg.DataDir); usageErr == nil {
+		stats.StorageUsedBytes = used
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func dataDirUsageBytes(root string) (int64, error) {
+	if strings.TrimSpace(root) == "" {
+		return 0, nil
+	}
+	var total int64
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total, err
 }
 
 func (h *Handler) observabilityMetrics(w http.ResponseWriter, r *http.Request) {
@@ -2646,6 +2690,9 @@ func (h *Handler) prometheusMetrics(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if h.apiMetrics != nil {
+		body += "\n" + h.apiMetrics.PrometheusText()
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -2884,7 +2931,7 @@ func (h *Handler) applyRuntimeGameAvailability(games []domain.GameCatalogEntry) 
 	}
 }
 
-func (h *Handler) attachRuntimeImageStatuses(_ context.Context, games []domain.GameCatalogEntry) {
+func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain.GameCatalogEntry) {
 	for gameIndex := range games {
 		for providerIndex := range games[gameIndex].Providers {
 			providerCatalog := &games[gameIndex].Providers[providerIndex]
@@ -2906,7 +2953,7 @@ func (h *Handler) attachRuntimeImageStatuses(_ context.Context, games []domain.G
 				}
 				continue
 			}
-			providerCatalog.RuntimeImage = h.runtimeInstallStatus(runtimeInstallRef{ProviderKey: providerCatalog.Key, Version: version, Image: image})
+			providerCatalog.RuntimeImage = h.runtimeInstallStatus(ctx, runtimeInstallRef{ProviderKey: providerCatalog.Key, Version: version, Image: image})
 		}
 	}
 }
@@ -3039,7 +3086,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	imageStatus := h.runtimeInstallStatus(runtimeInstallRef{
+	imageStatus := h.runtimeInstallStatus(r.Context(), runtimeInstallRef{
 		ProviderKey: payload.ProviderKey,
 		Version:     payload.Version,
 		Image:       gameProvider.ImageFor(payload.Version),
@@ -4305,15 +4352,25 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
+	if h.apiMetrics != nil {
+		h.apiMetrics.AddSSEConnection("server_logs", 1)
+		defer h.apiMetrics.AddSSEConnection("server_logs", -1)
+	}
 	stream, err := h.runtime.Logs(r.Context(), server)
 	if err != nil {
 		if strings.TrimSpace(server.LastError) != "" {
 			_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", server.LastError)
+			if h.apiMetrics != nil {
+				h.apiMetrics.AddSSEEvent("server_logs", "log")
+			}
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
 			}
 		}
 		_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+		if h.apiMetrics != nil {
+			h.apiMetrics.AddSSEEvent("server_logs", "error")
+		}
 		return
 	}
 	defer stream.Close()
@@ -4327,6 +4384,9 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		h.updatePlayersFromLogLine(r.Context(), server, recentLines, line)
 		_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
+		if h.apiMetrics != nil {
+			h.apiMetrics.AddSSEEvent("server_logs", "log")
+		}
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}

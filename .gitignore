@@ -6,6 +6,7 @@ dist
 coverage
 test-results
 .cache
+.gocache
 *.tsbuildinfo
 .env
 .env.local

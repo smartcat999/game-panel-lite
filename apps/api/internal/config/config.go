@@ -3,15 +3,18 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 )
 
 type Config struct {
-	Host       string
-	Port       string
-	DataDir    string
-	DBPath     string
-	DockerHost string
-	PublicHost string
+	Host                   string
+	Port                   string
+	DataDir                string
+	DBPath                 string
+	DockerHost             string
+	PublicHost             string
+	PrometheusURL          string
+	PrometheusQueryTimeout time.Duration
 }
 
 func Load() Config {
@@ -19,13 +22,21 @@ func Load() Config {
 	if dockerHost == "" {
 		dockerHost = "unix:///var/run/docker.sock"
 	}
+	queryTimeout := 2 * time.Second
+	if raw := value("GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT", ""); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			queryTimeout = parsed
+		}
+	}
 	return Config{
-		Host:       value("GAMEPANEL_HOST", "0.0.0.0"),
-		Port:       value("GAMEPANEL_PORT", "4000"),
-		DataDir:    value("GAMEPANEL_DATA_DIR", "./data"),
-		DBPath:     value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
-		DockerHost: dockerHost,
-		PublicHost: value("GAMEPANEL_PUBLIC_HOST", ""),
+		Host:                   value("GAMEPANEL_HOST", "0.0.0.0"),
+		Port:                   value("GAMEPANEL_PORT", "4000"),
+		DataDir:                value("GAMEPANEL_DATA_DIR", "./data"),
+		DBPath:                 value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
+		DockerHost:             dockerHost,
+		PublicHost:             value("GAMEPANEL_PUBLIC_HOST", ""),
+		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
+		PrometheusQueryTimeout: queryTimeout,
 	}
 }
 

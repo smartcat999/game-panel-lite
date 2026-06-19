@@ -49,6 +49,67 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ActivityEvent"
+  /api/monitoring/overview:
+    get:
+      summary: Read productized monitoring overview
+      responses:
+        "200":
+          description: Monitoring overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringOverview"
+  /api/monitoring/metrics:
+    get:
+      summary: Read global Prometheus-backed time-series metrics
+      parameters:
+        - name: range
+          in: query
+          schema:
+            type: string
+            default: 15m
+        - name: step
+          in: query
+          schema:
+            type: string
+            default: 30s
+      responses:
+        "200":
+          description: Global monitoring metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringMetrics"
+  /api/monitoring/server-load:
+    get:
+      summary: Read server load table data
+      responses:
+        "200":
+          description: Server load rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerLoadResponse"
+  /api/monitoring/events:
+    get:
+      summary: Read monitoring event stream
+      responses:
+        "200":
+          description: Monitoring events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringEvents"
+  /api/monitoring/platform:
+    get:
+      summary: Read platform health and traffic metrics
+      responses:
+        "200":
+          description: Platform monitoring metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformMonitoring"
   /api/servers:
     get:
       summary: List servers
@@ -177,6 +238,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServerStats"
+  /api/servers/{id}/metrics:
+    get:
+      summary: Read server-specific Prometheus-backed time-series metrics
+      responses:
+        "200":
+          description: Server monitoring metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringMetrics"
+  /api/servers/{id}/events:
+    get:
+      summary: Read server-specific monitoring events
+      responses:
+        "200":
+          description: Server monitoring events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringEvents"
   /api/servers/{id}/mods:
     get:
       summary: List tModLoader mods
@@ -474,6 +555,144 @@ components:
           type: number
         memoryLimitMb:
           type: number
+    MonitoringDataSource:
+      type: object
+      required: [kind, connected, endpointConfigured]
+      properties:
+        kind:
+          type: string
+          enum: [prometheus]
+        connected:
+          type: boolean
+        endpointConfigured:
+          type: boolean
+        lastQueryAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+    MonitoringPoint:
+      type: object
+      required: [timestamp, value]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+    MonitoringSeries:
+      type: object
+      required: [key, title, unit, chartType, points]
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        unit:
+          type: string
+        chartType:
+          type: string
+          enum: [line, area, bar]
+        currentValue:
+          type: number
+        avg:
+          type: number
+        max:
+          type: number
+        threshold:
+          type: number
+        emptyReason:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringPoint"
+    MonitoringMetrics:
+      type: object
+      required: [collectedAt, dataSource, series]
+      properties:
+        collectedAt:
+          type: string
+          format: date-time
+        dataSource:
+          $ref: "#/components/schemas/MonitoringDataSource"
+        series:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/MonitoringSeries"
+    MonitoringOverview:
+      type: object
+      required: [collectedAt, dataSource, health, kpis]
+      properties:
+        collectedAt:
+          type: string
+          format: date-time
+        dataSource:
+          $ref: "#/components/schemas/MonitoringDataSource"
+        health:
+          type: object
+        kpis:
+          type: object
+          properties:
+            totalServers:
+              type: integer
+            runningServers:
+              type: integer
+            issues:
+              type: integer
+            onlinePlayers:
+              type: integer
+            playerCapacity:
+              type: integer
+            resourceUsagePercent:
+              type: integer
+            storageBytes:
+              type: integer
+    ServerLoadResponse:
+      type: object
+      required: [collectedAt, dataSource, rows]
+      properties:
+        collectedAt:
+          type: string
+          format: date-time
+        dataSource:
+          $ref: "#/components/schemas/MonitoringDataSource"
+        rows:
+          type: array
+          items:
+            type: object
+    MonitoringEvents:
+      type: object
+      required: [collectedAt, events]
+      properties:
+        collectedAt:
+          type: string
+          format: date-time
+        events:
+          type: array
+          items:
+            type: object
+    PlatformMonitoring:
+      type: object
+      required: [collectedAt, dataSource, services, series, topRoutes]
+      properties:
+        collectedAt:
+          type: string
+          format: date-time
+        dataSource:
+          $ref: "#/components/schemas/MonitoringDataSource"
+        services:
+          type: array
+          items:
+            type: object
+        series:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/MonitoringSeries"
+        topRoutes:
+          type: array
+          items:
+            type: object
     ResourceLimits:
       type: object
       description: Optional maximum resources for one game server container. Zero means unlimited.

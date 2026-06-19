@@ -98,6 +98,7 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 		runtimeAdapter,
 		monitor,
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
+		nil,
 	)
 	if seedInstallMarkers {
 		seedRuntimeInstallMarkers(t, handler)
@@ -105,6 +106,18 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 	router := chi.NewRouter()
 	handler.Register(router)
 	return router, db, cfg
+}
+
+func TestMonitoringRoutesAreRegistered(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodGet, "/api/monitoring/overview", nil))
+	if response.Code == stdhttp.StatusNotFound {
+		t.Fatalf("expected monitoring overview route to be registered, got 404")
+	}
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("expected monitoring overview to return 200 before admin setup, got %d: %s", response.Code, response.Body.String())
+	}
 }
 
 func seedRuntimeInstallMarkers(t *testing.T, handler *Handler) {
@@ -144,6 +157,14 @@ type armMockAdapter struct {
 
 func (a armMockAdapter) Check(context.Context) runtime.DockerStatus {
 	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock", Architecture: "arm64"}
+}
+
+type missingImageAdapter struct {
+	availableMockAdapter
+}
+
+func (a missingImageAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
+	return domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusMissing}
 }
 
 type commandCaptureAdapter struct {
@@ -1448,8 +1469,8 @@ func TestObservabilityMetricsEndpoints(t *testing.T) {
 	}
 }
 
-func TestRuntimeInstallStateUsesLocalMarkerInsteadOfDockerImage(t *testing.T) {
-	router, _, _ := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
+func TestRuntimeInstallStateUsesDockerImageAndRepairsMarker(t *testing.T) {
+	router, _, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
 
 	runtimeStatus := func() domain.RuntimeImageStatus {
 		t.Helper()
@@ -1476,8 +1497,8 @@ func TestRuntimeInstallStateUsesLocalMarkerInsteadOfDockerImage(t *testing.T) {
 		return domain.RuntimeImageStatus{}
 	}
 
-	if status := runtimeStatus(); status.Status != runtime.ImageStatusMissing {
-		t.Fatalf("expected missing without local install marker even when Docker mock reports ready, got %+v", status)
+	if status := runtimeStatus(); status.Status != runtime.ImageStatusReady {
+		t.Fatalf("expected ready when Docker image exists even without local install marker, got %+v", status)
 	}
 
 	createPayload := `{
@@ -1499,29 +1520,46 @@ func TestRuntimeInstallStateUsesLocalMarkerInsteadOfDockerImage(t *testing.T) {
 	}`
 	blockedCreate := httptest.NewRecorder()
 	router.ServeHTTP(blockedCreate, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
-	if blockedCreate.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected create server to require local install marker, got %d: %s", blockedCreate.Code, blockedCreate.Body.String())
+	if blockedCreate.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server when Docker image exists without marker, got %d: %s", blockedCreate.Code, blockedCreate.Body.String())
 	}
 
-	prepare := httptest.NewRecorder()
-	router.ServeHTTP(prepare, httptest.NewRequest(stdhttp.MethodPost, "/api/runtime/images/prepare", bytes.NewBufferString(`{"providerKey":"terraria-vanilla","version":"1.4.4.9"}`)))
-	if prepare.Code != stdhttp.StatusAccepted {
-		t.Fatalf("expected prepare runtime 202, got %d: %s", prepare.Code, prepare.Body.String())
+	markerPath := filepath.Join(cfg.DataDir, "runtime-installs", "terraria-vanilla", "1.4.4.9.json")
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("expected runtime install marker to be repaired, got %v", err)
 	}
+}
 
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		if status := runtimeStatus(); status.Status == runtime.ImageStatusReady {
-			allowedCreate := httptest.NewRecorder()
-			router.ServeHTTP(allowedCreate, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
-			if allowedCreate.Code != stdhttp.StatusCreated {
-				t.Fatalf("expected create server after local install marker, got %d: %s", allowedCreate.Code, allowedCreate.Body.String())
-			}
-			return
+func TestRuntimeInstallStateDoesNotTrustMarkerWhenDockerImageIsMissing(t *testing.T) {
+	router, _, _ := newTestRouterWithAdapter(t, missingImageAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected game catalog 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var games []domain.GameCatalogEntry
+	if err := json.Unmarshal(recorder.Body.Bytes(), &games); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, game := range games {
+		if game.Key != domain.GameTerraria {
+			continue
 		}
-		time.Sleep(10 * time.Millisecond)
+		for _, providerCatalog := range game.Providers {
+			if providerCatalog.Key != domain.ProviderTerrariaVanilla {
+				continue
+			}
+			found = true
+			if providerCatalog.RuntimeImage.Status == runtime.ImageStatusReady {
+				t.Fatalf("expected missing Docker image to override local marker, got %+v", providerCatalog.RuntimeImage)
+			}
+		}
 	}
-	t.Fatalf("expected runtime status to become ready after local install marker, got %+v", runtimeStatus())
+	if !found {
+		t.Fatal("expected Terraria vanilla provider in catalog")
+	}
 }
 
 func TestGameCatalogMarksDSTUnsupportedOnArmRuntime(t *testing.T) {
@@ -4212,13 +4250,20 @@ func TestGameCatalogServerCountsAndRecommendedVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	var minecraftGame *domain.GameCatalogEntry
+	var terrariaGame *domain.GameCatalogEntry
 	for index := range games {
 		if games[index].Key == domain.GameMinecraft {
 			minecraftGame = &games[index]
 		}
+		if games[index].Key == domain.GameTerraria {
+			terrariaGame = &games[index]
+		}
 	}
 	if minecraftGame == nil {
 		t.Fatal("expected minecraft game in catalog")
+	}
+	if terrariaGame == nil {
+		t.Fatal("expected terraria game in catalog")
 	}
 	if minecraftGame.ServerCount != 2 {
 		t.Fatalf("expected minecraft server count 2, got %d", minecraftGame.ServerCount)
@@ -4226,8 +4271,20 @@ func TestGameCatalogServerCountsAndRecommendedVersion(t *testing.T) {
 	if minecraftGame.CoverImage != "minecraft" {
 		t.Fatalf("expected minecraft cover image, got %q", minecraftGame.CoverImage)
 	}
-	if minecraftGame.Providers[0].RecommendedVersion == "" {
-		t.Fatalf("expected recommended version set, got %+v", minecraftGame.Providers[0])
+	if minecraftGame.Providers[0].RecommendedVersion != "1.21.4" {
+		t.Fatalf("expected minecraft to recommend stable version after latest, got %+v", minecraftGame.Providers[0])
+	}
+	var vanillaProvider *domain.ProviderCatalog
+	for index := range terrariaGame.Providers {
+		if terrariaGame.Providers[index].Key == domain.ProviderTerrariaVanilla {
+			vanillaProvider = &terrariaGame.Providers[index]
+		}
+	}
+	if vanillaProvider == nil {
+		t.Fatal("expected Terraria vanilla provider in catalog")
+	}
+	if vanillaProvider.RecommendedVersion != "1.4.5.6" {
+		t.Fatalf("expected Terraria vanilla to recommend latest explicit version, got %+v", vanillaProvider)
 	}
 }
 

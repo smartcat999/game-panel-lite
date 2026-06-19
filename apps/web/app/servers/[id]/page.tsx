@@ -12,6 +12,9 @@ import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
+import { ActivityTimeline, MonitoringChartCard } from "@/features/monitoring/components";
+import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
+import type { MetricSeries, MonitoringEvent } from "@/features/monitoring/types";
 import {
   assignMod,
   createBackup,
@@ -51,7 +54,8 @@ import { serverInviteText, serverJoinAddress, serverJoinPassword, serverJoinPort
 import { cn } from "@/lib/utils";
 import type { Backup, ModFile, ModPack, ProviderCapabilities, ResourceLimits, Server, World } from "@/lib/types";
 
-type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
+type TabId = "overview" | "monitoring" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
+type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
@@ -121,6 +125,7 @@ export default function ServerDetailPage() {
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && capabilities.mods), retry: false, refetchInterval: 5000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(server), retry: false });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [monitoringRange, setMonitoringRange] = useState<MonitoringRangeValue>("1h");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
@@ -140,6 +145,21 @@ export default function ServerDetailPage() {
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
+  const monitoringStep = monitoringRange === "15m" ? "30s" : monitoringRange === "1h" ? "1m" : "5m";
+  const serverMetricsQuery = useQuery({
+    queryKey: ["server-monitoring-metrics", id, monitoringRange],
+    queryFn: () => getServerMonitoringMetrics(id, monitoringRange, monitoringStep),
+    enabled: Boolean(server && activeTab === "monitoring"),
+    retry: false,
+    refetchInterval: 5000
+  });
+  const serverEventsQuery = useQuery({
+    queryKey: ["server-monitoring-events", id],
+    queryFn: () => getServerMonitoringEvents(id, 50),
+    enabled: Boolean(server && activeTab === "monitoring"),
+    retry: false,
+    refetchInterval: 5000
+  });
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
   const [logStreamPaused, setLogStreamPaused] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
@@ -441,6 +461,7 @@ export default function ServerDetailPage() {
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
     { id: "overview", label: t("tabOverview") },
+    { id: "monitoring", label: t("monitoringTabTitle") },
     ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
     { id: "logs", label: t("tabLogs") },
     { id: "config", label: t("tabConfig") },
@@ -579,6 +600,15 @@ export default function ServerDetailPage() {
               backupCount={serverBackups.length}
               modCount={serverMods.length}
               onSelectTab={setActiveTab}
+            />
+          )}
+          {activeTab === "monitoring" && (
+            <MonitoringTab
+              events={serverEventsQuery.data?.events ?? []}
+              metrics={serverMetricsQuery.data?.series}
+              range={monitoringRange}
+              server={server}
+              onRangeChange={setMonitoringRange}
             />
           )}
           {activeTab === "console" && (
@@ -947,6 +977,61 @@ function OverviewTab({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MonitoringTab({
+  events,
+  metrics,
+  range,
+  server,
+  onRangeChange
+}: {
+  events: MonitoringEvent[];
+  metrics?: Record<string, MetricSeries>;
+  range: MonitoringRangeValue;
+  server: Server;
+  onRangeChange: (range: MonitoringRangeValue) => void;
+}) {
+  const { t } = useI18n();
+  const ranges: MonitoringRangeValue[] = ["15m", "1h", "6h", "24h"];
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-panel-line bg-slate-950/35 p-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="font-semibold text-slate-100">{t("monitoringTabTitle")}</h2>
+          <p className="mt-1 text-sm text-slate-500">{t("monitoringTabDescription", { name: server.name })}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {ranges.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={cn(
+                "h-8 rounded-md border border-panel-line px-3 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-slate-100",
+                range === item && "border-panel-green/40 bg-panel-green/15 text-panel-green"
+              )}
+              onClick={() => onRangeChange(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} series={metrics?.cpu} />
+        <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} series={metrics?.memory} />
+        <MonitoringChartCard color="#59d46f" icon={<Users aria-hidden="true" className="size-4" />} series={metrics?.players} />
+        <MonitoringChartCard color="#e6b84a" icon={<Clock aria-hidden="true" className="size-4" />} series={metrics?.uptime} />
+      </div>
+      <div>
+        <div className="mb-3 rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("serverRecentEventsDescription")}</p>
+        </div>
+        <ActivityTimeline events={events} />
       </div>
     </div>
   );

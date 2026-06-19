@@ -473,7 +473,7 @@ export function CreateServerWizard() {
             </p>
           )}
           {!canCreateSelectedProvider && currentStepId === "review" && <p className="mt-4 text-sm text-panel-gold">{t("providerNotCreatableYet")}</p>}
-          {create.isError && <p className="mt-4 text-sm text-red-200">{create.error.message}</p>}
+          {create.isError && <p className="mt-4 text-sm text-red-200">{createServerErrorMessage(create.error, t)}</p>}
           {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.server.name })}</p>}
           <p className="mt-4 text-xs text-slate-500">{t("currentStep", { step: selectedTitle })}</p>
         </div>
@@ -713,6 +713,13 @@ function RuntimeImagePill({ status }: { status?: RuntimeImageStatus }) {
       {t(runtimeImageLabelKey(status))}
     </span>
   );
+}
+
+function createServerErrorMessage(error: Error, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
+  if (error.message.includes("server runtime is not installed")) {
+    return t("runtimeNotInstalledForCreate");
+  }
+  return error.message;
 }
 
 function PresetStep({
@@ -1001,7 +1008,7 @@ function ConfigStep({
             </span>
           </WizardField>
         </div>
-        <div className="grid gap-3 rounded-md border border-panel-line bg-slate-950/40 p-3 md:col-span-2">
+        <div className="grid gap-3 md:col-span-2 sm:grid-cols-2">
           <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
           <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
         </div>
@@ -1194,10 +1201,17 @@ function WizardSelect({ children, onChange, value }: { children: React.ReactNode
 
 function WizardCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 text-sm text-slate-300">
-      <span>{label}</span>
+    <label
+      className={cn(
+        "flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm transition",
+        checked
+          ? "border-panel-green/45 bg-panel-green/10 text-slate-100"
+          : "border-panel-line bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200"
+      )}
+    >
+      <span className="min-w-0 truncate font-medium">{label}</span>
       <input
-        className="size-4 accent-panel-green"
+        className="size-4 shrink-0 accent-panel-green"
         checked={checked}
         type="checkbox"
         onChange={(event) => onChange(event.target.checked)}

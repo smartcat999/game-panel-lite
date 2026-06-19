@@ -196,14 +196,19 @@ function ProviderRuntimeRow({
 function RuntimeInstallProgress({ progress }: { progress: number }) {
   const hasProgress = progress > 0;
   return (
-    <div className="mt-3 h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-slate-800/80">
-      <div
-        className={cn(
-          "h-full rounded-full bg-sky-300 transition-all duration-500",
-          hasProgress ? "" : "w-1/3 animate-pulse"
-        )}
-        style={hasProgress ? { width: `${progress}%` } : undefined}
-      />
+    <div
+      aria-label="Runtime install progress"
+      aria-valuemax={100}
+      aria-valuemin={0}
+      aria-valuenow={hasProgress ? progress : undefined}
+      className="relative mt-3 h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-slate-800/80"
+      role="progressbar"
+    >
+      {hasProgress ? (
+        <div className="h-full rounded-full bg-sky-300 transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
+      ) : (
+        <div className="runtime-install-indeterminate absolute inset-y-0 left-0 w-20 rounded-full bg-sky-300/90" />
+      )}
     </div>
   );
 }

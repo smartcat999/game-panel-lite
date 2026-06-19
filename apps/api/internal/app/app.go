@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	apihttp "github.com/smartcat999/game-panel-lite/apps/api/internal/http"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/player"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
@@ -50,7 +51,8 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	dockerFactory := func(host string) (runtime.Adapter, error) {
 		return dockerruntime.NewAdapter(host)
 	}
-	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory)
+	apiMetrics := metrics.NewRegistry()
+	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics)
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)

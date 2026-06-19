@@ -109,11 +109,11 @@ export function ServerActions({
   };
 
   const pendingLabel = pendingAction ? actionLabel(pendingAction) : "";
-  const buttonClassName = compact ? "h-10 w-full min-w-0 whitespace-nowrap px-3 sm:w-32 sm:shrink-0" : undefined;
+  const buttonClassName = compact ? "h-10 w-full min-w-0 whitespace-nowrap px-2 text-sm" : undefined;
 
   return (
     <>
-      <div className={cn(compact ? "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" : "flex flex-wrap gap-2", className)}>
+      <div className={cn(compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
         {server.status === "running" || server.status === "stopping" ? (
           <Button className={buttonClassName} variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
             <Square aria-hidden="true" />

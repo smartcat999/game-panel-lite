@@ -1,0 +1,474 @@
+"use client";
+
+import ReactECharts from "echarts-for-react";
+import type { EChartsOption } from "echarts";
+import Link from "next/link";
+import { Activity, AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, Info, RadioTower, Server } from "lucide-react";
+import { Card } from "@/components/ui";
+import { useI18n, type MessageKey } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import type { MetricPoint, MetricSeries, MonitoringEvent, MonitoringOverviewResponse, PlatformService, RouteMetric, ServerLoadRow } from "./types";
+
+export function KpiStrip({ overview }: { overview?: MonitoringOverviewResponse }) {
+  const { t } = useI18n();
+  const kpis = overview?.kpis;
+  return (
+    <section className="grid gap-3 xl:grid-cols-5">
+      <KpiCard label={t("kpiTotalServers")} value={kpis?.totalServers ?? 0} note={t("kpiTotalServersNote")} tone="neutral" />
+      <KpiCard label={t("kpiRunning")} value={kpis?.runningServers ?? 0} note={t("kpiRunningNote")} tone="success" />
+      <KpiCard label={t("kpiIssues")} value={kpis?.issues ?? 0} note={(kpis?.issues ?? 0) > 0 ? t("kpiIssuesAction") : t("kpiIssuesClear")} tone={(kpis?.issues ?? 0) > 0 ? "warning" : "success"} />
+      <KpiCard label={t("kpiOnlinePlayers")} value={kpis?.onlinePlayers ?? 0} note={`capacity ${kpis?.onlinePlayers ?? 0} / ${kpis?.playerCapacity ?? 0}`} tone="neutral" />
+      <KpiCard label={t("kpiResourceUsage")} value={`${kpis?.resourceUsagePercent ?? 0}%`} note={t("kpiResourceUsageNote")} tone={(kpis?.resourceUsagePercent ?? 0) > 75 ? "warning" : "success"} />
+    </section>
+  );
+}
+
+function KpiCard({ label, note, tone, value }: { label: string; note: string; tone: "neutral" | "success" | "warning"; value: number | string }) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="truncate text-xs font-medium text-slate-500">{label}</p>
+        <span className={cn("size-2 rounded-full", tone === "success" ? "bg-panel-green" : tone === "warning" ? "bg-panel-gold" : "bg-slate-600")} />
+      </div>
+      <p className="mt-3 font-mono text-3xl font-semibold leading-none text-slate-100">{value}</p>
+      <p className="mt-3 truncate text-xs text-slate-500">{note}</p>
+    </Card>
+  );
+}
+
+export function HealthStatusCard({ overview }: { overview?: MonitoringOverviewResponse }) {
+  const { t } = useI18n();
+  const health = overview?.health;
+  const dataSource = overview?.dataSource;
+  const overall = health?.overall ?? "unknown";
+  return (
+    <Card className="p-4">
+      <div className="grid gap-4 xl:grid-cols-[220px_1fr] xl:items-center">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className={cn("size-2.5 rounded-full", overall === "healthy" ? "bg-panel-green" : "bg-panel-gold")} />
+            <h2 className="font-semibold text-slate-100">{t("healthOverviewTitle")}</h2>
+            <span className={cn("rounded-md border px-2 py-0.5 text-xs font-medium", overall === "healthy" ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold")}>
+              {t(overall === "healthy" ? "healthHealthy" : overall === "critical" ? "healthCritical" : "healthWarning")}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">{t("healthOverviewDescription")}</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <HealthMetric label={t("healthOverall")} value={healthStatusLabel(overall, t)} ok={overall === "healthy"} />
+          <HealthMetric label={t("healthPrometheusConnected")} value={dataSource?.connected ? t("connected") : t("unavailable")} ok={Boolean(dataSource?.connected)} />
+          <HealthMetric label={t("healthDockerRuntime")} value={healthStatusLabel(health?.dockerRuntime ?? "unknown", t)} ok={(health?.dockerRuntime ?? "unknown") === "healthy"} />
+          <HealthMetric label={t("healthLastSync")} value={health?.lastSync ? formatTime(health.lastSync) : t("none")} ok={Boolean(health?.lastSync)} />
+          <HealthMetric label={t("healthFailedTargets")} value={String(health?.failedTargets ?? 0)} ok={(health?.failedTargets ?? 0) === 0} />
+        </div>
+      </div>
+      {dataSource?.error ? <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">{dataSource.error}</p> : null}
+    </Card>
+  );
+}
+
+function healthStatusLabel(value: string, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
+  switch (value) {
+    case "healthy":
+      return t("healthHealthy");
+    case "warning":
+      return t("healthWarning");
+    case "critical":
+      return t("healthCritical");
+    case "degraded":
+      return t("healthDegraded");
+    case "down":
+      return t("healthDown");
+    case "unknown":
+    default:
+      return t("unknown");
+  }
+}
+
+function HealthMetric({ label, ok, value }: { label: string; ok: boolean; value: string }) {
+  return (
+    <div className="rounded-md border border-panel-line bg-slate-950/35 px-3 py-2">
+      <p className="truncate text-[11px] text-slate-500">{label}</p>
+      <span className="mt-1 inline-flex max-w-full items-center gap-2 text-sm font-medium text-slate-200">
+        <span className={cn("size-1.5 shrink-0 rounded-full", ok ? "bg-panel-green" : "bg-panel-gold")} />
+        <span className="truncate">{value}</span>
+      </span>
+    </div>
+  );
+}
+
+export function MonitoringChartCard({ color = "#59d46f", icon, series }: { color?: string; icon?: React.ReactNode; series?: MetricSeries }) {
+  const { t } = useI18n();
+  const points = series?.points ?? [];
+  const unit = series?.unit ?? "";
+  const current = series?.currentValue;
+  const helperText = emptyText(series?.emptyReason, t);
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {icon ? <span className="text-panel-green">{icon}</span> : null}
+            <h3 className="truncate text-sm font-semibold text-slate-100">{metricTitle(series, t)}</h3>
+          </div>
+          {helperText ? <p className="mt-1 text-xs text-slate-500">{helperText}</p> : null}
+        </div>
+        <p className="shrink-0 font-mono text-2xl font-semibold text-slate-100">{current == null ? "—" : formatValue(current, unit)}</p>
+      </div>
+      <div className="mt-4 h-56 rounded-md border border-panel-line bg-slate-950/35 p-2">
+        {points.length > 0 ? <MetricChart color={color} points={points} series={series} /> : <EmptyMetric reason={series?.emptyReason} />}
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-3 text-xs">
+        <MetricFoot label={t("metricAvg")} value={series?.avg == null ? "—" : formatValue(series.avg, unit)} />
+        <MetricFoot label={t("metricPeak")} value={series?.max == null ? "—" : formatValue(series.max, unit)} />
+        <MetricFoot label={t("metricSamples")} value={String(points.length)} />
+        <MetricFoot label={t("metricLimit")} value={series?.threshold == null ? "—" : formatValue(series.threshold, unit)} />
+      </div>
+    </Card>
+  );
+}
+
+function MetricChart({ color, points, series }: { color: string; points: MetricPoint[]; series?: MetricSeries }) {
+  const unit = series?.unit ?? "";
+  const type = series?.chartType === "bar" ? "bar" : "line";
+  const data = points.map((point) => [point.timestamp, Number(point.value.toFixed(3))]);
+  const option: EChartsOption = {
+    backgroundColor: "transparent",
+    animation: false,
+    grid: { left: 48, right: 16, top: 18, bottom: 30 },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "cross", lineStyle: { color: "#64748b", width: 1 } },
+      backgroundColor: "#111821",
+      borderColor: "#202a36",
+      textStyle: { color: "#f4f7fb" },
+      valueFormatter: (value) => formatValue(Number(value), unit)
+    },
+    xAxis: {
+      type: "time",
+      axisLabel: { color: "#74839a", hideOverlap: true },
+      axisLine: { lineStyle: { color: "#2b3544" } },
+      axisTick: { show: false },
+      splitLine: { show: true, lineStyle: { color: "rgba(100,116,139,0.14)" } }
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: { color: "#74839a", formatter: (value: number) => formatValue(value, unit) },
+      splitLine: { lineStyle: { color: "rgba(100,116,139,0.18)" } }
+    },
+    series: [
+      {
+        type,
+        data,
+        smooth: type === "line" ? 0.25 : false,
+        symbol: "circle",
+        symbolSize: 5,
+        showSymbol: false,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+        areaStyle: series?.chartType === "area" ? { color: `${color}24` } : undefined,
+        markLine: series?.threshold == null ? undefined : {
+          symbol: "none",
+          label: { color: "#94a3b8", formatter: `limit ${formatValue(series.threshold, unit)}` },
+          lineStyle: { color: "#94a3b8", type: "dashed" },
+          data: [{ yAxis: series.threshold }]
+        }
+      }
+    ]
+  };
+  return <ReactECharts option={option} style={{ height: "100%", width: "100%" }} />;
+}
+
+function EmptyMetric({ reason }: { reason?: string }) {
+  const { t } = useI18n();
+  return <div className="flex h-full items-center justify-center text-sm text-slate-500">{emptyText(reason, t) ?? t("monitoringNoSamples")}</div>;
+}
+
+function MetricFoot({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-slate-600">{label}</p>
+      <p className="mt-1 truncate font-mono text-slate-300">{value}</p>
+    </div>
+  );
+}
+
+function metricTitle(series: MetricSeries | undefined, t: ReturnType<typeof useI18n>["t"]) {
+  const key = series?.key;
+  if (key === "cpu") return t("metricTitleCpu");
+  if (key === "memory") return t("metricTitleMemory");
+  if (key === "players") return t("metricTitlePlayers");
+  if (key === "events") return t("metricTitleEvents");
+  if (key === "uptime") return t("metricTitleUptime");
+  if (key === "requests") return t("metricTitleRequests");
+  if (key === "errors") return t("metricTitleErrors");
+  if (key === "latencyP95") return t("metricTitleLatencyP95");
+  if (key === "sse") return t("metricTitleSse");
+  if (key === "nodeCpu") return t("metricTitleNodeCpu");
+  if (key === "nodeMemory") return t("metricTitleNodeMemory");
+  if (key === "nodeDisk") return t("metricTitleNodeDisk");
+  if (key === "nodeNetwork") return t("metricTitleNodeNetwork");
+  return series?.title ?? t("monitoringMetricFallbackTitle");
+}
+
+export function ServerLoadTable({ rows }: { rows: ServerLoadRow[] }) {
+  const { t } = useI18n();
+  return (
+    <section className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
+      <SectionHeader title={t("serverLoadTitle")} description={t("serverLoadDescription")} />
+      <div className="hidden grid-cols-[minmax(220px,1.2fr)_110px_110px_150px_150px_100px_120px_90px] border-b border-panel-line px-4 py-2 text-xs font-medium text-slate-500 xl:grid">
+        <span>Server</span><span>Game</span><span>Status</span><span>CPU</span><span>Memory</span><span>Players</span><span>Last Active</span><span>Action</span>
+      </div>
+      <div className="divide-y divide-panel-line">
+        {rows.length > 0 ? rows.map((row) => <ServerLoadItem key={row.serverId} row={row} />) : <EmptyRows label={t("monitoringNoServerLoad")} />}
+      </div>
+    </section>
+  );
+}
+
+function ServerLoadItem({ row }: { row: ServerLoadRow }) {
+  const memoryPercent = row.memoryLimitMb > 0 ? (row.memoryMb / row.memoryLimitMb) * 100 : 0;
+  return (
+    <div className={cn("grid gap-3 px-4 py-3 xl:grid-cols-[minmax(220px,1.2fr)_110px_110px_150px_150px_100px_120px_90px] xl:items-center", row.severity !== "normal" && "bg-panel-gold/5")}>
+      <div className="min-w-0">
+        <p className="truncate font-medium text-slate-100">{row.serverName}</p>
+        <p className="mt-1 truncate text-xs text-slate-500">{row.providerKey} · {row.version || "default"}</p>
+      </div>
+      <span className="text-sm text-slate-300">{row.gameKey}</span>
+      <StatusBadge status={row.status} severity={row.severity} />
+      <LoadBar percent={row.cpuPercent} value={`${row.cpuPercent.toFixed(1)}%`} />
+      <LoadBar percent={memoryPercent} value={`${Math.round(row.memoryMb)} MB`} tone="purple" />
+      <span className="font-mono text-sm text-slate-300">{row.playersOnline}/{row.maxPlayers}</span>
+      <span className="text-sm text-slate-500">{formatTime(row.lastActive)}</span>
+      <Link className="inline-flex w-fit items-center gap-1 rounded border border-panel-line px-2 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-900" href={`/servers/${row.serverId}`}>
+        View <ExternalLink aria-hidden="true" className="size-3" />
+      </Link>
+    </div>
+  );
+}
+
+export function ActivityTimeline({ events }: { events: MonitoringEvent[] }) {
+  const { t } = useI18n();
+  return (
+    <Card className="overflow-hidden">
+      {events.length === 0 ? <EmptyRows label={t("monitoringNoEvents")} /> : (
+        <div>
+          <div className="hidden grid-cols-[minmax(320px,1.3fr)_minmax(180px,0.55fr)_minmax(180px,0.55fr)_96px] border-b border-panel-line px-4 py-2 text-xs font-medium text-slate-500 lg:grid">
+            <span>{t("eventColumnEvent")}</span>
+            <span>{t("eventColumnSource")}</span>
+            <span>{t("eventColumnType")}</span>
+            <span className="text-right">{t("eventColumnTime")}</span>
+          </div>
+          <div className="divide-y divide-panel-line">
+          {events.map((event) => <EventRow key={event.id} event={event} />)}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function EventRow({ event }: { event: MonitoringEvent }) {
+  const { t } = useI18n();
+  const severity = event.severity === "error" ? "critical" : event.severity === "warning" ? "warning" : "normal";
+  const title = localizedEventTitle(event, t);
+  const typeLabel = localizedEventGroup(event.type, t);
+  const operator = event.operator === "system" ? t("eventSourceSystem") : event.operator;
+  const source = event.serverName || event.serverId || t("eventSourceSystem");
+  return (
+    <div className={cn("grid gap-3 px-4 py-3 lg:grid-cols-[minmax(320px,1.3fr)_minmax(180px,0.55fr)_minmax(180px,0.55fr)_96px] lg:items-center", event.severity === "error" && "bg-panel-gold/5")}>
+      <div className="flex min-w-0 items-start gap-3">
+        <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border", toneClass(event.severity))}>{severityIcon(event.severity)}</span>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="truncate font-medium text-slate-100">{title}</p>
+            <SeverityPill severity={event.severity} />
+          </div>
+          <p className="mt-1 line-clamp-1 text-xs text-slate-500">{t("eventMessageServer", { server: source, event: title })}</p>
+        </div>
+      </div>
+      <div className="min-w-0 text-sm">
+        {event.serverId ? (
+          <Link className="block truncate font-medium text-slate-300 transition hover:text-panel-green" href={`/servers/${event.serverId}`}>{source}</Link>
+        ) : (
+          <span className="block truncate font-medium text-slate-300">{t("eventSourceSystem")}</span>
+        )}
+        <span className="mt-1 block truncate text-xs text-slate-500">{operator}</span>
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <StatusBadge status={typeLabel} severity={severity} />
+      </div>
+      <span className="font-mono text-xs text-slate-500 lg:text-right">{formatTime(event.timestamp)}</span>
+    </div>
+  );
+}
+
+const eventTitleKeys: Record<string, MessageKey> = {
+  "backup.created": "eventTitleBackupCreated",
+  "backup.deleted": "eventTitleBackupDeleted",
+  "backup.restored": "eventTitleBackupRestored",
+  "mod.assigned": "eventTitleModAssigned",
+  "mod.deleted": "eventTitleModDeleted",
+  "mod.updated": "eventTitleModUpdated",
+  "mod.uploaded": "eventTitleModUploaded",
+  "mod.workshop_imported": "eventTitleModImported",
+  "player.banned": "eventTitlePlayerBanned",
+  "player.kicked": "eventTitlePlayerKicked",
+  "player.whitelist.removed": "eventTitlePlayerWhitelistRemoved",
+  "player.whitelisted": "eventTitlePlayerWhitelisted",
+  "save.snapshot.created": "eventTitleWorldSnapshotCreated",
+  "save.snapshot.restored": "eventTitleBackupRestored",
+  "server.config.updated": "eventTitleServerConfigUpdated",
+  "server.created": "eventTitleServerCreated",
+  "server.delete.queued": "eventTitleServerDeleteQueued",
+  "server.deleted": "eventTitleServerDeleted",
+  "server.restart.failed": "eventTitleServerRestartFailed",
+  "server.restart.queued": "eventTitleServerRestartQueued",
+  "server.restarted": "eventTitleServerRestarted",
+  "server.share.disabled": "eventTitleShareDisabled",
+  "server.share.enabled": "eventTitleShareEnabled",
+  "server.start.failed": "eventTitleServerStartFailed",
+  "server.start.queued": "eventTitleServerStartQueued",
+  "server.started": "eventTitleServerStarted",
+  "server.stop.queued": "eventTitleServerStopQueued",
+  "server.stopped": "eventTitleServerStopped",
+  "settings.publicHost": "eventTitleSettingsUpdated",
+  "world.assigned": "eventTitleWorldAssigned",
+  "world.deleted": "eventTitleWorldDeleted",
+  "world.imported": "eventTitleWorldImported",
+  "world.snapshot.created": "eventTitleWorldSnapshotCreated"
+};
+
+function localizedEventTitle(event: MonitoringEvent, t: ReturnType<typeof useI18n>["t"]) {
+  const key = eventTitleKeys[event.type];
+  return key ? t(key) : event.title;
+}
+
+function localizedEventGroup(type: string, t: ReturnType<typeof useI18n>["t"]) {
+  if (type.startsWith("server.")) return t("eventGroupServer");
+  if (type.startsWith("backup.") || type.startsWith("save.")) return t("eventGroupBackup");
+  if (type.startsWith("world.")) return t("eventGroupWorld");
+  if (type.startsWith("mod.")) return t("eventGroupMod");
+  if (type.startsWith("player.")) return t("eventGroupPlayer");
+  if (type.startsWith("settings.")) return t("eventGroupSettings");
+  return t("eventGroupSystem");
+}
+
+function SeverityPill({ severity }: { severity: MonitoringEvent["severity"] }) {
+  return (
+    <span className={cn(
+      "rounded px-1.5 py-0.5 text-[11px] font-medium",
+      severity === "error" ? "bg-panel-gold/15 text-panel-gold" :
+        severity === "warning" ? "bg-panel-gold/10 text-panel-gold" :
+          severity === "success" ? "bg-panel-green/10 text-panel-green" : "bg-slate-800 text-slate-400"
+    )}>
+      {severity}
+    </span>
+  );
+}
+
+export function PlatformHealth({ services, topRoutes }: { services: PlatformService[]; topRoutes: RouteMetric[] }) {
+  const { t } = useI18n();
+  return (
+    <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+      <Card className="p-4">
+        <SectionTitle title={t("platformStatusTitle")} description={t("platformStatusDescription")} />
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {services.map((service, index) => <HealthMetric key={`${service.name}-${service.instance ?? index}`} label={service.name} value={service.status} ok={service.status === "healthy"} />)}
+        </div>
+      </Card>
+      <Card className="p-4">
+        <SectionTitle title={t("topRoutesTitle")} description={t("topRoutesDescription")} />
+        <div className="mt-4 divide-y divide-panel-line">
+          {topRoutes.length > 0 ? topRoutes.map((route) => (
+            <div key={`${route.method}-${route.route}`} className="grid grid-cols-[70px_minmax(0,1fr)_90px] gap-3 py-2 text-sm">
+              <span className="font-mono text-slate-500">{route.method}</span>
+              <span className="truncate text-slate-300">{route.route}</span>
+              <span className="text-right font-mono text-slate-300">{route.requestRate.toFixed(2)}/s</span>
+            </div>
+          )) : <EmptyRows label={t("topRoutesEmpty")} />}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+function SectionHeader({ description, title }: { description: string; title: string }) {
+  return <div className="border-b border-panel-line px-4 py-3"><h2 className="text-sm font-semibold text-slate-100">{title}</h2><p className="mt-1 text-xs text-slate-500">{description}</p></div>;
+}
+
+function SectionTitle({ description, title }: { description: string; title: string }) {
+  return <div><h2 className="text-sm font-semibold text-slate-100">{title}</h2><p className="mt-1 text-xs text-slate-500">{description}</p></div>;
+}
+
+function EmptyRows({ label }: { label: string }) {
+  return <div className="flex min-h-28 items-center justify-center p-6 text-sm text-slate-500">{label}</div>;
+}
+
+function StatusBadge({ severity, status }: { severity: "normal" | "warning" | "critical"; status: string }) {
+  return <span className={cn("w-fit rounded px-2 py-0.5 text-xs font-medium", severity === "critical" ? "bg-panel-gold/15 text-panel-gold" : severity === "warning" ? "bg-panel-gold/10 text-panel-gold" : "bg-slate-800 text-slate-400")}>{status}</span>;
+}
+
+function LoadBar({ percent, tone = "green", value }: { percent: number; tone?: "green" | "purple"; value: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex justify-between gap-2 text-xs"><span className="font-mono text-slate-300">{value}</span></div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+        <div className={cn("h-full rounded-full", tone === "purple" ? "bg-panel-purple" : percent > 80 ? "bg-panel-gold" : "bg-panel-green")} style={{ width: `${Math.max(3, Math.min(percent, 100))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function toneClass(tone: MonitoringEvent["severity"]) {
+  if (tone === "error" || tone === "warning") return "border-panel-gold/30 bg-panel-gold/10 text-panel-gold";
+  if (tone === "success") return "border-panel-green/30 bg-panel-green/10 text-panel-green";
+  return "border-panel-line bg-slate-900 text-slate-400";
+}
+
+function severityIcon(severity: MonitoringEvent["severity"]) {
+  if (severity === "error") return <AlertCircle aria-hidden="true" className="size-4" />;
+  if (severity === "warning") return <AlertTriangle aria-hidden="true" className="size-4" />;
+  if (severity === "success") return <CheckCircle2 aria-hidden="true" className="size-4" />;
+  return <Info aria-hidden="true" className="size-4" />;
+}
+
+function emptyText(reason: string | undefined, t: ReturnType<typeof useI18n>["t"]) {
+  if (reason === "prometheus_unconfigured") return t("monitoringPrometheusUnconfigured");
+  if (reason === "prometheus_unavailable") return t("monitoringPrometheusUnavailable");
+  if (reason === "server_stopped") return t("monitoringServerStopped");
+  if (reason === "no_samples") return t("monitoringNoSamples");
+  return undefined;
+}
+
+function formatValue(value: number, unit: string) {
+  const rounded = Math.abs(value) >= 100 ? Math.round(value) : Number(value.toFixed(1));
+  if (unit === "%") return `${rounded}%`;
+  if (unit === "MB") return `${rounded} MB`;
+  if (unit === "ms") return `${rounded} ms`;
+  if (unit === "s") return `${rounded}s`;
+  return unit ? `${rounded} ${unit}` : String(rounded);
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export function SourceBadge({ connected }: { connected?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-panel-line bg-slate-900/55 px-3 text-xs">
+      <RadioTower aria-hidden="true" className={cn("size-3.5", connected ? "text-panel-green" : "text-panel-gold")} />
+      <span className="text-slate-500">{t("monitoringDatasource")}</span>
+      <span className="font-mono font-medium text-slate-200">{connected ? t("connected") : t("unavailable")}</span>
+    </span>
+  );
+}
+
+export function ChartIcon({ type }: { type: "cpu" | "memory" | "players" | "events" | "requests" }) {
+  if (type === "events") return <Activity aria-hidden="true" className="size-4" />;
+  if (type === "players") return <Server aria-hidden="true" className="size-4" />;
+  return <RadioTower aria-hidden="true" className="size-4" />;
+}
