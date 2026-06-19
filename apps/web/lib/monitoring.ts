@@ -64,8 +64,6 @@ export type MonitoringModel = {
   };
 };
 
-export type MonitoringChartKind = "cpu" | "memory" | "players" | "events";
-
 export type MonitoringTimeSeriesPoint = {
   timestamp: string;
   value: number;
@@ -76,25 +74,6 @@ export const severityOptions = ["all", "error", "warning", "success", "info"] as
 export type MonitoringSeverityFilter = typeof severityOptions[number];
 
 export const eventTypeOptions: MonitoringEventType[] = ["all", "lifecycle", "backup", "player", "failure", "mods", "world", "other"];
-
-export function createMonitoringTimeSeries(kind: MonitoringChartKind, currentValue: number, limit: number): MonitoringTimeSeriesPoint[] {
-  const now = Date.now();
-  const samples = 8;
-  const stepMs = 2 * 60 * 1000;
-  const safeLimit = Math.max(1, limit);
-  return Array.from({ length: samples }, (_, index) => {
-    const age = samples - 1 - index;
-    const timestamp = new Date(now - age * stepMs).toISOString();
-    const drift = Math.sin(index * 0.95 + kind.length) * 0.13;
-    const pulse = Math.cos(index * 0.45 + kind.charCodeAt(0)) * 0.07;
-    const baseline = kind === "events" ? currentValue * 0.7 : currentValue;
-    const value = Math.max(0, Math.min(safeLimit, baseline + currentValue * drift + safeLimit * pulse * 0.08));
-    return {
-      timestamp,
-      value: kind === "players" || kind === "events" ? Math.round(value) : Number(value.toFixed(1))
-    };
-  });
-}
 
 export function summarizeTimeSeries(data: MonitoringTimeSeriesPoint[]) {
   if (data.length === 0) {
@@ -187,68 +166,6 @@ export function createMonitoringModel({
   };
 }
 
-export function shouldUseMonitoringMock(metrics: ObservabilityMetrics | undefined, servers: Server[], activity: ActivityEvent[]) {
-  return !metrics && servers.length === 0 && activity.length === 0;
-}
-
-export function monitoringMockModel(): MonitoringModel {
-  return {
-    events: [
-      {
-        id: "mock-alert-1",
-        kind: "failure",
-        operator: "system",
-        rawType: "server.start.failed",
-        searchText: "journey friends failed runtime error",
-        serverName: "Journey Friends",
-        severity: "error",
-        timestamp: "2 min ago",
-        title: "Server failed to start after runtime check",
-        typeLabel: "Start Failed"
-      },
-      {
-        id: "mock-alert-2",
-        kind: "backup",
-        operator: "system",
-        rawType: "backup.created",
-        searchText: "classic world backup success",
-        serverName: "Classic World",
-        severity: "success",
-        timestamp: "18 min ago",
-        title: "Backup completed successfully",
-        typeLabel: "Backup Created"
-      }
-    ],
-    health: {
-      dockerRuntime: "healthy",
-      failedTargets: 1,
-      lastSyncLabel: "Just now",
-      overall: "warning",
-      prometheusConnected: true
-    },
-    kpis: {
-      issues: 1,
-      onlinePlayers: 7,
-      playerCapacity: 22,
-      resourceUsagePercent: 41,
-      runningServers: 2,
-      totalServers: 3
-    },
-    serverRows: [
-      mockServerRow("journey-friends", "Journey Friends", "Terraria", "running", 31, 768, 37, 5, 8, "3 min ago", "success"),
-      mockServerRow("classic-world", "Classic World", "Terraria", "running", 62, 1180, 58, 2, 8, "9 min ago", "warning"),
-      mockServerRow("modded-night", "Modded Night", "Terraria", "errored", 0, 0, 0, 0, 6, "24 min ago", "error")
-    ],
-    trends: {
-      cpuPercent: 38,
-      eventCount: 24,
-      memoryLimitMb: 4096,
-      memoryMb: 1948,
-      playerCount: 7
-    }
-  };
-}
-
 function buildServerRows(servers: Server[], metricById: Map<string, ObservabilityServerMetric>, gameByKey: Map<string, string>): MonitoringServerRow[] {
   return servers.map((server) => {
     const metric = metricById.get(server.id);
@@ -314,35 +231,4 @@ function average(values: number[]) {
 
 function severityRank(severity: MonitoringSeverity) {
   return { error: 4, warning: 3, success: 2, info: 1 }[severity];
-}
-
-function mockServerRow(
-  id: string,
-  name: string,
-  gameLabel: string,
-  status: string,
-  cpuPercent: number,
-  memoryMb: number,
-  memoryPercent: number,
-  playersOnline: number,
-  maxPlayers: number,
-  lastActive: string,
-  severity: MonitoringSeverity
-): MonitoringServerRow {
-  return {
-    actionHref: `/servers/${id}`,
-    cpuPercent,
-    gameLabel,
-    id,
-    lastActive,
-    memoryMb,
-    memoryPercent,
-    name,
-    playersOnline,
-    providerLabel: "terraria-vanilla",
-    severity,
-    status,
-    version: "latest",
-    maxPlayers
-  };
 }

@@ -17,7 +17,7 @@ import {
   Server,
   Users
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
@@ -27,23 +27,23 @@ import { formatActivityEvent } from "@/lib/activity-display";
 import { gameFilterOptions } from "@/lib/game-filters";
 import {
   createMonitoringModel,
-  createMonitoringTimeSeries,
   eventTypeOptions,
-  monitoringMockModel,
   severityOptions,
-  shouldUseMonitoringMock,
   summarizeTimeSeries,
   type MonitoringEvent,
   type MonitoringEventType,
   type MonitoringHealth,
   type MonitoringServerRow,
   type MonitoringSeverity,
-  type MonitoringSeverityFilter
+  type MonitoringSeverityFilter,
+  type MonitoringTimeSeriesPoint
 } from "@/lib/monitoring";
 import { cn } from "@/lib/utils";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 
 type ActivityGameFilter = "all" | string;
+
+const SERIES_WINDOW_MS = 15 * 60 * 1000;
 
 export default function ActivityPage() {
   const { locale, t } = useI18n();
@@ -55,6 +55,12 @@ export default function ActivityPage() {
   const [gameFilter, setGameFilter] = useState<ActivityGameFilter>("all");
   const [eventTypeFilter, setEventTypeFilter] = useState<MonitoringEventType>("all");
   const [severityFilter, setSeverityFilter] = useState<MonitoringSeverityFilter>("all");
+  const [chartPhase, setChartPhase] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setChartPhase((phase) => phase + 1), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const events = activityQuery.data ?? [];
   const servers = serversQuery.data ?? [];
@@ -64,9 +70,6 @@ export default function ActivityPage() {
     [events, locale]
   );
   const monitoring = useMemo(() => {
-    if (shouldUseMonitoringMock(metricsQuery.data, servers, events)) {
-      return monitoringMockModel();
-    }
     return createMonitoringModel({
       activity: events,
       displayByEventId,
@@ -76,10 +79,10 @@ export default function ActivityPage() {
     });
   }, [displayByEventId, events, games, metricsQuery.data, servers]);
 
-  const cpuSeries = useMemo(() => createMonitoringTimeSeries("cpu", monitoring.trends.cpuPercent, 100), [monitoring.trends.cpuPercent]);
-  const memorySeries = useMemo(() => createMonitoringTimeSeries("memory", monitoring.trends.memoryMb, monitoring.trends.memoryLimitMb), [monitoring.trends.memoryLimitMb, monitoring.trends.memoryMb]);
-  const playerSeries = useMemo(() => createMonitoringTimeSeries("players", monitoring.trends.playerCount, Math.max(1, monitoring.kpis.playerCapacity)), [monitoring.kpis.playerCapacity, monitoring.trends.playerCount]);
-  const eventSeries = useMemo(() => createMonitoringTimeSeries("events", monitoring.trends.eventCount, Math.max(10, monitoring.trends.eventCount)), [monitoring.trends.eventCount]);
+  const cpuSeries = useSampledTimeSeries(monitoring.trends.cpuPercent, Boolean(metricsQuery.data), chartPhase);
+  const memorySeries = useSampledTimeSeries(monitoring.trends.memoryMb, Boolean(metricsQuery.data), chartPhase);
+  const playerSeries = useSampledTimeSeries(monitoring.trends.playerCount, Boolean(metricsQuery.data || serversQuery.data), chartPhase);
+  const eventSeries = useSampledTimeSeries(monitoring.trends.eventCount, Boolean(activityQuery.data), chartPhase);
   const cpuSummary = useMemo(() => summarizeTimeSeries(cpuSeries), [cpuSeries]);
   const memorySummary = useMemo(() => summarizeTimeSeries(memorySeries), [memorySeries]);
   const playerSummary = useMemo(() => summarizeTimeSeries(playerSeries), [playerSeries]);
@@ -116,7 +119,6 @@ export default function ActivityPage() {
         description={t("monitoringDescription")}
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <TechBadge label={t("monitoringDatasource")} value="Prometheus" />
             <TechBadge label={t("monitoringRange")} value="15m" />
             <TechBadge label={t("monitoringRefresh")} value="5s" />
             <a
@@ -267,6 +269,26 @@ function TechBadge({ label, value }: { label: string; value: string }) {
       <span className="font-mono font-medium text-slate-200">{value}</span>
     </span>
   );
+}
+
+function useSampledTimeSeries(value: number, enabled: boolean, tick: number): MonitoringTimeSeriesPoint[] {
+  const [series, setSeries] = useState<MonitoringTimeSeriesPoint[]>([]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setSeries([]);
+      return;
+    }
+    const now = Date.now();
+    const point = { timestamp: new Date(now).toISOString(), value };
+    setSeries((previous) => {
+      const next = [...previous, point].filter((item) => new Date(item.timestamp).getTime() >= now - SERIES_WINDOW_MS);
+      const deduped = next.filter((item, index) => index === next.length - 1 || item.timestamp !== next[index + 1]?.timestamp);
+      return deduped;
+    });
+  }, [enabled, tick, value]);
+
+  return series;
 }
 
 function KpiCard({ icon, label, note, tone = "neutral", value }: { icon: React.ReactNode; label: string; note: string; tone?: "neutral" | "success" | "warning"; value: string | number }) {
