@@ -23,6 +23,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
@@ -83,6 +84,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/auth/setup", h.setupAdmin)
 	r.Post("/api/auth/login", h.login)
 	r.Post("/api/auth/logout", h.logout)
+	r.Get("/metrics", h.prometheusMetrics)
 	r.Get("/api/public/servers/{token}", h.getPublicServerShare)
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireAuth)
@@ -91,6 +93,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/version", h.version)
 		r.Get("/api/runtime/docker", h.dockerStatus)
 		r.Get("/api/runtime/stats", h.runtimeStats)
+		r.Get("/api/observability/metrics", h.observabilityMetrics)
+		r.Get("/api/observability/prometheus", h.prometheusMetrics)
 		r.Post("/api/runtime/images/prepare", h.prepareRuntimeImage)
 		r.Get("/api/settings", h.getSettings)
 		r.Put("/api/settings/public-host", h.updatePublicHost)
@@ -2626,6 +2630,26 @@ func (h *Handler) runtimeStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) observabilityMetrics(w http.ResponseWriter, r *http.Request) {
+	snapshot, err := observability.NewService(h.store, h.runtime).Snapshot(r.Context(), h.runtimeStatusAvailable())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, snapshot)
+}
+
+func (h *Handler) prometheusMetrics(w http.ResponseWriter, r *http.Request) {
+	body, err := observability.NewService(h.store, h.runtime).PrometheusText(r.Context(), h.runtimeStatusAvailable())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
 }
 
 func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {

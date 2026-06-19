@@ -444,12 +444,62 @@ export type HostStats = {
   memoryLimitMb: number;
 };
 
+export type ObservabilityServerMetric = {
+  id: string;
+  name: string;
+  gameKey: string;
+  providerKey: ProviderKey;
+  status: string;
+  playersOnline: number;
+  maxPlayers: number;
+  hostPort?: number;
+  version?: string;
+  cpuPercent: number;
+  memoryMb: number;
+  memoryLimitMb: number;
+  statsAvailable: boolean;
+};
+
+export type ObservabilityActivityTypeCount = {
+  type: string;
+  count: number;
+};
+
+export type ObservabilityActivitySummary = {
+  windowHours: number;
+  total: number;
+  lifecycle: number;
+  backups: number;
+  players: number;
+  failures: number;
+  byType: ObservabilityActivityTypeCount[];
+};
+
+export type ObservabilityMetrics = {
+  collectedAt: string;
+  host: HostStats;
+  servers: ObservabilityServerMetric[];
+  activity: ObservabilityActivitySummary;
+};
+
 export async function getRuntimeStats(): Promise<HostStats> {
   const response = await apiFetch(`${API_BASE}/api/runtime/stats`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load runtime stats");
   }
   return (await response.json()) as HostStats;
+}
+
+export async function getObservabilityMetrics(): Promise<ObservabilityMetrics> {
+  const response = await apiFetch(`${API_BASE}/api/observability/metrics`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load observability metrics");
+  }
+  return (await response.json()) as ObservabilityMetrics;
+}
+
+export function prometheusMetricsUrl() {
+  return `${API_BASE}/metrics`;
 }
 
 export async function getServerLogSnapshot(id: string): Promise<string[]> {
