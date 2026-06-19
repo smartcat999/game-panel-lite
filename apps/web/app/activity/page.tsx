@@ -80,6 +80,7 @@ export default function ActivityPage() {
           <>
             <KpiStrip overview={overviewQuery.data} />
             <HealthStatusCard overview={overviewQuery.data} />
+            <PlatformHealth services={platformQuery.data?.services ?? []} topRoutes={platformQuery.data?.topRoutes ?? []} />
           </>
         ) : null}
 
@@ -127,7 +128,6 @@ export default function ActivityPage() {
               <MonitoringChartCard color="#ff6b6b" icon={<Gauge aria-hidden="true" className="size-4" />} series={platformQuery.data?.series.latencyP95} />
             </section>
 
-            <PlatformHealth services={platformQuery.data?.services ?? []} topRoutes={platformQuery.data?.topRoutes ?? []} />
           </>
         ) : null}
 

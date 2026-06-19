@@ -200,7 +200,8 @@ export default function ServerDetailPage() {
   const successTimerRef = useRef<number | null>(null);
   const formatActionError = (error: unknown, fallback: string) => formatServerDetailError(error, {
     dockerUnavailable: t("detailDockerUnavailable"),
-    containerUnavailable: t("detailContainerUnavailable")
+    containerUnavailable: t("detailContainerUnavailable"),
+    portAlreadyAllocated: (port) => t("detailPortAlreadyAllocated", { port })
   }) || fallback;
   const formatSnapshotError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error || "");

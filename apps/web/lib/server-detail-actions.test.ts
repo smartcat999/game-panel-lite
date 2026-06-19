@@ -10,6 +10,12 @@ describe("server detail action feedback", () => {
     expect(formatServerDetailError(new Error("Error response from daemon: page not found"))).toBe(
       "Docker 容器不可用或已被外部删除，请重新启动服务器让面板恢复运行容器。"
     );
+    expect(formatServerDetailError(new Error("failed to set up container networking: driver failed programming external connectivity on endpoint gamepanel: Bind for 0.0.0.0:7778 failed: port is already allocated"))).toBe(
+      "外部端口 7778 已被占用。请在配置中改为自动分配或换一个端口，然后重新启动服务器。"
+    );
+    expect(formatServerDetailError(new Error("external port 7778 is already used"))).toBe(
+      "外部端口 7778 已被占用。请在配置中改为自动分配或换一个端口，然后重新启动服务器。"
+    );
     expect(formatServerDetailError(new Error("Error response from daemon: manifest for radioactivehydra/tmodloader:2024.10 not found: manifest unknown: manifest unknown"))).toBe(
       "Error response from daemon: manifest for radioactivehydra/tmodloader:2024.10 not found: manifest unknown: manifest unknown"
     );

@@ -77,7 +77,8 @@ export function ServerActions({
     } catch (error) {
       const message = formatServerDetailError(error, {
         dockerUnavailable: t("detailDockerUnavailable"),
-        containerUnavailable: t("detailContainerUnavailable")
+        containerUnavailable: t("detailContainerUnavailable"),
+        portAlreadyAllocated: (port) => t("detailPortAlreadyAllocated", { port })
       });
       setErrorMessage(message || t("unableAction", { action: actionLabel(action) }));
     } finally {
