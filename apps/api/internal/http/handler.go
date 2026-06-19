@@ -3347,11 +3347,18 @@ func (h *Handler) runStartServer(ctx context.Context, id string) {
 		h.markServerLifecycleFailed(ctx, id, "server.start.failed", errors.New("server not found"))
 		return
 	}
-	server, _, err = h.ensureRuntimeContainer(ctx, server)
+	h.recordActivity(ctx, server.ID, "server.start.container.prepare", fmt.Sprintf("Preparing runtime container for server %s", server.Name))
+	server, recreated, err := h.ensureRuntimeContainer(ctx, server)
 	if err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.start.failed", err)
 		return
 	}
+	if recreated {
+		h.recordActivity(ctx, server.ID, "server.start.container.created", fmt.Sprintf("Created runtime container for server %s", server.Name))
+	} else {
+		h.recordActivity(ctx, server.ID, "server.start.container.ready", fmt.Sprintf("Runtime container ready for server %s", server.Name))
+	}
+	h.recordActivity(ctx, server.ID, "server.start.runtime.starting", fmt.Sprintf("Starting runtime container for server %s", server.Name))
 	if err := h.runtime.Start(ctx, server); err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.start.failed", err)
 		return
@@ -3384,11 +3391,18 @@ func (h *Handler) runRestartServer(ctx context.Context, id string) {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
 		return
 	}
-	server, _, err = h.ensureRuntimeContainer(ctx, server)
+	h.recordActivity(ctx, server.ID, "server.restart.container.prepare", fmt.Sprintf("Preparing runtime container for server %s", server.Name))
+	server, recreated, err := h.ensureRuntimeContainer(ctx, server)
 	if err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
 		return
 	}
+	if recreated {
+		h.recordActivity(ctx, server.ID, "server.restart.container.created", fmt.Sprintf("Created runtime container for server %s", server.Name))
+	} else {
+		h.recordActivity(ctx, server.ID, "server.restart.container.ready", fmt.Sprintf("Runtime container ready for server %s", server.Name))
+	}
+	h.recordActivity(ctx, server.ID, "server.restart.runtime.starting", fmt.Sprintf("Starting runtime container for server %s", server.Name))
 	if err := h.runtime.Start(ctx, server); err != nil {
 		h.markServerLifecycleFailed(ctx, id, "server.restart.failed", err)
 		return

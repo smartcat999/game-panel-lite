@@ -32,6 +32,12 @@ func TestRegistryBuildsGameCatalog(t *testing.T) {
 	if terrariaGame.Status != "available" || len(terrariaGame.Providers) != 2 {
 		t.Fatalf("expected available Terraria entry with two providers, got %+v", terrariaGame)
 	}
+	if terrariaGame.Providers[0].Key != domain.ProviderTerrariaVanilla || !terrariaGame.Providers[0].Recommended {
+		t.Fatalf("expected vanilla Terraria to be the first recommended provider, got %+v", terrariaGame.Providers)
+	}
+	if terrariaGame.Providers[1].Key != domain.ProviderTerrariaTModLoader || terrariaGame.Providers[1].Recommended {
+		t.Fatalf("expected tModLoader to follow vanilla without recommendation, got %+v", terrariaGame.Providers)
+	}
 	if !terrariaGame.Providers[0].Capabilities.ConsoleCommands || !terrariaGame.Providers[0].Capabilities.SaveSnapshots {
 		t.Fatalf("expected Terraria capabilities to be exposed, got %+v", terrariaGame.Providers[0].Capabilities)
 	}

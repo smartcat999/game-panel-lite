@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds } from "@gamepanel-lite/shared";
@@ -32,6 +32,7 @@ import {
   getServerLogSnapshot,
   getServerShare,
   getServerStats,
+  listActivity,
   listBackups,
   listGlobalMods,
   listModPacks,
@@ -45,6 +46,7 @@ import {
   serverLogsUrl,
   updateServerConfig,
 } from "@/lib/api";
+import { formatActivityEvent } from "@/lib/activity-display";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
@@ -52,7 +54,7 @@ import { describeResourceAction, formatServerDetailError, isServerLifecyclePendi
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword, serverJoinPort } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
-import type { Backup, ModFile, ModPack, ProviderCapabilities, ResourceLimits, Server, World } from "@/lib/types";
+import type { ActivityEvent, Backup, ModFile, ModPack, ProviderCapabilities, ResourceLimits, Server, World } from "@/lib/types";
 
 type TabId = "overview" | "monitoring" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
@@ -79,6 +81,30 @@ function formatCpuLimitLabel(value: number, t: (key: "unlimited" | "cpuCoresValu
 
 function formatMemoryLimitLabel(value: number, t: (key: "unlimited" | "memoryGbValue", values?: Record<string, string | number>) => string) {
   return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
+}
+
+const lifecycleProgressTypes = new Set([
+  "server.start.queued",
+  "server.start.container.prepare",
+  "server.start.container.created",
+  "server.start.container.ready",
+  "server.start.runtime.starting",
+  "server.started",
+  "server.start.failed",
+  "server.restart.queued",
+  "server.restart.container.prepare",
+  "server.restart.container.created",
+  "server.restart.container.ready",
+  "server.restart.runtime.starting",
+  "server.restarted",
+  "server.restart.failed",
+  "server.stop.queued",
+  "server.stopped",
+  "server.stop.failed"
+]);
+
+function isLifecycleProgressEvent(type: string) {
+  return lifecycleProgressTypes.has(type);
 }
 
 export default function ServerDetailPage() {
@@ -124,6 +150,13 @@ export default function ServerDetailPage() {
   });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && capabilities.mods), retry: false, refetchInterval: 5000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(server), retry: false });
+  const lifecycleActivityQuery = useQuery({
+    queryKey: ["server-lifecycle-activity", id],
+    queryFn: listActivity,
+    enabled: Boolean(server && isServerLifecyclePending(server.status)),
+    retry: false,
+    refetchInterval: 2000
+  });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [monitoringRange, setMonitoringRange] = useState<MonitoringRangeValue>("1h");
   const [copied, setCopied] = useState("");
@@ -495,6 +528,7 @@ export default function ServerDetailPage() {
   const sharePath = share?.sharePath ?? "";
   const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
+  const lifecycleEvents = (lifecycleActivityQuery.data ?? []).filter((event) => event.instanceId === server.id && isLifecycleProgressEvent(event.type)).slice(0, 3);
   const copy = async (label: string, value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -547,6 +581,14 @@ export default function ServerDetailPage() {
       )}
       {errorMessage && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mt-3 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm text-panel-green">{successMessage}</p>}
+      {isServerLifecyclePending(server.status) && (
+        <LifecycleProgressCard
+          events={lifecycleEvents}
+          loading={lifecycleActivityQuery.isLoading}
+          locale={locale}
+          server={server}
+        />
+      )}
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -2423,6 +2465,59 @@ function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label
       </div>
       <p className="mt-3 text-2xl font-semibold">{value}</p>
     </button>
+  );
+}
+
+function LifecycleProgressCard({
+  events,
+  loading,
+  locale,
+  server
+}: {
+  events: ActivityEvent[];
+  loading: boolean;
+  locale: "zh" | "en";
+  server: Server;
+}) {
+  const { t } = useI18n();
+  const title = server.status === "restarting"
+    ? t("serverLifecycleRestartingTitle")
+    : server.status === "stopping"
+      ? t("serverLifecycleStoppingTitle")
+      : t("serverLifecycleStartingTitle");
+  return (
+    <div className="mt-3 rounded-lg border border-panel-gold/30 bg-panel-gold/10 px-4 py-3">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-panel-gold/35 bg-slate-950/45 text-panel-gold">
+          <Activity aria-hidden="true" className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <p className="font-medium text-slate-100">{title}</p>
+            <span className="text-xs font-medium text-panel-gold">{t("serverLifecycleRuntimeReady")}</span>
+          </div>
+          <p className="mt-1 text-sm leading-6 text-slate-400">{t("serverLifecycleProgressDescription")}</p>
+          <div className="mt-3 grid gap-2">
+            {events.length > 0 ? events.map((event) => {
+              const display = formatActivityEvent(event, locale);
+              return (
+                <div key={event.id} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-panel-line/80 bg-slate-950/45 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-200">{display.typeLabel}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">{display.message}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-500">{event.created}</span>
+                </div>
+              );
+            }) : (
+              <p className="rounded-md border border-panel-line/80 bg-slate-950/45 px-3 py-2 text-sm text-slate-400">
+                {loading ? t("serverLifecycleProgressLoading") : t("serverLifecycleProgressWaiting")}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

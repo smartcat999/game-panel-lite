@@ -49,6 +49,10 @@ type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
 type ConfigValidationErrors = Record<string, string>;
+const modeProviderPriority: Record<string, number> = {
+  "terraria-vanilla": 10,
+  "terraria-tmodloader": 20
+};
 
 const providerFieldLabelKeys: Record<string, MessageKey> = {
   adminPassword: "adminPassword",
@@ -104,6 +108,15 @@ function formatCpuLimitLabel(value: number, t: (key: MessageKey, values?: Record
 
 function formatMemoryLimitLabel(value: number, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
   return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
+}
+
+function orderModeProviders(providers: ProviderCatalog[]) {
+  return [...providers].sort((left, right) => {
+    const leftPriority = modeProviderPriority[left.key] ?? 100;
+    const rightPriority = modeProviderPriority[right.key] ?? 100;
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    return left.key.localeCompare(right.key);
+  });
 }
 
 function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
@@ -675,6 +688,7 @@ function ModeStep({
 }) {
   const { t } = useI18n();
   const visibleConfigPresets = configPresets.slice(0, 4);
+  const modeProviders = orderModeProviders(providers);
   const configPresetSection = visibleConfigPresets.length > 0 && (
     <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
       <div className="flex items-start gap-3">
@@ -711,7 +725,7 @@ function ModeStep({
         <div>
           <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {providers.map((provider) => {
+            {modeProviders.map((provider) => {
               const isSelected = selectedProviderKey === provider.key;
               const isModded = provider.capabilities.mods;
               const displayName = providerDisplayName(provider.key, provider.name, t);

@@ -90,8 +90,8 @@ func TestConsumeImagePullReturnsErrorDetail(t *testing.T) {
 
 func TestImagePullErrorExplainsMissingDSTRegistryImage(t *testing.T) {
 	err := imagePullError(
-		"gamepanel-lite/dst-server:latest",
-		errors.New("pull access denied for gamepanel-lite/dst-server, repository does not exist or may require 'docker login': denied: requested access to the resource is denied"),
+		"smartcat99999/dst-server:latest",
+		errors.New("pull access denied for smartcat99999/dst-server, repository does not exist or may require 'docker login': denied: requested access to the resource is denied"),
 	)
 	if err == nil {
 		t.Fatal("expected image pull error")

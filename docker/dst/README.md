@@ -10,7 +10,7 @@ Build this image for `linux/amd64`:
 scripts/build-game-images.sh dst --platform linux/amd64 --load
 ```
 
-By default this loads the local runtime image as `gamepanel-lite/dst-server:latest`, which is the image name GamePanel Lite uses for DST servers. This image is not assumed to exist on Docker Hub.
+By default this loads the runtime image as `smartcat99999/dst-server:latest`, matching the image namespace used by the other GamePanel Lite runtime images.
 
 The Dockerfile downloads Steam app `343050` and forces the SteamCMD platform to `linux` so the Linux dedicated-server depot is selected.
 

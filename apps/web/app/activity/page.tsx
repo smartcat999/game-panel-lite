@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Cpu, Gauge, HardDrive, MemoryStick, Network, RadioTower, Server, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -26,7 +26,7 @@ import type { MonitoringEvent } from "@/features/monitoring/types";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 
 type FilterValue = "all" | string;
-type MonitoringSection = "overview" | "server-load" | "activity-log";
+type MonitoringSection = "overview" | "resource-trends" | "platform" | "server-load" | "activity-log";
 
 const severityOptions = ["all", "error", "warning", "success", "info"] as const;
 const eventTypeOptions = ["all", "server", "backup", "world", "mod", "player", "settings", "system"] as const;
@@ -57,8 +57,6 @@ export default function ActivityPage() {
         description={t("monitoringDescription")}
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <TechBadge label={t("monitoringRange")} value="15m" />
-            <TechBadge label={t("monitoringRefresh")} value="5s" />
             <SourceBadge connected={overviewQuery.data?.dataSource.connected} />
           </div>
         }
@@ -71,6 +69,8 @@ export default function ActivityPage() {
           counts={{
             "activity-log": eventsQuery.data?.events.length ?? 0,
             overview: overviewQuery.data?.kpis.issues ?? 0,
+            platform: platformQuery.data?.services.length ?? 0,
+            "resource-trends": 4,
             "server-load": loadQuery.data?.rows.length ?? 0
           }}
           onChange={setSection}
@@ -80,17 +80,41 @@ export default function ActivityPage() {
           <>
             <KpiStrip overview={overviewQuery.data} />
             <HealthStatusCard overview={overviewQuery.data} />
+          </>
+        ) : null}
 
-            <section className="grid gap-4 md:grid-cols-2">
-              <MetricGroupHeader title={t("serverResourceTitle")} description={t("serverResourceDescription")} />
-              <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.cpu} />
-              <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.memory} />
-              <MonitoringChartCard color="#59d46f" icon={<Users aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.players} />
-              <MonitoringChartCard color="#e6b84a" icon={<Activity aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.events} />
-            </section>
+        {section === "resource-trends" ? (
+          <section className="grid gap-4 md:grid-cols-2">
+            <MetricGroupHeader
+              title={t("serverResourceTitle")}
+              description={t("serverResourceDescription")}
+              meta={
+                <>
+                  <TechBadge label={t("monitoringRange")} value="15m" />
+                  <TechBadge label={t("monitoringRefresh")} value="5s" />
+                </>
+              }
+            />
+            <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.cpu} />
+            <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.memory} />
+            <MonitoringChartCard color="#59d46f" icon={<Users aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.players} />
+            <MonitoringChartCard color="#e6b84a" icon={<Activity aria-hidden="true" className="size-4" />} series={metricsQuery.data?.series.events} />
+          </section>
+        ) : null}
 
+        {section === "platform" ? (
+          <>
             <section className="grid gap-4 md:grid-cols-2">
-              <MetricGroupHeader title={t("nodeResourceTitle")} description={t("nodeResourceDescription")} />
+              <MetricGroupHeader
+                title={t("nodeResourceTitle")}
+                description={t("nodeResourceDescription")}
+                meta={
+                  <>
+                    <TechBadge label={t("monitoringRange")} value="15m" />
+                    <TechBadge label={t("monitoringRefresh")} value="5s" />
+                  </>
+                }
+              />
               <MonitoringChartCard color="#7dd3fc" icon={<Server aria-hidden="true" className="size-4" />} series={platformQuery.data?.series.nodeCpu} />
               <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} series={platformQuery.data?.series.nodeMemory} />
               <MonitoringChartCard color="#e6b84a" icon={<HardDrive aria-hidden="true" className="size-4" />} series={platformQuery.data?.series.nodeDisk} />
@@ -153,15 +177,17 @@ function MonitoringSectionNav({
   onChange: (section: MonitoringSection) => void;
 }) {
   const { t } = useI18n();
-  const tabs: { id: MonitoringSection; label: string; note: string; countLabel: string }[] = [
-    { id: "overview", label: t("monitoringNavOverview"), note: t("monitoringNavOverviewNote"), countLabel: t("monitoringNavIssues", { count: counts.overview }) },
-    { id: "server-load", label: t("monitoringNavServerLoad"), note: t("monitoringNavServerLoadNote"), countLabel: t("monitoringNavServers", { count: counts["server-load"] }) },
-    { id: "activity-log", label: t("monitoringNavActivityLog"), note: t("monitoringNavActivityLogNote"), countLabel: t("monitoringNavEvents", { count: counts["activity-log"] }) }
+  const tabs: { id: MonitoringSection; label: string; countLabel: string }[] = [
+    { id: "overview", label: t("monitoringNavOverview"), countLabel: t("monitoringNavIssues", { count: counts.overview }) },
+    { id: "resource-trends", label: t("monitoringNavResourceTrends"), countLabel: t("monitoringNavCharts", { count: counts["resource-trends"] }) },
+    { id: "platform", label: t("monitoringNavPlatform"), countLabel: t("monitoringNavServices", { count: counts.platform }) },
+    { id: "server-load", label: t("monitoringNavServerLoad"), countLabel: t("monitoringNavServers", { count: counts["server-load"] }) },
+    { id: "activity-log", label: t("monitoringNavActivityLog"), countLabel: t("monitoringNavEvents", { count: counts["activity-log"] }) }
   ];
 
   return (
-    <div className="rounded-lg border border-panel-line bg-panel-card p-2">
-      <div className="grid gap-2 lg:grid-cols-3" role="tablist" aria-label={t("monitoringTitle")}>
+    <div className="rounded-lg border border-panel-line bg-panel-card p-1.5">
+      <div className="flex flex-wrap gap-1" role="tablist" aria-label={t("monitoringTitle")}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -169,18 +195,15 @@ function MonitoringSectionNav({
             role="tab"
             aria-selected={active === tab.id}
             className={[
-              "rounded-md border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
+              "inline-flex min-h-10 items-center gap-2 rounded-md border px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
               active === tab.id
                 ? "border-panel-green/35 bg-panel-green/10 text-slate-100"
                 : "border-transparent text-slate-400 hover:border-panel-line hover:bg-slate-950/35 hover:text-slate-200"
             ].join(" ")}
             onClick={() => onChange(tab.id)}
           >
-            <span className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold">{tab.label}</span>
-              <span className="rounded border border-panel-line bg-slate-950/45 px-2 py-0.5 font-mono text-xs text-slate-400">{tab.countLabel}</span>
-            </span>
-            <span className="mt-1 block text-xs text-slate-500">{tab.note}</span>
+            <span>{tab.label}</span>
+            <span className="rounded border border-panel-line bg-slate-950/45 px-1.5 py-0.5 font-mono text-[11px] text-slate-400">{tab.countLabel}</span>
           </button>
         ))}
       </div>
@@ -198,11 +221,16 @@ function TechBadge({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MetricGroupHeader({ description, title }: { description: string; title: string }) {
+function MetricGroupHeader({ description, meta, title }: { description: string; meta?: ReactNode; title: string }) {
   return (
     <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3 md:col-span-2">
-      <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
-      <p className="mt-1 text-xs text-slate-500">{description}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
+          <p className="mt-1 text-xs text-slate-500">{description}</p>
+        </div>
+        {meta ? <div className="flex flex-wrap gap-2">{meta}</div> : null}
+      </div>
     </div>
   );
 }

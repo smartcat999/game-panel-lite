@@ -129,7 +129,7 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 			Key:                item.Key(),
 			Name:               item.Name(),
 			Description:        item.Description(),
-			Recommended:        len(entry.Providers) == 0,
+			Recommended:        false,
 			Versions:           append([]string{}, item.Versions()...),
 			RecommendedVersion: recommendedVersion(item.Versions()),
 			Capabilities:       item.Capabilities(),
@@ -141,6 +141,7 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 	}
 	out := make([]domain.GameCatalogEntry, 0, len(games))
 	for _, item := range games {
+		sortProviderCatalog(item.Providers)
 		out = append(out, item)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -150,6 +151,31 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 		return out[i].Key < out[j].Key
 	})
 	return out
+}
+
+func sortProviderCatalog(providers []domain.ProviderCatalog) {
+	sort.SliceStable(providers, func(i, j int) bool {
+		leftPriority := providerCatalogPriority(providers[i].Key)
+		rightPriority := providerCatalogPriority(providers[j].Key)
+		if leftPriority != rightPriority {
+			return leftPriority < rightPriority
+		}
+		return providers[i].Key < providers[j].Key
+	})
+	for index := range providers {
+		providers[index].Recommended = index == 0
+	}
+}
+
+func providerCatalogPriority(key domain.ProviderKey) int {
+	switch key {
+	case domain.ProviderTerrariaVanilla:
+		return 10
+	case domain.ProviderTerrariaTModLoader:
+		return 20
+	default:
+		return 100
+	}
 }
 
 func (r *Registry) Game(key domain.GameKey) (domain.GameCatalogEntry, bool) {

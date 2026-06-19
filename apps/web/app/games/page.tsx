@@ -69,6 +69,7 @@ function GameRuntimeCard({
   const { t } = useI18n();
   const art = getGameArt(game.coverImage ?? game.key);
   const Icon = art.icon;
+  const hasMultipleProviders = game.providers.length > 1;
   return (
     <Card className="overflow-hidden p-0">
       <div className="grid gap-0 lg:grid-cols-[260px_1fr]">
@@ -97,9 +98,11 @@ function GameRuntimeCard({
               <h2 className="text-lg font-semibold text-white">{gameDisplayName(game.key, game.name, t)}</h2>
               <p className="mt-1 max-w-3xl text-sm text-slate-400">{gameDescription(game.key, game.description, t)}</p>
             </div>
-            <span className="w-fit rounded border border-panel-line bg-slate-950/60 px-2.5 py-1 text-xs text-slate-400">
-              {t("gameLibraryProviderCount", { count: game.providers.length })}
-            </span>
+            {hasMultipleProviders ? (
+              <span className="w-fit rounded border border-panel-line bg-slate-950/60 px-2.5 py-1 text-xs text-slate-400">
+                {t("gameLibraryProviderCount", { count: game.providers.length })}
+              </span>
+            ) : null}
           </div>
           <div className="mt-4 divide-y divide-panel-line overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
             {game.providers.map((provider) => (
@@ -111,6 +114,7 @@ function GameRuntimeCard({
                 isInstalling={isInstalling}
                 onInstall={onInstall}
                 provider={provider}
+                showProviderTitle={hasMultipleProviders}
               />
             ))}
             {game.providers.length === 0 && <p className="p-4 text-sm text-slate-500">{t("plannedGameHint")}</p>}
@@ -127,7 +131,8 @@ function ProviderRuntimeRow({
   installingProvider,
   isInstalling,
   onInstall,
-  provider
+  provider,
+  showProviderTitle
 }: {
   game: GameCatalogEntry;
   installError: string;
@@ -135,6 +140,7 @@ function ProviderRuntimeRow({
   isInstalling: boolean;
   onInstall: (provider: ProviderCatalog) => void;
   provider: ProviderCatalog;
+  showProviderTitle: boolean;
 }) {
   const { t } = useI18n();
   const status = provider.runtimeImage;
@@ -157,7 +163,7 @@ function ProviderRuntimeRow({
     <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p>
+          {showProviderTitle ? <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p> : null}
           <RuntimeStatusBadge status={displayStatus} />
           {provider.recommended && <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs text-panel-green">{t("recommended")}</span>}
         </div>

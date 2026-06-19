@@ -141,10 +141,6 @@ build_dst() {
   local image="${registry}/dst-server:${version}"
   local dst_buildx_args=("${buildx_args[@]}")
 
-  if [[ "$registry" == "smartcat99999" ]]; then
-    image="gamepanel-lite/dst-server:${version}"
-  fi
-
   if [[ -n "$platform" && "$platform" != "linux/amd64" ]]; then
     echo "Don't Starve Together image builds are currently supported only for linux/amd64." >&2
     exit 1
