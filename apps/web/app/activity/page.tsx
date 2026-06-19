@@ -1,390 +1,460 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity as ActivityIcon, AlertTriangle, Cpu, MemoryStick, RadioTower, Server, Users } from "lucide-react";
+import Link from "next/link";
+import {
+  Activity,
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Cpu,
+  Database,
+  ExternalLink,
+  Gauge,
+  Info,
+  MemoryStick,
+  RadioTower,
+  Search,
+  Server,
+  Users
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
-import { getObservabilityMetrics, listActivity, listGames, listServers, prometheusMetricsUrl, type ObservabilityServerMetric } from "@/lib/api";
+import { getObservabilityMetrics, listActivity, listGames, listServers, prometheusMetricsUrl } from "@/lib/api";
 import { formatActivityEvent } from "@/lib/activity-display";
 import { gameFilterOptions } from "@/lib/game-filters";
-import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
+import {
+  createMonitoringModel,
+  eventTypeOptions,
+  monitoringMockModel,
+  severityOptions,
+  shouldUseMonitoringMock,
+  type MonitoringEvent,
+  type MonitoringEventType,
+  type MonitoringHealth,
+  type MonitoringServerRow,
+  type MonitoringSeverity,
+  type MonitoringSeverityFilter
+} from "@/lib/monitoring";
 import { useTimeSeries, type SeriesPoint } from "@/lib/sparkline";
 import { cn } from "@/lib/utils";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 
 type ActivityGameFilter = "all" | string;
 
 export default function ActivityPage() {
   const { locale, t } = useI18n();
-  const query = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
+  const activityQuery = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
   const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const metricsQuery = useQuery({ queryKey: ["observability-metrics"], queryFn: getObservabilityMetrics, retry: false, refetchInterval: 5000 });
   const [search, setSearch] = useState("");
   const [gameFilter, setGameFilter] = useState<ActivityGameFilter>("all");
-  const events = query.data ?? [];
+  const [eventTypeFilter, setEventTypeFilter] = useState<MonitoringEventType>("all");
+  const [severityFilter, setSeverityFilter] = useState<MonitoringSeverityFilter>("all");
+
+  const events = activityQuery.data ?? [];
   const servers = serversQuery.data ?? [];
-  const metrics = metricsQuery.data;
-  const host = metrics?.host;
-  const cpuSeries = useTimeSeries(host?.totalCpuPercent, 60);
-  const memorySeries = useTimeSeries(host?.totalMemoryMb, 60);
-  const totalPlayers = metrics?.servers.reduce((sum, server) => sum + server.playersOnline, 0) ?? 0;
-  const playerCapacity = metrics?.servers.reduce((sum, server) => sum + server.maxPlayers, 0) ?? 0;
-  const runningServers = metrics?.servers.filter((server) => server.status === "running").length ?? 0;
-  const totalServers = metrics?.servers.length ?? 0;
-  const memoryLimit = Math.max(1024, host?.memoryLimitMb ?? 1024);
-  const topServers = (metrics?.servers ?? []).slice(0, 5);
-  const serverById = useMemo(() => new Map(servers.map((server) => [server.id, server])), [servers]);
-  const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
-  const gameFilters = useMemo(
-    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), events.map((event) => event.instanceId ? serverById.get(event.instanceId)?.gameKey : undefined)),
-    [events, gamesQuery.data, serverById, t]
+  const games = gamesQuery.data ?? [];
+  const displayByEventId = useMemo(
+    () => new Map(events.map((event) => [event.id, formatActivityEvent(event, locale)])),
+    [events, locale]
   );
-  const filteredEvents = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return events.filter((event) => {
-      const server = event.instanceId ? serverById.get(event.instanceId) : undefined;
-      const matchesGame = gameFilter === "all" || server?.gameKey === gameFilter;
-      if (!matchesGame) return false;
-      if (!term) return true;
-      const serverName = event.instanceId ? serverNameById.get(event.instanceId) ?? event.instanceId : "";
-      return [event.message, event.type, serverName].some((value) => value.toLowerCase().includes(term));
+  const monitoring = useMemo(() => {
+    if (shouldUseMonitoringMock(metricsQuery.data, servers, events)) {
+      return monitoringMockModel();
+    }
+    return createMonitoringModel({
+      activity: events,
+      displayByEventId,
+      games,
+      metrics: metricsQuery.data,
+      servers
     });
-  }, [events, gameFilter, search, serverById, serverNameById]);
+  }, [displayByEventId, events, games, metricsQuery.data, servers]);
+
+  const cpuSeries = useTimeSeries(monitoring.trends.cpuPercent, 60);
+  const memorySeries = useTimeSeries(monitoring.trends.memoryMb, 60);
+  const playerSeries = useTimeSeries(monitoring.trends.playerCount, 60);
+  const eventSeries = useTimeSeries(monitoring.trends.eventCount, 60);
+  const serverById = useMemo(() => new Map(servers.map((server) => [server.id, server])), [servers]);
+  const gameFilters = useMemo(
+    () => gameFilterOptions(games, t("filterAll"), events.map((event) => event.instanceId ? serverById.get(event.instanceId)?.gameKey : undefined)),
+    [events, games, serverById, t]
+  );
   const activeFilterChips = [
     search.trim(),
-    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : ""
+    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : "",
+    eventTypeFilter !== "all" ? t(eventTypeLabelKey(eventTypeFilter)) : "",
+    severityFilter !== "all" ? t(severityLabelKey(severityFilter)) : ""
   ].filter(Boolean);
+  const filteredEvents = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return monitoring.events.filter((event) => {
+      const sourceServer = events.find((item) => item.id === event.id)?.instanceId;
+      const sourceGame = sourceServer ? serverById.get(sourceServer)?.gameKey : undefined;
+      const matchesGame = gameFilter === "all" || sourceGame === gameFilter;
+      const matchesType = eventTypeFilter === "all" || event.kind === eventTypeFilter;
+      const matchesSeverity = severityFilter === "all" || event.severity === severityFilter;
+      const matchesSearch = !term || event.searchText.includes(term);
+      return matchesGame && matchesType && matchesSeverity && matchesSearch;
+    });
+  }, [eventTypeFilter, events, gameFilter, monitoring.events, search, serverById, severityFilter]);
+  const topServerRows = monitoring.serverRows.slice(0, 8);
+
   return (
     <>
       <PageHeader
-        title={t("activityTitle")}
-        description={t("activityObservabilityDescription")}
+        title={t("monitoringTitle")}
+        description={t("monitoringDescription")}
         action={
-          <a
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 text-sm font-medium text-slate-100 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-            href={prometheusMetricsUrl()}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <RadioTower aria-hidden="true" className="size-4" />
-            {t("prometheusEndpoint")}
-          </a>
-        }
-      />
-      {(query.isError || serversQuery.isError || gamesQuery.isError || metricsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiActivityUnavailable")}</p>}
-
-      <section className="mb-5 overflow-hidden rounded-md border border-panel-line bg-[#090d13]">
-        <div className="flex flex-col gap-3 border-b border-panel-line bg-[#0b111a] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={cn("size-2 rounded-full", metricsQuery.isError ? "bg-panel-gold" : "bg-panel-green")} />
-              <h2 className="text-sm font-semibold text-slate-100">{t("metricsOverviewTitle")}</h2>
-              <span className="rounded border border-panel-line px-1.5 py-0.5 font-mono text-[11px] text-slate-500">GamePanel</span>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">{t("monitoringDashboardDescription")}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <DashboardBadge label={t("monitoringDatasource")} value="Prometheus" />
-            <DashboardBadge label={t("monitoringRange")} value="15m" />
-            <DashboardBadge label={t("monitoringRefresh")} value="5s" />
+          <div className="flex flex-wrap justify-end gap-2">
+            <TechBadge label={t("monitoringDatasource")} value="Prometheus" />
+            <TechBadge label={t("monitoringRange")} value="15m" />
+            <TechBadge label={t("monitoringRefresh")} value="5s" />
             <a
-              className="inline-flex h-8 items-center gap-2 rounded border border-panel-line bg-slate-950/50 px-2.5 text-xs font-medium text-slate-300 transition hover:bg-slate-900"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 text-xs font-medium text-slate-300 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
               href={prometheusMetricsUrl()}
               rel="noreferrer"
               target="_blank"
             >
               <RadioTower aria-hidden="true" className="size-3.5 text-panel-green" />
-              /metrics
+              {t("monitoringEndpoint")}
             </a>
           </div>
-        </div>
+        }
+      />
+      {(activityQuery.isError || serversQuery.isError || gamesQuery.isError || metricsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiActivityUnavailable")}</p>}
 
-        <div className="grid border-b border-panel-line sm:grid-cols-2 xl:grid-cols-4">
-          <StatCell icon={<Server aria-hidden="true" className="size-4" />} label={t("metricRunningServers")} value={`${runningServers}/${totalServers}`} />
-          <StatCell icon={<Users aria-hidden="true" className="size-4" />} label={t("metricOnlinePlayers")} value={`${totalPlayers}/${playerCapacity}`} />
-          <StatCell icon={<RadioTower aria-hidden="true" className="size-4" />} label="Docker containers" value={`${host?.runningContainers ?? 0}`} />
-          <StatCell icon={<AlertTriangle aria-hidden="true" className="size-4" />} label={t("activityFailures")} tone="gold" value={`${metrics?.activity.failures ?? 0}`} />
-        </div>
+      <section className="mb-5 grid gap-3 xl:grid-cols-5">
+        <KpiCard icon={<Server aria-hidden="true" className="size-4" />} label={t("kpiTotalServers")} note={t("kpiTotalServersNote")} value={monitoring.kpis.totalServers} />
+        <KpiCard icon={<CheckCircle2 aria-hidden="true" className="size-4" />} label={t("kpiRunning")} note={t("kpiRunningNote")} tone="success" value={monitoring.kpis.runningServers} />
+        <KpiCard icon={<AlertTriangle aria-hidden="true" className="size-4" />} label={t("kpiIssues")} note={monitoring.kpis.issues > 0 ? t("kpiIssuesAction") : t("kpiIssuesClear")} tone={monitoring.kpis.issues > 0 ? "warning" : "success"} value={monitoring.kpis.issues} />
+        <KpiCard icon={<Users aria-hidden="true" className="size-4" />} label={t("kpiOnlinePlayers")} note={t("playersOnlineHint", { count: monitoring.kpis.onlinePlayers, capacity: monitoring.kpis.playerCapacity })} value={monitoring.kpis.onlinePlayers} />
+        <KpiCard icon={<Gauge aria-hidden="true" className="size-4" />} label={t("kpiResourceUsage")} note={t("kpiResourceUsageNote")} tone={monitoring.kpis.resourceUsagePercent > 75 ? "warning" : "success"} value={`${monitoring.kpis.resourceUsagePercent}%`} />
+      </section>
 
-        <div className="grid gap-px bg-panel-line xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px]">
-          <TimeSeriesPanel
+      <section className="mb-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <HealthOverview health={monitoring.health} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <TrendCard
             color="#7bd978"
-            current={host?.totalCpuPercent}
+            current={`${monitoring.trends.cpuPercent.toFixed(1)}%`}
+            currentValue={monitoring.trends.cpuPercent}
+            emptyLabel={t("monitoringNoCpuData")}
             icon={<Cpu aria-hidden="true" className="size-4" />}
             max={100}
-            metric="gamepanel_runtime_cpu_percent"
+            note={t("trendCpuNote")}
             series={cpuSeries}
-            title={t("metricRuntimeCpu")}
-            unit="%"
+            title={t("trendCpuTitle")}
           />
-          <TimeSeriesPanel
+          <TrendCard
             color="#a78bfa"
-            current={host?.totalMemoryMb}
+            current={`${Math.round(monitoring.trends.memoryMb)} MB`}
+            currentValue={monitoring.trends.memoryMb}
+            emptyLabel={t("monitoringNoMemoryData")}
             icon={<MemoryStick aria-hidden="true" className="size-4" />}
-            max={memoryLimit}
-            metric="gamepanel_runtime_memory_bytes"
+            max={monitoring.trends.memoryLimitMb}
+            note={t("trendMemoryNote")}
             series={memorySeries}
-            subtitle={host?.memoryLimitMb ? t("metricMemoryLimit", { limit: `${host.memoryLimitMb} MB` }) : t("metricNoLimit")}
-            title={t("metricRuntimeMemory")}
-            unit="MB"
+            title={t("trendMemoryTitle")}
           />
-          <EventsPanel items={metrics?.activity.byType ?? []} total={metrics?.activity.total ?? 0} windowHours={metrics?.activity.windowHours ?? 24} />
+          <TrendCard
+            color="#7bd978"
+            current={`${monitoring.trends.playerCount}`}
+            currentValue={monitoring.trends.playerCount}
+            emptyLabel={t("monitoringNoPlayerData")}
+            icon={<Users aria-hidden="true" className="size-4" />}
+            max={Math.max(1, monitoring.kpis.playerCapacity)}
+            note={t("trendPlayersNote")}
+            series={playerSeries}
+            title={t("trendPlayersTitle")}
+          />
+          <TrendCard
+            color="#f4c95d"
+            current={`${monitoring.trends.eventCount}`}
+            currentValue={monitoring.trends.eventCount}
+            emptyLabel={t("monitoringNoEventData")}
+            icon={<Activity aria-hidden="true" className="size-4" />}
+            max={Math.max(10, monitoring.trends.eventCount)}
+            note={t("trendEventsNote")}
+            series={eventSeries}
+            title={t("trendEventsTitle")}
+          />
         </div>
       </section>
 
-      <section className="mb-5 overflow-hidden rounded-md border border-panel-line bg-[#090d13]">
-        <div className="flex items-center justify-between border-b border-panel-line bg-[#0b111a] px-4 py-3">
-          <div>
-          <h2 className="text-sm font-semibold text-slate-100">{t("serverLoadTitle")}</h2>
-          <p className="mt-1 text-xs text-slate-500">{t("serverLoadDescription")}</p>
-          </div>
-          <span className="font-mono text-xs text-slate-500">gamepanel_server_*</span>
-        </div>
-        <div className="hidden grid-cols-[minmax(0,1fr)_110px_150px_150px_110px] border-b border-panel-line px-4 py-2 text-xs text-slate-500 lg:grid">
-          <span>target</span>
-          <span>state</span>
-          <span>cpu</span>
-          <span>memory</span>
-          <span>players</span>
+      <section className="mb-5 overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
+        <SectionHeader title={t("serverLoadTitle")} description={t("serverLoadDescription")} />
+        <div className="hidden grid-cols-[minmax(220px,1.2fr)_110px_110px_150px_150px_100px_120px_90px] border-b border-panel-line px-4 py-2 text-xs font-medium text-slate-500 xl:grid">
+          <span>{t("monitoringTableServer")}</span>
+          <span>{t("monitoringTableGame")}</span>
+          <span>{t("monitoringTableStatus")}</span>
+          <span>{t("monitoringTableCpu")}</span>
+          <span>{t("monitoringTableMemory")}</span>
+          <span>{t("monitoringTablePlayers")}</span>
+          <span>{t("monitoringTableLastActive")}</span>
+          <span>{t("monitoringTableAction")}</span>
         </div>
         <div className="divide-y divide-panel-line">
-          {topServers.length > 0 ? (
-            topServers.map((server) => <ServerLoadRow key={server.id} server={server} />)
+          {topServerRows.length > 0 ? (
+            topServerRows.map((server) => <ServerLoadRow key={server.id} server={server} />)
           ) : (
-            <div className="p-4 text-sm text-slate-400">{metricsQuery.isLoading ? t("loading") : t("noServersYet")}</div>
+            <EmptyBlock icon={<Server aria-hidden="true" className="size-5" />} label={t("noServersYet")} />
           )}
         </div>
       </section>
 
-      <ResourceFilterBar
-        activeChips={activeFilterChips}
-        clearLabel={t("clearFilters")}
-        density="compact"
-        filters={[
-          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) }
-        ]}
-        onClear={() => {
-          setGameFilter("all");
-          setSearch("");
-        }}
-        onSearchChange={setSearch}
-        resultLabel={t("filteredResultsCount", { count: filteredEvents.length })}
-        search={search}
-        searchPlaceholder={t("searchActivity")}
-      />
-      <Card className="overflow-hidden">
-        {filteredEvents.length === 0 ? (
-          <div className="flex min-h-48 items-center justify-center p-6 text-center text-sm text-slate-400">
-            {query.isLoading ? t("loading") : events.length === 0 ? t("noActivityYet") : t("noResultsMatchFilters")}
-          </div>
-        ) : (
-          <div className="divide-y divide-panel-line">
-            {filteredEvents.map((event) => {
-              const display = formatActivityEvent(event, locale);
-              const server = event.instanceId ? serverById.get(event.instanceId) : undefined;
-              return (
-                <div key={event.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-panel-green/15 text-panel-green">
-                      <ActivityIcon aria-hidden="true" className="size-5" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium text-white">{display.message}</p>
-                      <p className="mt-1 text-xs text-slate-500">{server?.name ?? event.instanceId ?? t("none")}</p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2 text-xs text-slate-400">
-                    <span className="rounded bg-slate-800 px-2 py-1">{display.typeLabel}</span>
-                    <span className="rounded bg-slate-800 px-2 py-1">{localizeRelativeTime(event.created, locale)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      <section>
+        <SectionHeader title={t("recentAlertsTitle")} description={t("recentAlertsDescription")} className="mb-3 rounded-lg border border-panel-line bg-slate-950/35" />
+        <ResourceFilterBar
+          activeChips={activeFilterChips}
+          clearLabel={t("clearFilters")}
+          density="compact"
+          filters={[
+            { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) },
+            { label: t("filterType"), options: eventTypeOptions.map((key) => ({ key, labelKey: eventTypeLabelKey(key) })), value: eventTypeFilter, onChange: (value) => setEventTypeFilter(value as MonitoringEventType) },
+            { label: t("filterSeverity"), options: severityOptions.map((key) => ({ key, labelKey: severityLabelKey(key) })), value: severityFilter, onChange: (value) => setSeverityFilter(value as MonitoringSeverityFilter) }
+          ]}
+          onClear={() => {
+            setGameFilter("all");
+            setEventTypeFilter("all");
+            setSeverityFilter("all");
+            setSearch("");
+          }}
+          onSearchChange={setSearch}
+          resultLabel={t("filteredResultsCount", { count: filteredEvents.length })}
+          search={search}
+          searchPlaceholder={t("searchMonitoringEvents")}
+        />
+        <Card className="overflow-hidden">
+          {filteredEvents.length === 0 ? (
+            <EmptyBlock icon={<Search aria-hidden="true" className="size-5" />} label={activityQuery.isLoading ? t("loading") : t("noResultsMatchFilters")} />
+          ) : (
+            <div className="divide-y divide-panel-line">
+              {filteredEvents.map((event) => <EventRow key={event.id} event={event} />)}
+            </div>
+          )}
+        </Card>
+      </section>
     </>
   );
 }
 
-function DashboardBadge({ label, value }: { label: string; value: string }) {
+function TechBadge({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex h-8 items-center gap-2 rounded border border-panel-line bg-slate-950/50 px-2.5 text-xs">
+    <span className="inline-flex h-9 items-center gap-2 rounded-md border border-panel-line bg-slate-900/55 px-3 text-xs">
       <span className="text-slate-500">{label}</span>
-      <span className="font-mono text-slate-200">{value}</span>
+      <span className="font-mono font-medium text-slate-200">{value}</span>
     </span>
   );
 }
 
-function StatCell({ icon, label, tone = "green", value }: { icon: React.ReactNode; label: string; tone?: "green" | "gold"; value: string }) {
+function KpiCard({ icon, label, note, tone = "neutral", value }: { icon: React.ReactNode; label: string; note: string; tone?: "neutral" | "success" | "warning"; value: string | number }) {
   return (
-    <div className="border-b border-panel-line px-4 py-3 sm:border-r sm:last:border-r-0 xl:border-b-0">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-slate-500">{label}</span>
-        <span className={cn("text-slate-500", tone === "gold" ? "text-panel-gold" : "text-panel-green")}>{icon}</span>
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <p className="mt-2 font-mono text-2xl font-semibold text-slate-100">{value}</p>
+        </div>
+        <span className={cn("flex size-8 items-center justify-center rounded-md border", toneClass(tone))}>{icon}</span>
       </div>
-      <p className="mt-2 font-mono text-2xl font-semibold text-slate-100">{value}</p>
+      <p className="mt-3 truncate text-xs text-slate-500">{note}</p>
+    </Card>
+  );
+}
+
+function HealthOverview({ health }: { health: MonitoringHealth }) {
+  const { t } = useI18n();
+  return (
+    <Card className="p-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-slate-100">{t("healthOverviewTitle")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("healthOverviewDescription")}</p>
+        </div>
+        <span className={cn("rounded-md border px-2 py-1 text-xs font-medium", health.overall === "healthy" ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold")}>
+          {t(health.overall === "healthy" ? "healthHealthy" : health.overall === "critical" ? "healthCritical" : "healthWarning")}
+        </span>
+      </div>
+      <div className="space-y-3">
+        <HealthRow label={t("healthOverall")} value={t(health.overall === "healthy" ? "healthHealthy" : health.overall === "critical" ? "healthCritical" : "healthWarning")} severity={health.overall === "healthy" ? "success" : "warning"} />
+        <HealthRow label={t("healthPrometheusConnected")} value={health.prometheusConnected ? t("connected") : t("unavailable")} severity={health.prometheusConnected ? "success" : "warning"} />
+        <HealthRow label={t("healthDockerRuntime")} value={t(health.dockerRuntime === "healthy" ? "available" : health.dockerRuntime === "degraded" ? "healthDegraded" : "unavailable")} severity={health.dockerRuntime === "healthy" ? "success" : "warning"} />
+        <HealthRow label={t("healthLastSync")} value={health.lastSyncLabel} severity="info" />
+        <HealthRow label={t("healthFailedTargets")} value={String(health.failedTargets)} severity={health.failedTargets > 0 ? "warning" : "success"} />
+      </div>
+      <div className="mt-4 rounded-md border border-panel-line bg-slate-950/45 p-3 text-xs text-slate-500">
+        <div className="flex items-center justify-between gap-3">
+          <span>{t("monitoringDatasource")}</span>
+          <span className="font-mono text-slate-300">Prometheus</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span>{t("monitoringEndpoint")}</span>
+          <span className="font-mono text-slate-300">/metrics</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function HealthRow({ label, severity, value }: { label: string; severity: MonitoringSeverity; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-slate-400">{label}</span>
+      <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-200">
+        <span className={cn("size-2 rounded-full", dotClass(severity))} />
+        {value}
+      </span>
     </div>
   );
 }
 
-function TimeSeriesPanel({
-  color,
-  current,
-  icon,
-  max,
-  metric,
-  series,
-  subtitle,
-  title,
-  unit
-}: {
-  color: string;
-  current?: number;
-  icon: React.ReactNode;
-  max: number;
-  metric: string;
-  series: SeriesPoint[];
-  subtitle?: string;
-  title: string;
-  unit: string;
-}) {
-  const chart = buildChart(series, max);
-  const display = current === undefined ? "—" : unit === "%" ? `${current.toFixed(1)}${unit}` : `${Math.round(current)} ${unit}`;
+function TrendCard({ color, current, currentValue, emptyLabel, icon, max, note, series, title }: { color: string; current: string; currentValue: number; emptyLabel: string; icon: React.ReactNode; max: number; note: string; series: SeriesPoint[]; title: string }) {
+  const chartSeries = series.length >= 2 ? series : seedSeries(currentValue);
+  const chart = buildChart(chartSeries, max);
+  const isEmpty = chartSeries.length === 0;
   return (
-    <div className="bg-[#090d13] p-4">
+    <Card className="h-[240px] p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
             <span style={{ color }}>{icon}</span>
-            <span>{title}</span>
+            {title}
           </div>
-          <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{metric}</p>
+          <p className="mt-1 text-xs text-slate-500">{note}</p>
         </div>
-        <div className="text-right">
-          <p className="font-mono text-2xl font-semibold text-slate-100">{display}</p>
-          {subtitle ? <p className="mt-1 text-xs text-slate-500">{subtitle}</p> : null}
-        </div>
+        <p className="font-mono text-xl font-semibold text-slate-100">{current}</p>
       </div>
-      <svg className="h-52 w-full overflow-visible" role="img" viewBox="0 0 640 240" preserveAspectRatio="none">
-        <g>
-          {[0, 1, 2, 3].map((line) => {
-            const y = 28 + line * 48;
-            const labelValue = Math.round(max - max * line / 3);
-            return (
-              <g key={line}>
-                <line x1="48" x2="624" y1={y} y2={y} stroke="rgba(148,163,184,0.14)" strokeWidth="1" />
-                <text x="8" y={y + 4} fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">{labelValue}</text>
-              </g>
-            );
-          })}
-          {[0, 1, 2, 3, 4, 5].map((line) => {
-            const x = 48 + line * 115.2;
-            return <line key={line} x1={x} x2={x} y1="28" y2="196" stroke="rgba(148,163,184,0.08)" strokeWidth="1" />;
-          })}
-          <line x1="48" x2="624" y1="196" y2="196" stroke="rgba(148,163,184,0.2)" strokeWidth="1" />
-          <line x1="48" x2="48" y1="28" y2="196" stroke="rgba(148,163,184,0.16)" strokeWidth="1" />
-          <path d={chart.area} fill={color} opacity="0.08" />
-          <path d={chart.line} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-          <circle cx={chart.last.x} cy={chart.last.y} r="3" fill={color} />
-          <text x="48" y="226" fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">-15m</text>
-          <text x="580" y="226" fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">now</text>
-        </g>
-      </svg>
-      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-        <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
-        <span className="font-mono">{metric}</span>
+      <div className="relative h-36 overflow-hidden rounded-md border border-panel-line bg-slate-950/35">
+        {isEmpty ? (
+          <EmptyChart label={emptyLabel} />
+        ) : (
+          <svg className="h-full w-full" role="img" viewBox="0 0 520 150" preserveAspectRatio="none">
+            {[0, 1, 2].map((line) => <line key={line} x1="32" x2="504" y1={28 + line * 42} y2={28 + line * 42} stroke="rgba(148,163,184,0.14)" strokeWidth="1" />)}
+            <path d={chart.area} fill={color} opacity="0.08" />
+            <path d={chart.line} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+            <circle cx={chart.last.x} cy={chart.last.y} r="3" fill={color} />
+          </svg>
+        )}
       </div>
-    </div>
+    </Card>
   );
 }
 
-function ServerLoadRow({ server }: { server: ObservabilityServerMetric }) {
-  const cpuPercent = Math.min(server.cpuPercent / 400 * 100, 100);
-  const memoryPercent = server.memoryLimitMb > 0 ? Math.min(server.memoryMb / server.memoryLimitMb * 100, 100) : 0;
+function ServerLoadRow({ server }: { server: MonitoringServerRow }) {
+  const { t } = useI18n();
   return (
-    <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_110px_150px_150px_110px] lg:items-center">
+    <div className={cn("grid gap-3 px-4 py-3 xl:grid-cols-[minmax(220px,1.2fr)_110px_110px_150px_150px_100px_120px_90px] xl:items-center", server.severity === "error" && "bg-panel-gold/5")}>
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
+          <span className={cn("size-2 rounded-full", dotClass(server.severity))} />
           <p className="truncate font-medium text-slate-100">{server.name}</p>
         </div>
-        <p className="mt-1 truncate text-xs text-slate-500">{server.providerKey} · {server.version || "latest"}</p>
+        <p className="mt-1 truncate text-xs text-slate-500">{server.providerLabel} · {server.version}</p>
       </div>
-      <span className={cn("w-fit rounded px-2 py-0.5 text-xs", server.status === "running" ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>{server.status}</span>
-      <LoadBar label="CPU" value={`${server.cpuPercent.toFixed(1)}%`} percent={cpuPercent} />
-      <LoadBar label="MEM" value={`${server.memoryMb} MB`} percent={memoryPercent} tone="purple" />
-      <div className="flex items-center gap-2 text-sm text-slate-300">
-        <Users aria-hidden="true" className="size-4 text-slate-500" />
-        <span>{server.playersOnline} / {server.maxPlayers}</span>
-      </div>
+      <span className="text-sm text-slate-300">{server.gameLabel}</span>
+      <StatusBadge status={server.status} severity={server.severity} />
+      <LoadBar value={`${server.cpuPercent.toFixed(1)}%`} percent={server.cpuPercent} />
+      <LoadBar value={`${Math.round(server.memoryMb)} MB`} percent={server.memoryPercent} tone="purple" />
+      <span className="font-mono text-sm text-slate-300">{server.playersOnline}/{server.maxPlayers}</span>
+      <span className="text-sm text-slate-500">{server.lastActive}</span>
+      <Link className="inline-flex w-fit items-center gap-1 rounded border border-panel-line px-2 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-900" href={server.actionHref}>
+        {t("view")}
+        <ExternalLink aria-hidden="true" className="size-3" />
+      </Link>
     </div>
   );
 }
 
-function LoadBar({ label, percent, tone = "green", value }: { label: string; percent: number; tone?: "green" | "purple"; value: string }) {
+function StatusBadge({ severity, status }: { severity: MonitoringSeverity; status: string }) {
+  return (
+    <span className={cn("w-fit rounded px-2 py-0.5 text-xs font-medium", severity === "error" ? "bg-panel-gold/15 text-panel-gold" : severity === "success" ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>
+      {status}
+    </span>
+  );
+}
+
+function LoadBar({ percent, tone = "green", value }: { percent: number; tone?: "green" | "purple"; value: string }) {
   return (
     <div>
       <div className="mb-1 flex justify-between gap-2 text-xs">
-        <span className="text-slate-500">{label}</span>
         <span className="font-mono text-slate-300">{value}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-        <div className={cn("h-full rounded-full", tone === "purple" ? "bg-panel-purple" : "bg-panel-green")} style={{ width: `${Math.max(3, Math.min(percent, 100))}%` }} />
+        <div className={cn("h-full rounded-full", tone === "purple" ? "bg-panel-purple" : percent > 80 ? "bg-panel-gold" : "bg-panel-green")} style={{ width: `${Math.max(3, Math.min(percent, 100))}%` }} />
       </div>
     </div>
   );
 }
 
-function EventsPanel({ items, total, windowHours }: { items: { type: string; count: number }[]; total: number; windowHours: number }) {
-  const { t } = useI18n();
-  const max = Math.max(1, ...items.map((item) => item.count));
+function EventRow({ event }: { event: MonitoringEvent }) {
   return (
-    <div className="bg-[#090d13] p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
-            <ActivityIcon aria-hidden="true" className="size-4 text-panel-green" />
-            <span>{t("activityEventMixDescription", { hours: windowHours })}</span>
+    <div className={cn("grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_150px_120px_110px] md:items-center", event.severity === "error" && "bg-panel-gold/5")}>
+      <div className="flex min-w-0 gap-3">
+        <span className={cn("mt-1 flex size-7 shrink-0 items-center justify-center rounded-md border", toneClass(event.severity))}>{severityIcon(event.severity)}</span>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-100">{event.title}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>{event.serverName}</span>
+            <span>·</span>
+            <span>{event.operator}</span>
           </div>
-          <p className="mt-1 font-mono text-[11px] text-slate-500">gamepanel_activity_events_24h_by_type</p>
         </div>
-        <p className="font-mono text-2xl font-semibold text-slate-100">{total}</p>
       </div>
-      {items.length === 0 ? (
-        <p className="text-sm text-slate-400">{t("noActivityYet")}</p>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div key={item.type}>
-              <div className="mb-1 flex justify-between gap-2 text-xs">
-                <span className="text-slate-400">{eventTypeLabel(item.type, t)}</span>
-                <span className="font-mono text-slate-500">{item.count}</span>
-              </div>
-              <div className="relative h-2 overflow-hidden rounded-sm bg-slate-900">
-                <div className="absolute inset-y-0 left-0 bg-panel-green" style={{ width: `${Math.max(5, item.count / max * 100)}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <StatusBadge status={event.typeLabel} severity={event.severity} />
+      <span className="text-xs text-slate-500">{event.timestamp}</span>
+      <span className="font-mono text-xs text-slate-500">{event.rawType}</span>
+    </div>
+  );
+}
+
+function SectionHeader({ className, description, title }: { className?: string; description: string; title: string }) {
+  return (
+    <div className={cn("border-b border-panel-line px-4 py-3", className)}>
+      <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
+      <p className="mt-1 text-xs text-slate-500">{description}</p>
+    </div>
+  );
+}
+
+function EmptyBlock({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="flex min-h-36 items-center justify-center p-6 text-center">
+      <div>
+        <span className="mx-auto flex size-10 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-slate-500">{icon}</span>
+        <p className="mt-3 text-sm text-slate-400">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function EmptyChart({ label }: { label: string }) {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="text-center">
+        <Database aria-hidden="true" className="mx-auto size-5 text-slate-600" />
+        <p className="mt-2 text-xs text-slate-500">{label}</p>
+      </div>
     </div>
   );
 }
 
 function buildChart(series: SeriesPoint[], max: number) {
-  const width = 576;
-  const height = 168;
-  const left = 48;
-  const top = 28;
+  const width = 472;
+  const height = 94;
+  const left = 32;
+  const top = 24;
   const bottom = top + height;
   const pointsSource = series.length >= 2 ? series : [{ value: 0, ts: 0 }, { value: series[0]?.value ?? 0, ts: 1 }];
   const first = pointsSource[0]!.ts;
   const last = pointsSource[pointsSource.length - 1]!.ts;
   const points = pointsSource.map((point, index) => {
     const x = left + ((point.ts - first) / (last - first || 1)) * width;
-    const y = bottom - Math.min(1, Math.max(0, point.value / max)) * height;
+    const y = bottom - Math.min(1, Math.max(0, point.value / Math.max(1, max))) * height;
     return { x: Number.isFinite(x) ? x : left + index / Math.max(1, pointsSource.length - 1) * width, y };
   });
   const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
@@ -395,15 +465,56 @@ function buildChart(series: SeriesPoint[], max: number) {
   };
 }
 
-function eventTypeLabel(type: string, t: (key: MessageKey) => string) {
-  const keys: Record<string, MessageKey> = {
+function seedSeries(value: number): SeriesPoint[] {
+  const now = Date.now();
+  return Array.from({ length: 8 }, (_, index) => ({
+    ts: now - (7 - index) * 120000,
+    value
+  }));
+}
+
+function toneClass(tone: MonitoringSeverity | "neutral") {
+  if (tone === "error" || tone === "warning") return "border-panel-gold/30 bg-panel-gold/10 text-panel-gold";
+  if (tone === "success") return "border-panel-green/30 bg-panel-green/10 text-panel-green";
+  return "border-panel-line bg-slate-900 text-slate-400";
+}
+
+function dotClass(severity: MonitoringSeverity) {
+  if (severity === "error" || severity === "warning") return "bg-panel-gold";
+  if (severity === "success") return "bg-panel-green";
+  return "bg-slate-500";
+}
+
+function severityIcon(severity: MonitoringSeverity) {
+  if (severity === "error") return <AlertCircle aria-hidden="true" className="size-4" />;
+  if (severity === "warning") return <AlertTriangle aria-hidden="true" className="size-4" />;
+  if (severity === "success") return <CheckCircle2 aria-hidden="true" className="size-4" />;
+  return <Info aria-hidden="true" className="size-4" />;
+}
+
+function eventTypeLabelKey(type: MonitoringEventType): MessageKey {
+  const keys: Record<MonitoringEventType, MessageKey> = {
+    all: "filterAll",
     backup: "activityTypeBackup",
     failure: "activityTypeFailure",
     lifecycle: "activityTypeLifecycle",
+    mods: "activityTypeMods",
     other: "activityTypeOther",
-    player: "activityTypePlayer"
+    player: "activityTypePlayer",
+    world: "activityTypeWorld"
   };
-  return keys[type] ? t(keys[type]) : type;
+  return keys[type];
+}
+
+function severityLabelKey(severity: MonitoringSeverityFilter): MessageKey {
+  const keys: Record<MonitoringSeverityFilter, MessageKey> = {
+    all: "filterAll",
+    error: "severityError",
+    info: "severityInfo",
+    success: "severitySuccess",
+    warning: "severityWarning"
+  };
+  return keys[severity];
 }
 
 function filterOptionLabel<T extends string>(
