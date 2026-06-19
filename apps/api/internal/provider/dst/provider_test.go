@@ -55,7 +55,7 @@ func TestRuntimeOptionsRenderDSTFiles(t *testing.T) {
 	provider := NewProvider()
 	options := provider.RuntimeOptions(config)
 
-	if provider.ImageFor("latest") != "smartcat99999/dst-server:latest" {
+	if provider.ImageFor("latest") != "gamepanel-lite/dst-server:latest" {
 		t.Fatalf("unexpected DST image: %s", provider.ImageFor("latest"))
 	}
 	if options.PortProtocol != "udp" {

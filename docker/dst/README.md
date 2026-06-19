@@ -10,6 +10,8 @@ Build this image for `linux/amd64`:
 scripts/build-game-images.sh dst --platform linux/amd64 --load
 ```
 
+By default this loads the local runtime image as `gamepanel-lite/dst-server:latest`, which is the image name GamePanel Lite uses for DST servers. This image is not assumed to exist on Docker Hub.
+
 The Dockerfile downloads Steam app `343050` and forces the SteamCMD platform to `linux` so the Linux dedicated-server depot is selected.
 
 Steam currently reports this app as owner-only for anonymous SteamCMD installs. If anonymous installation fails with `Missing configuration`, build with a Steam account that can access the free DST Dedicated Server tool. The build script passes credentials as BuildKit secrets when these environment variables are present; they are not stored in the final image:

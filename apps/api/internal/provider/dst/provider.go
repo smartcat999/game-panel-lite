@@ -463,8 +463,5 @@ func isDigits(value string) bool {
 }
 
 func ImageForVersion(version string) string {
-	if strings.TrimSpace(version) == "" {
-		version = versions[0]
-	}
-	return "smartcat99999/dst-server:" + version
+	return "gamepanel-lite/dst-server:latest"
 }

@@ -1,4 +1,4 @@
-FROM node:20-bookworm AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -35,4 +35,3 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 EXPOSE 3000
 
 CMD ["node", "apps/web/server.js"]
-

@@ -22,7 +22,7 @@ import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderKey, ResourceLimits, RuntimeImageStatus } from "@/lib/types";
+import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderConfigField, ProviderKey, ResourceLimits, RuntimeImageStatus } from "@/lib/types";
 
 const stepLabelKeys = {
   game: "stepGame",
@@ -48,6 +48,25 @@ type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
+type ConfigValidationErrors = Record<string, string>;
+
+const providerFieldLabelKeys: Record<string, MessageKey> = {
+  adminPassword: "adminPassword",
+  clusterName: "clusterName",
+  clusterToken: "clusterToken",
+  difficulty: "difficulty",
+  eulaAccepted: "minecraftEulaAccepted",
+  gameMode: "gameMode",
+  maxPlayers: "maxPlayersInput",
+  onlineMode: "onlineMode",
+  saveName: "saveName",
+  serverName: "serverName",
+  serverPassword: "serverPassword",
+  whitelistEnabled: "whitelistEnabled",
+  worldName: "worldName",
+  worldPreset: "worldPreset",
+  workshopIds: "workshopIds"
+};
 
 function createNameSuffix(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -87,6 +106,59 @@ function formatMemoryLimitLabel(value: number, t: (key: MessageKey, values?: Rec
   return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
 }
 
+function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
+  const key = providerFieldLabelKeys[field.name];
+  return key ? t(key) : field.label;
+}
+
+function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
+  if (field.name === "adminPassword") return t("adminPasswordHelp");
+  if (field.name === "clusterToken") return t("clusterTokenHelp");
+  if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
+  return field.help ?? "";
+}
+
+function validateCreateConfig({
+  config,
+  gameKey,
+  provider,
+  providerConfigPayload,
+  t
+}: {
+  config: TerrariaConfig;
+  gameKey: string;
+  provider?: ProviderCatalog;
+  providerConfigPayload: ProviderConfigPayload;
+  t: (key: MessageKey, values?: Record<string, string | number>) => string;
+}) {
+  const errors: ConfigValidationErrors = {};
+  if (gameKey === "terraria") {
+    if (!String(config.serverName ?? "").trim()) errors.serverName = t("requiredFieldError", { field: t("serverName") });
+    if (!String(config.worldName ?? "").trim()) errors.worldName = t("requiredFieldError", { field: t("worldName") });
+    if (!Number.isFinite(config.maxPlayers) || config.maxPlayers < 1) errors.maxPlayers = t("positiveNumberFieldError", { field: t("maxPlayersInput") });
+    return errors;
+  }
+
+  for (const field of provider?.configSchema ?? []) {
+    if (!field.required) continue;
+    const value = providerConfigPayload[field.name];
+    const label = providerFieldLabel(field, t);
+    if (field.type === "boolean") {
+      if (value !== true) errors[field.name] = t("requiredAgreementError", { field: label });
+      continue;
+    }
+    if (field.type === "number") {
+      const numberValue = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(numberValue) || numberValue < 1) errors[field.name] = t("positiveNumberFieldError", { field: label });
+      continue;
+    }
+    if (!String(value ?? "").trim()) {
+      errors[field.name] = t("requiredFieldError", { field: label });
+    }
+  }
+  return errors;
+}
+
 export function CreateServerWizard() {
   const { locale, t } = useI18n();
   const router = useRouter();
@@ -102,6 +174,7 @@ export function CreateServerWizard() {
   const [hostPort, setHostPort] = useState(terrariaInternalPort);
   const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 0, memoryLimitMb: 0 });
   const [version, setVersion] = useState("");
+  const [configValidationErrors, setConfigValidationErrors] = useState<ConfigValidationErrors>({});
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
   const [appliedConfigPresetId, setAppliedConfigPresetId] = useState("");
@@ -154,6 +227,22 @@ export function CreateServerWizard() {
       ? selectedProviderReady
       : true;
   const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider) && selectedProviderReady;
+  const validateCurrentConfig = () => {
+    const errors = validateCreateConfig({
+      config,
+      gameKey: selectedGameKey,
+      provider: selectedProvider,
+      providerConfigPayload,
+      t
+    });
+    setConfigValidationErrors(errors);
+    if (Object.keys(errors).length === 0) return true;
+    const configStep = stepIds.indexOf("config");
+    if (configStep >= 0) {
+      setStep(configStep);
+    }
+    return false;
+  };
   const create = useMutation({
     mutationFn: () => createTerrariaServerWithWorld({
       config: { ...effectiveConfig, port: terrariaInternalPort },
@@ -404,8 +493,15 @@ export function CreateServerWizard() {
                 hostPortMode={hostPortMode}
                 provider={selectedProvider}
                 providerConfigPayload={providerConfigPayload}
+                validationErrors={configValidationErrors}
                 setConfig={setConfig}
                 setProviderConfigPayload={setProviderConfigPayload}
+                onClearValidationError={(field) => setConfigValidationErrors((current) => {
+                  if (!current[field]) return current;
+                  const next = { ...current };
+                  delete next[field];
+                  return next;
+                })}
                 onCustomize={() => setSelectedPreset("custom")}
                 setHostPort={setHostPort}
                 setHostPortMode={setHostPortMode}
@@ -457,7 +553,14 @@ export function CreateServerWizard() {
               {t("back")}
             </Button>
             <Button
-              onClick={() => step === stepIds.length - 1 ? create.mutate() : setStep((value) => Math.min(stepIds.length - 1, value + 1))}
+              onClick={() => {
+                if ((currentStepId === "config" || currentStepId === "review") && !validateCurrentConfig()) return;
+                if (step === stepIds.length - 1) {
+                  create.mutate();
+                  return;
+                }
+                setStep((value) => Math.min(stepIds.length - 1, value + 1));
+              }}
               disabled={create.isPending || !canContinueCurrentStep || (step === stepIds.length - 1 && !canCreateSelectedProvider)}
             >
               {step === stepIds.length - 1 ? create.isPending ? t("creating") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
@@ -473,6 +576,7 @@ export function CreateServerWizard() {
             </p>
           )}
           {!canCreateSelectedProvider && currentStepId === "review" && <p className="mt-4 text-sm text-panel-gold">{t("providerNotCreatableYet")}</p>}
+          {Object.keys(configValidationErrors).length > 0 && <p className="mt-4 text-sm text-panel-gold">{t("requiredConfigSummary")}</p>}
           {create.isError && <p className="mt-4 text-sm text-red-200">{createServerErrorMessage(create.error, t)}</p>}
           {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.server.name })}</p>}
           <p className="mt-4 text-xs text-slate-500">{t("currentStep", { step: selectedTitle })}</p>
@@ -719,6 +823,14 @@ function createServerErrorMessage(error: Error, t: (key: MessageKey, params?: Re
   if (error.message.includes("server runtime is not installed")) {
     return t("runtimeNotInstalledForCreate");
   }
+  const normalized = error.message.toLowerCase();
+  if (normalized.includes("admin password is required")) return t("requiredFieldError", { field: t("adminPassword") });
+  if (normalized.includes("server name is required")) return t("requiredFieldError", { field: t("serverName") });
+  if (normalized.includes("save name is required")) return t("requiredFieldError", { field: t("saveName") });
+  if (normalized.includes("world name is required")) return t("requiredFieldError", { field: t("worldName") });
+  if (normalized.includes("cluster name is required")) return t("requiredFieldError", { field: t("clusterName") });
+  if (normalized.includes("klei server token is required")) return t("requiredFieldError", { field: t("clusterToken") });
+  if (normalized.includes("eula must be accepted")) return t("requiredAgreementError", { field: t("minecraftEulaAccepted") });
   return error.message;
 }
 
@@ -786,9 +898,11 @@ function ConfigStep({
   hostPortMode,
   provider,
   providerConfigPayload,
+  validationErrors,
   resourceLimits,
   setConfig,
   setProviderConfigPayload,
+  onClearValidationError,
   onCustomize,
   setHostPort,
   setHostPortMode,
@@ -808,9 +922,11 @@ function ConfigStep({
   hostPortMode: "auto" | "manual";
   provider?: ProviderCatalog;
   providerConfigPayload: ProviderConfigPayload;
+  validationErrors: ConfigValidationErrors;
   resourceLimits: ResourceLimits;
   setConfig: (config: TerrariaConfig) => void;
   setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
+  onClearValidationError: (field: string) => void;
   onCustomize: () => void;
   setHostPort: (port: number) => void;
   setHostPortMode: (mode: "auto" | "manual") => void;
@@ -838,6 +954,7 @@ function ConfigStep({
   };
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => {
     onCustomize();
+    onClearValidationError(String(key));
     setConfig({ ...config, [key]: value });
   };
   const updateResources = (limits: ResourceLimits) => {
@@ -872,26 +989,31 @@ function ConfigStep({
             const value = providerConfigPayload[field.name];
             const setFieldValue = (nextValue: string | boolean) => {
               onCustomize();
+              onClearValidationError(field.name);
               setProviderConfigPayload(updateProviderConfigPayload(providerConfigPayload, field, nextValue));
             };
+            const label = providerFieldLabel(field, t);
+            const error = validationErrors[field.name];
             return (
-              <WizardField key={field.name} label={field.label}>
+              <WizardField key={field.name} label={label} required={field.required} error={error}>
                 {field.type === "select" ? (
-                  <WizardSelect value={String(value ?? "")} onChange={setFieldValue}>
+                  <WizardSelect value={String(value ?? "")} onChange={setFieldValue} invalid={Boolean(error)}>
                     {(field.options ?? []).map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </WizardSelect>
                 ) : field.type === "boolean" ? (
-                  <WizardCheckbox label={field.help || field.label} checked={Boolean(value)} onChange={setFieldValue} />
+                  <WizardCheckbox label={providerFieldHelp(field, t) || label} checked={Boolean(value)} onChange={setFieldValue} invalid={Boolean(error)} />
                 ) : (
                   <Input
                     type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
                     value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
+                    aria-invalid={Boolean(error)}
+                    className={error ? "border-red-400/70 focus:border-red-300" : undefined}
                     onChange={(event) => setFieldValue(event.target.value)}
                   />
                 )}
-                {field.help && field.type !== "boolean" && <span className="text-xs text-slate-500">{field.help}</span>}
+                {providerFieldHelp(field, t) && field.type !== "boolean" && <span className="text-xs text-slate-500">{providerFieldHelp(field, t)}</span>}
               </WizardField>
             );
           })}
@@ -935,11 +1057,21 @@ function ConfigStep({
         onSave={submitPreset}
       />
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <WizardField label={t("serverName")}>
-          <Input value={config.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} />
+        <WizardField label={t("serverName")} required error={validationErrors.serverName}>
+          <Input
+            value={config.serverName ?? ""}
+            aria-invalid={Boolean(validationErrors.serverName)}
+            className={validationErrors.serverName ? "border-red-400/70 focus:border-red-300" : undefined}
+            onChange={(event) => update("serverName", event.target.value)}
+          />
         </WizardField>
-        <WizardField label={t("worldName")}>
-          <Input value={config.worldName} onChange={(event) => update("worldName", event.target.value)} />
+        <WizardField label={t("worldName")} required error={validationErrors.worldName}>
+          <Input
+            value={config.worldName}
+            aria-invalid={Boolean(validationErrors.worldName)}
+            className={validationErrors.worldName ? "border-red-400/70 focus:border-red-300" : undefined}
+            onChange={(event) => update("worldName", event.target.value)}
+          />
         </WizardField>
         <WizardField label={t("worldSize")}>
           <WizardSelect value={config.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])}>
@@ -981,8 +1113,16 @@ function ConfigStep({
             <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
           </WizardField>
         )}
-        <WizardField label={t("maxPlayersInput")}>
-          <Input type="number" min={1} max={255} value={config.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} />
+        <WizardField label={t("maxPlayersInput")} required error={validationErrors.maxPlayers}>
+          <Input
+            type="number"
+            min={1}
+            max={255}
+            value={config.maxPlayers}
+            aria-invalid={Boolean(validationErrors.maxPlayers)}
+            className={validationErrors.maxPlayers ? "border-red-400/70 focus:border-red-300" : undefined}
+            onChange={(event) => update("maxPlayers", Number(event.target.value))}
+          />
         </WizardField>
         <WizardField label={t("password")}>
           <Input value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
@@ -1178,19 +1318,52 @@ function PresetSaveDialog({
   );
 }
 
-function WizardField({ children, label }: { children: React.ReactNode; label: string }) {
+function WizardField({
+  children,
+  error,
+  label,
+  required
+}: {
+  children: React.ReactNode;
+  error?: string;
+  label: string;
+  required?: boolean;
+}) {
+  const { t } = useI18n();
   return (
     <label className="grid w-full min-w-0 self-start content-start gap-1.5">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
+        <span className="truncate">{label}</span>
+        {required && (
+          <span className="shrink-0 rounded border border-panel-gold/30 bg-panel-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-panel-gold">
+            {t("requiredField")}
+          </span>
+        )}
+      </span>
       {children}
+      {error && <span className="text-xs font-medium text-red-200">{error}</span>}
     </label>
   );
 }
 
-function WizardSelect({ children, onChange, value }: { children: React.ReactNode; onChange: (value: string) => void; value: string }) {
+function WizardSelect({
+  children,
+  invalid,
+  onChange,
+  value
+}: {
+  children: React.ReactNode;
+  invalid?: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
   return (
     <select
-      className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green"
+      aria-invalid={invalid}
+      className={cn(
+        "h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green",
+        invalid && "border-red-400/70 focus:border-red-300"
+      )}
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
@@ -1199,14 +1372,15 @@ function WizardSelect({ children, onChange, value }: { children: React.ReactNode
   );
 }
 
-function WizardCheckbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+function WizardCheckbox({ checked, invalid, label, onChange }: { checked: boolean; invalid?: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
     <label
       className={cn(
         "flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm transition",
         checked
           ? "border-panel-green/45 bg-panel-green/10 text-slate-100"
-          : "border-panel-line bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200"
+          : "border-panel-line bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200",
+        invalid && "border-red-400/70 bg-red-950/20 text-red-100"
       )}
     >
       <span className="min-w-0 truncate font-medium">{label}</span>

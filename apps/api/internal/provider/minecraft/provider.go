@@ -10,7 +10,10 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
-const DefaultInternalPort = 25565
+const (
+	DefaultInternalPort = 25565
+	runtimeImage        = "itzg/minecraft-server:latest"
+)
 
 var versions = []string{"latest", "1.21.4", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.19.2"}
 
@@ -133,6 +136,7 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 		Env: []string{
 			"EULA=TRUE",
 			"TYPE=VANILLA",
+			versionEnv(versions[0]),
 			fmt.Sprintf("SERVER_PORT=%d", config.Port),
 			fmt.Sprintf("MAX_PLAYERS=%d", config.MaxPlayers),
 			"MOTD=" + config.ServerName,
@@ -182,6 +186,7 @@ func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstanc
 		Env: []string{
 			"EULA=TRUE",
 			"TYPE=VANILLA",
+			versionEnv(server.Version),
 			fmt.Sprintf("SERVER_PORT=%d", config.Port),
 			fmt.Sprintf("MAX_PLAYERS=%d", config.MaxPlayers),
 			"MOTD=" + config.ServerName,
@@ -375,10 +380,15 @@ func boolValue(value any) bool {
 }
 
 func ImageForVersion(version string) string {
-	if strings.TrimSpace(version) == "" {
-		version = versions[0]
+	return runtimeImage
+}
+
+func versionEnv(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" || version == "latest" {
+		return "VERSION=LATEST"
 	}
-	return "itzg/minecraft-server:" + version
+	return "VERSION=" + version
 }
 
 func sanitizePlayerName(player string) string {

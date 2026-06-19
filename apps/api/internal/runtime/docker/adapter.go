@@ -174,7 +174,7 @@ func imagePullError(image string, err error) error {
 }
 
 func isDSTImage(image string) bool {
-	return strings.Contains(image, "/dst-server:")
+	return strings.Contains(image, "dst-server:")
 }
 
 func isImageAccessDenied(message string) bool {

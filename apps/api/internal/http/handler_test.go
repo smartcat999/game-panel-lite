@@ -69,6 +69,15 @@ func tmodBinaryString(value string) []byte {
 	return append([]byte{byte(len(value))}, []byte(value)...)
 }
 
+func containsEnv(env []string, target string) bool {
+	for _, item := range env {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
 func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Handler, *store.Store, config.Config) {
 	return newTestRouterWithAdapterAndInstallMarkers(t, adapter, true)
 }
@@ -1190,7 +1199,7 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "smartcat99999/dst-server:latest" {
+	if spec.Image != "gamepanel-lite/dst-server:latest" {
 		t.Fatalf("expected DST image, got %q", spec.Image)
 	}
 	if spec.Port != 10999 || spec.Options.PortProtocol != "udp" {
@@ -1289,8 +1298,11 @@ func TestCreateMinecraftServerUsesMinecraftRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "itzg/minecraft-server:1.20.4" {
+	if spec.Image != "itzg/minecraft-server:latest" {
 		t.Fatalf("expected Minecraft image, got %q", spec.Image)
+	}
+	if !containsEnv(spec.Options.Env, "VERSION=1.20.4") {
+		t.Fatalf("expected Minecraft VERSION=1.20.4 env, got %v", spec.Options.Env)
 	}
 	if spec.Port != 25565 || spec.Options.PortProtocol != "tcp" {
 		t.Fatalf("expected Minecraft TCP port mapping, got port=%d protocol=%q", spec.Port, spec.Options.PortProtocol)
