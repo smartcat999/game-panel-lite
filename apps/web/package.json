@@ -13,6 +13,8 @@
   "dependencies": {
     "@gamepanel-lite/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.8",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.468.0",
     "next": "^15.1.3",

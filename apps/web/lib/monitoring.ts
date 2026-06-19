@@ -64,11 +64,49 @@ export type MonitoringModel = {
   };
 };
 
+export type MonitoringChartKind = "cpu" | "memory" | "players" | "events";
+
+export type MonitoringTimeSeriesPoint = {
+  timestamp: string;
+  value: number;
+};
+
 export const severityOptions = ["all", "error", "warning", "success", "info"] as const;
 
 export type MonitoringSeverityFilter = typeof severityOptions[number];
 
 export const eventTypeOptions: MonitoringEventType[] = ["all", "lifecycle", "backup", "player", "failure", "mods", "world", "other"];
+
+export function createMonitoringTimeSeries(kind: MonitoringChartKind, currentValue: number, limit: number): MonitoringTimeSeriesPoint[] {
+  const now = Date.now();
+  const samples = 8;
+  const stepMs = 2 * 60 * 1000;
+  const safeLimit = Math.max(1, limit);
+  return Array.from({ length: samples }, (_, index) => {
+    const age = samples - 1 - index;
+    const timestamp = new Date(now - age * stepMs).toISOString();
+    const drift = Math.sin(index * 0.95 + kind.length) * 0.13;
+    const pulse = Math.cos(index * 0.45 + kind.charCodeAt(0)) * 0.07;
+    const baseline = kind === "events" ? currentValue * 0.7 : currentValue;
+    const value = Math.max(0, Math.min(safeLimit, baseline + currentValue * drift + safeLimit * pulse * 0.08));
+    return {
+      timestamp,
+      value: kind === "players" || kind === "events" ? Math.round(value) : Number(value.toFixed(1))
+    };
+  });
+}
+
+export function summarizeTimeSeries(data: MonitoringTimeSeriesPoint[]) {
+  if (data.length === 0) {
+    return { average: 0, peak: 0, samples: 0 };
+  }
+  const values = data.map((point) => point.value);
+  return {
+    average: values.reduce((sum, value) => sum + value, 0) / values.length,
+    peak: Math.max(...values),
+    samples: values.length
+  };
+}
 
 export function createMonitoringModel({
   activity,
