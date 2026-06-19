@@ -377,15 +377,42 @@ func (s *Service) platformServices(ctx context.Context, ds DataSource) []Platfor
 }
 
 func (s *Service) topRoutes(ctx context.Context) []RouteMetric {
-	samples, err := s.queryVector(ctx, `sum by (method, route) (rate(gamepanel_api_http_requests_total[5m]))`)
-	if err != nil {
+	rateSamples, rateErr := s.queryVector(ctx, `sum by (method, route) (rate(gamepanel_api_http_requests_total[5m]))`)
+	countSamples, countErr := s.queryVector(ctx, `sum by (method, route) (increase(gamepanel_api_http_requests_total[5m]))`)
+	if rateErr != nil && countErr != nil {
 		return nil
 	}
-	rows := make([]RouteMetric, 0, len(samples))
-	for _, sample := range samples {
-		rows = append(rows, RouteMetric{Method: sample.Metric["method"], Route: sample.Metric["route"], RequestRate: sample.Value})
+	rowsByKey := map[string]RouteMetric{}
+	for _, sample := range rateSamples {
+		method := sample.Metric["method"]
+		route := sample.Metric["route"]
+		key := method + "\x00" + route
+		row := rowsByKey[key]
+		row.Method = method
+		row.Route = route
+		row.RequestRate = sample.Value
+		rowsByKey[key] = row
 	}
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].RequestRate > rows[j].RequestRate })
+	for _, sample := range countSamples {
+		method := sample.Metric["method"]
+		route := sample.Metric["route"]
+		key := method + "\x00" + route
+		row := rowsByKey[key]
+		row.Method = method
+		row.Route = route
+		row.RequestCount = sample.Value
+		rowsByKey[key] = row
+	}
+	rows := make([]RouteMetric, 0, len(rowsByKey))
+	for _, row := range rowsByKey {
+		rows = append(rows, row)
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].RequestCount == rows[j].RequestCount {
+			return rows[i].RequestRate > rows[j].RequestRate
+		}
+		return rows[i].RequestCount > rows[j].RequestCount
+	})
 	if len(rows) > 8 {
 		rows = rows[:8]
 	}

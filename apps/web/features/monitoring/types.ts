@@ -109,6 +109,7 @@ export type PlatformService = {
 export type RouteMetric = {
   route: string;
   method: string;
+  requestCount: number;
   requestRate: number;
   errorRate: number;
   p95Ms: number;

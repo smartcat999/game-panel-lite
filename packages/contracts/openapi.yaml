@@ -693,6 +693,20 @@ components:
           type: array
           items:
             type: object
+            required: [route, method, requestCount, requestRate, errorRate, p95Ms]
+            properties:
+              route:
+                type: string
+              method:
+                type: string
+              requestCount:
+                type: number
+              requestRate:
+                type: number
+              errorRate:
+                type: number
+              p95Ms:
+                type: number
     ResourceLimits:
       type: object
       description: Optional maximum resources for one game server container. Zero means unlimited.

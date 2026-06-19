@@ -84,11 +84,12 @@ type PlatformService struct {
 }
 
 type RouteMetric struct {
-	Route       string  `json:"route"`
-	Method      string  `json:"method"`
-	RequestRate float64 `json:"requestRate"`
-	ErrorRate   float64 `json:"errorRate"`
-	P95Ms       float64 `json:"p95Ms"`
+	Route        string  `json:"route"`
+	Method       string  `json:"method"`
+	RequestCount float64 `json:"requestCount"`
+	RequestRate  float64 `json:"requestRate"`
+	ErrorRate    float64 `json:"errorRate"`
+	P95Ms        float64 `json:"p95Ms"`
 }
 
 type ServerLoadResponse struct {

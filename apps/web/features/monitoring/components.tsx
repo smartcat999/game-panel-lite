@@ -389,16 +389,24 @@ export function PlatformHealth({ services, topRoutes }: { services: PlatformServ
         <SectionTitle title={t("topRoutesTitle")} description={t("topRoutesDescription")} />
         <div className="mt-4 divide-y divide-panel-line">
           {topRoutes.length > 0 ? topRoutes.map((route) => (
-            <div key={`${route.method}-${route.route}`} className="grid grid-cols-[70px_minmax(0,1fr)_90px] gap-3 py-2 text-sm">
+            <div key={`${route.method}-${route.route}`} className="grid grid-cols-[64px_minmax(0,1fr)_112px] gap-3 py-2.5 text-sm">
               <span className="font-mono text-slate-500">{route.method}</span>
               <span className="truncate text-slate-300">{route.route}</span>
-              <span className="text-right font-mono text-slate-300">{route.requestRate.toFixed(2)}/s</span>
+              <span className="text-right">
+                <span className="block font-mono text-slate-100">{formatRouteRequestCount(route.requestCount)} {t("topRoutesCountUnit")}</span>
+                <span className="block font-mono text-[11px] text-slate-500">{route.requestRate.toFixed(2)} {t("topRoutesRateUnit")}</span>
+              </span>
             </div>
           )) : <EmptyRows label={t("topRoutesEmpty")} />}
         </div>
       </Card>
     </section>
   );
+}
+
+function formatRouteRequestCount(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  return Math.max(0, Math.round(value)).toLocaleString();
 }
 
 function SectionHeader({ description, title }: { description: string; title: string }) {
