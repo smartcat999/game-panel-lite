@@ -121,7 +121,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-panel-line bg-panel-sidebar lg:flex lg:flex-col">
-        <Link href="/dashboard" className="flex h-16 items-center gap-3 px-6">
+        <Link href="/dashboard" className="flex h-20 items-center gap-3 px-6 pt-2">
           <span className="flex size-9 items-center justify-center rounded-md bg-panel-green text-slate-950">
             <Gamepad2 aria-hidden="true" />
           </span>
