@@ -218,10 +218,6 @@ export default function HomePage() {
       <section className="relative overflow-hidden border-b border-[#30363d] bg-[#0a0e14]">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-16 pt-10 sm:px-6 sm:pt-16 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#3d4a3e] bg-[#1c2026] px-3 py-1 text-xs font-medium text-[#6bfb9a]">
-              <span className="size-2 rounded-full bg-[#6bfb9a]" />
-              v1 Terraria focus, Docker-backed
-            </div>
             <h1 className="max-w-3xl text-balance text-[2.4rem] font-bold leading-[1.02] tracking-[-0.025em] text-white sm:text-6xl lg:text-7xl">
               Self-hosted game servers, without the <span className="text-[#6bfb9a]">server admin headache.</span>
             </h1>
