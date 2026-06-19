@@ -145,10 +145,12 @@ export default function ActivityPage() {
             currentValue={monitoring.trends.cpuPercent}
             emptyLabel={t("monitoringNoCpuData")}
             icon={<Cpu aria-hidden="true" className="size-4" />}
+            limitLabel={t("chartCpuLimit")}
             max={100}
             note={t("trendCpuNote")}
             series={cpuSeries}
             title={t("trendCpuTitle")}
+            unit="%"
           />
           <TrendCard
             color="#a78bfa"
@@ -156,10 +158,12 @@ export default function ActivityPage() {
             currentValue={monitoring.trends.memoryMb}
             emptyLabel={t("monitoringNoMemoryData")}
             icon={<MemoryStick aria-hidden="true" className="size-4" />}
+            limitLabel={t("chartMemoryLimit", { limit: `${Math.round(monitoring.trends.memoryLimitMb)} MB` })}
             max={monitoring.trends.memoryLimitMb}
             note={t("trendMemoryNote")}
             series={memorySeries}
             title={t("trendMemoryTitle")}
+            unit="MB"
           />
           <TrendCard
             color="#7bd978"
@@ -167,10 +171,12 @@ export default function ActivityPage() {
             currentValue={monitoring.trends.playerCount}
             emptyLabel={t("monitoringNoPlayerData")}
             icon={<Users aria-hidden="true" className="size-4" />}
+            limitLabel={t("chartPlayerCapacity", { capacity: monitoring.kpis.playerCapacity })}
             max={Math.max(1, monitoring.kpis.playerCapacity)}
             note={t("trendPlayersNote")}
             series={playerSeries}
             title={t("trendPlayersTitle")}
+            unit=""
           />
           <TrendCard
             color="#f4c95d"
@@ -178,10 +184,12 @@ export default function ActivityPage() {
             currentValue={monitoring.trends.eventCount}
             emptyLabel={t("monitoringNoEventData")}
             icon={<Activity aria-hidden="true" className="size-4" />}
+            limitLabel={t("chartEventScale", { limit: Math.max(10, monitoring.trends.eventCount) })}
             max={Math.max(10, monitoring.trends.eventCount)}
             note={t("trendEventsNote")}
             series={eventSeries}
             title={t("trendEventsTitle")}
+            unit=""
           />
         </div>
       </section>
@@ -313,12 +321,38 @@ function HealthRow({ label, severity, value }: { label: string; severity: Monito
   );
 }
 
-function TrendCard({ color, current, currentValue, emptyLabel, icon, max, note, series, title }: { color: string; current: string; currentValue: number; emptyLabel: string; icon: React.ReactNode; max: number; note: string; series: SeriesPoint[]; title: string }) {
+function TrendCard({
+  color,
+  current,
+  currentValue,
+  emptyLabel,
+  icon,
+  limitLabel,
+  max,
+  note,
+  series,
+  title,
+  unit
+}: {
+  color: string;
+  current: string;
+  currentValue: number;
+  emptyLabel: string;
+  icon: React.ReactNode;
+  limitLabel: string;
+  max: number;
+  note: string;
+  series: SeriesPoint[];
+  title: string;
+  unit: string;
+}) {
+  const { t } = useI18n();
   const chartSeries = series.length >= 2 ? series : seedSeries(currentValue);
   const chart = buildChart(chartSeries, max);
   const isEmpty = chartSeries.length === 0;
+  const recentSamples = chartSeries.slice(-5);
   return (
-    <Card className="h-[240px] p-4">
+    <Card className="h-[260px] p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-100">
@@ -329,17 +363,37 @@ function TrendCard({ color, current, currentValue, emptyLabel, icon, max, note, 
         </div>
         <p className="font-mono text-xl font-semibold text-slate-100">{current}</p>
       </div>
-      <div className="relative h-36 overflow-hidden rounded-md border border-panel-line bg-slate-950/35">
+      <div className="relative h-40 overflow-hidden rounded-md border border-panel-line bg-slate-950/35">
         {isEmpty ? (
           <EmptyChart label={emptyLabel} />
         ) : (
-          <svg className="h-full w-full" role="img" viewBox="0 0 520 150" preserveAspectRatio="none">
-            {[0, 1, 2].map((line) => <line key={line} x1="32" x2="504" y1={28 + line * 42} y2={28 + line * 42} stroke="rgba(148,163,184,0.14)" strokeWidth="1" />)}
+          <svg className="h-full w-full" role="img" viewBox="0 0 640 176">
+            {chart.yTicks.map((tick) => (
+              <g key={tick.value}>
+                <line x1="52" x2="616" y1={tick.y} y2={tick.y} stroke="rgba(148,163,184,0.14)" strokeWidth="1" />
+                <text x="12" y={tick.y + 4} fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">{formatSampleValue(tick.value, unit)}</text>
+              </g>
+            ))}
+            <line x1="52" x2="616" y1={chart.limitY} y2={chart.limitY} stroke="rgba(244,201,93,0.65)" strokeDasharray="4 4" strokeWidth="1.25" />
+            <text x="530" y={Math.max(14, chart.limitY - 6)} fill="#f4c95d" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">{t("chartUpperLimit")}</text>
             <path d={chart.area} fill={color} opacity="0.08" />
             <path d={chart.line} fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-            <circle cx={chart.last.x} cy={chart.last.y} r="3" fill={color} />
+            {chart.points.map((point, index) => (
+              <g key={`${point.ts}-${index}`}>
+                <circle cx={point.x} cy={point.y} r="3" fill="#0b111a" stroke={color} strokeWidth="2">
+                  <title>{`${formatSampleTime(point.ts)} · ${formatSampleValue(point.value, unit)}`}</title>
+                </circle>
+              </g>
+            ))}
+            {chart.xTicks.map((tick) => (
+              <text key={tick.ts} x={tick.x} y="164" textAnchor={tick.anchor} fill="#64748b" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">{formatSampleTime(tick.ts)}</text>
+            ))}
           </svg>
         )}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+        <span className="truncate">{limitLabel}</span>
+        <span className="font-mono">{t("chartSamples")}: {recentSamples.map((sample) => formatSampleValue(sample.value, unit)).join(" / ")}</span>
       </div>
     </Card>
   );
@@ -444,10 +498,10 @@ function EmptyChart({ label }: { label: string }) {
 }
 
 function buildChart(series: SeriesPoint[], max: number) {
-  const width = 472;
-  const height = 94;
-  const left = 32;
-  const top = 24;
+  const width = 564;
+  const height = 112;
+  const left = 52;
+  const top = 18;
   const bottom = top + height;
   const pointsSource = series.length >= 2 ? series : [{ value: 0, ts: 0 }, { value: series[0]?.value ?? 0, ts: 1 }];
   const first = pointsSource[0]!.ts;
@@ -455,13 +509,31 @@ function buildChart(series: SeriesPoint[], max: number) {
   const points = pointsSource.map((point, index) => {
     const x = left + ((point.ts - first) / (last - first || 1)) * width;
     const y = bottom - Math.min(1, Math.max(0, point.value / Math.max(1, max))) * height;
-    return { x: Number.isFinite(x) ? x : left + index / Math.max(1, pointsSource.length - 1) * width, y };
+    return {
+      ts: point.ts,
+      value: point.value,
+      x: Number.isFinite(x) ? x : left + index / Math.max(1, pointsSource.length - 1) * width,
+      y
+    };
   });
   const line = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const yTicks = [max, max * 0.66, max * 0.33, 0].map((value) => ({
+    value,
+    y: bottom - Math.min(1, Math.max(0, value / Math.max(1, max))) * height
+  }));
+  const xTickSource = [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]].filter(Boolean);
   return {
     area: `${line} L ${left + width} ${bottom} L ${left} ${bottom} Z`,
     last: points[points.length - 1]!,
-    line
+    limitY: top,
+    line,
+    points,
+    xTicks: xTickSource.map((point, index) => ({
+      anchor: index === 0 ? "start" : index === xTickSource.length - 1 ? "end" : "middle" as "start" | "middle" | "end",
+      ts: point!.ts,
+      x: point!.x
+    })),
+    yTicks
   };
 }
 
@@ -469,8 +541,17 @@ function seedSeries(value: number): SeriesPoint[] {
   const now = Date.now();
   return Array.from({ length: 8 }, (_, index) => ({
     ts: now - (7 - index) * 120000,
-    value
+    value: Math.max(0, value + value * 0.06 * Math.sin(index * 0.9))
   }));
+}
+
+function formatSampleTime(ts: number) {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatSampleValue(value: number, unit: string) {
+  const rounded = unit === "%" ? value.toFixed(1) : Number.isInteger(value) ? String(value) : value.toFixed(0);
+  return unit ? `${rounded}${unit === "MB" ? " MB" : unit}` : rounded;
 }
 
 function toneClass(tone: MonitoringSeverity | "neutral") {
