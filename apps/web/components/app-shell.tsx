@@ -27,7 +27,7 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (pathname.startsWith("/share/")) {
+  if (pathname === "/" || pathname.startsWith("/share/")) {
     return <>{children}</>;
   }
   return <AppChrome>{children}</AppChrome>;
