@@ -141,9 +141,9 @@ export default function ActivityPage() {
         <KpiCard icon={<Gauge aria-hidden="true" className="size-4" />} label={t("kpiResourceUsage")} note={t("kpiResourceUsageNote")} tone={monitoring.kpis.resourceUsagePercent > 75 ? "warning" : "success"} value={`${monitoring.kpis.resourceUsagePercent}%`} />
       </section>
 
-      <section className="mb-5 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <section className="mb-5">
         <HealthOverview health={monitoring.health} />
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <MonitoringChartCard
             chartType="line"
             color="#7bd978"
@@ -272,14 +272,12 @@ function TechBadge({ label, value }: { label: string; value: string }) {
 function KpiCard({ icon, label, note, tone = "neutral", value }: { icon: React.ReactNode; label: string; note: string; tone?: "neutral" | "success" | "warning"; value: string | number }) {
   return (
     <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-slate-500">{label}</p>
-          <p className="mt-2 font-mono text-2xl font-semibold text-slate-100">{value}</p>
-        </div>
-        <span className={cn("flex size-8 items-center justify-center rounded-md border", toneClass(tone))}>{icon}</span>
+      <div className="flex items-center gap-2">
+        <span className={cn("flex size-6 shrink-0 items-center justify-center rounded border", toneClass(tone))}>{icon}</span>
+        <p className="min-w-0 truncate text-xs font-medium text-slate-500">{label}</p>
       </div>
-      <p className="mt-3 truncate text-xs text-slate-500">{note}</p>
+      <p className="mt-3 font-mono text-3xl font-semibold leading-none text-slate-100">{value}</p>
+      <p className="mt-3 min-h-4 truncate text-xs text-slate-500">{note}</p>
     </Card>
   );
 }
@@ -288,44 +286,50 @@ function HealthOverview({ health }: { health: MonitoringHealth }) {
   const { t } = useI18n();
   return (
     <Card className="p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-semibold text-slate-100">{t("healthOverviewTitle")}</h2>
+      <div className="grid gap-4 xl:grid-cols-[minmax(220px,0.9fr)_minmax(0,2.8fr)_minmax(240px,0.8fr)] xl:items-center">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={cn("size-2.5 rounded-full", health.overall === "healthy" ? "bg-panel-green" : "bg-panel-gold")} />
+            <h2 className="font-semibold text-slate-100">{t("healthOverviewTitle")}</h2>
+            <span className={cn("rounded-md border px-2 py-0.5 text-xs font-medium", health.overall === "healthy" ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold")}>
+              {t(health.overall === "healthy" ? "healthHealthy" : health.overall === "critical" ? "healthCritical" : "healthWarning")}
+            </span>
+          </div>
           <p className="mt-1 text-xs text-slate-500">{t("healthOverviewDescription")}</p>
         </div>
-        <span className={cn("rounded-md border px-2 py-1 text-xs font-medium", health.overall === "healthy" ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold")}>
-          {t(health.overall === "healthy" ? "healthHealthy" : health.overall === "critical" ? "healthCritical" : "healthWarning")}
-        </span>
-      </div>
-      <div className="space-y-3">
-        <HealthRow label={t("healthOverall")} value={t(health.overall === "healthy" ? "healthHealthy" : health.overall === "critical" ? "healthCritical" : "healthWarning")} severity={health.overall === "healthy" ? "success" : "warning"} />
-        <HealthRow label={t("healthPrometheusConnected")} value={health.prometheusConnected ? t("connected") : t("unavailable")} severity={health.prometheusConnected ? "success" : "warning"} />
-        <HealthRow label={t("healthDockerRuntime")} value={t(health.dockerRuntime === "healthy" ? "available" : health.dockerRuntime === "degraded" ? "healthDegraded" : "unavailable")} severity={health.dockerRuntime === "healthy" ? "success" : "warning"} />
-        <HealthRow label={t("healthLastSync")} value={health.lastSyncLabel} severity="info" />
-        <HealthRow label={t("healthFailedTargets")} value={String(health.failedTargets)} severity={health.failedTargets > 0 ? "warning" : "success"} />
-      </div>
-      <div className="mt-4 rounded-md border border-panel-line bg-slate-950/45 p-3 text-xs text-slate-500">
-        <div className="flex items-center justify-between gap-3">
-          <span>{t("monitoringDatasource")}</span>
-          <span className="font-mono text-slate-300">Prometheus</span>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <HealthMetric label={t("healthOverall")} value={t(health.overall === "healthy" ? "healthHealthy" : health.overall === "critical" ? "healthCritical" : "healthWarning")} severity={health.overall === "healthy" ? "success" : "warning"} />
+          <HealthMetric label={t("healthPrometheusConnected")} value={health.prometheusConnected ? t("connected") : t("unavailable")} severity={health.prometheusConnected ? "success" : "warning"} />
+          <HealthMetric label={t("healthDockerRuntime")} value={t(health.dockerRuntime === "healthy" ? "available" : health.dockerRuntime === "degraded" ? "healthDegraded" : "unavailable")} severity={health.dockerRuntime === "healthy" ? "success" : "warning"} />
+          <HealthMetric label={t("healthLastSync")} value={health.lastSyncLabel} severity="info" />
+          <HealthMetric label={t("healthFailedTargets")} value={String(health.failedTargets)} severity={health.failedTargets > 0 ? "warning" : "success"} />
         </div>
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <span>{t("monitoringEndpoint")}</span>
-          <span className="font-mono text-slate-300">/metrics</span>
+        <div className="grid grid-cols-2 gap-2 rounded-md border border-panel-line bg-slate-950/45 p-2 text-xs text-slate-500">
+          <HealthMeta label={t("monitoringDatasource")} value="Prometheus" />
+          <HealthMeta label={t("monitoringEndpoint")} value="/metrics" />
         </div>
       </div>
     </Card>
   );
 }
 
-function HealthRow({ label, severity, value }: { label: string; severity: MonitoringSeverity; value: string }) {
+function HealthMetric({ label, severity, value }: { label: string; severity: MonitoringSeverity; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-200">
-        <span className={cn("size-2 rounded-full", dotClass(severity))} />
-        {value}
+    <div className="rounded-md border border-panel-line bg-slate-950/35 px-3 py-2">
+      <p className="truncate text-[11px] text-slate-500">{label}</p>
+      <span className="mt-1 inline-flex max-w-full items-center gap-2 text-sm font-medium text-slate-200">
+        <span className={cn("size-1.5 shrink-0 rounded-full", dotClass(severity))} />
+        <span className="truncate">{value}</span>
       </span>
+    </div>
+  );
+}
+
+function HealthMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[11px] text-slate-600">{label}</p>
+      <p className="mt-1 truncate font-mono text-slate-300">{value}</p>
     </div>
   );
 }
