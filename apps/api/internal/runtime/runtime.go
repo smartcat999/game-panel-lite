@@ -66,6 +66,11 @@ type ImageProgressPreparer interface {
 	PrepareImageWithProgress(ctx context.Context, image string, onProgress ImagePrepareProgressFunc) error
 }
 
+type ImageArchiveManager interface {
+	SaveImageArchive(ctx context.Context, image string, path string) error
+	LoadImageArchive(ctx context.Context, path string) error
+}
+
 const (
 	ImageStatusReady       = "ready"
 	ImageStatusMissing     = "missing"

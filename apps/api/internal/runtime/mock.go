@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -21,6 +23,17 @@ func (m *MockAdapter) ImageStatus(_ context.Context, image string) domain.Runtim
 }
 
 func (m *MockAdapter) PrepareImage(context.Context, string) error {
+	return nil
+}
+
+func (m *MockAdapter) SaveImageArchive(_ context.Context, image string, path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte("mock image archive: "+image+"\n"), 0o644)
+}
+
+func (m *MockAdapter) LoadImageArchive(context.Context, string) error {
 	return nil
 }
 

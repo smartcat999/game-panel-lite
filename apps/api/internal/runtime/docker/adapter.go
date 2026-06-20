@@ -76,6 +76,54 @@ func (a *Adapter) PrepareImageWithProgress(ctx context.Context, image string, on
 	return a.ensureImageWithProgress(ctx, image, onProgress)
 }
 
+func (a *Adapter) SaveImageArchive(ctx context.Context, image string, path string) error {
+	if strings.TrimSpace(image) == "" {
+		return fmt.Errorf("image is empty")
+	}
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("image archive path is empty")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	reader, err := a.client.ImageSave(ctx, []string{image})
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	tempPath := path + ".tmp"
+	file, err := os.Create(tempPath)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(file, reader)
+	closeErr := file.Close()
+	if copyErr != nil {
+		_ = os.Remove(tempPath)
+		return copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(tempPath)
+		return closeErr
+	}
+	return os.Rename(tempPath, path)
+}
+
+func (a *Adapter) LoadImageArchive(ctx context.Context, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	response, err := a.client.ImageLoad(ctx, file, true)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	return nil
+}
+
 func (a *Adapter) Create(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
 	containerName := "gamepanel-" + spec.InstanceID
 	if err := a.removeContainerByNameIfExists(ctx, containerName); err != nil {

@@ -47,6 +47,7 @@ import {
   updateServerConfig,
 } from "@/lib/api";
 import { formatActivityEvent } from "@/lib/activity-display";
+import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/console-commands";
 import { saveBlob } from "@/lib/download";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
@@ -1184,6 +1185,8 @@ function ConsoleTab({
 }) {
   const { t } = useI18n();
   const consoleEnabled = server.status === "running";
+  const showTerrariaShortcuts = supportsTerrariaConsoleShortcuts(server);
+  const readyMessage = t(consoleReadyMessageKey(server));
   return (
     <div>
       <div className="overflow-hidden rounded-lg border border-panel-line bg-[#070b14]">
@@ -1220,12 +1223,12 @@ function ConsoleTab({
           logStatus={logStatus}
           viewportRef={viewportRef}
         />
-        <ConsoleCommandPanel capabilities={capabilities} commandPending={commandPending} disabled={!consoleEnabled} onRun={onQuickCommand} />
+        {showTerrariaShortcuts && <ConsoleCommandPanel capabilities={capabilities} commandPending={commandPending} disabled={!consoleEnabled} onRun={onQuickCommand} />}
         <form className="flex items-center gap-2 border-t border-panel-line bg-slate-950/70 px-3 py-3" onSubmit={onSubmit}>
           <span className={consoleEnabled ? "font-mono text-sm text-panel-green" : "font-mono text-sm text-slate-600"}>$</span>
           <input
             className="h-9 min-w-0 flex-1 bg-transparent font-mono text-sm text-slate-100 outline-none placeholder:text-slate-600 disabled:cursor-not-allowed disabled:text-slate-600"
-            placeholder={consoleEnabled ? t("consoleReady") : t("consoleRequiresRunning")}
+            placeholder={consoleEnabled ? readyMessage : t("consoleRequiresRunning")}
             value={command}
             onChange={(event) => onChangeCommand(event.target.value)}
             disabled={!consoleEnabled || commandPending}

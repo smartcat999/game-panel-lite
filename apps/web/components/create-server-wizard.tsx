@@ -98,7 +98,17 @@ function createGameDefaultNames(gameName: string) {
   return {
     clusterName: appendNameSuffix(`${gameName} Cluster`, suffix),
     saveName: appendNameSuffix(`${gameName} Save`, suffix),
-    serverName: appendNameSuffix(`${gameName} Server`, suffix)
+    serverName: appendNameSuffix(`${gameName} Server`, suffix),
+    worldName: appendNameSuffix(`${gameName} World`, suffix)
+  };
+}
+
+function createProviderDefaultOverrides(names: ReturnType<typeof createGameDefaultNames>) {
+  return {
+    clusterName: names.clusterName,
+    saveName: names.saveName,
+    serverName: names.serverName,
+    worldName: names.worldName
   };
 }
 
@@ -318,16 +328,12 @@ export function CreateServerWizard() {
       setConfig({
         ...defaultCreateServerConfig,
         serverName: names.serverName,
-        worldName: names.saveName,
+        worldName: names.worldName,
         maxPlayers: 8,
         password: "",
         motd: ""
       });
-      setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, {
-        clusterName: names.clusterName,
-        serverName: names.serverName,
-        saveName: names.saveName
-      }));
+      setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, createProviderDefaultOverrides(names)));
       setSelectedWorldId("");
       setAppliedWorldConfigId("");
       setSelectedModIds([]);
@@ -341,11 +347,7 @@ export function CreateServerWizard() {
     } else {
       const names = createGameDefaultNames(selectedGame?.name ?? provider.name);
       setSelectedPreset("custom");
-      setProviderConfigPayload(createDefaultProviderConfigPayload(provider, {
-        clusterName: names.clusterName,
-        serverName: names.serverName,
-        saveName: names.saveName
-      }));
+      setProviderConfigPayload(createDefaultProviderConfigPayload(provider, createProviderDefaultOverrides(names)));
       setSelectedModIds([]);
       setSelectedModPackId("");
     }
@@ -959,6 +961,12 @@ function ConfigStep({
   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
   const openPresetDialog = () => {
     onResetPresetSave();
+    const defaultPresetSource = gameKey === "terraria"
+      ? config.serverName
+      : String(providerConfigPayload.serverName ?? config.serverName ?? "").trim();
+    if (defaultPresetSource) {
+      setPresetName(`${defaultPresetSource} ${t("configurationPreset")}`);
+    }
     setPresetDialogOpen(true);
   };
   const closePresetDialog = () => {
@@ -982,6 +990,7 @@ function ConfigStep({
   };
   const selectedSecretSeed = terrariaSecretSeeds.find((seed) => seed.key === secretSeedKeyFor(config.seed));
   if (gameKey !== "terraria") {
+    const providerFields = provider?.configSchema ?? [];
     return (
       <div>
         <ConfigStepHeader
@@ -998,8 +1007,19 @@ function ConfigStep({
           onClose={closePresetDialog}
           onSave={submitPreset}
         />
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {(provider?.configSchema ?? []).map((field) => {
+        <div className="mt-4 grid gap-5">
+          <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
+                <Gamepad2 aria-hidden="true" className="size-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">{t("gameConfiguration")}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t("gameConfigurationHint")}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {providerFields.map((field) => {
             const value = providerConfigPayload[field.name];
             const setFieldValue = (nextValue: string | boolean) => {
               onCustomize();
@@ -1009,46 +1029,49 @@ function ConfigStep({
             const label = providerFieldLabel(field, t);
             const error = validationErrors[field.name];
             return (
-              <WizardField key={field.name} label={label} required={field.required} error={error}>
-                {field.type === "select" ? (
-                  <WizardSelect value={String(value ?? "")} onChange={setFieldValue} invalid={Boolean(error)}>
-                    {(field.options ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </WizardSelect>
-                ) : field.type === "boolean" ? (
-                  <WizardCheckbox label={providerFieldHelp(field, t) || label} checked={Boolean(value)} onChange={setFieldValue} invalid={Boolean(error)} />
-                ) : (
-                  <Input
-                    type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
-                    value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
-                    aria-invalid={Boolean(error)}
-                    className={error ? "border-red-400/70 focus:border-red-300" : undefined}
-                    onChange={(event) => setFieldValue(event.target.value)}
-                  />
-                )}
-                {providerFieldHelp(field, t) && field.type !== "boolean" && <span className="text-xs text-slate-500">{providerFieldHelp(field, t)}</span>}
-              </WizardField>
+              <ProviderSchemaField
+                key={field.name}
+                error={error}
+                field={field}
+                label={label}
+                value={value}
+                onChange={setFieldValue}
+              />
             );
           })}
-          <WizardField label={t("gameVersion")}>
-            <WizardSelect value={version} onChange={(value) => setVersion(value)}>
-              {versions.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </WizardSelect>
-          </WizardField>
-          <WizardField label={t("externalPort")}>
-            <WizardSelect value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
-              <option value="auto">{t("automaticPort")}</option>
-              <option value="manual">{t("manualPort")}</option>
-            </WizardSelect>
-          </WizardField>
-          {hostPortMode === "manual" && (
-            <WizardField label={t("externalPortValue")}>
-              <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
-            </WizardField>
-          )}
+            </div>
+          </section>
+          <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
+                <Settings2 aria-hidden="true" className="size-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">{t("runtimeConfiguration")}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t("runtimeConfigurationHint")}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <WizardField label={t("gameVersion")}>
+                <WizardSelect value={version} onChange={(value) => setVersion(value)}>
+                  {versions.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </WizardSelect>
+              </WizardField>
+              <WizardField label={t("externalPort")}>
+                <WizardSelect value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
+                  <option value="auto">{t("automaticPort")}</option>
+                  <option value="manual">{t("manualPort")}</option>
+                </WizardSelect>
+              </WizardField>
+              {hostPortMode === "manual" && (
+                <WizardField label={t("externalPortValue")}>
+                  <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
+                </WizardField>
+              )}
+            </div>
+          </section>
           <RuntimeResourceSection resourceLimits={resourceLimits} onChange={updateResources} />
         </div>
       </div>
@@ -1169,6 +1192,56 @@ function ConfigStep({
         <RuntimeResourceSection resourceLimits={resourceLimits} onChange={updateResources} />
       </div>
     </div>
+  );
+}
+
+function ProviderSchemaField({
+  error,
+  field,
+  label,
+  onChange,
+  value
+}: {
+  error?: string;
+  field: ProviderConfigField;
+  label: string;
+  onChange: (value: string | boolean) => void;
+  value: unknown;
+}) {
+  const { t } = useI18n();
+  const help = providerFieldHelp(field, t);
+  if (field.type === "boolean") {
+    return (
+      <div className="grid w-full min-w-0 self-start content-start gap-1.5">
+        <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
+          <span className="truncate">{label}</span>
+          {field.required && <RequiredFieldBadge />}
+        </span>
+        <WizardCheckbox label={help || label} checked={Boolean(value)} onChange={onChange} invalid={Boolean(error)} />
+        {error && <span className="text-xs font-medium text-red-200">{error}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <WizardField label={label} required={field.required} error={error}>
+                {field.type === "select" ? (
+                  <WizardSelect value={String(value ?? "")} onChange={onChange} invalid={Boolean(error)}>
+                    {(field.options ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </WizardSelect>
+                ) : (
+                  <Input
+                    type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                    value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
+                    aria-invalid={Boolean(error)}
+                    className={error ? "border-red-400/70 focus:border-red-300" : undefined}
+                    onChange={(event) => onChange(event.target.value)}
+                  />
+                )}
+                {help && <span className="text-xs text-slate-500">{help}</span>}
+    </WizardField>
   );
 }
 
@@ -1357,6 +1430,15 @@ function WizardField({
       {children}
       {error && <span className="text-xs font-medium text-red-200">{error}</span>}
     </label>
+  );
+}
+
+function RequiredFieldBadge() {
+  const { t } = useI18n();
+  return (
+    <span className="shrink-0 rounded border border-panel-gold/30 bg-panel-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-panel-gold">
+      {t("requiredField")}
+    </span>
   );
 }
 

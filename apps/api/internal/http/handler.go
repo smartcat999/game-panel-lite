@@ -2432,6 +2432,7 @@ type runtimeInstallMarker struct {
 	ProviderKey domain.ProviderKey `json:"providerKey"`
 	Version     string             `json:"version"`
 	Image       string             `json:"image"`
+	ArchivePath string             `json:"archivePath,omitempty"`
 	InstalledAt time.Time          `json:"installedAt"`
 }
 
@@ -2496,10 +2497,28 @@ func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 			h.logger.Warn("runtime image prepare failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
 		}
 	} else {
-		if err := h.writeRuntimeInstallMarker(ref); err != nil {
+		saveProgress := lastProgress
+		if saveProgress < 95 {
+			saveProgress = 95
+		}
+		h.setRuntimeImageJob(domain.RuntimeImageStatus{
+			Image:     ref.Image,
+			Status:    runtime.ImageStatusPreparing,
+			Message:   "saving runtime image",
+			Progress:  saveProgress,
+			UpdatedAt: time.Now(),
+		})
+		if err := h.runtime.SaveImageArchive(ctx, ref.Image, h.runtimeInstallArchivePath(ref)); err != nil {
 			status.Status = runtime.ImageStatusFailed
 			status.Message = err.Error()
-			status.Progress = lastProgress
+			status.Progress = saveProgress
+			if h.logger != nil {
+				h.logger.Warn("runtime image archive save failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
+			}
+		} else if err := h.writeRuntimeInstallMarker(ref); err != nil {
+			status.Status = runtime.ImageStatusFailed
+			status.Message = err.Error()
+			status.Progress = saveProgress
 			if h.logger != nil {
 				h.logger.Warn("runtime install marker write failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
 			}
@@ -2525,35 +2544,79 @@ func clampRuntimeImageProgress(progress int) int {
 	return progress
 }
 
+func (h *Handler) ensureRuntimeImageLoaded(ctx context.Context, ref runtimeInstallRef) error {
+	imageStatus := h.runtime.ImageStatus(ctx, ref.Image)
+	if imageStatus.Status == runtime.ImageStatusReady {
+		return nil
+	}
+	archiveStatus, ok := h.runtimeInstallMarkerStatus(ref)
+	if !ok || archiveStatus.Status != runtime.ImageStatusReady {
+		if archiveStatus.Message != "" {
+			return fmt.Errorf("server runtime is not installed: %s", archiveStatus.Message)
+		}
+		return fmt.Errorf("server runtime is not installed; install it from Game Library first")
+	}
+	if err := h.runtime.LoadImageArchive(ctx, h.runtimeInstallArchivePath(ref)); err != nil {
+		return fmt.Errorf("load server runtime image from local archive: %w", err)
+	}
+	imageStatus = h.runtime.ImageStatus(ctx, ref.Image)
+	if imageStatus.Status != runtime.ImageStatusReady {
+		if imageStatus.Message != "" {
+			return fmt.Errorf("load server runtime image from local archive: %s", imageStatus.Message)
+		}
+		return fmt.Errorf("load server runtime image from local archive failed")
+	}
+	return nil
+}
+
 func (h *Handler) runtimeInstallStatus(ctx context.Context, ref runtimeInstallRef) domain.RuntimeImageStatus {
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusPreparing {
 		return job
 	}
-	imageStatus := h.runtime.ImageStatus(ctx, ref.Image)
-	if imageStatus.Status == runtime.ImageStatusReady {
-		if markerStatus, ok := h.runtimeInstallMarkerStatus(ref); ok {
-			if markerStatus.Status == runtime.ImageStatusReady {
-				imageStatus.UpdatedAt = markerStatus.UpdatedAt
-			}
-		} else if err := h.writeRuntimeInstallMarker(ref); err != nil {
-			imageStatus.Message = err.Error()
-		}
-		return imageStatus
+	if markerStatus, ok := h.runtimeInstallMarkerStatus(ref); ok {
+		return markerStatus
 	}
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusFailed {
 		return job
 	}
-	return imageStatus
+	return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusMissing, Message: "runtime image is not installed", UpdatedAt: time.Now()}
 }
 
 func (h *Handler) runtimeInstallMarkerStatus(ref runtimeInstallRef) (domain.RuntimeImageStatus, bool) {
 	path := h.runtimeInstallMarkerPath(ref)
-	stat, err := os.Stat(path)
-	if err == nil {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.RuntimeImageStatus{}, false
+	}
+	if err != nil {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}, true
+	}
+	var marker runtimeInstallMarker
+	if err := json.Unmarshal(data, &marker); err != nil {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}, true
+	}
+	if marker.ProviderKey != "" && marker.ProviderKey != ref.ProviderKey {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: "runtime install marker provider mismatch", UpdatedAt: time.Now()}, true
+	}
+	if marker.Version != "" && marker.Version != ref.Version {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: "runtime install marker version mismatch", UpdatedAt: time.Now()}, true
+	}
+	if marker.Image != "" && marker.Image != ref.Image {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: "runtime install marker image mismatch", UpdatedAt: time.Now()}, true
+	}
+	archivePath, err := h.runtimeInstallMarkerArchivePath(ref, marker)
+	if err != nil {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}, true
+	}
+	stat, err := os.Stat(archivePath)
+	if err == nil && !stat.IsDir() {
 		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusReady, UpdatedAt: stat.ModTime()}, true
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		return domain.RuntimeImageStatus{}, false
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusMissing, Message: "runtime image archive is missing", UpdatedAt: time.Now()}, true
+	}
+	if err == nil && stat.IsDir() {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusMissing, Message: "runtime image archive path is a directory", UpdatedAt: time.Now()}, true
 	}
 	return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}, true
 }
@@ -2570,6 +2633,7 @@ func (h *Handler) writeRuntimeInstallMarker(ref runtimeInstallRef) error {
 		ProviderKey: ref.ProviderKey,
 		Version:     ref.Version,
 		Image:       ref.Image,
+		ArchivePath: h.runtimeInstallArchiveRelPath(ref),
 		InstalledAt: time.Now(),
 	}
 	data, err := json.MarshalIndent(marker, "", "  ")
@@ -2582,6 +2646,26 @@ func (h *Handler) writeRuntimeInstallMarker(ref runtimeInstallRef) error {
 
 func (h *Handler) runtimeInstallMarkerPath(ref runtimeInstallRef) string {
 	return filepath.Join(h.cfg.DataDir, "runtime-installs", safeRuntimeInstallPathPart(string(ref.ProviderKey)), safeRuntimeInstallPathPart(ref.Version)+".json")
+}
+
+func (h *Handler) runtimeInstallArchiveRelPath(ref runtimeInstallRef) string {
+	return filepath.Join("runtime-images", safeRuntimeInstallPathPart(string(ref.ProviderKey)), safeRuntimeInstallPathPart(ref.Version)+".tar")
+}
+
+func (h *Handler) runtimeInstallArchivePath(ref runtimeInstallRef) string {
+	return filepath.Join(h.cfg.DataDir, h.runtimeInstallArchiveRelPath(ref))
+}
+
+func (h *Handler) runtimeInstallMarkerArchivePath(ref runtimeInstallRef, marker runtimeInstallMarker) (string, error) {
+	archivePath := strings.TrimSpace(marker.ArchivePath)
+	if archivePath == "" {
+		archivePath = h.runtimeInstallArchiveRelPath(ref)
+	}
+	clean := filepath.Clean(archivePath)
+	if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("runtime install marker archive path is invalid")
+	}
+	return filepath.Join(h.cfg.DataDir, clean), nil
 }
 
 func safeRuntimeInstallPathPart(value string) string {
@@ -3086,13 +3170,18 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	imageStatus := h.runtimeInstallStatus(r.Context(), runtimeInstallRef{
+	runtimeRef := runtimeInstallRef{
 		ProviderKey: payload.ProviderKey,
 		Version:     payload.Version,
 		Image:       gameProvider.ImageFor(payload.Version),
-	})
+	}
+	imageStatus := h.runtimeInstallStatus(r.Context(), runtimeRef)
 	if imageStatus.Status != runtime.ImageStatusReady {
 		writeError(w, http.StatusConflict, "server runtime is not installed; install it from Game Library first")
+		return
+	}
+	if err := h.ensureRuntimeImageLoaded(r.Context(), runtimeRef); err != nil {
+		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
 	if err := gameProvider.ValidateConfig(config); err != nil {

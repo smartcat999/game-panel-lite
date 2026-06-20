@@ -216,8 +216,15 @@ export function ServerLoadTable({ rows }: { rows: ServerLoadRow[] }) {
   return (
     <section className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
       <SectionHeader title={t("serverLoadTitle")} description={t("serverLoadDescription")} />
-      <div className="hidden grid-cols-[minmax(220px,1.2fr)_110px_110px_150px_150px_100px_120px_90px] border-b border-panel-line px-4 py-2 text-xs font-medium text-slate-500 xl:grid">
-        <span>Server</span><span>Game</span><span>Status</span><span>CPU</span><span>Memory</span><span>Players</span><span>Last Active</span><span>Action</span>
+      <div className="hidden grid-cols-[minmax(220px,1fr)_96px_96px_140px_140px_88px_104px_96px] gap-3 border-b border-panel-line px-4 py-2 text-xs font-medium text-slate-500 2xl:grid">
+        <span>{t("monitoringTableServer")}</span>
+        <span>{t("monitoringTableGame")}</span>
+        <span>{t("monitoringTableStatus")}</span>
+        <span>{t("monitoringTableCpu")}</span>
+        <span>{t("monitoringTableMemory")}</span>
+        <span>{t("monitoringTablePlayers")}</span>
+        <span>{t("monitoringTableLastActive")}</span>
+        <span className="text-right">{t("monitoringTableAction")}</span>
       </div>
       <div className="divide-y divide-panel-line">
         {rows.length > 0 ? rows.map((row) => <ServerLoadItem key={row.serverId} row={row} />) : <EmptyRows label={t("monitoringNoServerLoad")} />}
@@ -227,21 +234,22 @@ export function ServerLoadTable({ rows }: { rows: ServerLoadRow[] }) {
 }
 
 function ServerLoadItem({ row }: { row: ServerLoadRow }) {
+  const { t } = useI18n();
   const memoryPercent = row.memoryLimitMb > 0 ? (row.memoryMb / row.memoryLimitMb) * 100 : 0;
   return (
-    <div className={cn("grid gap-3 px-4 py-3 xl:grid-cols-[minmax(220px,1.2fr)_110px_110px_150px_150px_100px_120px_90px] xl:items-center", row.severity !== "normal" && "bg-panel-gold/5")}>
+    <div className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] 2xl:grid-cols-[minmax(220px,1fr)_96px_96px_140px_140px_88px_104px_96px] 2xl:items-center", row.severity !== "normal" && "bg-panel-gold/5")}>
       <div className="min-w-0">
         <p className="truncate font-medium text-slate-100">{row.serverName}</p>
         <p className="mt-1 truncate text-xs text-slate-500">{row.providerKey} · {row.version || "default"}</p>
       </div>
-      <span className="text-sm text-slate-300">{row.gameKey}</span>
+      <span className="text-sm text-slate-300 sm:col-start-1 2xl:col-auto">{row.gameKey}</span>
       <StatusBadge status={row.status} severity={row.severity} />
-      <LoadBar percent={row.cpuPercent} value={`${row.cpuPercent.toFixed(1)}%`} />
-      <LoadBar percent={memoryPercent} value={`${Math.round(row.memoryMb)} MB`} tone="purple" />
+      <LoadBar className="sm:col-span-2 2xl:col-span-1" percent={row.cpuPercent} value={`${row.cpuPercent.toFixed(1)}%`} />
+      <LoadBar className="sm:col-span-2 2xl:col-span-1" percent={memoryPercent} value={`${Math.round(row.memoryMb)} MB`} tone="purple" />
       <span className="font-mono text-sm text-slate-300">{row.playersOnline}/{row.maxPlayers}</span>
       <span className="text-sm text-slate-500">{formatTime(row.lastActive)}</span>
-      <Link className="inline-flex w-fit items-center gap-1 rounded border border-panel-line px-2 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-900" href={`/servers/${row.serverId}`}>
-        View <ExternalLink aria-hidden="true" className="size-3" />
+      <Link className="inline-flex w-fit items-center gap-1 justify-self-start rounded border border-panel-line px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-900 sm:col-start-2 sm:row-start-1 sm:justify-self-end 2xl:col-auto 2xl:row-auto" href={`/servers/${row.serverId}`}>
+        {t("view")} <ExternalLink aria-hidden="true" className="size-3" />
       </Link>
     </div>
   );
@@ -425,9 +433,9 @@ function StatusBadge({ severity, status }: { severity: "normal" | "warning" | "c
   return <span className={cn("w-fit rounded px-2 py-0.5 text-xs font-medium", severity === "critical" ? "bg-panel-gold/15 text-panel-gold" : severity === "warning" ? "bg-panel-gold/10 text-panel-gold" : "bg-slate-800 text-slate-400")}>{status}</span>;
 }
 
-function LoadBar({ percent, tone = "green", value }: { percent: number; tone?: "green" | "purple"; value: string }) {
+function LoadBar({ className, percent, tone = "green", value }: { className?: string; percent: number; tone?: "green" | "purple"; value: string }) {
   return (
-    <div>
+    <div className={className}>
       <div className="mb-1 flex justify-between gap-2 text-xs"><span className="font-mono text-slate-300">{value}</span></div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
         <div className={cn("h-full rounded-full", tone === "purple" ? "bg-panel-purple" : percent > 80 ? "bg-panel-gold" : "bg-panel-green")} style={{ width: `${Math.max(3, Math.min(percent, 100))}%` }} />
