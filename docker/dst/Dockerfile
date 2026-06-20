@@ -49,7 +49,7 @@ LABEL org.opencontainers.image.description="Prebuilt Don't Starve Together dedic
 
 RUN dpkg --add-architecture i386 \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates lib32gcc-s1 libcurl4 libcurl4:i386 libstdc++6 libstdc++6:i386 \
+    && apt-get install -y --no-install-recommends ca-certificates lib32gcc-s1 libcurl4 libcurl4:i386 libcurl3-gnutls libcurl3-gnutls:i386 libstdc++6 libstdc++6:i386 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -m -d /home/container -s /bin/bash container \
     && mkdir -p /home/container/server /data \
