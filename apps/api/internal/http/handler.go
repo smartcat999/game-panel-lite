@@ -2477,7 +2477,7 @@ func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 	lastProgress := 0
 	status := domain.RuntimeImageStatus{Image: ref.Image, Progress: lastProgress, UpdatedAt: time.Now()}
 	if err := h.runtime.PrepareImageWithProgress(ctx, ref.Image, func(progress runtime.ImagePrepareProgress) {
-		nextProgress := clampRuntimeImageProgress(progress.Progress)
+		nextProgress := runtimeInstallPullProgress(progress.Progress)
 		if nextProgress < lastProgress {
 			nextProgress = lastProgress
 		}
@@ -2542,6 +2542,24 @@ func clampRuntimeImageProgress(progress int) int {
 		return 100
 	}
 	return progress
+}
+
+func runtimeInstallPullProgress(progress int) int {
+	progress = clampRuntimeImageProgress(progress)
+	if progress == 0 {
+		return 0
+	}
+	if progress >= 100 {
+		return 90
+	}
+	scaled := int(float64(progress) * 0.9)
+	if scaled <= 0 {
+		return 1
+	}
+	if scaled > 90 {
+		return 90
+	}
+	return scaled
 }
 
 func (h *Handler) ensureRuntimeImageLoaded(ctx context.Context, ref runtimeInstallRef) error {

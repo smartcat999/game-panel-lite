@@ -1553,6 +1553,27 @@ func TestRuntimeInstallStateRequiresLocalArchive(t *testing.T) {
 	}
 }
 
+func TestRuntimeInstallPullProgressIsReservedBelowComplete(t *testing.T) {
+	tests := []struct {
+		name     string
+		progress int
+		want     int
+	}{
+		{name: "empty", progress: 0, want: 0},
+		{name: "half", progress: 50, want: 45},
+		{name: "nearly done", progress: 99, want: 89},
+		{name: "pull complete", progress: 100, want: 90},
+		{name: "over complete", progress: 120, want: 90},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := runtimeInstallPullProgress(test.progress); got != test.want {
+				t.Fatalf("expected %d, got %d", test.want, got)
+			}
+		})
+	}
+}
+
 func TestRuntimeInstallStateUsesLocalArchiveWhenDockerImageIsMissing(t *testing.T) {
 	router, _, _ := newTestRouterWithAdapter(t, missingImageAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
 
