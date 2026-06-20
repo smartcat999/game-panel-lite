@@ -2,6 +2,7 @@ package docker
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -54,6 +55,48 @@ func TestNatPortSetSupportsUdp(t *testing.T) {
 	ports := natPortSet(8211, "udp")
 	if _, ok := ports["8211/udp"]; !ok {
 		t.Fatalf("expected exposed 8211/udp port, got %v", ports)
+	}
+}
+
+func TestPrepareDataMountsRepairsExistingDirectoryPermissions(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := os.Chmod(dataDir, 0o755); err != nil {
+		t.Fatalf("failed to chmod temp dir: %v", err)
+	}
+
+	if err := prepareDataMounts(dataDir, []string{"/data"}); err != nil {
+		t.Fatalf("expected mount preparation to succeed, got %v", err)
+	}
+
+	info, err := os.Stat(dataDir)
+	if err != nil {
+		t.Fatalf("expected data dir to exist: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o777 {
+		t.Fatalf("expected writable data dir permissions, got %o", got)
+	}
+}
+
+func TestWriteDataFileCreatesWritableRuntimeFiles(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := writeDataFile(dataDir, "dst/Cluster/Master/server.ini", "server_port = 10999\n"); err != nil {
+		t.Fatalf("expected runtime data file to be written, got %v", err)
+	}
+
+	dirInfo, err := os.Stat(filepath.Join(dataDir, "dst", "Cluster", "Master"))
+	if err != nil {
+		t.Fatalf("expected runtime data dir to exist: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o777 {
+		t.Fatalf("expected writable runtime data dir permissions, got %o", got)
+	}
+
+	fileInfo, err := os.Stat(filepath.Join(dataDir, "dst", "Cluster", "Master", "server.ini"))
+	if err != nil {
+		t.Fatalf("expected runtime data file to exist: %v", err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0o666 {
+		t.Fatalf("expected writable runtime data file permissions, got %o", got)
 	}
 }
 

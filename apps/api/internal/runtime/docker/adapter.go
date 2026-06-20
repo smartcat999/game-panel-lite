@@ -534,10 +534,13 @@ func writeDataFile(dataDir string, name string, content string) error {
 		return fmt.Errorf("invalid container data file path: %s", name)
 	}
 	target := filepath.Join(dataDir, clean)
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := ensureRuntimeWritableDir(filepath.Dir(target)); err != nil {
 		return err
 	}
-	return os.WriteFile(target, []byte(content), 0o644)
+	if err := os.WriteFile(target, []byte(content), 0o666); err != nil {
+		return err
+	}
+	return os.Chmod(target, 0o666)
 }
 
 func dataBinds(dataDir string, mounts []string) []string {
@@ -568,10 +571,13 @@ func prepareDataMounts(dataDir string, mounts []string) error {
 		}
 		hostPath, _ := dataBindPaths(dataDir, mount)
 		if _, err := os.Stat(hostPath); err == nil {
+			if err := ensureRuntimeWritablePath(hostPath); err != nil {
+				return err
+			}
 			continue
 		}
 		if filepath.Ext(hostPath) != "" {
-			if err := os.MkdirAll(filepath.Dir(hostPath), 0o777); err != nil {
+			if err := ensureRuntimeWritableDir(filepath.Dir(hostPath)); err != nil {
 				return err
 			}
 			file, err := os.OpenFile(hostPath, os.O_CREATE, 0o666)
@@ -581,16 +587,34 @@ func prepareDataMounts(dataDir string, mounts []string) error {
 			if err := file.Close(); err != nil {
 				return err
 			}
+			if err := os.Chmod(hostPath, 0o666); err != nil {
+				return err
+			}
 			continue
 		}
-		if err := os.MkdirAll(hostPath, 0o777); err != nil {
-			return err
-		}
-		if err := os.Chmod(hostPath, 0o777); err != nil {
+		if err := ensureRuntimeWritableDir(hostPath); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func ensureRuntimeWritablePath(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return os.Chmod(path, 0o777)
+	}
+	return os.Chmod(path, 0o666)
+}
+
+func ensureRuntimeWritableDir(path string) error {
+	if err := os.MkdirAll(path, 0o777); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o777)
 }
 
 func dataBindPaths(dataDir string, mount string) (string, string) {
