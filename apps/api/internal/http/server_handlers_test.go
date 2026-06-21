@@ -76,6 +76,40 @@ func TestStartServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
 	t.Fatalf("expected async start worker to mark server running, got %+v", updated)
 }
 
+func TestCreateTModLoaderServerPersistsDesiredModIDs(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	payload := `{
+		"name":"Modded Friends",
+		"providerKey":"terraria-tmodloader",
+		"version":"v2026.04.3.0",
+		"modIds":["mod-a","mod-b","mod-a"],
+		"config":{
+			"serverName":"Modded Friends",
+			"worldName":"ModWorld",
+			"worldSize":"medium",
+			"worldEvil":"random",
+			"difficulty":"classic",
+			"maxPlayers":8,
+			"port":7777,
+			"secure":true,
+			"language":"en-US",
+			"autoCreateWorld":true
+		}
+	}`
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", strings.NewReader(payload)))
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server 201, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var server domain.GameServer
+	if err := json.Unmarshal(recorder.Body.Bytes(), &server); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(server.Spec.ModIDs, []string{"mod-a", "mod-b"}) {
+		t.Fatalf("expected desired mod ids to be persisted, got %+v", server.Spec.ModIDs)
+	}
+}
+
 func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
 	adapter := newCaptureCreateAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)

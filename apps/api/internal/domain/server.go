@@ -61,6 +61,7 @@ type ServerSpec struct {
 	Config          map[string]any     `json:"config,omitempty"`
 	SourceWorldID   string             `json:"sourceWorldId,omitempty"`
 	SourceWorldName string             `json:"sourceWorldName,omitempty"`
+	ModIDs          []string           `json:"modIds,omitempty"`
 	Resources       ServerResources    `json:"resources,omitempty"`
 	Network         ServerNetworkSpec  `json:"network,omitempty"`
 	Runtime         ServerRuntimeSpec  `json:"runtime,omitempty"`

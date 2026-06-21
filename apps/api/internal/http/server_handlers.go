@@ -117,6 +117,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		ProviderKey domain.ProviderKey   `json:"providerKey"`
 		Config      json.RawMessage      `json:"config"`
 		HostPort    int                  `json:"hostPort,omitempty"`
+		ModIDs      []string             `json:"modIds,omitempty"`
 		Version     string               `json:"version"`
 		Resources   resourceLimitPayload `json:"resources,omitempty"`
 	}
@@ -153,6 +154,11 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported provider version")
 		return
 	}
+	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
+	if len(modIDs) > 0 && payload.ProviderKey != domain.ProviderTerrariaTModLoader {
+		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+		return
+	}
 	if err := validateProviderConfigPayload(gameProvider, configPayload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -184,6 +190,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 			DesiredState: domain.DesiredStopped,
 			Version:      payload.Version,
 			Config:       configPayload,
+			ModIDs:       modIDs,
 			Resources: domain.ServerResources{
 				CPULimitCores: resources.CPULimitCores,
 				MemoryLimitMB: resources.MemoryLimitMB,

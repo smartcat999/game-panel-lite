@@ -2,16 +2,20 @@ package server
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
 func TestProviderWorkloadBuilderUsesProviderRuntimeContract(t *testing.T) {
@@ -58,6 +62,83 @@ func TestProviderWorkloadBuilderUsesProviderRuntimeContract(t *testing.T) {
 	}
 	if !strings.Contains(spec.Options.Files["serverconfig.txt"], "worldname=Friends World") {
 		t.Fatalf("expected rendered server config, got %q", spec.Options.Files["serverconfig.txt"])
+	}
+}
+
+func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
+	root := t.TempDir()
+	db, err := store.Open(filepath.Join(root, "gamepanel.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := modsvc.NewService(root).Upload("unassigned", "quality.tmod", strings.NewReader("quality-mod")); err != nil {
+		t.Fatal(err)
+	}
+	libraryMod := domain.ModFile{
+		ID:         "mod-quality",
+		InstanceID: "unassigned",
+		FileName:   "quality.tmod",
+		Title:      "Quality",
+		ModName:    "Quality",
+		SizeBytes:  int64(len("quality-mod")),
+		Enabled:    true,
+	}
+	if err := db.CreateMod(context.Background(), &libraryMod); err != nil {
+		t.Fatal(err)
+	}
+	registry := provider.NewRegistry(terraria.NewTModLoaderProvider(runtimecatalog.Catalog{}))
+	builder := NewProviderWorkloadBuilder(registry).WithModPlanner(NewRuntimeModPlanner(root, db))
+	dataDir := filepath.Join(root, "instances", "srv-mods")
+	server := domain.GameServer{
+		ID:          "srv-mods",
+		Name:        "Modded",
+		GameKey:     domain.GameTerraria,
+		ProviderKey: domain.ProviderTerrariaTModLoader,
+		Spec: domain.ServerSpec{
+			Generation:   1,
+			DesiredState: domain.DesiredRunning,
+			Version:      "v2026.04.3.0",
+			ModIDs:       []string{"mod-quality"},
+			Config: map[string]any{
+				"serverName":      "Modded",
+				"worldName":       "ModWorld",
+				"worldSize":       "medium",
+				"worldEvil":       "random",
+				"difficulty":      "classic",
+				"maxPlayers":      float64(8),
+				"port":            float64(7777),
+				"secure":          true,
+				"language":        "en-US",
+				"autoCreateWorld": true,
+			},
+			Network: domain.ServerNetworkSpec{Port: 7777, HostPort: 47777},
+			Runtime: domain.ServerRuntimeSpec{DataDir: dataDir},
+		},
+	}
+
+	if _, err := builder.BuildWorkloadSpec(context.Background(), server); err != nil {
+		t.Fatalf("build workload spec: %v", err)
+	}
+	copied, err := os.ReadFile(filepath.Join(root, "mods", "srv-mods", "quality.tmod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(copied) != "quality-mod" {
+		t.Fatalf("expected copied mod payload, got %q", string(copied))
+	}
+	runtimeMod, err := os.ReadFile(filepath.Join(dataDir, "Mods", "quality.tmod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(runtimeMod) != "quality-mod" {
+		t.Fatalf("expected runtime mod payload, got %q", string(runtimeMod))
+	}
+	enabled, err := os.ReadFile(filepath.Join(dataDir, "Mods", "enabled.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(enabled), "Quality") {
+		t.Fatalf("expected enabled.json to include mod identity, got %s", string(enabled))
 	}
 }
 

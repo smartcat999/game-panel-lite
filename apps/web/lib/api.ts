@@ -478,6 +478,7 @@ export async function createGameServer(input: {
   providerKey: ProviderKey;
   config: TerrariaConfig | Record<string, unknown>;
   hostPort?: number;
+  modIds?: string[];
   version?: string;
   resources?: ResourceLimits;
 }): Promise<GameServerResource> {

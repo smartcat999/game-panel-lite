@@ -57,8 +57,7 @@ describe("createGameServerWithResources", () => {
   it("assigns the selected reusable world snapshot without overriding the requested world name", async () => {
     const deps = {
       createServer: vi.fn().mockResolvedValue(server),
-      assignWorld: vi.fn().mockResolvedValue(importedWorld),
-      assignMod: vi.fn()
+      assignWorld: vi.fn().mockResolvedValue(importedWorld)
     };
 
     const result = await createGameServerWithResources({
@@ -78,8 +77,7 @@ describe("createGameServerWithResources", () => {
   it("creates a server without world assignment when no worldId is given", async () => {
     const deps = {
       createServer: vi.fn().mockResolvedValue(server),
-      assignWorld: vi.fn(),
-      assignMod: vi.fn()
+      assignWorld: vi.fn()
     };
 
     const result = await createGameServerWithResources({
@@ -96,8 +94,7 @@ describe("createGameServerWithResources", () => {
   it("passes the requested external port to server creation", async () => {
     const deps = {
       createServer: vi.fn().mockResolvedValue(server),
-      assignWorld: vi.fn(),
-      assignMod: vi.fn()
+      assignWorld: vi.fn()
     };
 
     await createGameServerWithResources({
@@ -122,8 +119,7 @@ describe("createGameServerWithResources", () => {
           config: { serverName: "Pal Friends", saveName: "Pal Save", maxPlayers: 10 }
         }
       }),
-      assignWorld: vi.fn(),
-      assignMod: vi.fn()
+      assignWorld: vi.fn()
     };
 
     await createGameServerWithResources({
@@ -139,5 +135,22 @@ describe("createGameServerWithResources", () => {
       providerKey: "palworld",
       config: { serverName: "Pal Friends", saveName: "Pal Save", maxPlayers: 10 }
     }));
+  });
+
+  it("sends selected tModLoader mods as desired server spec instead of assigning after create", async () => {
+    const deps = {
+      createServer: vi.fn().mockResolvedValue({ ...server, providerKey: "terraria-tmodloader" }),
+      assignWorld: vi.fn()
+    };
+
+    await createGameServerWithResources({
+      config,
+      mode: "tmodloader",
+      name: "Friends",
+      modIds: ["mod-1", "mod-2"],
+      deps
+    });
+
+    expect(deps.createServer).toHaveBeenCalledWith(expect.objectContaining({ modIds: ["mod-1", "mod-2"] }));
   });
 });

@@ -15,13 +15,19 @@ type ProviderRegistry interface {
 
 type ProviderWorkloadBuilder struct {
 	providers ProviderRegistry
+	mods      ModPlanner
 }
 
 func NewProviderWorkloadBuilder(providers ProviderRegistry) *ProviderWorkloadBuilder {
 	return &ProviderWorkloadBuilder{providers: providers}
 }
 
-func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(_ context.Context, server domain.GameServer) (domain.WorkloadSpec, error) {
+func (b *ProviderWorkloadBuilder) WithModPlanner(planner ModPlanner) *ProviderWorkloadBuilder {
+	b.mods = planner
+	return b
+}
+
+func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server domain.GameServer) (domain.WorkloadSpec, error) {
 	if b.providers == nil {
 		return domain.WorkloadSpec{}, fmt.Errorf("provider registry is required")
 	}
@@ -33,14 +39,19 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(_ context.Context, server do
 	if version == "" || !providerVersionSupported(gameProvider.Versions(), version) {
 		version = recommendedProviderVersion(gameProvider.Versions())
 	}
-	runtimeConfig, err := runtimeConfigForResource(gameProvider, server)
-	if err != nil {
-		return domain.WorkloadSpec{}, err
-	}
 	if server.Spec.Runtime.DataDir != "" {
 		if err := os.MkdirAll(server.Spec.Runtime.DataDir, 0o755); err != nil {
 			return domain.WorkloadSpec{}, err
 		}
+	}
+	if b.mods != nil {
+		if err := b.mods.PlanMods(ctx, server); err != nil {
+			return domain.WorkloadSpec{}, err
+		}
+	}
+	runtimeConfig, err := runtimeConfigForResource(gameProvider, server)
+	if err != nil {
+		return domain.WorkloadSpec{}, err
 	}
 	files := map[string]string{}
 	if runtimeConfig.ConfigText != "" {

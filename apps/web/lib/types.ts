@@ -87,6 +87,7 @@ export type ServerResourceSpec = {
   config?: Record<string, unknown>;
   sourceWorldId?: string;
   sourceWorldName?: string;
+  modIds?: string[];
   resources?: Partial<ResourceLimits>;
   network?: {
     port?: number;

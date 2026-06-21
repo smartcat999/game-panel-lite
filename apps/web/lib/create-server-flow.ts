@@ -1,4 +1,4 @@
-import { assignMod, assignWorld, createGameServer } from "./api";
+import { assignWorld, createGameServer } from "./api";
 import type { GameServerResource, ProviderKey, ResourceLimits, World } from "./types";
 
 type CreateMode = "vanilla" | "tmodloader";
@@ -6,7 +6,6 @@ type CreateMode = "vanilla" | "tmodloader";
 type CreateGameServerDeps = {
   createServer: typeof createGameServer;
   assignWorld: typeof assignWorld;
-  assignMod: typeof assignMod;
 };
 
 export type CreateGameServerInput = {
@@ -29,8 +28,7 @@ export type CreatedGameServer = {
 
 const defaultDeps: CreateGameServerDeps = {
   assignWorld,
-  createServer: createGameServer,
-  assignMod
+  createServer: createGameServer
 };
 
 export async function createGameServerWithResources({
@@ -51,6 +49,7 @@ export async function createGameServerWithResources({
     providerKey: nextProviderKey,
     config,
     hostPort,
+    modIds: mode === "tmodloader" ? modIds : undefined,
     resources,
     version
   });
@@ -66,10 +65,6 @@ export async function createGameServerWithResources({
         sourceWorldName: assignedWorld.name
       }
     };
-  }
-
-  if (mode === "tmodloader" && modIds.length > 0) {
-    await Promise.all(modIds.map((modId) => deps.assignMod(modId, server.id)));
   }
 
   return { assignedWorld, server };

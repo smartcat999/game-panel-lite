@@ -63,7 +63,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	go serverctrl.NewController(
 		db,
 		serverctrl.NewRuntimeReconciler(
-			serverctrl.NewProviderWorkloadBuilder(registry),
+			serverctrl.NewProviderWorkloadBuilder(registry).WithModPlanner(serverctrl.NewRuntimeModPlanner(cfg.DataDir, db)),
 			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
 		).WithImageLoader(serverctrl.NewRuntimeImageLoader(cfg.DataDir, switchableRuntime)),
 		logger,
