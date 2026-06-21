@@ -14,7 +14,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
-func TestRuntimeInstallStateRequiresLocalArchive(t *testing.T) {
+func TestRuntimeInstallStateDoesNotBlockServerCreation(t *testing.T) {
 	router, _, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
 
 	runtimeStatus := func() domain.RuntimeImageStatus {
@@ -63,10 +63,10 @@ func TestRuntimeInstallStateRequiresLocalArchive(t *testing.T) {
 			"autoCreateWorld":true
 		}
 	}`
-	blockedCreate := httptest.NewRecorder()
-	router.ServeHTTP(blockedCreate, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
-	if blockedCreate.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected create server to require local runtime install, got %d: %s", blockedCreate.Code, blockedCreate.Body.String())
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create server to accept configuration without local runtime install, got %d: %s", create.Code, create.Body.String())
 	}
 
 	markerPath := filepath.Join(cfg.DataDir, "runtime-installs", "terraria-vanilla", "1.4.5.6.json")

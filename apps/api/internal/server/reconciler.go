@@ -20,9 +20,14 @@ type RuntimeClient interface {
 	Inspect(context.Context, string) (domain.WorkloadStatus, error)
 }
 
+type ImageLoader interface {
+	EnsureImage(context.Context, domain.GameServer, string) error
+}
+
 type Reconciler struct {
 	builder WorkloadBuilder
 	runtime RuntimeClient
+	images  ImageLoader
 	now     Clock
 }
 
@@ -32,6 +37,11 @@ func NewReconciler() *Reconciler {
 
 func NewRuntimeReconciler(builder WorkloadBuilder, runtime RuntimeClient) *Reconciler {
 	return &Reconciler{builder: builder, runtime: runtime, now: time.Now}
+}
+
+func (r *Reconciler) WithImageLoader(loader ImageLoader) *Reconciler {
+	r.images = loader
+	return r
 }
 
 func (r *Reconciler) NeedsReconcile(server domain.GameServer) bool {
@@ -109,6 +119,11 @@ func (r *Reconciler) reconcileRunning(ctx context.Context, server domain.GameSer
 		spec, err := r.builder.BuildWorkloadSpec(ctx, server)
 		if err != nil {
 			return r.markFailed(server, now, "BuildSpecFailed", err.Error()), nil
+		}
+		if r.images != nil {
+			if err := r.images.EnsureImage(ctx, server, spec.Image); err != nil {
+				return r.markFailed(server, now, "LoadImageFailed", err.Error()), nil
+			}
 		}
 		runtimeID, err := r.runtime.Create(ctx, spec)
 		if err != nil {

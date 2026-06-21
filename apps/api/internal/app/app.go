@@ -65,7 +65,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		serverctrl.NewRuntimeReconciler(
 			serverctrl.NewProviderWorkloadBuilder(registry),
 			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
-		),
+		).WithImageLoader(serverctrl.NewRuntimeImageLoader(cfg.DataDir, switchableRuntime)),
 		logger,
 	).Start(appCtx)
 

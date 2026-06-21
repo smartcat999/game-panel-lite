@@ -115,6 +115,16 @@ func (r *fakeRuntime) Inspect(_ context.Context, runtimeID string) (domain.Workl
 	return domain.WorkloadStatus{RuntimeID: runtimeID, State: state}, nil
 }
 
+type fakeImageLoader struct {
+	calls int
+	err   error
+}
+
+func (l *fakeImageLoader) EnsureImage(context.Context, domain.GameServer, string) error {
+	l.calls++
+	return l.err
+}
+
 func TestReconcileRunningCreatesAndStartsWorkload(t *testing.T) {
 	builder := &fakeBuilder{}
 	runtime := newFakeRuntime()
@@ -144,6 +154,39 @@ func TestReconcileRunningCreatesAndStartsWorkload(t *testing.T) {
 	}
 	if builder.calls != 1 || runtime.created != 1 || runtime.started != 1 {
 		t.Fatalf("expected one build/create/start, got builder=%d create=%d start=%d", builder.calls, runtime.created, runtime.started)
+	}
+}
+
+func TestReconcileRunningFailsWhenImageLoadFails(t *testing.T) {
+	builder := &fakeBuilder{}
+	runtime := newFakeRuntime()
+	images := &fakeImageLoader{err: errors.New("archive missing")}
+	reconciler := NewRuntimeReconciler(builder, runtime).WithImageLoader(images)
+	server := domain.GameServer{
+		ID:   "srv-image",
+		Name: "Image Missing",
+		Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredRunning},
+		Status: domain.ServerRuntimeStatus{
+			Phase:       domain.PhasePending,
+			ActualState: domain.ActualMissing,
+		},
+	}
+
+	updated, err := reconciler.Reconcile(context.Background(), server)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if updated.Status.Phase != domain.PhaseFailed {
+		t.Fatalf("expected failed phase, got %q", updated.Status.Phase)
+	}
+	if updated.Status.LastError != "archive missing" {
+		t.Fatalf("expected image load error, got %q", updated.Status.LastError)
+	}
+	if len(updated.Status.Conditions) != 1 || updated.Status.Conditions[0].Reason != "LoadImageFailed" {
+		t.Fatalf("expected image load failure condition, got %+v", updated.Status.Conditions)
+	}
+	if images.calls != 1 || runtime.created != 0 || runtime.started != 0 {
+		t.Fatalf("expected image load before create/start, got image=%d create=%d start=%d", images.calls, runtime.created, runtime.started)
 	}
 }
 

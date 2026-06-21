@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
-func TestInvalidDockerHostKeepsAPIAvailableButCreateFails(t *testing.T) {
+func TestInvalidDockerHostKeepsAPIAvailableButReconcileFails(t *testing.T) {
 	root := t.TempDir()
 	api, err := New(config.Config{
 		Host:       "127.0.0.1",
@@ -49,11 +48,34 @@ func TestInvalidDockerHostKeepsAPIAvailableButCreateFails(t *testing.T) {
 	}`
 	create := httptest.NewRecorder()
 	api.Routes().ServeHTTP(create, httptest.NewRequest(http.MethodPost, "/api/servers", bytes.NewBufferString(createPayload)))
-	if create.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected create server to fail fast without Docker, got %d: %s", create.Code, create.Body.String())
+	if create.Code != http.StatusCreated {
+		t.Fatalf("expected create server to accept configuration without Docker, got %d: %s", create.Code, create.Body.String())
 	}
-	if !strings.Contains(create.Body.String(), "Docker runtime unavailable") {
-		t.Fatalf("expected runtime availability error, got %s", create.Body.String())
+	var created domain.GameServer
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.ID == "" {
+		t.Fatalf("expected created server id, got %+v", created)
+	}
+
+	start := httptest.NewRecorder()
+	api.Routes().ServeHTTP(start, httptest.NewRequest(http.MethodPost, "/api/servers/"+created.ID+"/start", nil))
+	if start.Code != http.StatusAccepted {
+		t.Fatalf("expected start command to be accepted for async reconciliation, got %d: %s", start.Code, start.Body.String())
+	}
+	server := waitForAPIServerPhase(t, api, created.ID, domain.PhaseFailed)
+	if server.Status.LastError == "" {
+		t.Fatalf("expected reconcile failure to be recorded, got %+v", server.Status)
+	}
+	if len(server.Status.Conditions) != 1 || server.Status.Conditions[0].Reason == "" {
+		t.Fatalf("expected reconcile failure condition, got %+v", server.Status.Conditions)
+	}
+
+	health := httptest.NewRecorder()
+	api.Routes().ServeHTTP(health, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if health.Code != http.StatusOK {
+		t.Fatalf("expected API to remain available, got %d: %s", health.Code, health.Body.String())
 	}
 }
 

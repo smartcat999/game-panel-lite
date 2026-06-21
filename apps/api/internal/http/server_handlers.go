@@ -153,24 +153,6 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported provider version")
 		return
 	}
-	if err := h.requireRuntimeAvailable(r.Context()); err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
-		return
-	}
-	runtimeRef := runtimeInstallRef{
-		ProviderKey: payload.ProviderKey,
-		Version:     payload.Version,
-		Image:       gameProvider.ImageFor(payload.Version),
-	}
-	imageStatus := h.runtimeInstallStatus(r.Context(), runtimeRef)
-	if imageStatus.Status != runtime.ImageStatusReady {
-		writeError(w, http.StatusConflict, "server runtime is not installed; install it from Game Library first")
-		return
-	}
-	if err := h.requireRuntimeImageReady(r.Context(), runtimeRef); err != nil {
-		writeError(w, http.StatusConflict, err.Error())
-		return
-	}
 	if err := validateProviderConfigPayload(gameProvider, configPayload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
