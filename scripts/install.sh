@@ -28,6 +28,15 @@ EOF
 fi
 
 mkdir -p "$ROOT_DIR/data"
+mkdir -p "$ROOT_DIR/data/prometheus"
+
+if chown 65534:65534 "$ROOT_DIR/data/prometheus" >/dev/null 2>&1; then
+  :
+elif command -v sudo >/dev/null 2>&1 && sudo chown 65534:65534 "$ROOT_DIR/data/prometheus" >/dev/null 2>&1; then
+  :
+else
+  chmod 777 "$ROOT_DIR/data/prometheus"
+fi
 
 cd "$ROOT_DIR"
 docker compose -f compose.prod.yaml pull
