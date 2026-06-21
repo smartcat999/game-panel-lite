@@ -652,7 +652,7 @@ func renderVanillaRuntimeConfig(config Config) string {
 	config = NormalizeConfig(config)
 	worldSizes := map[WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	worldEvils := map[WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
-	difficulties := map[Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
+	difficulties := map[Difficulty]int{"classic": 0, "expert": 1, "master": 2, "journey": 3}
 	lines := []string{
 		fmt.Sprintf("world=/home/container/Worlds/%s.wld", config.WorldName),
 		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),
@@ -677,7 +677,7 @@ func renderTModLoaderRuntimeConfig(config Config) string {
 	config = NormalizeConfig(config)
 	worldSizes := map[WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	worldEvils := map[WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
-	difficulties := map[Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
+	difficulties := map[Difficulty]int{"classic": 0, "expert": 1, "master": 2, "journey": 3}
 	lines := []string{
 		fmt.Sprintf("world=/home/container/Worlds/%s.wld", config.WorldName),
 		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),

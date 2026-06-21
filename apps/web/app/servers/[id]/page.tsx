@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
+import { Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -177,7 +177,6 @@ export default function ServerDetailPage() {
   const [pendingBackupDelete, setPendingBackupDelete] = useState<Backup | null>(null);
   const [pendingModDelete, setPendingModDelete] = useState<ModFile | null>(null);
   const [pendingModToggle, setPendingModToggle] = useState<{ mod: ModFile; enabled: boolean } | null>(null);
-  const [pendingModAssign, setPendingModAssign] = useState<ModFile | null>(null);
   const [pendingModPackInstall, setPendingModPackInstall] = useState<ModPack | null>(null);
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
@@ -390,11 +389,14 @@ export default function ServerDetailPage() {
     onError: (error) => showError(formatActionError(error, t("unableDeleteMod")))
   });
   const modAssign = useMutation({
-    mutationFn: (modId: string) => assignMod(modId, id),
+    mutationFn: async (modIds: string[]) => {
+      for (const modId of modIds) {
+        await assignMod(modId, id);
+      }
+    },
     onSuccess: async () => {
       showSuccess(t("modAssigned"));
       markModsChanged();
-      setPendingModAssign(null);
       await client.invalidateQueries({ queryKey: ["mods", id] });
     },
     onError: (error) => showError(formatActionError(error, t("unableAssignMod")))
@@ -776,7 +778,7 @@ export default function ServerDetailPage() {
               serverStatus={status}
               toggling={modEnabled.isPending}
               workshopUnsupported={workshopUnsupported}
-              onAssignMod={setPendingModAssign}
+              onAssignMods={(mods) => modAssign.mutate(mods.map((mod) => mod.id))}
               onDelete={setPendingModDelete}
               onInstallPack={setPendingModPackInstall}
               onToggle={(mod) => setPendingModToggle({ mod, enabled: !mod.enabled })}
@@ -961,25 +963,6 @@ export default function ServerDetailPage() {
         busy={modEnabled.isPending}
         onCancel={() => setPendingModToggle(null)}
         onConfirm={() => pendingModToggle && modEnabled.mutate({ modId: pendingModToggle.mod.id, enabled: pendingModToggle.enabled })}
-      />
-      <ConfirmDialog
-        open={Boolean(pendingModAssign)}
-        eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmModInstallTitle", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "" })}
-        description={t("confirmModInstallDescription", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "", server: serverResource.name })}
-        detail={pendingModAssign ? (
-          <InstallDependencyDetail
-            dependencies={pendingModAssign.dependencies ?? []}
-            label={t("modsTitle")}
-            name={modDisplayName(pendingModAssign, locale)}
-          />
-        ) : undefined}
-        cancelLabel={t("cancel")}
-        confirmLabel={modAssign.isPending ? t("actionWorking") : t("installToServer")}
-        confirmVariant="gold"
-        busy={modAssign.isPending}
-        onCancel={() => setPendingModAssign(null)}
-        onConfirm={() => pendingModAssign && modAssign.mutate(pendingModAssign.id)}
       />
       <ConfirmDialog
         open={Boolean(pendingModPackInstall)}
@@ -2016,15 +1999,25 @@ function Select({ children, disabled, onChange, value }: { children: ReactNode; 
 
 function Checkbox({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 text-sm text-slate-300">
-      <span>{label}</span>
+    <label className={cn(
+      "grid cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-sm font-medium transition",
+      checked ? "border-panel-green/45 bg-panel-green/10 text-slate-100" : "border-panel-line bg-slate-950/50 text-slate-300 hover:bg-slate-900/70",
+      disabled && "cursor-not-allowed opacity-60"
+    )}>
+      <span className="min-w-0 leading-5">{label}</span>
       <input
-        className="size-4 accent-panel-green disabled:cursor-not-allowed"
+        className="sr-only"
         checked={checked}
         disabled={disabled}
         type="checkbox"
         onChange={(event) => onChange(event.target.checked)}
       />
+      <span className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded border",
+        checked ? "border-panel-green bg-panel-green text-slate-950" : "border-panel-line bg-slate-950 text-transparent"
+      )}>
+        <Check aria-hidden="true" className="size-3.5" />
+      </span>
     </label>
   );
 }
@@ -2206,7 +2199,7 @@ function ModsTab({
   serverStatus,
   toggling,
   workshopUnsupported,
-  onAssignMod,
+  onAssignMods,
   onDelete,
   onInstallPack,
   onToggle
@@ -2224,7 +2217,7 @@ function ModsTab({
   serverStatus: ServerStatus;
   toggling: boolean;
   workshopUnsupported: boolean;
-  onAssignMod: (mod: ModFile) => void;
+  onAssignMods: (mods: ModFile[]) => void;
   onDelete: (mod: ModFile) => void;
   onInstallPack: (pack: ModPack) => void;
   onToggle: (mod: ModFile) => void;
@@ -2232,9 +2225,20 @@ function ModsTab({
   const { locale, t } = useI18n();
   const [installerOpen, setInstallerOpen] = useState(false);
   const [installSource, setInstallSource] = useState<ModInstallSource>("library");
+  const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
   const blocked = modAction.disabled;
   const workshopBlockReason = workshopUnsupported ? t("workshopArmUnsupported") : "";
+  const selectedMods = useMemo(
+    () => availableMods.filter((mod) => selectedModIds.includes(mod.id) && !isModInstalledOnServer(mod, items)),
+    [availableMods, items, selectedModIds]
+  );
+  useEffect(() => {
+    setSelectedModIds((current) => current.filter((modId) => {
+      const mod = availableMods.find((item) => item.id === modId);
+      return mod ? !isModInstalledOnServer(mod, items) : false;
+    }));
+  }, [availableMods, items]);
   useEffect(() => {
     if (!installerOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -2333,40 +2337,70 @@ function ModsTab({
               </div>
 
               <div className="mt-4 rounded-lg border border-panel-line bg-slate-950/35">
-                <div className="border-b border-panel-line px-4 py-3">
-                  <h4 className="font-semibold text-white">{installSource === "library" ? t("installFromLibrary") : t("modPacks")}</h4>
-                  <p className="mt-1 text-sm text-slate-500">{installSource === "library" ? t("installFromLibraryHint") : t("installModPacksHint")}</p>
+                <div className="flex flex-col gap-3 border-b border-panel-line px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h4 className="font-semibold text-white">{installSource === "library" ? t("installFromLibrary") : t("modPacks")}</h4>
+                    <p className="mt-1 text-sm text-slate-500">{installSource === "library" ? t("installFromLibraryHint") : t("installModPacksHint")}</p>
+                  </div>
+                  {installSource === "library" ? (
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span className="rounded-md border border-panel-line bg-slate-950/60 px-2.5 py-1.5 text-xs font-medium text-slate-400">
+                        {t("selectedModsCount", { count: selectedMods.length })}
+                      </span>
+                      {selectedModIds.length > 0 ? (
+                        <Button variant="secondary" className="h-8 px-2 text-xs" onClick={() => setSelectedModIds([])} disabled={assigning}>
+                          {t("clearSelection")}
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 {installSource === "library" ? (
                   availableMods.length > 0 ? (
-                    <div className="divide-y divide-panel-line">
+                    <>
+                    <div className="max-h-[44vh] divide-y divide-panel-line overflow-y-auto">
                       {availableMods.map((mod) => {
                         const blockedByArchitecture = workshopUnsupported && isWorkshopBackedMod(mod);
+                        const installed = isModInstalledOnServer(mod, items);
+                        const selected = selectedModIds.includes(mod.id);
+                        const disabled = assigning || blocked || blockedByArchitecture || installed;
                         return (
-                          <ResourceRow
-                            className="rounded-none border-0 bg-transparent px-4"
+                          <ModInstallOptionRow
+                            blockedReason={blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                            disabled={disabled}
+                            installed={installed}
                             key={mod.id}
-                            title={<Link href={`/mods/${mod.id}`} className="transition hover:text-panel-green">{modDisplayName(mod, locale)}</Link>}
                             meta={modInstallMeta(mod, locale, t)}
-                            actions={
-                              <Button
-                                variant="secondary"
-                                onClick={() => {
-                                  setInstallerOpen(false);
-                                  onAssignMod(mod);
-                                }}
-                                disabled={assigning || blocked || blockedByArchitecture}
-                                title={blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
-                              >
-                                <Package aria-hidden="true" />
-                                {t("installToServer")}
-                              </Button>
-                            }
+                            selected={selected}
+                            title={modDisplayName(mod, locale)}
+                            onToggle={() => {
+                              if (disabled) return;
+                              setSelectedModIds((current) => current.includes(mod.id) ? current.filter((id) => id !== mod.id) : [...current, mod.id]);
+                            }}
                           />
                         );
                       })}
                     </div>
+                    <div className="flex flex-col gap-3 border-t border-panel-line bg-slate-950/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-slate-500">
+                        {selectedMods.length > 0 ? t("installSelectedModsHint", { count: selectedMods.length }) : t("selectModsToInstallHint")}
+                      </p>
+                      <Button
+                        onClick={() => {
+                          if (selectedMods.length === 0) return;
+                          onAssignMods(selectedMods);
+                          setSelectedModIds([]);
+                          setInstallerOpen(false);
+                        }}
+                        disabled={assigning || blocked || selectedMods.length === 0}
+                        title={modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                      >
+                        <Package aria-hidden="true" />
+                        {assigning ? t("actionWorking") : t("installSelectedMods", { count: selectedMods.length })}
+                      </Button>
+                    </div>
+                    </>
                   ) : (
                     <InstallerEmptyState message={t("noGlobalMods")} />
                   )
@@ -2374,12 +2408,14 @@ function ModsTab({
                   <div className="divide-y divide-panel-line">
                     {modPacks.map((pack) => {
                       const blockedByArchitecture = workshopUnsupported && modPackHasWorkshopMods(pack);
+                      const installedCount = pack.mods.filter((mod) => isModInstalledOnServer(mod, items)).length;
+                      const allInstalled = pack.mods.length > 0 && installedCount === pack.mods.length;
                       return (
                         <ResourceRow
                           className="rounded-none border-0 bg-transparent px-4"
                           key={pack.id}
                           title={<Link href={`/mods/packs/${pack.id}`} className="transition hover:text-panel-green">{pack.name}</Link>}
-                          meta={modPackInstallMeta(pack, locale, t)}
+                          meta={modPackInstallMeta(pack, locale, t, installedCount)}
                           actions={
                             <Button
                               variant="secondary"
@@ -2387,11 +2423,11 @@ function ModsTab({
                                 setInstallerOpen(false);
                                 onInstallPack(pack);
                               }}
-                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture}
+                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture || allInstalled}
                               title={blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
                             >
-                              <Package aria-hidden="true" />
-                              {t("installModPack")}
+                              {allInstalled ? <CheckCircle2 aria-hidden="true" /> : <Package aria-hidden="true" />}
+                              {allInstalled ? t("alreadyInstalled") : t("installModPack")}
                             </Button>
                           }
                         />
@@ -2528,11 +2564,12 @@ function modInstallMeta(mod: ModFile, locale: ReturnType<typeof useI18n>["locale
   return `${base} · ${t("dependencies")}: ${mod.dependencies.join(", ")}`;
 }
 
-function modPackInstallMeta(pack: ModPack, locale: ReturnType<typeof useI18n>["locale"], t: ReturnType<typeof useI18n>["t"]) {
+function modPackInstallMeta(pack: ModPack, locale: ReturnType<typeof useI18n>["locale"], t: ReturnType<typeof useI18n>["t"], installedCount = 0) {
   const description = pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ");
   const dependencies = dependencyNamesForMods(pack.mods);
   const dependencyText = dependencies.length > 0 ? ` · ${t("dependencies")}: ${dependencies.join(", ")}` : "";
-  return `${pack.mods.length} · ${description}${dependencyText}`;
+  const installedText = installedCount > 0 ? ` · ${t("installedModsCount", { count: installedCount, total: pack.mods.length })}` : "";
+  return `${pack.mods.length} · ${description}${dependencyText}${installedText}`;
 }
 
 function dependencyNamesForMods(mods: ModFile[]) {
@@ -2545,6 +2582,21 @@ function isWorkshopBackedMod(mod: ModFile) {
 
 function modPackHasWorkshopMods(pack: ModPack) {
   return pack.mods.some(isWorkshopBackedMod);
+}
+
+function modInstallKeys(mod: ModFile) {
+  return [
+    mod.workshopId ? `workshop:${mod.workshopId}` : "",
+    mod.fileName ? `file:${mod.fileName.toLowerCase()}` : "",
+    mod.modName ? `name:${mod.modName.toLowerCase()}` : "",
+    mod.title ? `title:${mod.title.toLowerCase()}` : ""
+  ].filter(Boolean);
+}
+
+function isModInstalledOnServer(mod: ModFile, installedMods: ModFile[]) {
+  const candidateKeys = new Set(modInstallKeys(mod));
+  if (candidateKeys.size === 0) return installedMods.some((item) => item.id === mod.id);
+  return installedMods.some((item) => item.id === mod.id || modInstallKeys(item).some((key) => candidateKeys.has(key)));
 }
 
 function isArmArchitecture(architecture: string | undefined) {
@@ -2631,6 +2683,57 @@ function InstallerEmptyState({ message }: { message: string }) {
       </span>
       <p className="mt-3 max-w-md text-sm text-slate-500">{message}</p>
     </div>
+  );
+}
+
+function ModInstallOptionRow({
+  blockedReason,
+  disabled,
+  installed,
+  meta,
+  selected,
+  title,
+  onToggle
+}: {
+  blockedReason?: string;
+  disabled: boolean;
+  installed: boolean;
+  meta: string;
+  selected: boolean;
+  title: string;
+  onToggle: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <button
+      className={cn(
+        "flex w-full items-start gap-3 px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
+        selected ? "bg-panel-green/10" : installed ? "bg-slate-900/45" : "bg-transparent hover:bg-slate-900/40",
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+      )}
+      disabled={disabled}
+      onClick={onToggle}
+      title={blockedReason}
+      type="button"
+    >
+      <span className={cn(
+        "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border",
+        installed || selected ? "border-panel-green/40 bg-panel-green/15 text-panel-green" : "border-panel-line bg-slate-950/70 text-slate-500"
+      )}>
+        {installed || selected ? <Check aria-hidden="true" className="size-4" /> : <Package aria-hidden="true" className="size-4" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-semibold text-white">{title}</span>
+          {installed ? (
+            <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs font-medium text-panel-green">{t("alreadyInstalled")}</span>
+          ) : selected ? (
+            <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs font-medium text-panel-green">{t("selected")}</span>
+          ) : null}
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">{meta}</span>
+      </span>
+    </button>
   );
 }
 

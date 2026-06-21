@@ -187,7 +187,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		ProviderKey: payload.ProviderKey,
 		Spec: domain.ServerSpec{
 			Generation:   1,
-			DesiredState: domain.DesiredStopped,
+			DesiredState: domain.DesiredRunning,
 			Version:      payload.Version,
 			Config:       configPayload,
 			ModIDs:       modIDs,

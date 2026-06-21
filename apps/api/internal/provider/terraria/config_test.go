@@ -26,7 +26,7 @@ func TestRenderServerConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"world=/home/container/Worlds/Moon Garden.wld", "autocreate=3", "worldname=Moon Garden", "worldevil=1", "difficulty=3",
+		"world=/home/container/Worlds/Moon Garden.wld", "autocreate=3", "worldname=Moon Garden", "worldevil=1", "difficulty=2",
 		"maxplayers=12", "port=7778", "password=stars", "secure=1",
 		"worldpath=/home/container/Worlds", "language=zh-Hans", "upnp=0",
 	} {
@@ -91,7 +91,7 @@ func TestVanillaRuntimeOptionsUseSelfBuiltImageAndConfig(t *testing.T) {
 		"autocreate=2",
 		"worldname=Vanilla Smoke",
 		"worldevil=2",
-		"difficulty=2",
+		"difficulty=1",
 		"maxplayers=8",
 		"port=17777",
 		"motd=Vanilla online",

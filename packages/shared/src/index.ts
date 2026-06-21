@@ -317,10 +317,10 @@ const worldSizeConfigValues = {
 } satisfies Record<z.infer<typeof worldSizeSchema>, number>;
 
 const difficultyConfigValues = {
-  journey: 0,
-  classic: 1,
-  expert: 2,
-  master: 3
+  classic: 0,
+  expert: 1,
+  master: 2,
+  journey: 3
 } satisfies Record<z.infer<typeof terrariaDifficultySchema>, number>;
 
 export function renderTerrariaServerConfig(config: TerrariaConfig): string {

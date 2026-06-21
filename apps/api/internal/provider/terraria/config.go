@@ -146,13 +146,13 @@ func ParseServerConfig(base Config, input string) (Config, error) {
 		case "difficulty":
 			switch value {
 			case "0":
-				next.Difficulty = "journey"
-			case "1":
 				next.Difficulty = "classic"
-			case "2":
+			case "1":
 				next.Difficulty = "expert"
-			case "3":
+			case "2":
 				next.Difficulty = "master"
+			case "3":
+				next.Difficulty = "journey"
 			}
 		case "maxplayers":
 			if parsed, err := strconv.Atoi(value); err == nil {

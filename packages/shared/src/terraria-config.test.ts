@@ -50,7 +50,7 @@ describe("Terraria config renderer", () => {
     expect(renderTerrariaServerConfig(config)).toMatchInlineSnapshot(`
       "world=worlds/Lunar Outpost.wld
       autocreate=3
-      difficulty=3
+      difficulty=2
       worldevil=1
       maxplayers=12
       port=7778

@@ -108,6 +108,9 @@ func TestCreateTModLoaderServerPersistsDesiredModIDs(t *testing.T) {
 	if !reflect.DeepEqual(server.Spec.ModIDs, []string{"mod-a", "mod-b"}) {
 		t.Fatalf("expected desired mod ids to be persisted, got %+v", server.Spec.ModIDs)
 	}
+	if server.Spec.DesiredState != domain.DesiredRunning {
+		t.Fatalf("expected created server desired state running, got %q", server.Spec.DesiredState)
+	}
 }
 
 func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
