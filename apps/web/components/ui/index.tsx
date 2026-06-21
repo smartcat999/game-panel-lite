@@ -1,3 +1,4 @@
+import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -36,5 +37,45 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
       className={cn("h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green", className)}
       {...props}
     />
+  );
+}
+
+export function ToastNotice({
+  closeLabel = "Close notification",
+  message,
+  tone = "success",
+  onClose
+}: {
+  closeLabel?: string;
+  message: string;
+  tone?: "success" | "warning" | "error" | "info";
+  onClose?: () => void;
+}) {
+  if (!message) return null;
+  const Icon = tone === "success" ? CheckCircle2 : tone === "info" ? Info : AlertTriangle;
+  return (
+    <div
+      className={cn(
+        "pointer-events-auto flex w-[min(360px,calc(100vw-32px))] items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-[0_18px_42px_rgba(0,0,0,0.32)] backdrop-blur",
+        tone === "success" && "border-panel-green/35 bg-slate-950/92 text-panel-green",
+        tone === "info" && "border-blue-400/30 bg-slate-950/92 text-blue-100",
+        tone === "warning" && "border-panel-gold/35 bg-slate-950/92 text-panel-gold",
+        tone === "error" && "border-red-400/35 bg-slate-950/92 text-red-100"
+      )}
+      role={tone === "error" ? "alert" : "status"}
+    >
+      <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <p className="min-w-0 flex-1 leading-5">{message}</p>
+      {onClose ? (
+        <button
+          aria-label={closeLabel}
+          className="flex size-6 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+          onClick={onClose}
+          type="button"
+        >
+          <X aria-hidden="true" className="size-4" />
+        </button>
+      ) : null}
+    </div>
   );
 }

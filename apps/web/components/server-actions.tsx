@@ -3,8 +3,8 @@
 import { Copy, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui";
+import { useEffect, useRef, useState } from "react";
+import { Button, ToastNotice } from "@/components/ui";
 import { serverActionRedirectPath } from "@/lib/server-action-flow";
 import { copyText } from "@/lib/clipboard";
 import { gameServerStatus } from "@/lib/game-server-resource";
@@ -37,6 +37,7 @@ export function ServerActions({
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const noticeTimerRef = useRef<number | null>(null);
   const status = gameServerStatus(server);
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = Boolean(busyAction) || lifecycleBusy;
@@ -60,6 +61,22 @@ export function ServerActions({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [busyAction, pendingAction]);
 
+  useEffect(() => {
+    return () => {
+      if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    };
+  }, []);
+
+  const showNotice = (tone: "success" | "error", message: string) => {
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+    setErrorMessage(tone === "error" ? message : "");
+    setSuccessMessage(tone === "success" ? message : "");
+    noticeTimerRef.current = window.setTimeout(() => {
+      setErrorMessage("");
+      setSuccessMessage("");
+    }, tone === "success" ? 3000 : 6000);
+  };
+
   const executeAction = async (action: "start" | "stop" | "restart" | "delete") => {
     setBusyAction(action);
     setErrorMessage("");
@@ -72,7 +89,7 @@ export function ServerActions({
       }
       await client.invalidateQueries({ queryKey: ["game-server", server.id] });
       await client.invalidateQueries({ queryKey: ["game-servers"] });
-      setSuccessMessage(successLabel(action));
+      showNotice("success", successLabel(action));
       const redirectPath = serverActionRedirectPath(action, pathname, server.id);
       if (redirectPath) {
         router.push(redirectPath);
@@ -83,7 +100,7 @@ export function ServerActions({
         containerUnavailable: t("detailContainerUnavailable"),
         portAlreadyAllocated: (port) => t("detailPortAlreadyAllocated", { port })
       });
-      setErrorMessage(message || t("unableAction", { action: actionLabel(action) }));
+      showNotice("error", message || t("unableAction", { action: actionLabel(action) }));
     } finally {
       setBusyAction(null);
     }
@@ -108,7 +125,7 @@ export function ServerActions({
       window.setTimeout(() => setCopiedInvite(false), 1500);
     } catch (error) {
       setCopiedInvite(false);
-      setErrorMessage(error instanceof Error ? error.message : t("copyInviteFailed"));
+      showNotice("error", error instanceof Error ? error.message : t("copyInviteFailed"));
     }
   };
 
@@ -154,8 +171,20 @@ export function ServerActions({
           </Button>
         )}
       </div>
-      {errorMessage && <p className="mt-2 text-sm text-panel-gold">{errorMessage}</p>}
-      {successMessage && <p className="mt-2 text-sm text-panel-green">{successMessage}</p>}
+      {(errorMessage || successMessage) && (
+        <div className="pointer-events-none fixed right-4 top-4 z-[60]">
+          <ToastNotice
+            closeLabel={t("cancel")}
+            message={errorMessage || successMessage}
+            tone={errorMessage ? "error" : "success"}
+            onClose={() => {
+              if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+              setErrorMessage("");
+              setSuccessMessage("");
+            }}
+          />
+        </div>
+      )}
       {pendingAction && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"

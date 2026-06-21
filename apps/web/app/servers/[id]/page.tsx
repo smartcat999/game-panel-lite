@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
-import { Button, Card, Input } from "@/components/ui";
+import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
 import type { MetricSeries, MonitoringEvent, MonitoringRange } from "@/features/monitoring/types";
@@ -206,7 +206,7 @@ export default function ServerDetailPage() {
   const [logStreamPaused, setLogStreamPaused] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [modsPendingRestart, setModsPendingRestart] = useState(false);
-  const successTimerRef = useRef<number | null>(null);
+  const noticeTimerRef = useRef<number | null>(null);
   const formatActionError = (error: unknown, fallback: string) => formatServerDetailError(error, {
     dockerUnavailable: t("detailDockerUnavailable"),
     containerUnavailable: t("detailContainerUnavailable"),
@@ -240,15 +240,17 @@ export default function ServerDetailPage() {
   }, [client, id, serverResource?.id]);
 
   const showSuccess = (message: string) => {
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
     setErrorMessage("");
     setSuccessMessage(message);
-    if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
-    successTimerRef.current = window.setTimeout(() => setSuccessMessage(""), 2200);
+    noticeTimerRef.current = window.setTimeout(() => setSuccessMessage(""), 3000);
   };
 
   const showError = (message: string) => {
+    if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
     setSuccessMessage("");
     setErrorMessage(message);
+    noticeTimerRef.current = window.setTimeout(() => setErrorMessage(""), 6000);
   };
 
   const setServerResourceCache = (updatedServer: GameServerResource | null | undefined) => {
@@ -266,7 +268,7 @@ export default function ServerDetailPage() {
 
   useEffect(() => {
     return () => {
-      if (successTimerRef.current) window.clearTimeout(successTimerRef.current);
+      if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
     };
   }, []);
 
@@ -620,8 +622,20 @@ export default function ServerDetailPage() {
     <>
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
-      {errorMessage && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{errorMessage}</p>}
-      {successMessage && <p className="mt-3 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm text-panel-green">{successMessage}</p>}
+      {(errorMessage || successMessage) && (
+        <div className="pointer-events-none fixed right-4 top-4 z-[60]">
+          <ToastNotice
+            closeLabel={t("cancel")}
+            message={errorMessage || successMessage}
+            tone={errorMessage ? "error" : "success"}
+            onClose={() => {
+              if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
+              setErrorMessage("");
+              setSuccessMessage("");
+            }}
+          />
+        </div>
+      )}
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
