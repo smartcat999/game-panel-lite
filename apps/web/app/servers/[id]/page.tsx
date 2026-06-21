@@ -65,6 +65,7 @@ import type { Backup, GameServerResource, ModFile, ModPack, ProviderCapabilities
 type TabId = "overview" | "monitoring" | "activity" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
+type ServerWatchStatus = "connecting" | "connected" | "error";
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
@@ -169,6 +170,7 @@ export default function ServerDetailPage() {
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
   const [activitySeenAt, setActivitySeenAt] = useState(() => Date.now());
+  const [watchStatus, setWatchStatus] = useState<ServerWatchStatus>("connecting");
   const [monitoringRange, setMonitoringRange] = useState<MonitoringRangeValue>("1h");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -199,7 +201,7 @@ export default function ServerDetailPage() {
   const serverEventsQuery = useQuery({
     queryKey: ["server-monitoring-events", id],
     queryFn: () => getServerMonitoringEvents(id, 50),
-    enabled: false,
+    enabled: Boolean(serverResource),
     retry: false,
     staleTime: 5000
   });
@@ -223,10 +225,14 @@ export default function ServerDetailPage() {
 
   useEffect(() => {
     if (!serverResource?.id) return;
+    setWatchStatus("connecting");
     const source = new EventSource(serverWatchUrl(id), { withCredentials: true });
+    source.onopen = () => setWatchStatus("connected");
+    source.onerror = () => setWatchStatus("error");
     source.addEventListener("snapshot", (event) => {
       try {
         const snapshot = JSON.parse((event as MessageEvent).data) as ServerWatchSnapshot;
+        setWatchStatus("connected");
         client.setQueryData(["game-server", id], snapshot.server);
         client.setQueryData(["server-stats", id], snapshot.stats);
         client.setQueryData(["server-monitoring-events", id], {
@@ -711,6 +717,7 @@ export default function ServerDetailPage() {
               events={visibleServerEvents}
               loading={serverEventsQuery.isLoading}
               runtimeError={runtimeErrorMessage}
+              watchStatus={watchStatus}
             />
           )}
           {activeTab === "console" && (
@@ -1128,12 +1135,24 @@ function MonitoringTab({
   );
 }
 
-function ServerActivityTab({ events, loading, runtimeError }: { events: MonitoringEvent[]; loading: boolean; runtimeError: string }) {
+function ServerActivityTab({ events, loading, runtimeError, watchStatus }: { events: MonitoringEvent[]; loading: boolean; runtimeError: string; watchStatus: ServerWatchStatus }) {
   const { t } = useI18n();
+  const liveLabel = watchStatus === "connected" ? t("activityLiveConnected") : watchStatus === "error" ? t("activityLiveDisconnected") : t("activityLiveConnecting");
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
+          <span className={cn(
+            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium",
+            watchStatus === "connected" ? "border-panel-green/25 bg-panel-green/10 text-panel-green" :
+              watchStatus === "error" ? "border-panel-gold/25 bg-panel-gold/10 text-panel-gold" :
+                "border-panel-line bg-slate-900/70 text-slate-500"
+          )}>
+            <span className={cn("size-1.5 rounded-full", watchStatus === "connected" ? "bg-panel-green" : watchStatus === "error" ? "bg-panel-gold" : "bg-slate-600")} />
+            {liveLabel}
+          </span>
+        </div>
         <p className="mt-1 text-xs text-slate-500">{t("serverRecentEventsDescription")}</p>
       </div>
       {runtimeError ? (

@@ -81,3 +81,44 @@ func TestListActivityByInstanceOrdersEqualTimestampsByInsertOrder(t *testing.T) 
 		t.Fatalf("expected equal timestamps ordered by newest insert first, got %#v", events)
 	}
 }
+
+func TestSubscribeActivityReceivesMatchingInstanceEvents(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "gamepanel.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := db.SubscribeActivity(ctx, "server-1")
+	if err := db.CreateActivity(context.Background(), &domain.ActivityEvent{
+		ID:         "other",
+		InstanceID: "server-2",
+		Type:       "server.started",
+		Message:    "Other server started",
+		CreatedAt:  time.Now(),
+	}); err != nil {
+		t.Fatalf("create other activity: %v", err)
+	}
+	select {
+	case event := <-events:
+		t.Fatalf("unexpected event for other server: %#v", event)
+	case <-time.After(25 * time.Millisecond):
+	}
+	if err := db.CreateActivity(context.Background(), &domain.ActivityEvent{
+		ID:         "matching",
+		InstanceID: "server-1",
+		Type:       "server.started",
+		Message:    "Server started",
+		CreatedAt:  time.Now(),
+	}); err != nil {
+		t.Fatalf("create matching activity: %v", err)
+	}
+	select {
+	case event := <-events:
+		if event.ID != "matching" {
+			t.Fatalf("expected matching event, got %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for matching activity event")
+	}
+}

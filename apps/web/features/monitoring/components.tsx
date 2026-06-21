@@ -529,7 +529,8 @@ function formatValue(value: number, unit: string) {
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const base = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return `${base}.${String(date.getMilliseconds()).padStart(3, "0")}`;
 }
 
 export function SourceBadge({ connected }: { connected?: boolean }) {

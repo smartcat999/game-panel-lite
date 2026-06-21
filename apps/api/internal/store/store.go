@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -14,7 +15,15 @@ import (
 )
 
 type Store struct {
-	db *gorm.DB
+	db                  *gorm.DB
+	activityMu          sync.Mutex
+	activitySubscribers map[uint64]activitySubscriber
+	nextActivitySubID   uint64
+}
+
+type activitySubscriber struct {
+	instanceID string
+	ch         chan domain.ActivityEvent
 }
 
 func Open(path string) (*Store, error) {
@@ -28,7 +37,7 @@ func Open(path string) (*Store, error) {
 	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 
 func (s *Store) HasAdminAccount(ctx context.Context) (bool, error) {
@@ -409,7 +418,48 @@ func (s *Store) CreateActivity(ctx context.Context, event *domain.ActivityEvent)
 		}
 		event.PayloadJSON = string(payload)
 	}
-	return s.db.WithContext(ctx).Create(event).Error
+	if err := s.db.WithContext(ctx).Create(event).Error; err != nil {
+		return err
+	}
+	if event != nil {
+		s.broadcastActivity(*event)
+	}
+	return nil
+}
+
+func (s *Store) SubscribeActivity(ctx context.Context, instanceID string) <-chan domain.ActivityEvent {
+	ch := make(chan domain.ActivityEvent, 32)
+	s.activityMu.Lock()
+	if s.activitySubscribers == nil {
+		s.activitySubscribers = map[uint64]activitySubscriber{}
+	}
+	s.nextActivitySubID++
+	id := s.nextActivitySubID
+	s.activitySubscribers[id] = activitySubscriber{instanceID: instanceID, ch: ch}
+	s.activityMu.Unlock()
+
+	go func() {
+		<-ctx.Done()
+		s.activityMu.Lock()
+		delete(s.activitySubscribers, id)
+		close(ch)
+		s.activityMu.Unlock()
+	}()
+	return ch
+}
+
+func (s *Store) broadcastActivity(event domain.ActivityEvent) {
+	s.activityMu.Lock()
+	defer s.activityMu.Unlock()
+	for _, subscriber := range s.activitySubscribers {
+		if subscriber.instanceID != "" && subscriber.instanceID != event.InstanceID {
+			continue
+		}
+		select {
+		case subscriber.ch <- event:
+		default:
+		}
+	}
 }
 
 func (s *Store) ListActivity(ctx context.Context, limit int) ([]domain.ActivityEvent, error) {

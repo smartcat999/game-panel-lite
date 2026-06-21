@@ -364,13 +364,15 @@ func (h *Handler) serverWatch(w http.ResponseWriter, r *http.Request) {
 	if !send() {
 		return
 	}
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
+	activityEvents := h.store.SubscribeActivity(r.Context(), serverID)
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-ticker.C:
+		case _, ok := <-activityEvents:
+			if !ok {
+				return
+			}
 			if !send() {
 				return
 			}
