@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -133,16 +134,11 @@ func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.Ga
 		return
 	}
 	events := reconciliationLifecycleActivityEvents(after, lifecycleEvents, time.Now())
-	events = append(events, reconciliationActivityEvents(before, after, time.Now())...)
-	lastActivityTime := time.Time{}
+	events = append(events, reconciliationActivityEvents(before, after, time.Now(), lifecycleEvents)...)
 	for _, event := range events {
 		if event.CreatedAt.IsZero() {
 			event.CreatedAt = time.Now().UTC()
 		}
-		if !lastActivityTime.IsZero() && !event.CreatedAt.After(lastActivityTime) {
-			event.CreatedAt = lastActivityTime.Add(time.Nanosecond)
-		}
-		lastActivityTime = event.CreatedAt
 		if err := activityStore.CreateActivity(ctx, &event); err != nil {
 			c.logger.Warn("failed to record reconciliation activity", "server", after.ID, "type", event.Type, "error", err)
 		}
@@ -161,13 +157,14 @@ func reconciliationLifecycleActivityEvents(server domain.GameServer, lifecycleEv
 	return events
 }
 
-func reconciliationActivityEvents(before domain.GameServer, after domain.GameServer, now time.Time) []domain.ActivityEvent {
+func reconciliationActivityEvents(before domain.GameServer, after domain.GameServer, now time.Time, lifecycleEvents []LifecycleEvent) []domain.ActivityEvent {
 	events := make([]domain.ActivityEvent, 0, 3)
+	lifecycle := newLifecycleEventSet(lifecycleEvents)
 	if before.Status.RuntimeID != after.Status.RuntimeID {
-		if before.Status.RuntimeID != "" {
+		if before.Status.RuntimeID != "" && !lifecycle.hasPrefix("server.container.remove.") {
 			events = append(events, newReconciliationActivity(after, "server.runtime.removed", "Removed runtime workload for server "+after.Name, now))
 		}
-		if after.Status.RuntimeID != "" {
+		if after.Status.RuntimeID != "" && !lifecycle.hasPrefix("server.container.create.") {
 			events = append(events, newReconciliationActivity(after, "server.runtime.created", "Created runtime workload for server "+after.Name, now))
 		}
 	}
@@ -175,16 +172,40 @@ func reconciliationActivityEvents(before domain.GameServer, after domain.GameSer
 		events = append(events, newReconciliationActivity(after, "server.reconcile.failed", after.Name+": "+after.Status.LastError, now))
 		return events
 	}
-	if after.Status.Phase == domain.PhaseRunning && (before.Status.Phase != domain.PhaseRunning || before.Status.AppliedGeneration != after.Status.AppliedGeneration || before.Status.ActualState != domain.ActualRunning) {
+	if after.Status.Phase == domain.PhaseRunning && !lifecycle.has("server.container.start.succeeded") && (before.Status.Phase != domain.PhaseRunning || before.Status.AppliedGeneration != after.Status.AppliedGeneration || before.Status.ActualState != domain.ActualRunning) {
 		events = append(events, newReconciliationActivity(after, "server.started", "Started server "+after.Name, now))
 	}
-	if after.Status.Phase == domain.PhaseStopped && !isInitialStoppedReconcile(before, after) && (before.Status.Phase != domain.PhaseStopped || before.Status.ActualState != after.Status.ActualState || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {
+	if after.Status.Phase == domain.PhaseStopped && !lifecycle.has("server.container.stop.succeeded") && !isInitialStoppedReconcile(before, after) && (before.Status.Phase != domain.PhaseStopped || before.Status.ActualState != after.Status.ActualState || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {
 		events = append(events, newReconciliationActivity(after, "server.stopped", "Stopped server "+after.Name, now))
 	}
 	if after.Status.Phase == domain.PhaseDeleted && before.Status.Phase != domain.PhaseDeleted {
 		events = append(events, newReconciliationActivity(after, "server.deleted", "Deleted server "+after.Name, now))
 	}
 	return events
+}
+
+type lifecycleEventSet map[string]struct{}
+
+func (items lifecycleEventSet) has(eventType string) bool {
+	_, ok := items[eventType]
+	return ok
+}
+
+func (items lifecycleEventSet) hasPrefix(prefix string) bool {
+	for item := range items {
+		if strings.HasPrefix(item, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func newLifecycleEventSet(items []LifecycleEvent) lifecycleEventSet {
+	result := make(lifecycleEventSet, len(items))
+	for _, item := range items {
+		result[item.Type] = struct{}{}
+	}
+	return result
 }
 
 func isInitialStoppedReconcile(before domain.GameServer, after domain.GameServer) bool {
