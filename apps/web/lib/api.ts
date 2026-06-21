@@ -4,6 +4,7 @@ import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerR
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
+const CREATE_SERVER_TIMEOUT_MS = 20000;
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -480,11 +481,11 @@ export async function createGameServer(input: {
   version?: string;
   resources?: ResourceLimits;
 }): Promise<GameServerResource> {
-  const response = await apiFetch(`${API_BASE}/api/servers`, {
+  const response = await fetchWithTimeout(`${API_BASE}/api/servers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
-  });
+  }, CREATE_SERVER_TIMEOUT_MS, "Create server request timed out");
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to create server");

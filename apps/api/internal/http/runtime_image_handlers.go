@@ -185,6 +185,21 @@ func (h *Handler) ensureRuntimeImageLoaded(ctx context.Context, ref runtimeInsta
 	return nil
 }
 
+func (h *Handler) requireRuntimeImageReady(ctx context.Context, ref runtimeInstallRef) error {
+	imageStatus := h.runtime.ImageStatus(ctx, ref.Image)
+	if imageStatus.Status == runtime.ImageStatusReady {
+		return nil
+	}
+	archiveStatus, _, ok := h.runtimeInstallMarkerStatusWithArchive(ref)
+	if !ok || archiveStatus.Status != runtime.ImageStatusReady {
+		if archiveStatus.Message != "" {
+			return fmt.Errorf("server runtime is not installed: %s", archiveStatus.Message)
+		}
+		return fmt.Errorf("server runtime is not installed; install it from Game Library first")
+	}
+	return fmt.Errorf("server runtime image is not loaded in Docker; reinstall it from Game Library before creating a server")
+}
+
 func (h *Handler) runtimeInstallStatus(ctx context.Context, ref runtimeInstallRef) domain.RuntimeImageStatus {
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusPreparing {
 		return job
