@@ -43,8 +43,10 @@ import {
   gameServerAction,
   setModEnabled,
   serverLogsUrl,
+  serverWatchUrl,
   updateGameServerConfig,
   type ServerConfigUpdatePayload,
+  type ServerWatchSnapshot,
 } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/console-commands";
@@ -118,19 +120,7 @@ export default function ServerDetailPage() {
   const logReplayIndexRef = useRef(0);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
-  const query = useQuery({
-    queryKey: ["game-server", id],
-    queryFn: () => getGameServer(id),
-    retry: false,
-    refetchInterval: (serverQuery) => {
-      const data = serverQuery.state.data as GameServerResource | undefined;
-      if (!data) return 5000;
-      const status = gameServerStatus(data);
-      if (isServerLifecyclePending(status)) return 2000;
-      if (status === "running") return 10000;
-      return false;
-    }
-  });
+  const query = useQuery({ queryKey: ["game-server", id], queryFn: () => getGameServer(id), retry: false });
   const serverResource = query.data;
   const resourceStatus = serverResource ? gameServerStatus(serverResource) : undefined;
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, enabled: Boolean(serverResource), staleTime: 5 * 60 * 1000, retry: false });
@@ -150,12 +140,10 @@ export default function ServerDetailPage() {
     }),
     [capabilities]
   );
-  const statsVisible = activeTab === "overview" || activeTab === "monitoring";
   const statsQuery = useQuery({
     queryKey: ["server-stats", id],
     queryFn: () => getServerStats(id),
-    enabled: resourceStatus === "running" && statsVisible,
-    refetchInterval: activeTab === "monitoring" ? 5000 : 10000,
+    enabled: false,
     retry: false
   });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(serverResource && visibleCapabilities.saveSnapshots), retry: false });
@@ -211,7 +199,7 @@ export default function ServerDetailPage() {
   const serverEventsQuery = useQuery({
     queryKey: ["server-monitoring-events", id],
     queryFn: () => getServerMonitoringEvents(id, 50),
-    enabled: Boolean(serverResource && activeTab === "activity"),
+    enabled: false,
     retry: false,
     staleTime: 5000
   });
@@ -232,6 +220,25 @@ export default function ServerDetailPage() {
     }
     return formatActionError(error, t("unableSaveWorldSnapshot"));
   };
+
+  useEffect(() => {
+    if (!serverResource?.id) return;
+    const source = new EventSource(serverWatchUrl(id), { withCredentials: true });
+    source.addEventListener("snapshot", (event) => {
+      try {
+        const snapshot = JSON.parse((event as MessageEvent).data) as ServerWatchSnapshot;
+        client.setQueryData(["game-server", id], snapshot.server);
+        client.setQueryData(["server-stats", id], snapshot.stats);
+        client.setQueryData(["server-monitoring-events", id], {
+          collectedAt: snapshot.collectedAt,
+          events: snapshot.events
+        });
+      } catch (error) {
+        console.warn("failed to parse server watch snapshot", error);
+      }
+    });
+    return () => source.close();
+  }, [client, id, serverResource?.id]);
 
   const showSuccess = (message: string) => {
     setErrorMessage("");

@@ -370,6 +370,26 @@ export type ServerStats = {
   memoryLimitMb: number;
 };
 
+export type ServerWatchEvent = {
+  id: string;
+  severity: "success" | "warning" | "error" | "info" | string;
+  type: string;
+  title: string;
+  message: string;
+  serverId?: string;
+  serverName?: string;
+  operator: string;
+  timestamp: string;
+  metadata?: Record<string, string>;
+};
+
+export type ServerWatchSnapshot = {
+  server: GameServerResource;
+  stats: ServerStats;
+  events: ServerWatchEvent[];
+  collectedAt: string;
+};
+
 export async function getServerStats(id: string): Promise<ServerStats> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/stats`, { cache: "no-store" });
   if (!response.ok) {
@@ -380,6 +400,10 @@ export async function getServerStats(id: string): Promise<ServerStats> {
 
 export function serverLogsUrl(id: string) {
   return `${API_BASE}/api/servers/${id}/logs`;
+}
+
+export function serverWatchUrl(id: string) {
+  return `${API_BASE}/api/servers/${id}/watch`;
 }
 
 export type HostStats = {

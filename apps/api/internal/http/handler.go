@@ -114,6 +114,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/servers/{id}/logs", h.serverLogs)
 		r.Get("/api/servers/{id}/logs/snapshot", h.serverLogSnapshot)
 		r.Get("/api/servers/{id}/stats", h.serverStats)
+		r.Get("/api/servers/{id}/watch", h.serverWatch)
 		r.Get("/api/worlds", h.listWorlds)
 		r.Post("/api/worlds/import", h.importWorld)
 		r.Post("/api/worlds/{id}/assign", h.assignWorld)

@@ -301,17 +301,161 @@ func (h *Handler) serverStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.Status.Phase != domain.PhaseRunning || !h.runtimeStatusAvailable() {
-		writeJSON(w, http.StatusOK, runtime.WorkloadStats{})
+	writeJSON(w, http.StatusOK, h.serverRuntimeStats(r.Context(), server))
+}
+
+type serverWatchSnapshot struct {
+	Server      domain.GameServer     `json:"server"`
+	Stats       runtime.WorkloadStats `json:"stats"`
+	Events      []serverWatchEvent    `json:"events"`
+	CollectedAt time.Time             `json:"collectedAt"`
+}
+
+type serverWatchEvent struct {
+	ID         string            `json:"id"`
+	Severity   string            `json:"severity"`
+	Type       string            `json:"type"`
+	Title      string            `json:"title"`
+	Message    string            `json:"message"`
+	ServerID   string            `json:"serverId,omitempty"`
+	ServerName string            `json:"serverName,omitempty"`
+	Operator   string            `json:"operator"`
+	Timestamp  time.Time         `json:"timestamp"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
+}
+
+func (h *Handler) serverWatch(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if _, err := h.store.GetGameServer(r.Context(), serverID); err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	stats, err := h.runtime.StatsWorkload(r.Context(), server.Status.RuntimeID)
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "streaming is not supported")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	if h.apiMetrics != nil {
+		h.apiMetrics.AddSSEConnection("server_watch", 1)
+		defer h.apiMetrics.AddSSEConnection("server_watch", -1)
+	}
+	send := func() bool {
+		snapshot, err := h.serverWatchSnapshot(r.Context(), serverID)
+		if err != nil {
+			_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+			if h.apiMetrics != nil {
+				h.apiMetrics.AddSSEEvent("server_watch", "error")
+			}
+			flusher.Flush()
+			return false
+		}
+		if err := writeSSEJSON(w, "snapshot", snapshot); err != nil {
+			return false
+		}
+		if h.apiMetrics != nil {
+			h.apiMetrics.AddSSEEvent("server_watch", "snapshot")
+		}
+		flusher.Flush()
+		return true
+	}
+	if !send() {
+		return
+	}
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if !send() {
+				return
+			}
+		}
+	}
+}
+
+func (h *Handler) serverWatchSnapshot(ctx context.Context, serverID string) (serverWatchSnapshot, error) {
+	server, err := h.store.GetGameServer(ctx, serverID)
+	if err != nil {
+		return serverWatchSnapshot{}, err
+	}
+	return serverWatchSnapshot{
+		Server:      server,
+		Stats:       h.serverRuntimeStats(ctx, server),
+		Events:      h.serverWatchEvents(ctx, server),
+		CollectedAt: time.Now().UTC(),
+	}, nil
+}
+
+func (h *Handler) serverRuntimeStats(ctx context.Context, server domain.GameServer) runtime.WorkloadStats {
+	if server.Status.Phase != domain.PhaseRunning || !h.runtimeStatusAvailable() {
+		return runtime.WorkloadStats{}
+	}
+	stats, err := h.runtime.StatsWorkload(ctx, server.Status.RuntimeID)
 	if err != nil {
 		h.logger.Warn("failed to get container stats", "server", server.ID, "error", err)
-		writeJSON(w, http.StatusOK, runtime.WorkloadStats{})
-		return
+		return runtime.WorkloadStats{}
 	}
-	writeJSON(w, http.StatusOK, stats)
+	return stats
+}
+
+func (h *Handler) serverWatchEvents(ctx context.Context, server domain.GameServer) []serverWatchEvent {
+	events, err := h.store.ListActivity(ctx, 50)
+	if err != nil {
+		h.logger.Warn("failed to list server watch events", "server", server.ID, "error", err)
+		return []serverWatchEvent{}
+	}
+	out := make([]serverWatchEvent, 0, len(events))
+	for _, event := range events {
+		if event.InstanceID != server.ID {
+			continue
+		}
+		out = append(out, serverWatchEventFromActivity(event, server))
+	}
+	return out
+}
+
+func serverWatchEventFromActivity(event domain.ActivityEvent, server domain.GameServer) serverWatchEvent {
+	severity := "info"
+	if strings.Contains(event.Type, "failed") || strings.Contains(event.Type, "error") {
+		severity = "error"
+	} else if strings.Contains(event.Type, "deleted") || strings.Contains(event.Type, "stop") {
+		severity = "warning"
+	} else if strings.Contains(event.Type, "created") || strings.Contains(event.Type, "started") || strings.Contains(event.Type, "restored") || strings.Contains(event.Type, "succeeded") {
+		severity = "success"
+	}
+	return serverWatchEvent{
+		ID:         event.ID,
+		Severity:   severity,
+		Type:       event.Type,
+		Title:      titleFromEventType(event.Type),
+		Message:    event.Message,
+		ServerID:   event.InstanceID,
+		ServerName: server.Name,
+		Operator:   "system",
+		Timestamp:  event.CreatedAt,
+	}
+}
+
+func titleFromEventType(value string) string {
+	value = strings.ReplaceAll(value, ".", " ")
+	if value == "" {
+		return "System event"
+	}
+	return strings.Title(value)
+}
+
+func writeSSEJSON(w http.ResponseWriter, eventName string, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventName, data)
+	return err
 }
 
 func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
