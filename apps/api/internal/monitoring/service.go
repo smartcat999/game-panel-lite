@@ -181,7 +181,7 @@ func (s *Service) ServerMetrics(ctx context.Context, serverID string, window str
 		"cpu":     s.series(ctx, rng, "cpu", "CPU Usage", "%", "area", containerCPUQuery(containerFilter), ptr(80)),
 		"memory":  s.series(ctx, rng, "memory", "Memory Usage", "MB", "area", containerMemoryQuery(containerFilter), memoryThreshold(server)),
 		"players": s.series(ctx, rng, "players", "Player Count", "players", "line", `gamepanel_server_players_online`+labelFilter, floatPtr(float64(domain.ServerMaxPlayers(server)))),
-		"uptime":  s.series(ctx, rng, "uptime", "Uptime", "s", "line", `gamepanel_server_running`+labelFilter, nil),
+		"uptime":  s.series(ctx, rng, "uptime", "Uptime", "s", "line", `gamepanel_server_uptime_seconds`+labelFilter, nil),
 	}
 	markInactiveServerSeries(series, rng)
 	applyDataSourceEmptyReason(series, ds)

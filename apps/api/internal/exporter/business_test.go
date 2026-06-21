@@ -35,6 +35,7 @@ func TestCollectorExposesLowCardinalityBusinessMetrics(t *testing.T) {
 			Phase:              domain.PhaseRunning,
 			ActualState:        domain.ActualRunning,
 			ObservedGeneration: 1,
+			LastTransitionAt:   now.Add(-2 * time.Minute),
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -62,6 +63,7 @@ func TestCollectorExposesLowCardinalityBusinessMetrics(t *testing.T) {
 	for _, expected := range []string{
 		"gamepanel_servers_total 1",
 		`gamepanel_server_running{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running",version="1.4.5.6"} 1`,
+		`gamepanel_server_uptime_seconds{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running",version="1.4.5.6"}`,
 		`gamepanel_server_status{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running"} 1`,
 		`gamepanel_server_players_max{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running",version="1.4.5.6"} 8`,
 		`gamepanel_backups_total{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1"} 1`,

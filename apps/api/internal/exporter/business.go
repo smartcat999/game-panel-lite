@@ -63,6 +63,7 @@ func writeServersByStatus(b *strings.Builder, servers []domain.GameServer) {
 func writeServerMetrics(b *strings.Builder, servers []domain.GameServer) {
 	writeHeader(b, "gamepanel_server_info", "Server metadata with low-cardinality labels.", "gauge")
 	writeHeader(b, "gamepanel_server_running", "Whether the server is running.", "gauge")
+	writeHeader(b, "gamepanel_server_uptime_seconds", "Current server uptime in seconds.", "gauge")
 	writeHeader(b, "gamepanel_server_status", "Current server lifecycle status as a labelled gauge.", "gauge")
 	writeHeader(b, "gamepanel_server_players_online", "Current online players.", "gauge")
 	writeHeader(b, "gamepanel_server_players_max", "Configured max players.", "gauge")
@@ -76,12 +77,24 @@ func writeServerMetrics(b *strings.Builder, servers []domain.GameServer) {
 			running = 1
 		}
 		writeSample(b, "gamepanel_server_running", labels, running)
+		writeSample(b, "gamepanel_server_uptime_seconds", labels, serverUptimeSeconds(server, time.Now()))
 		writeSample(b, "gamepanel_server_status", serverStatusLabels(server), 1)
 		writeSample(b, "gamepanel_server_players_online", labels, float64(server.Status.PlayersOnline))
 		writeSample(b, "gamepanel_server_players_max", labels, float64(domain.ServerMaxPlayers(server)))
 		writeSample(b, "gamepanel_server_config_revision", labels, float64(server.Spec.Generation))
 		writeSample(b, "gamepanel_server_applied_config_revision", labels, float64(server.Status.AppliedGeneration))
 	}
+}
+
+func serverUptimeSeconds(server domain.GameServer, now time.Time) float64 {
+	if server.Status.Phase != domain.PhaseRunning || server.Status.LastTransitionAt.IsZero() {
+		return 0
+	}
+	uptime := now.Sub(server.Status.LastTransitionAt).Seconds()
+	if uptime < 0 {
+		return 0
+	}
+	return uptime
 }
 
 func writeAssets(b *strings.Builder, collector *Collector, ctx context.Context, servers []domain.GameServer, backups assetStats, worlds assetStats) {

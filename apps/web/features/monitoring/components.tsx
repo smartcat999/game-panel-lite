@@ -665,7 +665,7 @@ function formatValue(value: number, unit: string) {
   if (unit === "%") return `${rounded}%`;
   if (unit === "MB") return `${rounded} MB`;
   if (unit === "ms") return `${rounded} ms`;
-  if (unit === "s") return `${rounded}s`;
+  if (unit === "s") return formatDuration(Number(value.toFixed(0)));
   return unit ? `${rounded} ${unit}` : String(rounded);
 }
 

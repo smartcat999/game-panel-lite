@@ -44,6 +44,7 @@ type ServerMetric struct {
 	CPUPercent     float64             `json:"cpuPercent"`
 	MemoryMB       int64               `json:"memoryMb"`
 	MemoryLimitMB  int64               `json:"memoryLimitMb"`
+	UptimeSeconds  float64             `json:"uptimeSeconds"`
 	StatsAvailable bool                `json:"statsAvailable"`
 }
 
@@ -97,6 +98,9 @@ func (s *Service) Snapshot(ctx context.Context, runtimeAvailable bool) (Snapshot
 			MaxPlayers:    domain.ServerMaxPlayers(server),
 			HostPort:      server.Spec.Network.HostPort,
 			Version:       server.Spec.Version,
+		}
+		if server.Status.Phase == domain.PhaseRunning && !server.Status.LastTransitionAt.IsZero() {
+			metric.UptimeSeconds = maxSeconds(0, snapshot.CollectedAt.Sub(server.Status.LastTransitionAt).Seconds())
 		}
 		if runtimeAvailable && server.Status.Phase == domain.PhaseRunning && server.Status.RuntimeID != "" {
 			if stats, err := s.runtime.StatsWorkload(ctx, server.Status.RuntimeID); err == nil {
@@ -161,6 +165,8 @@ func FormatPrometheus(snapshot Snapshot) string {
 
 	builder.WriteString("# HELP gamepanel_server_running Whether a server is currently running.\n")
 	builder.WriteString("# TYPE gamepanel_server_running gauge\n")
+	builder.WriteString("# HELP gamepanel_server_uptime_seconds Current server uptime in seconds.\n")
+	builder.WriteString("# TYPE gamepanel_server_uptime_seconds gauge\n")
 	builder.WriteString("# HELP gamepanel_server_cpu_percent Current server container CPU percent.\n")
 	builder.WriteString("# TYPE gamepanel_server_cpu_percent gauge\n")
 	builder.WriteString("# HELP gamepanel_server_memory_bytes Current server container memory usage in bytes.\n")
@@ -177,6 +183,11 @@ func FormatPrometheus(snapshot Snapshot) string {
 		builder.WriteString(labels)
 		builder.WriteByte(' ')
 		builder.WriteString(fmt.Sprint(running))
+		builder.WriteByte('\n')
+		builder.WriteString("gamepanel_server_uptime_seconds")
+		builder.WriteString(labels)
+		builder.WriteByte(' ')
+		builder.WriteString(fmt.Sprint(server.UptimeSeconds))
 		builder.WriteByte('\n')
 		builder.WriteString("gamepanel_server_cpu_percent")
 		builder.WriteString(labels)
@@ -195,6 +206,13 @@ func FormatPrometheus(snapshot Snapshot) string {
 		builder.WriteByte('\n')
 	}
 	return builder.String()
+}
+
+func maxSeconds(minimum float64, value float64) float64 {
+	if value < minimum {
+		return minimum
+	}
+	return value
 }
 
 func summarizeActivity(events []domain.ActivityEvent) ActivitySummary {
