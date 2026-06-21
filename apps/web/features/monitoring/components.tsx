@@ -434,7 +434,7 @@ function groupActivityOperations(events: MonitoringEvent[]): ActivityOperationGr
   return Array.from(map.entries()).map(([id, items]) => {
     const sorted = [...items].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     const times = sorted.map((event) => new Date(event.timestamp).getTime()).filter((value) => !Number.isNaN(value));
-    const severity: MonitoringEvent["severity"] = sorted.some((event) => event.severity === "error") ? "error" : sorted.some((event) => event.severity === "warning") ? "warning" : sorted.some((event) => event.severity === "success") ? "success" : "info";
+    const severity = operationSeverity(sorted);
     return {
       id,
       events: sorted,
@@ -443,6 +443,15 @@ function groupActivityOperations(events: MonitoringEvent[]): ActivityOperationGr
       endTime: times[times.length - 1] ?? 0
     };
   }).sort((a, b) => b.endTime - a.endTime);
+}
+
+function operationSeverity(events: MonitoringEvent[]): MonitoringEvent["severity"] {
+  if (events.some((event) => event.severity === "error")) return "error";
+  const latest = events[events.length - 1];
+  if (latest?.severity === "success") return "success";
+  if (latest?.severity === "warning") return "warning";
+  if (events.some((event) => event.severity === "success")) return "success";
+  return latest?.severity ?? "info";
 }
 
 function EventRow({ event }: { event: MonitoringEvent }) {
