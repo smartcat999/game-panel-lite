@@ -158,6 +158,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
 		r.Get("/api/mods", h.listGlobalMods)
 		r.Get("/api/mods/recommended", h.listRecommendedMods)
+		r.Post("/api/mods/recommended/import", h.importRecommendedMod)
 		r.Post("/api/mods/upload", h.uploadGlobalMod)
 		r.Post("/api/mods/workshop", h.importGlobalWorkshopMods)
 		r.Post("/api/mods/{id}/assign", h.assignMod)

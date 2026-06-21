@@ -465,6 +465,90 @@ func TestGlobalWorkshopImportCreatesLibraryWorkshopRecords(t *testing.T) {
 	}
 }
 
+func TestGlobalWorkshopImportCreatesDSTLibraryWorkshopRecords(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/workshop", bytes.NewBufferString(`{"providerKey":"dont-starve-together","workshopIds":["378160973"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected DST global workshop import 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var items []domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].ProviderKey != domain.ProviderDST || items[0].GameKey != domain.GameDST || items[0].WorkshopID != "378160973" {
+		t.Fatalf("expected DST workshop library record, got %+v", items)
+	}
+	mods, err := db.ListMods(context.Background(), "unassigned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 || mods[0].ProviderKey != domain.ProviderDST {
+		t.Fatalf("expected persisted DST workshop mod, got %+v", mods)
+	}
+}
+
+func TestRecommendedImportCreatesPalworldFileLibraryRecord(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+
+	list := httptest.NewRecorder()
+	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/mods/recommended", nil))
+	if list.Code != stdhttp.StatusOK {
+		t.Fatalf("expected recommended mods 200, got %d: %s", list.Code, list.Body.String())
+	}
+	var recommended []struct {
+		ExternalID  string             `json:"externalId"`
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		Source      string             `json:"source"`
+		FileName    string             `json:"fileName"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &recommended); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range recommended {
+		if item.ProviderKey == domain.ProviderPalworld && item.ExternalID == "nexus-palworld-pal-analyzer" && item.Source == "file" && item.FileName == "PalAnalyzer.pak" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected Palworld file recommendation in discovery payload, got %+v", recommended)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/recommended/import", bytes.NewBufferString(`{"providerKey":"palworld","externalId":"nexus-palworld-pal-analyzer"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected Palworld recommended import 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var item domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &item); err != nil {
+		t.Fatal(err)
+	}
+	if item.ProviderKey != domain.ProviderPalworld || item.Source != "file-recommendation" || item.FileName != "PalAnalyzer.pak" || item.ModName != "nexus-palworld-pal-analyzer" {
+		t.Fatalf("expected Palworld file recommendation record, got %+v", item)
+	}
+	mods, err := db.ListMods(context.Background(), "unassigned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 {
+		t.Fatalf("expected one persisted Palworld mod, got %+v", mods)
+	}
+
+	duplicate := httptest.NewRecorder()
+	duplicateReq := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/recommended/import", bytes.NewBufferString(`{"providerKey":"palworld","externalId":"nexus-palworld-pal-analyzer"}`))
+	duplicateReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(duplicate, duplicateReq)
+	if duplicate.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected duplicate Palworld recommended import 409, got %d: %s", duplicate.Code, duplicate.Body.String())
+	}
+}
+
 func TestGlobalWorkshopImportRejectsArmRuntime(t *testing.T) {
 	router, _, _ := newTestRouterWithAdapter(t, armMockAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
 
@@ -558,6 +642,41 @@ func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected Magic Storage to appear in recommended mods")
+	}
+}
+
+func TestRecommendedModsIncludesCompleteDSTCatalog(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/mods/recommended", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected recommended mods 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var items []struct {
+		WorkshopID    string             `json:"workshopId"`
+		GameKey       domain.GameKey     `json:"gameKey"`
+		ProviderKey   domain.ProviderKey `json:"providerKey"`
+		PreviewURL    string             `json:"previewUrl"`
+		FileSize      int64              `json:"fileSize"`
+		Subscriptions int                `json:"subscriptions"`
+		TimeUpdated   int64              `json:"timeUpdated"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	dstCount := 0
+	for _, item := range items {
+		if item.ProviderKey != domain.ProviderDST {
+			continue
+		}
+		dstCount++
+		if item.PreviewURL == "" || item.FileSize <= 1 || item.Subscriptions <= 0 {
+			t.Fatalf("expected complete DST recommendation metadata, got %+v", item)
+		}
+	}
+	if dstCount < 50 {
+		t.Fatalf("expected at least 50 DST recommended mods, got %d", dstCount)
 	}
 }
 

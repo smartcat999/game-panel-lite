@@ -13,9 +13,16 @@ var recommendedTModLoaderModsJSON []byte
 //go:embed recommended_dst_mods.json
 var recommendedDSTModsJSON []byte
 
+//go:embed recommended_palworld_mods.json
+var recommendedPalworldModsJSON []byte
+
 type RecommendedMod struct {
 	Rank           int      `json:"rank"`
-	WorkshopID     string   `json:"workshopId"`
+	Source         string   `json:"source,omitempty"`
+	ExternalID     string   `json:"externalId,omitempty"`
+	WorkshopID     string   `json:"workshopId,omitempty"`
+	FileName       string   `json:"fileName,omitempty"`
+	SourceURL      string   `json:"sourceUrl,omitempty"`
 	ModName        string   `json:"modName,omitempty"`
 	Title          string   `json:"title"`
 	CreatorSteamID string   `json:"creatorSteamId,omitempty"`
@@ -37,6 +44,10 @@ func RecommendedTModLoaderMods() ([]RecommendedMod, error) {
 
 func RecommendedDSTMods() ([]RecommendedMod, error) {
 	return recommendedModsFromJSON(recommendedDSTModsJSON)
+}
+
+func RecommendedPalworldMods() ([]RecommendedMod, error) {
+	return recommendedModsFromJSON(recommendedPalworldModsJSON)
 }
 
 func recommendedModsFromJSON(payload []byte) ([]RecommendedMod, error) {
@@ -62,6 +73,22 @@ func RecommendedModByProviderAndWorkshopID(providerKey domain.ProviderKey, works
 	default:
 		return RecommendedTModLoaderModByWorkshopID(workshopID)
 	}
+}
+
+func RecommendedModByProviderAndExternalID(providerKey domain.ProviderKey, externalID string) (RecommendedMod, bool) {
+	switch providerKey {
+	case domain.ProviderPalworld:
+		items, err := RecommendedPalworldMods()
+		if err != nil {
+			return RecommendedMod{}, false
+		}
+		for _, item := range items {
+			if item.ExternalID == externalID {
+				return item, true
+			}
+		}
+	}
+	return RecommendedMod{}, false
 }
 
 func recommendedModByWorkshopID(loader func() ([]RecommendedMod, error), workshopID string) (RecommendedMod, bool) {

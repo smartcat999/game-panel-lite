@@ -183,6 +183,7 @@ type ModFile struct {
 	CreatorSteamID   string      `json:"creatorSteamId,omitempty"`
 	PreviewURL       string      `json:"previewUrl,omitempty"`
 	Description      string      `json:"description,omitempty"`
+	ContentHash      string      `json:"contentHash,omitempty" gorm:"index"`
 	TagsJSON         string      `json:"-" gorm:"column:tags_json"`
 	Tags             []string    `json:"tags,omitempty" gorm:"-"`
 	Subscriptions    int         `json:"subscriptions,omitempty"`

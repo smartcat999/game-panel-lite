@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -167,14 +168,18 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusConflict, "workshop mod import is not supported on ARM Docker hosts; upload .tmod files instead")
 		return
 	}
-	workshopIDs, err := decodeWorkshopIDs(r)
+	providerKey, workshopIDs, err := decodeGlobalWorkshopImport(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if !providerSupportsWorkshopMods(providerKey) {
+		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
+		return
+	}
 	items := make([]domain.ModFile, 0, len(workshopIDs))
 	for _, workshopID := range workshopIDs {
-		item, _, err := h.createWorkshopModRecord(r.Context(), domain.ProviderTerrariaTModLoader, "unassigned", workshopID)
+		item, _, err := h.createWorkshopModRecord(r.Context(), providerKey, "unassigned", workshopID)
 		if err != nil {
 			if errors.Is(err, errWorkshopModExists) {
 				writeError(w, http.StatusConflict, fmt.Sprintf("workshop mod %s already exists in mod library", workshopID))
@@ -190,6 +195,30 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 		"workshopCount": len(workshopIDs),
 	})
 	writeJSON(w, http.StatusOK, items)
+}
+
+func decodeGlobalWorkshopImport(r *http.Request) (domain.ProviderKey, []string, error) {
+	var payload struct {
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		WorkshopIDs []string           `json:"workshopIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return "", nil, fmt.Errorf("invalid JSON body")
+	}
+	providerKey := payload.ProviderKey
+	if providerKey == "" {
+		providerKey = domain.ProviderTerrariaTModLoader
+	}
+	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
+	if len(workshopIDs) == 0 {
+		return "", nil, fmt.Errorf("select at least one workshop item")
+	}
+	for _, id := range workshopIDs {
+		if !isDigitsOnly(id) {
+			return "", nil, fmt.Errorf("workshop IDs must contain digits only")
+		}
+	}
+	return providerKey, workshopIDs, nil
 }
 
 func decodeWorkshopIDs(r *http.Request) ([]string, error) {
@@ -334,19 +363,32 @@ func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	palworldItems, err := modcatalog.RecommendedPalworldMods()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	mods, err := h.store.ListMods(r.Context(), "unassigned")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	byProviderWorkshopID := make(map[string]domain.ModFile, len(mods))
+	byProviderExternalID := make(map[string]domain.ModFile, len(mods))
+	byProviderFileName := make(map[string]domain.ModFile, len(mods))
 	for _, item := range mods {
 		hydrateModGameMetadata(&item)
 		if item.Source == "workshop" && item.WorkshopID != "" {
 			byProviderWorkshopID[string(item.ProviderKey)+"|"+item.WorkshopID] = item
 		}
+		if item.Source != "workshop" && item.ModName != "" {
+			byProviderExternalID[string(item.ProviderKey)+"|"+item.ModName] = item
+		}
+		if item.Source != "workshop" && item.FileName != "" {
+			byProviderFileName[string(item.ProviderKey)+"|"+strings.ToLower(item.FileName)] = item
+		}
 	}
-	response := make([]recommendedModResponse, 0, len(tmodItems)+len(dstItems))
+	response := make([]recommendedModResponse, 0, len(tmodItems)+len(dstItems)+len(palworldItems))
 	for _, item := range tmodItems {
 		entry := recommendedModResponse{
 			RecommendedMod: item,
@@ -371,7 +413,72 @@ func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
 		}
 		response = append(response, entry)
 	}
+	for _, item := range palworldItems {
+		entry := recommendedModResponse{
+			RecommendedMod: item,
+			GameKey:        domain.GamePalworld,
+			ProviderKey:    domain.ProviderPalworld,
+		}
+		if mod, ok := byProviderExternalID[string(domain.ProviderPalworld)+"|"+item.ExternalID]; ok {
+			entry.InLibrary = true
+			entry.ModID = mod.ID
+		} else if mod, ok := byProviderFileName[string(domain.ProviderPalworld)+"|"+strings.ToLower(item.FileName)]; ok {
+			entry.InLibrary = true
+			entry.ModID = mod.ID
+		}
+		response = append(response, entry)
+	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) importRecommendedMod(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		ExternalID  string             `json:"externalId"`
+		WorkshopID  string             `json:"workshopId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if payload.ProviderKey == "" {
+		payload.ProviderKey = domain.ProviderTerrariaTModLoader
+	}
+	if providerSupportsWorkshopMods(payload.ProviderKey) {
+		workshopID := strings.TrimSpace(payload.WorkshopID)
+		if workshopID == "" {
+			workshopID = strings.TrimSpace(payload.ExternalID)
+		}
+		if workshopID == "" || !isDigitsOnly(workshopID) {
+			writeError(w, http.StatusBadRequest, "workshop ID is required")
+			return
+		}
+		item, _, err := h.createWorkshopModRecord(r.Context(), payload.ProviderKey, "unassigned", workshopID)
+		if err != nil {
+			if errors.Is(err, errWorkshopModExists) {
+				writeError(w, http.StatusConflict, fmt.Sprintf("recommended mod %s already exists in mod library", workshopID))
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, item)
+		return
+	}
+	if payload.ProviderKey != domain.ProviderPalworld {
+		writeError(w, http.StatusBadRequest, "recommended file mods are not supported for this provider")
+		return
+	}
+	item, _, err := h.createRecommendedFileModRecord(r.Context(), payload.ProviderKey, "unassigned", payload.ExternalID)
+	if err != nil {
+		if errors.Is(err, errRecommendedFileModExists) {
+			writeError(w, http.StatusConflict, fmt.Sprintf("recommended mod %s already exists in mod library", payload.ExternalID))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
 }
 
 func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {

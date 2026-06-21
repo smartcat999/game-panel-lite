@@ -18,7 +18,7 @@ services:
       GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
       GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
     ports:
-      - "4000:4000"
+      - "${GAMEPANEL_API_PORT:-4000}:4000"
     stop_grace_period: 5s
     volumes:
       - ./config/providers.json:/etc/gamepanel/providers.json:ro
@@ -40,6 +40,20 @@ services:
       - api
     ports:
       - "4010:4010"
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+
+  palworld-mod-pack:
+    profiles:
+      - jobs
+    build:
+      context: .
+      dockerfile: docker/palworld-mod-pack/Dockerfile
+      network: host
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-palworld-mod-pack:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
+    environment:
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_PALWORLD_MOD_SOURCE_DIR: /palworld-mod-pack
     volumes:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
 
@@ -92,4 +106,4 @@ services:
     depends_on:
       - api
     ports:
-      - "3001:3000"
+      - "${GAMEPANEL_WEB_PORT:-3001}:3000"

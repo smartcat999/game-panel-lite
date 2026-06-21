@@ -239,7 +239,11 @@ export type ModFile = {
 
 export type RecommendedMod = {
   rank: number;
-  workshopId: string;
+  source?: string;
+  externalId?: string;
+  workshopId?: string;
+  fileName?: string;
+  sourceUrl?: string;
   gameKey?: GameKey;
   providerKey?: ProviderKey;
   modName?: string;

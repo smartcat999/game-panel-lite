@@ -290,6 +290,7 @@ func modDependencies(item domain.ModFile) []string {
 }
 
 var errWorkshopModExists = errors.New("workshop mod already exists")
+var errRecommendedFileModExists = errors.New("recommended file mod already exists")
 
 func (h *Handler) createWorkshopModRecord(ctx context.Context, providerKey domain.ProviderKey, instanceID string, workshopID string) (domain.ModFile, bool, error) {
 	if _, err := h.store.GetModByInstanceAndWorkshopID(ctx, instanceID, workshopID); err == nil {
@@ -305,8 +306,72 @@ func (h *Handler) createWorkshopModRecord(ctx context.Context, providerKey domai
 	return h.upsertWorkshopModRecordForProvider(ctx, providerKey, instanceID, workshopID)
 }
 
+func (h *Handler) createRecommendedFileModRecord(ctx context.Context, providerKey domain.ProviderKey, instanceID string, externalID string) (domain.ModFile, bool, error) {
+	recommended, ok := modcatalog.RecommendedModByProviderAndExternalID(providerKey, strings.TrimSpace(externalID))
+	if !ok {
+		return domain.ModFile{}, false, fmt.Errorf("recommended mod not found")
+	}
+	fileName := strings.TrimSpace(recommended.FileName)
+	if fileName == "" {
+		fileName = safeRecommendedFileName(recommended.Title, providerKey)
+	}
+	if _, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+		return domain.ModFile{}, false, errRecommendedFileModExists
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return domain.ModFile{}, false, err
+	}
+	mods, err := h.store.ListMods(ctx, instanceID)
+	if err != nil {
+		return domain.ModFile{}, false, err
+	}
+	for _, item := range mods {
+		if item.ProviderKey == providerKey && item.Source != "workshop" && item.ModName == recommended.ExternalID {
+			return domain.ModFile{}, false, errRecommendedFileModExists
+		}
+	}
+	tags, _ := json.Marshal(recommended.Tags)
+	dependencies, _ := json.Marshal(uniqueNonEmptyStrings(recommended.Dependencies))
+	item := domain.ModFile{
+		ID:               uuid.NewString(),
+		InstanceID:       instanceID,
+		GameKey:          gameKeyForProvider(providerKey),
+		ProviderKey:      providerKey,
+		FileName:         fileName,
+		Source:           "file-recommendation",
+		ModName:          recommended.ExternalID,
+		Title:            recommended.Title,
+		PreviewURL:       recommended.PreviewURL,
+		Description:      recommended.Description,
+		TagsJSON:         string(tags),
+		DependenciesJSON: string(dependencies),
+		SizeBytes:        recommended.FileSize,
+		Enabled:          true,
+		CreatedAt:        time.Now(),
+	}
+	hydrateModMetadata(&item)
+	return item, true, h.store.CreateMod(ctx, &item)
+}
+
 func applyRecommendedModMetadata(item *domain.ModFile, workshopID string) {
 	applyRecommendedModMetadataForProvider(item, item.ProviderKey, workshopID)
+}
+
+func safeRecommendedFileName(title string, providerKey domain.ProviderKey) string {
+	extension := ".tmod"
+	if providerKey == domain.ProviderPalworld {
+		extension = ".pak"
+	}
+	base := strings.ToLower(strings.TrimSpace(title))
+	if base == "" {
+		base = "recommended-mod"
+	}
+	replacer := strings.NewReplacer(" ", "-", "_", "-", "/", "-", "\\", "-", ":", "-", "'", "", "\"", "")
+	base = replacer.Replace(base)
+	base = strings.Trim(base, ".-")
+	if base == "" {
+		base = "recommended-mod"
+	}
+	return base + extension
 }
 
 func applyRecommendedModMetadataForProvider(item *domain.ModFile, providerKey domain.ProviderKey, workshopID string) {

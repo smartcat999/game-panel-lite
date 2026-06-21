@@ -1,0 +1,120 @@
+[
+  {
+    "rank": 1,
+    "source": "file",
+    "externalId": "github-okaetsu-ue4ss-palworld",
+    "fileName": "dwmapi.dll",
+    "title": "UE4SS Palworld",
+    "sourceUrl": "https://github.com/Okaetsu/RE-UE4SS/releases/tag/experimental-palworld",
+    "fileSize": 6623322,
+    "tags": ["dependency", "ue4ss", "palworld"],
+    "description": "Palworld-specific UE4SS runtime required by UE4SS Lua/DLL and PalSchema mods."
+  },
+  {
+    "rank": 2,
+    "source": "file",
+    "externalId": "nexus-palworld-pal-schema",
+    "fileName": "PalSchema-main.dll",
+    "title": "PalSchema (Okaetsu)",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/3037",
+    "fileSize": 718855,
+    "tags": ["dependency", "palschema", "palworld"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld"],
+    "description": "PalSchema runtime used by blueprint-style Palworld mods such as Map Unlocker, GameTweaks, and Faster Breeding."
+  },
+  {
+    "rank": 3,
+    "source": "file",
+    "externalId": "nexus-palworld-mod-config-menu",
+    "fileName": "DekModConfigMenu_P.pak",
+    "title": "Mod Config Menu (UI)",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/577",
+    "fileSize": 11800471,
+    "tags": ["dependency", "ui", "palworld", "logicmod"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld"],
+    "description": "DekitaRPG Mod Config Menu UI package used by configurable LogicMods."
+  },
+  {
+    "rank": 4,
+    "source": "file",
+    "externalId": "nexus-palworld-pal-analyzer",
+    "fileName": "PalAnalyzer.pak",
+    "title": "Pal Analyzer",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/336",
+    "fileSize": 73151,
+    "tags": ["utility", "ui", "palworld", "logicmod"],
+    "description": "Displays details and stats about wild pals by hovering over them."
+  },
+  {
+    "rank": 5,
+    "source": "file",
+    "externalId": "nexus-palworld-pal-analyzer-cn",
+    "fileName": "PalAnalyzerCN-main.dll",
+    "title": "Pal Analyzer CNS XD",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/3321",
+    "fileSize": 67394,
+    "tags": ["translation", "ui", "palworld", "ue4ss"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld", "nexus-palworld-pal-analyzer"],
+    "description": "Chinese translation patch for Pal Analyzer."
+  },
+  {
+    "rank": 6,
+    "source": "file",
+    "externalId": "nexus-palworld-basic-minimap",
+    "fileName": "DekBasicMinimap_P.pak",
+    "title": "Basic MiniMap",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/146",
+    "fileSize": 156872,
+    "tags": ["utility", "map", "palworld", "logicmod"],
+    "dependencies": ["nexus-palworld-mod-config-menu"],
+    "description": "A configurable minimap LogicMod. The packaged IO build includes pak, ucas, utoc, config, and icon assets."
+  },
+  {
+    "rank": 7,
+    "source": "file",
+    "externalId": "nexus-palworld-map-unlocker",
+    "fileName": "PalGameSetting.json",
+    "title": "Map Unlocker Plus",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/3276",
+    "fileSize": 662,
+    "tags": ["utility", "map", "palworld", "palschema"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld", "nexus-palworld-pal-schema"],
+    "description": "PalSchema blueprint mod that unlocks the full map through game settings."
+  },
+  {
+    "rank": 8,
+    "source": "file",
+    "externalId": "nexus-palworld-game-tweaks",
+    "fileName": "GameTweaks.json",
+    "title": "GameTweaks - Palshema Mod",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/2906",
+    "fileSize": 1296,
+    "tags": ["tweak", "server", "palworld", "palschema"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld", "nexus-palworld-pal-schema"],
+    "description": "PalSchema quality-of-life tweak pack for Palworld gameplay speed, efficiency, and convenience."
+  },
+  {
+    "rank": 9,
+    "source": "file",
+    "externalId": "nexus-palworld-faster-breeding",
+    "fileName": "DekFasterBreeding.json",
+    "title": "Faster Breeding - PalSchema",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/2565",
+    "fileSize": 1491,
+    "tags": ["tweak", "breeding", "palworld", "palschema"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld", "nexus-palworld-pal-schema"],
+    "description": "PalSchema blueprint mod that reduces egg breeding time and works for servers."
+  },
+  {
+    "rank": 10,
+    "source": "file",
+    "externalId": "nexus-palworld-less-restrictive-building",
+    "fileName": "LessRestrictiveBuilding-main.lua",
+    "title": "Less Restrictive Building",
+    "sourceUrl": "https://www.nexusmods.com/palworld/mods/98",
+    "fileSize": 2216,
+    "tags": ["building", "tweak", "palworld", "ue4ss"],
+    "dependencies": ["github-okaetsu-ue4ss-palworld"],
+    "description": "UE4SS Lua mod that allows floating foundations and removes inclination and max-height restrictions."
+  }
+]

@@ -9,13 +9,13 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
+import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
 import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
 import { cn } from "@/lib/utils";
-import type { ModFile, ModPack, RecommendedMod } from "@/lib/types";
+import type { ModFile, ModPack, ProviderKey, RecommendedMod } from "@/lib/types";
 
 type ModsView = "discover" | "library" | "packs";
 type ModGameFilter = "all" | string;
@@ -23,6 +23,7 @@ type DependencyImportPlan = {
   primaryIds: string[];
   dependencyIds: string[];
   dependencyNames: string[];
+  providerKey: ProviderKey;
 };
 
 export default function ModsPage() {
@@ -42,6 +43,7 @@ export default function ModsPage() {
   const [packDescription, setPackDescription] = useState("");
   const [selectedPackModIds, setSelectedPackModIds] = useState<string[]>([]);
   const [workshopIdsText, setWorkshopIdsText] = useState("");
+  const [workshopProviderKey, setWorkshopProviderKey] = useState<ProviderKey>("terraria-tmodloader");
   const [pendingDependencyImport, setPendingDependencyImport] = useState<DependencyImportPlan | null>(null);
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
@@ -121,13 +123,26 @@ export default function ModsPage() {
     }
   });
   const workshopImport = useMutation({
-    mutationFn: (ids: string[]) => importGlobalWorkshopMods(ids),
+    mutationFn: ({ ids, providerKey }: { ids: string[]; providerKey: ProviderKey }) => importGlobalWorkshopMods(ids, providerKey),
     onSuccess: async () => {
       setErrorMessage("");
       setSuccessMessage(t("workshopModsImported"));
       setWorkshopDialogOpen(false);
       setPendingDependencyImport(null);
       setWorkshopIdsText("");
+      await client.invalidateQueries({ queryKey: ["global-mods"] });
+      await client.invalidateQueries({ queryKey: ["recommended-mods"] });
+    },
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableImportWorkshopMods"));
+    }
+  });
+  const recommendedImport = useMutation({
+    mutationFn: importRecommendedMod,
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage(t("workshopModsImported"));
       await client.invalidateQueries({ queryKey: ["global-mods"] });
       await client.invalidateQueries({ queryKey: ["recommended-mods"] });
     },
@@ -165,18 +180,18 @@ export default function ModsPage() {
   const selectedPackModCount = selectedPackModIds.length;
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
-  const requestWorkshopImport = (ids: string[]) => {
+  const requestWorkshopImport = (ids: string[], providerKey: ProviderKey = workshopProviderKey) => {
     if (workshopUnsupported) {
       setSuccessMessage("");
       setErrorMessage(t("workshopArmUnsupported"));
       return;
     }
-    const plan = buildDependencyImportPlan(ids, recommendedMods, globalMods);
+    const plan = buildDependencyImportPlan(ids, providerKey, recommendedMods, globalMods);
     if (plan.dependencyIds.length > 0) {
       setPendingDependencyImport(plan);
       return;
     }
-    workshopImport.mutate(ids);
+    workshopImport.mutate({ ids, providerKey });
   };
   const togglePackMod = (modId: string) => {
     setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
@@ -259,13 +274,17 @@ export default function ModsPage() {
           <div className="mt-4 grid gap-3 2xl:grid-cols-2">
             {searchedRecommendedMods.map((item) => (
               <RecommendedModCard
-                key={item.workshopId}
+                key={recommendedModKey(item)}
                 item={item}
                 locale={locale}
-                busy={workshopImport.isPending || workshopUnsupported}
-                disabledReason={workshopUnsupported ? t("workshopArmUnsupported") : ""}
+                busy={workshopImport.isPending || recommendedImport.isPending || (isWorkshopRecommended(item) && workshopUnsupported)}
+                disabledReason={isWorkshopRecommended(item) && workshopUnsupported ? t("workshopArmUnsupported") : ""}
                 onAdd={() => {
-                  requestWorkshopImport([item.workshopId]);
+                  if (isWorkshopRecommended(item) && item.workshopId) {
+                    requestWorkshopImport([item.workshopId], item.providerKey ?? "terraria-tmodloader");
+                    return;
+                  }
+                  recommendedImport.mutate({ providerKey: item.providerKey, externalId: item.externalId, workshopId: item.workshopId });
                 }}
               />
             ))}
@@ -371,6 +390,18 @@ export default function ModsPage() {
           description={t("workshopImportLibraryHint")}
           onClose={() => setWorkshopDialogOpen(false)}
         >
+          <label className="mb-3 grid gap-1.5 text-sm text-slate-300">
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{t("filterGame")}</span>
+            <select
+              className="rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-panel-green"
+              value={workshopProviderKey}
+              onChange={(event) => setWorkshopProviderKey(event.target.value as ProviderKey)}
+              disabled={workshopImport.isPending}
+            >
+              <option value="terraria-tmodloader">tModLoader</option>
+              <option value="dont-starve-together">Don't Starve Together</option>
+            </select>
+          </label>
           <textarea
             className="min-h-32 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
             placeholder={t("workshopIdsPlaceholder")}
@@ -382,7 +413,7 @@ export default function ModsPage() {
             <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIds.length })}</span>
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setWorkshopDialogOpen(false)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
-              <Button variant="secondary" onClick={() => requestWorkshopImport(workshopIds)} disabled={workshopImport.isPending || workshopIds.length === 0 || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
+              <Button variant="secondary" onClick={() => requestWorkshopImport(workshopIds, workshopProviderKey)} disabled={workshopImport.isPending || workshopIds.length === 0 || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                 <Download aria-hidden="true" />
                 {workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
               </Button>
@@ -403,10 +434,10 @@ export default function ModsPage() {
           </div>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setPendingDependencyImport(null)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
-            <Button variant="secondary" onClick={() => workshopImport.mutate(pendingDependencyImport.primaryIds)} disabled={workshopImport.isPending}>
+            <Button variant="secondary" onClick={() => workshopImport.mutate({ ids: pendingDependencyImport.primaryIds, providerKey: pendingDependencyImport.providerKey })} disabled={workshopImport.isPending}>
               {t("importOnlySelected")}
             </Button>
-            <Button onClick={() => workshopImport.mutate([...pendingDependencyImport.primaryIds, ...pendingDependencyImport.dependencyIds])} disabled={workshopImport.isPending}>
+            <Button onClick={() => workshopImport.mutate({ ids: [...pendingDependencyImport.primaryIds, ...pendingDependencyImport.dependencyIds], providerKey: pendingDependencyImport.providerKey })} disabled={workshopImport.isPending}>
               <Download aria-hidden="true" />
               {workshopImport.isPending ? t("actionWorking") : t("importWithDependencies")}
             </Button>
@@ -656,7 +687,7 @@ function RecommendedModCard({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
-                <p className="mt-1 text-xs text-slate-500">{locale === "zh" ? "创意工坊" : "Workshop"} {item.workshopId}</p>
+                <p className="mt-1 text-xs text-slate-500">{recommendedSourceLabel(item, locale)}</p>
               </div>
               <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300">
                 #{item.rank}
@@ -682,14 +713,18 @@ function RecommendedModCard({
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-panel-line px-4 py-3 text-xs text-slate-500">
-        <a
-          href={`https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`}
-          target="_blank"
-          rel="noreferrer"
-          className="truncate text-slate-400 transition hover:text-panel-green"
-        >
-          {locale === "zh" ? "打开 Steam 工坊" : "Open Steam Workshop"}
-        </a>
+        {recommendedSourceURL(item) ? (
+          <a
+            href={recommendedSourceURL(item)}
+            target="_blank"
+            rel="noreferrer"
+            className="truncate text-slate-400 transition hover:text-panel-green"
+          >
+            {isWorkshopRecommended(item) ? (locale === "zh" ? "打开 Steam 工坊" : "Open Steam Workshop") : (locale === "zh" ? "打开来源页面" : "Open source page")}
+          </a>
+        ) : (
+          <span className="truncate text-slate-500">{recommendedSourceLabel(item, locale)}</span>
+        )}
         {item.inLibrary ? (
           <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
         ) : (
@@ -716,12 +751,33 @@ function dependencyNamesForSelectedMods(mods: ModFile[], selectedIds: string[]) 
   return Array.from(names);
 }
 
-function buildDependencyImportPlan(ids: string[], recommendedMods: RecommendedMod[], globalMods: ModFile[]): DependencyImportPlan {
+function isWorkshopRecommended(item: RecommendedMod) {
+  return Boolean(item.workshopId) || item.source === "workshop";
+}
+
+function recommendedModKey(item: RecommendedMod) {
+  return `${item.providerKey ?? "unknown"}:${item.workshopId ?? item.externalId ?? item.fileName ?? item.title}`;
+}
+
+function recommendedSourceURL(item: RecommendedMod) {
+  if (item.workshopId) return `https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`;
+  return item.sourceUrl ?? "";
+}
+
+function recommendedSourceLabel(item: RecommendedMod, locale: string) {
+  if (item.workshopId) return `${locale === "zh" ? "创意工坊" : "Workshop"} ${item.workshopId}`;
+  if (item.providerKey === "palworld") return `${locale === "zh" ? "文件模组" : "File mod"} ${item.fileName ?? ".pak"}`;
+  return locale === "zh" ? "推荐模组" : "Recommended mod";
+}
+
+function buildDependencyImportPlan(ids: string[], providerKey: ProviderKey, recommendedMods: RecommendedMod[], globalMods: ModFile[]): DependencyImportPlan {
   const primaryIds = Array.from(new Set(ids));
   const primarySet = new Set(primaryIds);
-  const recommendedByWorkshopID = new Map(recommendedMods.map((mod) => [mod.workshopId, mod]));
-  const recommendedByModName = new Map(recommendedMods.flatMap((mod) => mod.modName ? [[mod.modName, mod] as const] : []));
-  const libraryNames = new Set(globalMods.map(modIdentity));
+  const providerRecommended = recommendedMods.filter((mod) => mod.providerKey === providerKey && mod.workshopId);
+  const providerLibrary = globalMods.filter((mod) => mod.providerKey === providerKey);
+  const recommendedByWorkshopID = new Map(providerRecommended.map((mod) => [mod.workshopId ?? "", mod]));
+  const recommendedByModName = new Map(providerRecommended.flatMap((mod) => mod.modName ? [[mod.modName, mod] as const] : []));
+  const libraryNames = new Set(providerLibrary.map(modIdentity));
   const dependencyIds: string[] = [];
   const dependencyNames: string[] = [];
   const queue = [...primaryIds];
@@ -733,14 +789,14 @@ function buildDependencyImportPlan(ids: string[], recommendedMods: RecommendedMo
     for (const dependencyName of item?.dependencies ?? []) {
       if (libraryNames.has(dependencyName) || seenDependencyNames.has(dependencyName)) continue;
       const dependency = recommendedByModName.get(dependencyName);
-      if (!dependency || primarySet.has(dependency.workshopId)) continue;
+      if (!dependency?.workshopId || primarySet.has(dependency.workshopId)) continue;
       seenDependencyNames.add(dependencyName);
       dependencyIds.push(dependency.workshopId);
       dependencyNames.push(dependencyName);
       queue.push(dependency.workshopId);
     }
   }
-  return { primaryIds, dependencyIds, dependencyNames };
+  return { primaryIds, dependencyIds, dependencyNames, providerKey };
 }
 
 function modIdentity(mod: ModFile) {

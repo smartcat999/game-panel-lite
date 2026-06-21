@@ -14,5 +14,8 @@ export function modSourceLabel(mod: ModFile, locale: string) {
   if (mod.source === "workshop") {
     return locale === "zh" ? "创意工坊" : "Workshop";
   }
+  if (mod.providerKey === "palworld") {
+    return locale === "zh" ? "文件模组 .pak" : "File mod .pak";
+  }
   return ".tmod";
 }

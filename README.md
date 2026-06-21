@@ -1,160 +1,100 @@
 # GamePanel Lite
 
-GamePanel Lite is a lightweight self-hosted game server management panel. V1 focuses only on Terraria Vanilla and Terraria tModLoader while keeping the provider architecture ready for future Steam games.
+GamePanel Lite 是一个轻量、现代、适合自托管的游戏服务器管理面板。
 
-## Requirements
+它把“创建服务器、启动停止、查看日志、管理世界、备份恢复、安装模组”放在一个简单的网页里。你不需要记一堆命令，也不用手动整理每个游戏的目录。
 
-- Go 1.25+
-- Node.js 20+
-- pnpm 9+
-- Docker for real server runtime verification
+## 现在可以做什么
 
-## Local Development
+- 创建和管理多个游戏服务器
+- 启动、停止、重启服务器
+- 查看服务器状态、日志和控制台
+- 管理世界文件、备份和恢复
+- 管理 Terraria / tModLoader 模组
+- 发现 Don't Starve Together Workshop 推荐模组
+- 发现 Palworld `.pak` / UE4SS 文件型推荐模组
+- 每个服务器都有独立数据目录，互不影响
 
-Copy local environment defaults:
+## 一键安装
+
+准备一台已经安装 Docker 的机器，然后在项目目录执行：
 
 ```bash
-cp .env.example .env
+sh scripts/install.sh
 ```
 
-Run the Go API:
+启动完成后打开：
+
+```text
+http://localhost:3001
+```
+
+默认数据会保存在项目目录下的 `data/`，包括数据库、服务器实例、世界、备份和模组文件。
+
+## 常用配置
+
+第一次运行会自动生成 `.env`。常用配置如下：
+
+```env
+GAMEPANEL_WEB_PORT=3001
+GAMEPANEL_API_PORT=4000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+```
+
+如果你部署到服务器，并希望网页直接使用 80 端口，可以改成：
+
+```env
+GAMEPANEL_WEB_PORT=80
+NEXT_PUBLIC_API_BASE_URL=http://你的域名:4000
+```
+
+然后重新启动：
+
+```bash
+docker compose up -d --build
+```
+
+## 使用方式
+
+1. 打开 GamePanel Lite。
+2. 创建一个服务器，选择游戏和运行版本。
+3. 按需要调整配置。
+4. 点击启动，面板会自动准备运行环境。
+5. 在服务器详情页查看日志、控制台、连接信息、世界、备份和模组。
+
+## Palworld 模组包
+
+Palworld 的 Nexus 模组不是 Steam Workshop 模组。GamePanel Lite 会把它们作为“文件型推荐项”展示。
+
+如果你已经准备好 Palworld 模组文件，可以同步到本地数据目录：
+
+```bash
+docker compose --profile jobs run --rm palworld-mod-pack
+```
+
+同步后的文件会进入：
+
+```text
+data/mods/palworld-pack/
+```
+
+推荐列表里的 Palworld 模组会引用这些本地文件，并按依赖关系加入模组列表。
+
+## 开发者入口
+
+本地开发可以使用：
 
 ```bash
 pnpm dev:api
-```
-
-Run the web app:
-
-```bash
 pnpm dev:web
 ```
 
-The top-bar service badge checks the Go API `GET /healthz` endpoint. If only the web app is running, the badge will show unavailable until `pnpm dev:api` is started.
-
-Run both services with Docker Compose:
+常用检查：
 
 ```bash
-docker compose up
-```
-
-For OrbStack on macOS, keep the machine-specific workspace and socket paths in your untracked `.env`:
-
-```bash
-GAMEPANEL_WORKSPACE_PATH="/Users/<you>/Desktop/Projects/go-project/game-panel-lite"
-GAMEPANEL_DOCKER_SOCKET_PATH="/Users/<you>/.orbstack/run/docker.sock"
-```
-
-Useful checks:
-
-```bash
-gofmt -w apps/api
 go test ./...
-go vet ./...
-pnpm lint
 pnpm typecheck
-pnpm test
 pnpm build
 ```
 
-If your shell cannot write to the default Go build cache, use a local cache:
-
-```bash
-mkdir -p .cache/go-build
-GOCACHE="$PWD/.cache/go-build" go test ./...
-GOCACHE="$PWD/.cache/go-build" go vet ./...
-```
-
-## Workspace Layout
-
-- `apps/api` - Go, chi, SQLite, provider and runtime backend.
-- `apps/web` - Next.js, React, TypeScript, Tailwind CSS frontend with local shadcn/ui-style source components.
-- `packages/contracts` - OpenAPI contract.
-- `packages/shared` - shared TypeScript schemas used by the frontend.
-
-Default Docker Compose ports:
-
-- Web app: `http://localhost:3001`
-- API: `http://localhost:4000`
-
-## V1 Scope
-
-V1 is intentionally limited to Terraria. It includes provider boundaries for Vanilla and tModLoader, SQLite persistence, server configuration rendering, isolated instance data directories, and a Docker runtime adapter boundary.
-
-Do not add auth, billing, cloud provisioning, OAuth, RBAC, Kubernetes, or plugin marketplace features in V1.
-
-## V1 Usage
-
-1. Start the API with `pnpm dev:api`.
-2. Start the web UI with `pnpm dev:web`.
-3. Open `http://localhost:3000/dashboard`.
-4. Use **Create Server** to choose Terraria, Vanilla or tModLoader, a preset, and config values.
-5. Use **Preview serverconfig.txt** to render the Go backend config output.
-6. Start a server from the Servers page. The API will reuse an existing runtime container when it is present, or create a new container from the persisted server config and data directory when it is missing.
-7. Use Worlds to import `.wld` files, Backups to manage zip backups, and Mods for tModLoader `.tmod` files, mod packs, and Workshop ID imports.
-
-## Docker Runtime
-
-The API exposes `GET /api/runtime/docker` for daemon status. Game server records are persisted in SQLite; Docker containers are runtime instances. Starting a server creates or reuses a container mounted to that server's isolated data directory, so a missing old container can be recreated without losing world/config data. Real container creation requires Docker to be running and access to the configured Terraria images:
-
-- Vanilla: `smartcat99999/terraria-vanilla:<version>` selected from the provider version list.
-- tModLoader: `smartcat99999/tmodloader:<version>` selected from the provider version list.
-
-Build the supported game images with:
-
-```bash
-scripts/build-game-images.sh
-```
-
-For local arm64 testing:
-
-```bash
-scripts/build-game-images.sh all --platform linux/arm64 --load
-```
-
-For multi-platform registry publishing:
-
-```bash
-scripts/build-game-images.sh all --platform linux/amd64,linux/arm64 --push
-```
-
-Configure the Docker socket or host with `GAMEPANEL_DOCKER_HOST`. If it is not set, the API falls back to `DOCKER_HOST`, then `unix:///var/run/docker.sock`.
-
-Common examples:
-
-```bash
-GAMEPANEL_DOCKER_HOST="unix:///var/run/docker.sock"
-GAMEPANEL_DOCKER_HOST="unix:///Users/<you>/.orbstack/run/docker.sock"
-GAMEPANEL_DOCKER_HOST="tcp://127.0.0.1:2375"
-```
-
-The Settings page displays the configured Docker Host and runtime status only. Docker Host changes should be made in the backend config or environment, then applied by restarting the backend process.
-
-When using `compose.yaml`, the API service always reads Docker through `unix:///var/run/docker.sock` inside the API container. Override `GAMEPANEL_DOCKER_SOCKET_PATH` in local `.env` to decide which host socket is mounted there. Set `GAMEPANEL_WORKSPACE_PATH` to the absolute repo path so game server containers receive bind mounts from the Docker daemon's host path instead of the API container's internal path.
-
-Each server instance uses an isolated directory under `GAMEPANEL_DATA_DIR/instances/{instanceId}`. World, backup, and mod files use separate per-instance directories.
-
-## Safety
-
-- Uploaded world files must end in `.wld`.
-- Uploaded mod files use the `.tmod` workflow; Workshop ID imports generate `install.txt` for tModLoader.
-- File names, joined paths, and restored backup archive entries are checked to prevent path traversal.
-- Stop, restart, and delete server actions require an in-app confirmation before the API call.
-- Secrets, tokens, and machine-specific absolute paths must stay out of committed config.
-- Keep machine-specific Docker socket paths in local `.env` or shell environment only.
-
-## Known Limitations
-
-- Backup restore extracts archives into the server data directory and refuses to run while a server is running or restarting.
-- Server detail pages stream logs from the backend SSE endpoint when the server/container log stream is available.
-- Server detail console input sends commands to the running container stdin.
-- Vanilla Terraria was verified against a real OrbStack Docker daemon: image pull, create, start, auto-create world, clean SSE logs, TCP port probe, and delete cleanup.
-- tModLoader was verified against a real OrbStack Docker daemon with versioned `radioactivehydra/tmodloader` tags: image pull, create, start, auto-create world from `/data/serverconfig.txt`, clean SSE logs, TCP port probe, and delete cleanup.
-- Playwright E2E smoke tests cover the Chinese app shell, Docker scan feedback, game cover/avatar rendering, create-server selection states, server detail logs, copy join info, world migration, and backup restore confirmation.
-- Actual Terraria client join still needs manual verification with the desktop game client; see `docs/goals/V1_MANUAL_VERIFICATION.md`.
-- World and backup migration APIs are implemented for copying assets between server instances.
-
-## Roadmap
-
-- Post-V1 product direction is tracked in `docs/product/product-roadmap.md`.
-- The next product focus is local admin login and support for more user-facing games such as Palworld, Don't Starve Together, and Minecraft Java.
-- V1 UI polish and existing-flow optimization are deferred unless they block a new product feature.
+更多架构和实现说明放在 `docs/` 目录。

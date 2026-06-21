@@ -209,7 +209,11 @@ type ApiModFile = {
 
 type ApiRecommendedMod = {
   rank: number;
-  workshopId: string;
+  source?: string;
+  externalId?: string;
+  workshopId?: string;
+  fileName?: string;
+  sourceUrl?: string;
   gameKey?: string;
   providerKey?: string;
   modName?: string;
@@ -774,7 +778,11 @@ function toModFile(file: ApiModFile): ModFile {
 function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
   return {
     rank: mod.rank,
+    source: mod.source,
+    externalId: mod.externalId,
     workshopId: mod.workshopId,
+    fileName: mod.fileName,
+    sourceUrl: mod.sourceUrl,
     gameKey: mod.gameKey,
     providerKey: mod.providerKey,
     modName: mod.modName,
@@ -888,11 +896,11 @@ export async function listRecommendedMods(): Promise<RecommendedMod[]> {
   return payload.map(toRecommendedMod);
 }
 
-export async function importGlobalWorkshopMods(workshopIds: string[]): Promise<ModFile[]> {
+export async function importGlobalWorkshopMods(workshopIds: string[], providerKey = "terraria-tmodloader"): Promise<ModFile[]> {
   const response = await apiFetch(`${API_BASE}/api/mods/workshop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workshopIds })
+    body: JSON.stringify({ providerKey, workshopIds })
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -900,6 +908,20 @@ export async function importGlobalWorkshopMods(workshopIds: string[]): Promise<M
   }
   const payload = (await response.json()) as ApiModFile[];
   return payload.map(toModFile);
+}
+
+export async function importRecommendedMod(input: { providerKey?: string; externalId?: string; workshopId?: string }): Promise<ModFile> {
+  const response = await apiFetch(`${API_BASE}/api/mods/recommended/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import recommended mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
 }
 
 export async function assignMod(modId: string, instanceId: string): Promise<ModFile> {

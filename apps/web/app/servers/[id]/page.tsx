@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
+import { Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -45,6 +45,7 @@ import {
   serverLogsUrl,
   serverWatchUrl,
   updateGameServerConfig,
+  uploadMod,
   type ServerConfigUpdatePayload,
   type ServerWatchSnapshot,
 } from "@/lib/api";
@@ -115,6 +116,7 @@ export default function ServerDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const client = useQueryClient();
+  const modUploadInputRef = useRef<HTMLInputElement>(null);
   const logViewportRef = useRef<HTMLDivElement>(null);
   const logServerIdRef = useRef("");
   const logReplayIndexRef = useRef(0);
@@ -415,6 +417,22 @@ export default function ServerDetailPage() {
     },
     onError: (error) => showError(formatActionError(error, t("unableDeleteMod")))
   });
+  const modUpload = useMutation({
+    mutationFn: async (files: File[]) => {
+      for (const file of files) {
+        await uploadMod(id, file);
+      }
+      return files.length;
+    },
+    onSuccess: async (count) => {
+      showSuccess(t("modsUploadedSummary", { count }));
+      markModsChanged();
+      if (modUploadInputRef.current) modUploadInputRef.current.value = "";
+      await client.invalidateQueries({ queryKey: ["mods", id] });
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+    },
+    onError: (error) => showError(formatActionError(error, t("unableUploadMod")))
+  });
   const modAssign = useMutation({
     mutationFn: async (modIds: string[]) => {
       for (const modId of modIds) {
@@ -531,7 +549,17 @@ export default function ServerDetailPage() {
   );
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
+  const providerGlobalMods = useMemo(
+    () => globalMods.filter((mod) => !serverResource || mod.providerKey === serverResource.providerKey),
+    [globalMods, serverResource]
+  );
   const modPacks = useMemo(() => modPacksQuery.data ?? [], [modPacksQuery.data]);
+  const providerModPacks = useMemo(
+    () => modPacks.filter((pack) => !serverResource || pack.providerKey === serverResource.providerKey),
+    [modPacks, serverResource]
+  );
+  const modUploadAccept = serverResource?.providerKey === "palworld" ? ".pak" : serverResource?.providerKey === "terraria-tmodloader" ? ".tmod" : "";
+  const supportsDirectModUpload = Boolean(modUploadAccept);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
     { id: "overview", label: t("tabOverview") },
@@ -620,6 +648,19 @@ export default function ServerDetailPage() {
 
   return (
     <>
+      {supportsDirectModUpload ? (
+        <input
+          ref={modUploadInputRef}
+          className="hidden"
+          type="file"
+          accept={modUploadAccept}
+          multiple
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            if (files.length > 0) modUpload.mutate(files);
+          }}
+        />
+      ) : null}
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
       {(errorMessage || successMessage) && (
@@ -774,22 +815,25 @@ export default function ServerDetailPage() {
           )}
           {activeTab === "mods" && capabilities.mods && (
             <ModsTab
-              availableMods={globalMods}
+              availableMods={providerGlobalMods}
               assigning={modAssign.isPending}
               deleting={modDelete.isPending}
               isError={modsQuery.isError}
               isLoading={modsQuery.isLoading}
               items={serverMods}
               libraryError={globalModsQuery.isError || modPacksQuery.isError}
-              modPacks={modPacks}
+              modPacks={providerModPacks}
               pendingRestart={modsPendingRestart}
               packInstalling={modPackAssign.isPending}
               serverStatus={status}
+              uploadAccept={modUploadAccept}
+              uploading={modUpload.isPending}
               toggling={modEnabled.isPending}
               workshopUnsupported={workshopUnsupported}
               onAssignMods={(mods) => modAssign.mutate(mods.map((mod) => mod.id))}
               onDelete={setPendingModDelete}
               onInstallPack={setPendingModPackInstall}
+              onUpload={supportsDirectModUpload ? () => modUploadInputRef.current?.click() : undefined}
               onToggle={(mod) => setPendingModToggle({ mod, enabled: !mod.enabled })}
             />
           )}
@@ -2163,10 +2207,13 @@ function ModsTab({
   packInstalling,
   serverStatus,
   toggling,
+  uploadAccept,
+  uploading,
   workshopUnsupported,
   onAssignMods,
   onDelete,
   onInstallPack,
+  onUpload,
   onToggle
 }: {
   availableMods: ModFile[];
@@ -2181,10 +2228,13 @@ function ModsTab({
   packInstalling: boolean;
   serverStatus: ServerStatus;
   toggling: boolean;
+  uploadAccept: string;
+  uploading: boolean;
   workshopUnsupported: boolean;
   onAssignMods: (mods: ModFile[]) => void;
   onDelete: (mod: ModFile) => void;
   onInstallPack: (pack: ModPack) => void;
+  onUpload?: () => void;
   onToggle: (mod: ModFile) => void;
 }) {
   const { locale, t } = useI18n();
@@ -2218,10 +2268,18 @@ function ModsTab({
       title={t("detailModActions")}
       href="/mods"
       action={
-        <Button variant="secondary" onClick={() => setInstallerOpen(true)}>
-          <Package aria-hidden="true" />
-          {t("installMods")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {onUpload ? (
+            <Button variant="secondary" onClick={onUpload} disabled={uploading || blocked} title={uploadAccept ? `${t("uploadMod")} ${uploadAccept}` : undefined}>
+              <Upload aria-hidden="true" />
+              {uploading ? t("actionWorking") : t("uploadMod")}
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={() => setInstallerOpen(true)}>
+            <Package aria-hidden="true" />
+            {t("installMods")}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4">
