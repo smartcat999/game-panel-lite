@@ -1141,17 +1141,14 @@ function ServerActivityTab({ events, loading, runtimeError, watchStatus }: { eve
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
           <span className={cn(
-            "inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium",
-            watchStatus === "connected" ? "border-panel-green/25 bg-panel-green/10 text-panel-green" :
-              watchStatus === "error" ? "border-panel-gold/25 bg-panel-gold/10 text-panel-gold" :
-                "border-panel-line bg-slate-900/70 text-slate-500"
-          )}>
-            <span className={cn("size-1.5 rounded-full", watchStatus === "connected" ? "bg-panel-green" : watchStatus === "error" ? "bg-panel-gold" : "bg-slate-600")} />
-            {liveLabel}
-          </span>
+            "size-2 rounded-full",
+            watchStatus === "connected" ? "bg-panel-green shadow-[0_0_0_3px_rgba(89,212,111,0.14)]" :
+              watchStatus === "error" ? "bg-panel-gold shadow-[0_0_0_3px_rgba(230,184,74,0.12)]" :
+                "bg-slate-600"
+          )} title={liveLabel} aria-label={liveLabel} />
         </div>
         <p className="mt-1 text-xs text-slate-500">{t("serverRecentEventsDescription")}</p>
       </div>
