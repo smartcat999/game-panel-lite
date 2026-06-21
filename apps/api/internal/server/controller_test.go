@@ -41,6 +41,7 @@ func TestReconciliationActivityEventsForRuntimeStart(t *testing.T) {
 
 func TestReconciliationLifecycleActivityEventsIncludeRuntimeDetails(t *testing.T) {
 	now := time.Unix(1000, 0)
+	occurredAt := now.Add(5 * time.Second)
 	server := domain.GameServer{
 		ID:          "server-1",
 		Name:        "Friends",
@@ -54,8 +55,9 @@ func TestReconciliationLifecycleActivityEventsIncludeRuntimeDetails(t *testing.T
 		},
 	}
 	events := reconciliationLifecycleActivityEvents(server, []LifecycleEvent{{
-		Type:    "server.container.start.failed",
-		Message: "Start runtime container failed for server Friends: boom",
+		Type:       "server.container.start.failed",
+		Message:    "Start runtime container failed for server Friends: boom",
+		OccurredAt: occurredAt,
 		Payload: map[string]any{
 			"runtimeId": "runtime-1",
 			"error":     "boom",
@@ -66,6 +68,9 @@ func TestReconciliationLifecycleActivityEventsIncludeRuntimeDetails(t *testing.T
 	}
 	if events[0].Type != "server.container.start.failed" {
 		t.Fatalf("unexpected event type: %+v", events[0])
+	}
+	if !events[0].CreatedAt.Equal(occurredAt) {
+		t.Fatalf("expected lifecycle event occurrence time, got %s", events[0].CreatedAt)
 	}
 	if events[0].Payload["serverName"] != "Friends" || events[0].Payload["runtimeId"] != "runtime-1" || events[0].Payload["error"] != "boom" {
 		t.Fatalf("expected merged lifecycle payload, got %+v", events[0].Payload)

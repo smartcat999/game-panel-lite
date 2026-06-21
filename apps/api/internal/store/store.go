@@ -417,7 +417,7 @@ func (s *Store) ListActivity(ctx context.Context, limit int) ([]domain.ActivityE
 		limit = 50
 	}
 	var events []domain.ActivityEvent
-	if err := s.db.WithContext(ctx).Order("created_at desc").Limit(limit).Find(&events).Error; err != nil {
+	if err := s.db.WithContext(ctx).Order("created_at desc, rowid desc").Limit(limit).Find(&events).Error; err != nil {
 		return nil, err
 	}
 	for index := range events {
@@ -431,7 +431,7 @@ func (s *Store) ListActivityByInstance(ctx context.Context, instanceID string, l
 		limit = 50
 	}
 	var events []domain.ActivityEvent
-	if err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc").Limit(limit).Find(&events).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc, rowid desc").Limit(limit).Find(&events).Error; err != nil {
 		return nil, err
 	}
 	for index := range events {

@@ -134,7 +134,15 @@ func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.Ga
 	}
 	events := reconciliationLifecycleActivityEvents(after, lifecycleEvents, time.Now())
 	events = append(events, reconciliationActivityEvents(before, after, time.Now())...)
+	lastActivityTime := time.Time{}
 	for _, event := range events {
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now().UTC()
+		}
+		if !lastActivityTime.IsZero() && !event.CreatedAt.After(lastActivityTime) {
+			event.CreatedAt = lastActivityTime.Add(time.Nanosecond)
+		}
+		lastActivityTime = event.CreatedAt
 		if err := activityStore.CreateActivity(ctx, &event); err != nil {
 			c.logger.Warn("failed to record reconciliation activity", "server", after.ID, "type", event.Type, "error", err)
 		}
@@ -144,7 +152,11 @@ func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.Ga
 func reconciliationLifecycleActivityEvents(server domain.GameServer, lifecycleEvents []LifecycleEvent, now time.Time) []domain.ActivityEvent {
 	events := make([]domain.ActivityEvent, 0, len(lifecycleEvents))
 	for _, item := range lifecycleEvents {
-		events = append(events, newReconciliationActivityWithPayload(server, item.Type, item.Message, now, item.Payload))
+		occurredAt := item.OccurredAt
+		if occurredAt.IsZero() {
+			occurredAt = now
+		}
+		events = append(events, newReconciliationActivityWithPayload(server, item.Type, item.Message, occurredAt, item.Payload))
 	}
 	return events
 }

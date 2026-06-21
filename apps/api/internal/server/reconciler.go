@@ -25,9 +25,10 @@ type ImageLoader interface {
 }
 
 type LifecycleEvent struct {
-	Type    string
-	Message string
-	Payload map[string]any
+	Type       string
+	Message    string
+	Payload    map[string]any
+	OccurredAt time.Time
 }
 
 type Reconciler struct {
@@ -268,7 +269,7 @@ func (r *lifecycleRecorder) event(eventType string, message string, payload map[
 	for key, value := range payload {
 		next[key] = value
 	}
-	r.events = append(r.events, LifecycleEvent{Type: eventType, Message: message, Payload: next})
+	r.events = append(r.events, LifecycleEvent{Type: eventType, Message: message, Payload: next, OccurredAt: time.Now().UTC()})
 }
 
 func (r *lifecycleRecorder) failed(eventType string, action string, runtimeID string, image string, err error) {

@@ -55,3 +55,29 @@ func TestListActivityByInstanceFiltersBeforeLimit(t *testing.T) {
 		t.Fatalf("expected target activity after instance filter, got %#v", target)
 	}
 }
+
+func TestListActivityByInstanceOrdersEqualTimestampsByInsertOrder(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "gamepanel.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	ctx := context.Background()
+	createdAt := time.Date(2026, 6, 21, 12, 30, 0, 0, time.UTC)
+	for _, event := range []domain.ActivityEvent{
+		{ID: "first", InstanceID: "server-1", Type: "server.runtime.created", Message: "Runtime created", CreatedAt: createdAt},
+		{ID: "second", InstanceID: "server-1", Type: "server.started", Message: "Server started", CreatedAt: createdAt},
+	} {
+		item := event
+		if err := db.CreateActivity(ctx, &item); err != nil {
+			t.Fatalf("create activity %s: %v", item.ID, err)
+		}
+	}
+
+	events, err := db.ListActivityByInstance(ctx, "server-1", 50)
+	if err != nil {
+		t.Fatalf("list activity: %v", err)
+	}
+	if len(events) != 2 || events[0].ID != "second" || events[1].ID != "first" {
+		t.Fatalf("expected equal timestamps ordered by newest insert first, got %#v", events)
+	}
+}

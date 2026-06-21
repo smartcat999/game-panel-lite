@@ -309,8 +309,9 @@ function EventRow({ event }: { event: MonitoringEvent }) {
   const typeLabel = localizedEventGroup(event.type, t);
   const operator = event.operator === "system" ? t("eventSourceSystem") : event.operator;
   const source = event.serverName || event.serverId || t("eventSourceSystem");
+  const eventTime = formatTime(event.timestamp);
   return (
-    <div className={cn("grid gap-3 px-4 py-3 lg:grid-cols-[minmax(320px,1.3fr)_minmax(180px,0.55fr)_minmax(180px,0.55fr)_96px] lg:items-center", event.severity === "error" && "bg-panel-gold/5")}>
+    <div className={cn("grid gap-3 px-4 py-3 lg:grid-cols-[minmax(320px,1.3fr)_minmax(180px,0.55fr)_minmax(150px,0.45fr)_112px] lg:items-center", event.severity === "error" && "bg-panel-gold/5")}>
       <div className="flex min-w-0 items-start gap-3">
         <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border", toneClass(event.severity))}>{severityIcon(event.severity)}</span>
         <div className="min-w-0">
@@ -318,7 +319,11 @@ function EventRow({ event }: { event: MonitoringEvent }) {
             <p className="truncate font-medium text-slate-100">{title}</p>
             <SeverityPill severity={event.severity} />
           </div>
-          <p className="mt-1 line-clamp-1 text-xs text-slate-500">{t("eventMessageServer", { server: source, event: title })}</p>
+          <p className="mt-1 line-clamp-1 text-xs text-slate-500">
+            <span className="font-mono text-slate-400">{eventTime}</span>
+            <span className="px-1.5 text-slate-700">·</span>
+            {t("eventMessageServer", { server: source, event: title })}
+          </p>
         </div>
       </div>
       <div className="min-w-0 text-sm">
@@ -332,7 +337,7 @@ function EventRow({ event }: { event: MonitoringEvent }) {
       <div className="flex min-w-0 items-center gap-2">
         <StatusBadge status={typeLabel} severity={severity} />
       </div>
-      <span className="font-mono text-xs text-slate-500 lg:text-right">{formatTime(event.timestamp)}</span>
+      <span className="font-mono text-xs text-slate-500 lg:text-right">{eventTime}</span>
     </div>
   );
 }
@@ -353,9 +358,26 @@ const eventTitleKeys: Record<string, MessageKey> = {
   "save.snapshot.created": "eventTitleWorldSnapshotCreated",
   "save.snapshot.restored": "eventTitleBackupRestored",
   "server.config.updated": "eventTitleServerConfigUpdated",
+  "server.container.create.failed": "eventTitleServerContainerCreateFailed",
+  "server.container.create.started": "eventTitleServerContainerCreateStarted",
+  "server.container.create.succeeded": "eventTitleServerContainerCreateSucceeded",
+  "server.container.inspect.failed": "eventTitleServerContainerInspectFailed",
+  "server.container.remove.failed": "eventTitleServerContainerRemoveFailed",
+  "server.container.remove.started": "eventTitleServerContainerRemoveStarted",
+  "server.container.remove.succeeded": "eventTitleServerContainerRemoveSucceeded",
+  "server.container.start.failed": "eventTitleServerContainerStartFailed",
+  "server.container.start.started": "eventTitleServerContainerStartStarted",
+  "server.container.start.succeeded": "eventTitleServerContainerStartSucceeded",
+  "server.container.stop.failed": "eventTitleServerContainerStopFailed",
+  "server.container.stop.started": "eventTitleServerContainerStopStarted",
+  "server.container.stop.succeeded": "eventTitleServerContainerStopSucceeded",
   "server.created": "eventTitleServerCreated",
   "server.delete.queued": "eventTitleServerDeleteQueued",
   "server.deleted": "eventTitleServerDeleted",
+  "server.image.load.failed": "eventTitleServerImageLoadFailed",
+  "server.image.load.started": "eventTitleServerImageLoadStarted",
+  "server.image.load.succeeded": "eventTitleServerImageLoadSucceeded",
+  "server.reconcile.failed": "eventTitleServerReconcileFailed",
   "server.restart.failed": "eventTitleServerRestartFailed",
   "server.restart.container.created": "eventTitleServerContainerCreated",
   "server.restart.container.prepare": "eventTitleServerContainerPreparing",
@@ -363,6 +385,8 @@ const eventTitleKeys: Record<string, MessageKey> = {
   "server.restart.runtime.starting": "eventTitleServerRuntimeStarting",
   "server.restart.queued": "eventTitleServerRestartQueued",
   "server.restarted": "eventTitleServerRestarted",
+  "server.runtime.created": "eventTitleServerRuntimeCreated",
+  "server.runtime.removed": "eventTitleServerRuntimeRemoved",
   "server.share.disabled": "eventTitleShareDisabled",
   "server.share.enabled": "eventTitleShareEnabled",
   "server.start.failed": "eventTitleServerStartFailed",
@@ -505,7 +529,7 @@ function formatValue(value: number, unit: string) {
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 export function SourceBadge({ connected }: { connected?: boolean }) {
