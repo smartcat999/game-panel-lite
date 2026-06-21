@@ -172,7 +172,7 @@ export function ServerActions({
         )}
       </div>
       {(errorMessage || successMessage) && (
-        <div className="pointer-events-none fixed right-4 top-4 z-[60]">
+        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
           <ToastNotice
             closeLabel={t("cancel")}
             message={errorMessage || successMessage}

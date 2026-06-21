@@ -56,20 +56,31 @@ export function ToastNotice({
   return (
     <div
       className={cn(
-        "pointer-events-auto flex w-[min(360px,calc(100vw-32px))] items-start gap-3 rounded-lg border px-4 py-3 text-sm shadow-[0_18px_42px_rgba(0,0,0,0.32)] backdrop-blur",
-        tone === "success" && "border-panel-green/35 bg-slate-950/92 text-panel-green",
-        tone === "info" && "border-blue-400/30 bg-slate-950/92 text-blue-100",
-        tone === "warning" && "border-panel-gold/35 bg-slate-950/92 text-panel-gold",
-        tone === "error" && "border-red-400/35 bg-slate-950/92 text-red-100"
+        "pointer-events-auto relative flex w-[min(340px,calc(100vw-32px))] items-start gap-3 overflow-hidden rounded-lg border bg-slate-950 px-3.5 py-3 text-sm text-slate-100 shadow-[0_18px_44px_rgba(0,0,0,0.48)]",
+        "before:absolute before:inset-y-0 before:left-0 before:w-1",
+        tone === "success" && "border-panel-green/45 before:bg-panel-green",
+        tone === "info" && "border-blue-400/40 before:bg-blue-400",
+        tone === "warning" && "border-panel-gold/45 before:bg-panel-gold",
+        tone === "error" && "border-red-400/45 before:bg-red-400"
       )}
       role={tone === "error" ? "alert" : "status"}
     >
-      <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-      <p className="min-w-0 flex-1 leading-5">{message}</p>
+      <span
+        className={cn(
+          "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border",
+          tone === "success" && "border-panel-green/35 bg-panel-green/12 text-panel-green",
+          tone === "info" && "border-blue-400/30 bg-blue-400/10 text-blue-200",
+          tone === "warning" && "border-panel-gold/35 bg-panel-gold/10 text-panel-gold",
+          tone === "error" && "border-red-400/35 bg-red-400/10 text-red-200"
+        )}
+      >
+        <Icon aria-hidden="true" className="size-4" />
+      </span>
+      <p className="min-w-0 flex-1 pt-0.5 font-medium leading-5">{message}</p>
       {onClose ? (
         <button
           aria-label={closeLabel}
-          className="flex size-6 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
           onClick={onClose}
           type="button"
         >
