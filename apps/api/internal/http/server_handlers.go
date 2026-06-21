@@ -404,16 +404,13 @@ func (h *Handler) serverRuntimeStats(ctx context.Context, server domain.GameServ
 }
 
 func (h *Handler) serverWatchEvents(ctx context.Context, server domain.GameServer) []serverWatchEvent {
-	events, err := h.store.ListActivity(ctx, 50)
+	events, err := h.store.ListActivityByInstance(ctx, server.ID, 50)
 	if err != nil {
 		h.logger.Warn("failed to list server watch events", "server", server.ID, "error", err)
 		return []serverWatchEvent{}
 	}
 	out := make([]serverWatchEvent, 0, len(events))
 	for _, event := range events {
-		if event.InstanceID != server.ID {
-			continue
-		}
 		out = append(out, serverWatchEventFromActivity(event, server))
 	}
 	return out

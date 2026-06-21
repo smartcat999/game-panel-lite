@@ -232,7 +232,13 @@ func (s *Service) ServerLoad(ctx context.Context) (ServerLoadResponse, error) {
 }
 
 func (s *Service) Events(ctx context.Context, serverID string, limit int, severity, eventType, game string) (EventsResponse, error) {
-	events, err := s.store.ListActivity(ctx, limit)
+	var events []domain.ActivityEvent
+	var err error
+	if serverID != "" {
+		events, err = s.store.ListActivityByInstance(ctx, serverID, limit)
+	} else {
+		events, err = s.store.ListActivity(ctx, limit)
+	}
 	if err != nil {
 		return EventsResponse{}, err
 	}

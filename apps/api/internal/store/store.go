@@ -426,6 +426,20 @@ func (s *Store) ListActivity(ctx context.Context, limit int) ([]domain.ActivityE
 	return events, nil
 }
 
+func (s *Store) ListActivityByInstance(ctx context.Context, instanceID string, limit int) ([]domain.ActivityEvent, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	var events []domain.ActivityEvent
+	if err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc").Limit(limit).Find(&events).Error; err != nil {
+		return nil, err
+	}
+	for index := range events {
+		hydrateActivityPayload(&events[index])
+	}
+	return events, nil
+}
+
 var ErrNotFound = errors.New("not found")
 
 func hydrateActivityPayload(event *domain.ActivityEvent) {
