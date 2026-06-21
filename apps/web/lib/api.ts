@@ -1,8 +1,9 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
+import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
 import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
 const CREATE_SERVER_TIMEOUT_MS = 20000;
 

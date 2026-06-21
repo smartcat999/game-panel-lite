@@ -1,0 +1,98 @@
+services:
+  api:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
+    pull_policy: always
+    environment:
+      GAMEPANEL_HOST: 0.0.0.0
+      GAMEPANEL_PORT: 4000
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
+      GAMEPANEL_DOCKER_HOST: unix:///var/run/docker.sock
+      GAMEPANEL_PROVIDER_CATALOG_PATH: ${GAMEPANEL_PROVIDER_CATALOG_PATH:-/etc/gamepanel/providers.json}
+      GAMEPANEL_IMAGE_REGION: ${GAMEPANEL_IMAGE_REGION:-global}
+      GAMEPANEL_IMAGE_REGISTRY: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}
+      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.1.0}
+      GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
+      GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
+    ports:
+      - "${GAMEPANEL_API_PORT:-4000}:4000"
+    stop_grace_period: 5s
+    volumes:
+      - ./config/providers.json:/etc/gamepanel/providers.json:ro
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+
+  gamepanel-exporter:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
+    pull_policy: always
+    environment:
+      GAMEPANEL_HOST: 0.0.0.0
+      GAMEPANEL_PORT: 4010
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
+    depends_on:
+      - api
+    ports:
+      - "4010:4010"
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+
+  palworld-mod-pack:
+    profiles:
+      - jobs
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-palworld-mod-pack:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
+    pull_policy: always
+    environment:
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_PALWORLD_MOD_SOURCE_DIR: /palworld-mod-pack
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+
+  prometheus:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:v2.55.1
+    pull_policy: missing
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${GAMEPANEL_PROMETHEUS_DATA_DIR:-./data/prometheus}:/prometheus
+    depends_on:
+      - api
+      - gamepanel-exporter
+      - cadvisor
+      - node-exporter
+
+  cadvisor:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:v0.52.1
+    pull_policy: missing
+    privileged: true
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+
+  node-exporter:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:v1.10.2
+    pull_policy: missing
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  web:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
+    pull_policy: always
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+    depends_on:
+      - api
+    ports:
+      - "${GAMEPANEL_WEB_PORT:-3001}:3000"

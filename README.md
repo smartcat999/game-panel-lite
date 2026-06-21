@@ -29,6 +29,8 @@ sh scripts/install.sh
 http://localhost:3001
 ```
 
+脚本会拉取正式镜像并启动服务，不会在生产环境重新构建镜像。
+
 默认数据会保存在项目目录下的 `data/`，包括数据库、服务器实例、世界、备份和模组文件。
 
 ## 常用配置
@@ -38,20 +40,20 @@ http://localhost:3001
 ```env
 GAMEPANEL_WEB_PORT=3001
 GAMEPANEL_API_PORT=4000
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+NEXT_PUBLIC_API_BASE_URL=
 ```
 
 如果你部署到服务器，并希望网页直接使用 80 端口，可以改成：
 
 ```env
 GAMEPANEL_WEB_PORT=80
-NEXT_PUBLIC_API_BASE_URL=http://你的域名:4000
+NEXT_PUBLIC_API_BASE_URL=
 ```
 
-然后重新启动：
+默认情况下，网页会自动使用当前访问域名并连接 `4000` 端口的 API。然后重新启动：
 
 ```bash
-docker compose up -d --build
+docker compose -f compose.prod.yaml up -d
 ```
 
 ## 使用方式

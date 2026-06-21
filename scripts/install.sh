@@ -20,7 +20,7 @@ GAMEPANEL_WORKSPACE_PATH="$ROOT_DIR"
 GAMEPANEL_DOCKER_SOCKET_PATH="/var/run/docker.sock"
 GAMEPANEL_WEB_PORT="3001"
 GAMEPANEL_API_PORT="4000"
-NEXT_PUBLIC_API_BASE_URL="http://localhost:4000"
+NEXT_PUBLIC_API_BASE_URL=""
 GAMEPANEL_IMAGE_REGION="global"
 GAMEPANEL_IMAGE_REGISTRY="smartcat99999"
 GAMEPANEL_IMAGE_TAG="v0.1.0"
@@ -30,7 +30,8 @@ fi
 mkdir -p "$ROOT_DIR/data"
 
 cd "$ROOT_DIR"
-docker compose up -d --build api web gamepanel-exporter prometheus cadvisor node-exporter
+docker compose -f compose.prod.yaml pull
+docker compose -f compose.prod.yaml up -d
 
 echo
 echo "GamePanel Lite is starting."

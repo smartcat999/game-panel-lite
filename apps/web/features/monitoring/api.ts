@@ -5,8 +5,9 @@ import type {
   PlatformResponse,
   ServerLoadResponse
 } from "./types";
+import { getApiBaseUrl } from "@/lib/api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const API_BASE = getApiBaseUrl();
 
 async function apiFetch<T>(path: string, fallback: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, { cache: "no-store", credentials: "include" });
