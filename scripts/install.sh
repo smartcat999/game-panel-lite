@@ -31,7 +31,7 @@ mkdir -p "$ROOT_DIR/data"
 
 cd "$ROOT_DIR"
 docker compose -f compose.prod.yaml pull
-docker compose -f compose.prod.yaml up -d
+docker compose -f compose.prod.yaml up -d api web nginx gamepanel-exporter prometheus cadvisor node-exporter
 
 echo
 echo "GamePanel Lite is starting."

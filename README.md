@@ -30,6 +30,7 @@ http://localhost:3001
 ```
 
 脚本会拉取正式镜像并启动服务，不会在生产环境重新构建镜像。
+生产入口由 Nginx 代理到 Web 和 API，外部只需要访问一个端口。
 
 默认数据会保存在项目目录下的 `data/`，包括数据库、服务器实例、世界、备份和模组文件。
 
@@ -50,7 +51,7 @@ GAMEPANEL_WEB_PORT=80
 NEXT_PUBLIC_API_BASE_URL=
 ```
 
-默认情况下，网页会自动使用当前访问域名并连接 `4000` 端口的 API。然后重新启动：
+默认情况下，Nginx 会把同源 `/api` 代理到后端，不需要额外暴露 API 端口。然后重新启动：
 
 ```bash
 docker compose -f compose.prod.yaml up -d

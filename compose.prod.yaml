@@ -14,8 +14,8 @@ services:
       GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.1.0}
       GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
       GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
-    ports:
-      - "${GAMEPANEL_API_PORT:-4000}:4000"
+    expose:
+      - "4000"
     stop_grace_period: 5s
     volumes:
       - ./config/providers.json:/etc/gamepanel/providers.json:ro
@@ -32,8 +32,8 @@ services:
       GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
     depends_on:
       - api
-    ports:
-      - "4010:4010"
+    expose:
+      - "4010"
     volumes:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
 
@@ -94,5 +94,16 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
     depends_on:
       - api
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    pull_policy: missing
+    depends_on:
+      - api
+      - web
     ports:
-      - "${GAMEPANEL_WEB_PORT:-3001}:3000"
+      - "${GAMEPANEL_WEB_PORT:-3001}:80"
+    volumes:
+      - ./deploy/nginx/gamepanel.conf:/etc/nginx/conf.d/default.conf:ro
