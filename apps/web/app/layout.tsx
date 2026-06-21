@@ -6,8 +6,8 @@ import { AuthGate } from "@/components/auth-gate";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "GamePanel Lite | Self-hosted Terraria server panel",
-  description: "Modern lightweight self-hosted panel for Terraria and tModLoader servers."
+  title: "GamePanel Lite | Self-hosted game server panel",
+  description: "Modern lightweight self-hosted panel for Docker-backed game servers, lifecycle operations, logs, and mods."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

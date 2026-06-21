@@ -109,6 +109,40 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+func TestPalworldPakUploadCreatesDesiredAsset(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("palworld", cfg.DataDir)
+	server.GameKey = domain.GamePalworld
+	server.ProviderKey = domain.ProviderPalworld
+	createTestServer(t, db, server)
+
+	upload := httptest.NewRecorder()
+	router.ServeHTTP(upload, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/servers/palworld/mods/upload", "file", "better-pals.pak", []byte("pak-bytes")))
+	if upload.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected Palworld pak upload 201, got %d: %s", upload.Code, upload.Body.String())
+	}
+	var mod domain.ModFile
+	if err := json.Unmarshal(upload.Body.Bytes(), &mod); err != nil {
+		t.Fatal(err)
+	}
+	if mod.ProviderKey != domain.ProviderPalworld || mod.GameKey != domain.GamePalworld || mod.FileName != "better-pals.pak" {
+		t.Fatalf("expected Palworld mod metadata, got %+v", mod)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "mods", "palworld", "better-pals.pak")); err != nil {
+		t.Fatalf("expected pak stored in provider-safe mod cache: %v", err)
+	}
+	persisted, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted.Spec.ModIDs) != 1 || persisted.Spec.ModIDs[0] != mod.ID {
+		t.Fatalf("expected uploaded pak to be desired mod, got %+v", persisted.Spec.ModIDs)
+	}
+	if persisted.Status.Phase != domain.PhasePending {
+		t.Fatalf("expected Palworld mod upload to queue reconcile, got %+v", persisted.Status)
+	}
+}
+
 func TestModListsPruneMissingFiles(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)
@@ -326,7 +360,7 @@ func TestRunningTModLoaderServerAllowsModMutation(t *testing.T) {
 		t.Fatalf("expected running delete to remove mod record, got err=%v", err)
 	}
 
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "library.tmod", bytes.NewBufferString("library")); err != nil {
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, "library.tmod", bytes.NewBufferString("library")); err != nil {
 		t.Fatal(err)
 	}
 	libraryMod := domain.ModFile{
@@ -529,7 +563,7 @@ func TestRecommendedModsMarksExistingLibraryItems(t *testing.T) {
 
 func TestLegacyWorkshopInstallRecordMigratesToWorkshopMods(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
-	_, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "install.txt", bytes.NewBufferString("2563309347\n2824688072\n2563309347\n"))
+	_, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, "install.txt", bytes.NewBufferString("2563309347\n2824688072\n2563309347\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +607,7 @@ func TestLegacyWorkshopInstallRecordMigratesToWorkshopMods(t *testing.T) {
 func TestModPackCreateListAndDelete(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	for _, name := range []string{"boss.tmod", "quality.tmod"} {
-		if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", name, bytes.NewBufferString(name)); err != nil {
+		if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, name, bytes.NewBufferString(name)); err != nil {
 			t.Fatal(err)
 		}
 		item := domain.ModFile{
@@ -712,7 +746,7 @@ func TestAssignModRefreshesExistingServerModCache(t *testing.T) {
 	server := testServer("tmod", cfg.DataDir)
 	server.ProviderKey = domain.ProviderTerrariaTModLoader
 	createTestServer(t, db, server)
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "large.tmod", bytes.NewBufferString("library-version")); err != nil {
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, "large.tmod", bytes.NewBufferString("library-version")); err != nil {
 		t.Fatal(err)
 	}
 	libraryMod := domain.ModFile{
@@ -726,7 +760,7 @@ func TestAssignModRefreshesExistingServerModCache(t *testing.T) {
 	if err := db.CreateMod(context.Background(), &libraryMod); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, "large.tmod", bytes.NewBufferString("cached-version")); err != nil {
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, domain.ProviderTerrariaTModLoader, "large.tmod", bytes.NewBufferString("cached-version")); err != nil {
 		t.Fatal(err)
 	}
 	runtimeModPath := filepath.Join(server.DataDir, "Mods", "large.tmod")
@@ -768,7 +802,7 @@ func TestTModLoaderModDeleteRejectsDifferentServerMod(t *testing.T) {
 	target.ProviderKey = domain.ProviderTerrariaTModLoader
 	createTestServer(t, db, source)
 	createTestServer(t, db, target)
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(target.ID, "example.tmod", bytes.NewBufferString("mod")); err != nil {
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(target.ID, domain.ProviderTerrariaTModLoader, "example.tmod", bytes.NewBufferString("mod")); err != nil {
 		t.Fatal(err)
 	}
 	mod := domain.ModFile{
@@ -899,7 +933,7 @@ func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
 	server := testServer("tmod", cfg.DataDir)
 	server.ProviderKey = domain.ProviderTerrariaTModLoader
 	createTestServer(t, db, server)
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", "example.tmod", bytes.NewBufferString("mod-v1")); err != nil {
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, "example.tmod", bytes.NewBufferString("mod-v1")); err != nil {
 		t.Fatal(err)
 	}
 	globalMod := domain.ModFile{
@@ -965,7 +999,7 @@ func TestAssignModCopiesKnownDependencies(t *testing.T) {
 		{id: "magic", fileName: "MagicStorage.tmod", modName: "MagicStorage"},
 		{id: "serous", fileName: "SerousCommonLib.tmod", modName: "SerousCommonLib"},
 	} {
-		if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", item.fileName, bytes.NewReader(tmodFixture(item.modName, "1.0.0", "2026.04.3.0"))); err != nil {
+		if _, _, err := modsvc.NewService(cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, item.fileName, bytes.NewReader(tmodFixture(item.modName, "1.0.0", "2026.04.3.0"))); err != nil {
 			t.Fatal(err)
 		}
 		globalMod := domain.ModFile{

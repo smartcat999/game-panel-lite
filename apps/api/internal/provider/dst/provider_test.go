@@ -22,7 +22,7 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	for _, field := range provider.ConfigSchema() {
 		names[field.Name] = true
 	}
-	for _, expected := range []string{"serverName", "clusterName", "maxPlayers", "serverPassword", "clusterToken", "gameMode", "worldPreset", "clusterDescription", "cavesEnabled", "pvp", "pauseWhenEmpty", "offlineServer", "consoleEnabled"} {
+	for _, expected := range []string{"identity.serverName", "identity.clusterName", "identity.description", "identity.password", "identity.clusterToken", "identity.visibility", "gameplay.maxPlayers", "gameplay.gameMode", "gameplay.pvp", "gameplay.pauseWhenEmpty", "gameplay.consoleEnabled", "world.preset", "caves.enabled"} {
 		if !names[expected] {
 			t.Fatalf("expected config schema field %q, got %+v", expected, provider.ConfigSchema())
 		}
@@ -33,7 +33,10 @@ func TestProviderCatalogMetadata(t *testing.T) {
 }
 
 func TestNormalizeAndValidateConfig(t *testing.T) {
-	config := normalizeConfig(Config{ServerName: "DST Friends", ClusterName: "Cluster", MaxPlayers: 6, ClusterToken: "klei-token"})
+	config := normalizeConfig(Config{
+		Identity: DSTIdentityConfig{ServerName: "DST Friends", ClusterName: "Cluster", ClusterToken: "klei-token"},
+		Gameplay: DSTGameplayConfig{MaxPlayers: 6},
+	})
 	if config.Port != DefaultInternalPort {
 		t.Fatalf("expected internal port %d, got %d", DefaultInternalPort, config.Port)
 	}
@@ -41,7 +44,7 @@ func TestNormalizeAndValidateConfig(t *testing.T) {
 		t.Fatalf("expected valid config, got %v", err)
 	}
 	bad := config
-	bad.ClusterToken = ""
+	bad.Identity.ClusterToken = ""
 	if err := validateConfig(bad); err == nil {
 		t.Fatal("expected missing Klei token to fail")
 	}
@@ -49,19 +52,23 @@ func TestNormalizeAndValidateConfig(t *testing.T) {
 
 func TestRuntimeOptionsRenderDSTFiles(t *testing.T) {
 	config := normalizeConfig(Config{
-		ServerName:     "DST Friends",
-		ClusterName:    "Cluster",
-		MaxPlayers:     5,
-		ServerPassword: "join-secret",
-		ClusterToken:   "klei-token",
-		PauseWhenEmpty: true,
-		ConsoleEnabled: true,
+		Identity: DSTIdentityConfig{
+			ServerName:   "DST Friends",
+			ClusterName:  "Cluster",
+			Password:     "join-secret",
+			ClusterToken: "klei-token",
+		},
+		Gameplay: DSTGameplayConfig{
+			MaxPlayers:     5,
+			PauseWhenEmpty: true,
+			ConsoleEnabled: true,
+		},
 	})
 	provider := NewProvider()
 	options := runtimeOptions(config)
 
-	if provider.ImageFor("latest") != "smartcat99999/dst-server:latest" {
-		t.Fatalf("unexpected DST image: %s", provider.ImageFor("latest"))
+	if provider.ImageFor("") != "smartcat99999/dst-server:v2026.06.21" {
+		t.Fatalf("unexpected DST image: %s", provider.ImageFor(""))
 	}
 	if options.PortProtocol != "udp" {
 		t.Fatalf("expected UDP port protocol, got %q", options.PortProtocol)
@@ -89,17 +96,27 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	provider := NewProvider()
 	runtimeConfig, err := provider.RuntimeConfigForResource(domain.GameServer{
 		Spec: domain.ServerSpec{Config: map[string]any{
-			"serverName":         "Payload Name",
-			"clusterName":        "Payload Cluster",
-			"maxPlayers":         float64(12),
-			"serverPassword":     "payload-password",
-			"clusterToken":       "payload-token",
-			"gameMode":           "endless",
-			"worldPreset":        "forest_classic",
-			"clusterDescription": "Friends only",
-			"cavesEnabled":       true,
-			"pauseWhenEmpty":     false,
-			"workshopIds":        "123456789, 987654321",
+			"identity": map[string]any{
+				"serverName":   "Payload Name",
+				"clusterName":  "Payload Cluster",
+				"description":  "Friends only",
+				"password":     "payload-password",
+				"clusterToken": "payload-token",
+			},
+			"gameplay": map[string]any{
+				"maxPlayers":     float64(12),
+				"gameMode":       "endless",
+				"pauseWhenEmpty": false,
+			},
+			"world": map[string]any{
+				"preset": "forest_classic",
+			},
+			"caves": map[string]any{
+				"enabled": true,
+			},
+			"mods": map[string]any{
+				"workshopIds": []any{"123456789", "987654321"},
+			},
 		}},
 	})
 	if err != nil {
@@ -115,8 +132,8 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if !strings.Contains(options.Files["dst/Payload Cluster/cluster.ini"], "cluster_description = Friends only") || !strings.Contains(options.Files["dst/Payload Cluster/cluster.ini"], "pause_when_empty = false") {
 		t.Fatalf("expected payload cluster settings in cluster.ini, got:\n%s", options.Files["dst/Payload Cluster/cluster.ini"])
 	}
-	if !strings.Contains(options.Files["dst/Payload Cluster/Master/worldgen.lua"], `preset = "forest_classic"`) {
-		t.Fatalf("expected payload world preset in Master worldgen, got:\n%s", options.Files["dst/Payload Cluster/Master/worldgen.lua"])
+	if !strings.Contains(options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"], `preset = "forest_classic"`) {
+		t.Fatalf("expected payload world preset in Master leveldataoverride, got:\n%s", options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"])
 	}
 	if _, ok := options.Files["dst/Payload Cluster/Caves/server.ini"]; !ok {
 		t.Fatalf("expected caves shard files when caves are enabled, got %+v", options.Files)

@@ -155,9 +155,17 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
-	if len(modIDs) > 0 && payload.ProviderKey != domain.ProviderTerrariaTModLoader {
-		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+	if len(modIDs) > 0 && !providerSupportsMods(payload.ProviderKey) {
+		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
 		return
+	}
+	if payload.ProviderKey == domain.ProviderDST && len(modIDs) > 0 {
+		workshopIDs, err := h.dstWorkshopIDsForModIDs(r.Context(), modIDs)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		configPayload = withDSTWorkshopIDs(configPayload, workshopIDs)
 	}
 	if err := validateProviderConfigPayload(gameProvider, configPayload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -215,6 +223,34 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "server.created", fmt.Sprintf("Created server %s", server.Name), activityServerPayload(server))
 	writeJSON(w, http.StatusCreated, server)
+}
+
+func (h *Handler) dstWorkshopIDsForModIDs(ctx context.Context, modIDs []string) ([]string, error) {
+	workshopIDs := make([]string, 0, len(modIDs))
+	for _, id := range modIDs {
+		item, err := h.store.GetMod(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("mod %s not found", id)
+		}
+		if item.ProviderKey != domain.ProviderDST || item.Source != "workshop" || item.WorkshopID == "" {
+			return nil, fmt.Errorf("mod %s is not a DST Workshop mod", id)
+		}
+		workshopIDs = append(workshopIDs, item.WorkshopID)
+	}
+	return uniqueNonEmptyStrings(workshopIDs), nil
+}
+
+func withDSTWorkshopIDs(config map[string]any, workshopIDs []string) map[string]any {
+	if config == nil {
+		config = map[string]any{}
+	}
+	mods, _ := config["mods"].(map[string]any)
+	if mods == nil {
+		mods = map[string]any{}
+	}
+	mods["workshopIds"] = workshopIDs
+	config["mods"] = mods
+	return config
 }
 
 func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {

@@ -21,7 +21,7 @@ import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServer
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
-import { createDefaultProviderConfigPayload, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import {
   getTerrariaPreset,
@@ -174,7 +174,7 @@ function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, val
 
 function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
   if (field.name === "adminPassword") return t("adminPasswordHelp");
-  if (field.name === "clusterToken") return t("clusterTokenHelp");
+  if (field.name === "clusterToken" || field.name === "identity.clusterToken") return t("clusterTokenHelp");
   if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
   return field.help ?? "";
 }
@@ -202,7 +202,7 @@ function validateCreateConfig({
 
   for (const field of provider?.configSchema ?? []) {
     if (!field.required) continue;
-    const value = providerConfigPayload[field.name];
+    const value = providerConfigValue(providerConfigPayload, field.name);
     const label = providerFieldLabel(field, t);
     if (field.type === "boolean") {
       if (value !== true) errors[field.name] = t("requiredAgreementError", { field: label });
@@ -221,14 +221,14 @@ function validateCreateConfig({
 }
 
 function stringPayloadValue(payload: ProviderConfigPayload | undefined, key: string): string {
-  const value = payload?.[key];
+  const value = providerConfigValue(payload, key) ?? payload?.[key];
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return "";
 }
 
 function numberPayloadValue(payload: ProviderConfigPayload | undefined, key: string, fallback: number): number {
-  const value = payload?.[key];
+  const value = providerConfigValue(payload, key) ?? payload?.[key];
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
@@ -264,11 +264,11 @@ function terrariaConfigFromPayload(payload: ProviderConfigPayload | undefined, f
 }
 
 function providerServerName(payload: ProviderConfigPayload, fallback: string) {
-  return stringPayloadValue(payload, "serverName") || stringPayloadValue(payload, "clusterName") || fallback;
+  return stringPayloadValue(payload, "serverName") || stringPayloadValue(payload, "identity.serverName") || stringPayloadValue(payload, "clusterName") || stringPayloadValue(payload, "identity.clusterName") || fallback;
 }
 
 function providerJoinPassword(payload: ProviderConfigPayload) {
-  return stringPayloadValue(payload, "password") || stringPayloadValue(payload, "serverPassword");
+  return stringPayloadValue(payload, "password") || stringPayloadValue(payload, "identity.password") || stringPayloadValue(payload, "serverPassword");
 }
 
 function providerReviewValue(field: ProviderConfigField, value: unknown, t: (key: MessageKey, values?: Record<string, string | number>) => string): string {
@@ -332,7 +332,7 @@ function createReviewConfigModel({
 
   const fields = (provider?.configSchema ?? [])
     .map((field): ReviewConfigField | null => {
-      const value = providerConfigPayload[field.name];
+      const value = providerConfigValue(providerConfigPayload, field.name);
       const formatted = providerReviewValue(field, value, t);
       if (!field.required && field.type !== "boolean" && formatted.trim() === "") return null;
       return { label: providerFieldLabel(field, t), value: formatted };
@@ -1182,28 +1182,25 @@ function ConfigStep({
                 <p className="mt-1 text-xs leading-5 text-slate-500">{t("gameConfigurationHint")}</p>
               </div>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {providerFields.map((field) => {
-            const value = providerConfigPayload[field.name];
-            const setFieldValue = (nextValue: string | boolean) => {
-              onCustomize();
-              onClearValidationError(field.name);
-              setProviderConfigPayload(updateProviderConfigPayload(providerConfigPayload, field, nextValue));
-            };
-            const label = providerFieldLabel(field, t);
-            const error = validationErrors[field.name];
-            return (
-              <ProviderSchemaField
-                key={field.name}
-                error={error}
-                field={field}
-                label={label}
-                value={value}
-                onChange={setFieldValue}
+            {provider?.key === "dont-starve-together" ? (
+              <DSTProviderConfigSections
+                fields={providerFields}
+                payload={providerConfigPayload}
+                validationErrors={validationErrors}
+                onCustomize={onCustomize}
+                onClearValidationError={onClearValidationError}
+                setProviderConfigPayload={setProviderConfigPayload}
               />
-            );
-          })}
-            </div>
+            ) : (
+              <ProviderSchemaFieldsGrid
+                fields={providerFields}
+                payload={providerConfigPayload}
+                validationErrors={validationErrors}
+                onCustomize={onCustomize}
+                onClearValidationError={onClearValidationError}
+                setProviderConfigPayload={setProviderConfigPayload}
+              />
+            )}
           </section>
           <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
             <div className="flex items-start gap-3">
@@ -1645,6 +1642,85 @@ function ProviderSchemaField({
                 )}
                 {help && <span className="text-xs text-slate-500">{help}</span>}
     </WizardField>
+  );
+}
+
+function ProviderSchemaFieldsGrid({
+  fields,
+  onClearValidationError,
+  onCustomize,
+  payload,
+  setProviderConfigPayload,
+  validationErrors
+}: {
+  fields: ProviderConfigField[];
+  onClearValidationError: (field: string) => void;
+  onCustomize: () => void;
+  payload: ProviderConfigPayload;
+  setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
+  validationErrors: ConfigValidationErrors;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mt-4 grid gap-4 md:grid-cols-2">
+      {fields.map((field) => (
+        <ProviderSchemaField
+          key={field.name}
+          error={validationErrors[field.name]}
+          field={field}
+          label={providerFieldLabel(field, t)}
+          value={providerConfigValue(payload, field.name)}
+          onChange={(nextValue) => {
+            onCustomize();
+            onClearValidationError(field.name);
+            setProviderConfigPayload(updateProviderConfigPayload(payload, field, nextValue));
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const dstConfigSections = [
+  { title: "Identity and Access", prefix: "identity.", summary: ["identity.visibility"] },
+  { title: "Gameplay", prefix: "gameplay.", summary: ["gameplay.gameMode", "gameplay.maxPlayers"] },
+  { title: "World Generation", prefix: "world.", summary: ["world.preset"] },
+  { title: "Caves", prefix: "caves.", summary: ["caves.enabled"] }
+] as const;
+
+function DSTProviderConfigSections(props: {
+  fields: ProviderConfigField[];
+  onClearValidationError: (field: string) => void;
+  onCustomize: () => void;
+  payload: ProviderConfigPayload;
+  setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
+  validationErrors: ConfigValidationErrors;
+}) {
+  return (
+    <div className="mt-4 grid gap-3">
+      {dstConfigSections.map((section) => {
+        const fields = props.fields.filter((field) => field.name.startsWith(section.prefix));
+        if (fields.length === 0) return null;
+        return (
+          <section key={section.title} className="rounded-md border border-panel-line bg-slate-950/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{section.title}</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {section.summary.map((path) => {
+                  const value = providerConfigValue(props.payload, path);
+                  return (
+                    <span key={path} className="rounded border border-panel-line bg-slate-900 px-2 py-1 text-[11px] text-slate-400">
+                      {String(value ?? "default")}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <ProviderSchemaFieldsGrid {...props} fields={fields} />
+          </section>
+        );
+      })}
+    </div>
   );
 }
 

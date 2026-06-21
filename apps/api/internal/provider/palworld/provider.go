@@ -12,7 +12,7 @@ import (
 
 const DefaultInternalPort = 8211
 
-var versions = []string{"latest"}
+var versions = []string{"v2.4.1", "v2.4.0", "v2.3.2"}
 
 type Provider struct {
 	runtime runtimecatalog.RuntimeConfig
@@ -34,7 +34,7 @@ func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
 }
 
 func runtimeConfig() runtimecatalog.RuntimeConfig {
-	return runtimecatalog.RuntimeConfig{ImageTemplate: "thijsvanloef/palworld-server-docker:{version}", Versions: versions}
+	return runtimecatalog.RuntimeConfig{ImageTemplate: "smartcat99999/palworld-server:{version}", Versions: versions}
 }
 
 func (Provider) GameKey() domain.GameKey { return domain.GamePalworld }
@@ -51,7 +51,7 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 		BanPlayer:       false,
 		SaveSnapshots:   true,
 		Backups:         true,
-		Mods:            false,
+		Mods:            true,
 		Versions:        true,
 	}
 }

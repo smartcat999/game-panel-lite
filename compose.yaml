@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
       network: host
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-latest}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
     environment:
       GAMEPANEL_HOST: 0.0.0.0
       GAMEPANEL_PORT: 4000
@@ -12,6 +12,9 @@ services:
       GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
       GAMEPANEL_DOCKER_HOST: unix:///var/run/docker.sock
       GAMEPANEL_PROVIDER_CATALOG_PATH: ${GAMEPANEL_PROVIDER_CATALOG_PATH:-/etc/gamepanel/providers.json}
+      GAMEPANEL_IMAGE_REGION: ${GAMEPANEL_IMAGE_REGION:-global}
+      GAMEPANEL_IMAGE_REGISTRY: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}
+      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.1.0}
       GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
       GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
     ports:
@@ -27,7 +30,7 @@ services:
       context: .
       dockerfile: docker/exporter/Dockerfile
       network: host
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-latest}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
     environment:
       GAMEPANEL_HOST: 0.0.0.0
       GAMEPANEL_PORT: 4010
@@ -41,7 +44,7 @@ services:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
 
   prometheus:
-    image: prom/prometheus:v2.55.1
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:v2.55.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -57,7 +60,7 @@ services:
       - node-exporter
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:v0.52.1
     privileged: true
     ports:
       - "8081:8080"
@@ -69,7 +72,7 @@ services:
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
 
   node-exporter:
-    image: prom/node-exporter:v1.10.2
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:v1.10.2
     command:
       - --path.rootfs=/host
     pid: host
@@ -83,7 +86,7 @@ services:
       network: host
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-latest}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.1.0}
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
     depends_on:

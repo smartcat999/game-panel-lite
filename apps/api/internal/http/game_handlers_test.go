@@ -108,7 +108,7 @@ func TestGameCatalogServerCountsAndRecommendedVersion(t *testing.T) {
 		t.Fatalf("expected minecraft cover image, got %q", minecraftGame.CoverImage)
 	}
 	if minecraftGame.Providers[0].RecommendedVersion != "1.21.4" {
-		t.Fatalf("expected minecraft to recommend stable version after latest, got %+v", minecraftGame.Providers[0])
+		t.Fatalf("expected minecraft to recommend the first concrete version, got %+v", minecraftGame.Providers[0])
 	}
 	var vanillaProvider *domain.ProviderCatalog
 	for index := range terrariaGame.Providers {
@@ -120,6 +120,6 @@ func TestGameCatalogServerCountsAndRecommendedVersion(t *testing.T) {
 		t.Fatal("expected Terraria vanilla provider in catalog")
 	}
 	if vanillaProvider.RecommendedVersion != "1.4.5.6" {
-		t.Fatalf("expected Terraria vanilla to recommend latest explicit version, got %+v", vanillaProvider)
+		t.Fatalf("expected Terraria vanilla to recommend the first concrete version, got %+v", vanillaProvider)
 	}
 }

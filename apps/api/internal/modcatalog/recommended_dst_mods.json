@@ -1,0 +1,26 @@
+[
+  {
+    "rank": 1,
+    "workshopId": "378160973",
+    "title": "Global Positions",
+    "fileSize": 1,
+    "tags": ["utility", "map"],
+    "description": "Shows player positions on the map for cooperative DST servers."
+  },
+  {
+    "rank": 2,
+    "workshopId": "362175979",
+    "title": "Combined Status",
+    "fileSize": 1,
+    "tags": ["utility", "hud"],
+    "description": "Adds compact hunger, sanity, temperature, and season status displays."
+  },
+  {
+    "rank": 3,
+    "workshopId": "347079953",
+    "title": "Display Food Values",
+    "fileSize": 1,
+    "tags": ["utility", "food"],
+    "description": "Shows food stat values in tooltips for easier survival planning."
+  }
+]

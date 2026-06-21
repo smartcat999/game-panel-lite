@@ -33,18 +33,18 @@ const navItems = [
 const capabilities = [
   {
     icon: Gamepad2,
-    title: "Create Terraria Servers",
-    body: "Spin up fresh Terraria or tModLoader instances with presets for friends, mods, and long-running sessions."
+    title: "Create Game Servers",
+    body: "Spin up Terraria, tModLoader, and upcoming provider-backed servers through the same guided resource flow."
   },
   {
     icon: Container,
-    title: "Docker Isolation",
-    body: "Each server maps to one container and its own data directory, keeping ports and runtime state separate."
+    title: "Runtime Isolation",
+    body: "Each server maps to an isolated runtime resource and data directory, keeping ports, files, and lifecycle state separate."
   },
   {
     icon: Zap,
-    title: "Quick Controls",
-    body: "Start, stop, restart, inspect status, and open logs from the same focused command surface."
+    title: "Controller-style Lifecycle",
+    body: "Start, stop, restart, and watch lifecycle progress as the backend reconciles runtime state asynchronously."
   },
   {
     icon: Globe2,
@@ -54,43 +54,43 @@ const capabilities = [
   {
     icon: ShieldCheck,
     title: "Safe Runtime Boundaries",
-    body: "Keep Docker access scoped through the backend runtime adapter with validation around filesystem operations."
+    body: "Keep Docker and future runtime access scoped through adapters with validation around filesystem operations."
   },
   {
     icon: TerminalSquare,
-    title: "Live Console",
-    body: "Follow server logs over SSE and keep commands close to the operational context that needs them."
+    title: "Console and Logs",
+    body: "Stream live output over SSE and keep command input in the same operational context when a provider supports it."
   }
 ] as const;
 
 const previewShots = [
   {
     src: "/official/interface-dashboard.png",
-    title: "Instance Overview",
-    body: "A dense launcher-style dashboard for active servers, resources, status, and fast server actions."
+    title: "Resource Overview",
+    body: "A dense launcher-style dashboard for active servers, runtime status, resource usage, and fast actions."
   },
   {
     src: "/official/interface-servers.png",
-    title: "Seamless Creation",
-    body: "A guided server flow that keeps provider, runtime image, and world settings readable."
+    title: "Guided Creation",
+    body: "A provider-aware server flow that separates game settings from runtime resources."
   },
   {
     src: "/official/interface-mods.png",
-    title: "Organized Library",
-    body: "A compact place for modded setup, provider metadata, and Terraria-specific configuration."
+    title: "Mod Library",
+    body: "A compact place for provider-specific mod metadata, installed state, and reusable mod packs."
   }
 ] as const;
 
 const setupSteps = [
   {
     icon: Download,
-    title: "Choose your build",
-    body: "Pick Vanilla Terraria or tModLoader, then start from a preset that matches the world you want."
+    title: "Choose your provider",
+    body: "Pick a supported game and start from a preset that matches the server experience you want."
   },
   {
     icon: Settings2,
-    title: "Tune the instance",
-    body: "Set name, port, password, memory, and runtime options before the container starts."
+    title: "Tune the resource",
+    body: "Set game configuration separately from CPU, memory, port, and runtime options."
   },
   {
     icon: Play,
@@ -102,17 +102,17 @@ const setupSteps = [
 const roadmap = [
   {
     label: "Now",
-    items: ["Terraria Core Engine", "tModLoader UI Integration", "Runtime Monitoring"],
+    items: ["Async Server Controller", "Terraria and tModLoader", "Runtime Metrics and Progress"],
     tone: "text-[#6bfb9a]"
   },
   {
     label: "Next",
-    items: ["Advanced Config Templates", "Expanded Provider Catalog", "User Permission System"],
+    items: ["DST World and Cave Config", "Provider Mod Packs", "Palworld Mod Assets"],
     tone: "text-[#dfe2eb]"
   },
   {
     label: "Later",
-    items: ["Minecraft Support", "Palworld Support", "One-click Mod Installations"],
+    items: ["Process Runtime Adapter", "Node Runtime Targets", "Provider Marketplace"],
     tone: "text-[#869486]"
   }
 ] as const;
@@ -218,10 +218,10 @@ export default function HomePage() {
         <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-16 pt-10 sm:px-6 sm:pt-16 lg:grid-cols-[0.92fr_1.08fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <h1 className="max-w-3xl text-balance text-[2.4rem] font-bold leading-[1.02] tracking-[-0.025em] text-white sm:text-6xl lg:text-7xl">
-              Self-hosted game servers, without the <span className="text-[#6bfb9a]">server admin headache.</span>
+              Self-hosted game servers, without the <span className="text-[#6bfb9a]">runtime busywork.</span>
             </h1>
             <p className="mt-5 max-w-2xl text-pretty text-base leading-7 text-[#bccabb] sm:text-lg">
-              Create, run, back up, restore, and manage Terraria servers from a clean web panel built for players and small groups.
+              Create and operate Docker-backed game servers from a clean web panel built for players, modded groups, and small communities.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -254,21 +254,21 @@ export default function HomePage() {
       <MotionSection className="border-b border-[#30363d] bg-[#181c22]">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <h2 className="max-w-xl text-balance text-2xl font-semibold tracking-[-0.01em] text-white">
-            Hosting a friend-group server should not feel like managing infrastructure.
+            Hosting a friend-group server should feel like managing a game resource, not hand-editing infrastructure.
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border border-[#30363d] bg-[#10141a] p-5">
               <Container className="mb-4 size-5 text-[#6bfb9a]" aria-hidden="true" />
-              <h3 className="font-semibold text-white">Forget Docker commands</h3>
+              <h3 className="font-semibold text-white">Forget runtime commands</h3>
               <p className="mt-2 text-sm leading-6 text-[#bccabb]">
-                Stop wrestling with compose files, YAML, and container state just to keep one Terraria world online.
+                Stop wrestling with compose files, container names, and restart timing just to keep a game world online.
               </p>
             </div>
             <div className="rounded-lg border border-[#30363d] bg-[#10141a] p-5">
               <FileCode2 className="mb-4 size-5 text-[#6bfb9a]" aria-hidden="true" />
-              <h3 className="font-semibold text-white">No more manual configs</h3>
+              <h3 className="font-semibold text-white">Provider-owned configs</h3>
               <p className="mt-2 text-sm leading-6 text-[#bccabb]">
-                Edit common server settings in the panel, then let the Terraria provider render the correct config.
+                Let each game provider own its structured settings instead of forcing every game into one common form.
               </p>
             </div>
           </div>
@@ -283,7 +283,7 @@ export default function HomePage() {
               <h2 className="mt-2 text-balance text-3xl font-semibold tracking-[-0.02em] text-white">Everything you need, nothing you do not.</h2>
             </div>
             <p className="max-w-xl text-sm leading-6 text-[#bccabb] lg:justify-self-end">
-              Optimized specifically for Terraria enthusiasts and performance-minded hosts.
+              Terraria is first-class today, with DST, Palworld, and future games moving through the same provider architecture.
             </p>
           </div>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -336,7 +336,7 @@ export default function HomePage() {
 
       <MotionSection className="border-b border-[#30363d] bg-[#10141a]">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-          <h2 className="text-center text-3xl font-semibold tracking-[-0.02em] text-white">From zero to Terraria in 60 seconds.</h2>
+          <h2 className="text-center text-3xl font-semibold tracking-[-0.02em] text-white">From zero to a running server in 60 seconds.</h2>
           <div className="mt-10 grid gap-5 md:grid-cols-3">
             {setupSteps.map((step, index) => {
               const Icon = step.icon;
@@ -384,7 +384,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:px-8">
           <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#181c22] px-3 py-1 text-xs text-[#bccabb]">
             <ShieldCheck className="size-4 text-[#6bfb9a]" aria-hidden="true" />
-            Loved by self-hosters and small communities
+            Built for self-hosters and small communities
           </div>
           <h2 className="mx-auto max-w-2xl text-balance text-4xl font-semibold tracking-[-0.03em] text-white">
             Built for self-hosters and small game communities.

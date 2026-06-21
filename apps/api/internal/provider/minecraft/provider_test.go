@@ -31,11 +31,16 @@ func TestProviderCatalogMetadata(t *testing.T) {
 
 func TestImageAndVersions(t *testing.T) {
 	provider := NewProvider()
-	if provider.ImageFor("latest") != "itzg/minecraft-server:latest" {
-		t.Fatalf("unexpected minecraft image: %s", provider.ImageFor("latest"))
+	if provider.ImageFor("") != "smartcat99999/minecraft-server:2026.6.0-java21" {
+		t.Fatalf("unexpected minecraft image: %s", provider.ImageFor(""))
 	}
-	if provider.ImageFor("1.21.4") != "itzg/minecraft-server:latest" {
+	if provider.ImageFor("1.21.4") != "smartcat99999/minecraft-server:2026.6.0-java21" {
 		t.Fatalf("minecraft game versions should be passed via VERSION env, got image %s", provider.ImageFor("1.21.4"))
+	}
+	for _, version := range provider.Versions() {
+		if version == "latest" {
+			t.Fatalf("provider versions must be concrete, got %v", provider.Versions())
+		}
 	}
 	if len(provider.Versions()) < 2 {
 		t.Fatalf("expected multiple versions, got %v", provider.Versions())
@@ -90,8 +95,8 @@ func TestRuntimeOptionsRenderMinecraftFiles(t *testing.T) {
 	if !containsEnv(options.Env, "EULA=TRUE") {
 		t.Fatalf("expected EULA=TRUE env, got %v", options.Env)
 	}
-	if !containsEnv(options.Env, "VERSION=LATEST") {
-		t.Fatalf("expected default VERSION=LATEST env, got %v", options.Env)
+	if !containsEnv(options.Env, "VERSION=1.21.4") {
+		t.Fatalf("expected default VERSION=1.21.4 env, got %v", options.Env)
 	}
 }
 
@@ -122,8 +127,8 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := runtimeConfig.Options
-	if !containsEnv(options.Env, "VERSION=LATEST") {
-		t.Fatalf("expected default VERSION=LATEST env, got %v", options.Env)
+	if !containsEnv(options.Env, "VERSION=1.21.4") {
+		t.Fatalf("expected default VERSION=1.21.4 env, got %v", options.Env)
 	}
 	properties := options.Files["data/server.properties"]
 	for _, expected := range []string{

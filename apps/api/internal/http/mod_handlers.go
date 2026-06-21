@@ -37,8 +37,8 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.ProviderKey != domain.ProviderTerrariaTModLoader {
-		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+	if !providerSupportsUploadedMods(server.ProviderKey) {
+		writeError(w, http.StatusBadRequest, "uploaded mods are not supported for this provider")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -51,25 +51,34 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	if !isTModPackage(header.Filename) {
-		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
+	if !isProviderModPackage(server.ProviderKey, header.Filename) {
+		writeError(w, http.StatusBadRequest, providerModUploadError(server.ProviderKey))
 		return
 	}
-	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, header.Filename, file)
+	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, server.ProviderKey, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	metadata, err := modsvc.Inspect(path)
-	if err != nil {
-		h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
+	metadata := modsvc.Metadata{}
+	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
+		metadata, err = modsvc.Inspect(path)
+		if err != nil {
+			h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
+		}
 	}
-	item, created, err := h.upsertModRecord(r.Context(), server.ID, header.Filename, size, metadata)
+	item, created, err := h.upsertModRecord(r.Context(), server, server.ID, header.Filename, size, metadata)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := h.materializeModForRuntime(item, server); err != nil {
+	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
+		if err := h.materializeModForRuntime(item, server); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := h.markModDesired(r.Context(), &server, item.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -102,8 +111,8 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.ProviderKey != domain.ProviderTerrariaTModLoader {
-		writeError(w, http.StatusBadRequest, "workshop mods are only supported for tModLoader servers")
+	if !providerSupportsWorkshopMods(server.ProviderKey) {
+		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -121,7 +130,7 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]domain.ModFile, 0, len(workshopIDs))
 	for _, workshopID := range workshopIDs {
-		item, _, err := h.upsertWorkshopModRecord(r.Context(), server.ID, workshopID)
+		item, _, err := h.upsertWorkshopModRecord(r.Context(), server, server.ID, workshopID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -134,6 +143,10 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items = append(items, dependencies...)
+	if err := h.markModsDesired(r.Context(), &server, modIDs(items)); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -161,7 +174,7 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 	}
 	items := make([]domain.ModFile, 0, len(workshopIDs))
 	for _, workshopID := range workshopIDs {
-		item, _, err := h.createWorkshopModRecord(r.Context(), "unassigned", workshopID)
+		item, _, err := h.createWorkshopModRecord(r.Context(), domain.ProviderTerrariaTModLoader, "unassigned", workshopID)
 		if err != nil {
 			if errors.Is(err, errWorkshopModExists) {
 				writeError(w, http.StatusConflict, fmt.Sprintf("workshop mod %s already exists in mod library", workshopID))
@@ -229,6 +242,15 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if item.Enabled {
+		if err := h.markModDesired(r.Context(), &server, item.ID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if err := h.unmarkModDesired(r.Context(), &server, item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -257,13 +279,17 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
 		if err := removeStoredFile(path); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if err := h.store.DeleteMod(r.Context(), item.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.unmarkModDesired(r.Context(), &server, item.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -298,7 +324,12 @@ type recommendedModResponse struct {
 }
 
 func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
-	items, err := modcatalog.RecommendedTModLoaderMods()
+	tmodItems, err := modcatalog.RecommendedTModLoaderMods()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dstItems, err := modcatalog.RecommendedDSTMods()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -308,20 +339,33 @@ func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	byWorkshopID := make(map[string]domain.ModFile, len(mods))
+	byProviderWorkshopID := make(map[string]domain.ModFile, len(mods))
 	for _, item := range mods {
+		hydrateModGameMetadata(&item)
 		if item.Source == "workshop" && item.WorkshopID != "" {
-			byWorkshopID[item.WorkshopID] = item
+			byProviderWorkshopID[string(item.ProviderKey)+"|"+item.WorkshopID] = item
 		}
 	}
-	response := make([]recommendedModResponse, 0, len(items))
-	for _, item := range items {
+	response := make([]recommendedModResponse, 0, len(tmodItems)+len(dstItems))
+	for _, item := range tmodItems {
 		entry := recommendedModResponse{
 			RecommendedMod: item,
 			GameKey:        domain.GameTerraria,
 			ProviderKey:    domain.ProviderTerrariaTModLoader,
 		}
-		if mod, ok := byWorkshopID[item.WorkshopID]; ok {
+		if mod, ok := byProviderWorkshopID[string(domain.ProviderTerrariaTModLoader)+"|"+item.WorkshopID]; ok {
+			entry.InLibrary = true
+			entry.ModID = mod.ID
+		}
+		response = append(response, entry)
+	}
+	for _, item := range dstItems {
+		entry := recommendedModResponse{
+			RecommendedMod: item,
+			GameKey:        domain.GameDST,
+			ProviderKey:    domain.ProviderDST,
+		}
+		if mod, ok := byProviderWorkshopID[string(domain.ProviderDST)+"|"+item.WorkshopID]; ok {
 			entry.InLibrary = true
 			entry.ModID = mod.ID
 		}
@@ -341,7 +385,7 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
 		return
 	}
-	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", header.Filename, file)
+	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -350,7 +394,7 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
 	}
-	item, created, err := h.upsertModRecord(r.Context(), "unassigned", header.Filename, size, metadata)
+	item, created, err := h.upsertModRecordForProvider(r.Context(), domain.ProviderTerrariaTModLoader, "unassigned", header.Filename, size, metadata)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -380,8 +424,8 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if targetServer.ProviderKey != domain.ProviderTerrariaTModLoader {
-		writeError(w, http.StatusBadRequest, "mods are only supported for tModLoader servers")
+	if !providerSupportsMods(targetServer.ProviderKey) {
+		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
 		return
 	}
 	if isGameServerBusyForModMutation(targetServer) {
@@ -393,7 +437,11 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "workshop mods are not supported on ARM Docker hosts; upload the .tmod file instead")
 			return
 		}
-		assigned, created, err := h.upsertWorkshopModRecord(r.Context(), targetServer.ID, item.WorkshopID)
+		if !providerSupportsWorkshopMods(targetServer.ProviderKey) {
+			writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
+			return
+		}
+		assigned, created, err := h.upsertWorkshopModRecord(r.Context(), targetServer, targetServer.ID, item.WorkshopID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -413,6 +461,10 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if err := h.markModDesired(r.Context(), &targetServer, assigned.ID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		if !created {
 			h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name), activityModPayload(assigned, &targetServer))
 			writeJSON(w, http.StatusOK, assigned)
@@ -427,12 +479,18 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	assigned, created, err := h.upsertModRecord(r.Context(), targetServer.ID, item.FileName, size, metadataFromMod(item))
+	assigned, created, err := h.upsertModRecord(r.Context(), targetServer, targetServer.ID, item.FileName, size, metadataFromMod(item))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := h.materializeModForRuntime(assigned, targetServer); err != nil {
+	if targetServer.ProviderKey == domain.ProviderTerrariaTModLoader {
+		if err := h.materializeModForRuntime(assigned, targetServer); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := h.markModDesired(r.Context(), &targetServer, assigned.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -471,7 +529,7 @@ func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Source != "workshop" {
-		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
 		if err := removeStoredFile(path); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return

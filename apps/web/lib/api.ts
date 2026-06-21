@@ -362,6 +362,10 @@ export type AppSettings = {
   dockerHost: string;
   publicHost: string;
   locale: Locale;
+  imageRegion: string;
+  imageRegistry: string;
+  imageTag: string;
+  providerCatalogPath: string;
 };
 
 export type ServerStats = {

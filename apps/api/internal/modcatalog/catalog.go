@@ -3,10 +3,15 @@ package modcatalog
 import (
 	_ "embed"
 	"encoding/json"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
 
 //go:embed recommended_tmodloader_mods.json
 var recommendedTModLoaderModsJSON []byte
+
+//go:embed recommended_dst_mods.json
+var recommendedDSTModsJSON []byte
 
 type RecommendedMod struct {
 	Rank           int      `json:"rank"`
@@ -27,15 +32,40 @@ type RecommendedMod struct {
 }
 
 func RecommendedTModLoaderMods() ([]RecommendedMod, error) {
+	return recommendedModsFromJSON(recommendedTModLoaderModsJSON)
+}
+
+func RecommendedDSTMods() ([]RecommendedMod, error) {
+	return recommendedModsFromJSON(recommendedDSTModsJSON)
+}
+
+func recommendedModsFromJSON(payload []byte) ([]RecommendedMod, error) {
 	var items []RecommendedMod
-	if err := json.Unmarshal(recommendedTModLoaderModsJSON, &items); err != nil {
+	if err := json.Unmarshal(payload, &items); err != nil {
 		return nil, err
 	}
 	return items, nil
 }
 
 func RecommendedTModLoaderModByWorkshopID(workshopID string) (RecommendedMod, bool) {
-	items, err := RecommendedTModLoaderMods()
+	return recommendedModByWorkshopID(RecommendedTModLoaderMods, workshopID)
+}
+
+func RecommendedDSTModByWorkshopID(workshopID string) (RecommendedMod, bool) {
+	return recommendedModByWorkshopID(RecommendedDSTMods, workshopID)
+}
+
+func RecommendedModByProviderAndWorkshopID(providerKey domain.ProviderKey, workshopID string) (RecommendedMod, bool) {
+	switch providerKey {
+	case domain.ProviderDST:
+		return RecommendedDSTModByWorkshopID(workshopID)
+	default:
+		return RecommendedTModLoaderModByWorkshopID(workshopID)
+	}
+}
+
+func recommendedModByWorkshopID(loader func() ([]RecommendedMod, error), workshopID string) (RecommendedMod, bool) {
+	items, err := loader()
 	if err != nil {
 		return RecommendedMod{}, false
 	}

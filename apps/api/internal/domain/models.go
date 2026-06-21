@@ -171,8 +171,8 @@ type World struct {
 type ModFile struct {
 	ID               string      `json:"id" gorm:"primaryKey"`
 	InstanceID       string      `json:"instanceId" gorm:"index"`
-	GameKey          GameKey     `json:"gameKey,omitempty" gorm:"-"`
-	ProviderKey      ProviderKey `json:"providerKey,omitempty" gorm:"-"`
+	GameKey          GameKey     `json:"gameKey,omitempty" gorm:"index"`
+	ProviderKey      ProviderKey `json:"providerKey,omitempty" gorm:"index"`
 	FileName         string      `json:"fileName"`
 	Source           string      `json:"source,omitempty" gorm:"index"`
 	WorkshopID       string      `json:"workshopId,omitempty" gorm:"index"`

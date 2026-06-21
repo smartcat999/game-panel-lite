@@ -3,13 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Bookmark, Box, Gauge, Gamepad2, Globe2, HardDrive, LogOut, Plus, Search, Settings, ShieldCheck } from "lucide-react";
+import { Activity, Archive, Bookmark, Box, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, Plus, Search, Settings, ShieldCheck, UserCog, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { getApiHealth, getAuthBootstrap, getSettings, listGameServers, logoutAdmin } from "@/lib/api";
+import { changeAdminPassword, getApiHealth, getAuthBootstrap, getSettings, listGameServers, logoutAdmin, updateLocale } from "@/lib/api";
 import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerJoinPort, gameServerMode, gameServerSearchText, gameServerWorldName } from "@/lib/game-server-resource";
 import { serverProviderDisplay, serverResourceLabelKey } from "@/lib/server-display";
@@ -41,11 +41,17 @@ function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { setLocale, t } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const [createPending, setCreatePending] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountTab, setAccountTab] = useState<"language" | "password">("language");
+  const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [accountMessage, setAccountMessage] = useState("");
   const searchRef = useRef<HTMLFormElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
@@ -60,6 +66,25 @@ function AppChrome({ children }: { children: ReactNode }) {
       await queryClient.invalidateQueries({ queryKey: ["auth-bootstrap"] });
       router.push("/dashboard");
     }
+  });
+  const localeMutation = useMutation({
+    mutationFn: (nextLocale: Locale) => updateLocale(nextLocale),
+    onSuccess: async (result) => {
+      setLocale(result.locale);
+      setSelectedLocale(result.locale);
+      setAccountMessage(t("languageSaved"));
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (err) => setAccountMessage(err instanceof Error ? err.message : t("languageSaveFailed"))
+  });
+  const passwordMutation = useMutation({
+    mutationFn: () => changeAdminPassword(currentPassword, newPassword),
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setAccountMessage(t("passwordChanged"));
+    },
+    onError: (err) => setAccountMessage(err instanceof Error ? err.message : t("passwordChangeFailed"))
   });
   const serviceAvailable = apiHealth.data?.status === "ok";
   const serviceLabel = serviceAvailable ? t("online") : apiHealth.isLoading ? t("dockerCheckingShort") : t("unavailable");
@@ -95,6 +120,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (settingsQuery.data?.locale) {
       setLocale(settingsQuery.data.locale);
+      setSelectedLocale(settingsQuery.data.locale);
     }
   }, [settingsQuery.data?.locale, setLocale]);
 
@@ -110,6 +136,21 @@ function AppChrome({ children }: { children: ReactNode }) {
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, []);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+    };
+  }, [accountOpen]);
 
   const openServer = (id: string) => {
     setSearchOpen(false);
@@ -127,6 +168,25 @@ function AppChrome({ children }: { children: ReactNode }) {
       router.push(`/servers?search=${encodeURIComponent(search.trim())}`);
       setSearchOpen(false);
     }
+  };
+
+  const openAccountSettings = (tab: "language" | "password" = "language") => {
+    setAccountTab(tab);
+    setSelectedLocale(locale);
+    setAccountMessage("");
+    setProfileOpen(false);
+    setAccountOpen(true);
+  };
+
+  const saveLocale = () => {
+    setAccountMessage("");
+    localeMutation.mutate(selectedLocale);
+  };
+
+  const submitPasswordChange = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAccountMessage("");
+    passwordMutation.mutate();
   };
 
   return (
@@ -266,6 +326,14 @@ function AppChrome({ children }: { children: ReactNode }) {
                     </div>
                     <button
                       type="button"
+                      className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      onClick={() => openAccountSettings("language")}
+                    >
+                      <UserCog aria-hidden="true" className="size-4" />
+                      {t("accountSettings")}
+                    </button>
+                    <button
+                      type="button"
                       className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => logoutMutation.mutate()}
                       disabled={logoutMutation.isPending}
@@ -280,6 +348,28 @@ function AppChrome({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="px-4 py-6 pb-24 md:px-8 lg:pb-6">{children}</main>
+        {accountOpen ? (
+          <AccountSettingsDialog
+            activeTab={accountTab}
+            currentPassword={currentPassword}
+            locale={locale}
+            selectedLocale={selectedLocale}
+            message={accountMessage}
+            newPassword={newPassword}
+            passwordPending={passwordMutation.isPending}
+            localePending={localeMutation.isPending}
+            onChangeLocale={setSelectedLocale}
+            onChangeCurrentPassword={setCurrentPassword}
+            onChangeNewPassword={setNewPassword}
+            onClose={() => setAccountOpen(false)}
+            onSaveLocale={saveLocale}
+            onSubmitPassword={submitPasswordChange}
+            onTabChange={(tab) => {
+              setAccountTab(tab);
+              setAccountMessage("");
+            }}
+          />
+        ) : null}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-line bg-panel-bg/95 px-2 py-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
           <div className="grid grid-cols-5 gap-1">
             {visibleNav.slice(0, 5).map((item) => {
@@ -303,6 +393,159 @@ function AppChrome({ children }: { children: ReactNode }) {
         </nav>
       </div>
     </div>
+  );
+}
+
+function AccountSettingsDialog({
+  activeTab,
+  currentPassword,
+  locale,
+  localePending,
+  message,
+  newPassword,
+  passwordPending,
+  selectedLocale,
+  onChangeLocale,
+  onChangeCurrentPassword,
+  onChangeNewPassword,
+  onClose,
+  onSaveLocale,
+  onSubmitPassword,
+  onTabChange
+}: {
+  activeTab: "language" | "password";
+  currentPassword: string;
+  locale: Locale;
+  localePending: boolean;
+  message: string;
+  newPassword: string;
+  passwordPending: boolean;
+  selectedLocale: Locale;
+  onChangeLocale: (locale: Locale) => void;
+  onChangeCurrentPassword: (value: string) => void;
+  onChangeNewPassword: (value: string) => void;
+  onClose: () => void;
+  onSaveLocale: () => void;
+  onSubmitPassword: (event: FormEvent<HTMLFormElement>) => void;
+  onTabChange: (tab: "language" | "password") => void;
+}) {
+  const { t } = useI18n();
+  const localeChanged = selectedLocale !== locale;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/72 px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="account-settings-title">
+      <div className="w-[min(720px,calc(100vw-32px))] overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_24px_72px_rgba(0,0,0,0.55)]">
+        <div className="flex min-h-[81px] items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
+          <div className="min-w-0">
+            <h2 id="account-settings-title" className="font-semibold text-white">{t("accountSettings")}</h2>
+            <p className="mt-1 line-clamp-2 text-sm text-slate-400">{t("accountSettingsDescription")}</p>
+          </div>
+          <button
+            aria-label={t("close")}
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+            type="button"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" className="size-5" />
+          </button>
+        </div>
+        <div className="grid min-h-[360px] md:grid-cols-[192px_minmax(0,1fr)]">
+          <nav className="border-b border-panel-line bg-slate-950/25 p-3 md:border-b-0 md:border-r" aria-label={t("accountSettings")}>
+            <AccountTabButton active={activeTab === "language"} icon={<Languages aria-hidden="true" className="size-4" />} label={t("appearanceTitle")} onClick={() => onTabChange("language")} />
+            <AccountTabButton active={activeTab === "password"} icon={<KeyRound aria-hidden="true" className="size-4" />} label={t("changePassword")} onClick={() => onTabChange("password")} />
+          </nav>
+          <div className="min-w-0 p-5">
+            {activeTab === "language" ? (
+              <div>
+                <h3 className="font-semibold text-white">{t("appearanceTitle")}</h3>
+                <p className="mt-1 min-h-10 max-w-xl text-sm text-slate-400">{t("appearanceDescription")}</p>
+                <div className="mt-5 inline-flex rounded-md border border-panel-line bg-slate-950/60 p-1 text-sm" aria-label={t("language")}>
+                  <button
+                    className={cn("min-w-24 rounded px-3 py-2 text-center text-slate-300 transition-colors", selectedLocale === "zh" && "bg-panel-green text-slate-950")}
+                    type="button"
+                    disabled={localePending}
+                    onClick={() => onChangeLocale("zh")}
+                  >
+                    {t("chinese")}
+                  </button>
+                  <button
+                    className={cn("min-w-24 rounded px-3 py-2 text-center text-slate-300 transition-colors", selectedLocale === "en" && "bg-panel-green text-slate-950")}
+                    type="button"
+                    disabled={localePending}
+                    onClick={() => onChangeLocale("en")}
+                  >
+                    {t("languageEnglish")}
+                  </button>
+                </div>
+                <div className="mt-5 flex min-h-10 flex-wrap items-center gap-3">
+                  {localeChanged ? (
+                    <>
+                      <Button className="px-4" type="button" disabled={localePending} onClick={onSaveLocale}>
+                        {localePending ? t("saving") : t("saveButton")}
+                      </Button>
+                      <button
+                        className="rounded-md px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                        type="button"
+                        disabled={localePending}
+                        onClick={() => onChangeLocale(locale)}
+                      >
+                        {t("cancel")}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <form className="max-w-md space-y-3" onSubmit={onSubmitPassword}>
+                <div>
+                  <h3 className="font-semibold text-white">{t("changePassword")}</h3>
+                  <p className="mt-1 text-sm text-slate-400">{t("localAdminDescription")}</p>
+                </div>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{t("currentPassword")}</span>
+                  <Input
+                    className="mt-2 w-full"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) => onChangeCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-slate-500">{t("newPassword")}</span>
+                  <Input
+                    className="mt-2 w-full"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => onChangeNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <Button className="px-4" type="submit" disabled={passwordPending}>
+                  {passwordPending ? t("saving") : t("changePassword")}
+                </Button>
+              </form>
+            )}
+            {message ? <p className="mt-5 rounded-md border border-panel-line bg-slate-950/40 px-3 py-2 text-sm text-slate-300">{message}</p> : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AccountTabButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      className={cn(
+        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-400 transition hover:bg-slate-800 hover:text-white",
+        active && "bg-panel-green/15 text-panel-green"
+      )}
+      type="button"
+      onClick={onClick}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 

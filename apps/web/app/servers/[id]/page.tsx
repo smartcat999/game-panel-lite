@@ -55,7 +55,7 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
-import { updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -536,7 +536,7 @@ export default function ServerDetailPage() {
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
     { id: "overview", label: t("tabOverview") },
     ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
-    { id: "logs", label: t("tabLogs") },
+    ...(!capabilities.consoleCommands ? [{ id: "logs" as const, label: t("tabLogs") }] : []),
     { id: "config", label: t("tabConfig") },
     ...(visibleCapabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
     ...(visibleCapabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
@@ -1754,10 +1754,10 @@ function FieldHelp({ text }: { text: string }) {
 }
 
 function initialProviderDraftFromResource(resource: GameServerResource, provider?: ProviderCatalog): ProviderConfigPayload {
-  const payload: ProviderConfigPayload = {};
+  let payload: ProviderConfigPayload = {};
   const configPayload = resource.spec.config ?? {};
   for (const field of provider?.configSchema ?? []) {
-    payload[field.name] = configPayload[field.name] ?? defaultProviderFieldValue(field);
+    payload = updateProviderConfigPayload(payload, field, (providerConfigValue(configPayload, field.name) ?? defaultProviderFieldValue(field)) as string | boolean);
   }
   return {
     ...payload,
@@ -1779,7 +1779,7 @@ function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, par
 
 function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
   if (field.name === "adminPassword") return t("adminPasswordHelp");
-  if (field.name === "clusterToken") return t("clusterTokenHelp");
+  if (field.name === "clusterToken" || field.name === "identity.clusterToken") return t("clusterTokenHelp");
   if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
   return field.help ?? "";
 }
@@ -1804,7 +1804,7 @@ function ProviderConfigFields({
       {fields.map((field) => {
         const label = providerFieldLabel(field, t);
         const help = providerFieldHelp(field, t);
-        const value = payload[field.name];
+        const value = providerConfigValue(payload, field.name);
         if (field.type === "boolean") {
           return (
             <div key={field.name} className="rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">

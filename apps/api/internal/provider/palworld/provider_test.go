@@ -58,8 +58,8 @@ func TestRuntimeOptionsUsePalworldImageAndUdpPort(t *testing.T) {
 	provider := NewProvider()
 	options := runtimeOptions(config)
 
-	if provider.ImageFor("latest") != "thijsvanloef/palworld-server-docker:latest" {
-		t.Fatalf("unexpected Palworld image: %s", provider.ImageFor("latest"))
+	if provider.ImageFor("") != "smartcat99999/palworld-server:v2.4.1" {
+		t.Fatalf("unexpected Palworld image: %s", provider.ImageFor(""))
 	}
 	if options.PortProtocol != "udp" {
 		t.Fatalf("expected UDP port protocol, got %q", options.PortProtocol)

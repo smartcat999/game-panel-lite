@@ -48,7 +48,7 @@ func TestRuntimeAdapterClientCreatesWorkload(t *testing.T) {
 	spec := domain.WorkloadSpec{
 		ServerID: "srv-1",
 		Name:     "Friends",
-		Image:    "game:latest",
+		Image:    "game:1.0.0",
 		Network:  domain.WorkloadNetwork{Port: 7777, HostPort: 47777, Protocol: "tcp"},
 	}
 	runtimeID, err := client.Create(context.Background(), domain.WorkloadSpec{

@@ -152,7 +152,7 @@ func TestStartPalworldServerRuntimeSpecUsesConfigPayload(t *testing.T) {
 	server := testServer("palworld-payload-runtime", cfg.DataDir)
 	server.GameKey = domain.GamePalworld
 	server.ProviderKey = domain.ProviderPalworld
-	server.Version = "latest"
+	server.Version = "v2.4.1"
 	server.Port = palworld.DefaultInternalPort
 	server.HostPort = 18211
 	server.Config = terraria.Config{
@@ -451,7 +451,7 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "thijsvanloef/palworld-server-docker:latest" {
+	if spec.Image != "smartcat99999/palworld-server:v2.4.1" {
 		t.Fatalf("expected Palworld image, got %q", spec.Image)
 	}
 	if spec.Port != 8211 || spec.Options.PortProtocol != "udp" {
@@ -468,15 +468,25 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 		"providerKey":"dont-starve-together",
 		"hostPort":11099,
 		"config":{
-			"serverName":"DST Friends",
-			"clusterName":"FriendsCluster",
-			"maxPlayers":6,
-			"serverPassword":"join-secret",
-			"clusterToken":"klei-token",
-			"gameMode":"endless",
-			"worldPreset":"forest_classic",
-			"cavesEnabled":true,
-			"workshopIds":"123456789,987654321"
+			"identity":{
+				"serverName":"DST Friends",
+				"clusterName":"FriendsCluster",
+				"password":"join-secret",
+				"clusterToken":"klei-token"
+			},
+			"gameplay":{
+				"maxPlayers":6,
+				"gameMode":"endless"
+			},
+			"world":{
+				"preset":"forest_classic"
+			},
+			"caves":{
+				"enabled":true
+			},
+			"mods":{
+				"workshopIds":["123456789","987654321"]
+			}
 		}
 	}`
 	create := httptest.NewRecorder()
@@ -494,11 +504,12 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	if server.Spec.Network.Port != 10999 || server.Spec.Network.HostPort != 11099 {
 		t.Fatalf("expected DST ports, got internal=%d external=%d", server.Spec.Network.Port, server.Spec.Network.HostPort)
 	}
-	if server.Spec.Config["clusterName"] != "FriendsCluster" || server.Spec.Config["clusterToken"] != "klei-token" || server.Spec.Config["gameMode"] != "endless" || server.Spec.Config["worldPreset"] != "forest_classic" || server.Spec.Config["cavesEnabled"] != true {
+	identity, _ := server.Spec.Config["identity"].(map[string]any)
+	gameplay, _ := server.Spec.Config["gameplay"].(map[string]any)
+	world, _ := server.Spec.Config["world"].(map[string]any)
+	caves, _ := server.Spec.Config["caves"].(map[string]any)
+	if identity["clusterName"] != "FriendsCluster" || identity["clusterToken"] != "klei-token" || gameplay["gameMode"] != "endless" || world["preset"] != "forest_classic" || caves["enabled"] != true {
 		t.Fatalf("expected semantic DST config payload, got %+v", server.Spec.Config)
-	}
-	if _, ok := server.Spec.Config["workshopIds"]; ok {
-		t.Fatalf("workshop IDs should not be persisted from the server config form, got %+v", server.Spec.Config)
 	}
 
 	start := httptest.NewRecorder()
@@ -512,7 +523,7 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "smartcat99999/dst-server:latest" {
+	if spec.Image != "smartcat99999/dst-server:v2026.06.21" {
 		t.Fatalf("expected DST image, got %q", spec.Image)
 	}
 	if spec.Port != 10999 || spec.Options.PortProtocol != "udp" {
@@ -521,7 +532,7 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/cluster.ini"], "game_mode = endless") {
 		t.Fatalf("expected DST cluster.ini in runtime files, got %+v", spec.Options.Files)
 	}
-	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/Master/worldgen.lua"], `preset = "forest_classic"`) {
+	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/Master/leveldataoverride.lua"], `preset = "forest_classic"`) {
 		t.Fatalf("expected DST world preset in runtime files, got %+v", spec.Options.Files)
 	}
 	if _, ok := spec.Options.Files["dst/FriendsCluster/Caves/server.ini"]; !ok {
@@ -540,10 +551,14 @@ func TestCreateDSTServerRejectsArmRuntime(t *testing.T) {
 		"providerKey":"dont-starve-together",
 		"hostPort":11099,
 		"config":{
-			"serverName":"DST Friends",
-			"clusterName":"FriendsCluster",
-			"maxPlayers":6,
-			"clusterToken":"klei-token"
+			"identity":{
+				"serverName":"DST Friends",
+				"clusterName":"FriendsCluster",
+				"clusterToken":"klei-token"
+			},
+			"gameplay":{
+				"maxPlayers":6
+			}
 		}
 	}`
 	create := httptest.NewRecorder()
@@ -605,7 +620,7 @@ func TestCreateMinecraftServerUsesMinecraftRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "itzg/minecraft-server:latest" {
+	if spec.Image != "smartcat99999/minecraft-server:2026.6.0-java21" {
 		t.Fatalf("expected Minecraft image, got %q", spec.Image)
 	}
 	if !containsEnv(spec.Options.Env, "VERSION=1.20.4") {
@@ -835,7 +850,7 @@ func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 	if err := db.CreateBackup(context.Background(), &backup); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, "owned.tmod", bytes.NewBufferString("mod")); err != nil {
+	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, domain.ProviderTerrariaTModLoader, "owned.tmod", bytes.NewBufferString("mod")); err != nil {
 		t.Fatal(err)
 	}
 	mod := domain.ModFile{

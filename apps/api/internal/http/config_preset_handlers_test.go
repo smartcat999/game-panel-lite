@@ -15,7 +15,7 @@ func TestConfigPresetStripsSecretsAndListsSavedPreset(t *testing.T) {
 	payload := `{
 		"name":"Palworld Friends",
 		"providerKey":"palworld",
-		"version":"latest",
+		"version":"v2.4.1",
 		"resources":{"cpuLimitCores":1,"memoryLimitMb":2048},
 		"config":{
 			"serverName":"Pal Friends",

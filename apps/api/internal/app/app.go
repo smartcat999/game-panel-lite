@@ -39,6 +39,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err != nil {
 		logger.Warn("using built-in provider runtime catalog", "error", err)
 	}
+	providerCatalog = providerCatalog.WithActiveRegistry(cfg.ImageRegion)
 	registry := provider.NewRegistry(
 		terraria.NewVanillaProvider(providerCatalog),
 		terraria.NewTModLoaderProvider(providerCatalog),

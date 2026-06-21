@@ -10,7 +10,9 @@ import (
 )
 
 type Catalog struct {
-	Providers map[domain.ProviderKey]RuntimeConfig `json:"providers"`
+	ActiveRegistry string                               `json:"activeRegistry,omitempty"`
+	Registries     map[string]string                    `json:"registries,omitempty"`
+	Providers      map[domain.ProviderKey]RuntimeConfig `json:"providers"`
 }
 
 type RuntimeConfig struct {
@@ -41,13 +43,36 @@ func FromCatalog(catalogs []Catalog, providerKey domain.ProviderKey, fallback Ru
 	if len(catalogs) == 0 {
 		return fallback
 	}
-	if got, ok := catalogs[0].Providers[providerKey]; ok {
-		return got.WithFallback(fallback)
+	catalog := catalogs[0]
+	if got, ok := catalog.Providers[providerKey]; ok {
+		return got.WithFallback(fallback).WithRegistry(catalog.Registry())
 	}
 	return fallback
 }
 
+func (catalog Catalog) WithActiveRegistry(region string) Catalog {
+	region = strings.TrimSpace(region)
+	if region == "" {
+		return catalog
+	}
+	catalog.ActiveRegistry = region
+	return catalog
+}
+
+func (catalog Catalog) Registry() string {
+	active := strings.TrimSpace(catalog.ActiveRegistry)
+	if active == "" {
+		active = "global"
+	}
+	if catalog.Registries == nil {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimSpace(catalog.Registries[active]), "/")
+}
+
 func (config RuntimeConfig) WithFallback(fallback RuntimeConfig) RuntimeConfig {
+	config.Versions = concreteVersions(config.Versions)
+	fallback.Versions = concreteVersions(fallback.Versions)
 	if strings.TrimSpace(config.Image) == "" {
 		config.Image = fallback.Image
 	}
@@ -60,17 +85,42 @@ func (config RuntimeConfig) WithFallback(fallback RuntimeConfig) RuntimeConfig {
 	return config
 }
 
+func (config RuntimeConfig) WithRegistry(registry string) RuntimeConfig {
+	registry = strings.TrimSuffix(strings.TrimSpace(registry), "/")
+	if registry == "" {
+		return config
+	}
+	config.Image = strings.ReplaceAll(config.Image, "{registry}", registry)
+	config.ImageTemplate = strings.ReplaceAll(config.ImageTemplate, "{registry}", registry)
+	return config
+}
+
 func (config RuntimeConfig) VersionList() []string {
-	return append([]string{}, config.Versions...)
+	return append([]string{}, concreteVersions(config.Versions)...)
 }
 
 func (config RuntimeConfig) ImageFor(version string) string {
 	version = strings.TrimSpace(version)
-	if version == "" && len(config.Versions) > 0 {
-		version = config.Versions[0]
+	versions := concreteVersions(config.Versions)
+	if (version == "" || strings.EqualFold(version, "latest")) && len(versions) > 0 {
+		version = versions[0]
 	}
 	if strings.TrimSpace(config.ImageTemplate) != "" {
 		return strings.ReplaceAll(config.ImageTemplate, "{version}", version)
 	}
 	return config.Image
+}
+
+func concreteVersions(versions []string) []string {
+	out := make([]string, 0, len(versions))
+	seen := map[string]bool{}
+	for _, version := range versions {
+		version = strings.TrimSpace(version)
+		if version == "" || strings.EqualFold(version, "latest") || seen[version] {
+			continue
+		}
+		seen[version] = true
+		out = append(out, version)
+	}
+	return out
 }

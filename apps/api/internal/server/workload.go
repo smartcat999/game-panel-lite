@@ -94,14 +94,6 @@ func recommendedProviderVersion(versions []string) string {
 	if len(versions) == 0 {
 		return ""
 	}
-	if versions[0] != "latest" {
-		return versions[0]
-	}
-	for _, version := range versions[1:] {
-		if version != "latest" {
-			return version
-		}
-	}
 	return versions[0]
 }
 

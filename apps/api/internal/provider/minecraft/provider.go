@@ -13,10 +13,10 @@ import (
 
 const (
 	DefaultInternalPort = 25565
-	runtimeImage        = "itzg/minecraft-server:latest"
+	runtimeImage        = "smartcat99999/minecraft-server:2026.6.0-java21"
 )
 
-var versions = []string{"latest", "1.21.4", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.19.2"}
+var versions = []string{"1.21.4", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.19.2"}
 
 type Provider struct {
 	runtime runtimecatalog.RuntimeConfig
@@ -381,8 +381,8 @@ func ImageForVersion(version string) string {
 
 func versionEnv(version string) string {
 	version = strings.TrimSpace(version)
-	if version == "" || version == "latest" {
-		return "VERSION=LATEST"
+	if version == "" || strings.EqualFold(version, "latest") {
+		version = versions[0]
 	}
 	return "VERSION=" + version
 }

@@ -17,13 +17,17 @@ import (
 
 func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
-		"host":       h.cfg.Host,
-		"port":       h.cfg.Port,
-		"dataDir":    h.cfg.DataDir,
-		"dbPath":     h.cfg.DBPath,
-		"dockerHost": h.cfg.DockerHost,
-		"publicHost": h.resolvePublicHost(),
-		"locale":     h.resolveLocale(r.Context()),
+		"host":                h.cfg.Host,
+		"port":                h.cfg.Port,
+		"dataDir":             h.cfg.DataDir,
+		"dbPath":              h.cfg.DBPath,
+		"dockerHost":          h.cfg.DockerHost,
+		"publicHost":          h.resolvePublicHost(),
+		"locale":              h.resolveLocale(r.Context()),
+		"imageRegion":         h.cfg.ImageRegion,
+		"imageRegistry":       h.cfg.ImageRegistry,
+		"imageTag":            h.cfg.ImageTag,
+		"providerCatalogPath": h.cfg.ProviderCatalogPath,
 	})
 }
 

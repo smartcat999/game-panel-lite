@@ -71,7 +71,7 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := modsvc.NewService(root).Upload("unassigned", "quality.tmod", strings.NewReader("quality-mod")); err != nil {
+	if _, _, err := modsvc.NewService(root).Upload("unassigned", domain.ProviderTerrariaTModLoader, "quality.tmod", strings.NewReader("quality-mod")); err != nil {
 		t.Fatal(err)
 	}
 	libraryMod := domain.ModFile{
@@ -182,13 +182,19 @@ func TestProviderWorkloadBuilderUsesResourceRuntimeProviders(t *testing.T) {
 			gameKey:     domain.GameDST,
 			providerKey: domain.ProviderDST,
 			config: map[string]any{
-				"serverName":         "DST Friends",
-				"clusterName":        "FriendsCluster",
-				"maxPlayers":         float64(6),
-				"clusterToken":       "klei-token",
-				"gameMode":           "endless",
-				"worldPreset":        "forest_classic",
-				"clusterDescription": "Friends only",
+				"identity": map[string]any{
+					"serverName":   "DST Friends",
+					"clusterName":  "FriendsCluster",
+					"description":  "Friends only",
+					"clusterToken": "klei-token",
+				},
+				"gameplay": map[string]any{
+					"maxPlayers": float64(6),
+					"gameMode":   "endless",
+				},
+				"world": map[string]any{
+					"preset": "forest_classic",
+				},
 			},
 			assert: func(t *testing.T, spec domain.WorkloadSpec) {
 				t.Helper()

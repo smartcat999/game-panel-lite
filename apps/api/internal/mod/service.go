@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/safety"
 )
 
@@ -16,8 +17,8 @@ func NewService(dataDir string) *Service {
 	return &Service{dataDir: dataDir}
 }
 
-func (s *Service) Upload(instanceID string, fileName string, reader io.Reader) (string, int64, error) {
-	safeName, err := safeModFile(fileName)
+func (s *Service) Upload(instanceID string, providerKey domain.ProviderKey, fileName string, reader io.Reader) (string, int64, error) {
+	safeName, err := safeModFile(providerKey, fileName)
 	if err != nil {
 		return "", 0, err
 	}
@@ -53,17 +54,24 @@ func (s *Service) Upload(instanceID string, fileName string, reader io.Reader) (
 	return target, size, nil
 }
 
-func (s *Service) Path(instanceID string, fileName string) (string, error) {
-	safeName, err := safeModFile(fileName)
+func (s *Service) Path(instanceID string, providerKey domain.ProviderKey, fileName string) (string, error) {
+	safeName, err := safeModFile(providerKey, fileName)
 	if err != nil {
 		return "", err
 	}
 	return safety.SafeJoin(s.dataDir, "mods", instanceID, safeName)
 }
 
-func safeModFile(fileName string) (string, error) {
+func safeModFile(providerKey domain.ProviderKey, fileName string) (string, error) {
 	if fileName == "install.txt" || fileName == "enabled.json" {
 		return safety.SafeFileName(fileName, ".txt", ".json")
 	}
-	return safety.SafeFileName(fileName, ".tmod")
+	switch providerKey {
+	case domain.ProviderPalworld:
+		return safety.SafeFileName(fileName, ".pak")
+	case domain.ProviderTerrariaTModLoader:
+		return safety.SafeFileName(fileName, ".tmod")
+	default:
+		return safety.SafeFileName(fileName, ".tmod")
+	}
 }

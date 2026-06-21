@@ -48,7 +48,7 @@ func (b *fakeBuilder) BuildWorkloadSpec(_ context.Context, server domain.GameSer
 	if b.err != nil {
 		return domain.WorkloadSpec{}, b.err
 	}
-	return domain.WorkloadSpec{ServerID: server.ID, Name: server.Name, Image: "game:latest"}, nil
+	return domain.WorkloadSpec{ServerID: server.ID, Name: server.Name, Image: "game:1.0.0"}, nil
 }
 
 type fakeRuntime struct {
@@ -195,7 +195,7 @@ func TestReconcileRunningRecordsLifecycleEvents(t *testing.T) {
 			t.Fatalf("expected event %d to be %q, got %+v", index, eventType, events[index])
 		}
 	}
-	if events[0].Payload["image"] != "game:latest" || events[3].Payload["runtimeId"] == "" || events[5].Payload["runtimeId"] == "" {
+	if events[0].Payload["image"] != "game:1.0.0" || events[3].Payload["runtimeId"] == "" || events[5].Payload["runtimeId"] == "" {
 		t.Fatalf("expected lifecycle payload details, got %+v", events)
 	}
 }

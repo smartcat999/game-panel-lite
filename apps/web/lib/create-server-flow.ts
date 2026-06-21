@@ -49,7 +49,7 @@ export async function createGameServerWithResources({
     providerKey: nextProviderKey,
     config,
     hostPort,
-    modIds: mode === "tmodloader" ? modIds : undefined,
+    modIds: modIds.length > 0 ? modIds : undefined,
     resources,
     version
   });

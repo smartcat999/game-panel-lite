@@ -14,6 +14,9 @@ type Config struct {
 	DockerHost             string
 	PublicHost             string
 	ProviderCatalogPath    string
+	ImageRegion            string
+	ImageRegistry          string
+	ImageTag               string
 	PrometheusURL          string
 	PrometheusQueryTimeout time.Duration
 }
@@ -37,6 +40,9 @@ func Load() Config {
 		DockerHost:             dockerHost,
 		PublicHost:             value("GAMEPANEL_PUBLIC_HOST", ""),
 		ProviderCatalogPath:    value("GAMEPANEL_PROVIDER_CATALOG_PATH", "./config/providers.json"),
+		ImageRegion:            value("GAMEPANEL_IMAGE_REGION", "global"),
+		ImageRegistry:          value("GAMEPANEL_IMAGE_REGISTRY", "smartcat99999"),
+		ImageTag:               value("GAMEPANEL_IMAGE_TAG", "v0.1.0"),
 		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
 		PrometheusQueryTimeout: queryTimeout,
 	}

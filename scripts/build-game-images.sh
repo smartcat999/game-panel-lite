@@ -167,7 +167,6 @@ cd "$root_dir"
 
 if [[ "$target" == "all" || "$target" == "vanilla" ]]; then
   build_vanilla "1.4.5.6" "1456"
-  build_vanilla "1.4.4.9" "1449"
 fi
 
 if [[ "$target" == "all" || "$target" == "tmodloader" ]]; then
@@ -176,7 +175,7 @@ if [[ "$target" == "all" || "$target" == "tmodloader" ]]; then
 fi
 
 if [[ "$target" == "dst" ]]; then
-  build_dst "latest"
+  build_dst "v2026.06.21"
 fi
 
 echo "Done."

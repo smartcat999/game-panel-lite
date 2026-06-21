@@ -3,6 +3,7 @@ package dst
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -12,28 +13,53 @@ import (
 
 const DefaultInternalPort = 10999
 
-var versions = []string{"latest"}
+var versions = []string{"v2026.06.21"}
 
 type Provider struct {
 	runtime runtimecatalog.RuntimeConfig
 }
 
 type Config struct {
-	ServerName         string
-	ClusterName        string
-	MaxPlayers         int
-	Port               int
-	ServerPassword     string
-	ClusterToken       string
-	GameMode           string
-	WorldPreset        string
-	ClusterDescription string
-	CavesEnabled       bool
-	PVP                bool
-	PauseWhenEmpty     bool
-	OfflineServer      bool
-	ConsoleEnabled     bool
-	WorkshopIDs        []string
+	Identity DSTIdentityConfig
+	Gameplay DSTGameplayConfig
+	World    DSTWorldConfig
+	Caves    *DSTCaveConfig
+	Mods     DSTModConfig
+	Port     int
+}
+
+type DSTIdentityConfig struct {
+	ServerName   string
+	ClusterName  string
+	Description  string
+	Password     string
+	ClusterToken string
+	Visibility   string
+}
+
+type DSTGameplayConfig struct {
+	MaxPlayers     int
+	GameMode       string
+	PVP            bool
+	PauseWhenEmpty bool
+	ConsoleEnabled bool
+}
+
+type DSTWorldConfig struct {
+	Preset    string
+	Customize bool
+	Overrides map[string]string
+}
+
+type DSTCaveConfig struct {
+	Enabled   bool
+	Preset    string
+	Overrides map[string]string
+}
+
+type DSTModConfig struct {
+	WorkshopIDs []string
+	ModPackIDs  []string
 }
 
 func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
@@ -60,7 +86,7 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 		BanPlayer:       false,
 		SaveSnapshots:   true,
 		Backups:         true,
-		Mods:            false,
+		Mods:            true,
 		Versions:        true,
 	}
 }
@@ -74,7 +100,12 @@ func (p Provider) ImageFor(version string) string {
 	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
 }
 func defaultConfig() Config {
-	return normalizeConfig(Config{PauseWhenEmpty: true, ConsoleEnabled: true})
+	return normalizeConfig(Config{
+		Gameplay: DSTGameplayConfig{
+			PauseWhenEmpty: true,
+			ConsoleEnabled: true,
+		},
+	})
 }
 func (p Provider) DefaultConfigPayload() map[string]any {
 	return payloadFromConfig(defaultConfig())
@@ -90,33 +121,57 @@ func (p Provider) ValidateConfigPayload(payload map[string]any) error {
 func (p Provider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
 	config := configFromPayload(payload, defaultConfig())
 	return domain.ProviderConfigSummary{
-		ServerName: config.ServerName,
-		WorldName:  config.ClusterName,
-		MaxPlayers: config.MaxPlayers,
+		ServerName: config.Identity.ServerName,
+		WorldName:  config.Identity.ClusterName,
+		MaxPlayers: config.Gameplay.MaxPlayers,
 		Port:       config.Port,
-		Password:   config.ServerPassword,
-		MOTD:       config.ClusterToken,
+		Password:   config.Identity.Password,
+		MOTD:       config.Identity.ClusterToken,
 	}, nil
 }
 func validateConfig(config Config) error {
 	config = normalizeConfig(config)
-	if strings.TrimSpace(config.ServerName) == "" {
+	if strings.TrimSpace(config.Identity.ServerName) == "" {
 		return fmt.Errorf("server name is required")
 	}
-	if strings.Contains(config.ServerName, "/") || strings.Contains(config.ServerName, "\\") {
+	if strings.Contains(config.Identity.ServerName, "/") || strings.Contains(config.Identity.ServerName, "\\") {
 		return fmt.Errorf("server name contains unsupported path characters")
 	}
-	if strings.TrimSpace(config.ClusterName) == "" {
+	if strings.TrimSpace(config.Identity.ClusterName) == "" {
 		return fmt.Errorf("cluster name is required")
 	}
-	if strings.Contains(config.ClusterName, "/") || strings.Contains(config.ClusterName, "\\") || strings.Contains(config.ClusterName, "..") {
+	if strings.Contains(config.Identity.ClusterName, "/") || strings.Contains(config.Identity.ClusterName, "\\") || strings.Contains(config.Identity.ClusterName, "..") {
 		return fmt.Errorf("cluster name contains unsupported path characters")
 	}
-	if config.MaxPlayers < 1 || config.MaxPlayers > 64 {
+	if config.Gameplay.MaxPlayers < 1 || config.Gameplay.MaxPlayers > 64 {
 		return fmt.Errorf("max players must be between 1 and 64")
 	}
-	if strings.TrimSpace(config.ClusterToken) == "" {
+	if strings.TrimSpace(config.Identity.ClusterToken) == "" {
 		return fmt.Errorf("Klei server token is required")
+	}
+	if !stringIn(config.Identity.Visibility, "public", "lan", "offline") {
+		return fmt.Errorf("visibility must be public, lan, or offline")
+	}
+	if !stringIn(config.Gameplay.GameMode, "survival", "endless", "wilderness") {
+		return fmt.Errorf("game mode must be survival, endless, or wilderness")
+	}
+	if config.World.Preset == "" {
+		return fmt.Errorf("world preset is required")
+	}
+	for key, value := range config.World.Overrides {
+		if err := validateOverride(key, value); err != nil {
+			return fmt.Errorf("world override %s: %w", key, err)
+		}
+	}
+	if config.Caves != nil {
+		if config.Caves.Enabled && strings.TrimSpace(config.Caves.Preset) == "" {
+			return fmt.Errorf("cave preset is required")
+		}
+		for key, value := range config.Caves.Overrides {
+			if err := validateOverride(key, value); err != nil {
+				return fmt.Errorf("cave override %s: %w", key, err)
+			}
+		}
 	}
 	return nil
 }
@@ -127,13 +182,13 @@ func renderConfig(config Config) (string, error) {
 	}
 	lines := []string{
 		"game=dont-starve-together",
-		"serverName=" + config.ServerName,
-		"clusterName=" + config.ClusterName,
-		fmt.Sprintf("maxPlayers=%d", config.MaxPlayers),
+		"serverName=" + config.Identity.ServerName,
+		"clusterName=" + config.Identity.ClusterName,
+		fmt.Sprintf("maxPlayers=%d", config.Gameplay.MaxPlayers),
 		fmt.Sprintf("port=%d", config.Port),
 	}
-	if config.ServerPassword != "" {
-		lines = append(lines, "serverPassword="+config.ServerPassword)
+	if config.Identity.Password != "" {
+		lines = append(lines, "serverPassword="+config.Identity.Password)
 	}
 	return strings.Join(lines, "\n") + "\n", nil
 }
@@ -142,16 +197,18 @@ func runtimeOptions(config Config) runtime.ContainerOptions {
 	clusterDir := clusterConfigDir(config)
 	return runtime.ContainerOptions{
 		Env: []string{
-			"DST_CLUSTER_NAME=" + config.ClusterName,
+			"DST_CLUSTER_NAME=" + config.Identity.ClusterName,
 			"DST_SHARD=Master",
 			fmt.Sprintf("DST_PORT=%d", config.Port),
 		},
 		DataMounts: []string{"/data"},
 		Files: map[string]string{
-			clusterDir + "/cluster.ini":         renderClusterINI(config),
-			clusterDir + "/cluster_token.txt":   strings.TrimSpace(config.ClusterToken) + "\n",
-			clusterDir + "/Master/server.ini":   renderShardServerINI(config.Port, true, "Master"),
-			clusterDir + "/Master/worldgen.lua": renderWorldgenLua(config.WorldPreset),
+			clusterDir + "/cluster.ini":                     renderClusterINI(config),
+			clusterDir + "/cluster_token.txt":               strings.TrimSpace(config.Identity.ClusterToken) + "\n",
+			clusterDir + "/Master/server.ini":               renderShardServerINI(config.Port, true, "Master"),
+			clusterDir + "/Master/leveldataoverride.lua":    renderLevelDataOverrideLua("forest", config.World.Preset, config.World.Overrides),
+			clusterDir + "/Master/modoverrides.lua":         renderModOverrides(config.Mods.WorkshopIDs),
+			clusterDir + "/dedicated_server_mods_setup.lua": renderWorkshopSetup(config.Mods.WorkshopIDs),
 		},
 		PortProtocol: "udp",
 	}
@@ -168,13 +225,11 @@ func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.Pro
 	options := runtimeOptions(config)
 	clusterDir := clusterConfigDir(config)
 	options.Files[clusterDir+"/cluster.ini"] = renderClusterINI(config)
-	options.Files[clusterDir+"/Master/worldgen.lua"] = renderWorldgenLua(config.WorldPreset)
-	if config.CavesEnabled {
+	options.Files[clusterDir+"/Master/leveldataoverride.lua"] = renderLevelDataOverrideLua("forest", config.World.Preset, config.World.Overrides)
+	if config.Caves != nil && config.Caves.Enabled {
 		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
-		options.Files[clusterDir+"/Caves/worldgen.lua"] = renderWorldgenLua("cave_default")
-	}
-	if len(config.WorkshopIDs) > 0 {
-		options.Files[clusterDir+"/dedicated_server_mods_setup.lua"] = renderWorkshopSetup(config.WorkshopIDs)
+		options.Files[clusterDir+"/Caves/leveldataoverride.lua"] = renderLevelDataOverrideLua("cave", config.Caves.Preset, config.Caves.Overrides)
+		options.Files[clusterDir+"/Caves/modoverrides.lua"] = renderModOverrides(config.Mods.WorkshopIDs)
 	}
 	return domain.ProviderRuntimeConfig{
 		Port:     config.Port,
@@ -190,7 +245,7 @@ func (p Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 		port = server.Spec.Network.Port
 	}
 	config := configFromPayload(server.Spec.Config, defaultConfig())
-	password := config.ServerPassword
+	password := config.Identity.Password
 	invite := fmt.Sprintf("Join %s in Don't Starve Together at %s:%d", server.Name, address, port)
 	if password != "" {
 		invite += " password: " + password
@@ -208,82 +263,121 @@ func (p Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 }
 
 func normalizeConfig(config Config) Config {
-	if strings.TrimSpace(config.ServerName) == "" {
-		config.ServerName = "DST Friends"
+	if strings.TrimSpace(config.Identity.ServerName) == "" {
+		config.Identity.ServerName = "DST Friends"
 	}
-	if strings.TrimSpace(config.ClusterName) == "" {
-		config.ClusterName = "GamePanelLite"
+	if strings.TrimSpace(config.Identity.ClusterName) == "" {
+		config.Identity.ClusterName = "GamePanelLite"
 	}
-	if config.MaxPlayers == 0 {
-		config.MaxPlayers = 6
+	if strings.TrimSpace(config.Identity.Description) == "" {
+		config.Identity.Description = "Managed by GamePanel Lite"
+	}
+	if strings.TrimSpace(config.Identity.Visibility) == "" {
+		config.Identity.Visibility = "public"
+	}
+	if config.Gameplay.MaxPlayers == 0 {
+		config.Gameplay.MaxPlayers = 6
 	}
 	config.Port = DefaultInternalPort
-	if strings.TrimSpace(config.GameMode) == "" {
-		config.GameMode = "survival"
+	if strings.TrimSpace(config.Gameplay.GameMode) == "" {
+		config.Gameplay.GameMode = "survival"
 	}
-	if strings.TrimSpace(config.WorldPreset) == "" {
-		config.WorldPreset = "forest_default"
+	if !config.Gameplay.PauseWhenEmpty {
+		// False is a valid explicit value; defaulting is handled in defaultConfig.
 	}
-	if strings.TrimSpace(config.ClusterDescription) == "" {
-		config.ClusterDescription = "Managed by GamePanel Lite"
+	if strings.TrimSpace(config.World.Preset) == "" {
+		config.World.Preset = "forest_default"
 	}
-	config.WorkshopIDs = uniqueDigits(config.WorkshopIDs)
+	config.World.Overrides = cleanOverrides(config.World.Overrides)
+	if config.Caves != nil {
+		if strings.TrimSpace(config.Caves.Preset) == "" {
+			config.Caves.Preset = "cave_default"
+		}
+		config.Caves.Overrides = cleanOverrides(config.Caves.Overrides)
+		if !config.Caves.Enabled {
+			config.Caves = nil
+		}
+	}
+	config.Mods.WorkshopIDs = uniqueDigits(config.Mods.WorkshopIDs)
+	config.Mods.ModPackIDs = uniqueStrings(config.Mods.ModPackIDs)
 	return config
 }
 
 func configFromPayload(payload map[string]any, fallback Config) Config {
 	config := normalizeConfig(fallback)
-	if value := stringPayload(payload, "serverName"); value != "" {
-		config.ServerName = value
+	if identity := objectPayload(payload, "identity"); identity != nil {
+		config.Identity.ServerName = stringPayload(identity, "serverName")
+		config.Identity.ClusterName = stringPayload(identity, "clusterName")
+		config.Identity.Description = stringPayload(identity, "description")
+		config.Identity.Password = stringPayload(identity, "password")
+		config.Identity.ClusterToken = stringPayload(identity, "clusterToken")
+		config.Identity.Visibility = stringPayload(identity, "visibility")
 	}
-	if value := stringPayload(payload, "clusterName"); value != "" {
-		config.ClusterName = value
-	} else if value := stringPayload(payload, "worldName"); value != "" {
-		config.ClusterName = value
+	if gameplay := objectPayload(payload, "gameplay"); gameplay != nil {
+		if value, ok := intPayload(gameplay, "maxPlayers"); ok {
+			config.Gameplay.MaxPlayers = value
+		}
+		config.Gameplay.GameMode = stringPayload(gameplay, "gameMode")
+		config.Gameplay.PVP = boolPayload(gameplay, "pvp")
+		config.Gameplay.PauseWhenEmpty = boolPayloadDefault(gameplay, "pauseWhenEmpty", config.Gameplay.PauseWhenEmpty)
+		config.Gameplay.ConsoleEnabled = boolPayloadDefault(gameplay, "consoleEnabled", config.Gameplay.ConsoleEnabled)
 	}
-	if value, ok := intPayload(payload, "maxPlayers"); ok {
-		config.MaxPlayers = value
+	if world := objectPayload(payload, "world"); world != nil {
+		config.World.Preset = stringPayload(world, "preset")
+		config.World.Customize = boolPayload(world, "customize")
+		config.World.Overrides = stringMapPayload(world, "overrides")
 	}
-	if value := stringPayload(payload, "serverPassword"); value != "" {
-		config.ServerPassword = value
-	} else if value := stringPayload(payload, "password"); value != "" {
-		config.ServerPassword = value
+	if caves := objectPayload(payload, "caves"); caves != nil {
+		config.Caves = &DSTCaveConfig{
+			Enabled:   boolPayload(caves, "enabled"),
+			Preset:    stringPayload(caves, "preset"),
+			Overrides: stringMapPayload(caves, "overrides"),
+		}
 	}
-	if value := stringPayload(payload, "clusterToken"); value != "" {
-		config.ClusterToken = value
-	} else if value := stringPayload(payload, "motd"); value != "" {
-		config.ClusterToken = value
+	if mods := objectPayload(payload, "mods"); mods != nil {
+		config.Mods.WorkshopIDs = workshopIDsPayload(mods, "workshopIds")
+		config.Mods.ModPackIDs = stringSlicePayload(mods, "modPackIds")
 	}
-	config.GameMode = stringPayload(payload, "gameMode")
-	config.WorldPreset = stringPayload(payload, "worldPreset")
-	config.ClusterDescription = stringPayload(payload, "clusterDescription")
-	config.CavesEnabled = boolPayload(payload, "cavesEnabled")
-	config.PVP = boolPayload(payload, "pvp")
-	config.PauseWhenEmpty = boolPayloadDefault(payload, "pauseWhenEmpty", config.PauseWhenEmpty)
-	config.OfflineServer = boolPayload(payload, "offlineServer")
-	config.ConsoleEnabled = boolPayloadDefault(payload, "consoleEnabled", config.ConsoleEnabled)
-	config.WorkshopIDs = workshopIDsPayload(payload, "workshopIds")
 	return normalizeConfig(config)
 }
 
 func payloadFromConfig(config Config) map[string]any {
 	config = normalizeConfig(config)
 	payload := map[string]any{
-		"serverName":         config.ServerName,
-		"clusterName":        config.ClusterName,
-		"maxPlayers":         config.MaxPlayers,
-		"clusterToken":       config.ClusterToken,
-		"gameMode":           config.GameMode,
-		"worldPreset":        config.WorldPreset,
-		"clusterDescription": config.ClusterDescription,
-		"cavesEnabled":       config.CavesEnabled,
-		"pvp":                config.PVP,
-		"pauseWhenEmpty":     config.PauseWhenEmpty,
-		"offlineServer":      config.OfflineServer,
-		"consoleEnabled":     config.ConsoleEnabled,
+		"identity": map[string]any{
+			"serverName":   config.Identity.ServerName,
+			"clusterName":  config.Identity.ClusterName,
+			"description":  config.Identity.Description,
+			"clusterToken": config.Identity.ClusterToken,
+			"visibility":   config.Identity.Visibility,
+		},
+		"gameplay": map[string]any{
+			"maxPlayers":     config.Gameplay.MaxPlayers,
+			"gameMode":       config.Gameplay.GameMode,
+			"pvp":            config.Gameplay.PVP,
+			"pauseWhenEmpty": config.Gameplay.PauseWhenEmpty,
+			"consoleEnabled": config.Gameplay.ConsoleEnabled,
+		},
+		"world": map[string]any{
+			"preset":    config.World.Preset,
+			"customize": config.World.Customize,
+			"overrides": cloneStringMap(config.World.Overrides),
+		},
+		"mods": map[string]any{
+			"workshopIds": append([]string{}, config.Mods.WorkshopIDs...),
+			"modPackIds":  append([]string{}, config.Mods.ModPackIDs...),
+		},
 	}
-	if config.ServerPassword != "" {
-		payload["serverPassword"] = config.ServerPassword
+	identity := payload["identity"].(map[string]any)
+	if config.Identity.Password != "" {
+		identity["password"] = config.Identity.Password
+	}
+	if config.Caves != nil {
+		payload["caves"] = map[string]any{
+			"enabled":   config.Caves.Enabled,
+			"preset":    config.Caves.Preset,
+			"overrides": cloneStringMap(config.Caves.Overrides),
+		}
 	}
 	return payload
 }
@@ -310,28 +404,31 @@ func cloneFiles(files map[string]string) map[string]string {
 
 func renderClusterINI(config Config) string {
 	config = normalizeConfig(config)
+	lanOnly := config.Identity.Visibility == "lan"
+	offline := config.Identity.Visibility == "offline"
 	lines := []string{
 		"[GAMEPLAY]",
-		"game_mode = " + config.GameMode,
-		"max_players = " + fmt.Sprintf("%d", config.MaxPlayers),
-		"pvp = " + boolINI(config.PVP),
-		"pause_when_empty = " + boolINI(config.PauseWhenEmpty),
+		"game_mode = " + config.Gameplay.GameMode,
+		"max_players = " + fmt.Sprintf("%d", config.Gameplay.MaxPlayers),
+		"pvp = " + boolINI(config.Gameplay.PVP),
+		"pause_when_empty = " + boolINI(config.Gameplay.PauseWhenEmpty),
 		"",
 		"[NETWORK]",
-		"cluster_name = " + config.ServerName,
-		"cluster_description = " + config.ClusterDescription,
-		"cluster_password = " + config.ServerPassword,
-		"offline_server = " + boolINI(config.OfflineServer),
+		"cluster_name = " + config.Identity.ServerName,
+		"cluster_description = " + config.Identity.Description,
+		"cluster_password = " + config.Identity.Password,
+		"lan_only_cluster = " + boolINI(lanOnly),
+		"offline_server = " + boolINI(offline),
 		"",
 		"[MISC]",
-		"console_enabled = " + boolINI(config.ConsoleEnabled),
+		"console_enabled = " + boolINI(config.Gameplay.ConsoleEnabled),
 		"",
 	}
 	return strings.Join(lines, "\n")
 }
 
 func clusterConfigDir(config Config) string {
-	return "dst/" + config.ClusterName
+	return "dst/" + config.Identity.ClusterName
 }
 
 func renderShardServerINI(port int, isMaster bool, name string) string {
@@ -350,20 +447,53 @@ func renderShardServerINI(port int, isMaster bool, name string) string {
 	}, "\n")
 }
 
-func renderWorldgenLua(preset string) string {
+func renderLevelDataOverrideLua(location string, preset string, overrides map[string]string) string {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		location = "forest"
+	}
 	preset = strings.TrimSpace(preset)
 	if preset == "" {
-		preset = "forest_default"
+		if location == "cave" {
+			preset = "cave_default"
+		} else {
+			preset = "forest_default"
+		}
 	}
-	return fmt.Sprintf("return { override_enabled = true, preset = %q }\n", preset)
+	lines := []string{
+		"return {",
+		"  id = \"SURVIVAL_TOGETHER\",",
+		fmt.Sprintf("  location = %q,", location),
+		"  version = 4,",
+		"  override_enabled = true,",
+		fmt.Sprintf("  preset = %q,", preset),
+		"  overrides = {",
+	}
+	for _, key := range sortedStringKeys(overrides) {
+		lines = append(lines, fmt.Sprintf("    %s = %q,", key, overrides[key]))
+	}
+	lines = append(lines, "  },", "}", "")
+	return strings.Join(lines, "\n")
 }
 
 func renderWorkshopSetup(workshopIDs []string) string {
+	if len(workshopIDs) == 0 {
+		return "return nil\n"
+	}
 	lines := make([]string, 0, len(workshopIDs))
 	for _, id := range workshopIDs {
 		lines = append(lines, fmt.Sprintf("ServerModSetup(%q)", id))
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func renderModOverrides(workshopIDs []string) string {
+	lines := []string{"return {"}
+	for _, id := range workshopIDs {
+		lines = append(lines, fmt.Sprintf("  [\"workshop-%s\"] = { enabled = true },", id))
+	}
+	lines = append(lines, "}", "")
+	return strings.Join(lines, "\n")
 }
 
 func boolINI(value bool) string {
@@ -430,6 +560,60 @@ func boolPayloadDefault(payload map[string]any, key string, fallback bool) bool 
 	return boolPayload(payload, key)
 }
 
+func objectPayload(payload map[string]any, key string) map[string]any {
+	value, ok := payload[key]
+	if !ok {
+		return nil
+	}
+	object, ok := value.(map[string]any)
+	if ok {
+		return object
+	}
+	return nil
+}
+
+func stringMapPayload(payload map[string]any, key string) map[string]string {
+	value, ok := payload[key]
+	if !ok {
+		return nil
+	}
+	switch typed := value.(type) {
+	case map[string]string:
+		return cloneStringMap(typed)
+	case map[string]any:
+		out := map[string]string{}
+		for key, value := range typed {
+			if text, ok := value.(string); ok {
+				out[key] = text
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func stringSlicePayload(payload map[string]any, key string) []string {
+	value, ok := payload[key]
+	if !ok {
+		return nil
+	}
+	switch typed := value.(type) {
+	case []string:
+		return typed
+	case []any:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				out = append(out, text)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 func workshopIDsPayload(payload map[string]any, key string) []string {
 	value, ok := payload[key]
 	if !ok {
@@ -467,6 +651,86 @@ func uniqueDigits(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func cleanOverrides(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for key, value := range values {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			continue
+		}
+		out[key] = value
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
+}
+
+func sortedStringKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func stringIn(value string, allowed ...string) bool {
+	for _, item := range allowed {
+		if value == item {
+			return true
+		}
+	}
+	return false
+}
+
+func validateOverride(key string, value string) error {
+	if strings.TrimSpace(key) == "" {
+		return fmt.Errorf("key is required")
+	}
+	for _, r := range key {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return fmt.Errorf("key must use lowercase letters, numbers, or underscore")
+		}
+	}
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("value is required")
+	}
+	if strings.ContainsAny(value, "\r\n\"\\") {
+		return fmt.Errorf("value contains unsupported characters")
+	}
+	return nil
 }
 
 func isDigits(value string) bool {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog } from "./types";
 
 const provider: ProviderCatalog = {
@@ -48,5 +48,28 @@ describe("provider config helpers", () => {
     expect(communityField).toBeDefined();
     expect(updateProviderConfigPayload(payload, maxPlayersField!, "12")).toMatchObject({ maxPlayers: 12 });
     expect(updateProviderConfigPayload(payload, communityField!, true)).toMatchObject({ community: true });
+  });
+
+  it("supports provider-owned nested schema paths", () => {
+    const nestedProvider: ProviderCatalog = {
+      ...provider,
+      key: "dont-starve-together",
+      configSchema: [
+        { name: "identity.serverName", label: "Server", type: "text", required: true, default: "DST Friends" },
+        { name: "gameplay.maxPlayers", label: "Players", type: "number", required: true, default: 6 },
+        { name: "caves.enabled", label: "Caves", type: "boolean", required: false, default: false }
+      ]
+    };
+    const payload = createDefaultProviderConfigPayload(nestedProvider);
+
+    expect(payload).toEqual({
+      caves: { enabled: false },
+      gameplay: { maxPlayers: 6 },
+      identity: { serverName: "DST Friends" }
+    });
+    const playersField = nestedProvider.configSchema[1];
+    expect(playersField).toBeDefined();
+    const updated = updateProviderConfigPayload(payload, playersField!, "12");
+    expect(providerConfigValue(updated, "gameplay.maxPlayers")).toBe(12);
   });
 });
