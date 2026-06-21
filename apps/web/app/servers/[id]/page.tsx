@@ -187,7 +187,7 @@ export default function ServerDetailPage() {
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
-  const monitoringStep = "1m";
+  const monitoringStep = "5s";
   const serverMetricsQuery = useQuery({
     queryKey: ["server-monitoring-metrics", id, monitoringRange],
     queryFn: () => getServerMonitoringMetrics(id, monitoringRange, monitoringStep),

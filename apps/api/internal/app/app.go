@@ -74,6 +74,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	}
 	apiMetrics := metrics.NewRegistry()
 	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics)
+	handler.Start(appCtx)
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)

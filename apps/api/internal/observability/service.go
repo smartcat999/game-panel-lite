@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -79,39 +80,24 @@ func (s *Service) Snapshot(ctx context.Context, runtimeAvailable bool) (Snapshot
 
 	snapshot := Snapshot{
 		CollectedAt: time.Now(),
-		Servers:     make([]ServerMetric, 0, len(servers)),
 		Activity:    summarizeActivity(events),
 	}
+	var wg sync.WaitGroup
 	if runtimeAvailable {
-		if host, err := s.runtime.HostStats(ctx); err == nil {
-			snapshot.Host = host
-		}
-	}
-	for _, server := range servers {
-		metric := ServerMetric{
-			ID:            server.ID,
-			Name:          server.Name,
-			GameKey:       server.GameKey,
-			ProviderKey:   server.ProviderKey,
-			Status:        domain.ServerStatusFromRuntime(server.Spec.DesiredState, server.Status),
-			PlayersOnline: server.Status.PlayersOnline,
-			MaxPlayers:    domain.ServerMaxPlayers(server),
-			HostPort:      server.Spec.Network.HostPort,
-			Version:       server.Spec.Version,
-		}
-		if server.Status.Phase == domain.PhaseRunning && !server.Status.LastTransitionAt.IsZero() {
-			metric.UptimeSeconds = maxSeconds(0, snapshot.CollectedAt.Sub(server.Status.LastTransitionAt).Seconds())
-		}
-		if runtimeAvailable && server.Status.Phase == domain.PhaseRunning && server.Status.RuntimeID != "" {
-			if stats, err := s.runtime.StatsWorkload(ctx, server.Status.RuntimeID); err == nil {
-				metric.CPUPercent = stats.CPUPercent
-				metric.MemoryMB = stats.MemoryMB
-				metric.MemoryLimitMB = stats.MemoryLimitMB
-				metric.StatsAvailable = true
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if host, err := s.runtime.HostStats(ctx); err == nil {
+				snapshot.Host = host
 			}
-		}
-		snapshot.Servers = append(snapshot.Servers, metric)
+		}()
 	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		snapshot.Servers = s.serverMetrics(ctx, servers, snapshot.CollectedAt, runtimeAvailable)
+	}()
+	wg.Wait()
 	sort.Slice(snapshot.Servers, func(i, j int) bool {
 		if snapshot.Servers[i].Status == snapshot.Servers[j].Status {
 			return strings.ToLower(snapshot.Servers[i].Name) < strings.ToLower(snapshot.Servers[j].Name)
@@ -119,6 +105,47 @@ func (s *Service) Snapshot(ctx context.Context, runtimeAvailable bool) (Snapshot
 		return statusRank(snapshot.Servers[i].Status) < statusRank(snapshot.Servers[j].Status)
 	})
 	return snapshot, nil
+}
+
+func (s *Service) serverMetrics(ctx context.Context, servers []domain.GameServer, collectedAt time.Time, runtimeAvailable bool) []ServerMetric {
+	metrics := make([]ServerMetric, len(servers))
+	var wg sync.WaitGroup
+	for i, server := range servers {
+		i, server := i, server
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			metrics[i] = s.serverMetric(ctx, server, collectedAt, runtimeAvailable)
+		}()
+	}
+	wg.Wait()
+	return metrics
+}
+
+func (s *Service) serverMetric(ctx context.Context, server domain.GameServer, collectedAt time.Time, runtimeAvailable bool) ServerMetric {
+	metric := ServerMetric{
+		ID:            server.ID,
+		Name:          server.Name,
+		GameKey:       server.GameKey,
+		ProviderKey:   server.ProviderKey,
+		Status:        domain.ServerStatusFromRuntime(server.Spec.DesiredState, server.Status),
+		PlayersOnline: server.Status.PlayersOnline,
+		MaxPlayers:    domain.ServerMaxPlayers(server),
+		HostPort:      server.Spec.Network.HostPort,
+		Version:       server.Spec.Version,
+	}
+	if server.Status.Phase == domain.PhaseRunning && !server.Status.LastTransitionAt.IsZero() {
+		metric.UptimeSeconds = maxSeconds(0, collectedAt.Sub(server.Status.LastTransitionAt).Seconds())
+	}
+	if runtimeAvailable && server.Status.Phase == domain.PhaseRunning && server.Status.RuntimeID != "" {
+		if stats, err := s.runtime.StatsWorkload(ctx, server.Status.RuntimeID); err == nil {
+			metric.CPUPercent = stats.CPUPercent
+			metric.MemoryMB = stats.MemoryMB
+			metric.MemoryLimitMB = stats.MemoryLimitMB
+			metric.StatsAvailable = true
+		}
+	}
+	return metric
 }
 
 func (s *Service) PrometheusText(ctx context.Context, runtimeAvailable bool) (string, error) {

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func dataDirUsageBytes(root string) (int64, error) {
 }
 
 func (h *Handler) observabilityMetrics(w http.ResponseWriter, r *http.Request) {
-	snapshot, err := observability.NewService(h.store, h.runtime).Snapshot(r.Context(), h.runtimeStatusAvailable())
+	snapshot, err := h.observabilitySnapshot(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -72,6 +73,31 @@ func (h *Handler) prometheusMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(body))
+}
+
+func (h *Handler) observabilityPrometheus(w http.ResponseWriter, r *http.Request) {
+	body, err := h.observabilityPrometheusText(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
+}
+
+func (h *Handler) observabilitySnapshot(ctx context.Context) (observability.Snapshot, error) {
+	if h.observability != nil {
+		return h.observability.Snapshot(ctx)
+	}
+	return observability.NewService(h.store, h.runtime).Snapshot(ctx, h.runtimeStatusAvailable())
+}
+
+func (h *Handler) observabilityPrometheusText(ctx context.Context) (string, error) {
+	if h.observability != nil {
+		return h.observability.PrometheusText(ctx)
+	}
+	return observability.NewService(h.store, h.runtime).PrometheusText(ctx, h.runtimeStatusAvailable())
 }
 
 func (h *Handler) listActivity(w http.ResponseWriter, r *http.Request) {

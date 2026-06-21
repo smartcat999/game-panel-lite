@@ -92,4 +92,21 @@ func TestObservabilityMetricsEndpoints(t *testing.T) {
 			t.Fatalf("expected API scrape metrics to exclude runtime/business metric %q, got:\n%s", unexpected, body)
 		}
 	}
+
+	observabilityRecorder := httptest.NewRecorder()
+	router.ServeHTTP(observabilityRecorder, httptest.NewRequest(stdhttp.MethodGet, "/api/observability/prometheus", nil))
+	if observabilityRecorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected observability prometheus 200, got %d: %s", observabilityRecorder.Code, observabilityRecorder.Body.String())
+	}
+	observabilityBody := observabilityRecorder.Body.String()
+	for _, expected := range []string{
+		"gamepanel_runtime_running_containers",
+		"gamepanel_server_cpu_percent",
+		"gamepanel_server_memory_bytes",
+		"gamepanel_server_players_online",
+	} {
+		if !strings.Contains(observabilityBody, expected) {
+			t.Fatalf("expected observability prometheus metrics to contain %q, got:\n%s", expected, observabilityBody)
+		}
+	}
 }

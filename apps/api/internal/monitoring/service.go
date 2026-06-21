@@ -176,10 +176,9 @@ func (s *Service) ServerMetrics(ctx context.Context, serverID string, window str
 	rng := makeRange(s.now().UTC(), window, stepText)
 	ds := s.dataSource(ctx)
 	labelFilter := fmt.Sprintf(`{server_id="%s"}`, escapePromLabel(server.ID))
-	containerFilter := fmt.Sprintf(`{container_label_gamepanel_instance="%s"}`, escapePromLabel(server.ID))
 	series := map[string]Series{
-		"cpu":     s.series(ctx, rng, "cpu", "CPU Usage", "%", "area", containerCPUQuery(containerFilter), ptr(80)),
-		"memory":  s.series(ctx, rng, "memory", "Memory Usage", "MB", "area", containerMemoryQuery(containerFilter), memoryThreshold(server)),
+		"cpu":     s.series(ctx, rng, "cpu", "CPU Usage", "%", "area", serverCPUQuery(labelFilter), ptr(80)),
+		"memory":  s.series(ctx, rng, "memory", "Memory Usage", "MB", "area", serverMemoryQuery(labelFilter), memoryThreshold(server)),
 		"players": s.series(ctx, rng, "players", "Player Count", "players", "line", `gamepanel_server_players_online`+labelFilter, floatPtr(float64(domain.ServerMaxPlayers(server)))),
 		"uptime":  s.series(ctx, rng, "uptime", "Uptime", "s", "line", `gamepanel_server_uptime_seconds`+labelFilter, nil),
 	}
@@ -196,13 +195,10 @@ func (s *Service) ServerLoad(ctx context.Context) (ServerLoadResponse, error) {
 	ds := s.dataSource(ctx)
 	rows := make([]ServerLoadRow, 0, len(servers))
 	for _, server := range servers {
-		containerFilter := fmt.Sprintf(`{container_label_gamepanel_instance="%s"}`, escapePromLabel(server.ID))
-		cpu := s.latestQuery(ctx, containerCPUQuery(containerFilter))
-		memory := s.latestQuery(ctx, containerMemoryBytesQuery(containerFilter)) / 1024 / 1024
+		labelFilter := fmt.Sprintf(`{server_id="%s"}`, escapePromLabel(server.ID))
+		cpu := s.latestQuery(ctx, serverCPUQuery(labelFilter))
+		memory := s.latestQuery(ctx, serverMemoryBytesQuery(labelFilter)) / 1024 / 1024
 		limit := float64(server.Spec.Resources.MemoryLimitMB)
-		if limit <= 0 {
-			limit = s.latestQuery(ctx, containerMemoryLimitBytesQuery(containerFilter)) / 1024 / 1024
-		}
 		severity := "normal"
 		if isIssuePhase(server.Status.Phase) || server.Status.LastError != "" {
 			severity = "critical"
@@ -583,6 +579,18 @@ func containerMemoryBytesQuery(filter string) string {
 
 func containerMemoryLimitBytesQuery(filter string) string {
 	return fmt.Sprintf(`sum(container_spec_memory_limit_bytes%s)`, filter)
+}
+
+func serverCPUQuery(filter string) string {
+	return `sum(gamepanel_server_cpu_percent` + filter + `)`
+}
+
+func serverMemoryQuery(filter string) string {
+	return serverMemoryBytesQuery(filter) + ` / 1024 / 1024`
+}
+
+func serverMemoryBytesQuery(filter string) string {
+	return `sum(gamepanel_server_memory_bytes` + filter + `)`
 }
 
 func nodeCPUQuery() string {

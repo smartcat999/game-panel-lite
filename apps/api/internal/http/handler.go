@@ -14,6 +14,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -28,6 +29,7 @@ type Handler struct {
 	dockerMonitor  *runtime.DockerMonitor
 	runtimeFactory func(string) (runtime.Adapter, error)
 	apiMetrics     *metrics.Registry
+	observability  *observability.CachedService
 
 	runtimeImageJobsMu sync.Mutex
 	runtimeImageJobs   map[string]domain.RuntimeImageStatus
@@ -53,7 +55,7 @@ func NewHandler(
 	if apiMetrics == nil {
 		apiMetrics = metrics.NewRegistry()
 	}
-	return &Handler{
+	handler := &Handler{
 		cfg:              cfg,
 		logger:           logger,
 		store:            store,
@@ -64,6 +66,15 @@ func NewHandler(
 		apiMetrics:       apiMetrics,
 		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
 	}
+	handler.observability = observability.NewCachedService(observability.NewService(store, adapter), handler.runtimeStatusAvailable, 5*time.Second)
+	return handler
+}
+
+func (h *Handler) Start(ctx context.Context) {
+	if h == nil || h.observability == nil {
+		return
+	}
+	go h.observability.Start(ctx)
 }
 
 func (h *Handler) Register(r chi.Router) {
@@ -75,6 +86,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/auth/login", h.login)
 	r.Post("/api/auth/logout", h.logout)
 	r.Get("/metrics", h.prometheusMetrics)
+	r.Get("/api/observability/prometheus", h.observabilityPrometheus)
 	r.Get("/api/public/servers/{token}", h.getPublicServerShare)
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireAuth)
@@ -84,7 +96,6 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/runtime/docker", h.dockerStatus)
 		r.Get("/api/runtime/stats", h.runtimeStats)
 		r.Get("/api/observability/metrics", h.observabilityMetrics)
-		r.Get("/api/observability/prometheus", h.prometheusMetrics)
 		monitoring.NewHandler(monitoring.NewService(
 			h.store,
 			monitoring.NewPrometheusClient(h.cfg.PrometheusURL, h.cfg.PrometheusQueryTimeout, h.apiMetrics),
