@@ -328,6 +328,26 @@ export function ActivityOperationTimeline({ events }: { events: MonitoringEvent[
   );
 }
 
+export function ActivityLatestOperation({ events, loading, runtimeError }: { events: MonitoringEvent[]; loading: boolean; runtimeError: string }) {
+  const { t } = useI18n();
+  const latest = groupActivityOperations(events)[0];
+  if (runtimeError) {
+    return (
+      <Card className="border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+        <p className="font-medium">{t("serverRuntimeError")}</p>
+        <p className="mt-1 break-words text-red-100/85">{runtimeError}</p>
+      </Card>
+    );
+  }
+  if (loading) {
+    return <Card className="px-4 py-8 text-center text-sm text-slate-500">{t("serverLifecycleProgressLoading")}</Card>;
+  }
+  if (!latest) {
+    return null;
+  }
+  return <CurrentOperationCard group={latest} />;
+}
+
 type ActivityOperationGroup = {
   id: string;
   events: MonitoringEvent[];

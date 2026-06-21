@@ -12,7 +12,7 @@ import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
-import { ActivityOperationTimeline, MonitoringChartCard } from "@/features/monitoring/components";
+import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
 import type { MetricSeries, MonitoringEvent, MonitoringRange } from "@/features/monitoring/types";
 import {
@@ -62,10 +62,9 @@ import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/s
 import { cn } from "@/lib/utils";
 import type { Backup, GameServerResource, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
-type TabId = "overview" | "monitoring" | "activity" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
+type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
-type ServerWatchStatus = "connecting" | "connected" | "error";
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
@@ -169,9 +168,7 @@ export default function ServerDetailPage() {
   });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
-  const [activitySeenAt, setActivitySeenAt] = useState(() => Date.now());
-  const [watchStatus, setWatchStatus] = useState<ServerWatchStatus>("connecting");
-  const [monitoringRange, setMonitoringRange] = useState<MonitoringRangeValue>("1h");
+  const monitoringRange: MonitoringRangeValue = "1h";
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
@@ -190,11 +187,11 @@ export default function ServerDetailPage() {
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
-  const monitoringStep = monitoringRange === "15m" ? "30s" : monitoringRange === "1h" ? "1m" : monitoringRange === "6h" ? "5m" : "15m";
+  const monitoringStep = "1m";
   const serverMetricsQuery = useQuery({
     queryKey: ["server-monitoring-metrics", id, monitoringRange],
     queryFn: () => getServerMonitoringMetrics(id, monitoringRange, monitoringStep),
-    enabled: Boolean(serverResource && activeTab === "monitoring"),
+    enabled: Boolean(serverResource && activeTab === "overview"),
     retry: false,
     refetchInterval: 5000
   });
@@ -225,14 +222,10 @@ export default function ServerDetailPage() {
 
   useEffect(() => {
     if (!serverResource?.id) return;
-    setWatchStatus("connecting");
     const source = new EventSource(serverWatchUrl(id), { withCredentials: true });
-    source.onopen = () => setWatchStatus("connected");
-    source.onerror = () => setWatchStatus("error");
     source.addEventListener("snapshot", (event) => {
       try {
         const snapshot = JSON.parse((event as MessageEvent).data) as ServerWatchSnapshot;
-        setWatchStatus("connected");
         client.setQueryData(["game-server", id], snapshot.server);
         client.setQueryData(["server-stats", id], snapshot.stats);
         client.setQueryData(["server-monitoring-events", id], {
@@ -540,8 +533,6 @@ export default function ServerDetailPage() {
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
     { id: "overview", label: t("tabOverview") },
-    { id: "monitoring", label: t("monitoringTabTitle") },
-    { id: "activity", label: t("activityTitle") },
     ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
     { id: "logs", label: t("tabLogs") },
     { id: "config", label: t("tabConfig") },
@@ -563,12 +554,6 @@ export default function ServerDetailPage() {
     () => (serverEventsQuery.data?.events ?? []).filter((event) => showWorldAndBackupFeatures || !isWorldOrBackupEventType(event.type)),
     [serverEventsQuery.data?.events]
   );
-  const latestActivityAt = latestMonitoringEventTime(visibleServerEvents);
-  useEffect(() => {
-    if (activeTab === "activity") {
-      setActivitySeenAt((current) => Math.max(current, latestActivityAt, Date.now()));
-    }
-  }, [activeTab, latestActivityAt]);
   if (!serverResource) {
     return (
       <>
@@ -591,8 +576,6 @@ export default function ServerDetailPage() {
   const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const runtimeErrorMessage = status === "errored" && serverResource.status.lastError ? formatActionError(new Error(serverResource.status.lastError), serverResource.status.lastError) : "";
-  const hasUnreadActivity = latestActivityAt > activitySeenAt;
-  const showActivityIndicator = activeTab !== "activity" && (Boolean(runtimeErrorMessage) || hasUnreadActivity);
   const copy = async (label: string, value: string) => {
     try {
       await copyText(value);
@@ -680,15 +663,6 @@ export default function ServerDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
               >
                 <span>{tab.label}</span>
-                {tab.id === "activity" ? (
-                  <span
-                    className={cn(
-                      "pointer-events-none absolute right-1.5 top-1.5 size-1.5 rounded-full transition-opacity",
-                      showActivityIndicator ? runtimeErrorMessage ? "bg-red-400 opacity-100" : "bg-panel-green opacity-100" : "opacity-0"
-                    )}
-                    aria-label={showActivityIndicator ? t("serverActivityUnread") : undefined}
-                  />
-                ) : null}
               </button>
             ))}
           </div>
@@ -699,25 +673,13 @@ export default function ServerDetailPage() {
               resource={serverResource}
               worldCount={serverWorlds.length}
               backupCount={serverBackups.length}
-              modCount={serverMods.length}
-              onSelectTab={setActiveTab}
-            />
-          )}
-          {activeTab === "monitoring" && (
-            <MonitoringTab
+              events={visibleServerEvents}
+              eventsLoading={serverEventsQuery.isLoading}
               metrics={serverMetricsQuery.data?.series}
               metricsRange={serverMetricsQuery.data?.range}
-              range={monitoringRange}
-              server={serverResource}
-              onRangeChange={setMonitoringRange}
-            />
-          )}
-          {activeTab === "activity" && (
-            <ServerActivityTab
-              events={visibleServerEvents}
-              loading={serverEventsQuery.isLoading}
+              modCount={serverMods.length}
               runtimeError={runtimeErrorMessage}
-              watchStatus={watchStatus}
+              onSelectTab={setActiveTab}
             />
           )}
           {activeTab === "console" && (
@@ -1035,14 +997,24 @@ export default function ServerDetailPage() {
 
 function OverviewTab({
   capabilities,
+  events,
+  eventsLoading,
+  metrics,
+  metricsRange,
   resource,
+  runtimeError,
   worldCount,
   backupCount,
   modCount,
   onSelectTab
 }: {
   capabilities: ProviderCapabilities;
+  events: MonitoringEvent[];
+  eventsLoading: boolean;
+  metrics?: Record<string, MetricSeries>;
+  metricsRange?: MonitoringRange;
   resource: GameServerResource;
+  runtimeError: string;
   worldCount: number;
   backupCount: number;
   modCount: number;
@@ -1056,6 +1028,7 @@ function OverviewTab({
     { label: t("difficulty"), value: difficultyLabel(stringProviderValue(resourceConfig, "difficulty", "classic"), t) },
     { label: t("maxPlayers"), value: String(gameServerMaxPlayers(resource)) },
     { label: t("version"), value: gameServerVersion(resource) },
+    { label: t("metricTitleUptime"), value: formatServerUptime(resource, t) },
     ...(hostPort > 0 && hostPort !== internalPort ? [{ label: t("hostPort"), value: String(hostPort) }] : [])
   ];
   return (
@@ -1071,6 +1044,11 @@ function OverviewTab({
           {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
         </div>
       </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <MonitoringChartCard compact color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.cpu} />
+        <MonitoringChartCard compact color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.memory} />
+      </div>
+      <ActivityLatestOperation events={events} loading={eventsLoading} runtimeError={runtimeError} />
     </div>
   );
 }
@@ -1080,91 +1058,22 @@ function stringProviderValue(payload: Record<string, unknown> | undefined, key: 
   return typeof value === "string" ? value : fallback;
 }
 
-function latestMonitoringEventTime(events: MonitoringEvent[]) {
-  return events.reduce((latest, event) => {
-    const next = Date.parse(event.timestamp);
-    return Number.isFinite(next) ? Math.max(latest, next) : latest;
-  }, 0);
-}
-
-function MonitoringTab({
-  metrics,
-  metricsRange,
-  range,
-  server,
-  onRangeChange
-}: {
-  metrics?: Record<string, MetricSeries>;
-  metricsRange?: MonitoringRange;
-  range: MonitoringRangeValue;
-  server: GameServerResource;
-  onRangeChange: (range: MonitoringRangeValue) => void;
-}) {
-  const { t } = useI18n();
-  const ranges: MonitoringRangeValue[] = ["15m", "1h", "6h", "24h"];
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-lg border border-panel-line bg-slate-950/35 p-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="font-semibold text-slate-100">{t("monitoringTabTitle")}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t("monitoringTabDescription", { name: server.name })}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {ranges.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={cn(
-                "h-8 rounded-md border border-panel-line px-3 text-xs font-medium text-slate-400 transition hover:bg-slate-900 hover:text-slate-100",
-                range === item && "border-panel-green/40 bg-panel-green/15 text-panel-green"
-              )}
-              onClick={() => onRangeChange(item)}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.cpu} />
-        <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.memory} />
-        <MonitoringChartCard color="#59d46f" icon={<Users aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.players} />
-        <MonitoringChartCard color="#e6b84a" icon={<Clock aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.uptime} />
-      </div>
-    </div>
-  );
-}
-
-function ServerActivityTab({ events, loading, runtimeError, watchStatus }: { events: MonitoringEvent[]; loading: boolean; runtimeError: string; watchStatus: ServerWatchStatus }) {
-  const { t } = useI18n();
-  const liveLabel = watchStatus === "connected" ? t("activityLiveConnected") : watchStatus === "error" ? t("activityLiveDisconnected") : t("activityLiveConnecting");
-  return (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
-          <span className={cn(
-            "size-2 rounded-full",
-            watchStatus === "connected" ? "bg-panel-green shadow-[0_0_0_3px_rgba(89,212,111,0.14)]" :
-              watchStatus === "error" ? "bg-panel-gold shadow-[0_0_0_3px_rgba(230,184,74,0.12)]" :
-                "bg-slate-600"
-          )} title={liveLabel} aria-label={liveLabel} />
-        </div>
-        <p className="mt-1 text-xs text-slate-500">{t("serverRecentEventsDescription")}</p>
-      </div>
-      {runtimeError ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-          <p className="font-medium">{t("serverRuntimeError")}</p>
-          <p className="mt-1 break-words text-red-100/85">{runtimeError}</p>
-        </div>
-      ) : null}
-      {loading ? (
-        <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-8 text-center text-sm text-slate-500">{t("loading")}</div>
-      ) : (
-        <ActivityOperationTimeline events={events} />
-      )}
-    </div>
-  );
+function formatServerUptime(resource: GameServerResource, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
+  if (gameServerStatus(resource) !== "running" || !resource.status.lastTransitionAt) {
+    return t("notRunning");
+  }
+  const startedAt = Date.parse(resource.status.lastTransitionAt);
+  if (!Number.isFinite(startedAt)) return t("unknown");
+  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  if (hours < 24) return restMinutes > 0 ? `${hours}h ${restMinutes}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  return restHours > 0 ? `${days}d ${restHours}h` : `${days}d`;
 }
 
 function ResourceLimitsCard({
