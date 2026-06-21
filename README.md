@@ -59,6 +59,42 @@ NEXT_PUBLIC_API_BASE_URL=
 docker compose -f compose.prod.yaml up -d
 ```
 
+## 开启 HTTPS
+
+先确认域名已经解析到服务器，并且服务器安全组已经放行 `80` 和 `443`。
+
+然后执行：
+
+```bash
+sh scripts/setup-https.sh dev.gamepanel.site your-email@example.com
+```
+
+如果当前用户没有 Docker 权限，可以使用：
+
+```bash
+sudo sh scripts/setup-https.sh dev.gamepanel.site your-email@example.com
+```
+
+脚本会自动申请 Let's Encrypt 证书，并把入口切换到：
+
+```text
+https://dev.gamepanel.site
+```
+
+证书文件保存在 `data/certbot/`，不会写进镜像，也不会提交到代码仓库。
+
+后续续期可以执行：
+
+```bash
+sh scripts/renew-https.sh
+```
+
+如果要交给系统定时任务执行，可以用 `sudo crontab -e` 加一行：
+
+```cron
+15 3 * * * cd /home/ubuntu/game-panel-lite && sh scripts/renew-https.sh >/var/log/gamepanel-renew-https.log 2>&1
+```
+
 ## 使用方式
 
 1. 打开 GamePanel Lite。

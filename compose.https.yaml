@@ -1,0 +1,20 @@
+services:
+  certbot:
+    image: certbot/certbot:v2.11.0
+    volumes:
+      - ./data/certbot/www:/var/www/certbot
+      - ./data/certbot/conf:/etc/letsencrypt
+
+  nginx-https:
+    image: nginx:1.27-alpine
+    pull_policy: missing
+    depends_on:
+      - api
+      - web
+    ports:
+      - "${GAMEPANEL_WEB_PORT:-80}:80"
+      - "${GAMEPANEL_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./data/nginx/gamepanel-https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data/certbot/www:/var/www/certbot:ro
+      - ./data/certbot/conf:/etc/letsencrypt:ro
