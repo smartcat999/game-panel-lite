@@ -90,7 +90,7 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	updated, err := c.reconciler.Reconcile(ctx, item)
+	updated, lifecycleEvents, err := c.reconciler.ReconcileWithEvents(ctx, item)
 	if err != nil {
 		c.logger.Warn("server reconciliation failed", "server", item.ID, "error", err)
 		return
@@ -105,7 +105,7 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 				c.logger.Warn("failed to delete reconciled server resource", "server", item.ID, "error", err)
 				return
 			}
-			c.recordReconcileEvents(ctx, item, updated)
+			c.recordReconcileEvents(ctx, item, updated, lifecycleEvents)
 			return
 		}
 	}
@@ -113,7 +113,7 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 		c.logger.Warn("failed to save reconciled server", "server", item.ID, "error", err)
 		return
 	}
-	c.recordReconcileEvents(ctx, item, updated)
+	c.recordReconcileEvents(ctx, item, updated, lifecycleEvents)
 }
 
 func (c *Controller) lockFor(id string) *sync.Mutex {
@@ -127,16 +127,26 @@ func (c *Controller) lockFor(id string) *sync.Mutex {
 	return lock
 }
 
-func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.GameServer, after domain.GameServer) {
+func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.GameServer, after domain.GameServer, lifecycleEvents []LifecycleEvent) {
 	activityStore, ok := c.store.(activityControllerStore)
 	if !ok {
 		return
 	}
-	for _, event := range reconciliationActivityEvents(before, after, time.Now()) {
+	events := reconciliationLifecycleActivityEvents(after, lifecycleEvents, time.Now())
+	events = append(events, reconciliationActivityEvents(before, after, time.Now())...)
+	for _, event := range events {
 		if err := activityStore.CreateActivity(ctx, &event); err != nil {
 			c.logger.Warn("failed to record reconciliation activity", "server", after.ID, "type", event.Type, "error", err)
 		}
 	}
+}
+
+func reconciliationLifecycleActivityEvents(server domain.GameServer, lifecycleEvents []LifecycleEvent, now time.Time) []domain.ActivityEvent {
+	events := make([]domain.ActivityEvent, 0, len(lifecycleEvents))
+	for _, item := range lifecycleEvents {
+		events = append(events, newReconciliationActivityWithPayload(server, item.Type, item.Message, now, item.Payload))
+	}
+	return events
 }
 
 func reconciliationActivityEvents(before domain.GameServer, after domain.GameServer, now time.Time) []domain.ActivityEvent {
@@ -156,7 +166,7 @@ func reconciliationActivityEvents(before domain.GameServer, after domain.GameSer
 	if after.Status.Phase == domain.PhaseRunning && (before.Status.Phase != domain.PhaseRunning || before.Status.AppliedGeneration != after.Status.AppliedGeneration || before.Status.ActualState != domain.ActualRunning) {
 		events = append(events, newReconciliationActivity(after, "server.started", "Started server "+after.Name, now))
 	}
-	if after.Status.Phase == domain.PhaseStopped && (before.Status.Phase != domain.PhaseStopped || before.Status.ActualState != after.Status.ActualState || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {
+	if after.Status.Phase == domain.PhaseStopped && !isInitialStoppedReconcile(before, after) && (before.Status.Phase != domain.PhaseStopped || before.Status.ActualState != after.Status.ActualState || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {
 		events = append(events, newReconciliationActivity(after, "server.stopped", "Stopped server "+after.Name, now))
 	}
 	if after.Status.Phase == domain.PhaseDeleted && before.Status.Phase != domain.PhaseDeleted {
@@ -165,24 +175,42 @@ func reconciliationActivityEvents(before domain.GameServer, after domain.GameSer
 	return events
 }
 
+func isInitialStoppedReconcile(before domain.GameServer, after domain.GameServer) bool {
+	return before.Spec.DesiredState == domain.DesiredStopped &&
+		after.Spec.DesiredState == domain.DesiredStopped &&
+		before.Status.Phase == domain.PhasePending &&
+		before.Status.ActualState == domain.ActualMissing &&
+		before.Status.RuntimeID == "" &&
+		after.Status.RuntimeID == "" &&
+		after.Status.ActualState == domain.ActualMissing
+}
+
 func newReconciliationActivity(server domain.GameServer, eventType string, message string, now time.Time) domain.ActivityEvent {
+	return newReconciliationActivityWithPayload(server, eventType, message, now, nil)
+}
+
+func newReconciliationActivityWithPayload(server domain.GameServer, eventType string, message string, now time.Time, extraPayload map[string]any) domain.ActivityEvent {
+	payload := map[string]any{
+		"serverId":      server.ID,
+		"serverName":    server.Name,
+		"gameKey":       server.GameKey,
+		"providerKey":   server.ProviderKey,
+		"desiredState":  server.Spec.DesiredState,
+		"generation":    server.Spec.Generation,
+		"runtimePhase":  server.Status.Phase,
+		"runtimeId":     server.Status.RuntimeID,
+		"runtimeStatus": server.Status.ActualState,
+		"lastError":     server.Status.LastError,
+	}
+	for key, value := range extraPayload {
+		payload[key] = value
+	}
 	return domain.ActivityEvent{
 		ID:         uuid.NewString(),
 		InstanceID: server.ID,
 		Type:       eventType,
 		Message:    message,
-		Payload: map[string]any{
-			"serverId":      server.ID,
-			"serverName":    server.Name,
-			"gameKey":       server.GameKey,
-			"providerKey":   server.ProviderKey,
-			"desiredState":  server.Spec.DesiredState,
-			"generation":    server.Spec.Generation,
-			"runtimePhase":  server.Status.Phase,
-			"runtimeId":     server.Status.RuntimeID,
-			"runtimeStatus": server.Status.ActualState,
-			"lastError":     server.Status.LastError,
-		},
-		CreatedAt: now,
+		Payload:    payload,
+		CreatedAt:  now,
 	}
 }

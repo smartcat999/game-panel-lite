@@ -210,7 +210,7 @@ func severityForEvent(eventType string) string {
 	if strings.Contains(eventType, "deleted") || strings.Contains(eventType, "stop") {
 		return "warning"
 	}
-	if strings.Contains(eventType, "created") || strings.Contains(eventType, "started") || strings.Contains(eventType, "restored") {
+	if strings.Contains(eventType, "created") || strings.Contains(eventType, "started") || strings.Contains(eventType, "restored") || strings.Contains(eventType, "succeeded") {
 		return "success"
 	}
 	return "info"

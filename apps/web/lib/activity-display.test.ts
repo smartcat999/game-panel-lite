@@ -191,6 +191,34 @@ describe("formatActivityEvent", () => {
     });
   });
 
+  it("formats container lifecycle failure details from structured payload", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      type: "server.container.start.failed",
+      message: "Start runtime container failed for server stale-server: Docker runtime unavailable",
+      payload: { serverName: "朋友服务器", runtimeId: "runtime-1", error: "Docker runtime unavailable" }
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "朋友服务器 容器启动失败：Docker 未连接，请先在设置页完成 Docker Host 配置。（容器：runtime-1）",
+      typeLabel: "容器启动失败"
+    });
+  });
+
+  it("formats image lifecycle details from structured payload", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      type: "server.image.load.failed",
+      message: "Load runtime image failed for server stale-server: runtime image archive is missing",
+      payload: { serverName: "朋友服务器", image: "gamepanel/dst:latest", error: "runtime image archive is missing" }
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "朋友服务器 镜像加载失败：runtime image archive is missing（镜像：gamepanel/dst:latest）",
+      typeLabel: "镜像加载失败"
+    });
+  });
+
   it("falls back to raw values for unknown activity types", () => {
     const event: ActivityEvent = {
       ...baseEvent,

@@ -157,6 +157,49 @@ func TestReconcileRunningCreatesAndStartsWorkload(t *testing.T) {
 	}
 }
 
+func TestReconcileRunningRecordsLifecycleEvents(t *testing.T) {
+	builder := &fakeBuilder{}
+	runtime := newFakeRuntime()
+	images := &fakeImageLoader{}
+	reconciler := NewRuntimeReconciler(builder, runtime).WithImageLoader(images)
+	server := domain.GameServer{
+		ID:   "srv-events",
+		Name: "Friends",
+		Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredRunning},
+		Status: domain.ServerRuntimeStatus{
+			Phase:       domain.PhasePending,
+			ActualState: domain.ActualMissing,
+		},
+	}
+
+	updated, events, err := reconciler.ReconcileWithEvents(context.Background(), server)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if updated.Status.Phase != domain.PhaseRunning {
+		t.Fatalf("expected running phase, got %q", updated.Status.Phase)
+	}
+	want := []string{
+		"server.image.load.started",
+		"server.image.load.succeeded",
+		"server.container.create.started",
+		"server.container.create.succeeded",
+		"server.container.start.started",
+		"server.container.start.succeeded",
+	}
+	if len(events) != len(want) {
+		t.Fatalf("expected lifecycle events %v, got %+v", want, events)
+	}
+	for index, eventType := range want {
+		if events[index].Type != eventType {
+			t.Fatalf("expected event %d to be %q, got %+v", index, eventType, events[index])
+		}
+	}
+	if events[0].Payload["image"] != "game:latest" || events[3].Payload["runtimeId"] == "" || events[5].Payload["runtimeId"] == "" {
+		t.Fatalf("expected lifecycle payload details, got %+v", events)
+	}
+}
+
 func TestReconcileRunningFailsWhenImageLoadFails(t *testing.T) {
 	builder := &fakeBuilder{}
 	runtime := newFakeRuntime()

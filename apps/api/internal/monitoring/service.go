@@ -477,7 +477,7 @@ func eventFromActivity(event domain.ActivityEvent, server domain.GameServer) Eve
 		severity = "error"
 	} else if strings.Contains(event.Type, "deleted") || strings.Contains(event.Type, "stop") {
 		severity = "warning"
-	} else if strings.Contains(event.Type, "created") || strings.Contains(event.Type, "started") || strings.Contains(event.Type, "restored") {
+	} else if strings.Contains(event.Type, "created") || strings.Contains(event.Type, "started") || strings.Contains(event.Type, "restored") || strings.Contains(event.Type, "succeeded") {
 		severity = "success"
 	}
 	return Event{

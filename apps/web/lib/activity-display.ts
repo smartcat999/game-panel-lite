@@ -11,6 +11,23 @@ type ActivityDisplay = {
 const labels: Record<string, Record<Locale, string>> = {
   "server.created": { zh: "服务器创建", en: "Server Created" },
   "server.start.queued": { zh: "启动排队", en: "Start Queued" },
+  "server.image.load.started": { zh: "加载镜像", en: "Loading Image" },
+  "server.image.load.succeeded": { zh: "镜像已就绪", en: "Image Ready" },
+  "server.image.load.failed": { zh: "镜像加载失败", en: "Image Load Failed" },
+  "server.container.prepare.failed": { zh: "容器配置失败", en: "Container Spec Failed" },
+  "server.container.inspect.failed": { zh: "检查容器失败", en: "Container Inspect Failed" },
+  "server.container.create.started": { zh: "创建容器", en: "Creating Container" },
+  "server.container.create.succeeded": { zh: "容器已创建", en: "Container Created" },
+  "server.container.create.failed": { zh: "容器创建失败", en: "Container Create Failed" },
+  "server.container.start.started": { zh: "启动容器", en: "Starting Container" },
+  "server.container.start.succeeded": { zh: "容器已启动", en: "Container Started" },
+  "server.container.start.failed": { zh: "容器启动失败", en: "Container Start Failed" },
+  "server.container.stop.started": { zh: "停止容器", en: "Stopping Container" },
+  "server.container.stop.succeeded": { zh: "容器已停止", en: "Container Stopped" },
+  "server.container.stop.failed": { zh: "容器停止失败", en: "Container Stop Failed" },
+  "server.container.remove.started": { zh: "移除容器", en: "Removing Container" },
+  "server.container.remove.succeeded": { zh: "容器已移除", en: "Container Removed" },
+  "server.container.remove.failed": { zh: "容器移除失败", en: "Container Remove Failed" },
   "server.start.container.prepare": { zh: "准备容器", en: "Preparing Container" },
   "server.start.container.created": { zh: "容器已创建", en: "Container Created" },
   "server.runtime.created": { zh: "运行实例已创建", en: "Runtime Created" },
@@ -129,6 +146,8 @@ export function formatActivityEvent(event: ActivityEvent, locale: Locale): Activ
 function formatActivityPayloadMessage(event: ActivityEvent, locale: Locale): string | undefined {
   const serverName = payloadString(event, "serverName");
   if (serverName) {
+    const lifecycleMessage = formatLifecyclePayloadMessage(event, locale, serverName);
+    if (lifecycleMessage) return lifecycleMessage;
     const messages: Record<string, Record<Locale, string>> = {
       "server.created": { zh: `已创建服务器 ${serverName}`, en: `Created server ${serverName}` },
       "server.config.updated": { zh: `已更新 ${serverName} 的配置`, en: `Updated config for ${serverName}` },
@@ -246,6 +265,70 @@ function formatActivityPayloadMessage(event: ActivityEvent, locale: Locale): str
     }
   }
   return undefined;
+}
+
+function formatLifecyclePayloadMessage(event: ActivityEvent, locale: Locale, serverName: string): string | undefined {
+  const error = payloadString(event, "error");
+  const image = payloadString(event, "image");
+  const runtimeId = payloadString(event, "runtimeId");
+  const detail = locale === "zh" ? formatLifecycleDetailZh(image, runtimeId) : formatLifecycleDetailEn(image, runtimeId);
+  const formattedError = error ? formatServerDetailError(new Error(error), locale === "en" ? {
+    dockerUnavailable: "Docker is not connected. Configure Docker Host in Settings first.",
+    containerUnavailable: "The Docker container is unavailable or was removed outside the panel. Start the server again so GamePanel can recreate it."
+  } : undefined) : "";
+  const zh: Record<string, string> = {
+    "server.image.load.started": `正在为 ${serverName} 加载运行镜像${detail}`,
+    "server.image.load.succeeded": `${serverName} 的运行镜像已就绪${detail}`,
+    "server.image.load.failed": `${serverName} 镜像加载失败：${formattedError}${detail}`,
+    "server.container.prepare.failed": `${serverName} 容器配置生成失败：${formattedError}`,
+    "server.container.inspect.failed": `${serverName} 容器检查失败：${formattedError}${detail}`,
+    "server.container.create.started": `正在为 ${serverName} 创建容器${detail}`,
+    "server.container.create.succeeded": `已创建 ${serverName} 的容器${detail}`,
+    "server.container.create.failed": `${serverName} 容器创建失败：${formattedError}${detail}`,
+    "server.container.start.started": `正在启动 ${serverName} 的容器${detail}`,
+    "server.container.start.succeeded": `${serverName} 的容器已启动${detail}`,
+    "server.container.start.failed": `${serverName} 容器启动失败：${formattedError}${detail}`,
+    "server.container.stop.started": `正在停止 ${serverName} 的容器${detail}`,
+    "server.container.stop.succeeded": `${serverName} 的容器已停止${detail}`,
+    "server.container.stop.failed": `${serverName} 容器停止失败：${formattedError}${detail}`,
+    "server.container.remove.started": `正在移除 ${serverName} 的容器${detail}`,
+    "server.container.remove.succeeded": `${serverName} 的容器已移除${detail}`,
+    "server.container.remove.failed": `${serverName} 容器移除失败：${formattedError}${detail}`
+  };
+  const en: Record<string, string> = {
+    "server.image.load.started": `Loading runtime image for ${serverName}${detail}`,
+    "server.image.load.succeeded": `Runtime image is ready for ${serverName}${detail}`,
+    "server.image.load.failed": `${serverName} image load failed: ${formattedError}${detail}`,
+    "server.container.prepare.failed": `${serverName} container spec failed: ${formattedError}`,
+    "server.container.inspect.failed": `${serverName} container inspect failed: ${formattedError}${detail}`,
+    "server.container.create.started": `Creating container for ${serverName}${detail}`,
+    "server.container.create.succeeded": `Created container for ${serverName}${detail}`,
+    "server.container.create.failed": `${serverName} container create failed: ${formattedError}${detail}`,
+    "server.container.start.started": `Starting container for ${serverName}${detail}`,
+    "server.container.start.succeeded": `Started container for ${serverName}${detail}`,
+    "server.container.start.failed": `${serverName} container start failed: ${formattedError}${detail}`,
+    "server.container.stop.started": `Stopping container for ${serverName}${detail}`,
+    "server.container.stop.succeeded": `Stopped container for ${serverName}${detail}`,
+    "server.container.stop.failed": `${serverName} container stop failed: ${formattedError}${detail}`,
+    "server.container.remove.started": `Removing container for ${serverName}${detail}`,
+    "server.container.remove.succeeded": `Removed container for ${serverName}${detail}`,
+    "server.container.remove.failed": `${serverName} container remove failed: ${formattedError}${detail}`
+  };
+  return (locale === "zh" ? zh : en)[event.type];
+}
+
+function formatLifecycleDetailZh(image?: string, runtimeId?: string): string {
+  const parts = [];
+  if (image) parts.push(`镜像：${image}`);
+  if (runtimeId) parts.push(`容器：${runtimeId}`);
+  return parts.length > 0 ? `（${parts.join("，")}）` : "";
+}
+
+function formatLifecycleDetailEn(image?: string, runtimeId?: string): string {
+  const parts = [];
+  if (image) parts.push(`image: ${image}`);
+  if (runtimeId) parts.push(`container: ${runtimeId}`);
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
 }
 
 function payloadString(event: ActivityEvent, key: string): string | undefined {

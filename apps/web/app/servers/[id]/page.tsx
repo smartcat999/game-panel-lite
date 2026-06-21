@@ -640,23 +640,21 @@ export default function ServerDetailPage() {
                 role="tab"
                 aria-selected={activeTab === tab.id}
                 className={cn(
-                  "shrink-0 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
+                  "relative shrink-0 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
                   activeTab === tab.id && "border-panel-green/40 bg-panel-green/15 text-white shadow-[inset_0_0_0_1px_rgba(123,217,120,0.18)]"
                 )}
                 onClick={() => setActiveTab(tab.id)}
               >
-                <span className="inline-flex items-center gap-2">
-                  {tab.label}
-                  {tab.id === "activity" ? (
-                    <span
-                      className={cn(
-                        "size-1.5 rounded-full transition-opacity",
-                        showActivityIndicator ? runtimeErrorMessage ? "bg-red-400 opacity-100" : "bg-panel-green opacity-100" : "opacity-0"
-                      )}
-                      aria-label={showActivityIndicator ? t("serverActivityUnread") : undefined}
-                    />
-                  ) : null}
-                </span>
+                <span>{tab.label}</span>
+                {tab.id === "activity" ? (
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute right-1.5 top-1.5 size-1.5 rounded-full transition-opacity",
+                      showActivityIndicator ? runtimeErrorMessage ? "bg-red-400 opacity-100" : "bg-panel-green opacity-100" : "opacity-0"
+                    )}
+                    aria-label={showActivityIndicator ? t("serverActivityUnread") : undefined}
+                  />
+                ) : null}
               </button>
             ))}
           </div>
