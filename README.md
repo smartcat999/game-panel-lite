@@ -30,7 +30,7 @@ Running a game server should not mean juggling shell commands, scattered config 
 Run this on a server with Docker installed:
 
 ```bash
-git clone https://github.com/smartcat999/game-panel-lite.git && cd game-panel-lite && sh scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
 ```
 
 Then open:
@@ -42,7 +42,7 @@ http://YOUR_SERVER_IP:3001
 If you have a domain pointed at the server, enable HTTPS:
 
 ```bash
-sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
+cd ~/gamepanel-lite && sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
 ```
 
 ## Data Location
