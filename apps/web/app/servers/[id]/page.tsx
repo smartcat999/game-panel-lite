@@ -116,8 +116,21 @@ export default function ServerDetailPage() {
   const logViewportRef = useRef<HTMLDivElement>(null);
   const logServerIdRef = useRef("");
   const logReplayIndexRef = useRef(0);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
 
-  const query = useQuery({ queryKey: ["game-server", id], queryFn: () => getGameServer(id), retry: false, refetchInterval: 5000 });
+  const query = useQuery({
+    queryKey: ["game-server", id],
+    queryFn: () => getGameServer(id),
+    retry: false,
+    refetchInterval: (serverQuery) => {
+      const data = serverQuery.state.data as GameServerResource | undefined;
+      if (!data) return 5000;
+      const status = gameServerStatus(data);
+      if (isServerLifecyclePending(status)) return 2000;
+      if (status === "running") return 10000;
+      return false;
+    }
+  });
   const serverResource = query.data;
   const resourceStatus = serverResource ? gameServerStatus(serverResource) : undefined;
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, enabled: Boolean(serverResource), staleTime: 5 * 60 * 1000, retry: false });
@@ -137,7 +150,14 @@ export default function ServerDetailPage() {
     }),
     [capabilities]
   );
-  const statsQuery = useQuery({ queryKey: ["server-stats", id], queryFn: () => getServerStats(id), enabled: resourceStatus === "running", refetchInterval: 3000, retry: false });
+  const statsVisible = activeTab === "overview" || activeTab === "monitoring";
+  const statsQuery = useQuery({
+    queryKey: ["server-stats", id],
+    queryFn: () => getServerStats(id),
+    enabled: resourceStatus === "running" && statsVisible,
+    refetchInterval: activeTab === "monitoring" ? 5000 : 10000,
+    retry: false
+  });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(serverResource && visibleCapabilities.saveSnapshots), retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(serverResource && visibleCapabilities.backups), retry: false });
   const modsQuery = useQuery({
@@ -158,9 +178,8 @@ export default function ServerDetailPage() {
     enabled: Boolean(serverResource && capabilities.mods),
     retry: false
   });
-  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, refetchInterval: 5000 });
+  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [activitySeenAt, setActivitySeenAt] = useState(() => Date.now());
   const [monitoringRange, setMonitoringRange] = useState<MonitoringRangeValue>("1h");
   const [copied, setCopied] = useState("");
@@ -192,9 +211,9 @@ export default function ServerDetailPage() {
   const serverEventsQuery = useQuery({
     queryKey: ["server-monitoring-events", id],
     queryFn: () => getServerMonitoringEvents(id, 50),
-    enabled: Boolean(serverResource),
+    enabled: Boolean(serverResource && activeTab === "activity"),
     retry: false,
-    refetchInterval: 5000
+    staleTime: 5000
   });
   const [logStatus, setLogStatus] = useState<"idle" | "connecting" | "connected" | "error" | "paused">("idle");
   const [logStreamPaused, setLogStreamPaused] = useState(false);
