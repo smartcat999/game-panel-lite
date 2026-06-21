@@ -3,7 +3,8 @@
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import Link from "next/link";
-import { Activity, AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, Info, RadioTower, Server } from "lucide-react";
+import { Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Info, RadioTower, Server } from "lucide-react";
+import { useState } from "react";
 import { Card } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -302,6 +303,148 @@ export function ActivityTimeline({ events }: { events: MonitoringEvent[] }) {
   );
 }
 
+export function ActivityOperationTimeline({ events }: { events: MonitoringEvent[] }) {
+  const { t } = useI18n();
+  const groups = groupActivityOperations(events);
+  const latest = groups[0];
+  return (
+    <div className="space-y-3">
+      {events.length === 0 ? (
+        <Card className="px-4 py-12 text-center text-sm text-slate-500">{t("monitoringNoEvents")}</Card>
+      ) : null}
+      {latest ? <CurrentOperationCard group={latest} /> : null}
+      {groups.length > 0 ? (
+        <Card className="overflow-hidden">
+          <div className="border-b border-panel-line px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-100">{t("serverOperationHistory")}</h3>
+            <p className="mt-1 text-xs text-slate-500">{t("serverOperationHistoryDescription")}</p>
+          </div>
+          <div className="divide-y divide-panel-line">
+            {groups.map((group, index) => <OperationGroupRow key={group.id} group={group} defaultOpen={index === 0 && group.severity === "error"} />)}
+          </div>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+type ActivityOperationGroup = {
+  id: string;
+  events: MonitoringEvent[];
+  endTime: number;
+  severity: MonitoringEvent["severity"];
+  startTime: number;
+};
+
+function CurrentOperationCard({ group }: { group: ActivityOperationGroup }) {
+  const { t } = useI18n();
+  const latest = group.events[group.events.length - 1];
+  if (!latest) return null;
+  const duration = Math.max(0, group.endTime - group.startTime);
+  const visibleEvents = group.events.slice(-8);
+  return (
+    <Card className={cn("p-4", group.severity === "error" && "border-panel-gold/40 bg-panel-gold/5")}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-md border", toneClass(group.severity))}>{severityIcon(group.severity)}</span>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-semibold text-slate-100">{t("serverCurrentOperation")}</h3>
+              <p className="mt-1 truncate text-xs text-slate-500">{localizedEventTitle(latest, t)}</p>
+            </div>
+          </div>
+        </div>
+        <span className="rounded-md border border-panel-line bg-slate-950/40 px-2 py-1 font-mono text-xs text-slate-400">
+          {formatDuration(duration)}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {visibleEvents.map((event, index) => {
+          const title = localizedEventTitle(event, t);
+          const isLatest = index === visibleEvents.length - 1;
+          return (
+            <div key={event.id} className="grid grid-cols-[20px_88px_minmax(0,1fr)] items-start gap-2 text-xs">
+              <span className={cn("mt-1 size-2 rounded-full", isLatest ? "bg-panel-green shadow-[0_0_0_4px_rgba(89,212,111,0.12)]" : event.severity === "error" ? "bg-panel-gold" : "bg-slate-600")} />
+              <span className="font-mono text-slate-500">{formatTime(event.timestamp)}</span>
+              <span className={cn("truncate", isLatest ? "font-medium text-slate-100" : "text-slate-400")}>{title}</span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function OperationGroupRow({ defaultOpen, group }: { defaultOpen: boolean; group: ActivityOperationGroup }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(defaultOpen);
+  const latest = group.events[group.events.length - 1];
+  if (!latest) return null;
+  const duration = Math.max(0, group.endTime - group.startTime);
+  return (
+    <div>
+      <button
+        className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-950/30 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="flex min-w-0 items-start gap-3">
+          <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border", toneClass(group.severity))}>{severityIcon(group.severity)}</span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-slate-100">{localizedEventTitle(latest, t)}</span>
+            <span className="mt-1 block truncate text-xs text-slate-500">
+              {formatTime(new Date(group.startTime).toISOString())} - {formatTime(new Date(group.endTime).toISOString())} · {group.events.length} {t("serverOperationEventCount")} · {formatDuration(duration)}
+            </span>
+          </span>
+        </span>
+        <SeverityPill severity={group.severity} />
+        <ChevronDown aria-hidden="true" className={cn("size-4 text-slate-500 transition", open && "rotate-180")} />
+      </button>
+      {open ? (
+        <div className="border-t border-panel-line bg-slate-950/25 px-4 py-2">
+          {group.events.map((event) => <CompactEventRow key={event.id} event={event} />)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CompactEventRow({ event }: { event: MonitoringEvent }) {
+  const { t } = useI18n();
+  return (
+    <div className="grid grid-cols-[96px_20px_minmax(0,1fr)] items-start gap-2 py-2 text-xs">
+      <span className="font-mono text-slate-500">{formatTime(event.timestamp)}</span>
+      <span className={cn("mt-1 size-2 rounded-full", event.severity === "error" ? "bg-panel-gold" : event.severity === "success" ? "bg-panel-green" : "bg-slate-600")} />
+      <span className="min-w-0">
+        <span className="block truncate font-medium text-slate-300">{localizedEventTitle(event, t)}</span>
+        <span className="mt-0.5 block truncate text-slate-600">{event.message}</span>
+      </span>
+    </div>
+  );
+}
+
+function groupActivityOperations(events: MonitoringEvent[]): ActivityOperationGroup[] {
+  const map = new Map<string, MonitoringEvent[]>();
+  for (const event of events) {
+    const operationId = event.metadata?.operationId || event.id;
+    const list = map.get(operationId) ?? [];
+    list.push(event);
+    map.set(operationId, list);
+  }
+  return Array.from(map.entries()).map(([id, items]) => {
+    const sorted = [...items].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const times = sorted.map((event) => new Date(event.timestamp).getTime()).filter((value) => !Number.isNaN(value));
+    const severity: MonitoringEvent["severity"] = sorted.some((event) => event.severity === "error") ? "error" : sorted.some((event) => event.severity === "warning") ? "warning" : sorted.some((event) => event.severity === "success") ? "success" : "info";
+    return {
+      id,
+      events: sorted,
+      severity,
+      startTime: times[0] ?? 0,
+      endTime: times[times.length - 1] ?? 0
+    };
+  }).sort((a, b) => b.endTime - a.endTime);
+}
+
 function EventRow({ event }: { event: MonitoringEvent }) {
   const { t } = useI18n();
   const severity = event.severity === "error" ? "critical" : event.severity === "warning" ? "warning" : "normal";
@@ -524,6 +667,15 @@ function formatValue(value: number, unit: string) {
   if (unit === "ms") return `${rounded} ms`;
   if (unit === "s") return `${rounded}s`;
   return unit ? `${rounded} ${unit}` : String(rounded);
+}
+
+function formatDuration(value: number) {
+  if (value < 1000) return `${value}ms`;
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return `${minutes}m ${rest}s`;
 }
 
 function formatTime(value: string) {

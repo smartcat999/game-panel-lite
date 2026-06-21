@@ -12,7 +12,7 @@ import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
-import { ActivityTimeline, MonitoringChartCard } from "@/features/monitoring/components";
+import { ActivityOperationTimeline, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
 import type { MetricSeries, MonitoringEvent, MonitoringRange } from "@/features/monitoring/types";
 import {
@@ -1161,7 +1161,7 @@ function ServerActivityTab({ events, loading, runtimeError, watchStatus }: { eve
       {loading ? (
         <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-8 text-center text-sm text-slate-500">{t("loading")}</div>
       ) : (
-        <ActivityTimeline events={events} />
+        <ActivityOperationTimeline events={events} />
       )}
     </div>
   );

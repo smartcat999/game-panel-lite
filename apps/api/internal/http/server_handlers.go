@@ -437,7 +437,24 @@ func serverWatchEventFromActivity(event domain.ActivityEvent, server domain.Game
 		ServerName: server.Name,
 		Operator:   "system",
 		Timestamp:  event.CreatedAt,
+		Metadata:   activityMetadata(event.Payload),
 	}
+}
+
+func activityMetadata(payload map[string]any) map[string]string {
+	if len(payload) == 0 {
+		return nil
+	}
+	metadata := map[string]string{}
+	for _, key := range []string{"operationId", "runtimeId", "image", "action", "error"} {
+		if value, ok := payload[key]; ok {
+			metadata[key] = fmt.Sprint(value)
+		}
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	return metadata
 }
 
 func titleFromEventType(value string) string {

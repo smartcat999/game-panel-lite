@@ -133,8 +133,9 @@ func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.Ga
 	if !ok {
 		return
 	}
-	events := reconciliationLifecycleActivityEvents(after, lifecycleEvents, time.Now())
-	events = append(events, reconciliationActivityEvents(before, after, time.Now(), lifecycleEvents)...)
+	operationID := uuid.NewString()
+	events := reconciliationLifecycleActivityEvents(after, lifecycleEvents, time.Now(), operationID)
+	events = append(events, reconciliationActivityEvents(before, after, time.Now(), lifecycleEvents, operationID)...)
 	for _, event := range events {
 		if event.CreatedAt.IsZero() {
 			event.CreatedAt = time.Now().UTC()
@@ -145,41 +146,45 @@ func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.Ga
 	}
 }
 
-func reconciliationLifecycleActivityEvents(server domain.GameServer, lifecycleEvents []LifecycleEvent, now time.Time) []domain.ActivityEvent {
+func reconciliationLifecycleActivityEvents(server domain.GameServer, lifecycleEvents []LifecycleEvent, now time.Time, operationID string) []domain.ActivityEvent {
 	events := make([]domain.ActivityEvent, 0, len(lifecycleEvents))
 	for _, item := range lifecycleEvents {
 		occurredAt := item.OccurredAt
 		if occurredAt.IsZero() {
 			occurredAt = now
 		}
-		events = append(events, newReconciliationActivityWithPayload(server, item.Type, item.Message, occurredAt, item.Payload))
+		payload := map[string]any{"operationId": operationID}
+		for key, value := range item.Payload {
+			payload[key] = value
+		}
+		events = append(events, newReconciliationActivityWithPayload(server, item.Type, item.Message, occurredAt, payload))
 	}
 	return events
 }
 
-func reconciliationActivityEvents(before domain.GameServer, after domain.GameServer, now time.Time, lifecycleEvents []LifecycleEvent) []domain.ActivityEvent {
+func reconciliationActivityEvents(before domain.GameServer, after domain.GameServer, now time.Time, lifecycleEvents []LifecycleEvent, operationID string) []domain.ActivityEvent {
 	events := make([]domain.ActivityEvent, 0, 3)
 	lifecycle := newLifecycleEventSet(lifecycleEvents)
 	if before.Status.RuntimeID != after.Status.RuntimeID {
 		if before.Status.RuntimeID != "" && !lifecycle.hasPrefix("server.container.remove.") {
-			events = append(events, newReconciliationActivity(after, "server.runtime.removed", "Removed runtime workload for server "+after.Name, now))
+			events = append(events, newReconciliationActivity(after, "server.runtime.removed", "Removed runtime workload for server "+after.Name, now, operationID))
 		}
 		if after.Status.RuntimeID != "" && !lifecycle.hasPrefix("server.container.create.") {
-			events = append(events, newReconciliationActivity(after, "server.runtime.created", "Created runtime workload for server "+after.Name, now))
+			events = append(events, newReconciliationActivity(after, "server.runtime.created", "Created runtime workload for server "+after.Name, now, operationID))
 		}
 	}
 	if after.Status.Phase == domain.PhaseFailed && (before.Status.Phase != domain.PhaseFailed || before.Status.LastError != after.Status.LastError || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {
-		events = append(events, newReconciliationActivity(after, "server.reconcile.failed", after.Name+": "+after.Status.LastError, now))
+		events = append(events, newReconciliationActivity(after, "server.reconcile.failed", after.Name+": "+after.Status.LastError, now, operationID))
 		return events
 	}
 	if after.Status.Phase == domain.PhaseRunning && !lifecycle.has("server.container.start.succeeded") && (before.Status.Phase != domain.PhaseRunning || before.Status.AppliedGeneration != after.Status.AppliedGeneration || before.Status.ActualState != domain.ActualRunning) {
-		events = append(events, newReconciliationActivity(after, "server.started", "Started server "+after.Name, now))
+		events = append(events, newReconciliationActivity(after, "server.started", "Started server "+after.Name, now, operationID))
 	}
 	if after.Status.Phase == domain.PhaseStopped && !lifecycle.has("server.container.stop.succeeded") && !isInitialStoppedReconcile(before, after) && (before.Status.Phase != domain.PhaseStopped || before.Status.ActualState != after.Status.ActualState || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {
-		events = append(events, newReconciliationActivity(after, "server.stopped", "Stopped server "+after.Name, now))
+		events = append(events, newReconciliationActivity(after, "server.stopped", "Stopped server "+after.Name, now, operationID))
 	}
 	if after.Status.Phase == domain.PhaseDeleted && before.Status.Phase != domain.PhaseDeleted {
-		events = append(events, newReconciliationActivity(after, "server.deleted", "Deleted server "+after.Name, now))
+		events = append(events, newReconciliationActivity(after, "server.deleted", "Deleted server "+after.Name, now, operationID))
 	}
 	return events
 }
@@ -218,8 +223,8 @@ func isInitialStoppedReconcile(before domain.GameServer, after domain.GameServer
 		after.Status.ActualState == domain.ActualMissing
 }
 
-func newReconciliationActivity(server domain.GameServer, eventType string, message string, now time.Time) domain.ActivityEvent {
-	return newReconciliationActivityWithPayload(server, eventType, message, now, nil)
+func newReconciliationActivity(server domain.GameServer, eventType string, message string, now time.Time, operationID string) domain.ActivityEvent {
+	return newReconciliationActivityWithPayload(server, eventType, message, now, map[string]any{"operationId": operationID})
 }
 
 func newReconciliationActivityWithPayload(server domain.GameServer, eventType string, message string, now time.Time, extraPayload map[string]any) domain.ActivityEvent {
