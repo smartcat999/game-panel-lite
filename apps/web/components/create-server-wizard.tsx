@@ -1876,20 +1876,30 @@ function WizardCheckbox({ checked, invalid, label, onChange }: { checked: boolea
   return (
     <label
       className={cn(
-        "flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm transition",
+        "grid min-h-11 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2 text-sm transition",
         checked
           ? "border-panel-green/45 bg-panel-green/10 text-slate-100"
           : "border-panel-line bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200",
         invalid && "border-red-400/70 bg-red-950/20 text-red-100"
       )}
     >
-      <span className="min-w-0 truncate font-medium">{label}</span>
+      <span className="min-w-0 break-words font-medium leading-5">{label}</span>
       <input
-        className="size-4 shrink-0 accent-panel-green"
+        className="sr-only"
         checked={checked}
         type="checkbox"
         onChange={(event) => onChange(event.target.checked)}
       />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex size-5 shrink-0 items-center justify-center rounded border",
+          checked ? "border-panel-green bg-panel-green text-slate-950" : "border-panel-line bg-slate-950 text-transparent",
+          invalid && !checked ? "border-red-300/70 bg-red-950/20" : null
+        )}
+      >
+        <Check className="size-3.5" />
+      </span>
     </label>
   );
 }
