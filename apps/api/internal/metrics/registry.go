@@ -165,6 +165,12 @@ func (r *statusRecorder) WriteHeader(status int) {
 	r.ResponseWriter.WriteHeader(status)
 }
 
+func (r *statusRecorder) Flush() {
+	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func routePattern(r *http.Request) string {
 	if ctx := chi.RouteContext(r.Context()); ctx != nil {
 		if pattern := ctx.RoutePattern(); pattern != "" {

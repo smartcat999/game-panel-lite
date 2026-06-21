@@ -26,3 +26,22 @@ func TestMiddlewareUsesRoutePatternLabels(t *testing.T) {
 		t.Fatalf("route label leaked concrete id:\n%s", body)
 	}
 }
+
+func TestMiddlewarePreservesFlusher(t *testing.T) {
+	registry := NewRegistry()
+	router := chi.NewRouter()
+	router.Use(registry.Middleware)
+	router.Get("/api/servers/{id}/watch", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := w.(http.Flusher); !ok {
+			http.Error(w, "streaming is not supported", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/servers/example-id/watch", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected middleware to preserve flusher, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
