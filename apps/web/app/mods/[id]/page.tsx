@@ -7,14 +7,15 @@ import { ArrowLeft, ArrowRight, Package } from "lucide-react";
 import { useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Card } from "@/components/ui";
-import { listGames, listGlobalMods, listModPacks, listMods, listServers } from "@/lib/api";
+import { listGameServers, listGames, listGlobalMods, listModPacks, listMods } from "@/lib/api";
+import { gameServerMode } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
-import type { ModFile, Server } from "@/lib/types";
+import type { GameServerResource, ModFile } from "@/lib/types";
 
 type ModSource = {
   mod: ModFile;
-  server?: Server;
+  server?: GameServerResource;
   scope: "library" | "server";
 };
 
@@ -23,7 +24,7 @@ export default function ModDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000, retry: false });
   const packsQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const modProviderKeys = useMemo(() => {
@@ -38,7 +39,7 @@ export default function ModDetailPage() {
     return keys;
   }, [gamesQuery.data]);
   const modCapableServers = useMemo(
-    () => (serversQuery.data ?? []).filter((server) => modProviderKeys.has(server.providerKey ?? "") || server.mode === "tmodloader"),
+    () => (serversQuery.data ?? []).filter((server) => modProviderKeys.has(server.providerKey) || gameServerMode(server) === "tmodloader"),
     [modProviderKeys, serversQuery.data]
   );
   const serverModQueries = useQueries({
@@ -46,7 +47,7 @@ export default function ModDetailPage() {
       queryKey: ["mods", server.id],
       queryFn: () => listMods(server.id),
       retry: false,
-      enabled: serversQuery.isSuccess && (gamesQuery.isSuccess || server.mode === "tmodloader")
+      enabled: serversQuery.isSuccess && (gamesQuery.isSuccess || gameServerMode(server) === "tmodloader")
     }))
   });
   const sources = useMemo<ModSource[]>(() => {

@@ -49,7 +49,9 @@ export const terrariaConfigSchema = z.object({
   port: serverPortSchema,
   password: z.string().max(128).optional(),
   motd: z.string().max(256).optional(),
-  seed: z.string().max(128).optional(),
+  seed: z.string().max(512).optional(),
+  specialSeeds: z.array(z.string().min(1).max(64)).default([]),
+  secretSeeds: z.array(z.string().min(1).max(64)).default([]),
   secure: z.boolean().default(true),
   language: z.string().min(2).max(12).default(terrariaDefaultLanguage),
   autoCreateWorld: z.boolean().default(true)
@@ -92,6 +94,8 @@ export const terrariaPresets = [
       password: "",
       motd: "Welcome to GamePanel Lite",
       seed: "",
+      specialSeeds: [],
+      secretSeeds: [],
       secure: true,
       language: terrariaDefaultLanguage,
       autoCreateWorld: true
@@ -112,6 +116,8 @@ export const terrariaPresets = [
       password: "",
       motd: "Bring potions",
       seed: "",
+      specialSeeds: [],
+      secretSeeds: [],
       secure: true,
       language: terrariaDefaultLanguage,
       autoCreateWorld: true
@@ -132,6 +138,8 @@ export const terrariaPresets = [
       password: "",
       motd: "Good luck",
       seed: "",
+      specialSeeds: [],
+      secretSeeds: [],
       secure: true,
       language: terrariaDefaultLanguage,
       autoCreateWorld: true
@@ -152,6 +160,8 @@ export const terrariaPresets = [
       password: "",
       motd: "Build something sharp",
       seed: "",
+      specialSeeds: [],
+      secretSeeds: [],
       secure: true,
       language: terrariaDefaultLanguage,
       autoCreateWorld: true
@@ -172,6 +182,8 @@ export const terrariaPresets = [
       password: "",
       motd: "Mods enabled",
       seed: "",
+      specialSeeds: [],
+      secretSeeds: [],
       secure: true,
       language: terrariaDefaultLanguage,
       autoCreateWorld: true
@@ -191,17 +203,105 @@ export function getTerrariaPreset(
   return preset;
 }
 
-export const terrariaSecretSeeds = [
+export const terrariaSpecialWorldSeeds = [
   { key: "05162020", label: "Drunk World", description: "融合两个世界布局，NPC 和物品混搭" },
   { key: "for the worthy", label: "For the Worthy", description: "大幅增加难度，敌人更强、掉落更丰厚" },
   { key: "not the bees", label: "Not the Bees", description: "世界主要由蜂巢块和幼虫组成" },
   { key: "celebrationmk10", label: "CelebrationMK10", description: "派对世界，稀有物品和烟花" },
+  { key: "the constant", label: "The Constant", description: "饥荒联动世界，加入饥饿与独特光照机制" },
+  { key: "no traps", label: "No Traps", description: "陷阱密度显著提升，探索更危险" },
   { key: "dontdigup", label: "Don't Dig Up", description: "世界反转，出生点在地下深处" },
-  { key: "getfixedboi", label: "Get Fixed Boi (天顶)", description: "所有彩蛋种子效果的终极组合" }
+  { key: "getfixedboi", label: "Get Fixed Boi (天顶)", description: "多个特殊世界规则的终极组合" },
+  { key: "skyblock", label: "Skyblock", description: "1.4.5 新增，空岛式世界生成" }
 ] as const;
 
+export const terrariaSecretWorldSeeds145 = [
+  { key: "invisible plane", label: "Invisible Plane", description: "隐藏部分世界结构，探索更依赖记忆与试探" },
+  { key: "monochrome", label: "Monochrome", description: "世界呈现单色视觉风格" },
+  { key: "negative infinity", label: "Negative Infinity", description: "改变地下与洞穴生成节奏" },
+  { key: "x-ray vision", label: "X-ray Vision", description: "强调可视化矿物与地下结构" },
+  { key: "jagged rocks", label: "Jagged Rocks", description: "地形更加尖锐破碎" },
+  { key: "mole people", label: "Mole People", description: "地下活动与结构更突出" },
+  { key: "planetoids", label: "Planetoids", description: "生成更偏碎片化的星体式地形" },
+  { key: "such great heights", label: "Such Great Heights", description: "强化高空探索与垂直空间" },
+  { key: "waterpark", label: "Waterpark", description: "水体与水上探索更显著" },
+  { key: "arachnophobia", label: "Arachnophobia", description: "蜘蛛主题内容更集中" },
+  { key: "does that sparkle", label: "Does That Sparkle", description: "宝石与闪光资源更突出" },
+  { key: "fish mox", label: "Fish Mox", description: "钓鱼与水生内容更突出" },
+  { key: "purify this", label: "Purify This", description: "净化与邪恶生态相关变化" },
+  { key: "sandy britches", label: "Sandy Britches", description: "沙漠生态与沙地生成更突出" },
+  { key: "toadstool", label: "Toadstool", description: "蘑菇生态内容更突出" },
+  { key: "winter is coming", label: "Winter Is Coming", description: "雪地与寒冷生态更突出" },
+  { key: "abandoned manors", label: "Abandoned Manors", description: "废弃建筑与探索点更多" },
+  { key: "beam me up", label: "Beam Me Up", description: "传送与空间主题变化" },
+  { key: "more traps please", label: "More Traps Please", description: "额外陷阱与危险机关" },
+  { key: "pumpkin season", label: "Pumpkin Season", description: "南瓜与季节主题内容更突出" },
+  { key: "rainbow road", label: "Rainbow Road", description: "彩虹视觉与高空路线主题" },
+  { key: "save the rainforest", label: "Save the Rainforest", description: "丛林生态更突出" },
+  { key: "the care bears movie", label: "The Care Bears Movie", description: "色彩与友好主题变化" },
+  { key: "truck stop", label: "Truck Stop", description: "旅途与补给主题变化" },
+  { key: "we don't even test for that", label: "We Don't Even Test For That", description: "实验性组合规则" },
+  { key: "bring a towel", label: "Bring a Towel", description: "水与旅行主题变化" },
+  { key: "hocus pocus", label: "Hocus Pocus", description: "魔法主题内容更突出" },
+  { key: "jingle all the way", label: "Jingle All The Way", description: "节日与雪地氛围变化" },
+  { key: "how did i get here", label: "How Did I Get Here", description: "探索路径更出人意料" },
+  { key: "royale with cheese", label: "Royale With Cheese", description: "特殊掉落与趣味主题变化" },
+  { key: "double daring dangers", label: "Double Daring Dangers", description: "危险要素进一步叠加" },
+  { key: "i am error", label: "I Am Error", description: "异常与错位主题变化" },
+  { key: "night of the living dead", label: "Night Of The Living Dead", description: "亡灵与夜晚威胁更突出" },
+  { key: "too easy", label: "Too Easy", description: "降低部分挑战感的趣味规则" },
+  { key: "what a horrible night to have a curse", label: "What A Horrible Night To Have A Curse", description: "夜晚与诅咒主题变化" }
+] as const;
+
+export const terrariaSecretSeeds = terrariaSpecialWorldSeeds;
+export const terrariaLegacySpecialWorldSeeds = terrariaSpecialWorldSeeds.filter((seed) => seed.key !== "skyblock");
+
+function normalizeSeedCode(seed: string | undefined): string {
+  return (seed ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 export function secretSeedKeyFor(seed: string | undefined): string {
-  return terrariaSecretSeeds.find((item) => item.key === (seed ?? "").toLowerCase())?.key ?? "";
+  const normalized = normalizeSeedCode(seed);
+  return terrariaSpecialWorldSeeds.find((item) => normalizeSeedCode(item.key) === normalized)?.key ?? "";
+}
+
+export function isTerrariaVersionAtLeast(version: string | undefined, target: string): boolean {
+  const left = (version ?? "").split(".").map((part) => Number.parseInt(part, 10));
+  const right = target.split(".").map((part) => Number.parseInt(part, 10));
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = left[index] ?? 0;
+    const rightValue = right[index] ?? 0;
+    const leftPart = Number.isFinite(leftValue) ? leftValue : 0;
+    const rightPart = Number.isFinite(rightValue) ? rightValue : 0;
+    if (leftPart > rightPart) return true;
+    if (leftPart < rightPart) return false;
+  }
+  return true;
+}
+
+function uniqueKnownSeeds(values: string[] | undefined, known: readonly { key: string }[]) {
+  const knownByCode = new Map(known.map((item) => [normalizeSeedCode(item.key), item.key]));
+  const next: string[] = [];
+  for (const value of values ?? []) {
+    const key = knownByCode.get(normalizeSeedCode(value));
+    if (key && !next.includes(key)) next.push(key);
+  }
+  return next;
+}
+
+export function terrariaSeedModeCodes(config: TerrariaConfig): string[] {
+  return [
+    ...uniqueKnownSeeds(config.specialSeeds, terrariaSpecialWorldSeeds),
+    ...uniqueKnownSeeds(config.secretSeeds, terrariaSecretWorldSeeds145)
+  ];
+}
+
+export function renderTerrariaSeedValue(config: TerrariaConfig): string {
+  const seed = (config.seed ?? "").trim();
+  const modes = terrariaSeedModeCodes(config);
+  if (modes.length === 0) return seed;
+  return `1.1.1.${seed || "0"}.${modes.join("|")}|`;
 }
 
 const worldEvilConfigValues = {
@@ -233,7 +333,7 @@ export function renderTerrariaServerConfig(config: TerrariaConfig): string {
     `port=${config.port}`,
     `password=${config.password ?? ""}`,
     `motd=${config.motd ?? ""}`,
-    `seed=${config.seed ?? ""}`,
+    `seed=${renderTerrariaSeedValue(config)}`,
     `secure=${config.secure ? 1 : 0}`,
     `language=${terrariaDefaultLanguage}`
   ].join("\n");
@@ -294,6 +394,7 @@ export const activityEventSchema = z.object({
   instanceId: z.string().min(1).nullable(),
   type: z.string().min(1).max(64),
   message: z.string().min(1).max(256),
+  payload: z.record(z.string(), z.unknown()).optional(),
   createdAt: z.date()
 });
 

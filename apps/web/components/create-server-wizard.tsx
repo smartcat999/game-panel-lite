@@ -4,24 +4,37 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronLeft, ChevronRight, FileArchive, FileText, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
+import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
+import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { getGameArt } from "@/lib/game-art";
 import { gameDescription, gameDisplayName } from "@/lib/game-display";
 import { providerDescription, providerDisplayName } from "@/lib/provider-display";
+import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds, previewTerrariaConfig } from "@/lib/api";
+import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
-import { createTerrariaServerWithWorld } from "@/lib/create-server-flow";
-import { createReviewInvitePreview, reviewJoinInstructionKey, reviewResourceSummaryKey } from "@/lib/create-server-review";
+import { createGameServerWithResources } from "@/lib/create-server-flow";
+import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
-import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
-import { getTerrariaPreset, secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, type TerrariaConfig } from "@gamepanel-lite/shared";
+import {
+  getTerrariaPreset,
+  isTerrariaVersionAtLeast,
+  secretSeedKeyFor,
+  terrariaInternalPort,
+  terrariaLegacySpecialWorldSeeds,
+  terrariaSecretWorldSeeds145,
+  terrariaSeedModeCodes,
+  terrariaSecretSeeds,
+  terrariaSpecialWorldSeeds,
+  type TerrariaConfig
+} from "@gamepanel-lite/shared";
 import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderConfigField, ProviderKey, ResourceLimits, RuntimeImageStatus } from "@/lib/types";
 
 const stepLabelKeys = {
@@ -29,6 +42,7 @@ const stepLabelKeys = {
   mode: "stepMode",
   preset: "stepPreset",
   config: "stepConfig",
+  resources: "stepResources",
   mods: "stepMods",
   review: "stepReview"
 } as const;
@@ -49,6 +63,12 @@ type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
 type ConfigValidationErrors = Record<string, string>;
+type ReviewConfigField = { label: string; value: string };
+type ReviewConfigModel = {
+  serverName: string;
+  password: string;
+  fields: ReviewConfigField[];
+};
 const modeProviderPriority: Record<string, number> = {
   "terraria-vanilla": 10,
   "terraria-tmodloader": 20
@@ -56,20 +76,25 @@ const modeProviderPriority: Record<string, number> = {
 
 const providerFieldLabelKeys: Record<string, MessageKey> = {
   adminPassword: "adminPassword",
+  cavesEnabled: "cavesEnabled",
+  clusterDescription: "clusterDescription",
   clusterName: "clusterName",
   clusterToken: "clusterToken",
+  consoleEnabled: "consoleEnabled",
   difficulty: "difficulty",
   eulaAccepted: "minecraftEulaAccepted",
   gameMode: "gameMode",
   maxPlayers: "maxPlayersInput",
+  offlineServer: "offlineServer",
   onlineMode: "onlineMode",
+  pauseWhenEmpty: "pauseWhenEmpty",
+  pvp: "pvp",
   saveName: "saveName",
   serverName: "serverName",
   serverPassword: "serverPassword",
   whitelistEnabled: "whitelistEnabled",
   worldName: "worldName",
-  worldPreset: "worldPreset",
-  workshopIds: "workshopIds"
+  worldPreset: "worldPreset"
 };
 
 function createNameSuffix(date = new Date()) {
@@ -86,10 +111,23 @@ function appendNameSuffix(name: string, suffix: string) {
 function createNamedTerrariaConfig(presetKey: BuiltInPresetKey | typeof tmodLoaderBasePreset) {
   const suffix = createNameSuffix();
   const presetConfig = getTerrariaPreset(presetKey).config;
-  return {
+  return editableTerrariaConfig({
     ...presetConfig,
     serverName: appendNameSuffix(presetConfig.serverName || "Terraria Server", suffix),
     worldName: appendNameSuffix(presetConfig.worldName || "Terraria World", suffix)
+  });
+}
+
+type EditableTerrariaConfigInput = Omit<TerrariaConfig, "specialSeeds" | "secretSeeds"> & {
+  specialSeeds?: readonly string[];
+  secretSeeds?: readonly string[];
+};
+
+function editableTerrariaConfig(config: EditableTerrariaConfigInput): TerrariaConfig {
+  return {
+    ...config,
+    specialSeeds: [...(config.specialSeeds ?? [])],
+    secretSeeds: [...(config.secretSeeds ?? [])]
   };
 }
 
@@ -182,12 +220,142 @@ function validateCreateConfig({
   return errors;
 }
 
+function stringPayloadValue(payload: ProviderConfigPayload | undefined, key: string): string {
+  const value = payload?.[key];
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
+function numberPayloadValue(payload: ProviderConfigPayload | undefined, key: string, fallback: number): number {
+  const value = payload?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function arrayPayloadValue(payload: ProviderConfigPayload | undefined, key: string): string[] {
+  const value = payload?.[key];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function terrariaConfigFromPayload(payload: ProviderConfigPayload | undefined, fallback: TerrariaConfig = defaultCreateServerConfig): TerrariaConfig {
+  return editableTerrariaConfig({
+    ...fallback,
+    serverName: stringPayloadValue(payload, "serverName") || fallback.serverName,
+    worldName: stringPayloadValue(payload, "worldName") || fallback.worldName,
+    worldSize: (stringPayloadValue(payload, "worldSize") || fallback.worldSize) as TerrariaConfig["worldSize"],
+    worldEvil: (stringPayloadValue(payload, "worldEvil") || fallback.worldEvil) as TerrariaConfig["worldEvil"],
+    difficulty: (stringPayloadValue(payload, "difficulty") || fallback.difficulty) as TerrariaConfig["difficulty"],
+    maxPlayers: numberPayloadValue(payload, "maxPlayers", fallback.maxPlayers),
+    port: numberPayloadValue(payload, "port", fallback.port),
+    password: stringPayloadValue(payload, "password") || fallback.password || "",
+    motd: stringPayloadValue(payload, "motd") || fallback.motd || "",
+    seed: stringPayloadValue(payload, "seed") || fallback.seed || "",
+    specialSeeds: arrayPayloadValue(payload, "specialSeeds"),
+    secretSeeds: arrayPayloadValue(payload, "secretSeeds"),
+    secure: typeof payload?.secure === "boolean" ? payload.secure : fallback.secure,
+    language: stringPayloadValue(payload, "language") || fallback.language,
+    autoCreateWorld: typeof payload?.autoCreateWorld === "boolean" ? payload.autoCreateWorld : fallback.autoCreateWorld
+  });
+}
+
+function providerServerName(payload: ProviderConfigPayload, fallback: string) {
+  return stringPayloadValue(payload, "serverName") || stringPayloadValue(payload, "clusterName") || fallback;
+}
+
+function providerJoinPassword(payload: ProviderConfigPayload) {
+  return stringPayloadValue(payload, "password") || stringPayloadValue(payload, "serverPassword");
+}
+
+function providerReviewValue(field: ProviderConfigField, value: unknown, t: (key: MessageKey, values?: Record<string, string | number>) => string): string {
+  if (field.type === "boolean") return value === true ? t("enabled") : t("disabled");
+  if (field.type === "password") return String(value ?? "").trim() ? t("enabled") : t("none");
+  if (field.type === "select") {
+    const option = field.options?.find((item) => item.value === value);
+    return option?.label ?? String(value ?? "");
+  }
+  return String(value ?? "");
+}
+
+function createReviewConfigModel({
+  config,
+  gameKey,
+  gameName,
+  hostPortLabel,
+  provider,
+  providerConfigPayload,
+  t,
+  version
+}: {
+  config: TerrariaConfig;
+  gameKey: string;
+  gameName: string;
+  hostPortLabel: string;
+  provider?: ProviderCatalog;
+  providerConfigPayload: ProviderConfigPayload;
+  t: (key: MessageKey, values?: Record<string, string | number>) => string;
+  version: string;
+}): ReviewConfigModel {
+  if (gameKey === "terraria") {
+    const secretSeed = secretSeedKeyFor(config.seed);
+    const selectedSeedModeCount = terrariaSeedModeCodes(config).length;
+    const seedLabel = secretSeed
+      ? `${terrariaSecretSeeds.find((seed) => seed.key === secretSeed)?.label ?? secretSeed} · ${secretSeed}`
+      : config.seed?.trim() || t("tagRandom");
+    const worldSizeLabel = config.worldSize === "small" ? t("tagSmallWorld") : config.worldSize === "medium" ? t("tagMediumWorld") : t("tagLargeWorld");
+    const worldEvilLabel = config.worldEvil === "corruption" ? t("tagCorruption") : config.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
+    const difficultyLabel = config.difficulty === "journey" ? t("tagJourney") : config.difficulty === "classic" ? t("tagClassic") : config.difficulty === "expert" ? t("tagExpert") : t("tagMaster");
+    return {
+      serverName: config.serverName || gameName,
+      password: config.password ?? "",
+      fields: [
+        { label: t("serverName"), value: config.serverName || gameName },
+        { label: t("worldName"), value: config.worldName },
+        { label: t("worldSize"), value: worldSizeLabel },
+        { label: t("worldEvil"), value: worldEvilLabel },
+        { label: t("difficulty"), value: difficultyLabel },
+        { label: t("worldSeed"), value: seedLabel },
+        ...(selectedSeedModeCount > 0 ? [{ label: t("seedModes"), value: t("seedModesSummary", { special: config.specialSeeds?.length ?? 0, secret: config.secretSeeds?.length ?? 0 }) }] : []),
+        { label: t("maxPlayersInput"), value: String(config.maxPlayers) },
+        { label: t("password"), value: config.password ? t("enabled") : t("none") },
+        { label: t("secureMode"), value: config.secure ? t("enabled") : t("disabled") },
+        { label: t("autoCreateWorld"), value: config.autoCreateWorld ? t("enabled") : t("disabled") },
+        ...(version ? [{ label: t("gameVersion"), value: version }] : []),
+        { label: t("externalPort"), value: hostPortLabel }
+      ]
+    };
+  }
+
+  const fields = (provider?.configSchema ?? [])
+    .map((field): ReviewConfigField | null => {
+      const value = providerConfigPayload[field.name];
+      const formatted = providerReviewValue(field, value, t);
+      if (!field.required && field.type !== "boolean" && formatted.trim() === "") return null;
+      return { label: providerFieldLabel(field, t), value: formatted };
+    })
+    .filter((field): field is ReviewConfigField => Boolean(field));
+
+  return {
+    serverName: providerServerName(providerConfigPayload, gameName),
+    password: providerJoinPassword(providerConfigPayload),
+    fields: [
+      ...fields,
+      ...(version ? [{ label: t("gameVersion"), value: version }] : []),
+      { label: t("externalPort"), value: hostPortLabel }
+    ]
+  };
+}
+
 export function CreateServerWizard() {
   const { locale, t } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
-  const [selectedGameKey, setSelectedGameKey] = useState("terraria");
+  const [selectedGameKey, setSelectedGameKey] = useState("");
   const [selectedProviderKey, setSelectedProviderKey] = useState<ProviderKey>("terraria-vanilla");
   const [mode, setMode] = useState<"vanilla" | "tmodloader">(defaultCreateServerMode);
   const [selectedPreset, setSelectedPreset] = useState<PresetKey>(defaultCreateServerPreset);
@@ -198,6 +366,8 @@ export function CreateServerWizard() {
   const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 0, memoryLimitMb: 0 });
   const [version, setVersion] = useState("");
   const [configValidationErrors, setConfigValidationErrors] = useState<ConfigValidationErrors>({});
+  const [presetName, setPresetName] = useState("");
+  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
   const [appliedConfigPresetId, setAppliedConfigPresetId] = useState("");
@@ -206,12 +376,12 @@ export function CreateServerWizard() {
   const [selectedModPackId, setSelectedModPackId] = useState("");
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000 });
   const versionsQuery = useQuery({ queryKey: ["game-versions", selectedGameKey], queryFn: () => getGameVersions(selectedGameKey), enabled: selectedGameKey.length > 0, staleTime: 5 * 60 * 1000 });
-  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
+  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: showWorldAndBackupFeatures, retry: false });
   const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const configPresetsQuery = useQuery({ queryKey: ["config-presets"], queryFn: listConfigPresets, retry: false });
   const games = gamesQuery.data ?? [];
-  const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games.find((game) => game.key === "terraria");
+  const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games[0] ?? games.find((game) => game.key === "terraria");
   const selectedGameArt = getGameArt(selectedGame?.coverImage ?? selectedGame?.key ?? selectedGameKey);
   const SelectedGameIcon = selectedGameArt.icon;
   const selectedProvider = selectedGame?.providers.find((provider) => provider.key === selectedProviderKey) ?? selectedGame?.providers.find((provider) => provider.recommended) ?? selectedGame?.providers[0];
@@ -221,12 +391,13 @@ export function CreateServerWizard() {
     "mode",
     ...(selectedGameKey === "terraria" ? ["preset" as const] : []),
     "config",
+    "resources",
     ...(selectedProvider?.capabilities.mods ? ["mods" as const] : []),
     "review"
   ], [selectedGameKey, selectedProvider?.capabilities.mods]);
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
-  const allWorlds = worldsQuery.data ?? [];
+  const allWorlds = showWorldAndBackupFeatures ? worldsQuery.data ?? [] : [];
   const selectedWorld = allWorlds.find((w) => w.id === selectedWorldId);
   const allMods = modsQuery.data ?? [];
   const allModPacks = modPacksQuery.data ?? [];
@@ -235,7 +406,6 @@ export function CreateServerWizard() {
   const configPresets = configPresetsQuery.data ?? [];
   const gameConfigPresets = configPresets.filter((preset) => preset.gameKey === selectedGameKey);
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
-  const effectiveConfig = selectedGameKey === "terraria" ? config : providerPayloadToTerrariaConfig(providerKey, providerConfigPayload, config);
   const fallbackStepId: StepId = "review";
   const currentStepId = stepIds[step] ?? fallbackStepId;
   const nextStepId = stepIds[Math.min(stepIds.length - 1, step + 1)] ?? fallbackStepId;
@@ -267,24 +437,27 @@ export function CreateServerWizard() {
     return false;
   };
   const create = useMutation({
-    mutationFn: () => createTerrariaServerWithWorld({
-      config: { ...effectiveConfig, port: terrariaInternalPort },
-      configPayload: selectedGameKey === "terraria" ? undefined : providerConfigPayload,
+    mutationFn: () => createGameServerWithResources({
+      name: selectedGameKey === "terraria"
+        ? config.serverName || "Terraria Server"
+        : providerServerName(providerConfigPayload, providerDisplayName(providerKey, providerKey, t) || "Game Server"),
+      config: selectedGameKey === "terraria" ? { ...config, port: terrariaInternalPort } : providerConfigPayload,
       hostPort: hostPortMode === "manual" ? hostPort : undefined,
       mode,
       providerKey,
       resources: resourceLimits,
-      worldId: selectedWorldId || undefined,
+      worldId: showWorldAndBackupFeatures ? selectedWorldId || undefined : undefined,
       modIds: selectedModIds,
       version: selectedVersion
     }),
     onSuccess: async ({ server }) => {
-      await queryClient.invalidateQueries({ queryKey: ["servers"] });
-      await queryClient.invalidateQueries({ queryKey: ["worlds"] });
-      await queryClient.invalidateQueries({ queryKey: ["backups"] });
+      await queryClient.invalidateQueries({ queryKey: ["game-servers"] });
+      if (showWorldAndBackupFeatures) {
+        await queryClient.invalidateQueries({ queryKey: ["worlds"] });
+        await queryClient.invalidateQueries({ queryKey: ["backups"] });
+      }
       await queryClient.invalidateQueries({ queryKey: ["mods", server.id] });
-      await queryClient.invalidateQueries({ queryKey: ["server", server.id] });
-      queryClient.setQueryData(["server", server.id], server);
+      queryClient.setQueryData(["game-server", server.id], server);
       router.push(`/servers/${server.id}`);
     }
   });
@@ -292,7 +465,7 @@ export function CreateServerWizard() {
     mutationFn: (name: string) => createConfigPreset({
       name,
       providerKey,
-      config: selectedGameKey === "terraria" ? effectiveConfig : providerConfigPayload,
+      config: selectedGameKey === "terraria" ? config : providerConfigPayload,
       resources: resourceLimits,
       version: selectedVersion,
       modPackId: selectedModPackId || undefined
@@ -301,6 +474,24 @@ export function CreateServerWizard() {
       await queryClient.invalidateQueries({ queryKey: ["config-presets"] });
     }
   });
+  const openPresetDialog = () => {
+    saveConfigPreset.reset();
+    const defaultPresetSource = selectedGameKey === "terraria"
+      ? config.serverName
+      : providerServerName(providerConfigPayload, "");
+    setPresetName(`${defaultPresetSource || gameDisplayName(selectedGame?.key ?? selectedGameKey, selectedGame?.name ?? selectedGameKey, t)} ${t("configurationPreset")}`);
+    setPresetDialogOpen(true);
+  };
+  const closePresetDialog = () => {
+    if (saveConfigPreset.isPending) return;
+    saveConfigPreset.reset();
+    setPresetDialogOpen(false);
+  };
+  const submitPreset = () => {
+    const name = presetName.trim();
+    if (!name) return;
+    saveConfigPreset.mutate(name);
+  };
   const chooseMode = (nextMode: "vanilla" | "tmodloader") => {
     const basePreset = nextMode === "tmodloader" ? tmodLoaderBasePreset : "friends-casual";
     const visiblePreset: PresetKey = nextMode === "tmodloader" ? "custom" : "friends-casual";
@@ -325,14 +516,14 @@ export function CreateServerWizard() {
     } else {
       const names = createGameDefaultNames(game.name);
       setSelectedPreset("custom");
-      setConfig({
+      setConfig(editableTerrariaConfig({
         ...defaultCreateServerConfig,
         serverName: names.serverName,
         worldName: names.worldName,
         maxPlayers: 8,
         password: "",
         motd: ""
-      });
+      }));
       setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, createProviderDefaultOverrides(names)));
       setSelectedWorldId("");
       setAppliedWorldConfigId("");
@@ -370,8 +561,11 @@ export function CreateServerWizard() {
     setSelectedProviderKey(provider.key);
     setMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     setSelectedPreset("custom");
-    setConfig({ ...preset.config, password: "" });
-    setProviderConfigPayload(preset.configPayload ?? createDefaultProviderConfigPayload(provider));
+    const presetPayload = preset.configPayload ?? preset.config;
+    if (game.key === "terraria") {
+      setConfig(terrariaConfigFromPayload({ ...presetPayload, password: "" }));
+    }
+    setProviderConfigPayload(presetPayload);
     setResourceLimits({ cpuLimitCores: preset.cpuLimitCores ?? 0, memoryLimitMb: preset.memoryLimitMb ?? 0 });
     setVersion(preset.version ?? "");
     setSelectedWorldId("");
@@ -383,11 +577,24 @@ export function CreateServerWizard() {
   };
 
   useEffect(() => {
+    if (!showWorldAndBackupFeatures) return;
     if (typeof window === "undefined" || selectedWorldId) return;
     const worldId = new URLSearchParams(window.location.search).get("worldId");
     if (!worldId) return;
     setSelectedWorldId(worldId);
   }, [selectedWorldId]);
+
+  useEffect(() => {
+    if (selectedGameKey || games.length === 0 || appliedConfigPresetId || selectedWorldId) return;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("game") || params.get("presetId") || params.get("worldId")) return;
+    }
+    const defaultGame = games.find((game) => game.status === "available") ?? games[0];
+    if (defaultGame) {
+      chooseGame(defaultGame);
+    }
+  }, [appliedConfigPresetId, games, selectedGameKey, selectedWorldId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || games.length === 0) return;
@@ -416,13 +623,19 @@ export function CreateServerWizard() {
   }, [appliedConfigPresetId, configPresets, games.length]);
 
   useEffect(() => {
+    if (!showWorldAndBackupFeatures) return;
     if (!selectedWorld || appliedWorldConfigId === selectedWorld.id) return;
     const nextMode = selectedWorld.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla";
     const basePreset = nextMode === "tmodloader" ? tmodLoaderBasePreset : "friends-casual";
-    const presetConfig = getTerrariaPreset(basePreset).config;
+    const presetConfig = editableTerrariaConfig(getTerrariaPreset(basePreset).config);
     setMode(nextMode);
     setSelectedPreset("custom");
-    setConfig(selectedWorld.config ? { ...presetConfig, ...selectedWorld.config } : { ...presetConfig, worldName: selectedWorld.name });
+    if ((selectedWorld.gameKey ?? "terraria") === "terraria") {
+      const worldConfig = selectedWorld.config ? terrariaConfigFromPayload(selectedWorld.config, presetConfig) : { ...presetConfig, worldName: selectedWorld.name };
+      setConfig(editableTerrariaConfig(worldConfig));
+    } else if (selectedWorld.config) {
+      setProviderConfigPayload(selectedWorld.config);
+    }
     setAppliedWorldConfigId(selectedWorld.id);
     setStep(3);
   }, [appliedWorldConfigId, selectedWorld]);
@@ -520,23 +733,25 @@ export function CreateServerWizard() {
                 onCustomize={() => setSelectedPreset("custom")}
                 setHostPort={setHostPort}
                 setHostPortMode={setHostPortMode}
-                resourceLimits={resourceLimits}
-                setResourceLimits={setResourceLimits}
                 versions={availableVersions}
                 version={selectedVersion}
                 setVersion={setVersion}
-                onSavePreset={(name) => saveConfigPreset.mutate(name)}
-                onResetPresetSave={() => saveConfigPreset.reset()}
-                presetSaveError={saveConfigPreset.error instanceof Error ? saveConfigPreset.error.message : ""}
-                presetSavePending={saveConfigPreset.isPending}
-                presetSaveSuccess={saveConfigPreset.isSuccess}
+              />
+            )}
+            {currentStepId === "resources" && (
+              <ResourcesStep
+                resourceLimits={resourceLimits}
+                onChange={(limits) => {
+                  setSelectedPreset("custom");
+                  setResourceLimits(limits);
+                }}
               />
             )}
             {currentStepId === "mods" && (
               <ModsStep
                 locale={locale}
                 supportsMods={Boolean(selectedProvider?.capabilities.mods)}
-                worldName={selectedWorld?.name}
+                worldName={showWorldAndBackupFeatures ? selectedWorld?.name : undefined}
                 mods={availableMods}
                 modPacks={modPacks}
                 selectedModPackId={selectedModPackId}
@@ -550,15 +765,31 @@ export function CreateServerWizard() {
             )}
             {currentStepId === "review" && (
               <ReviewStep
-                config={effectiveConfig}
+                configModel={createReviewConfigModel({
+                  config,
+                  gameKey: selectedGameKey,
+                  gameName: selectedGame ? gameDisplayName(selectedGame.key, selectedGame.name, t) : t("gameNameTerraria"),
+                  hostPortLabel: hostPortMode === "manual" ? String(hostPort) : t("automaticPort"),
+                  provider: selectedProvider,
+                  providerConfigPayload,
+                  t,
+                  version: selectedVersion
+                })}
                 gameKey={selectedGameKey}
                 gameName={selectedGame ? gameDisplayName(selectedGame.key, selectedGame.name, t) : t("gameNameTerraria")}
                 hostPortLabel={hostPortMode === "manual" ? String(hostPort) : t("automaticPort")}
-                providerName={selectedProvider ? providerDisplayName(selectedProvider.key, selectedProvider.name, t) : mode === "tmodloader" ? t("providerNameTerrariaTmodloader") : t("modeVanilla")}
-                version={selectedVersion}
                 resourceLimits={resourceLimits}
-                selectedWorldName={selectedWorld?.name}
+                selectedWorldName={showWorldAndBackupFeatures ? selectedWorld?.name : undefined}
                 selectedModNames={selectedModNames}
+                presetDialogOpen={presetDialogOpen}
+                presetName={presetName}
+                presetSaveError={saveConfigPreset.error instanceof Error ? saveConfigPreset.error.message : ""}
+                presetSavePending={saveConfigPreset.isPending}
+                presetSaveSuccess={saveConfigPreset.isSuccess}
+                onChangePresetName={setPresetName}
+                onClosePreset={closePresetDialog}
+                onOpenPreset={openPresetDialog}
+                onSavePreset={submitPreset}
               />
             )}
           </motion.div>
@@ -592,7 +823,7 @@ export function CreateServerWizard() {
           )}
           {!canCreateSelectedProvider && currentStepId === "review" && <p className="mt-4 text-sm text-panel-gold">{t("providerNotCreatableYet")}</p>}
           {Object.keys(configValidationErrors).length > 0 && <p className="mt-4 text-sm text-panel-gold">{t("requiredConfigSummary")}</p>}
-          {create.isError && <p className="mt-4 text-sm text-red-200">{createServerErrorMessage(create.error, t)}</p>}
+          {create.isError && <p className="mt-4 text-sm text-red-200">{formatCreateServerError(create.error, t)}</p>}
           {create.data && <p className="mt-4 text-sm text-panel-green">{t("createdServer", { name: create.data.server.name })}</p>}
           <p className="mt-4 text-xs text-slate-500">{t("currentStep", { step: selectedTitle })}</p>
         </div>
@@ -835,21 +1066,6 @@ function RuntimeImagePill({ status }: { status?: RuntimeImageStatus }) {
   );
 }
 
-function createServerErrorMessage(error: Error, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
-  if (error.message.includes("server runtime is not installed")) {
-    return t("runtimeNotInstalledForCreate");
-  }
-  const normalized = error.message.toLowerCase();
-  if (normalized.includes("admin password is required")) return t("requiredFieldError", { field: t("adminPassword") });
-  if (normalized.includes("server name is required")) return t("requiredFieldError", { field: t("serverName") });
-  if (normalized.includes("save name is required")) return t("requiredFieldError", { field: t("saveName") });
-  if (normalized.includes("world name is required")) return t("requiredFieldError", { field: t("worldName") });
-  if (normalized.includes("cluster name is required")) return t("requiredFieldError", { field: t("clusterName") });
-  if (normalized.includes("klei server token is required")) return t("requiredFieldError", { field: t("clusterToken") });
-  if (normalized.includes("eula must be accepted")) return t("requiredAgreementError", { field: t("minecraftEulaAccepted") });
-  return error.message;
-}
-
 function PresetStep({
   selectedPreset,
   setPreset
@@ -858,7 +1074,7 @@ function PresetStep({
   setPreset: (preset: PresetKey) => void;
 }) {
   const { t } = useI18n();
-  const presetOptions = [customPreset, ...presets];
+  const presetOptions = [...presets, customPreset];
   const renderTag = (tag: PresetTag) => {
     if (tag === "6" || tag === "8" || tag === "12") return t("tagPlayers", { count: tag });
     return t(tag as MessageKey);
@@ -915,22 +1131,15 @@ function ConfigStep({
   provider,
   providerConfigPayload,
   validationErrors,
-  resourceLimits,
   setConfig,
   setProviderConfigPayload,
   onClearValidationError,
   onCustomize,
   setHostPort,
   setHostPortMode,
-  setResourceLimits,
   versions,
   version,
-  setVersion,
-  onSavePreset,
-  onResetPresetSave,
-  presetSaveError,
-  presetSavePending,
-  presetSaveSuccess
+  setVersion
 }: {
   config: TerrariaConfig;
   gameKey: string;
@@ -939,74 +1148,29 @@ function ConfigStep({
   provider?: ProviderCatalog;
   providerConfigPayload: ProviderConfigPayload;
   validationErrors: ConfigValidationErrors;
-  resourceLimits: ResourceLimits;
   setConfig: (config: TerrariaConfig) => void;
   setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
   onClearValidationError: (field: string) => void;
   onCustomize: () => void;
   setHostPort: (port: number) => void;
   setHostPortMode: (mode: "auto" | "manual") => void;
-  setResourceLimits: (limits: ResourceLimits) => void;
   versions: string[];
   version: string;
   setVersion: (version: string) => void;
-  onSavePreset: (name: string) => void;
-  onResetPresetSave: () => void;
-  presetSaveError: string;
-  presetSavePending: boolean;
-  presetSaveSuccess: boolean;
 }) {
   const { t } = useI18n();
-  const [presetName, setPresetName] = useState(config.serverName ? `${config.serverName} ${t("configurationPreset")}` : "");
-  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
-  const openPresetDialog = () => {
-    onResetPresetSave();
-    const defaultPresetSource = gameKey === "terraria"
-      ? config.serverName
-      : String(providerConfigPayload.serverName ?? config.serverName ?? "").trim();
-    if (defaultPresetSource) {
-      setPresetName(`${defaultPresetSource} ${t("configurationPreset")}`);
-    }
-    setPresetDialogOpen(true);
-  };
-  const closePresetDialog = () => {
-    if (presetSavePending) return;
-    onResetPresetSave();
-    setPresetDialogOpen(false);
-  };
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => {
     onCustomize();
     onClearValidationError(String(key));
     setConfig({ ...config, [key]: value });
   };
-  const updateResources = (limits: ResourceLimits) => {
-    onCustomize();
-    setResourceLimits(limits);
-  };
-  const submitPreset = () => {
-    const name = presetName.trim();
-    if (!name) return;
-    onSavePreset(name);
-  };
-  const selectedSecretSeed = terrariaSecretSeeds.find((seed) => seed.key === secretSeedKeyFor(config.seed));
+  const supportsModernSeedModes = isTerrariaVersionAtLeast(version, "1.4.5");
+  const supportsLegacySecretSeedPicker = provider?.key === "terraria-tmodloader" && !supportsModernSeedModes;
   if (gameKey !== "terraria") {
     const providerFields = provider?.configSchema ?? [];
     return (
       <div>
-        <ConfigStepHeader
-          onOpenPreset={openPresetDialog}
-          presetDialogOpen={presetDialogOpen}
-        />
-        <PresetSaveDialog
-          error={presetSaveError}
-          name={presetName}
-          open={presetDialogOpen}
-          pending={presetSavePending}
-          success={presetSaveSuccess}
-          onChangeName={setPresetName}
-          onClose={closePresetDialog}
-          onSave={submitPreset}
-        />
+        <ConfigStepHeader />
         <div className="mt-4 grid gap-5">
           <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
             <div className="flex items-start gap-3">
@@ -1072,27 +1236,13 @@ function ConfigStep({
               )}
             </div>
           </section>
-          <RuntimeResourceSection resourceLimits={resourceLimits} onChange={updateResources} />
         </div>
       </div>
     );
   }
   return (
     <div>
-      <ConfigStepHeader
-        onOpenPreset={openPresetDialog}
-        presetDialogOpen={presetDialogOpen}
-      />
-      <PresetSaveDialog
-        error={presetSaveError}
-        name={presetName}
-        open={presetDialogOpen}
-        pending={presetSavePending}
-        success={presetSaveSuccess}
-        onChangeName={setPresetName}
-        onClose={closePresetDialog}
-        onSave={submitPreset}
-      />
+      <ConfigStepHeader />
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <WizardField label={t("serverName")} required error={validationErrors.serverName}>
           <Input
@@ -1168,29 +1318,282 @@ function ConfigStep({
           <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
         </WizardField>
         <div className="md:col-span-2">
-          <WizardField label={t("worldSeed")}>
-            <Input
-              list="terraria-secret-seeds"
+          <WizardField label={t("worldSeed")} help={t("worldSeedHint")}>
+            <SeedInput
+              config={config}
+              supportsLegacySecretSeedPicker={supportsLegacySecretSeedPicker}
+              supportsModernSeedModes={supportsModernSeedModes}
               value={config.seed ?? ""}
               placeholder={t("worldSeedPlaceholder")}
-              onChange={(event) => update("seed", event.target.value)}
+              onChange={(value) => update("seed", value)}
+              onChangeSeedModes={(specialSeeds, secretSeeds) => {
+                onCustomize();
+                setConfig({ ...config, specialSeeds, secretSeeds });
+              }}
             />
-            <datalist id="terraria-secret-seeds">
-              {terrariaSecretSeeds.map((seed) => (
-                <option key={seed.key} label={seed.label} value={seed.key} />
-              ))}
-            </datalist>
-            <span className="text-xs text-slate-500">
-              {selectedSecretSeed ? t("secretSeedDetected", { name: selectedSecretSeed.label }) : t("worldSeedHint")}
-            </span>
           </WizardField>
         </div>
         <div className="grid gap-3 md:col-span-2 sm:grid-cols-2">
           <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
           <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
         </div>
-        <RuntimeResourceSection resourceLimits={resourceLimits} onChange={updateResources} />
       </div>
+    </div>
+  );
+}
+
+function SeedInput({
+  config,
+  onChange,
+  onChangeSeedModes,
+  placeholder,
+  supportsLegacySecretSeedPicker,
+  supportsModernSeedModes,
+  value
+}: {
+  config: TerrariaConfig;
+  onChange: (value: string) => void;
+  onChangeSeedModes: (specialSeeds: string[], secretSeeds: string[]) => void;
+  placeholder: string;
+  supportsLegacySecretSeedPicker: boolean;
+  supportsModernSeedModes: boolean;
+  value: string;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const showsSeedPicker = supportsModernSeedModes || supportsLegacySecretSeedPicker;
+  const selectedSpecialSeeds = config.specialSeeds ?? [];
+  const selectedSecretSeeds = config.secretSeeds ?? [];
+  const selectedModeCount = selectedSpecialSeeds.length + selectedSecretSeeds.length;
+  const legacySpecialSeed = terrariaLegacySpecialWorldSeeds.find((seed) => seed.key === secretSeedKeyFor(value));
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+  const toggleSeed = (type: "special" | "secret", key: string) => {
+    const current = type === "special" ? selectedSpecialSeeds : selectedSecretSeeds;
+    const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+    onChangeSeedModes(
+      type === "special" ? next : selectedSpecialSeeds,
+      type === "secret" ? next : selectedSecretSeeds
+    );
+  };
+  const clearModes = () => onChangeSeedModes([], []);
+  const clearLegacySeed = () => {
+    onChange("");
+    onChangeSeedModes([], []);
+  };
+  const selectLegacySeed = (key: string) => {
+    onChange(key);
+    onChangeSeedModes([], []);
+    setOpen(false);
+  };
+  const pickerLabel = supportsModernSeedModes
+    ? selectedModeCount > 0 ? t("seedModesSelected", { count: selectedModeCount }) : t("seedModes")
+    : legacySpecialSeed ? legacySpecialSeed.label : t("secretSeed");
+  return (
+    <div className="relative space-y-1.5">
+      <div className="relative">
+        <Input
+          value={value}
+          placeholder={placeholder}
+          className={showsSeedPicker ? "pr-36" : undefined}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {showsSeedPicker ? (
+          <button
+            type="button"
+            aria-expanded={open}
+            className={cn(
+              "absolute right-1.5 top-1/2 inline-flex h-7 -translate-y-1/2 items-center gap-1 rounded-md border px-2 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
+              selectedModeCount > 0 || Boolean(legacySpecialSeed)
+                ? "border-panel-green/50 bg-panel-green/15 text-panel-green"
+                : "border-panel-line bg-slate-950/70 text-slate-400 hover:border-slate-600 hover:bg-slate-900 hover:text-slate-200"
+            )}
+            onClick={() => setOpen(true)}
+          >
+            {pickerLabel}
+            <ChevronDown aria-hidden="true" className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+      {supportsLegacySecretSeedPicker && legacySpecialSeed ? (
+        <p className="text-xs leading-5 text-panel-green">
+          {t("secretSeedDetected", { name: legacySpecialSeed.label })}
+          <span className="text-slate-500"> · {legacySpecialSeed.description}</span>
+        </p>
+      ) : null}
+      {supportsModernSeedModes && selectedModeCount > 0 ? (
+        <p className="text-xs leading-5 text-panel-green">
+          {t("seedModesSummary", { special: selectedSpecialSeeds.length, secret: selectedSecretSeeds.length })}
+        </p>
+      ) : null}
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 px-4 py-8 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setOpen(false);
+            }
+          }}
+        >
+          <div
+            aria-modal="true"
+            className="w-full max-w-5xl rounded-lg border border-panel-line bg-panel-card shadow-[0_18px_56px_rgba(0,0,0,0.45)]"
+            role="dialog"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-panel-line p-4">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-white">{supportsModernSeedModes ? t("seedModes") : t("secretSeed")}</h3>
+                <p className="mt-1 text-sm leading-5 text-slate-500">{supportsModernSeedModes ? t("seedModesHint145") : t("legacySecretSeedHint")}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {supportsModernSeedModes && selectedModeCount > 0 ? (
+                  <button
+                    type="button"
+                    className="h-8 rounded-md border border-panel-line px-3 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-900 hover:text-white"
+                    onClick={clearModes}
+                  >
+                    {t("clearSeedModes")}
+                  </button>
+                ) : null}
+                {supportsLegacySecretSeedPicker && legacySpecialSeed ? (
+                  <button
+                    type="button"
+                    className="h-8 rounded-md border border-panel-line px-3 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-900 hover:text-white"
+                    onClick={clearLegacySeed}
+                  >
+                    {t("noSecretSeed")}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label={t("cancel")}
+                  className="flex size-8 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/40"
+                  onClick={() => setOpen(false)}
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[min(72vh,620px)] overflow-y-auto p-4">
+              {supportsModernSeedModes ? (
+                <>
+                  <SeedModeSection
+                    description={t("specialSeedModesDescription")}
+                    selected={selectedSpecialSeeds}
+                    seeds={terrariaSpecialWorldSeeds}
+                    title={t("specialWorldSeeds")}
+                    onToggle={(key) => toggleSeed("special", key)}
+                  />
+                  <SeedModeSection
+                    className="mt-5"
+                    description={t("secretSeedModesDescription145")}
+                    selected={selectedSecretSeeds}
+                    seeds={terrariaSecretWorldSeeds145}
+                    title={t("secretWorldSeeds145")}
+                    onToggle={(key) => toggleSeed("secret", key)}
+                  />
+                </>
+              ) : (
+                <SeedModeSection
+                  description={t("legacySpecialSeedModesDescription")}
+                  selected={legacySpecialSeed ? [legacySpecialSeed.key] : []}
+                  seeds={terrariaLegacySpecialWorldSeeds}
+                  title={t("specialWorldSeeds")}
+                  onToggle={selectLegacySeed}
+                />
+              )}
+            </div>
+            <div className="flex items-center justify-end border-t border-panel-line p-4">
+              <Button type="button" onClick={() => setOpen(false)}>
+                {t("done")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SeedModeSection({
+  className,
+  description,
+  onToggle,
+  seeds,
+  selected,
+  title
+}: {
+  className?: string;
+  description: string;
+  onToggle: (key: string) => void;
+  seeds: readonly { key: string; label: string; description: string }[];
+  selected: string[];
+  title: string;
+}) {
+  return (
+    <section className={className}>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-100">{title}</h4>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+        </div>
+        <span className="text-xs text-slate-500">{selected.length}/{seeds.length}</span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {seeds.map((seed) => {
+          const active = selected.includes(seed.key);
+          return (
+            <button
+              key={seed.key}
+              type="button"
+              className={cn(
+                "group flex min-h-20 items-start justify-between gap-3 rounded-md border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
+                active
+                  ? "border-panel-green/55 bg-panel-green/12 text-white"
+                  : "border-panel-line bg-slate-950/45 text-slate-300 hover:border-slate-600 hover:bg-slate-900"
+              )}
+              onClick={() => onToggle(seed.key)}
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-slate-100">{seed.label}</span>
+                <span className="mt-0.5 block truncate text-xs text-slate-500">{seed.key}</span>
+                <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500 group-hover:text-slate-400">{seed.description}</span>
+              </span>
+              <span
+                className={cn(
+                  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border transition",
+                  active ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-700 bg-slate-950"
+                )}
+              >
+                {active ? <Check aria-hidden="true" className="size-3.5" /> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ResourcesStep({
+  onChange,
+  resourceLimits
+}: {
+  onChange: (limits: ResourceLimits) => void;
+  resourceLimits: ResourceLimits;
+}) {
+  return (
+    <div>
+      <RuntimeResourceSection resourceLimits={resourceLimits} onChange={onChange} />
     </div>
   );
 }
@@ -1245,31 +1648,12 @@ function ProviderSchemaField({
   );
 }
 
-function ConfigStepHeader({
-  onOpenPreset,
-  presetDialogOpen
-}: {
-  onOpenPreset: () => void;
-  presetDialogOpen: boolean;
-}) {
+function ConfigStepHeader() {
   const { t } = useI18n();
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t("serverConfigDescription")}</p>
-      </div>
-      <Button
-        type="button"
-        variant="secondary"
-        className="sm:mt-0"
-        aria-expanded={presetDialogOpen}
-        aria-haspopup="dialog"
-        onClick={onOpenPreset}
-      >
-        <Bookmark aria-hidden="true" />
-        {t("saveConfigurationPreset")}
-      </Button>
+    <div>
+      <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
+      <p className="mt-1 text-sm text-slate-500">{t("serverConfigDescription")}</p>
     </div>
   );
 }
@@ -1408,19 +1792,22 @@ function PresetSaveDialog({
 function WizardField({
   children,
   error,
+  help,
   label,
   required
 }: {
   children: React.ReactNode;
   error?: string;
+  help?: string;
   label: string;
   required?: boolean;
 }) {
   const { t } = useI18n();
   return (
-    <label className="grid w-full min-w-0 self-start content-start gap-1.5">
+    <div className="grid w-full min-w-0 self-start content-start gap-1.5">
       <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
         <span className="truncate">{label}</span>
+        {help ? <FieldHelp text={help} /> : null}
         {required && (
           <span className="shrink-0 rounded border border-panel-gold/30 bg-panel-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-panel-gold">
             {t("requiredField")}
@@ -1429,7 +1816,24 @@ function WizardField({
       </span>
       {children}
       {error && <span className="text-xs font-medium text-red-200">{error}</span>}
-    </label>
+    </div>
+  );
+}
+
+function FieldHelp({ text }: { text: string }) {
+  return (
+    <span className="group/help relative inline-flex shrink-0">
+      <button
+        aria-label={text}
+        className="flex size-4 cursor-help select-none items-center justify-center rounded-full border border-slate-600 bg-slate-950/70 text-[10px] font-bold leading-none text-slate-300 transition hover:border-panel-green/70 hover:text-panel-green focus:border-panel-green focus:text-panel-green focus:outline-none focus:ring-2 focus:ring-panel-green/30"
+        type="button"
+      >
+        ?
+      </button>
+      <span className="pointer-events-none absolute left-1/2 top-6 z-20 hidden w-64 -translate-x-1/2 rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-xs font-normal leading-5 text-slate-300 shadow-[0_10px_30px_rgba(0,0,0,0.35)] group-hover/help:block group-focus-within/help:block">
+        {text}
+      </span>
+    </span>
   );
 }
 
@@ -1618,85 +2022,99 @@ function ModsStep({
 }
 
 function ReviewStep({
-  config,
+  configModel,
   gameKey,
   gameName,
   hostPortLabel,
-  providerName,
   resourceLimits,
-  version,
   selectedWorldName,
-  selectedModNames
+  selectedModNames,
+  presetDialogOpen,
+  presetName,
+  presetSaveError,
+  presetSavePending,
+  presetSaveSuccess,
+  onChangePresetName,
+  onClosePreset,
+  onOpenPreset,
+  onSavePreset
 }: {
-  config: TerrariaConfig;
+  configModel: ReviewConfigModel;
   gameKey: string;
   gameName: string;
   hostPortLabel: string;
-  providerName: string;
   resourceLimits: ResourceLimits;
-  version: string;
   selectedWorldName?: string;
   selectedModNames: string[];
+  presetDialogOpen: boolean;
+  presetName: string;
+  presetSaveError: string;
+  presetSavePending: boolean;
+  presetSaveSuccess: boolean;
+  onChangePresetName: (name: string) => void;
+  onClosePreset: () => void;
+  onOpenPreset: () => void;
+  onSavePreset: () => void;
 }) {
   const { t } = useI18n();
-  const preview = useMutation({
-    mutationFn: () => previewTerrariaConfig(config)
-  });
-  const previewVisible = Boolean(preview.data);
-  const togglePreview = () => {
-    if (previewVisible) {
-      preview.reset();
-      return;
-    }
-    preview.mutate();
-  };
   const invitePreview = createReviewInvitePreview({
     gameKey,
     gameName,
     hostPortLabel,
-    password: config.password,
-    serverName: config.serverName || gameName
+    password: configModel.password,
+    serverName: configModel.serverName || gameName
   });
   const joinInstruction = t(reviewJoinInstructionKey(gameKey));
-  const resourceSummary = t(reviewResourceSummaryKey(gameKey), { world: config.worldName, players: config.maxPlayers });
   return (
     <div>
-      <h2 className="text-lg font-semibold">{t("review")}</h2>
+      <PresetSaveDialog
+        error={presetSaveError}
+        name={presetName}
+        open={presetDialogOpen}
+        pending={presetSavePending}
+        success={presetSaveSuccess}
+        onChangeName={onChangePresetName}
+        onClose={onClosePreset}
+        onSave={onSavePreset}
+      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">{t("review")}</h2>
+          <p className="mt-1 text-sm text-slate-500">{t("configurationPresetSaveHint")}</p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          aria-expanded={presetDialogOpen}
+          aria-haspopup="dialog"
+          onClick={onOpenPreset}
+        >
+          <Bookmark aria-hidden="true" />
+          {t("saveConfigurationPreset")}
+        </Button>
+      </div>
       <Card className="mt-4 p-4">
-        <div className="flex items-center gap-3"><Settings2 aria-hidden="true" /> {t("reviewSummary", { game: gameName, mode: providerName, port: hostPortLabel })}</div>
-        <p className="mt-3 text-sm text-slate-400">{resourceSummary}</p>
-        <p className="mt-2 text-sm text-slate-400">
-          {t("resourceLimits")}: <span className="text-slate-200">{formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}</span>
-        </p>
-        {version && <p className="mt-2 text-sm text-slate-400">{t("gameVersion")}: <span className="text-slate-200">{version}</span></p>}
-        {gameKey === "terraria" && (
-          <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2 font-medium text-slate-100">
-                  <FileText aria-hidden="true" className="size-4 text-panel-green" />
-                  serverconfig.txt
-                </div>
-                <p className="mt-2 text-slate-400">{t("configPreviewHint")}</p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                aria-expanded={previewVisible}
-                onClick={togglePreview}
-                disabled={preview.isPending}
-              >
-                {preview.isPending ? t("rendering") : previewVisible ? t("hidePreview") : t("previewServerConfig")}
-              </Button>
-            </div>
-            {preview.isError && <p className="mt-3 text-sm text-red-200">{preview.error.message}</p>}
-            {previewVisible && (
-              <pre className="mt-3 max-h-64 overflow-auto rounded-md border border-panel-line bg-slate-950 p-4 text-xs leading-6 text-slate-300">
-                {preview.data}
-              </pre>
-            )}
+        <div className="rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
+          <div className="flex items-center gap-2 font-medium text-slate-100">
+            <Gamepad2 aria-hidden="true" className="size-4 text-panel-green" />
+            {t("gameConfiguration")}
           </div>
-        )}
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {configModel.fields.map((field) => (
+              <ReviewConfigItem key={`${field.label}:${field.value}`} label={field.label} value={field.value} />
+            ))}
+          </div>
+        </div>
+        <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
+          <div className="flex items-center gap-2 font-medium text-slate-100">
+            <Settings2 aria-hidden="true" className="size-4 text-panel-green" />
+            {t("runtimeResources")}
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <ReviewConfigItem label={t("cpuLimit")} value={formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} />
+            <ReviewConfigItem label={t("memoryLimit")} value={formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)} />
+          </div>
+        </div>
         <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
           <div className="flex items-center gap-2 font-medium text-slate-100">
             <Globe aria-hidden="true" className="size-4 text-panel-green" />
@@ -1717,6 +2135,15 @@ function ReviewStep({
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function ReviewConfigItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-panel-line bg-slate-950/55 px-3 py-2">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-slate-200">{value}</p>
     </div>
   );
 }

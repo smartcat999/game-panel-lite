@@ -7,7 +7,7 @@ import { Activity, AlertCircle, AlertTriangle, CheckCircle2, ExternalLink, Info,
 import { Card } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import type { MetricPoint, MetricSeries, MonitoringEvent, MonitoringOverviewResponse, PlatformService, RouteMetric, ServerLoadRow } from "./types";
+import type { MetricPoint, MetricSeries, MonitoringEvent, MonitoringOverviewResponse, MonitoringRange, PlatformService, RouteMetric, ServerLoadRow } from "./types";
 
 export function KpiStrip({ overview }: { overview?: MonitoringOverviewResponse }) {
   const { t } = useI18n();
@@ -97,7 +97,7 @@ function HealthMetric({ label, ok, value }: { label: string; ok: boolean; value:
   );
 }
 
-export function MonitoringChartCard({ color = "#59d46f", icon, series }: { color?: string; icon?: React.ReactNode; series?: MetricSeries }) {
+export function MonitoringChartCard({ color = "#59d46f", compact = false, icon, range, series }: { color?: string; compact?: boolean; icon?: React.ReactNode; range?: MonitoringRange; series?: MetricSeries }) {
   const { t } = useI18n();
   const points = series?.points ?? [];
   const unit = series?.unit ?? "";
@@ -115,10 +115,10 @@ export function MonitoringChartCard({ color = "#59d46f", icon, series }: { color
         </div>
         <p className="shrink-0 font-mono text-2xl font-semibold text-slate-100">{current == null ? "—" : formatValue(current, unit)}</p>
       </div>
-      <div className="mt-4 h-56 rounded-md border border-panel-line bg-slate-950/35 p-2">
-        {points.length > 0 ? <MetricChart color={color} points={points} series={series} /> : <EmptyMetric reason={series?.emptyReason} />}
+      <div className={cn("mt-4 rounded-md border border-panel-line bg-slate-950/35 p-2", compact ? "h-44" : "h-56")}>
+        {points.length > 0 ? <MetricChart color={color} points={points} range={range} series={series} /> : <EmptyMetric reason={series?.emptyReason} />}
       </div>
-      <div className="mt-3 grid grid-cols-4 gap-3 text-xs">
+      <div className={cn("mt-3 grid grid-cols-4 gap-3 text-xs", compact && "hidden 2xl:grid")}>
         <MetricFoot label={t("metricAvg")} value={series?.avg == null ? "—" : formatValue(series.avg, unit)} />
         <MetricFoot label={t("metricPeak")} value={series?.max == null ? "—" : formatValue(series.max, unit)} />
         <MetricFoot label={t("metricSamples")} value={String(points.length)} />
@@ -128,10 +128,12 @@ export function MonitoringChartCard({ color = "#59d46f", icon, series }: { color
   );
 }
 
-function MetricChart({ color, points, series }: { color: string; points: MetricPoint[]; series?: MetricSeries }) {
+function MetricChart({ color, points, range, series }: { color: string; points: MetricPoint[]; range?: MonitoringRange; series?: MetricSeries }) {
   const unit = series?.unit ?? "";
   const type = series?.chartType === "bar" ? "bar" : "line";
   const data = points.map((point) => [point.timestamp, Number(point.value.toFixed(3))]);
+  const yAxisMax = metricYAxisMax(points, series?.threshold);
+  const xAxisRange = metricXAxisRange(range);
   const option: EChartsOption = {
     backgroundColor: "transparent",
     animation: false,
@@ -146,6 +148,8 @@ function MetricChart({ color, points, series }: { color: string; points: MetricP
     },
     xAxis: {
       type: "time",
+      min: xAxisRange?.min,
+      max: xAxisRange?.max,
       axisLabel: { color: "#74839a", hideOverlap: true },
       axisLine: { lineStyle: { color: "#2b3544" } },
       axisTick: { show: false },
@@ -153,6 +157,8 @@ function MetricChart({ color, points, series }: { color: string; points: MetricP
     },
     yAxis: {
       type: "value",
+      min: 0,
+      max: yAxisMax,
       axisLabel: { color: "#74839a", formatter: (value: number) => formatValue(value, unit) },
       splitLine: { lineStyle: { color: "rgba(100,116,139,0.18)" } }
     },
@@ -168,15 +174,35 @@ function MetricChart({ color, points, series }: { color: string; points: MetricP
         itemStyle: { color },
         areaStyle: series?.chartType === "area" ? { color: `${color}24` } : undefined,
         markLine: series?.threshold == null ? undefined : {
+          silent: true,
           symbol: "none",
-          label: { color: "#94a3b8", formatter: `limit ${formatValue(series.threshold, unit)}` },
-          lineStyle: { color: "#94a3b8", type: "dashed" },
+          label: { show: false },
+          lineStyle: { color: "#94a3b8", type: "dashed", width: 1.2 },
           data: [{ yAxis: series.threshold }]
         }
       }
     ]
   };
   return <ReactECharts option={option} style={{ height: "100%", width: "100%" }} />;
+}
+
+function metricYAxisMax(points: MetricPoint[], threshold?: number) {
+  const dataMax = Math.max(0, ...points.map((point) => point.value));
+  const thresholdMax = threshold == null ? 0 : threshold;
+  const max = Math.max(dataMax, thresholdMax);
+  if (max <= 0) return undefined;
+  if (threshold != null && threshold >= dataMax) {
+    return Number((threshold * 1.05).toFixed(3));
+  }
+  return Number((max * 1.12).toFixed(3));
+}
+
+function metricXAxisRange(range?: MonitoringRange) {
+  if (!range?.start || !range.end) return undefined;
+  const min = new Date(range.start).getTime();
+  const max = new Date(range.end).getTime();
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) return undefined;
+  return { min, max };
 }
 
 function EmptyMetric({ reason }: { reason?: string }) {
@@ -348,6 +374,7 @@ const eventTitleKeys: Record<string, MessageKey> = {
   "server.started": "eventTitleServerStarted",
   "server.stop.queued": "eventTitleServerStopQueued",
   "server.stopped": "eventTitleServerStopped",
+  "settings.locale": "eventTitleSettingsLocale",
   "settings.publicHost": "eventTitleSettingsUpdated",
   "world.assigned": "eventTitleWorldAssigned",
   "world.deleted": "eventTitleWorldDeleted",
@@ -460,6 +487,7 @@ function severityIcon(severity: MonitoringEvent["severity"]) {
 function emptyText(reason: string | undefined, t: ReturnType<typeof useI18n>["t"]) {
   if (reason === "prometheus_unconfigured") return t("monitoringPrometheusUnconfigured");
   if (reason === "prometheus_unavailable") return t("monitoringPrometheusUnavailable");
+  if (reason === "no_active_samples") return t("monitoringNoActiveSamples");
   if (reason === "server_stopped") return t("monitoringServerStopped");
   if (reason === "no_samples") return t("monitoringNoSamples");
   return undefined;

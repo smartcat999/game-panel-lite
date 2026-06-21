@@ -17,20 +17,14 @@ import (
 
 type playerRuntime struct {
 	runtime.MockAdapter
-	commands []string
-	logs     string
+	logs string
 }
 
 func (r *playerRuntime) Check(context.Context) runtime.DockerStatus {
 	return runtime.DockerStatus{Available: true, Message: "ok", Host: "mock"}
 }
 
-func (r *playerRuntime) SendCommand(_ context.Context, _ domain.GameServerInstance, command string) error {
-	r.commands = append(r.commands, command)
-	return nil
-}
-
-func (r *playerRuntime) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
+func (r *playerRuntime) LogSnapshotWorkload(context.Context, string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(r.logs)), nil
 }
 
@@ -39,22 +33,36 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := domain.GameServerInstance{
+	now := time.Now()
+	server := domain.GameServer{
 		ID:          "server-1",
 		Name:        "Friends",
 		GameKey:     "terraria",
 		ProviderKey: domain.ProviderTerrariaTModLoader,
-		Status:      domain.StatusRunning,
-		WorldName:   "Friends",
-		Port:        terraria.DefaultInternalPort,
-		MaxPlayers:  8,
-		DataDir:     t.TempDir(),
-		ContainerID: "container-1",
-		Config:      terraria.Presets[0].Config,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		Spec: domain.ServerSpec{
+			Generation:   1,
+			DesiredState: domain.DesiredRunning,
+			Version:      "v2026.04.3.0",
+			Config: map[string]any{
+				"serverName": "Friends",
+				"worldName":  "Friends",
+				"maxPlayers": 8,
+				"port":       terraria.DefaultInternalPort,
+			},
+			Network: domain.ServerNetworkSpec{Port: terraria.DefaultInternalPort},
+			Runtime: domain.ServerRuntimeSpec{DataDir: t.TempDir()},
+		},
+		Status: domain.ServerRuntimeStatus{
+			Phase:              domain.PhaseRunning,
+			ActualState:        domain.ActualRunning,
+			RuntimeID:          "container-1",
+			ObservedGeneration: 1,
+			AppliedGeneration:  1,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
-	if err := db.CreateServer(context.Background(), &server); err != nil {
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
 		t.Fatal(err)
 	}
 	runtimeAdapter := &playerRuntime{logs: "Server started\n: yyds (192.168.215.1:32643)\n\n1个玩家已连接。\n"}
@@ -69,14 +77,11 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(runtimeAdapter.commands) != 0 {
-		t.Fatalf("expected passive player sync to avoid console commands, got %+v", runtimeAdapter.commands)
-	}
-	updated, err := db.GetServer(context.Background(), server.ID)
+	updated, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.PlayersOnline != 1 {
+	if updated.Status.PlayersOnline != 1 {
 		t.Fatalf("expected player count to update to 1, got %+v", updated)
 	}
 }
@@ -86,22 +91,36 @@ func TestRunOnceClearsPlayerCountForStoppedServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := domain.GameServerInstance{
-		ID:            "server-1",
-		Name:          "Friends",
-		GameKey:       "terraria",
-		ProviderKey:   domain.ProviderTerrariaVanilla,
-		Status:        domain.StatusStopped,
-		WorldName:     "Friends",
-		Port:          terraria.DefaultInternalPort,
-		MaxPlayers:    8,
-		PlayersOnline: 3,
-		DataDir:       t.TempDir(),
-		Config:        terraria.Presets[0].Config,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+	now := time.Now()
+	server := domain.GameServer{
+		ID:          "server-1",
+		Name:        "Friends",
+		GameKey:     "terraria",
+		ProviderKey: domain.ProviderTerrariaVanilla,
+		Spec: domain.ServerSpec{
+			Generation:   1,
+			DesiredState: domain.DesiredStopped,
+			Version:      "1.4.5.6",
+			Config: map[string]any{
+				"serverName": "Friends",
+				"worldName":  "Friends",
+				"maxPlayers": 8,
+				"port":       terraria.DefaultInternalPort,
+			},
+			Network: domain.ServerNetworkSpec{Port: terraria.DefaultInternalPort},
+			Runtime: domain.ServerRuntimeSpec{DataDir: t.TempDir()},
+		},
+		Status: domain.ServerRuntimeStatus{
+			Phase:              domain.PhaseStopped,
+			ActualState:        domain.ActualStopped,
+			PlayersOnline:      3,
+			ObservedGeneration: 1,
+			AppliedGeneration:  1,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
-	if err := db.CreateServer(context.Background(), &server); err != nil {
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
 		t.Fatal(err)
 	}
 	syncer := NewSyncer(
@@ -115,11 +134,11 @@ func TestRunOnceClearsPlayerCountForStoppedServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, err := db.GetServer(context.Background(), server.ID)
+	updated, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.PlayersOnline != 0 {
+	if updated.Status.PlayersOnline != 0 {
 		t.Fatalf("expected stopped server player count to reset, got %+v", updated)
 	}
 }

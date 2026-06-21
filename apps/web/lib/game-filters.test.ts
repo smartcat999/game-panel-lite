@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gameFilterOptions, gameFilterOptionsForKeys, gameKeyFromProvider } from "./game-filters";
+import type { MessageKey } from "./i18n";
 import type { GameCatalogEntry } from "./types";
 
 const games: GameCatalogEntry[] = [
@@ -29,6 +30,14 @@ const games: GameCatalogEntry[] = [
   }
 ];
 
+const zhMessages: Partial<Record<MessageKey, string>> = {
+  gameNameDST: "饥荒联机版",
+  gameNameMinecraft: "我的世界 (Java版)",
+  gameNamePalworld: "幻兽帕鲁",
+  gameNameTerraria: "泰拉瑞亚"
+};
+const t = (key: MessageKey) => zhMessages[key] ?? key;
+
 describe("game filter options", () => {
   it("uses available catalog games and preserves unknown resource games", () => {
     expect(gameFilterOptions(games, "All", ["minecraft", "terraria"]).map((item) => item.key)).toEqual(["all", "minecraft", "palworld", "terraria"]);
@@ -41,5 +50,9 @@ describe("game filter options", () => {
 
   it("can build options only for explicit resource games", () => {
     expect(gameFilterOptionsForKeys(games, "All", ["terraria", "minecraft", "terraria"]).map((item) => item.key)).toEqual(["all", "minecraft", "terraria"]);
+  });
+
+  it("localizes known game labels when a translator is provided", () => {
+    expect(gameFilterOptions(games, "全部", ["minecraft"], t).map((item) => item.label)).toEqual(["全部", "幻兽帕鲁", "我的世界 (Java版)", "泰拉瑞亚"]);
   });
 });

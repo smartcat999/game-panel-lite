@@ -16,7 +16,7 @@ const activityLimit = 100
 
 type RuntimeStatsProvider interface {
 	HostStats(ctx context.Context) (runtime.HostStats, error)
-	Stats(ctx context.Context, instance domain.GameServerInstance) (runtime.ContainerStats, error)
+	StatsWorkload(ctx context.Context, runtimeID string) (runtime.WorkloadStats, error)
 }
 
 type Service struct {
@@ -67,7 +67,7 @@ func NewService(store *store.Store, runtime RuntimeStatsProvider) *Service {
 }
 
 func (s *Service) Snapshot(ctx context.Context, runtimeAvailable bool) (Snapshot, error) {
-	servers, err := s.store.ListServers(ctx)
+	servers, err := s.store.ListGameServers(ctx)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -92,14 +92,14 @@ func (s *Service) Snapshot(ctx context.Context, runtimeAvailable bool) (Snapshot
 			Name:          server.Name,
 			GameKey:       server.GameKey,
 			ProviderKey:   server.ProviderKey,
-			Status:        server.Status,
-			PlayersOnline: server.PlayersOnline,
-			MaxPlayers:    server.MaxPlayers,
-			HostPort:      server.HostPort,
-			Version:       server.Version,
+			Status:        domain.ServerStatusFromRuntime(server.Spec.DesiredState, server.Status),
+			PlayersOnline: server.Status.PlayersOnline,
+			MaxPlayers:    domain.ServerMaxPlayers(server),
+			HostPort:      server.Spec.Network.HostPort,
+			Version:       server.Spec.Version,
 		}
-		if runtimeAvailable && server.Status == domain.StatusRunning {
-			if stats, err := s.runtime.Stats(ctx, server); err == nil {
+		if runtimeAvailable && server.Status.Phase == domain.PhaseRunning && server.Status.RuntimeID != "" {
+			if stats, err := s.runtime.StatsWorkload(ctx, server.Status.RuntimeID); err == nil {
 				metric.CPUPercent = stats.CPUPercent
 				metric.MemoryMB = stats.MemoryMB
 				metric.MemoryLimitMB = stats.MemoryLimitMB
@@ -142,7 +142,7 @@ func FormatPrometheus(snapshot Snapshot) string {
 		builder.WriteByte('\n')
 	}
 
-	writeGauge("gamepanel_runtime_running_containers", "Number of running GamePanel-managed runtime containers.", snapshot.Host.RunningContainers)
+	writeGauge("gamepanel_runtime_running_containers", "Number of running GamePanel-managed runtime containers.", snapshot.Host.RunningWorkloads)
 	writeGauge("gamepanel_runtime_cpu_percent", "Total CPU percent used by GamePanel-managed runtime containers.", snapshot.Host.TotalCPUPercent)
 	writeGauge("gamepanel_runtime_memory_bytes", "Total memory used by GamePanel-managed runtime containers in bytes.", megabytesToBytes(snapshot.Host.TotalMemoryMB))
 	writeGauge("gamepanel_runtime_memory_limit_bytes", "Total memory limit for GamePanel-managed runtime containers in bytes.", megabytesToBytes(snapshot.Host.MemoryLimitMB))

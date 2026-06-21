@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
@@ -13,9 +14,28 @@ const DefaultInternalPort = 8211
 
 var versions = []string{"latest"}
 
-type Provider struct{}
+type Provider struct {
+	runtime runtimecatalog.RuntimeConfig
+}
 
-func NewProvider() Provider { return Provider{} }
+type Config struct {
+	ServerName     string
+	SaveName       string
+	MaxPlayers     int
+	Port           int
+	ServerPassword string
+	AdminPassword  string
+}
+
+func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
+	return Provider{
+		runtime: runtimecatalog.FromCatalog(catalog, domain.ProviderPalworld, runtimeConfig()),
+	}
+}
+
+func runtimeConfig() runtimecatalog.RuntimeConfig {
+	return runtimecatalog.RuntimeConfig{ImageTemplate: "thijsvanloef/palworld-server-docker:{version}", Versions: versions}
+}
 
 func (Provider) GameKey() domain.GameKey { return domain.GamePalworld }
 func (Provider) Key() domain.ProviderKey { return domain.ProviderPalworld }
@@ -37,66 +57,82 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 }
 func (Provider) SaveDisplayName() string { return "save" }
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
-	return []domain.ProviderConfigField{
-		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Palworld Server"},
-		{Name: "saveName", Label: "存档名称", Type: "text", Required: true, Default: "Palworld Save"},
-		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 8},
-		{Name: "serverPassword", Label: "服务器密码", Type: "password", Required: false},
-		{Name: "adminPassword", Label: "管理员密码", Type: "password", Required: true, Help: "用于 Palworld 管理员操作。"},
-	}
+	return configSchema()
 }
-func (Provider) Image() string      { return ImageForVersion(versions[0]) }
-func (Provider) Versions() []string { return append([]string{}, versions...) }
-func (Provider) ImageFor(version string) string {
-	return ImageForVersion(version)
+func (p Provider) Image() string      { return p.ImageFor(p.Versions()[0]) }
+func (p Provider) Versions() []string { return p.runtime.WithFallback(runtimeConfig()).VersionList() }
+func (p Provider) ImageFor(version string) string {
+	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
 }
-func (Provider) DefaultConfig() domain.TerrariaConfig {
-	return NormalizeConfig(domain.TerrariaConfig{})
+func defaultConfig() Config {
+	return normalizeConfig(Config{})
 }
-func (Provider) ValidateConfig(config domain.TerrariaConfig) error {
-	config = NormalizeConfig(config)
+func (p Provider) DefaultConfigPayload() map[string]any {
+	return payloadFromConfig(defaultConfig())
+}
+func (p Provider) NormalizeConfigPayload(payload map[string]any) (map[string]any, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return payloadFromConfig(config), nil
+}
+func (p Provider) ValidateConfigPayload(payload map[string]any) error {
+	config := configFromPayload(payload, defaultConfig())
+	return validateConfig(config)
+}
+func (p Provider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return domain.ProviderConfigSummary{
+		ServerName: config.ServerName,
+		WorldName:  config.SaveName,
+		MaxPlayers: config.MaxPlayers,
+		Port:       config.Port,
+		Password:   config.ServerPassword,
+		MOTD:       config.AdminPassword,
+	}, nil
+}
+func validateConfig(config Config) error {
+	config = normalizeConfig(config)
 	if strings.TrimSpace(config.ServerName) == "" {
 		return fmt.Errorf("server name is required")
 	}
 	if strings.Contains(config.ServerName, "/") || strings.Contains(config.ServerName, "\\") {
 		return fmt.Errorf("server name contains unsupported path characters")
 	}
-	if strings.TrimSpace(config.WorldName) == "" {
+	if strings.TrimSpace(config.SaveName) == "" {
 		return fmt.Errorf("save name is required")
 	}
-	if strings.Contains(config.WorldName, "/") || strings.Contains(config.WorldName, "\\") || strings.Contains(config.WorldName, "..") {
+	if strings.Contains(config.SaveName, "/") || strings.Contains(config.SaveName, "\\") || strings.Contains(config.SaveName, "..") {
 		return fmt.Errorf("save name contains unsupported path characters")
 	}
 	if config.MaxPlayers < 1 || config.MaxPlayers > 32 {
 		return fmt.Errorf("max players must be between 1 and 32")
 	}
-	if strings.TrimSpace(config.MOTD) == "" {
+	if strings.TrimSpace(config.AdminPassword) == "" {
 		return fmt.Errorf("admin password is required")
 	}
 	return nil
 }
-func (Provider) RenderConfig(config domain.TerrariaConfig) (string, error) {
-	config = NormalizeConfig(config)
-	if err := (Provider{}).ValidateConfig(config); err != nil {
+func renderConfig(config Config) (string, error) {
+	config = normalizeConfig(config)
+	if err := validateConfig(config); err != nil {
 		return "", err
 	}
 	lines := []string{
 		"game=palworld",
 		"serverName=" + config.ServerName,
-		"saveName=" + config.WorldName,
+		"saveName=" + config.SaveName,
 		fmt.Sprintf("maxPlayers=%d", config.MaxPlayers),
 		fmt.Sprintf("port=%d", config.Port),
 	}
-	if config.Password != "" {
-		lines = append(lines, "serverPassword="+config.Password)
+	if config.ServerPassword != "" {
+		lines = append(lines, "serverPassword="+config.ServerPassword)
 	}
-	if config.MOTD != "" {
-		lines = append(lines, "adminPassword="+config.MOTD)
+	if config.AdminPassword != "" {
+		lines = append(lines, "adminPassword="+config.AdminPassword)
 	}
 	return strings.Join(lines, "\n") + "\n", nil
 }
-func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
-	config = NormalizeConfig(config)
+func runtimeOptions(config Config) runtime.ContainerOptions {
+	config = normalizeConfig(config)
 	return runtime.ContainerOptions{
 		Env: []string{
 			"PUID=1000",
@@ -104,8 +140,8 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 			"PORT=" + fmt.Sprintf("%d", config.Port),
 			"PLAYERS=" + fmt.Sprintf("%d", config.MaxPlayers),
 			"SERVER_NAME=" + config.ServerName,
-			"SERVER_PASSWORD=" + config.Password,
-			"ADMIN_PASSWORD=" + config.MOTD,
+			"SERVER_PASSWORD=" + config.ServerPassword,
+			"ADMIN_PASSWORD=" + config.AdminPassword,
 			"MULTITHREADING=true",
 			"COMMUNITY=false",
 			"UPDATE_ON_BOOT=true",
@@ -115,13 +151,30 @@ func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOp
 	}
 }
 
-func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
-	address := "127.0.0.1"
-	port := server.HostPort
-	if port == 0 {
-		port = server.Port
+func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	if server.Spec.Network.Port != 0 {
+		config.Port = server.Spec.Network.Port
 	}
-	password := server.Password
+	if err := validateConfig(config); err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	options := runtimeOptions(config)
+	return domain.ProviderRuntimeConfig{
+		Port:     config.Port,
+		Protocol: options.PortProtocol,
+		Options:  workloadOptions(options),
+	}, nil
+}
+
+func (p Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
+	address := "127.0.0.1"
+	port := server.Spec.Network.HostPort
+	if port == 0 {
+		port = server.Spec.Network.Port
+	}
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	password := config.ServerPassword
 	invite := fmt.Sprintf("Join %s in Palworld at %s:%d", server.Name, address, port)
 	if password != "" {
 		invite += " password: " + password
@@ -138,44 +191,22 @@ func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo
 	}
 }
 
-func (provider Provider) RenderServerConfig(server domain.GameServerInstance) (string, error) {
-	return provider.RenderConfig(configFromServer(server))
-}
-
-func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstance) (runtime.ContainerOptions, error) {
-	config := configFromServer(server)
-	if err := provider.ValidateConfig(config); err != nil {
-		return runtime.ContainerOptions{}, err
-	}
-	return provider.RuntimeOptions(config), nil
-}
-
-func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
+func normalizeConfig(config Config) Config {
 	if strings.TrimSpace(config.ServerName) == "" {
 		config.ServerName = "Palworld Server"
 	}
-	if strings.TrimSpace(config.WorldName) == "" {
-		config.WorldName = "Palworld Save"
+	if strings.TrimSpace(config.SaveName) == "" {
+		config.SaveName = "Palworld Save"
 	}
 	if config.MaxPlayers == 0 {
 		config.MaxPlayers = 8
 	}
 	config.Port = DefaultInternalPort
-	config.WorldSize = ""
-	config.WorldEvil = ""
-	config.Difficulty = ""
-	config.Secure = false
-	config.AutoCreateWorld = false
-	config.Language = "en-US"
 	return config
 }
 
-func configFromServer(server domain.GameServerInstance) domain.TerrariaConfig {
-	config := NormalizeConfig(server.Config)
-	payload := server.ConfigPayload
-	if len(payload) == 0 && strings.TrimSpace(server.ConfigPayloadJSON) != "" {
-		_ = json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload)
-	}
+func configFromPayload(payload map[string]any, fallback Config) Config {
+	config := normalizeConfig(fallback)
 	if len(payload) == 0 {
 		return config
 	}
@@ -183,24 +214,58 @@ func configFromServer(server domain.GameServerInstance) domain.TerrariaConfig {
 		config.ServerName = value
 	}
 	if value := stringPayload(payload, "saveName"); value != "" {
-		config.WorldName = value
+		config.SaveName = value
 	} else if value := stringPayload(payload, "worldName"); value != "" {
-		config.WorldName = value
+		config.SaveName = value
 	}
 	if value, ok := intPayload(payload, "maxPlayers"); ok {
 		config.MaxPlayers = value
 	}
 	if value := stringPayload(payload, "serverPassword"); value != "" {
-		config.Password = value
+		config.ServerPassword = value
 	} else if value := stringPayload(payload, "password"); value != "" {
-		config.Password = value
+		config.ServerPassword = value
 	}
 	if value := stringPayload(payload, "adminPassword"); value != "" {
-		config.MOTD = value
+		config.AdminPassword = value
 	} else if value := stringPayload(payload, "motd"); value != "" {
-		config.MOTD = value
+		config.AdminPassword = value
 	}
-	return NormalizeConfig(config)
+	return normalizeConfig(config)
+}
+
+func payloadFromConfig(config Config) map[string]any {
+	config = normalizeConfig(config)
+	payload := map[string]any{
+		"serverName":    config.ServerName,
+		"saveName":      config.SaveName,
+		"maxPlayers":    config.MaxPlayers,
+		"adminPassword": config.AdminPassword,
+	}
+	if config.ServerPassword != "" {
+		payload["serverPassword"] = config.ServerPassword
+	}
+	return payload
+}
+
+func workloadOptions(options runtime.ContainerOptions) domain.WorkloadOptions {
+	return domain.WorkloadOptions{
+		Env:        append([]string{}, options.Env...),
+		Cmd:        append([]string{}, options.Cmd...),
+		Files:      cloneFiles(options.Files),
+		DataMounts: append([]string{}, options.DataMounts...),
+	}
+}
+
+func cloneFiles(files map[string]string) map[string]string {
+	if files == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(files))
+	for key, value := range files {
+		clone[key] = value
+	}
+	return clone
 }
 
 func stringPayload(payload map[string]any, key string) string {

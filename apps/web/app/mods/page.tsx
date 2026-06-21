@@ -140,7 +140,7 @@ export default function ModsPage() {
   const modPacks = modPacksQuery.data ?? [];
   const recommendedMods = recommendedModsQuery.data ?? [];
   const modGameKeys = modGameFilterKeys(gamesQuery.data ?? [], [...globalMods, ...modPacks, ...recommendedMods]);
-  const gameFilters = gameFilterOptionsForKeys(gamesQuery.data ?? [], t("filterAll"), modGameKeys);
+  const gameFilters = gameFilterOptionsForKeys(gamesQuery.data ?? [], t("filterAll"), modGameKeys, t);
   const filteredGlobalMods = filterModResources(globalMods, gameFilter);
   const filteredModPacks = filterModResources(modPacks, gameFilter);
   const filteredRecommendedMods = filterModResources(recommendedMods, gameFilter);

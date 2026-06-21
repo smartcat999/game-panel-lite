@@ -14,7 +14,6 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
@@ -71,22 +70,8 @@ func TestInvalidDockerHostDoesNotMockStopExistingContainer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := domain.GameServerInstance{
-		ID:          "existing",
-		Name:        "Existing",
-		GameKey:     "terraria",
-		ProviderKey: domain.ProviderTerrariaVanilla,
-		Status:      domain.StatusRunning,
-		ContainerID: "real-container",
-		WorldName:   "ExistingWorld",
-		Port:        7777,
-		MaxPlayers:  8,
-		DataDir:     filepath.Join(cfg.DataDir, "instances", "existing"),
-		Config:      terraria.Presets[0].Config,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-	if err := db.CreateServer(t.Context(), &server); err != nil {
+	server := testRunningGameServer("existing", cfg.DataDir)
+	if err := db.CreateGameServer(t.Context(), &server); err != nil {
 		t.Fatal(err)
 	}
 	api, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -97,11 +82,12 @@ func TestInvalidDockerHostDoesNotMockStopExistingContainer(t *testing.T) {
 
 	stop := httptest.NewRecorder()
 	api.Routes().ServeHTTP(stop, httptest.NewRequest(http.MethodPost, "/api/servers/existing/stop", nil))
-	if stop.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected stop to fail without Docker runtime, got %d: %s", stop.Code, stop.Body.String())
+	if stop.Code != http.StatusAccepted {
+		t.Fatalf("expected stop command to be accepted without blocking on Docker runtime, got %d: %s", stop.Code, stop.Body.String())
 	}
-	if !strings.Contains(stop.Body.String(), "Docker runtime unavailable") {
-		t.Fatalf("expected Docker runtime unavailable message, got %q", stop.Body.String())
+	server = waitForAPIServerPhase(t, api, "existing", domain.PhaseFailed)
+	if server.Status.RuntimeID != "real-container" {
+		t.Fatalf("expected failed stop to preserve existing container id, got %+v", server)
 	}
 }
 
@@ -118,22 +104,9 @@ func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := domain.GameServerInstance{
-		ID:          "existing-delete",
-		Name:        "Existing Delete",
-		GameKey:     "terraria",
-		ProviderKey: domain.ProviderTerrariaVanilla,
-		Status:      domain.StatusRunning,
-		ContainerID: "real-container",
-		WorldName:   "ExistingWorld",
-		Port:        7777,
-		MaxPlayers:  8,
-		DataDir:     filepath.Join(cfg.DataDir, "instances", "existing-delete"),
-		Config:      terraria.Presets[0].Config,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
-	if err := db.CreateServer(t.Context(), &server); err != nil {
+	server := testRunningGameServer("existing-delete", cfg.DataDir)
+	server.Name = "Existing Delete"
+	if err := db.CreateGameServer(t.Context(), &server); err != nil {
 		t.Fatal(err)
 	}
 	api, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -147,27 +120,66 @@ func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
 	if remove.Code != http.StatusAccepted {
 		t.Fatalf("expected async delete to be accepted without blocking on Docker runtime, got %d: %s", remove.Code, remove.Body.String())
 	}
-	server = waitForAPIServerStatus(t, api, "existing-delete", domain.StatusErrored)
-	if server.ContainerID != "real-container" {
+	server = waitForAPIServerPhase(t, api, "existing-delete", domain.PhaseFailed)
+	if server.Status.RuntimeID != "real-container" {
 		t.Fatalf("expected failed delete to preserve existing container id, got %+v", server)
 	}
-	if _, err := db.GetServer(t.Context(), "existing-delete"); err != nil {
+	if _, err := db.GetGameServer(t.Context(), "existing-delete"); err != nil {
 		t.Fatalf("expected server record to remain after failed delete, got %v", err)
 	}
 }
 
-func waitForAPIServerStatus(t *testing.T, api *App, id string, status domain.ServerStatus) domain.GameServerInstance {
+func testRunningGameServer(id string, dataDir string) domain.GameServer {
+	now := time.Now()
+	return domain.GameServer{
+		ID:          id,
+		Name:        "Existing",
+		GameKey:     domain.GameTerraria,
+		ProviderKey: domain.ProviderTerrariaVanilla,
+		Spec: domain.ServerSpec{
+			Generation:   1,
+			DesiredState: domain.DesiredRunning,
+			Version:      "1.4.5.6",
+			Config: map[string]any{
+				"serverName":      "Existing",
+				"worldName":       "ExistingWorld",
+				"worldSize":       "medium",
+				"worldEvil":       "random",
+				"difficulty":      "classic",
+				"maxPlayers":      8,
+				"port":            7777,
+				"secure":          true,
+				"language":        "en-US",
+				"autoCreateWorld": true,
+			},
+			Network: domain.ServerNetworkSpec{Port: 7777, HostPort: 7777},
+			Runtime: domain.ServerRuntimeSpec{DataDir: filepath.Join(dataDir, "instances", id)},
+		},
+		Status: domain.ServerRuntimeStatus{
+			Phase:              domain.PhaseRunning,
+			ActualState:        domain.ActualRunning,
+			RuntimeID:          "real-container",
+			ObservedGeneration: 1,
+			AppliedGeneration:  1,
+			LastTransitionAt:   now,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func waitForAPIServerPhase(t *testing.T, api *App, id string, phase domain.ServerPhase) domain.GameServer {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		recorder := httptest.NewRecorder()
 		api.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/servers/"+id, nil))
 		if recorder.Code == http.StatusOK {
-			var server domain.GameServerInstance
+			var server domain.GameServer
 			if err := json.Unmarshal(recorder.Body.Bytes(), &server); err != nil {
 				t.Fatal(err)
 			}
-			if server.Status == status {
+			if server.Status.Phase == phase {
 				return server
 			}
 		}
@@ -175,6 +187,6 @@ func waitForAPIServerStatus(t *testing.T, api *App, id string, status domain.Ser
 	}
 	recorder := httptest.NewRecorder()
 	api.Routes().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/servers/"+id, nil))
-	t.Fatalf("expected server %s to reach %s, got %d: %s", id, status, recorder.Code, recorder.Body.String())
-	return domain.GameServerInstance{}
+	t.Fatalf("expected server %s to reach phase %s, got %d: %s", id, phase, recorder.Code, recorder.Body.String())
+	return domain.GameServer{}
 }

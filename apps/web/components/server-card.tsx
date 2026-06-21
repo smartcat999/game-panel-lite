@@ -1,21 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, Plug, Users } from "lucide-react";
+import { Plug, Users } from "lucide-react";
 import { ServerProviderBadge, ServerStatusBadge } from "./server-badges";
 import { ServerActions } from "./server-actions";
 import { ServerGameArt } from "./server-game-art";
 import { Card } from "@/components/ui";
-import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { serverResourceLabelKey } from "@/lib/server-display";
-import { serverJoinPort } from "@/lib/server-join";
+import { gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion } from "@/lib/game-server-resource";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import type { Server } from "@/lib/types";
+import type { GameServerResource } from "@/lib/types";
 
-export function ServerCard({ server, compact = false }: { server: Server; compact?: boolean }) {
-  const { locale, t } = useI18n();
-  const resourceLabel = t(serverResourceLabelKey(server));
-  const joinPort = serverJoinPort(server);
+export function ServerCard({ server, compact = false }: { server: GameServerResource; compact?: boolean }) {
+  const { t } = useI18n();
+  const status = gameServerStatus(server);
+  const players = server.status.playersOnline ?? 0;
+  const maxPlayers = gameServerMaxPlayers(server);
+  const version = gameServerVersion(server);
+  const joinPort = gameServerJoinPort(server);
+  const displayServer = { gameKey: server.gameKey, providerKey: server.providerKey, mode: gameServerMode(server) };
   return (
     <Card className="group overflow-hidden p-0 transition hover:border-panel-green/35">
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
@@ -24,7 +27,7 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
           className="w-fit shrink-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card"
           href={`/servers/${server.id}`}
         >
-          <ServerGameArt server={server} className="size-20" />
+          <ServerGameArt server={displayServer} className="size-20" />
         </Link>
         <div className="min-w-0 flex-1 space-y-4">
           <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -33,18 +36,14 @@ export function ServerCard({ server, compact = false }: { server: Server; compac
                 <Link href={`/servers/${server.id}`} className="min-w-0 truncate text-base font-semibold text-white transition hover:text-panel-green">
                   {server.name}
                 </Link>
-                <ServerProviderBadge server={server} />
-                <ServerStatusBadge status={server.status} />
+                <ServerProviderBadge server={displayServer} />
+                <ServerStatusBadge status={status} />
               </div>
-              <p className="mt-1 truncate text-sm text-slate-400">
-                {resourceLabel}: <span className="text-slate-300">{server.world}</span>
-              </p>
             </div>
-            <PlayerPill label={t("players")} players={server.players} maxPlayers={server.maxPlayers} running={server.status === "running"} />
+            <PlayerPill label={t("players")} players={players} maxPlayers={maxPlayers} running={status === "running"} />
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <InfoTile icon={<Archive aria-hidden="true" />} label={t("lastBackup")} value={localizeRelativeTime(server.lastBackup, locale)} />
-            <InfoTile label={t("version")} value={server.version} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <InfoTile label={t("version")} value={version} />
             <InfoTile icon={<Plug aria-hidden="true" />} label={t("port")} value={String(joinPort)} />
           </div>
         </div>

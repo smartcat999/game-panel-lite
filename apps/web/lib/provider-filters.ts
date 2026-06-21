@@ -21,6 +21,7 @@ export function providerFilterOptions(
   gameFilter: string = "all"
 ): ProviderFilterOption[] {
   const labels = new Map<string, string>();
+  const resourceProviderOrder = new Map<string, number>();
 
   for (const game of games) {
     if (game.status !== "available") continue;
@@ -34,15 +35,36 @@ export function providerFilterOptions(
     if (!providerKey) continue;
     const providerGame = gameKeyFromProvider(providerKey);
     if (gameFilter !== "all" && providerGame !== gameFilter) continue;
+    if (!resourceProviderOrder.has(providerKey)) {
+      resourceProviderOrder.set(providerKey, resourceProviderOrder.size);
+    }
     labels.set(providerKey, labels.get(providerKey) ?? fallbackProviderLabels[providerKey] ?? formatProviderKey(providerKey));
   }
 
   return [
     { key: "all", label: allLabel },
     ...Array.from(labels.entries())
-      .sort((a, b) => a[1].localeCompare(b[1]))
+      .sort((a, b) => compareProviderOptions(a, b, resourceProviderOrder, gameFilter))
       .map(([key, label]) => ({ key, label }))
   ];
+}
+
+function compareProviderOptions(
+  a: [string, string],
+  b: [string, string],
+  resourceProviderOrder: Map<string, number>,
+  gameFilter: string
+) {
+  if (gameFilter !== "all") {
+    const aOrder = resourceProviderOrder.get(a[0]);
+    const bOrder = resourceProviderOrder.get(b[0]);
+    if (aOrder !== undefined || bOrder !== undefined) {
+      if (aOrder === undefined) return 1;
+      if (bOrder === undefined) return -1;
+      return aOrder - bOrder;
+    }
+  }
+  return a[1].localeCompare(b[1]);
 }
 
 function formatProviderKey(key: string) {

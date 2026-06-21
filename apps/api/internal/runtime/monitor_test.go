@@ -23,26 +23,28 @@ func (a *countingAdapter) ImageStatus(_ context.Context, image string) domain.Ru
 	return domain.RuntimeImageStatus{Image: image, Status: ImageStatusReady}
 }
 func (a *countingAdapter) PrepareImage(context.Context, string) error { return nil }
-func (a *countingAdapter) Create(context.Context, ContainerSpec) (string, error) {
+func (a *countingAdapter) CreateWorkload(context.Context, domain.WorkloadSpec) (string, error) {
 	return "", nil
 }
-func (a *countingAdapter) Start(context.Context, domain.GameServerInstance) error   { return nil }
-func (a *countingAdapter) Stop(context.Context, domain.GameServerInstance) error    { return nil }
-func (a *countingAdapter) Restart(context.Context, domain.GameServerInstance) error { return nil }
-func (a *countingAdapter) Remove(context.Context, domain.GameServerInstance) error  { return nil }
-func (a *countingAdapter) Inspect(context.Context, domain.GameServerInstance) (domain.ServerStatus, error) {
-	return domain.StatusStopped, nil
+func (a *countingAdapter) StartWorkload(context.Context, string) error  { return nil }
+func (a *countingAdapter) StopWorkload(context.Context, string) error   { return nil }
+func (a *countingAdapter) RemoveWorkload(context.Context, string) error { return nil }
+func (a *countingAdapter) InspectWorkload(context.Context, string) (domain.WorkloadStatus, error) {
+	return domain.WorkloadStatus{}, nil
 }
-func (a *countingAdapter) Stats(context.Context, domain.GameServerInstance) (ContainerStats, error) {
-	return ContainerStats{}, nil
+func (a *countingAdapter) StatsWorkload(context.Context, string) (WorkloadStats, error) {
+	return WorkloadStats{}, nil
 }
 func (a *countingAdapter) HostStats(context.Context) (HostStats, error) {
 	return HostStats{}, nil
 }
-func (a *countingAdapter) Logs(context.Context, domain.GameServerInstance) (io.ReadCloser, error) {
+func (a *countingAdapter) LogsWorkload(context.Context, string, bool) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
-func (a *countingAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+func (a *countingAdapter) LogSnapshotWorkload(context.Context, string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+func (a *countingAdapter) SendCommandWorkload(context.Context, string, string) error {
 	return nil
 }
 

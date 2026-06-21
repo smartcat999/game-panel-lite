@@ -8,9 +8,10 @@ import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/page-header";
 import { getGameArt } from "@/lib/game-art";
 import { gameDescription, gameDisplayName } from "@/lib/game-display";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type MessageKey } from "@/lib/i18n";
 import { listGames, prepareRuntimeImage } from "@/lib/api";
 import { providerDescription, providerDisplayName } from "@/lib/provider-display";
+import { formatRuntimeInstallError } from "@/lib/runtime-errors";
 import { isRuntimeImagePreparing, isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import { cn } from "@/lib/utils";
 import type { GameCatalogEntry, ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
@@ -41,7 +42,7 @@ export default function GamesPage() {
           <GameRuntimeCard
             key={game.key}
             game={game}
-            installError={install.error instanceof Error ? install.error.message : ""}
+            installError={install.error ? formatRuntimeInstallError(install.error, t) : ""}
             installingProvider={install.variables?.providerKey}
             isInstalling={install.isPending}
             onInstall={(provider) => install.mutate({ providerKey: provider.key, version: provider.recommendedVersion })}
@@ -151,11 +152,8 @@ function ProviderRuntimeRow({
   const displayStatus: RuntimeImageStatus | undefined = preparing
     ? { image: status?.image ?? provider.key, message: status?.message, progress: status?.progress, status: "preparing", updatedAt: status?.updatedAt }
     : status;
-  const progress = preparing ? normalizedRuntimeProgress(displayStatus?.progress) : 0;
   const statusHint = preparing
-    ? progress > 0
-      ? t("gameLibraryInstallProgress", { progress })
-      : t("gameLibraryInstallStarting")
+    ? t(runtimeInstallPhaseMessageKey(displayStatus))
     : ready
       ? t("gameLibraryReadyHint")
       : t("gameLibraryInstallHint");
@@ -169,8 +167,8 @@ function ProviderRuntimeRow({
         </div>
         <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p>
         <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
-        {preparing ? <RuntimeInstallProgress progress={progress} /> : null}
-        {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{status.message}</p> : null}
+        {preparing ? <RuntimeInstallProgress /> : null}
+        {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -199,22 +197,14 @@ function ProviderRuntimeRow({
   );
 }
 
-function RuntimeInstallProgress({ progress }: { progress: number }) {
-  const hasProgress = progress > 0;
+function RuntimeInstallProgress() {
   return (
     <div
       aria-label="Runtime install progress"
-      aria-valuemax={100}
-      aria-valuemin={0}
-      aria-valuenow={hasProgress ? progress : undefined}
       className="relative mt-3 h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-slate-800/80"
       role="progressbar"
     >
-      {hasProgress ? (
-        <div className="h-full rounded-full bg-sky-300 transition-[width] duration-500 ease-out" style={{ width: `${progress}%` }} />
-      ) : (
-        <div className="runtime-install-indeterminate absolute inset-y-0 left-0 w-20 rounded-full bg-sky-300/90" />
-      )}
+      <div className="runtime-install-indeterminate absolute inset-y-0 left-0 w-20 rounded-full bg-sky-300/90" />
     </div>
   );
 }
@@ -243,7 +233,13 @@ function hasPreparingRuntime(games?: GameCatalogEntry[]) {
   return Boolean(games?.some((game) => game.providers.some((provider) => provider.runtimeImage?.status === "preparing")));
 }
 
-function normalizedRuntimeProgress(progress?: number) {
-  if (typeof progress !== "number" || Number.isNaN(progress)) return 0;
-  return Math.max(0, Math.min(100, Math.round(progress)));
+function runtimeInstallPhaseMessageKey(status?: RuntimeImageStatus): MessageKey {
+  const message = status?.message?.toLowerCase() ?? "";
+  if (message.includes("saving")) {
+    return "gameLibraryInstallSaving";
+  }
+  if (status?.progress && status.progress > 0) {
+    return "gameLibraryInstallDownloading";
+  }
+  return "gameLibraryInstallStarting";
 }

@@ -62,6 +62,19 @@ describe("Terraria config renderer", () => {
     `);
   });
 
+  it("renders Terraria 1.4.5 seed mode combinations", () => {
+    const config = terrariaConfigSchema.parse({
+      ...getTerrariaPreset("friends-casual").config,
+      seed: "daily-run",
+      specialSeeds: ["for the worthy", "skyblock"],
+      secretSeeds: ["beam me up"]
+    });
+
+    expect(renderTerrariaServerConfig(config)).toContain(
+      "seed=1.1.1.daily-run.for the worthy|skyblock|beam me up|"
+    );
+  });
+
   it("rejects invalid ports", () => {
     expect(() =>
       terrariaConfigSchema.parse({

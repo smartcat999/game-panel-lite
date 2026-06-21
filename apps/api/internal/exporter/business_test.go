@@ -16,18 +16,30 @@ func TestCollectorExposesLowCardinalityBusinessMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := domain.GameServerInstance{
+	now := time.Now()
+	server := domain.GameServer{
 		ID:          "server-1",
 		Name:        "Do Not Expose This Name",
 		GameKey:     domain.GameTerraria,
 		ProviderKey: domain.ProviderTerrariaVanilla,
-		Status:      domain.StatusRunning,
-		MaxPlayers:  8,
-		Version:     "latest",
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		Spec: domain.ServerSpec{
+			Generation:   1,
+			DesiredState: domain.DesiredRunning,
+			Version:      "1.4.5.6",
+			Config: map[string]any{
+				"maxPlayers": 8,
+				"port":       7777,
+			},
+		},
+		Status: domain.ServerRuntimeStatus{
+			Phase:              domain.PhaseRunning,
+			ActualState:        domain.ActualRunning,
+			ObservedGeneration: 1,
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
-	if err := db.CreateServer(context.Background(), &server); err != nil {
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.CreateActivity(context.Background(), &domain.ActivityEvent{ID: "event-1", InstanceID: server.ID, Type: "server.started", Message: "Started", CreatedAt: time.Now()}); err != nil {
@@ -49,8 +61,9 @@ func TestCollectorExposesLowCardinalityBusinessMetrics(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"gamepanel_servers_total 1",
-		`gamepanel_server_running{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running",version="latest"} 1`,
+		`gamepanel_server_running{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running",version="1.4.5.6"} 1`,
 		`gamepanel_server_status{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running"} 1`,
+		`gamepanel_server_players_max{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1",status="running",version="1.4.5.6"} 8`,
 		`gamepanel_backups_total{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1"} 1`,
 		`gamepanel_worlds_total{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1"} 1`,
 		`gamepanel_mods_total{game_key="terraria",provider_key="terraria-vanilla",server_id="server-1"} 1`,

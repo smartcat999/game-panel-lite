@@ -8,18 +8,24 @@ import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { deleteBackup, downloadBackupFile, listBackups, listServers } from "@/lib/api";
+import { deleteBackup, downloadBackupFile, listBackups, listGameServers } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
+import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 
 export default function BackupDetailPage() {
+  if (!showWorldAndBackupFeatures) return <HiddenFeaturePage />;
+  return <EnabledBackupDetailPage />;
+}
+
+function EnabledBackupDetailPage() {
   const { locale, t } = useI18n();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const client = useQueryClient();
   const id = params.id;
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false });
   const [pendingDelete, setPendingDelete] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -127,6 +133,18 @@ export default function BackupDetailPage() {
         onConfirm={() => remove.mutate(backup.id)}
       />
     </>
+  );
+}
+
+function HiddenFeaturePage() {
+  return (
+    <Card className="p-6">
+      <h1 className="text-xl font-semibold text-white">Page not found</h1>
+      <p className="mt-2 text-sm text-slate-400">The requested GamePanel Lite page does not exist.</p>
+      <Link className="mt-4 inline-flex text-sm font-medium text-panel-green hover:underline" href="/dashboard">
+        Back to dashboard
+      </Link>
+    </Card>
   );
 }
 

@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { serverProviderDisplay, serverResourceLabelKey } from "./server-display";
-import type { Server } from "./types";
 
-const baseServer: Pick<Server, "gameKey" | "mode" | "providerKey"> = {
+const baseServer = {
   gameKey: "terraria",
   mode: "vanilla",
   providerKey: "terraria-vanilla"
-};
+} as const;
 
 describe("server display helpers", () => {
   it("uses provider metadata for server badges", () => {

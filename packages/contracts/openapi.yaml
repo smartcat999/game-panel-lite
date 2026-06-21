@@ -37,6 +37,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppSettings"
+  /api/settings/locale:
+    put:
+      summary: Update persisted UI language
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locale]
+              properties:
+                locale:
+                  type: string
+                  enum: [zh, en]
+      responses:
+        "200":
+          description: Saved locale
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [locale]
+                properties:
+                  locale:
+                    type: string
+                    enum: [zh, en]
   /api/activity:
     get:
       summary: List recent activity events
@@ -116,83 +142,98 @@ paths:
       responses:
         "200":
           description: Server list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameServer"
     post:
       summary: Create server
+      description: Creates a server resource with desired state stopped. Runtime reconciliation is handled asynchronously by the server controller.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [providerKey, config]
-              properties:
-                name:
-                  type: string
-                providerKey:
-                  type: string
-                  enum: [terraria-vanilla, terraria-tmodloader]
-                config:
-                  $ref: "#/components/schemas/TerrariaConfig"
-                hostPort:
-                  type: integer
-                version:
-                  type: string
-                resources:
-                  $ref: "#/components/schemas/ResourceLimits"
+              $ref: "#/components/schemas/CreateServerRequest"
       responses:
         "201":
           description: Created server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
   /api/servers/{id}:
     get:
       summary: Get server
       responses:
         "200":
           description: Server detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
     delete:
-      summary: Queue async server deletion; backend removes runtime/container resources in the background
+      summary: Queue async server deletion
+      description: Sets spec.desiredState to deleted and returns the deleting resource. The controller stops/removes runtime resources and then deletes the record.
       responses:
         "202":
-          description: Delete accepted; returned server is marked deleting until the background task completes
+          description: Delete accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
   /api/servers/{id}/config:
     put:
-      summary: Update persisted Terraria server config, external port, and resource limits; running servers apply changes after restart
+      summary: Update desired server configuration
+      description: Updates spec.config/spec.network/spec.resources, bumps spec.generation, and lets the controller apply changes asynchronously.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [config]
-              properties:
-                config:
-                  $ref: "#/components/schemas/TerrariaConfig"
-                hostPort:
-                  type: integer
-                resources:
-                  $ref: "#/components/schemas/ResourceLimits"
+              $ref: "#/components/schemas/UpdateServerConfigRequest"
       responses:
         "200":
           description: Updated server config
-        "409":
-          description: Server lifecycle action is already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
   /api/servers/{id}/start:
     post:
-      summary: Queue async server start, creating a runtime container from persisted config and data when needed
+      summary: Request server start
+      description: Sets spec.desiredState to running and bumps spec.generation. The controller creates or updates runtime workload asynchronously.
       responses:
         "202":
-          description: Start accepted; returned server is marked starting until the background task completes
+          description: Start accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
   /api/servers/{id}/stop:
     post:
-      summary: Stop server
-      responses:
-        "200":
-          description: Stopped server
-  /api/servers/{id}/restart:
-    post:
-      summary: Queue async server restart, creating a runtime container from persisted config and data when needed
+      summary: Request server stop
+      description: Sets spec.desiredState to stopped and bumps spec.generation. Runtime stop is handled asynchronously by the controller.
       responses:
         "202":
-          description: Restart accepted; returned server is marked restarting until the background task completes
+          description: Stop accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
+  /api/servers/{id}/restart:
+    post:
+      summary: Request server restart
+      description: Keeps spec.desiredState running and bumps spec.generation so the controller recreates/applies the workload.
+      responses:
+        "202":
+          description: Restart accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameServer"
   /api/servers/{id}/command:
     post:
       summary: Send a console command to a running server
@@ -518,7 +559,7 @@ components:
           format: date-time
     AppSettings:
       type: object
-      required: [host, port, dataDir, dbPath, dockerHost]
+      required: [host, port, dataDir, dbPath, dockerHost, publicHost, locale]
       properties:
         host:
           type: string
@@ -530,6 +571,11 @@ components:
           type: string
         dockerHost:
           type: string
+        publicHost:
+          type: string
+        locale:
+          type: string
+          enum: [zh, en]
     ActivityEvent:
       type: object
       required: [id, type, message, createdAt]
@@ -542,7 +588,190 @@ components:
           type: string
         message:
           type: string
+        payload:
+          type: object
+          additionalProperties: true
         createdAt:
+          type: string
+          format: date-time
+    CreateServerRequest:
+      type: object
+      required: [providerKey, config]
+      properties:
+        name:
+          type: string
+        providerKey:
+          $ref: "#/components/schemas/ProviderKey"
+        config:
+          type: object
+          description: Provider-specific game configuration. Terraria providers use TerrariaConfig.
+          oneOf:
+            - $ref: "#/components/schemas/TerrariaConfig"
+        hostPort:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: External host port. Zero or omitted means auto assign.
+        version:
+          type: string
+        resources:
+          $ref: "#/components/schemas/ResourceLimits"
+    UpdateServerConfigRequest:
+      type: object
+      required: [config]
+      properties:
+        config:
+          type: object
+          description: Provider-specific game configuration. Terraria providers use TerrariaConfig.
+          oneOf:
+            - $ref: "#/components/schemas/TerrariaConfig"
+        hostPort:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: External host port. Zero means auto assign.
+        resources:
+          $ref: "#/components/schemas/ResourceLimits"
+    ProviderKey:
+      type: string
+      enum: [terraria-vanilla, terraria-tmodloader, minecraft-java, palworld, dst]
+    GameKey:
+      type: string
+      enum: [terraria, minecraft, palworld, dst]
+    ServerDesiredState:
+      type: string
+      enum: [running, stopped, deleted]
+    ServerPhase:
+      type: string
+      enum: [pending, reconciling, running, stopped, failed, deleting, deleted]
+    ServerActualState:
+      type: string
+      enum: [running, stopped, missing, unknown]
+    GameServer:
+      type: object
+      required: [id, name, gameKey, providerKey, spec, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        gameKey:
+          $ref: "#/components/schemas/GameKey"
+        providerKey:
+          $ref: "#/components/schemas/ProviderKey"
+        spec:
+          $ref: "#/components/schemas/ServerSpec"
+        status:
+          $ref: "#/components/schemas/ServerRuntimeStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ServerSpec:
+      type: object
+      required: [generation, desiredState]
+      properties:
+        generation:
+          type: integer
+          minimum: 1
+        desiredState:
+          $ref: "#/components/schemas/ServerDesiredState"
+        version:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+          description: Provider-specific structured configuration payload.
+        sourceWorldId:
+          type: string
+        sourceWorldName:
+          type: string
+        resources:
+          $ref: "#/components/schemas/ResourceLimits"
+        network:
+          $ref: "#/components/schemas/ServerNetworkSpec"
+        runtime:
+          $ref: "#/components/schemas/ServerRuntimeSpec"
+    ServerNetworkSpec:
+      type: object
+      properties:
+        port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+        hostPort:
+          type: integer
+          minimum: 0
+          maximum: 65535
+        protocol:
+          type: string
+          enum: [tcp, udp]
+    ServerRuntimeSpec:
+      type: object
+      properties:
+        dataDir:
+          type: string
+        image:
+          type: string
+        env:
+          type: array
+          items:
+            type: string
+        cmd:
+          type: array
+          items:
+            type: string
+    ServerRuntimeStatus:
+      type: object
+      required: [phase, actualState, observedGeneration, appliedGeneration]
+      properties:
+        phase:
+          $ref: "#/components/schemas/ServerPhase"
+        actualState:
+          $ref: "#/components/schemas/ServerActualState"
+        runtimeId:
+          type: string
+        playersOnline:
+          type: integer
+          minimum: 0
+        observedGeneration:
+          type: integer
+          minimum: 0
+        appliedGeneration:
+          type: integer
+          minimum: 0
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerCondition"
+        lastError:
+          type: string
+        lastReconcileAt:
+          type: string
+          format: date-time
+        lastTransitionAt:
+          type: string
+          format: date-time
+    ServerCondition:
+      type: object
+      required: [type, status, lastTransitionAt]
+      properties:
+        type:
+          type: string
+          examples: [RuntimeReady, ConfigApplied, WorkloadStarted, WorkloadStopped, DeleteComplete]
+        status:
+          type: string
+          enum: ["True", "False", Unknown]
+        reason:
+          type: string
+        message:
+          type: string
+        observedGeneration:
+          type: integer
+          minimum: 0
+        lastTransitionAt:
           type: string
           format: date-time
     ServerStats:
@@ -785,6 +1014,16 @@ components:
           type: string
         seed:
           type: string
+        specialSeeds:
+          type: array
+          description: Terraria 1.4.5+ Special world seed mode codes selected during world creation.
+          items:
+            type: string
+        secretSeeds:
+          type: array
+          description: Terraria 1.4.5+ Secret world seed mode codes selected during world creation.
+          items:
+            type: string
         secure:
           type: boolean
         language:

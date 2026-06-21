@@ -9,9 +9,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { getApiHealth, getAuthBootstrap, listServers, logoutAdmin } from "@/lib/api";
+import { getApiHealth, getAuthBootstrap, getSettings, listGameServers, logoutAdmin } from "@/lib/api";
+import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
+import { gameServerJoinPort, gameServerMode, gameServerSearchText, gameServerWorldName } from "@/lib/game-server-resource";
 import { serverProviderDisplay, serverResourceLabelKey } from "@/lib/server-display";
-import { serverJoinPort } from "@/lib/server-join";
+import type { GameServerResource } from "@/lib/types";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
@@ -25,6 +27,8 @@ const nav = [
   { href: "/settings", labelKey: "navSettings", icon: Settings }
 ] as const;
 
+const visibleNav = nav.filter((item) => showWorldAndBackupFeatures || (item.href !== "/worlds" && item.href !== "/backups"));
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   if (pathname === "/" || pathname.startsWith("/share/")) {
@@ -37,7 +41,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { locale, setLocale, t } = useI18n();
+  const { setLocale, t } = useI18n();
   const [createPending, setCreatePending] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -46,7 +50,8 @@ function AppChrome({ children }: { children: ReactNode }) {
   const profileRef = useRef<HTMLDivElement>(null);
   const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
   const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 30000 });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
 
   const logoutMutation = useMutation({
     mutationFn: logoutAdmin,
@@ -63,9 +68,9 @@ function AppChrome({ children }: { children: ReactNode }) {
     if (!searchTerm) return [];
     return (serversQuery.data ?? [])
       .filter((server) => {
-        const provider = serverProviderDisplay(server);
+        const provider = serverProviderDisplay({ providerKey: server.providerKey, mode: gameServerMode(server) });
         const resourceLabel = t(serverResourceLabelKey(server));
-        return [server.name, server.world, String(serverJoinPort(server)), String(server.port), server.mode, provider.label, resourceLabel]
+        return [...gameServerSearchText(server, provider.label), resourceLabel]
           .some((value) => value.toLowerCase().includes(searchTerm));
       })
       .slice(0, 5);
@@ -83,9 +88,15 @@ function AppChrome({ children }: { children: ReactNode }) {
   }, [createPending]);
 
   useEffect(() => {
-    nav.forEach((item) => router.prefetch(item.href));
+    visibleNav.forEach((item) => router.prefetch(item.href));
     router.prefetch("/servers/new");
   }, [router]);
+
+  useEffect(() => {
+    if (settingsQuery.data?.locale) {
+      setLocale(settingsQuery.data.locale);
+    }
+  }, [settingsQuery.data?.locale, setLocale]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -128,7 +139,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           <span className="font-semibold">GamePanel Lite</span>
         </Link>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
-          {nav.map((item) => {
+          {visibleNav.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
@@ -207,31 +218,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                   <span>{serviceLabel}</span>
                 </span>
               </div>
-              <div
-                className="hidden w-[104px] shrink-0 items-center gap-1 rounded-md border border-panel-line bg-slate-950/60 p-1 text-xs md:flex"
-                aria-label={t("language")}
-              >
-                <button
-                  className={cn(
-                    "w-12 rounded px-2 py-1 text-center text-slate-300 transition-colors",
-                    locale === "zh" && "bg-panel-green text-slate-950"
-                  )}
-                  type="button"
-                  onClick={() => setLocale("zh")}
-                >
-                  {t("chinese")}
-                </button>
-                <button
-                  className={cn(
-                    "w-9 rounded px-2 py-1 text-center text-slate-300 transition-colors",
-                    locale === "en" && "bg-panel-green text-slate-950"
-                  )}
-                  type="button"
-                  onClick={() => setLocale("en")}
-                >
-                  {t("english")}
-                </button>
-              </div>
               <Link
                 href="/servers/new"
                 aria-label={t("createServer")}
@@ -296,7 +282,7 @@ function AppChrome({ children }: { children: ReactNode }) {
         <main className="px-4 py-6 pb-24 md:px-8 lg:pb-6">{children}</main>
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-line bg-panel-bg/95 px-2 py-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
           <div className="grid grid-cols-5 gap-1">
-            {nav.slice(0, 5).map((item) => {
+            {visibleNav.slice(0, 5).map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
               return (
@@ -320,10 +306,12 @@ function AppChrome({ children }: { children: ReactNode }) {
   );
 }
 
-function SearchServerResult({ server, onOpen }: { server: Awaited<ReturnType<typeof listServers>>[number]; onOpen: (id: string) => void }) {
+function SearchServerResult({ server, onOpen }: { server: GameServerResource; onOpen: (id: string) => void }) {
   const { t } = useI18n();
-  const provider = serverProviderDisplay(server);
+  const provider = serverProviderDisplay({ providerKey: server.providerKey, mode: gameServerMode(server) });
   const resourceLabel = t(serverResourceLabelKey(server));
+  const joinPort = gameServerJoinPort(server);
+  const meta = showWorldAndBackupFeatures ? `${resourceLabel}: ${gameServerWorldName(server)} · ${joinPort}` : `${provider.label} · ${joinPort}`;
   return (
     <button
       type="button"
@@ -332,7 +320,7 @@ function SearchServerResult({ server, onOpen }: { server: Awaited<ReturnType<typ
     >
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium text-white">{server.name}</span>
-        <span className="block truncate text-xs text-slate-500">{resourceLabel}: {server.world} · {serverJoinPort(server)}</span>
+        <span className="block truncate text-xs text-slate-500">{meta}</span>
       </span>
       <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{provider.label}</span>
     </button>

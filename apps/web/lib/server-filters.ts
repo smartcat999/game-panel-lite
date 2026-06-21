@@ -1,7 +1,6 @@
-import { serverJoinPort } from "./server-join";
-import { gameKeyFromProvider } from "./game-filters";
+import { gameKeyForGameServer, gameServerSearchText, gameServerStatus } from "./game-server-resource";
 import { serverProviderDisplay } from "./server-display";
-import type { Server } from "./types";
+import type { GameServerResource } from "./types";
 
 export type ServerGameFilter = "all" | string;
 export type ServerStatusFilter = "all" | "running" | "stopped";
@@ -14,17 +13,17 @@ export type ServerFilters = {
   status: ServerStatusFilter;
 };
 
-export function serverGame(server: Server): ServerGameFilter {
-  return server.gameKey ?? gameKeyFromProvider(server.providerKey) ?? "all";
+export function gameServerGame(server: GameServerResource): ServerGameFilter {
+  return gameKeyForGameServer(server);
 }
 
-export function filterServers(servers: Server[], filters: ServerFilters) {
+export function filterGameServers(servers: GameServerResource[], filters: ServerFilters) {
   const term = filters.query.trim().toLowerCase();
   return servers.filter((server) => {
     const provider = serverProviderDisplay(server);
-    const matchesSearch = !term || [server.name, server.world, String(serverJoinPort(server)), String(server.port), server.mode, provider.label].some((value) => value.toLowerCase().includes(term));
-    const matchesGame = filters.game === "all" || serverGame(server) === filters.game;
-    const matchesStatus = filters.status === "all" || server.status === filters.status;
+    const matchesSearch = !term || gameServerSearchText(server, provider.label).some((value) => value.toLowerCase().includes(term));
+    const matchesGame = filters.game === "all" || gameServerGame(server) === filters.game;
+    const matchesStatus = filters.status === "all" || gameServerStatus(server) === filters.status;
     const matchesProvider = filters.provider === "all" || server.providerKey === filters.provider;
     return matchesSearch && matchesGame && matchesStatus && matchesProvider;
   });

@@ -6,11 +6,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { serverActionRedirectPath } from "@/lib/server-action-flow";
+import { copyText } from "@/lib/clipboard";
+import { gameServerStatus } from "@/lib/game-server-resource";
 import { useI18n } from "@/lib/i18n";
 import { formatServerDetailError } from "@/lib/server-detail-actions";
 import { serverInviteText } from "@/lib/server-join";
-import type { Server } from "@/lib/types";
-import { serverAction } from "@/lib/api";
+import type { GameServerResource } from "@/lib/types";
+import { gameServerAction } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function ServerActions({
@@ -20,7 +22,7 @@ export function ServerActions({
   compact = false,
   className
 }: {
-  server: Server;
+  server: GameServerResource;
   showInvite?: boolean;
   showDelete?: boolean;
   compact?: boolean;
@@ -35,16 +37,17 @@ export function ServerActions({
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const lifecycleBusy = server.status === "creating" || server.status === "starting" || server.status === "stopping" || server.status === "restarting" || server.status === "deleting";
+  const status = gameServerStatus(server);
+  const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = Boolean(busyAction) || lifecycleBusy;
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
   const successLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("serverStartQueued") : action === "stop" ? t("serverStopQueued") : action === "restart" ? t("serverRestartQueued") : t("serverDeleteQueued");
-  const startLabel = busyAction === "start" || server.status === "starting" || server.status === "creating" ? t("actionStarting") : t("actionStart");
-  const stopLabel = busyAction === "stop" || server.status === "stopping" ? t("actionStopping") : t("actionStop");
-  const restartLabel = busyAction === "restart" || server.status === "restarting" ? t("actionRestarting") : t("actionRestart");
-  const deleteLabel = busyAction === "delete" || server.status === "deleting" ? t("actionDeleting") : t("delete");
+  const startLabel = busyAction === "start" || status === "starting" || status === "creating" ? t("actionStarting") : t("actionStart");
+  const stopLabel = busyAction === "stop" || status === "stopping" ? t("actionStopping") : t("actionStop");
+  const restartLabel = busyAction === "restart" || status === "restarting" ? t("actionRestarting") : t("actionRestart");
+  const deleteLabel = busyAction === "delete" || status === "deleting" ? t("actionDeleting") : t("delete");
 
   useEffect(() => {
     if (!pendingAction) return;
@@ -62,13 +65,13 @@ export function ServerActions({
     setErrorMessage("");
     setSuccessMessage("");
     try {
-      const updatedServer = await serverAction(server.id, action);
+      const updatedServer = await gameServerAction(server.id, action);
       setPendingAction(null);
       if (updatedServer) {
-        client.setQueryData(["server", server.id], updatedServer);
+        client.setQueryData(["game-server", server.id], updatedServer);
       }
-      await client.invalidateQueries({ queryKey: ["servers"] });
-      await client.invalidateQueries({ queryKey: ["server", server.id] });
+      await client.invalidateQueries({ queryKey: ["game-server", server.id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
       setSuccessMessage(successLabel(action));
       const redirectPath = serverActionRedirectPath(action, pathname, server.id);
       if (redirectPath) {
@@ -100,7 +103,7 @@ export function ServerActions({
     setErrorMessage("");
     setSuccessMessage("");
     try {
-      await navigator.clipboard.writeText(serverInviteText(server));
+      await copyText(serverInviteText(server));
       setCopiedInvite(true);
       window.setTimeout(() => setCopiedInvite(false), 1500);
     } catch (error) {
@@ -115,7 +118,7 @@ export function ServerActions({
   return (
     <>
       <div className={cn(compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
-        {server.status === "running" || server.status === "stopping" ? (
+        {status === "running" || status === "stopping" ? (
           <Button className={buttonClassName} variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
             <Square aria-hidden="true" />
             {stopLabel}
@@ -139,7 +142,7 @@ export function ServerActions({
           {restartLabel}
         </Button>
         {showInvite && (
-          <Button className={buttonClassName} variant="secondary" onClick={() => void copyInvite()} disabled={server.status === "deleting"}>
+          <Button className={buttonClassName} variant="secondary" onClick={() => void copyInvite()} disabled={status === "deleting"}>
             <Copy aria-hidden="true" />
             {copiedInvite ? t("copied") : t("actionCopyInvite")}
           </Button>
@@ -186,7 +189,9 @@ export function ServerActions({
               </button>
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-400" id="server-action-confirm-description">
-              {t("confirmServerActionDescription", { action: pendingLabel, name: server.name })}
+              {pendingAction === "delete"
+                ? t("confirmServerDeleteDescription", { name: server.name })
+                : t("confirmServerActionDescription", { action: pendingLabel, name: server.name })}
             </p>
             <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm">
               <span className="text-slate-500">{t("server")}: </span>

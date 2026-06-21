@@ -1,0 +1,24 @@
+{
+  "providers": {
+    "terraria-vanilla": {
+      "imageTemplate": "smartcat99999/terraria-vanilla:{version}",
+      "versions": ["1.4.5.6"]
+    },
+    "terraria-tmodloader": {
+      "imageTemplate": "smartcat99999/tmodloader:{version}",
+      "versions": ["v2026.04.3.0", "v2026.02.3.1"]
+    },
+    "dont-starve-together": {
+      "imageTemplate": "smartcat99999/dst-server:{version}",
+      "versions": ["latest"]
+    },
+    "palworld": {
+      "imageTemplate": "thijsvanloef/palworld-server-docker:{version}",
+      "versions": ["latest"]
+    },
+    "minecraft": {
+      "image": "itzg/minecraft-server:latest",
+      "versions": ["latest", "1.21.4", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.19.2"]
+    }
+  }
+}

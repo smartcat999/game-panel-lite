@@ -64,50 +64,42 @@ func (s *SwitchableAdapter) LoadImageArchive(ctx context.Context, path string) e
 	return fmt.Errorf("runtime adapter does not support local image archives")
 }
 
-func (s *SwitchableAdapter) Create(ctx context.Context, spec ContainerSpec) (string, error) {
-	return s.current().Create(ctx, spec)
+func (s *SwitchableAdapter) CreateWorkload(ctx context.Context, spec domain.WorkloadSpec) (string, error) {
+	return s.current().CreateWorkload(ctx, spec)
 }
 
-func (s *SwitchableAdapter) Start(ctx context.Context, instance domain.GameServerInstance) error {
-	return s.current().Start(ctx, instance)
+func (s *SwitchableAdapter) StartWorkload(ctx context.Context, runtimeID string) error {
+	return s.current().StartWorkload(ctx, runtimeID)
 }
 
-func (s *SwitchableAdapter) Stop(ctx context.Context, instance domain.GameServerInstance) error {
-	return s.current().Stop(ctx, instance)
+func (s *SwitchableAdapter) StopWorkload(ctx context.Context, runtimeID string) error {
+	return s.current().StopWorkload(ctx, runtimeID)
 }
 
-func (s *SwitchableAdapter) Restart(ctx context.Context, instance domain.GameServerInstance) error {
-	return s.current().Restart(ctx, instance)
+func (s *SwitchableAdapter) RemoveWorkload(ctx context.Context, runtimeID string) error {
+	return s.current().RemoveWorkload(ctx, runtimeID)
 }
 
-func (s *SwitchableAdapter) Remove(ctx context.Context, instance domain.GameServerInstance) error {
-	return s.current().Remove(ctx, instance)
+func (s *SwitchableAdapter) InspectWorkload(ctx context.Context, runtimeID string) (domain.WorkloadStatus, error) {
+	return s.current().InspectWorkload(ctx, runtimeID)
 }
 
-func (s *SwitchableAdapter) Inspect(ctx context.Context, instance domain.GameServerInstance) (domain.ServerStatus, error) {
-	return s.current().Inspect(ctx, instance)
-}
-
-func (s *SwitchableAdapter) Stats(ctx context.Context, instance domain.GameServerInstance) (ContainerStats, error) {
-	return s.current().Stats(ctx, instance)
+func (s *SwitchableAdapter) StatsWorkload(ctx context.Context, runtimeID string) (WorkloadStats, error) {
+	return s.current().StatsWorkload(ctx, runtimeID)
 }
 
 func (s *SwitchableAdapter) HostStats(ctx context.Context) (HostStats, error) {
 	return s.current().HostStats(ctx)
 }
 
-func (s *SwitchableAdapter) Logs(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
-	return s.current().Logs(ctx, instance)
+func (s *SwitchableAdapter) LogsWorkload(ctx context.Context, runtimeID string, follow bool) (io.ReadCloser, error) {
+	return s.current().LogsWorkload(ctx, runtimeID, follow)
 }
 
-func (s *SwitchableAdapter) LogSnapshot(ctx context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
-	current := s.current()
-	if snapshotter, ok := current.(LogSnapshotter); ok {
-		return snapshotter.LogSnapshot(ctx, instance)
-	}
-	return current.Logs(ctx, instance)
+func (s *SwitchableAdapter) LogSnapshotWorkload(ctx context.Context, runtimeID string) (io.ReadCloser, error) {
+	return s.current().LogSnapshotWorkload(ctx, runtimeID)
 }
 
-func (s *SwitchableAdapter) SendCommand(ctx context.Context, instance domain.GameServerInstance, command string) error {
-	return s.current().SendCommand(ctx, instance, command)
+func (s *SwitchableAdapter) SendCommandWorkload(ctx context.Context, runtimeID string, command string) error {
+	return s.current().SendCommandWorkload(ctx, runtimeID, command)
 }

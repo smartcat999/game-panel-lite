@@ -13,6 +13,7 @@ type Config struct {
 	DBPath                 string
 	DockerHost             string
 	PublicHost             string
+	ProviderCatalogPath    string
 	PrometheusURL          string
 	PrometheusQueryTimeout time.Duration
 }
@@ -35,6 +36,7 @@ func Load() Config {
 		DBPath:                 value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
 		DockerHost:             dockerHost,
 		PublicHost:             value("GAMEPANEL_PUBLIC_HOST", ""),
+		ProviderCatalogPath:    value("GAMEPANEL_PROVIDER_CATALOG_PATH", "./config/providers.json"),
 		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
 		PrometheusQueryTimeout: queryTimeout,
 	}

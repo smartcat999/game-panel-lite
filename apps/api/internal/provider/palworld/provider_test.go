@@ -33,30 +33,30 @@ func TestProviderCatalogMetadata(t *testing.T) {
 }
 
 func TestNormalizeAndValidateConfig(t *testing.T) {
-	config := NormalizeConfig(domain.TerrariaConfig{ServerName: "Pal Friends", WorldName: "Starter Save", MaxPlayers: 10, MOTD: "admin-secret"})
+	config := normalizeConfig(Config{ServerName: "Pal Friends", SaveName: "Starter Save", MaxPlayers: 10, AdminPassword: "admin-secret"})
 	if config.Port != DefaultInternalPort {
 		t.Fatalf("expected internal port %d, got %d", DefaultInternalPort, config.Port)
 	}
-	if err := NewProvider().ValidateConfig(config); err != nil {
+	if err := validateConfig(config); err != nil {
 		t.Fatalf("expected valid config, got %v", err)
 	}
 	bad := config
 	bad.MaxPlayers = 64
-	if err := NewProvider().ValidateConfig(bad); err == nil {
+	if err := validateConfig(bad); err == nil {
 		t.Fatal("expected invalid max players to fail")
 	}
 }
 
 func TestRuntimeOptionsUsePalworldImageAndUdpPort(t *testing.T) {
-	config := NormalizeConfig(domain.TerrariaConfig{
-		ServerName: "Pal Friends",
-		WorldName:  "Starter Save",
-		MaxPlayers: 10,
-		Password:   "join-secret",
-		MOTD:       "admin-secret",
+	config := normalizeConfig(Config{
+		ServerName:     "Pal Friends",
+		SaveName:       "Starter Save",
+		MaxPlayers:     10,
+		ServerPassword: "join-secret",
+		AdminPassword:  "admin-secret",
 	})
 	provider := NewProvider()
-	options := provider.RuntimeOptions(config)
+	options := runtimeOptions(config)
 
 	if provider.ImageFor("latest") != "thijsvanloef/palworld-server-docker:latest" {
 		t.Fatalf("unexpected Palworld image: %s", provider.ImageFor("latest"))
@@ -80,41 +80,22 @@ func TestRuntimeOptionsUsePalworldImageAndUdpPort(t *testing.T) {
 
 func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	provider := NewProvider()
-	server := domain.GameServerInstance{
-		Config: NormalizeConfig(domain.TerrariaConfig{
-			ServerName: "Old Name",
-			WorldName:  "Old Save",
-			MaxPlayers: 4,
-			Password:   "old-password",
-			MOTD:       "old-admin",
-		}),
-		ConfigPayload: map[string]any{
+	runtimeConfig, err := provider.RuntimeConfigForResource(domain.GameServer{
+		Spec: domain.ServerSpec{Config: map[string]any{
 			"serverName":     "Payload Name",
 			"saveName":       "Payload Save",
 			"maxPlayers":     float64(12),
 			"serverPassword": "payload-password",
 			"adminPassword":  "payload-admin",
-		},
-	}
-	rendered, err := provider.RenderServerConfig(server)
+		}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	options, err := provider.RuntimeOptionsForServer(server)
-	if err != nil {
-		t.Fatal(err)
+	if runtimeConfig.ConfigText != "" {
+		t.Fatalf("Palworld resource runtime should not render legacy serverconfig.txt, got %q", runtimeConfig.ConfigText)
 	}
-	for _, expected := range []string{
-		"serverName=Payload Name",
-		"saveName=Payload Save",
-		"maxPlayers=12",
-		"serverPassword=payload-password",
-		"adminPassword=payload-admin",
-	} {
-		if !strings.Contains(rendered, expected) {
-			t.Fatalf("expected rendered payload config to contain %q, got:\n%s", expected, rendered)
-		}
-	}
+	options := runtimeConfig.Options
 	env := strings.Join(options.Env, "\n")
 	for _, expected := range []string{
 		"PLAYERS=12",
@@ -129,12 +110,12 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 }
 
 func TestRenderConfigSummary(t *testing.T) {
-	rendered, err := NewProvider().RenderConfig(domain.TerrariaConfig{
-		ServerName: "Pal Friends",
-		WorldName:  "Starter Save",
-		MaxPlayers: 10,
-		Password:   "join-secret",
-		MOTD:       "admin-secret",
+	rendered, err := renderConfig(Config{
+		ServerName:     "Pal Friends",
+		SaveName:       "Starter Save",
+		MaxPlayers:     10,
+		ServerPassword: "join-secret",
+		AdminPassword:  "admin-secret",
 	})
 	if err != nil {
 		t.Fatal(err)

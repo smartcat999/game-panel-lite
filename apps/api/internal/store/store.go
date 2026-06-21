@@ -25,7 +25,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServerInstance{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db}, nil
@@ -86,49 +86,38 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) error 
 	return s.db.WithContext(ctx).Delete(&domain.Session{}, "expires_at <= ?", now).Error
 }
 
-func (s *Store) CreateServer(ctx context.Context, server *domain.GameServerInstance) error {
+func (s *Store) CreateGameServer(ctx context.Context, server *domain.GameServer) error {
 	return s.db.WithContext(ctx).Create(server).Error
 }
 
-func (s *Store) SaveServer(ctx context.Context, server *domain.GameServerInstance) error {
+func (s *Store) SaveGameServer(ctx context.Context, server *domain.GameServer) error {
 	return s.db.WithContext(ctx).Save(server).Error
 }
 
-func (s *Store) ListServers(ctx context.Context) ([]domain.GameServerInstance, error) {
-	var servers []domain.GameServerInstance
+func (s *Store) ListGameServers(ctx context.Context) ([]domain.GameServer, error) {
+	var servers []domain.GameServer
 	if err := s.db.WithContext(ctx).Order("created_at desc").Find(&servers).Error; err != nil {
 		return nil, err
-	}
-	for index := range servers {
-		hydrateServerConfigPayload(&servers[index])
 	}
 	return servers, nil
 }
 
-func (s *Store) GetServer(ctx context.Context, id string) (domain.GameServerInstance, error) {
-	var server domain.GameServerInstance
-	err := s.db.WithContext(ctx).First(&server, "id = ?", id).Error
+func (s *Store) GetGameServer(ctx context.Context, id string) (domain.GameServer, error) {
+	server, err := s.getStoredGameServer(ctx, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return server, ErrNotFound
-	}
-	if err == nil {
-		hydrateServerConfigPayload(&server)
 	}
 	return server, err
 }
 
-func (s *Store) DeleteServer(ctx context.Context, id string) error {
-	return s.db.WithContext(ctx).Delete(&domain.GameServerInstance{}, "id = ?", id).Error
+func (s *Store) getStoredGameServer(ctx context.Context, id string) (domain.GameServer, error) {
+	var server domain.GameServer
+	err := s.db.WithContext(ctx).First(&server, "id = ?", id).Error
+	return server, err
 }
 
-func hydrateServerConfigPayload(server *domain.GameServerInstance) {
-	if server == nil || server.ConfigPayloadJSON == "" {
-		return
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload); err == nil {
-		server.ConfigPayload = payload
-	}
+func (s *Store) DeleteGameServer(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.GameServer{}, "id = ?", id).Error
 }
 
 func hydratePresetConfigPayload(preset *domain.ConfigPreset) {
@@ -137,8 +126,41 @@ func hydratePresetConfigPayload(preset *domain.ConfigPreset) {
 	}
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(preset.ConfigPayloadJSON), &payload); err == nil {
+		preset.Config = payload
 		preset.ConfigPayload = payload
 	}
+}
+
+func hydrateWorldConfigPayload(world *domain.World) {
+	if world == nil || world.ConfigPayloadJSON == "" {
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(world.ConfigPayloadJSON), &payload); err == nil {
+		world.Config = payload
+		world.ConfigPayload = payload
+	}
+}
+
+func prepareWorldConfigPayload(world *domain.World) error {
+	if world == nil {
+		return nil
+	}
+	payload := world.ConfigPayload
+	if len(payload) == 0 {
+		payload = world.Config
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	buf, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	world.ConfigPayloadJSON = string(buf)
+	world.Config = payload
+	world.ConfigPayload = payload
+	return nil
 }
 
 func (s *Store) CreateConfigPreset(ctx context.Context, preset *domain.ConfigPreset) error {
@@ -177,12 +199,21 @@ func (s *Store) DeleteConfigPreset(ctx context.Context, id string) error {
 }
 
 func (s *Store) CreateWorld(ctx context.Context, world *domain.World) error {
+	if err := prepareWorldConfigPayload(world); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Create(world).Error
 }
 
 func (s *Store) ListWorlds(ctx context.Context) ([]domain.World, error) {
 	var worlds []domain.World
-	return worlds, s.db.WithContext(ctx).Order("created_at desc").Find(&worlds).Error
+	if err := s.db.WithContext(ctx).Order("created_at desc").Find(&worlds).Error; err != nil {
+		return nil, err
+	}
+	for index := range worlds {
+		hydrateWorldConfigPayload(&worlds[index])
+	}
+	return worlds, nil
 }
 
 func (s *Store) GetWorld(ctx context.Context, id string) (domain.World, error) {
@@ -190,6 +221,9 @@ func (s *Store) GetWorld(ctx context.Context, id string) (domain.World, error) {
 	err := s.db.WithContext(ctx).First(&world, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return world, ErrNotFound
+	}
+	if err == nil {
+		hydrateWorldConfigPayload(&world)
 	}
 	return world, err
 }
@@ -200,10 +234,16 @@ func (s *Store) GetWorldByInstanceAndFile(ctx context.Context, instanceID string
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return world, ErrNotFound
 	}
+	if err == nil {
+		hydrateWorldConfigPayload(&world)
+	}
 	return world, err
 }
 
 func (s *Store) SaveWorld(ctx context.Context, world *domain.World) error {
+	if err := prepareWorldConfigPayload(world); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Save(world).Error
 }
 
@@ -362,6 +402,13 @@ func (s *Store) DeleteModPack(ctx context.Context, id string) error {
 }
 
 func (s *Store) CreateActivity(ctx context.Context, event *domain.ActivityEvent) error {
+	if event != nil && len(event.Payload) > 0 {
+		payload, err := json.Marshal(event.Payload)
+		if err != nil {
+			return err
+		}
+		event.PayloadJSON = string(payload)
+	}
 	return s.db.WithContext(ctx).Create(event).Error
 }
 
@@ -370,7 +417,23 @@ func (s *Store) ListActivity(ctx context.Context, limit int) ([]domain.ActivityE
 		limit = 50
 	}
 	var events []domain.ActivityEvent
-	return events, s.db.WithContext(ctx).Order("created_at desc").Limit(limit).Find(&events).Error
+	if err := s.db.WithContext(ctx).Order("created_at desc").Limit(limit).Find(&events).Error; err != nil {
+		return nil, err
+	}
+	for index := range events {
+		hydrateActivityPayload(&events[index])
+	}
+	return events, nil
 }
 
 var ErrNotFound = errors.New("not found")
+
+func hydrateActivityPayload(event *domain.ActivityEvent) {
+	if event == nil || event.PayloadJSON == "" {
+		return
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(event.PayloadJSON), &payload); err == nil {
+		event.Payload = payload
+	}
+}

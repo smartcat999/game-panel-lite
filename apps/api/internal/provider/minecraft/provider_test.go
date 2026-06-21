@@ -43,29 +43,29 @@ func TestImageAndVersions(t *testing.T) {
 }
 
 func TestNormalizeAndValidateConfig(t *testing.T) {
-	config := NormalizeConfig(domain.TerrariaConfig{ServerName: "Friends", WorldName: "world", MaxPlayers: 20, Secure: true})
+	config := normalizeConfig(Config{ServerName: "Friends", WorldName: "world", MaxPlayers: 20, EULAAccepted: true})
 	if config.Port != DefaultInternalPort {
 		t.Fatalf("expected internal port %d, got %d", DefaultInternalPort, config.Port)
 	}
-	if err := NewProvider().ValidateConfig(config); err != nil {
+	if err := validateConfig(config); err != nil {
 		t.Fatalf("expected valid config, got %v", err)
 	}
 	bad := config
-	bad.Secure = false
-	if err := NewProvider().ValidateConfig(bad); err == nil {
+	bad.EULAAccepted = false
+	if err := validateConfig(bad); err == nil {
 		t.Fatal("expected missing EULA to fail")
 	}
 }
 
 func TestRuntimeOptionsRenderMinecraftFiles(t *testing.T) {
-	config := NormalizeConfig(domain.TerrariaConfig{
-		ServerName: "Friends Server",
-		WorldName:  "survival-island",
-		MaxPlayers: 16,
-		Secure:     true,
+	config := normalizeConfig(Config{
+		ServerName:   "Friends Server",
+		WorldName:    "survival-island",
+		MaxPlayers:   16,
+		EULAAccepted: true,
+		OnlineMode:   true,
 	})
-	provider := NewProvider()
-	options := provider.RuntimeOptions(config)
+	options := runtimeOptions(config)
 
 	if options.PortProtocol != "tcp" {
 		t.Fatalf("expected TCP port protocol, got %q", options.PortProtocol)
@@ -106,13 +106,8 @@ func containsEnv(env []string, target string) bool {
 
 func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	provider := NewProvider()
-	server := domain.GameServerInstance{
-		Config: NormalizeConfig(domain.TerrariaConfig{
-			ServerName: "Old Name",
-			WorldName:  "old-world",
-			MaxPlayers: 10,
-		}),
-		ConfigPayload: map[string]any{
+	runtimeConfig, err := provider.RuntimeConfigForResource(domain.GameServer{
+		Spec: domain.ServerSpec{Config: map[string]any{
 			"serverName":       "Payload Server",
 			"worldName":        "payload-world",
 			"maxPlayers":       float64(24),
@@ -121,19 +116,12 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 			"onlineMode":       false,
 			"whitelistEnabled": true,
 			"eulaAccepted":     true,
-		},
-	}
-	rendered, err := provider.RenderServerConfig(server)
+		}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(rendered, "Payload Server") {
-		t.Fatalf("expected rendered payload server name, got:\n%s", rendered)
-	}
-	options, err := provider.RuntimeOptionsForServer(server)
-	if err != nil {
-		t.Fatal(err)
-	}
+	options := runtimeConfig.Options
 	if !containsEnv(options.Env, "VERSION=LATEST") {
 		t.Fatalf("expected default VERSION=LATEST env, got %v", options.Env)
 	}
@@ -161,14 +149,14 @@ func TestConfigFromPayloadAndEnrich(t *testing.T) {
 		"eulaAccepted": true,
 		"gameMode":     "adventure",
 	}
-	config := ConfigFromPayload(payload, domain.TerrariaConfig{})
+	config := configFromPayload(payload, Config{})
 	if config.ServerName != "Test" || config.WorldName != "test-world" {
 		t.Fatalf("unexpected config: %+v", config)
 	}
-	if !config.Secure {
+	if !config.EULAAccepted {
 		t.Fatal("expected eulaAccepted to map to Secure=true")
 	}
-	enriched := EnrichPayloadFromConfig(config, payload)
+	enriched := payloadFromConfig(config)
 	if enriched["gameMode"] != "adventure" {
 		t.Fatalf("expected enriched game mode adventure, got %v", enriched["gameMode"])
 	}
@@ -178,7 +166,12 @@ func TestConfigFromPayloadAndEnrich(t *testing.T) {
 }
 
 func TestJoinInfo(t *testing.T) {
-	server := domain.GameServerInstance{Name: "Survival", Port: 25565, HostPort: 25565}
+	server := domain.GameServer{
+		Name: "Survival",
+		Spec: domain.ServerSpec{
+			Network: domain.ServerNetworkSpec{Port: 25565, HostPort: 25565},
+		},
+	}
 	info := NewProvider().JoinInfo(server)
 	if info.Port != 25565 {
 		t.Fatalf("expected port 25565, got %d", info.Port)

@@ -5,13 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { ServerCard } from "@/components/server-card";
-import { listBackups, listGames, listServers } from "@/lib/api";
+import { listGameServers, listGames } from "@/lib/api";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
-import { filterServers, type ServerGameFilter, type ServerProviderFilter, type ServerStatusFilter } from "@/lib/server-filters";
-import { attachLatestBackupTimes } from "@/lib/server-metrics";
+import { filterGameServers, type ServerGameFilter, type ServerProviderFilter, type ServerStatusFilter } from "@/lib/server-filters";
 
 const statusFilters = [
   { key: "all", labelKey: "filterAll" },
@@ -20,17 +19,16 @@ const statusFilters = [
 ] as const satisfies readonly { key: ServerStatusFilter; labelKey: MessageKey }[];
 
 export default function ServersPage() {
-  const query = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
-  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
+  const query = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false, refetchInterval: 5000 });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const { t } = useI18n();
   const [gameFilter, setGameFilter] = useState<ServerGameFilter>("all");
   const [statusFilter, setStatusFilter] = useState<ServerStatusFilter>("all");
   const [providerFilter, setProviderFilter] = useState<ServerProviderFilter>("all");
   const [search, setSearch] = useState("");
-  const servers = useMemo(() => attachLatestBackupTimes(query.data ?? [], backupsQuery.data ?? []), [backupsQuery.data, query.data]);
+  const servers = query.data ?? [];
   const gameFilters = useMemo(
-    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), servers.map((server) => server.gameKey)),
+    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), servers.map((server) => server.gameKey), t),
     [gamesQuery.data, servers, t]
   );
   const providerFilters = useMemo(
@@ -46,7 +44,7 @@ export default function ServersPage() {
     setSearch(new URLSearchParams(window.location.search).get("search") ?? "");
   }, []);
   const filteredServers = useMemo(() => {
-    return filterServers(servers, { game: gameFilter, provider: providerFilter, query: search, status: statusFilter });
+    return filterGameServers(servers, { game: gameFilter, provider: providerFilter, query: search, status: statusFilter });
   }, [gameFilter, providerFilter, search, servers, statusFilter]);
   const activeFilterChips = [
     search.trim(),
@@ -77,7 +75,7 @@ export default function ServersPage() {
         search={search}
         searchPlaceholder={t("searchServers")}
       />
-      {(query.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{query.isError ? t("apiServersUnavailable") : t("apiBackupsUnavailable")}</p>}
+      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiServersUnavailable")}</p>}
       <div className="grid gap-4 xl:grid-cols-2">
         {filteredServers.map((server) => <ServerCard key={server.id} server={server} />)}
       </div>

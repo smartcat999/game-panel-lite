@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadWorldFile, getServer, listBackups, listGames, listWorlds, setModEnabled } from "./api";
+import { downloadWorldFile, getGameServer, listBackups, listGames, listWorlds, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -62,12 +62,22 @@ describe("api mappers", () => {
         JSON.stringify({
           id: "server-1",
           name: "Broken tModLoader",
+          gameKey: "terraria",
           providerKey: "terraria-tmodloader",
-          status: "errored",
-          worldName: "Modded",
-          port: 7777,
-          maxPlayers: 8,
-          lastError: "container exited (exit code 1)",
+          spec: {
+            generation: 1,
+            desiredState: "running",
+            version: "v2026.04.3.0",
+            config: { worldName: "Modded", maxPlayers: 8, port: 7777 },
+            network: { port: 7777 }
+          },
+          status: {
+            phase: "failed",
+            actualState: "stopped",
+            observedGeneration: 1,
+            appliedGeneration: 0,
+            lastError: "container exited (exit code 1)"
+          },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }),
@@ -75,9 +85,9 @@ describe("api mappers", () => {
       )
     );
 
-    const server = await getServer("server-1");
+    const server = await getGameServer("server-1");
 
-    expect(server.lastError).toBe("container exited (exit code 1)");
+    expect(server.status.lastError).toBe("container exited (exit code 1)");
   });
 
   it("maps backend online player count onto server cards", async () => {
@@ -88,11 +98,20 @@ describe("api mappers", () => {
           name: "Friends Server",
           gameKey: "terraria",
           providerKey: "terraria-vanilla",
-          status: "running",
-          worldName: "Friends World",
-          playersOnline: 2,
-          port: 7777,
-          maxPlayers: 8,
+          spec: {
+            generation: 1,
+            desiredState: "running",
+            version: "1.4.5.6",
+            config: { worldName: "Friends World", maxPlayers: 8, port: 7777 },
+            network: { port: 7777 }
+          },
+          status: {
+            phase: "running",
+            actualState: "running",
+            playersOnline: 2,
+            observedGeneration: 1,
+            appliedGeneration: 1
+          },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }),
@@ -100,11 +119,58 @@ describe("api mappers", () => {
       )
     );
 
-    const server = await getServer("server-1");
+    const server = await getGameServer("server-1");
 
-    expect(server.players).toBe(2);
+    expect(server.status.playersOnline).toBe(2);
     expect(server.gameKey).toBe("terraria");
     expect(server.providerKey).toBe("terraria-vanilla");
+  });
+
+  it("preserves the controller resource spec and status on mapped servers", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: "server-1",
+          name: "Friends Server",
+          gameKey: "terraria",
+          providerKey: "terraria-vanilla",
+          spec: {
+            generation: 3,
+            desiredState: "running",
+            version: "1.4.5.6",
+            config: { worldName: "Friends World", maxPlayers: 8, port: 7777 },
+            resources: { cpuLimitCores: 2, memoryLimitMb: 2048 },
+            network: { port: 7777, hostPort: 30001 }
+          },
+          status: {
+            phase: "running",
+            actualState: "running",
+            playersOnline: 2,
+            observedGeneration: 2,
+            appliedGeneration: 2,
+            conditions: [
+              {
+                type: "RuntimeReady",
+                status: "True",
+                observedGeneration: 2,
+                lastTransitionAt: new Date().toISOString()
+              }
+            ]
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const server = await getGameServer("server-1");
+
+    expect(server.status.phase).toBe("running");
+    expect(server.status.playersOnline).toBe(2);
+    expect(server.spec.generation).toBe(3);
+    expect(server.status.phase).toBe("running");
+    expect(server.spec.generation).toBeGreaterThan(server.status.appliedGeneration);
   });
 
   it("loads game catalog entries with provider capabilities", async () => {

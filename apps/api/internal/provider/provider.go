@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
 type GameProvider interface {
@@ -17,19 +16,24 @@ type GameProvider interface {
 	Image() string
 	Versions() []string
 	ImageFor(version string) string
-	DefaultConfig() domain.TerrariaConfig
-	ValidateConfig(domain.TerrariaConfig) error
-	RenderConfig(domain.TerrariaConfig) (string, error)
-	RuntimeOptions(domain.TerrariaConfig) runtime.ContainerOptions
 }
 
-type ServerRuntimeProvider interface {
-	RenderServerConfig(domain.GameServerInstance) (string, error)
-	RuntimeOptionsForServer(domain.GameServerInstance) (runtime.ContainerOptions, error)
+type ConfigPayloadProvider interface {
+	DefaultConfigPayload() map[string]any
+	NormalizeConfigPayload(map[string]any) (map[string]any, error)
+	ValidateConfigPayload(map[string]any) error
+}
+
+type ConfigSummaryProvider interface {
+	ConfigSummary(map[string]any) (domain.ProviderConfigSummary, error)
+}
+
+type ResourceRuntimeProvider interface {
+	RuntimeConfigForResource(domain.GameServer) (domain.ProviderRuntimeConfig, error)
 }
 
 type JoinInfoProvider interface {
-	JoinInfo(domain.GameServerInstance) domain.ServerJoinInfo
+	JoinInfo(domain.GameServer) domain.ServerJoinInfo
 }
 
 type SaveMetadataProvider interface {
@@ -37,7 +41,7 @@ type SaveMetadataProvider interface {
 }
 
 type PlayerListProvider interface {
-	PlayerListCommand(domain.TerrariaConfig) string
+	PlayerListCommand(domain.GameServer) string
 	ParsePlayerListOutput([]string) []domain.Player
 }
 

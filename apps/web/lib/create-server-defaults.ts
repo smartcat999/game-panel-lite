@@ -1,5 +1,11 @@
-import { getTerrariaPreset } from "@gamepanel-lite/shared";
+import { getTerrariaPreset, type TerrariaConfig } from "@gamepanel-lite/shared";
 
 export const defaultCreateServerMode = "vanilla" as const;
 export const defaultCreateServerPreset = "friends-casual" as const;
-export const defaultCreateServerConfig = getTerrariaPreset(defaultCreateServerPreset).config;
+const defaultConfig = getTerrariaPreset(defaultCreateServerPreset).config;
+
+export const defaultCreateServerConfig: TerrariaConfig = {
+  ...defaultConfig,
+  specialSeeds: [...(defaultConfig.specialSeeds ?? [])],
+  secretSeeds: [...(defaultConfig.secretSeeds ?? [])]
+};

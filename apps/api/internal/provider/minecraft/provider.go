@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
@@ -17,9 +18,31 @@ const (
 
 var versions = []string{"latest", "1.21.4", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.19.2"}
 
-type Provider struct{}
+type Provider struct {
+	runtime runtimecatalog.RuntimeConfig
+}
 
-func NewProvider() Provider { return Provider{} }
+type Config struct {
+	ServerName       string
+	WorldName        string
+	MaxPlayers       int
+	Port             int
+	EULAAccepted     bool
+	GameMode         string
+	Difficulty       string
+	OnlineMode       bool
+	WhitelistEnabled bool
+}
+
+func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
+	return Provider{
+		runtime: runtimecatalog.FromCatalog(catalog, domain.ProviderMinecraft, runtimeConfig()),
+	}
+}
+
+func runtimeConfig() runtimecatalog.RuntimeConfig {
+	return runtimecatalog.RuntimeConfig{Image: runtimeImage, Versions: versions}
+}
 
 func (Provider) GameKey() domain.GameKey { return domain.GameMinecraft }
 func (Provider) Key() domain.ProviderKey { return domain.ProviderMinecraft }
@@ -57,51 +80,39 @@ func (Provider) WhitelistListCommand() string {
 	return "whitelist list"
 }
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
-	return []domain.ProviderConfigField{
-		{Name: "serverName", Label: "服务器名称 / MOTD", Type: "text", Required: true, Default: "Friends Server"},
-		{Name: "worldName", Label: "世界名称", Type: "text", Required: true, Default: "world"},
-		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 20},
-		{
-			Name:     "gameMode",
-			Label:    "游戏模式",
-			Type:     "select",
-			Required: true,
-			Default:  "survival",
-			Options: []domain.ProviderConfigFieldOption{
-				{Value: "survival", Label: "生存"},
-				{Value: "creative", Label: "创造"},
-				{Value: "adventure", Label: "冒险"},
-				{Value: "spectator", Label: "旁观"},
-			},
-		},
-		{
-			Name:     "difficulty",
-			Label:    "难度",
-			Type:     "select",
-			Required: true,
-			Default:  "normal",
-			Options: []domain.ProviderConfigFieldOption{
-				{Value: "peaceful", Label: "和平"},
-				{Value: "easy", Label: "简单"},
-				{Value: "normal", Label: "普通"},
-				{Value: "hard", Label: "困难"},
-			},
-		},
-		{Name: "onlineMode", Label: "正版验证 (online-mode)", Type: "boolean", Required: false, Default: true, Help: "关闭后允许非正版账号加入，建议仅用于私人好友服。"},
-		{Name: "whitelistEnabled", Label: "启用白名单", Type: "boolean", Required: false, Default: false, Help: "开启后仅白名单内玩家可加入，需要后续手动添加玩家。"},
-		{Name: "eulaAccepted", Label: "我已阅读并接受 Minecraft EULA", Type: "boolean", Required: true, Default: false, Help: "运行 Minecraft 服务器必须接受最终用户许可协议。"},
-	}
+	return configSchema()
 }
-func (Provider) Image() string      { return ImageForVersion(versions[0]) }
-func (Provider) Versions() []string { return append([]string{}, versions...) }
-func (Provider) ImageFor(version string) string {
-	return ImageForVersion(version)
+func (p Provider) Image() string      { return p.ImageFor(p.Versions()[0]) }
+func (p Provider) Versions() []string { return p.runtime.WithFallback(runtimeConfig()).VersionList() }
+func (p Provider) ImageFor(version string) string {
+	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
 }
-func (Provider) DefaultConfig() domain.TerrariaConfig {
-	return NormalizeConfig(domain.TerrariaConfig{})
+func defaultConfig() Config {
+	return normalizeConfig(Config{OnlineMode: true})
 }
-func (Provider) ValidateConfig(config domain.TerrariaConfig) error {
-	config = NormalizeConfig(config)
+func (p Provider) DefaultConfigPayload() map[string]any {
+	return payloadFromConfig(defaultConfig())
+}
+func (p Provider) NormalizeConfigPayload(payload map[string]any) (map[string]any, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return payloadFromConfig(config), nil
+}
+func (p Provider) ValidateConfigPayload(payload map[string]any) error {
+	config := configFromPayload(payload, defaultConfig())
+	return validateConfig(config)
+}
+func (p Provider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return domain.ProviderConfigSummary{
+		ServerName: config.ServerName,
+		WorldName:  config.WorldName,
+		MaxPlayers: config.MaxPlayers,
+		Port:       config.Port,
+		Secure:     config.EULAAccepted,
+	}, nil
+}
+func validateConfig(config Config) error {
+	config = normalizeConfig(config)
 	if strings.TrimSpace(config.ServerName) == "" {
 		return fmt.Errorf("server name is required")
 	}
@@ -117,49 +128,84 @@ func (Provider) ValidateConfig(config domain.TerrariaConfig) error {
 	if config.MaxPlayers < 1 || config.MaxPlayers > 100 {
 		return fmt.Errorf("max players must be between 1 and 100")
 	}
-	if !config.Secure {
+	if !config.EULAAccepted {
 		return fmt.Errorf("EULA must be accepted before creating a Minecraft server")
 	}
 	return nil
 }
-func (Provider) RenderConfig(config domain.TerrariaConfig) (string, error) {
-	config = NormalizeConfig(config)
-	if err := (Provider{}).ValidateConfig(config); err != nil {
+func renderConfig(config Config) (string, error) {
+	config = normalizeConfig(config)
+	if err := validateConfig(config); err != nil {
 		return "", err
 	}
-	return renderServerProperties(config, settingsFromPayload(map[string]any{})), nil
+	return renderServerProperties(config), nil
 }
-func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
-	config = NormalizeConfig(config)
-	settings := settingsFromPayload(map[string]any{})
+func runtimeOptions(config Config) runtime.ContainerOptions {
+	config = normalizeConfig(config)
 	return runtime.ContainerOptions{
 		Env: []string{
 			"EULA=TRUE",
 			"TYPE=VANILLA",
-			versionEnv(versions[0]),
+			versionEnv(NewProvider().Versions()[0]),
 			fmt.Sprintf("SERVER_PORT=%d", config.Port),
 			fmt.Sprintf("MAX_PLAYERS=%d", config.MaxPlayers),
 			"MOTD=" + config.ServerName,
 			"LEVEL_NAME=" + config.WorldName,
-			"MODE=" + settings.GameMode,
-			"DIFFICULTY=" + settings.Difficulty,
-			fmt.Sprintf("ONLINE_MODE=%t", settings.OnlineMode),
-			fmt.Sprintf("WHITE_LIST=%t", settings.WhitelistEnabled),
+			"MODE=" + config.GameMode,
+			"DIFFICULTY=" + config.Difficulty,
+			fmt.Sprintf("ONLINE_MODE=%t", config.OnlineMode),
+			fmt.Sprintf("WHITE_LIST=%t", config.WhitelistEnabled),
 		},
 		DataMounts:   []string{"/data"},
 		PortProtocol: "tcp",
 		Files: map[string]string{
-			"data/server.properties": renderServerProperties(config, settings),
+			"data/server.properties": renderServerProperties(config),
 			"data/eula.txt":          "eula=true\n",
 		},
 	}
 }
 
-func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	if server.Spec.Network.Port != 0 {
+		config.Port = server.Spec.Network.Port
+	}
+	if err := validateConfig(config); err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	options := runtime.ContainerOptions{
+		Env: []string{
+			"EULA=TRUE",
+			"TYPE=VANILLA",
+			versionEnv(server.Spec.Version),
+			fmt.Sprintf("SERVER_PORT=%d", config.Port),
+			fmt.Sprintf("MAX_PLAYERS=%d", config.MaxPlayers),
+			"MOTD=" + config.ServerName,
+			"LEVEL_NAME=" + config.WorldName,
+			"MODE=" + config.GameMode,
+			"DIFFICULTY=" + config.Difficulty,
+			fmt.Sprintf("ONLINE_MODE=%t", config.OnlineMode),
+			fmt.Sprintf("WHITE_LIST=%t", config.WhitelistEnabled),
+		},
+		DataMounts:   []string{"/data"},
+		PortProtocol: "tcp",
+		Files: map[string]string{
+			"data/server.properties": renderServerProperties(config),
+			"data/eula.txt":          "eula=true\n",
+		},
+	}
+	return domain.ProviderRuntimeConfig{
+		Port:     config.Port,
+		Protocol: options.PortProtocol,
+		Options:  workloadOptions(options),
+	}, nil
+}
+
+func (Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 	address := "127.0.0.1"
-	port := server.HostPort
+	port := server.Spec.Network.HostPort
 	if port == 0 {
-		port = server.Port
+		port = server.Spec.Network.Port
 	}
 	return domain.ServerJoinInfo{
 		Address:    address,
@@ -172,40 +218,7 @@ func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo
 	}
 }
 
-func (provider Provider) RenderServerConfig(server domain.GameServerInstance) (string, error) {
-	return provider.RenderConfig(configFromServer(server))
-}
-
-func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstance) (runtime.ContainerOptions, error) {
-	config := configFromServer(server)
-	if err := provider.ValidateConfig(config); err != nil {
-		return runtime.ContainerOptions{}, err
-	}
-	settings := settingsFromPayload(payloadFromServer(server))
-	return runtime.ContainerOptions{
-		Env: []string{
-			"EULA=TRUE",
-			"TYPE=VANILLA",
-			versionEnv(server.Version),
-			fmt.Sprintf("SERVER_PORT=%d", config.Port),
-			fmt.Sprintf("MAX_PLAYERS=%d", config.MaxPlayers),
-			"MOTD=" + config.ServerName,
-			"LEVEL_NAME=" + config.WorldName,
-			"MODE=" + settings.GameMode,
-			"DIFFICULTY=" + settings.Difficulty,
-			fmt.Sprintf("ONLINE_MODE=%t", settings.OnlineMode),
-			fmt.Sprintf("WHITE_LIST=%t", settings.WhitelistEnabled),
-		},
-		DataMounts:   []string{"/data"},
-		PortProtocol: "tcp",
-		Files: map[string]string{
-			"data/server.properties": renderServerProperties(config, settings),
-			"data/eula.txt":          "eula=true\n",
-		},
-	}, nil
-}
-
-func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
+func normalizeConfig(config Config) Config {
 	if strings.TrimSpace(config.ServerName) == "" {
 		config.ServerName = "Friends Server"
 	}
@@ -216,45 +229,17 @@ func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
 		config.MaxPlayers = 20
 	}
 	config.Port = DefaultInternalPort
-	config.WorldSize = ""
-	config.WorldEvil = ""
-	config.Difficulty = ""
-	config.Password = ""
-	config.MOTD = ""
-	config.Seed = ""
-	config.AutoCreateWorld = false
-	config.Language = "en-US"
+	if strings.TrimSpace(config.GameMode) == "" {
+		config.GameMode = "survival"
+	}
+	if strings.TrimSpace(config.Difficulty) == "" {
+		config.Difficulty = "normal"
+	}
 	return config
 }
 
-type minecraftSettings struct {
-	GameMode         string
-	Difficulty       string
-	OnlineMode       bool
-	WhitelistEnabled bool
-}
-
-func settingsFromPayload(payload map[string]any) minecraftSettings {
-	settings := minecraftSettings{
-		GameMode:   stringPayload(payload, "gameMode"),
-		Difficulty: stringPayload(payload, "difficulty"),
-		OnlineMode: true,
-	}
-	if settings.GameMode == "" {
-		settings.GameMode = "survival"
-	}
-	if settings.Difficulty == "" {
-		settings.Difficulty = "normal"
-	}
-	if value, ok := payload["onlineMode"]; ok {
-		settings.OnlineMode = boolValue(value)
-	}
-	settings.WhitelistEnabled = boolValue(payload["whitelistEnabled"])
-	return settings
-}
-
-func ConfigFromPayload(payload map[string]any, fallback domain.TerrariaConfig) domain.TerrariaConfig {
-	config := NormalizeConfig(fallback)
+func configFromPayload(payload map[string]any, fallback Config) Config {
+	config := normalizeConfig(fallback)
 	if value := stringPayload(payload, "serverName"); value != "" {
 		config.ServerName = value
 	}
@@ -265,58 +250,69 @@ func ConfigFromPayload(payload map[string]any, fallback domain.TerrariaConfig) d
 		config.MaxPlayers = value
 	}
 	if value, ok := payload["eulaAccepted"]; ok {
-		config.Secure = boolValue(value)
+		config.EULAAccepted = boolValue(value)
 	}
-	return NormalizeConfig(config)
+	if value := stringPayload(payload, "gameMode"); value != "" {
+		config.GameMode = value
+	}
+	if value := stringPayload(payload, "difficulty"); value != "" {
+		config.Difficulty = value
+	}
+	if value, ok := payload["onlineMode"]; ok {
+		config.OnlineMode = boolValue(value)
+	}
+	if value, ok := payload["whitelistEnabled"]; ok {
+		config.WhitelistEnabled = boolValue(value)
+	}
+	return normalizeConfig(config)
 }
 
-func PayloadFromConfig(config domain.TerrariaConfig, payload map[string]any) map[string]any {
-	settings := settingsFromPayload(payload)
+func payloadFromConfig(config Config) map[string]any {
+	config = normalizeConfig(config)
 	out := map[string]any{
 		"serverName":       config.ServerName,
 		"worldName":        config.WorldName,
 		"maxPlayers":       config.MaxPlayers,
-		"gameMode":         settings.GameMode,
-		"difficulty":       settings.Difficulty,
-		"onlineMode":       settings.OnlineMode,
-		"whitelistEnabled": settings.WhitelistEnabled,
-		"eulaAccepted":     config.Secure,
+		"gameMode":         config.GameMode,
+		"difficulty":       config.Difficulty,
+		"onlineMode":       config.OnlineMode,
+		"whitelistEnabled": config.WhitelistEnabled,
+		"eulaAccepted":     config.EULAAccepted,
 	}
 	return out
 }
 
-func EnrichPayloadFromConfig(config domain.TerrariaConfig, payload map[string]any) map[string]any {
-	next := PayloadFromConfig(config, payload)
-	return next
-}
-
-func configFromServer(server domain.GameServerInstance) domain.TerrariaConfig {
-	payload := payloadFromServer(server)
-	if len(payload) == 0 {
-		return NormalizeConfig(server.Config)
+func workloadOptions(options runtime.ContainerOptions) domain.WorkloadOptions {
+	return domain.WorkloadOptions{
+		Env:        append([]string{}, options.Env...),
+		Cmd:        append([]string{}, options.Cmd...),
+		Files:      cloneFiles(options.Files),
+		DataMounts: append([]string{}, options.DataMounts...),
 	}
-	return ConfigFromPayload(payload, server.Config)
 }
 
-func payloadFromServer(server domain.GameServerInstance) map[string]any {
-	payload := server.ConfigPayload
-	if len(payload) == 0 && strings.TrimSpace(server.ConfigPayloadJSON) != "" {
-		_ = json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload)
+func cloneFiles(files map[string]string) map[string]string {
+	if files == nil {
+		return nil
 	}
-	return payload
+	clone := make(map[string]string, len(files))
+	for key, value := range files {
+		clone[key] = value
+	}
+	return clone
 }
 
-func renderServerProperties(config domain.TerrariaConfig, settings minecraftSettings) string {
+func renderServerProperties(config Config) string {
 	lines := []string{
 		"# Minecraft server properties - managed by GamePanel Lite",
 		"server-port=" + fmt.Sprintf("%d", config.Port),
 		"max-players=" + fmt.Sprintf("%d", config.MaxPlayers),
 		"motd=" + config.ServerName,
 		"level-name=" + config.WorldName,
-		"gamemode=" + settings.GameMode,
-		"difficulty=" + settings.Difficulty,
-		fmt.Sprintf("online-mode=%t", settings.OnlineMode),
-		fmt.Sprintf("white-list=%t", settings.WhitelistEnabled),
+		"gamemode=" + config.GameMode,
+		"difficulty=" + config.Difficulty,
+		fmt.Sprintf("online-mode=%t", config.OnlineMode),
+		fmt.Sprintf("white-list=%t", config.WhitelistEnabled),
 		"enforce-whitelist=true",
 		"allow-flight=false",
 		"pvp=true",

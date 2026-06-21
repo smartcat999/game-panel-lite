@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
@@ -13,9 +14,37 @@ const DefaultInternalPort = 10999
 
 var versions = []string{"latest"}
 
-type Provider struct{}
+type Provider struct {
+	runtime runtimecatalog.RuntimeConfig
+}
 
-func NewProvider() Provider { return Provider{} }
+type Config struct {
+	ServerName         string
+	ClusterName        string
+	MaxPlayers         int
+	Port               int
+	ServerPassword     string
+	ClusterToken       string
+	GameMode           string
+	WorldPreset        string
+	ClusterDescription string
+	CavesEnabled       bool
+	PVP                bool
+	PauseWhenEmpty     bool
+	OfflineServer      bool
+	ConsoleEnabled     bool
+	WorkshopIDs        []string
+}
+
+func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
+	return Provider{
+		runtime: runtimecatalog.FromCatalog(catalog, domain.ProviderDST, runtimeConfig()),
+	}
+}
+
+func runtimeConfig() runtimecatalog.RuntimeConfig {
+	return runtimecatalog.RuntimeConfig{ImageTemplate: "smartcat99999/dst-server:{version}", Versions: versions}
+}
 
 func (Provider) GameKey() domain.GameKey { return domain.GameDST }
 func (Provider) Key() domain.ProviderKey { return domain.ProviderDST }
@@ -37,114 +66,131 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 }
 func (Provider) SaveDisplayName() string { return "cluster save" }
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
-	return []domain.ProviderConfigField{
-		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "DST Friends"},
-		{Name: "clusterName", Label: "存档名称", Type: "text", Required: true, Default: "GamePanelLite"},
-		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 6},
-		{Name: "serverPassword", Label: "服务器密码", Type: "password", Required: false},
-		{Name: "clusterToken", Label: "Klei 服务器令牌", Type: "password", Required: true, Help: "在 Klei 账号页面创建专用服务器令牌后填入。"},
-		{
-			Name:     "worldPreset",
-			Label:    "世界预设",
-			Type:     "select",
-			Required: true,
-			Default:  "forest_default",
-			Options: []domain.ProviderConfigFieldOption{
-				{Value: "forest_default", Label: "默认森林"},
-				{Value: "forest_classic", Label: "经典森林"},
-				{Value: "forest_survival", Label: "生存森林"},
-			},
-		},
-		{
-			Name:     "gameMode",
-			Label:    "游戏模式",
-			Type:     "select",
-			Required: true,
-			Default:  "survival",
-			Options: []domain.ProviderConfigFieldOption{
-				{Value: "survival", Label: "生存"},
-				{Value: "endless", Label: "无尽"},
-				{Value: "wilderness", Label: "荒野"},
-			},
-		},
-		{Name: "cavesEnabled", Label: "启用洞穴", Type: "boolean", Required: false, Default: false, Help: "创建额外洞穴分片配置。"},
-		{Name: "workshopIds", Label: "创意工坊 ID", Type: "text", Required: false, Help: "多个创意工坊 ID 用逗号或空格分隔。"},
-	}
+	return configSchema()
 }
-func (Provider) Image() string      { return ImageForVersion(versions[0]) }
-func (Provider) Versions() []string { return append([]string{}, versions...) }
-func (Provider) ImageFor(version string) string {
-	return ImageForVersion(version)
+func (p Provider) Image() string      { return p.ImageFor(p.Versions()[0]) }
+func (p Provider) Versions() []string { return p.runtime.WithFallback(runtimeConfig()).VersionList() }
+func (p Provider) ImageFor(version string) string {
+	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
 }
-func (Provider) DefaultConfig() domain.TerrariaConfig {
-	return NormalizeConfig(domain.TerrariaConfig{})
+func defaultConfig() Config {
+	return normalizeConfig(Config{PauseWhenEmpty: true, ConsoleEnabled: true})
 }
-func (Provider) ValidateConfig(config domain.TerrariaConfig) error {
-	config = NormalizeConfig(config)
+func (p Provider) DefaultConfigPayload() map[string]any {
+	return payloadFromConfig(defaultConfig())
+}
+func (p Provider) NormalizeConfigPayload(payload map[string]any) (map[string]any, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return payloadFromConfig(config), nil
+}
+func (p Provider) ValidateConfigPayload(payload map[string]any) error {
+	config := configFromPayload(payload, defaultConfig())
+	return validateConfig(config)
+}
+func (p Provider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return domain.ProviderConfigSummary{
+		ServerName: config.ServerName,
+		WorldName:  config.ClusterName,
+		MaxPlayers: config.MaxPlayers,
+		Port:       config.Port,
+		Password:   config.ServerPassword,
+		MOTD:       config.ClusterToken,
+	}, nil
+}
+func validateConfig(config Config) error {
+	config = normalizeConfig(config)
 	if strings.TrimSpace(config.ServerName) == "" {
 		return fmt.Errorf("server name is required")
 	}
 	if strings.Contains(config.ServerName, "/") || strings.Contains(config.ServerName, "\\") {
 		return fmt.Errorf("server name contains unsupported path characters")
 	}
-	if strings.TrimSpace(config.WorldName) == "" {
+	if strings.TrimSpace(config.ClusterName) == "" {
 		return fmt.Errorf("cluster name is required")
 	}
-	if strings.Contains(config.WorldName, "/") || strings.Contains(config.WorldName, "\\") || strings.Contains(config.WorldName, "..") {
+	if strings.Contains(config.ClusterName, "/") || strings.Contains(config.ClusterName, "\\") || strings.Contains(config.ClusterName, "..") {
 		return fmt.Errorf("cluster name contains unsupported path characters")
 	}
 	if config.MaxPlayers < 1 || config.MaxPlayers > 64 {
 		return fmt.Errorf("max players must be between 1 and 64")
 	}
-	if strings.TrimSpace(config.MOTD) == "" {
+	if strings.TrimSpace(config.ClusterToken) == "" {
 		return fmt.Errorf("Klei server token is required")
 	}
 	return nil
 }
-func (Provider) RenderConfig(config domain.TerrariaConfig) (string, error) {
-	config = NormalizeConfig(config)
-	if err := (Provider{}).ValidateConfig(config); err != nil {
+func renderConfig(config Config) (string, error) {
+	config = normalizeConfig(config)
+	if err := validateConfig(config); err != nil {
 		return "", err
 	}
 	lines := []string{
 		"game=dont-starve-together",
 		"serverName=" + config.ServerName,
-		"clusterName=" + config.WorldName,
+		"clusterName=" + config.ClusterName,
 		fmt.Sprintf("maxPlayers=%d", config.MaxPlayers),
 		fmt.Sprintf("port=%d", config.Port),
 	}
-	if config.Password != "" {
-		lines = append(lines, "serverPassword="+config.Password)
+	if config.ServerPassword != "" {
+		lines = append(lines, "serverPassword="+config.ServerPassword)
 	}
 	return strings.Join(lines, "\n") + "\n", nil
 }
-func (Provider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
-	config = NormalizeConfig(config)
+func runtimeOptions(config Config) runtime.ContainerOptions {
+	config = normalizeConfig(config)
 	clusterDir := clusterConfigDir(config)
 	return runtime.ContainerOptions{
 		Env: []string{
-			"DST_CLUSTER_NAME=" + config.WorldName,
+			"DST_CLUSTER_NAME=" + config.ClusterName,
 			"DST_SHARD=Master",
 			fmt.Sprintf("DST_PORT=%d", config.Port),
 		},
 		DataMounts: []string{"/data"},
 		Files: map[string]string{
-			clusterDir + "/cluster.ini":         renderClusterINI(config, "survival"),
-			clusterDir + "/cluster_token.txt":   strings.TrimSpace(config.MOTD) + "\n",
+			clusterDir + "/cluster.ini":         renderClusterINI(config),
+			clusterDir + "/cluster_token.txt":   strings.TrimSpace(config.ClusterToken) + "\n",
 			clusterDir + "/Master/server.ini":   renderShardServerINI(config.Port, true, "Master"),
-			clusterDir + "/Master/worldgen.lua": renderWorldgenLua("forest_default"),
+			clusterDir + "/Master/worldgen.lua": renderWorldgenLua(config.WorldPreset),
 		},
 		PortProtocol: "udp",
 	}
 }
 
-func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
-	address := "127.0.0.1"
-	port := server.HostPort
-	if port == 0 {
-		port = server.Port
+func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	if server.Spec.Network.Port != 0 {
+		config.Port = server.Spec.Network.Port
 	}
-	password := server.Password
+	if err := validateConfig(config); err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	options := runtimeOptions(config)
+	clusterDir := clusterConfigDir(config)
+	options.Files[clusterDir+"/cluster.ini"] = renderClusterINI(config)
+	options.Files[clusterDir+"/Master/worldgen.lua"] = renderWorldgenLua(config.WorldPreset)
+	if config.CavesEnabled {
+		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
+		options.Files[clusterDir+"/Caves/worldgen.lua"] = renderWorldgenLua("cave_default")
+	}
+	if len(config.WorkshopIDs) > 0 {
+		options.Files[clusterDir+"/dedicated_server_mods_setup.lua"] = renderWorkshopSetup(config.WorkshopIDs)
+	}
+	return domain.ProviderRuntimeConfig{
+		Port:     config.Port,
+		Protocol: options.PortProtocol,
+		Options:  workloadOptions(options),
+	}, nil
+}
+
+func (p Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
+	address := "127.0.0.1"
+	port := server.Spec.Network.HostPort
+	if port == 0 {
+		port = server.Spec.Network.Port
+	}
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	password := config.ServerPassword
 	invite := fmt.Sprintf("Join %s in Don't Starve Together at %s:%d", server.Name, address, port)
 	if password != "" {
 		invite += " password: " + password
@@ -161,148 +207,131 @@ func (Provider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo
 	}
 }
 
-func (provider Provider) RenderServerConfig(server domain.GameServerInstance) (string, error) {
-	return provider.RenderConfig(configFromServer(server))
-}
-
-func (provider Provider) RuntimeOptionsForServer(server domain.GameServerInstance) (runtime.ContainerOptions, error) {
-	config := configFromServer(server)
-	if err := provider.ValidateConfig(config); err != nil {
-		return runtime.ContainerOptions{}, err
-	}
-	options := provider.RuntimeOptions(config)
-	payload := payloadFromServer(server)
-	settings := settingsFromPayload(payload)
-	clusterDir := clusterConfigDir(config)
-	options.Files[clusterDir+"/cluster.ini"] = renderClusterINI(config, settings.GameMode)
-	options.Files[clusterDir+"/Master/worldgen.lua"] = renderWorldgenLua(settings.WorldPreset)
-	if settings.CavesEnabled {
-		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
-		options.Files[clusterDir+"/Caves/worldgen.lua"] = renderWorldgenLua("cave_default")
-	}
-	if len(settings.WorkshopIDs) > 0 {
-		options.Files[clusterDir+"/dedicated_server_mods_setup.lua"] = renderWorkshopSetup(settings.WorkshopIDs)
-	}
-	return options, nil
-}
-
-func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
+func normalizeConfig(config Config) Config {
 	if strings.TrimSpace(config.ServerName) == "" {
 		config.ServerName = "DST Friends"
 	}
-	if strings.TrimSpace(config.WorldName) == "" {
-		config.WorldName = "GamePanelLite"
+	if strings.TrimSpace(config.ClusterName) == "" {
+		config.ClusterName = "GamePanelLite"
 	}
 	if config.MaxPlayers == 0 {
 		config.MaxPlayers = 6
 	}
 	config.Port = DefaultInternalPort
-	config.WorldSize = ""
-	config.WorldEvil = ""
-	config.Difficulty = ""
-	config.Secure = false
-	config.AutoCreateWorld = false
-	config.Language = "en-US"
+	if strings.TrimSpace(config.GameMode) == "" {
+		config.GameMode = "survival"
+	}
+	if strings.TrimSpace(config.WorldPreset) == "" {
+		config.WorldPreset = "forest_default"
+	}
+	if strings.TrimSpace(config.ClusterDescription) == "" {
+		config.ClusterDescription = "Managed by GamePanel Lite"
+	}
+	config.WorkshopIDs = uniqueDigits(config.WorkshopIDs)
 	return config
 }
 
-func ConfigFromPayload(payload map[string]any, fallback domain.TerrariaConfig) domain.TerrariaConfig {
-	config := NormalizeConfig(fallback)
+func configFromPayload(payload map[string]any, fallback Config) Config {
+	config := normalizeConfig(fallback)
 	if value := stringPayload(payload, "serverName"); value != "" {
 		config.ServerName = value
 	}
 	if value := stringPayload(payload, "clusterName"); value != "" {
-		config.WorldName = value
+		config.ClusterName = value
 	} else if value := stringPayload(payload, "worldName"); value != "" {
-		config.WorldName = value
+		config.ClusterName = value
 	}
 	if value, ok := intPayload(payload, "maxPlayers"); ok {
 		config.MaxPlayers = value
 	}
 	if value := stringPayload(payload, "serverPassword"); value != "" {
-		config.Password = value
+		config.ServerPassword = value
 	} else if value := stringPayload(payload, "password"); value != "" {
-		config.Password = value
+		config.ServerPassword = value
 	}
 	if value := stringPayload(payload, "clusterToken"); value != "" {
-		config.MOTD = value
+		config.ClusterToken = value
 	} else if value := stringPayload(payload, "motd"); value != "" {
-		config.MOTD = value
+		config.ClusterToken = value
 	}
-	return NormalizeConfig(config)
+	config.GameMode = stringPayload(payload, "gameMode")
+	config.WorldPreset = stringPayload(payload, "worldPreset")
+	config.ClusterDescription = stringPayload(payload, "clusterDescription")
+	config.CavesEnabled = boolPayload(payload, "cavesEnabled")
+	config.PVP = boolPayload(payload, "pvp")
+	config.PauseWhenEmpty = boolPayloadDefault(payload, "pauseWhenEmpty", config.PauseWhenEmpty)
+	config.OfflineServer = boolPayload(payload, "offlineServer")
+	config.ConsoleEnabled = boolPayloadDefault(payload, "consoleEnabled", config.ConsoleEnabled)
+	config.WorkshopIDs = workshopIDsPayload(payload, "workshopIds")
+	return normalizeConfig(config)
 }
 
-func PayloadFromConfig(config domain.TerrariaConfig, gameMode string) map[string]any {
-	config = NormalizeConfig(config)
-	settings := dstSettings{GameMode: strings.TrimSpace(gameMode), WorldPreset: "forest_default"}
-	settings = normalizeSettings(settings)
+func payloadFromConfig(config Config) map[string]any {
+	config = normalizeConfig(config)
 	payload := map[string]any{
-		"serverName":   config.ServerName,
-		"clusterName":  config.WorldName,
-		"maxPlayers":   config.MaxPlayers,
-		"clusterToken": config.MOTD,
-		"gameMode":     settings.GameMode,
-		"worldPreset":  settings.WorldPreset,
+		"serverName":         config.ServerName,
+		"clusterName":        config.ClusterName,
+		"maxPlayers":         config.MaxPlayers,
+		"clusterToken":       config.ClusterToken,
+		"gameMode":           config.GameMode,
+		"worldPreset":        config.WorldPreset,
+		"clusterDescription": config.ClusterDescription,
+		"cavesEnabled":       config.CavesEnabled,
+		"pvp":                config.PVP,
+		"pauseWhenEmpty":     config.PauseWhenEmpty,
+		"offlineServer":      config.OfflineServer,
+		"consoleEnabled":     config.ConsoleEnabled,
 	}
-	if config.Password != "" {
-		payload["serverPassword"] = config.Password
-	}
-	return payload
-}
-
-func EnrichPayloadFromConfig(config domain.TerrariaConfig, payload map[string]any) map[string]any {
-	settings := settingsFromPayload(payload)
-	next := PayloadFromConfig(config, settings.GameMode)
-	next["worldPreset"] = settings.WorldPreset
-	next["cavesEnabled"] = settings.CavesEnabled
-	if len(settings.WorkshopIDs) > 0 {
-		next["workshopIds"] = strings.Join(settings.WorkshopIDs, ",")
-	}
-	return next
-}
-
-func configFromServer(server domain.GameServerInstance) domain.TerrariaConfig {
-	payload := payloadFromServer(server)
-	if len(payload) == 0 {
-		return NormalizeConfig(server.Config)
-	}
-	return ConfigFromPayload(payload, server.Config)
-}
-
-func payloadFromServer(server domain.GameServerInstance) map[string]any {
-	payload := server.ConfigPayload
-	if len(payload) == 0 && strings.TrimSpace(server.ConfigPayloadJSON) != "" {
-		_ = json.Unmarshal([]byte(server.ConfigPayloadJSON), &payload)
+	if config.ServerPassword != "" {
+		payload["serverPassword"] = config.ServerPassword
 	}
 	return payload
 }
 
-func renderClusterINI(config domain.TerrariaConfig, gameMode string) string {
-	if strings.TrimSpace(gameMode) == "" {
-		gameMode = "survival"
+func workloadOptions(options runtime.ContainerOptions) domain.WorkloadOptions {
+	return domain.WorkloadOptions{
+		Env:        append([]string{}, options.Env...),
+		Cmd:        append([]string{}, options.Cmd...),
+		Files:      cloneFiles(options.Files),
+		DataMounts: append([]string{}, options.DataMounts...),
 	}
+}
+
+func cloneFiles(files map[string]string) map[string]string {
+	if files == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(files))
+	for key, value := range files {
+		clone[key] = value
+	}
+	return clone
+}
+
+func renderClusterINI(config Config) string {
+	config = normalizeConfig(config)
 	lines := []string{
 		"[GAMEPLAY]",
-		"game_mode = " + gameMode,
+		"game_mode = " + config.GameMode,
 		"max_players = " + fmt.Sprintf("%d", config.MaxPlayers),
-		"pvp = false",
-		"pause_when_empty = true",
+		"pvp = " + boolINI(config.PVP),
+		"pause_when_empty = " + boolINI(config.PauseWhenEmpty),
 		"",
 		"[NETWORK]",
 		"cluster_name = " + config.ServerName,
-		"cluster_description = Managed by GamePanel Lite",
-		"cluster_password = " + config.Password,
-		"offline_server = false",
+		"cluster_description = " + config.ClusterDescription,
+		"cluster_password = " + config.ServerPassword,
+		"offline_server = " + boolINI(config.OfflineServer),
 		"",
 		"[MISC]",
-		"console_enabled = true",
+		"console_enabled = " + boolINI(config.ConsoleEnabled),
 		"",
 	}
 	return strings.Join(lines, "\n")
 }
 
-func clusterConfigDir(config domain.TerrariaConfig) string {
-	return "dst/" + config.WorldName
+func clusterConfigDir(config Config) string {
+	return "dst/" + config.ClusterName
 }
 
 func renderShardServerINI(port int, isMaster bool, name string) string {
@@ -337,31 +366,11 @@ func renderWorkshopSetup(workshopIDs []string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-type dstSettings struct {
-	GameMode     string
-	WorldPreset  string
-	CavesEnabled bool
-	WorkshopIDs  []string
-}
-
-func settingsFromPayload(payload map[string]any) dstSettings {
-	return normalizeSettings(dstSettings{
-		GameMode:     stringPayload(payload, "gameMode"),
-		WorldPreset:  stringPayload(payload, "worldPreset"),
-		CavesEnabled: boolPayload(payload, "cavesEnabled"),
-		WorkshopIDs:  workshopIDsPayload(payload, "workshopIds"),
-	})
-}
-
-func normalizeSettings(settings dstSettings) dstSettings {
-	if strings.TrimSpace(settings.GameMode) == "" {
-		settings.GameMode = "survival"
+func boolINI(value bool) string {
+	if value {
+		return "true"
 	}
-	if strings.TrimSpace(settings.WorldPreset) == "" {
-		settings.WorldPreset = "forest_default"
-	}
-	settings.WorkshopIDs = uniqueDigits(settings.WorkshopIDs)
-	return settings
+	return "false"
 }
 
 func stringPayload(payload map[string]any, key string) string {
@@ -412,6 +421,13 @@ func boolPayload(payload map[string]any, key string) bool {
 	default:
 		return false
 	}
+}
+
+func boolPayloadDefault(payload map[string]any, key string, fallback bool) bool {
+	if _, ok := payload[key]; !ok {
+		return fallback
+	}
+	return boolPayload(payload, key)
 }
 
 func workshopIDsPayload(payload map[string]any, key string) []string {

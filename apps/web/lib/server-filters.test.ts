@@ -1,67 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { filterServers, type ServerFilters } from "./server-filters";
-import type { Server } from "./types";
+import { filterGameServers, type ServerFilters } from "./server-filters";
+import type { GameServerResource } from "./types";
 
-const baseServer: Server = {
-  id: "server-1",
-  name: "Friends",
-  gameKey: "terraria",
-  providerKey: "terraria-vanilla",
-  mode: "vanilla",
-  status: "stopped",
-  world: "Classic World",
-  players: 0,
-  maxPlayers: 8,
-  port: 7777,
-  hostPort: 7777,
-  version: "1.4.4.9",
-  cpuLimitCores: 0,
-  memoryLimitMb: 0,
-  lastBackup: "Not yet",
-  password: "",
-  cpu: "0%",
-  memory: "0 MB",
-  config: {
-    serverName: "Friends",
-    worldName: "Classic World",
-    worldSize: "medium",
-    worldEvil: "random",
-    difficulty: "classic",
-    maxPlayers: 8,
-    port: 7777,
-    password: "",
-    motd: "",
-    seed: "",
-    secure: true,
-    language: "en-US",
-    autoCreateWorld: true
-  }
-};
-
-const servers: Server[] = [
-  baseServer,
+const gameServers: GameServerResource[] = [
   {
-    ...baseServer,
-    id: "server-2",
-    name: "Mods",
-    providerKey: "terraria-tmodloader",
-    mode: "tmodloader",
-    status: "running",
-    world: "Modded World",
-    port: 7788,
-    hostPort: 7788
+    id: "resource-1",
+    name: "Friends",
+    gameKey: "terraria",
+    providerKey: "terraria-vanilla",
+    spec: {
+      generation: 1,
+      desiredState: "stopped",
+      version: "1.4.5.6",
+      config: { worldName: "Classic World", maxPlayers: 8, port: 7777 },
+      network: { port: 7777, hostPort: 7777 }
+    },
+    status: {
+      phase: "stopped",
+      actualState: "stopped",
+      observedGeneration: 1,
+      appliedGeneration: 1
+    },
+    createdAt: "2026-06-20T00:00:00Z",
+    updatedAt: "2026-06-20T00:00:00Z"
   },
   {
-    ...baseServer,
-    id: "server-3",
+    id: "resource-2",
     name: "Pal Friends",
     gameKey: "palworld",
     providerKey: "palworld",
-    mode: "vanilla",
-    status: "running",
-    world: "Pal Save",
-    port: 8211,
-    hostPort: 18211
+    spec: {
+      generation: 2,
+      desiredState: "running",
+      version: "latest",
+      config: { saveName: "Pal Save", maxPlayers: 16, port: 8211 },
+      network: { port: 8211, hostPort: 18211 }
+    },
+    status: {
+      phase: "reconciling",
+      actualState: "stopped",
+      observedGeneration: 1,
+      appliedGeneration: 1
+    },
+    createdAt: "2026-06-20T00:00:00Z",
+    updatedAt: "2026-06-20T00:00:00Z"
   }
 ];
 
@@ -73,13 +55,12 @@ const defaultFilters: ServerFilters = {
 };
 
 describe("server filters", () => {
-  it("combines game, status, provider, and search filters", () => {
-    expect(filterServers(servers, { ...defaultFilters, game: "terraria" }).map((server) => server.id)).toEqual(["server-1", "server-2"]);
-    expect(filterServers(servers, { ...defaultFilters, game: "palworld" }).map((server) => server.id)).toEqual(["server-3"]);
-    expect(filterServers(servers, { ...defaultFilters, status: "running" }).map((server) => server.id)).toEqual(["server-2", "server-3"]);
-    expect(filterServers(servers, { ...defaultFilters, provider: "terraria-tmodloader" }).map((server) => server.id)).toEqual(["server-2"]);
-    expect(filterServers(servers, { ...defaultFilters, query: "7777", provider: "terraria-vanilla" }).map((server) => server.id)).toEqual(["server-1"]);
-    expect(filterServers(servers, { ...defaultFilters, provider: "palworld" }).map((server) => server.id)).toEqual(["server-3"]);
-    expect(filterServers(servers, { ...defaultFilters, query: "Palworld" }).map((server) => server.id)).toEqual(["server-3"]);
+  it("filters GameServer resources without converting the API result to legacy Server first", () => {
+    expect(filterGameServers(gameServers, { ...defaultFilters, game: "palworld" }).map((server) => server.id)).toEqual(["resource-2"]);
+    expect(filterGameServers(gameServers, { ...defaultFilters, status: "running" }).map((server) => server.id)).toEqual([]);
+    expect(filterGameServers(gameServers, { ...defaultFilters, query: "Pal Save" }).map((server) => server.id)).toEqual(["resource-2"]);
+    expect(filterGameServers(gameServers, { ...defaultFilters, query: "18211" }).map((server) => server.id)).toEqual(["resource-2"]);
+    expect(filterGameServers(gameServers, { ...defaultFilters, provider: "terraria-vanilla" }).map((server) => server.id)).toEqual(["resource-1"]);
+    expect(filterGameServers(gameServers, { ...defaultFilters, query: "Palworld" }).map((server) => server.id)).toEqual(["resource-2"]);
   });
 });

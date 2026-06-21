@@ -1,6 +1,14 @@
-import type { Backup, Server } from "./types";
+import type { Backup, GameServerResource } from "./types";
 
-export function attachLatestBackupTimes(servers: Server[], backups: Backup[]) {
+export function attachLatestBackupTimesToGameServers(servers: GameServerResource[], backups: Backup[]) {
+  const latestByServer = latestBackupByServer(backups);
+  return servers.map((server) => ({
+    ...server,
+    latestBackup: latestByServer.get(server.id)
+  }));
+}
+
+function latestBackupByServer(backups: Backup[]) {
   const latestByServer = new Map<string, Backup>();
   for (const backup of backups) {
     const serverId = backup.instanceId ?? backup.server;
@@ -12,8 +20,5 @@ export function attachLatestBackupTimes(servers: Server[], backups: Backup[]) {
       latestByServer.set(serverId, backup);
     }
   }
-  return servers.map((server) => ({
-    ...server,
-    lastBackup: latestByServer.get(server.id)?.created ?? server.lastBackup
-  }));
+  return latestByServer;
 }

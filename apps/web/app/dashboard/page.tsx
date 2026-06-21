@@ -2,34 +2,32 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Cpu, HardDrive, MemoryStick, Plus, Users } from "lucide-react";
+import { Activity, ArrowRight, Cpu, HardDrive, MemoryStick, Plus, Server as ServerIcon, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { GameLibrary } from "@/components/game-library";
 import { ServerCard } from "@/components/server-card";
 import { Card } from "@/components/ui";
 import { formatActivityEvent } from "@/lib/activity-display";
+import { isWorldOrBackupEventType } from "@/lib/feature-flags";
+import { gameServerMaxPlayers, gameServerStatus } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
-import { formatBytes, getRuntimeStats, listActivity, listBackups, listServers } from "@/lib/api";
+import { formatBytes, getRuntimeStats, listActivity, listGameServers } from "@/lib/api";
 import { dashboardQuickActionHrefs } from "@/lib/dashboard-quick-actions";
-import { attachLatestBackupTimes } from "@/lib/server-metrics";
 import { Sparkline, useTimeSeries } from "@/lib/sparkline";
 
 export default function DashboardPage() {
   const { locale, t } = useI18n();
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false, refetchInterval: 5000 });
-  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false, refetchInterval: 5000 });
   const activityQuery = useQuery({ queryKey: ["activity"], queryFn: listActivity, retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, refetchInterval: 5000, retry: false });
   const runtimeCpuSeries = useTimeSeries(runtimeStatsQuery.data?.totalCpuPercent);
   const runtimeMemSeries = useTimeSeries(runtimeStatsQuery.data?.totalMemoryMb, 60);
-  const backups = backupsQuery.data ?? [];
-  const servers = attachLatestBackupTimes(serversQuery.data ?? [], backups);
-  const activity = activityQuery.data ?? [];
-  const running = servers.filter((server) => server.status === "running");
-  const players = running.reduce((sum, server) => sum + server.players, 0);
-  const playerCapacity = servers.reduce((sum, server) => sum + server.maxPlayers, 0);
+  const servers = serversQuery.data ?? [];
+  const activity = (activityQuery.data ?? []).filter((event) => !isWorldOrBackupEventType(event.type));
+  const running = servers.filter((server) => gameServerStatus(server) === "running");
+  const players = running.reduce((sum, server) => sum + (server.status.playersOnline ?? 0), 0);
+  const playerCapacity = servers.reduce((sum, server) => sum + gameServerMaxPlayers(server), 0);
   const storageUsedBytes = runtimeStatsQuery.data?.storageUsedBytes ?? 0;
-  const latestBackup = backups[0];
   const memMax = Math.max(1024, runtimeStatsQuery.data?.memoryLimitMb ?? 1024);
   const runtimeCpu = runtimeStatsQuery.data?.totalCpuPercent ?? 0;
   const runtimeMemory = runtimeStatsQuery.data?.totalMemoryMb ?? 0;
@@ -39,12 +37,11 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader title={t("dashboardTitle")} description={t("dashboardDescription")} />
-      {(serversQuery.isError || backupsQuery.isError || activityQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiDataUnavailable")}</p>}
-      <div className="grid gap-4 md:grid-cols-4">
+      {(serversQuery.isError || activityQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiDataUnavailable")}</p>}
+      <div className="grid gap-4 md:grid-cols-3">
         <Stat icon={<HardDrive />} label={t("runningServers")} value={`${running.length} / ${servers.length}`} hint={t("runningHint", { count: running.length })} />
         <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players} / ${playerCapacity}`} hint={t("playersOnlineHint", { count: players, capacity: playerCapacity })} />
-        <Stat icon={<Archive />} label={t("latestBackup")} value={latestBackup ? localizeRelativeTime(latestBackup.created, locale) : t("none")} hint={latestBackup?.world ?? t("none")} />
-        <Stat icon={<HardDrive />} label={t("storageUsed")} value={runtimeStatsQuery.data ? formatBytes(storageUsedBytes) : "—"} hint={t("storageHint", { count: backups.length })} />
+        <Stat icon={<ServerIcon />} label={t("storageUsed")} value={runtimeStatsQuery.data ? formatBytes(storageUsedBytes) : "—"} hint={t("storageHint", { count: servers.length })} />
       </div>
 
       <div className="mt-6 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -105,13 +102,6 @@ export default function DashboardPage() {
               label={t("createServer")}
               hint={t("createServerQuickHint")}
               tone="primary"
-            />
-            <ActionLink
-              href={dashboardQuickActionHrefs.createBackup}
-              icon={<Archive aria-hidden="true" className="size-4" />}
-              label={t("createBackup")}
-              hint={t("createBackupQuickHint")}
-              tone="gold"
             />
           </div>
           <div className="border-t border-panel-line px-4 py-4">

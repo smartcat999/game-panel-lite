@@ -8,14 +8,15 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { Button, Card } from "@/components/ui";
-import { deleteWorld, downloadWorldFile, listGames, listServers, listWorlds } from "@/lib/api";
+import { deleteWorld, downloadWorldFile, listGameServers, listGames, listWorlds } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
+import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameFilterOptions, gameKeyFromProvider } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import type { MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
 import { getWorldSourceServerId } from "@/lib/server-detail-resources";
-import type { Server } from "@/lib/types";
+import type { GameServerResource } from "@/lib/types";
 import type { World } from "@/lib/types";
 
 type PendingWorldAction =
@@ -30,15 +31,20 @@ function worldModeLabel(world: World, vanillaLabel: string) {
   return vanillaLabel;
 }
 
-function serversUsingWorld(world: World, servers: Server[]) {
-  return servers.filter((server) => server.sourceWorldId === world.id);
+function serversUsingWorld(world: World, servers: GameServerResource[]) {
+  return servers.filter((server) => server.spec.sourceWorldId === world.id);
 }
 
 export default function WorldsPage() {
+  if (!showWorldAndBackupFeatures) return <HiddenFeaturePage />;
+  return <EnabledWorldsPage />;
+}
+
+function EnabledWorldsPage() {
   const { locale, t } = useI18n();
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -51,7 +57,7 @@ export default function WorldsPage() {
   const servers = serversQuery.data ?? [];
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
   const gameFilters = useMemo(
-    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.gameKey ?? gameKeyFromProvider(world.providerKey))),
+    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.gameKey ?? gameKeyFromProvider(world.providerKey)), t),
     [gamesQuery.data, t, worlds]
   );
   const providerFilters = useMemo(
@@ -278,6 +284,18 @@ export default function WorldsPage() {
         />
       )}
     </>
+  );
+}
+
+function HiddenFeaturePage() {
+  return (
+    <Card className="p-6">
+      <h1 className="text-xl font-semibold text-white">Page not found</h1>
+      <p className="mt-2 text-sm text-slate-400">The requested GamePanel Lite page does not exist.</p>
+      <Link className="mt-4 inline-flex text-sm font-medium text-panel-green hover:underline" href="/dashboard">
+        Back to dashboard
+      </Link>
+    </Card>
   );
 }
 

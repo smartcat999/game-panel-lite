@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card } from "@/components/ui";
 import { getPublicServerShare } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { useI18n } from "@/lib/i18n";
 
 export default function SharedServerPage() {
@@ -18,7 +19,7 @@ export default function SharedServerPage() {
   const server = query.data;
 
   const copy = async (label: string, value: string) => {
-    await navigator.clipboard.writeText(value);
+    await copyText(value);
     setCopied(label);
     window.setTimeout(() => setCopied(""), 1500);
   };

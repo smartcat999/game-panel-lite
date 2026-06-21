@@ -16,11 +16,11 @@ import (
 type Syncer struct {
 	store     *store.Store
 	providers *provider.Registry
-	runtime   runtime.Adapter
+	runtime   runtime.WorkloadIOAdapter
 	logger    *slog.Logger
 }
 
-func NewSyncer(store *store.Store, providers *provider.Registry, runtime runtime.Adapter, _ config.Config) *Syncer {
+func NewSyncer(store *store.Store, providers *provider.Registry, runtime runtime.WorkloadIOAdapter, _ config.Config) *Syncer {
 	return &Syncer{
 		store:     store,
 		providers: providers,
@@ -55,22 +55,22 @@ func (s *Syncer) Start(ctx context.Context, interval time.Duration) {
 }
 
 func (s *Syncer) RunOnce(ctx context.Context) error {
-	servers, err := s.store.ListServers(ctx)
+	servers, err := s.store.ListGameServers(ctx)
 	if err != nil {
 		return err
 	}
 	for _, server := range servers {
-		if server.Status != domain.StatusRunning {
-			if server.PlayersOnline != 0 {
-				server.PlayersOnline = 0
+		if server.Status.Phase != domain.PhaseRunning {
+			if server.Status.PlayersOnline != 0 {
+				server.Status.PlayersOnline = 0
 				server.UpdatedAt = time.Now()
-				if err := s.store.SaveServer(ctx, &server); err != nil {
+				if err := s.store.SaveGameServer(ctx, &server); err != nil {
 					return err
 				}
 			}
 			continue
 		}
-		if server.ContainerID == "" {
+		if server.Status.RuntimeID == "" {
 			continue
 		}
 		gameProvider, ok := s.providers.Get(server.ProviderKey)
@@ -81,7 +81,7 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 		if !ok {
 			continue
 		}
-		lines, err := s.recentLogLines(ctx, server)
+		lines, err := s.recentLogLines(ctx, server.Status.RuntimeID)
 		if err != nil {
 			s.logger.Warn("failed to read player log output", "server", server.ID, "error", err)
 			continue
@@ -91,10 +91,10 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 			continue
 		}
 		nextCount := len(players)
-		if nextCount != server.PlayersOnline {
-			server.PlayersOnline = nextCount
+		if nextCount != server.Status.PlayersOnline {
+			server.Status.PlayersOnline = nextCount
 			server.UpdatedAt = time.Now()
-			if err := s.store.SaveServer(ctx, &server); err != nil {
+			if err := s.store.SaveGameServer(ctx, &server); err != nil {
 				return err
 			}
 		}
@@ -102,10 +102,8 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 	return nil
 }
 
-func (s *Syncer) recentLogLines(ctx context.Context, server domain.GameServerInstance) ([]string, error) {
-	snapshotServer := server
-	snapshotServer.Status = domain.StatusStopped
-	stream, err := s.runtime.Logs(ctx, snapshotServer)
+func (s *Syncer) recentLogLines(ctx context.Context, runtimeID string) ([]string, error) {
+	stream, err := s.runtime.LogSnapshotWorkload(ctx, runtimeID)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,6 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, Server, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
+import type { Locale } from "./i18n";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -131,30 +132,7 @@ export async function previewTerrariaConfig(config: TerrariaConfig): Promise<str
   return payload.serverconfig ?? "";
 }
 
-type ApiServer = {
-  id: string;
-  name: string;
-  gameKey?: string;
-  providerKey: ProviderKey;
-  status: Server["status"];
-  worldName: string;
-  playersOnline?: number;
-  port: number;
-  maxPlayers: number;
-  password?: string;
-  version?: string;
-  lastError?: string;
-  hostPort?: number;
-  cpuLimitCores?: number;
-  memoryLimitMb?: number;
-  sourceWorldId?: string;
-  sourceWorldName?: string;
-  config?: TerrariaConfig;
-  configPayload?: Record<string, unknown>;
-  joinInfo?: Server["joinInfo"];
-  configRevision?: number;
-  appliedConfigRevision?: number;
-};
+type ApiServer = GameServerResource;
 
 type ApiWorld = {
   id: string;
@@ -165,7 +143,7 @@ type ApiWorld = {
   fileName: string;
   sizeBytes: number;
   source?: string;
-  config?: TerrariaConfig;
+  config?: Record<string, unknown>;
   activeInstanceId?: string;
   updatedAt?: string;
   createdAt: string;
@@ -266,6 +244,7 @@ type ApiActivityEvent = {
   instanceId?: string;
   type: string;
   message: string;
+  payload?: Record<string, unknown>;
   createdAt: string;
 };
 
@@ -293,54 +272,16 @@ function formatRelative(value?: string) {
   return `${Math.floor(hours / 24)} d ago`;
 }
 
-function configFromServer(server: ApiServer): TerrariaConfig {
-  return {
-    serverName: server.config?.serverName ?? server.name,
-    worldName: server.config?.worldName ?? server.worldName,
-    worldSize: server.config?.worldSize ?? "medium",
-    worldEvil: server.config?.worldEvil ?? "random",
-    difficulty: server.config?.difficulty ?? "classic",
-    maxPlayers: server.config?.maxPlayers ?? server.maxPlayers,
-    port: server.config?.port ?? server.port,
-    password: server.config?.password ?? server.password ?? "",
-    motd: server.config?.motd ?? "",
-    seed: server.config?.seed ?? "",
-    secure: server.config?.secure ?? true,
-    language: server.config?.language ?? "en-US",
-    autoCreateWorld: server.config?.autoCreateWorld ?? true
-  };
-}
-
-function toServer(server: ApiServer): Server {
-  const config = configFromServer(server);
-  const configRevision = server.configRevision ?? 0;
-  const appliedConfigRevision = server.appliedConfigRevision ?? 0;
+function gameServerResourceFromApi(server: ApiServer): GameServerResource {
   return {
     id: server.id,
     name: server.name,
     gameKey: server.gameKey,
     providerKey: server.providerKey,
-    mode: server.providerKey === "terraria-tmodloader" ? "tmodloader" : "vanilla",
+    spec: server.spec,
     status: server.status,
-    world: server.worldName,
-    players: server.playersOnline ?? 0,
-    maxPlayers: server.maxPlayers,
-    port: server.port,
-    version: server.version ?? "1.4.5.6",
-    hostPort: server.hostPort ?? 0,
-    cpuLimitCores: server.cpuLimitCores ?? 0,
-    memoryLimitMb: server.memoryLimitMb ?? 0,
-    lastError: server.lastError,
-    sourceWorldId: server.sourceWorldId,
-    sourceWorldName: server.sourceWorldName,
-    lastBackup: "Not yet",
-    password: server.password ?? "",
-    cpu: "0%",
-    memory: "0 MB",
-    config,
-    configPayload: server.configPayload,
-    joinInfo: server.joinInfo,
-    configPendingRestart: server.status === "running" && configRevision > appliedConfigRevision
+    createdAt: "createdAt" in server && typeof server.createdAt === "string" ? server.createdAt : "",
+    updatedAt: "updatedAt" in server && typeof server.updatedAt === "string" ? server.updatedAt : ""
   };
 }
 
@@ -362,25 +303,27 @@ function toWorld(world: ApiWorld): World {
   };
 }
 
-export async function listServers(): Promise<Server[]> {
+export async function listGameServers(): Promise<GameServerResource[]> {
   const response = await apiFetch(`${API_BASE}/api/servers`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load servers");
   }
   const payload = (await response.json()) as ApiServer[];
-  return payload.map(toServer);
+  return payload.map(gameServerResourceFromApi);
 }
 
-export async function getServer(id: string): Promise<Server> {
+export async function getGameServer(id: string): Promise<GameServerResource> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load server");
   }
   const server = (await response.json()) as ApiServer;
-  return toServer(server);
+  return gameServerResourceFromApi(server);
 }
 
-export async function updateServerConfig(id: string, config: TerrariaConfig, hostPort?: number, resources?: ResourceLimits): Promise<Server> {
+export type ServerConfigUpdatePayload = TerrariaConfig | Record<string, unknown>;
+
+export async function updateGameServerConfig(id: string, config: ServerConfigUpdatePayload, hostPort?: number, resources?: ResourceLimits): Promise<GameServerResource> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -391,7 +334,7 @@ export async function updateServerConfig(id: string, config: TerrariaConfig, hos
     throw new Error(payload.error ?? "Unable to update server config");
   }
   const server = (await response.json()) as ApiServer;
-  return toServer(server);
+  return gameServerResourceFromApi(server);
 }
 
 export async function getDockerStatus(): Promise<DockerStatus> {
@@ -417,6 +360,7 @@ export type AppSettings = {
   dbPath: string;
   dockerHost: string;
   publicHost: string;
+  locale: Locale;
 };
 
 export type ServerStats = {
@@ -438,7 +382,7 @@ export function serverLogsUrl(id: string) {
 }
 
 export type HostStats = {
-  runningContainers: number;
+  runningWorkloads: number;
   totalCpuPercent: number;
   totalMemoryMb: number;
   memoryLimitMb: number;
@@ -528,14 +472,14 @@ export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
   return (await response.json()) as Record<string, string[]>;
 }
 
-export async function createServer(input: {
+export async function createGameServer(input: {
   name: string;
   providerKey: ProviderKey;
   config: TerrariaConfig | Record<string, unknown>;
   hostPort?: number;
   version?: string;
   resources?: ResourceLimits;
-}): Promise<Server> {
+}): Promise<GameServerResource> {
   const response = await apiFetch(`${API_BASE}/api/servers`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -546,7 +490,7 @@ export async function createServer(input: {
     throw new Error(payload.error ?? "Unable to create server");
   }
   const server = (await response.json()) as ApiServer;
-  return toServer(server);
+  return gameServerResourceFromApi(server);
 }
 
 export async function listConfigPresets(): Promise<ConfigPreset[]> {
@@ -585,7 +529,7 @@ export async function deleteConfigPreset(id: string): Promise<void> {
   }
 }
 
-export async function serverAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<Server | null> {
+export async function gameServerAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<GameServerResource | null> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}${action === "delete" ? "" : `/${action}`}`, {
     method: action === "delete" ? "DELETE" : "POST"
   });
@@ -597,7 +541,7 @@ export async function serverAction(id: string, action: "start" | "stop" | "resta
     return null;
   }
   const server = (await response.json()) as ApiServer;
-  return toServer(server);
+  return gameServerResourceFromApi(server);
 }
 
 export async function sendServerCommand(id: string, command: string) {
@@ -1007,6 +951,7 @@ export async function listActivity(): Promise<ActivityEvent[]> {
     instanceId: event.instanceId,
     type: event.type,
     message: event.message,
+    payload: event.payload,
     created: formatRelative(event.createdAt)
   }));
 }
@@ -1018,6 +963,15 @@ export async function updatePublicHost(publicHost: string): Promise<{ publicHost
     body: JSON.stringify({ publicHost })
   });
   return readPayload<{ publicHost: string }>(response, "Unable to update public host");
+}
+
+export async function updateLocale(locale: Locale): Promise<{ locale: Locale }> {
+  const response = await apiFetch(`${API_BASE}/api/settings/locale`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale })
+  });
+  return readPayload<{ locale: Locale }>(response, "Unable to update language");
 }
 
 export async function getServerJoinInfo(id: string): Promise<ServerJoinInfo> {

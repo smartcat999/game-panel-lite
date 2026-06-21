@@ -1,40 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { attachLatestBackupTimes } from "./server-metrics";
-import type { Backup, Server } from "./types";
+import { attachLatestBackupTimesToGameServers } from "./server-metrics";
+import type { Backup, GameServerResource } from "./types";
 
-const server = {
+const gameServer = {
   id: "server-1",
   name: "Friends",
-  mode: "vanilla",
-  status: "stopped",
-  world: "Earth",
-  players: 0,
-  maxPlayers: 8,
-  port: 7777,
-  version: "1.4.4.9",
-  hostPort: 7777,
-  cpuLimitCores: 0,
-  memoryLimitMb: 0,
-  lastBackup: "Not yet",
-  password: "",
-  cpu: "0%",
-  memory: "0 MB",
-  config: {
-    serverName: "Friends",
-    worldName: "Earth",
-    worldSize: "medium",
-    worldEvil: "random",
-    difficulty: "classic",
-    maxPlayers: 8,
-    port: 7777,
-    password: "",
-    motd: "",
-    seed: "",
-    secure: true,
-    language: "en-US",
-    autoCreateWorld: true
-  }
-} satisfies Server;
+  gameKey: "terraria",
+  providerKey: "terraria-vanilla",
+  spec: {
+    generation: 1,
+    desiredState: "stopped",
+    version: "1.4.5.6",
+    config: {
+      serverName: "Friends",
+      worldName: "Earth",
+      maxPlayers: 8,
+      port: 7777
+    },
+    resources: {
+      cpuLimitCores: 0,
+      memoryLimitMb: 0
+    },
+    network: {
+      port: 7777,
+      hostPort: 7777
+    }
+  },
+  status: {
+    phase: "stopped",
+    actualState: "stopped",
+    playersOnline: 0,
+    observedGeneration: 1,
+    appliedGeneration: 1
+  },
+  createdAt: "2026-06-14T00:00:00.000Z",
+  updatedAt: "2026-06-14T00:00:00.000Z"
+} satisfies GameServerResource;
 
 function backup(id: string, created: string, createdAt: string): Backup {
   return {
@@ -52,12 +53,12 @@ function backup(id: string, created: string, createdAt: string): Backup {
 }
 
 describe("server metrics", () => {
-  it("attaches the newest backup time to matching servers", () => {
-    const result = attachLatestBackupTimes([server], [
+  it("attaches the newest backup object to matching game server resources", () => {
+    const result = attachLatestBackupTimesToGameServers([gameServer], [
       backup("older", "1 h ago", "2026-06-14T01:00:00.000Z"),
       backup("newer", "Just now", "2026-06-14T02:00:00.000Z")
     ]);
 
-    expect(result[0]?.lastBackup).toBe("Just now");
+    expect(result[0]?.latestBackup?.id).toBe("newer");
   });
 });

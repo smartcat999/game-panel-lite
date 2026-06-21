@@ -1,6 +1,7 @@
 package terraria
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -8,17 +9,38 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
-type VanillaProvider struct{}
-type TModLoaderProvider struct{}
+type VanillaProvider struct {
+	runtime runtimecatalog.RuntimeConfig
+}
+type TModLoaderProvider struct {
+	runtime runtimecatalog.RuntimeConfig
+}
 
-var vanillaVersions = []string{"1.4.5.6", "1.4.4.9"}
+var vanillaVersions = []string{"1.4.5.6"}
 var tmodloaderVersions = []string{"v2026.04.3.0", "v2026.02.3.1"}
 
-func NewVanillaProvider() VanillaProvider       { return VanillaProvider{} }
-func NewTModLoaderProvider() TModLoaderProvider { return TModLoaderProvider{} }
+func NewVanillaProvider(catalog ...runtimecatalog.Catalog) VanillaProvider {
+	return VanillaProvider{
+		runtime: runtimecatalog.FromCatalog(catalog, domain.ProviderTerrariaVanilla, vanillaRuntimeConfig()),
+	}
+}
+func NewTModLoaderProvider(catalog ...runtimecatalog.Catalog) TModLoaderProvider {
+	return TModLoaderProvider{
+		runtime: runtimecatalog.FromCatalog(catalog, domain.ProviderTerrariaTModLoader, tmodLoaderRuntimeConfig()),
+	}
+}
+
+func vanillaRuntimeConfig() runtimecatalog.RuntimeConfig {
+	return runtimecatalog.RuntimeConfig{ImageTemplate: "smartcat99999/terraria-vanilla:{version}", Versions: vanillaVersions}
+}
+
+func tmodLoaderRuntimeConfig() runtimecatalog.RuntimeConfig {
+	return runtimecatalog.RuntimeConfig{ImageTemplate: "smartcat99999/tmodloader:{version}", Versions: tmodloaderVersions}
+}
 
 func (VanillaProvider) GameKey() domain.GameKey { return domain.GameTerraria }
 func (VanillaProvider) Key() domain.ProviderKey { return domain.ProviderTerrariaVanilla }
@@ -33,27 +55,60 @@ func (VanillaProvider) ConfigSchema() []domain.ProviderConfigField {
 	return configSchema()
 }
 func (VanillaProvider) SaveDisplayName() string { return "world" }
-func (VanillaProvider) Image() string           { return VanillaImageForVersion(vanillaVersions[0]) }
-func (VanillaProvider) Versions() []string      { return vanillaVersions }
-func (VanillaProvider) ImageFor(version string) string {
-	return VanillaImageForVersion(version)
+func (p VanillaProvider) Image() string         { return p.ImageFor(p.Versions()[0]) }
+func (p VanillaProvider) Versions() []string {
+	return p.runtime.WithFallback(vanillaRuntimeConfig()).VersionList()
 }
-func (VanillaProvider) DefaultConfig() domain.TerrariaConfig {
+func (p VanillaProvider) ImageFor(version string) string {
+	return p.runtime.WithFallback(vanillaRuntimeConfig()).ImageFor(version)
+}
+func (VanillaProvider) DefaultConfig() Config {
 	return Presets[0].Config
 }
-func (VanillaProvider) ValidateConfig(config domain.TerrariaConfig) error {
+func (p VanillaProvider) DefaultConfigPayload() map[string]any {
+	return terrariaPayloadFromConfig(p.DefaultConfig())
+}
+func (p VanillaProvider) NormalizeConfigPayload(payload map[string]any) (map[string]any, error) {
+	config, err := terrariaConfigFromPayload(payload, p.DefaultConfig())
+	if err != nil {
+		return nil, err
+	}
+	return terrariaPayloadFromConfig(config), nil
+}
+func (p VanillaProvider) ValidateConfigPayload(payload map[string]any) error {
+	config, err := terrariaConfigFromPayload(payload, p.DefaultConfig())
+	if err != nil {
+		return err
+	}
+	return p.ValidateConfig(config)
+}
+func (p VanillaProvider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
+	config, err := terrariaConfigFromPayload(payload, p.DefaultConfig())
+	if err != nil {
+		return domain.ProviderConfigSummary{}, err
+	}
+	return summaryFromConfig(config), nil
+}
+func (VanillaProvider) ValidateConfig(config Config) error {
 	return ValidateConfig(config)
 }
-func (VanillaProvider) RenderConfig(config domain.TerrariaConfig) (string, error) {
+func (VanillaProvider) RenderConfig(config Config) (string, error) {
 	return RenderServerConfig(config)
 }
-func (VanillaProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
+func (VanillaProvider) RuntimeOptions(config Config) runtime.ContainerOptions {
 	return vanillaRuntimeOptions(config)
 }
-func (VanillaProvider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+func (VanillaProvider) RuntimeConfigForResource(server domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	return resourceRuntimeConfig(server, Presets[0].Config, vanillaRuntimeOptions)
+}
+func (VanillaProvider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 	return terrariaJoinInfo(server)
 }
-func (VanillaProvider) PlayerListCommand(config domain.TerrariaConfig) string {
+func (VanillaProvider) PlayerListCommand(server domain.GameServer) string {
+	config, err := configFromResource(server, Presets[0].Config)
+	if err != nil {
+		config = Presets[0].Config
+	}
 	return localizedPlayerListCommand(config)
 }
 func (VanillaProvider) KickCommand(player string) string {
@@ -84,27 +139,60 @@ func (TModLoaderProvider) ConfigSchema() []domain.ProviderConfigField {
 	return configSchema()
 }
 func (TModLoaderProvider) SaveDisplayName() string { return "world" }
-func (TModLoaderProvider) Image() string           { return TModLoaderImageForVersion(tmodloaderVersions[0]) }
-func (TModLoaderProvider) Versions() []string      { return tmodloaderVersions }
-func (TModLoaderProvider) ImageFor(version string) string {
-	return TModLoaderImageForVersion(version)
+func (p TModLoaderProvider) Image() string         { return p.ImageFor(p.Versions()[0]) }
+func (p TModLoaderProvider) Versions() []string {
+	return p.runtime.WithFallback(tmodLoaderRuntimeConfig()).VersionList()
 }
-func (TModLoaderProvider) DefaultConfig() domain.TerrariaConfig {
+func (p TModLoaderProvider) ImageFor(version string) string {
+	return p.runtime.WithFallback(tmodLoaderRuntimeConfig()).ImageFor(version)
+}
+func (TModLoaderProvider) DefaultConfig() Config {
 	return Presets[4].Config
 }
-func (TModLoaderProvider) ValidateConfig(config domain.TerrariaConfig) error {
+func (p TModLoaderProvider) DefaultConfigPayload() map[string]any {
+	return terrariaPayloadFromConfig(p.DefaultConfig())
+}
+func (p TModLoaderProvider) NormalizeConfigPayload(payload map[string]any) (map[string]any, error) {
+	config, err := terrariaConfigFromPayload(payload, p.DefaultConfig())
+	if err != nil {
+		return nil, err
+	}
+	return terrariaPayloadFromConfig(config), nil
+}
+func (p TModLoaderProvider) ValidateConfigPayload(payload map[string]any) error {
+	config, err := terrariaConfigFromPayload(payload, p.DefaultConfig())
+	if err != nil {
+		return err
+	}
+	return p.ValidateConfig(config)
+}
+func (p TModLoaderProvider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
+	config, err := terrariaConfigFromPayload(payload, p.DefaultConfig())
+	if err != nil {
+		return domain.ProviderConfigSummary{}, err
+	}
+	return summaryFromConfig(config), nil
+}
+func (TModLoaderProvider) ValidateConfig(config Config) error {
 	return ValidateConfig(config)
 }
-func (TModLoaderProvider) RenderConfig(config domain.TerrariaConfig) (string, error) {
+func (TModLoaderProvider) RenderConfig(config Config) (string, error) {
 	return RenderServerConfig(config)
 }
-func (TModLoaderProvider) RuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
+func (TModLoaderProvider) RuntimeOptions(config Config) runtime.ContainerOptions {
 	return tModLoaderRuntimeOptions(config)
 }
-func (TModLoaderProvider) JoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+func (TModLoaderProvider) RuntimeConfigForResource(server domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	return resourceRuntimeConfig(server, Presets[4].Config, tModLoaderRuntimeOptions)
+}
+func (TModLoaderProvider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 	return terrariaJoinInfo(server)
 }
-func (TModLoaderProvider) PlayerListCommand(config domain.TerrariaConfig) string {
+func (TModLoaderProvider) PlayerListCommand(server domain.GameServer) string {
+	config, err := configFromResource(server, Presets[4].Config)
+	if err != nil {
+		config = Presets[4].Config
+	}
 	return localizedPlayerListCommand(config)
 }
 func (TModLoaderProvider) KickCommand(player string) string {
@@ -120,6 +208,66 @@ func (TModLoaderProvider) ParsePlayerLogEvent(line string) (domain.PlayerLogEven
 	return parsePlayerLogEvent(line)
 }
 
+func terrariaConfigFromPayload(payload map[string]any, fallback Config) (Config, error) {
+	config := NormalizeConfig(fallback)
+	if len(payload) == 0 {
+		return config, nil
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return Config{}, fmt.Errorf("invalid config payload")
+	}
+	return NormalizeConfig(config), nil
+}
+
+func ConfigFromPayload(payload map[string]any, fallback Config) (Config, error) {
+	return terrariaConfigFromPayload(payload, fallback)
+}
+
+func terrariaPayloadFromConfig(config Config) map[string]any {
+	config = NormalizeConfig(config)
+	payload := map[string]any{
+		"serverName":      config.ServerName,
+		"worldName":       config.WorldName,
+		"worldSize":       config.WorldSize,
+		"worldEvil":       config.WorldEvil,
+		"difficulty":      config.Difficulty,
+		"maxPlayers":      config.MaxPlayers,
+		"port":            config.Port,
+		"motd":            config.MOTD,
+		"secure":          config.Secure,
+		"language":        config.Language,
+		"autoCreateWorld": config.AutoCreateWorld,
+	}
+	if config.Password != "" {
+		payload["password"] = config.Password
+	}
+	if config.Seed != "" {
+		payload["seed"] = config.Seed
+	}
+	return payload
+}
+
+func PayloadFromConfig(config Config) map[string]any {
+	return terrariaPayloadFromConfig(config)
+}
+
+func summaryFromConfig(config Config) domain.ProviderConfigSummary {
+	config = NormalizeConfig(config)
+	return domain.ProviderConfigSummary{
+		ServerName: config.ServerName,
+		WorldName:  config.WorldName,
+		MaxPlayers: config.MaxPlayers,
+		Port:       config.Port,
+		Password:   config.Password,
+		MOTD:       config.MOTD,
+		Secure:     config.Secure,
+	}
+}
+
 func vanillaCapabilities() domain.ProviderCapabilities {
 	return domain.ProviderCapabilities{
 		ConsoleCommands: true,
@@ -132,10 +280,14 @@ func vanillaCapabilities() domain.ProviderCapabilities {
 	}
 }
 
-func terrariaJoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
+func terrariaJoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 	address := defaultJoinAddress
 	port := joinPort(server)
-	password := server.Password
+	config, err := configFromResource(server, Config{})
+	password := ""
+	if err == nil {
+		password = config.Password
+	}
 	invite := fmt.Sprintf("Join %s in Terraria at %s:%d", server.Name, address, port)
 	if password != "" {
 		invite += " password: " + password
@@ -154,11 +306,11 @@ func terrariaJoinInfo(server domain.GameServerInstance) domain.ServerJoinInfo {
 
 const defaultJoinAddress = "127.0.0.1"
 
-func joinPort(server domain.GameServerInstance) int {
-	if server.HostPort > 0 {
-		return server.HostPort
+func joinPort(server domain.GameServer) int {
+	if server.Spec.Network.HostPort > 0 {
+		return server.Spec.Network.HostPort
 	}
-	return server.Port
+	return server.Spec.Network.Port
 }
 
 func configSchema() []domain.ProviderConfigField {
@@ -197,7 +349,7 @@ func configSchema() []domain.ProviderConfigField {
 	}
 }
 
-func RuntimeWorldFiles(providerKey domain.ProviderKey, config domain.TerrariaConfig) []string {
+func RuntimeWorldFiles(providerKey domain.ProviderKey, config Config) []string {
 	switch providerKey {
 	case domain.ProviderTerrariaTModLoader:
 		return []string{filepath.Join("Worlds", config.WorldName+".wld")}
@@ -213,8 +365,67 @@ func RuntimeModFiles(providerKey domain.ProviderKey, fileName string) []string {
 	return []string{filepath.Join("Mods", fileName)}
 }
 
-func vanillaRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
-	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
+func resourceRuntimeConfig(server domain.GameServer, fallback Config, optionsFor func(Config) runtime.ContainerOptions) (domain.ProviderRuntimeConfig, error) {
+	config, err := configFromResource(server, fallback)
+	if err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	config = NormalizeConfig(config)
+	if err := ValidateConfig(config); err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	configText, err := RenderServerConfig(config)
+	if err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	options := optionsFor(config)
+	return domain.ProviderRuntimeConfig{
+		Port:       config.Port,
+		Protocol:   options.PortProtocol,
+		ConfigText: configText,
+		Options:    workloadOptions(options),
+	}, nil
+}
+
+func configFromResource(server domain.GameServer, fallback Config) (Config, error) {
+	config := NormalizeConfig(fallback)
+	if server.Spec.Config != nil {
+		buf, err := json.Marshal(server.Spec.Config)
+		if err != nil {
+			return Config{}, err
+		}
+		if err := json.Unmarshal(buf, &config); err != nil {
+			return Config{}, fmt.Errorf("invalid Terraria config payload")
+		}
+	}
+	if server.Spec.Network.Port != 0 {
+		config.Port = server.Spec.Network.Port
+	}
+	return NormalizeConfig(config), nil
+}
+
+func workloadOptions(options runtime.ContainerOptions) domain.WorkloadOptions {
+	return domain.WorkloadOptions{
+		Env:        append([]string{}, options.Env...),
+		Cmd:        append([]string{}, options.Cmd...),
+		Files:      cloneFiles(options.Files),
+		DataMounts: append([]string{}, options.DataMounts...),
+	}
+}
+
+func cloneFiles(files map[string]string) map[string]string {
+	if files == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(files))
+	for key, value := range files {
+		clone[key] = value
+	}
+	return clone
+}
+
+func vanillaRuntimeOptions(config Config) runtime.ContainerOptions {
+	worldSizes := map[WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	return runtime.ContainerOptions{
 		Env: []string{
 			"HOME=/home/container",
@@ -237,8 +448,8 @@ func vanillaRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOption
 	}
 }
 
-func tModLoaderRuntimeOptions(config domain.TerrariaConfig) runtime.ContainerOptions {
-	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
+func tModLoaderRuntimeOptions(config Config) runtime.ContainerOptions {
+	worldSizes := map[WorldSize]int{"small": 1, "medium": 2, "large": 3}
 	return runtime.ContainerOptions{
 		Env: []string{
 			"HOME=/home/container",
@@ -280,7 +491,7 @@ func VanillaImageForVersion(version string) string {
 	return "smartcat99999/terraria-vanilla:" + version
 }
 
-func localizedPlayerListCommand(config domain.TerrariaConfig) string {
+func localizedPlayerListCommand(config Config) string {
 	switch strings.ToLower(strings.TrimSpace(config.Language)) {
 	case "zh-hans", "zh-cn", "zh":
 		return "游戏中"
@@ -437,11 +648,11 @@ func unnamedPlayers(count int) []domain.Player {
 	return players
 }
 
-func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {
+func renderVanillaRuntimeConfig(config Config) string {
 	config = NormalizeConfig(config)
-	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
-	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
-	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
+	worldSizes := map[WorldSize]int{"small": 1, "medium": 2, "large": 3}
+	worldEvils := map[WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
+	difficulties := map[Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
 	lines := []string{
 		fmt.Sprintf("world=/home/container/Worlds/%s.wld", config.WorldName),
 		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),
@@ -452,7 +663,7 @@ func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {
 		fmt.Sprintf("port=%d", config.Port),
 		fmt.Sprintf("password=%s", config.Password),
 		fmt.Sprintf("motd=%s", value(config.MOTD, "Welcome to GamePanel Lite")),
-		fmt.Sprintf("seed=%s", config.Seed),
+		fmt.Sprintf("seed=%s", renderSeedValue(config)),
 		fmt.Sprintf("worldpath=%s", "/home/container/Worlds"),
 		fmt.Sprintf("secure=%d", boolInt(config.Secure)),
 		fmt.Sprintf("language=%s", value(config.Language, DefaultLanguage)),
@@ -462,11 +673,11 @@ func renderVanillaRuntimeConfig(config domain.TerrariaConfig) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
+func renderTModLoaderRuntimeConfig(config Config) string {
 	config = NormalizeConfig(config)
-	worldSizes := map[domain.WorldSize]int{"small": 1, "medium": 2, "large": 3}
-	worldEvils := map[domain.WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
-	difficulties := map[domain.Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
+	worldSizes := map[WorldSize]int{"small": 1, "medium": 2, "large": 3}
+	worldEvils := map[WorldEvil]int{"": 0, "random": 0, "corruption": 1, "crimson": 2}
+	difficulties := map[Difficulty]int{"journey": 0, "classic": 1, "expert": 2, "master": 3}
 	lines := []string{
 		fmt.Sprintf("world=/home/container/Worlds/%s.wld", config.WorldName),
 		fmt.Sprintf("autocreate=%d", worldSizes[config.WorldSize]),
@@ -477,7 +688,7 @@ func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
 		fmt.Sprintf("port=%d", config.Port),
 		fmt.Sprintf("password=%s", config.Password),
 		fmt.Sprintf("motd=%s", value(config.MOTD, "Welcome to GamePanel Lite")),
-		fmt.Sprintf("seed=%s", config.Seed),
+		fmt.Sprintf("seed=%s", renderSeedValue(config)),
 		fmt.Sprintf("worldpath=%s", "/home/container/Worlds"),
 		fmt.Sprintf("secure=%d", boolInt(config.Secure)),
 		fmt.Sprintf("language=%s", value(config.Language, DefaultLanguage)),
@@ -485,4 +696,35 @@ func renderTModLoaderRuntimeConfig(config domain.TerrariaConfig) string {
 		"priority=1",
 	}
 	return strings.Join(lines, "\n")
+}
+
+func renderSeedValue(config Config) string {
+	seed := strings.TrimSpace(config.Seed)
+	modes := append([]string{}, normalizedSeedList(config.SpecialSeeds)...)
+	modes = append(modes, normalizedSeedList(config.SecretSeeds)...)
+	if len(modes) == 0 {
+		return seed
+	}
+	if seed == "" {
+		seed = "0"
+	}
+	return fmt.Sprintf("1.1.1.%s.%s|", seed, strings.Join(modes, "|"))
+}
+
+func normalizedSeedList(values []string) []string {
+	next := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		item := strings.TrimSpace(value)
+		if item == "" {
+			continue
+		}
+		key := strings.ToLower(item)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		next = append(next, item)
+	}
+	return next
 }

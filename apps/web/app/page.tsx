@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  Archive,
   ChevronRight,
   CircleDot,
   Container,
@@ -35,12 +34,12 @@ const capabilities = [
   {
     icon: Gamepad2,
     title: "Create Terraria Servers",
-    body: "Spin up fresh Terraria or tModLoader instances with presets for friends, mods, and long-running worlds."
+    body: "Spin up fresh Terraria or tModLoader instances with presets for friends, mods, and long-running sessions."
   },
   {
     icon: Container,
     title: "Docker Isolation",
-    body: "Each server maps to one container and its own data directory, keeping worlds, ports, and runtime state separate."
+    body: "Each server maps to one container and its own data directory, keeping ports and runtime state separate."
   },
   {
     icon: Zap,
@@ -53,9 +52,9 @@ const capabilities = [
     body: "Copy IP, port, password, and player-ready details without digging through config files."
   },
   {
-    icon: Archive,
-    title: "World Backups",
-    body: "Import, back up, restore, and migrate worlds with validation against unsafe filenames and traversal."
+    icon: ShieldCheck,
+    title: "Safe Runtime Boundaries",
+    body: "Keep Docker access scoped through the backend runtime adapter with validation around filesystem operations."
   },
   {
     icon: TerminalSquare,
@@ -68,7 +67,7 @@ const previewShots = [
   {
     src: "/official/interface-dashboard.png",
     title: "Instance Overview",
-    body: "A dense launcher-style dashboard for active worlds, resources, status, and fast server actions."
+    body: "A dense launcher-style dashboard for active servers, resources, status, and fast server actions."
   },
   {
     src: "/official/interface-servers.png",
@@ -91,7 +90,7 @@ const setupSteps = [
   {
     icon: Settings2,
     title: "Tune the instance",
-    body: "Set name, port, password, world path, memory, and runtime options before the container starts."
+    body: "Set name, port, password, memory, and runtime options before the container starts."
   },
   {
     icon: Play,
@@ -103,12 +102,12 @@ const setupSteps = [
 const roadmap = [
   {
     label: "Now",
-    items: ["Terraria Core Engine", "tModLoader UI Integration", "World Backup System"],
+    items: ["Terraria Core Engine", "tModLoader UI Integration", "Runtime Monitoring"],
     tone: "text-[#6bfb9a]"
   },
   {
     label: "Next",
-    items: ["Advanced Config Templates", "S3 Backup Exports", "User Permission System"],
+    items: ["Advanced Config Templates", "Expanded Provider Catalog", "User Permission System"],
     tone: "text-[#dfe2eb]"
   },
   {

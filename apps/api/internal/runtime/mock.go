@@ -37,30 +37,33 @@ func (m *MockAdapter) LoadImageArchive(context.Context, string) error {
 	return nil
 }
 
-func (m *MockAdapter) Create(_ context.Context, spec ContainerSpec) (string, error) {
-	return "mock-" + spec.InstanceID, nil
+func (m *MockAdapter) CreateWorkload(_ context.Context, spec domain.WorkloadSpec) (string, error) {
+	return "mock-" + spec.ServerID, nil
 }
 
-func (m *MockAdapter) Start(context.Context, domain.GameServerInstance) error   { return nil }
-func (m *MockAdapter) Stop(context.Context, domain.GameServerInstance) error    { return nil }
-func (m *MockAdapter) Restart(context.Context, domain.GameServerInstance) error { return nil }
-func (m *MockAdapter) Remove(context.Context, domain.GameServerInstance) error  { return nil }
+func (m *MockAdapter) StartWorkload(context.Context, string) error  { return nil }
+func (m *MockAdapter) StopWorkload(context.Context, string) error   { return nil }
+func (m *MockAdapter) RemoveWorkload(context.Context, string) error { return nil }
 
-func (m *MockAdapter) Inspect(context.Context, domain.GameServerInstance) (domain.ServerStatus, error) {
-	return domain.StatusStopped, nil
+func (m *MockAdapter) InspectWorkload(_ context.Context, runtimeID string) (domain.WorkloadStatus, error) {
+	return domain.WorkloadStatus{RuntimeID: runtimeID, State: domain.ActualStopped}, nil
 }
 
-func (m *MockAdapter) Stats(context.Context, domain.GameServerInstance) (ContainerStats, error) {
-	return ContainerStats{}, nil
+func (m *MockAdapter) StatsWorkload(context.Context, string) (WorkloadStats, error) {
+	return WorkloadStats{}, nil
 }
 func (m *MockAdapter) HostStats(context.Context) (HostStats, error) {
 	return HostStats{}, nil
 }
 
-func (m *MockAdapter) Logs(_ context.Context, instance domain.GameServerInstance) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("[Info] Mock Terraria log stream for " + instance.Name + "\n")), nil
+func (m *MockAdapter) LogsWorkload(_ context.Context, runtimeID string, _ bool) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("[Info] Mock log stream for " + runtimeID + "\n")), nil
 }
 
-func (m *MockAdapter) SendCommand(context.Context, domain.GameServerInstance, string) error {
+func (m *MockAdapter) LogSnapshotWorkload(_ context.Context, runtimeID string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("[Info] Mock log stream for " + runtimeID + "\n")), nil
+}
+
+func (m *MockAdapter) SendCommandWorkload(context.Context, string, string) error {
 	return nil
 }

@@ -11,7 +11,10 @@ import (
 )
 
 func TestDataBindsUsesAbsoluteHostPath(t *testing.T) {
-	binds := dataBinds("data/instances/example", []string{"/data"})
+	binds, err := dataBinds("data/instances/example", []string{"/data"})
+	if err != nil {
+		t.Fatalf("expected data binds to succeed, got %v", err)
+	}
 	if len(binds) != 1 {
 		t.Fatalf("expected one bind, got %v", binds)
 	}
@@ -25,7 +28,10 @@ func TestDataBindsUsesAbsoluteHostPath(t *testing.T) {
 }
 
 func TestDataBindsSupportsSubPathMounts(t *testing.T) {
-	binds := dataBinds("data/instances/example", []string{"Worlds:/home/container/Worlds"})
+	binds, err := dataBinds("data/instances/example", []string{"Worlds:/home/container/Worlds"})
+	if err != nil {
+		t.Fatalf("expected data binds to succeed, got %v", err)
+	}
 	if len(binds) != 1 {
 		t.Fatalf("expected one bind, got %v", binds)
 	}
@@ -41,6 +47,34 @@ func TestDataBindsSupportsSubPathMounts(t *testing.T) {
 	}
 	if container != "/home/container/Worlds" {
 		t.Fatalf("expected container bind path, got %q", container)
+	}
+}
+
+func TestDataBindsRejectsEscapingHostSubPath(t *testing.T) {
+	_, err := dataBinds("data/instances/example", []string{"../escape:/data"})
+	if err == nil {
+		t.Fatal("expected escaping data mount host path to fail")
+	}
+	if !strings.Contains(err.Error(), "invalid data mount host path") {
+		t.Fatalf("expected invalid host path error, got %v", err)
+	}
+}
+
+func TestDataBindsRejectsRelativeContainerPath(t *testing.T) {
+	_, err := dataBinds("data/instances/example", []string{"Worlds:home/container/Worlds"})
+	if err == nil {
+		t.Fatal("expected relative container path to fail")
+	}
+	if !strings.Contains(err.Error(), "invalid data mount container path") {
+		t.Fatalf("expected invalid container path error, got %v", err)
+	}
+}
+
+func TestPrepareDataMountsRejectsEscapingHostSubPath(t *testing.T) {
+	dataDir := t.TempDir()
+	err := prepareDataMounts(dataDir, []string{"../escape:/data"})
+	if err == nil {
+		t.Fatal("expected escaping data mount host path to fail")
 	}
 }
 
@@ -74,6 +108,37 @@ func TestPrepareDataMountsRepairsExistingDirectoryPermissions(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o777 {
 		t.Fatalf("expected writable data dir permissions, got %o", got)
+	}
+}
+
+func TestPrepareDataMountsRepairsExistingNestedDSTSavePermissions(t *testing.T) {
+	dataDir := t.TempDir()
+	saveDir := filepath.Join(dataDir, "dst", "Cluster", "Master", "save")
+	if err := os.MkdirAll(saveDir, 0o755); err != nil {
+		t.Fatalf("failed to create save dir: %v", err)
+	}
+	shardIndex := filepath.Join(saveDir, "shardindex")
+	if err := os.WriteFile(shardIndex, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("failed to create shardindex: %v", err)
+	}
+
+	if err := prepareDataMounts(dataDir, []string{"/data"}); err != nil {
+		t.Fatalf("expected mount preparation to succeed, got %v", err)
+	}
+
+	dirInfo, err := os.Stat(saveDir)
+	if err != nil {
+		t.Fatalf("expected save dir to exist: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o777 {
+		t.Fatalf("expected writable save dir permissions, got %o", got)
+	}
+	fileInfo, err := os.Stat(shardIndex)
+	if err != nil {
+		t.Fatalf("expected shardindex to exist: %v", err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0o666 {
+		t.Fatalf("expected writable shardindex permissions, got %o", got)
 	}
 }
 

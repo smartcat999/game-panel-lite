@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { serverProviderDisplay } from "@/lib/server-display";
-import type { Server, ServerMode, ServerStatus } from "@/lib/types";
+import type { ProviderKey, ServerMode, ServerStatus } from "@/lib/types";
 
 export function ServerStatusBadge({ status }: { status: ServerStatus }) {
   const { t } = useI18n();
@@ -45,7 +45,7 @@ export function ServerModeBadge({ mode }: { mode: ServerMode }) {
   );
 }
 
-export function ServerProviderBadge({ server }: { server: Pick<Server, "mode" | "providerKey"> }) {
+export function ServerProviderBadge({ server }: { server: { mode?: ServerMode; providerKey?: ProviderKey } }) {
   const display = serverProviderDisplay(server);
   const className =
     display.tone === "purple"

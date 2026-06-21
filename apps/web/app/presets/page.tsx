@@ -33,7 +33,7 @@ export default function PresetsPage() {
   const games = gamesQuery.data ?? [];
   const modPacks = modPacksQuery.data ?? [];
   const gameFilters = useMemo(
-    () => gameFilterOptions(games, t("filterAll"), presets.map((preset) => preset.gameKey)),
+    () => gameFilterOptions(games, t("filterAll"), presets.map((preset) => preset.gameKey), t),
     [games, presets, t]
   );
   const providerFilters = useMemo(

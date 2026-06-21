@@ -1,5 +1,5 @@
 import type { MessageKey } from "./i18n";
-import type { ProviderKey, Server } from "./types";
+import type { ProviderKey, ServerMode } from "./types";
 
 export type ServerDisplayProvider = {
   label: string;
@@ -14,19 +14,19 @@ const providerLabels: Record<string, ServerDisplayProvider> = {
   minecraft: { label: "Minecraft Java", tone: "green" }
 };
 
-export function serverProviderDisplay(server: Pick<Server, "mode" | "providerKey">): ServerDisplayProvider {
+export function serverProviderDisplay(server: { mode?: ServerMode; providerKey?: ProviderKey }): ServerDisplayProvider {
   const providerKey = server.providerKey || legacyProviderKey(server.mode);
   return providerLabels[providerKey] ?? { label: formatProviderKey(providerKey), tone: "slate" };
 }
 
-export function serverResourceLabelKey(server: Pick<Server, "gameKey" | "providerKey">): MessageKey {
+export function serverResourceLabelKey(server: { gameKey?: string; providerKey?: ProviderKey }): MessageKey {
   const providerKey = server.providerKey ?? "";
   if (providerKey === "palworld") return "save";
   if (providerKey === "dont-starve-together") return "clusterSave";
   return "world";
 }
 
-function legacyProviderKey(mode: Server["mode"]): ProviderKey {
+function legacyProviderKey(mode?: ServerMode): ProviderKey {
   return mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla";
 }
 

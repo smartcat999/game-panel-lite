@@ -16,9 +16,11 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	dockerruntime "github.com/smartcat999/game-panel-lite/apps/api/internal/runtime/docker"
+	serverctrl "github.com/smartcat999/game-panel-lite/apps/api/internal/server"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
@@ -33,11 +35,22 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider(), minecraft.NewProvider())
+	providerCatalog, err := runtimecatalog.Load(cfg.ProviderCatalogPath)
+	if err != nil {
+		logger.Warn("using built-in provider runtime catalog", "error", err)
+	}
+	registry := provider.NewRegistry(
+		terraria.NewVanillaProvider(providerCatalog),
+		terraria.NewTModLoaderProvider(providerCatalog),
+		palworld.NewProvider(providerCatalog),
+		dst.NewProvider(providerCatalog),
+		minecraft.NewProvider(providerCatalog),
+	)
 	adapter, err := dockerruntime.NewAdapter(cfg.DockerHost)
 	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()
 	if err != nil {
-		logger.Warn("falling back to mock runtime adapter", "error", err)
+		logger.Warn("runtime adapter unavailable", "error", err)
+		runtimeAdapter = runtime.NewUnavailableAdapter(err)
 	} else {
 		runtimeAdapter = adapter
 	}
@@ -47,6 +60,14 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	appCtx, cancel := context.WithCancel(context.Background())
 	go dockerMonitor.Start(appCtx, 10*time.Second)
 	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(appCtx, 30*time.Second)
+	go serverctrl.NewController(
+		db,
+		serverctrl.NewRuntimeReconciler(
+			serverctrl.NewProviderWorkloadBuilder(registry),
+			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
+		),
+		logger,
+	).Start(appCtx)
 
 	dockerFactory := func(host string) (runtime.Adapter, error) {
 		return dockerruntime.NewAdapter(host)

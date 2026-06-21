@@ -5,9 +5,9 @@ import { Box, Hammer } from "lucide-react";
 import { getGameArt } from "@/lib/game-art";
 import { serverProviderDisplay } from "@/lib/server-display";
 import { cn } from "@/lib/utils";
-import type { Server } from "@/lib/types";
+import type { GameKey, ProviderKey, ServerMode } from "@/lib/types";
 
-export function ServerGameArt({ server, className }: { server: Pick<Server, "mode" | "providerKey" | "gameKey">; className?: string }) {
+export function ServerGameArt({ server, className }: { server: { mode?: ServerMode; providerKey?: ProviderKey; gameKey?: GameKey }; className?: string }) {
   const art = getGameArt(server.gameKey ?? server.providerKey);
   const provider = serverProviderDisplay(server);
   const showProviderMark = provider.label !== "Terraria";

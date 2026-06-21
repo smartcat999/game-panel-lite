@@ -1,5 +1,3 @@
-import type { TerrariaConfig } from "@gamepanel-lite/shared";
-
 export type ServerStatus = "creating" | "starting" | "running" | "stopping" | "stopped" | "restarting" | "deleting" | "errored";
 export type ServerMode = "vanilla" | "tmodloader";
 export type GameKey = "terraria" | "palworld" | string;
@@ -78,6 +76,64 @@ export type ResourceLimits = {
   memoryLimitMb: number;
 };
 
+export type ServerDesiredState = "running" | "stopped" | "deleted" | string;
+export type ServerPhase = "pending" | "reconciling" | "running" | "stopped" | "failed" | "deleting" | "deleted" | string;
+export type ServerActualState = "running" | "stopped" | "missing" | "unknown" | string;
+
+export type ServerResourceSpec = {
+  generation: number;
+  desiredState: ServerDesiredState;
+  version?: string;
+  config?: Record<string, unknown>;
+  sourceWorldId?: string;
+  sourceWorldName?: string;
+  resources?: Partial<ResourceLimits>;
+  network?: {
+    port?: number;
+    hostPort?: number;
+    protocol?: string;
+  };
+  runtime?: {
+    dataDir?: string;
+    image?: string;
+    env?: string[];
+    cmd?: string[];
+  };
+};
+
+export type ServerCondition = {
+  type: string;
+  status: "True" | "False" | "Unknown" | string;
+  reason?: string;
+  message?: string;
+  observedGeneration?: number;
+  lastTransitionAt: string;
+};
+
+export type ServerRuntimeStatus = {
+  phase: ServerPhase;
+  actualState: ServerActualState;
+  runtimeId?: string;
+  playersOnline?: number;
+  observedGeneration: number;
+  appliedGeneration: number;
+  conditions?: ServerCondition[];
+  lastError?: string;
+  lastReconcileAt?: string;
+  lastTransitionAt?: string;
+};
+
+export type GameServerResource = {
+  id: string;
+  name: string;
+  gameKey: GameKey;
+  providerKey: ProviderKey;
+  spec: ServerResourceSpec;
+  status: ServerRuntimeStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ServerJoinInfo = {
   address: string;
   port: number;
@@ -101,7 +157,7 @@ export type ConfigPreset = {
   gameKey: GameKey;
   providerKey: ProviderKey;
   version?: string;
-  config: TerrariaConfig;
+  config: Record<string, unknown>;
   configPayload?: Record<string, unknown>;
   cpuLimitCores: number;
   memoryLimitMb: number;
@@ -120,34 +176,6 @@ export type PublicServerShare = {
   joinInfo: ServerJoinInfo;
 };
 
-export type Server = {
-  id: string;
-  name: string;
-  gameKey?: GameKey;
-  providerKey?: ProviderKey;
-  mode: ServerMode;
-  status: ServerStatus;
-  world: string;
-  players: number;
-  maxPlayers: number;
-  port: number;
-  hostPort: number;
-  cpuLimitCores: number;
-  memoryLimitMb: number;
-  version: string;
-  lastError?: string;
-  sourceWorldId?: string;
-  sourceWorldName?: string;
-  lastBackup: string;
-  password: string;
-  cpu: string;
-  memory: string;
-  config: TerrariaConfig;
-  configPayload?: Record<string, unknown>;
-  joinInfo?: ServerJoinInfo;
-  configPendingRestart?: boolean;
-};
-
 export type World = {
   id: string;
   instanceId?: string;
@@ -161,7 +189,7 @@ export type World = {
   modified: string;
   bytes: string;
   source?: string;
-  config?: TerrariaConfig;
+  config?: Record<string, unknown>;
 };
 
 export type Backup = {
@@ -247,5 +275,6 @@ export type ActivityEvent = {
   instanceId?: string;
   type: string;
   message: string;
+  payload?: Record<string, unknown>;
   created: string;
 };

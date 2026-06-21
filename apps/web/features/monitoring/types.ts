@@ -28,7 +28,7 @@ export type MetricSeries = {
   max: number | null;
   threshold?: number;
   points: MetricPoint[];
-  emptyReason?: "prometheus_unconfigured" | "prometheus_unavailable" | "no_samples" | "server_stopped" | string;
+  emptyReason?: "prometheus_unconfigured" | "prometheus_unavailable" | "no_samples" | "no_active_samples" | "server_stopped" | string;
 };
 
 export type MonitoringOverviewResponse = {

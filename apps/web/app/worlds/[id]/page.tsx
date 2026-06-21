@@ -8,8 +8,9 @@ import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { deleteWorld, downloadWorldFile, listServers, listWorlds } from "@/lib/api";
+import { deleteWorld, downloadWorldFile, listGameServers, listWorlds } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
+import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { getWorldSourceServerId } from "@/lib/server-detail-resources";
 import { getTerrariaLanguageLabel } from "@/lib/terraria-language";
@@ -20,31 +21,46 @@ function worldModeLabel(world: World, vanillaLabel: string) {
   return vanillaLabel;
 }
 
-function difficultyLabel(value: NonNullable<World["config"]>["difficulty"], t: ReturnType<typeof useI18n>["t"]) {
+function difficultyLabel(value: string, t: ReturnType<typeof useI18n>["t"]) {
   return {
     journey: t("tagJourney"),
     classic: t("tagClassic"),
     expert: t("tagExpert"),
     master: t("tagMaster")
-  }[value];
+  }[value] ?? value;
 }
 
-function worldSizeLabel(value: NonNullable<World["config"]>["worldSize"], t: ReturnType<typeof useI18n>["t"]) {
+function worldSizeLabel(value: string, t: ReturnType<typeof useI18n>["t"]) {
   return {
     small: t("tagSmallWorld"),
     medium: t("tagMediumWorld"),
     large: t("tagLargeWorld")
-  }[value];
+  }[value] ?? value;
+}
+
+function stringConfigValue(config: World["config"], key: string, fallback = "") {
+  const value = config?.[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function numberConfigValue(config: World["config"], key: string, fallback = 0) {
+  const value = config?.[key];
+  return typeof value === "number" ? value : fallback;
 }
 
 export default function WorldDetailPage() {
+  if (!showWorldAndBackupFeatures) return <HiddenFeaturePage />;
+  return <EnabledWorldDetailPage />;
+}
+
+function EnabledWorldDetailPage() {
   const { locale, t } = useI18n();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const client = useQueryClient();
   const id = params.id;
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false });
   const [pendingDelete, setPendingDelete] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -53,7 +69,7 @@ export default function WorldDetailPage() {
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
   const sourceServerId = world ? getWorldSourceServerId(world) ?? "" : "";
   const sourceServerName = sourceServerId ? serverNameById.get(sourceServerId) ?? sourceServerId : "";
-  const usingServers = useMemo(() => (world ? servers.filter((server) => server.sourceWorldId === world.id) : []), [servers, world]);
+  const usingServers = useMemo(() => (world ? servers.filter((server) => server.spec.sourceWorldId === world.id) : []), [servers, world]);
 
   const remove = useMutation({
     mutationFn: deleteWorld,
@@ -134,12 +150,12 @@ export default function WorldDetailPage() {
             <h2 className="font-semibold">{t("worldTemplateConfig")}</h2>
             {config ? (
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <DetailTile label={t("worldName")} value={config.worldName} />
-                <DetailTile label={t("worldSize")} value={worldSizeLabel(config.worldSize, t)} />
-                <DetailTile label={t("difficulty")} value={difficultyLabel(config.difficulty, t)} />
-                <DetailTile label={t("maxPlayers")} value={String(config.maxPlayers)} />
-                <DetailTile label={t("languageSetting")} value={getTerrariaLanguageLabel(config.language, t)} />
-                <DetailTile label={t("motd")} value={config.motd || t("none")} />
+                <DetailTile label={t("worldName")} value={stringConfigValue(config, "worldName", stringConfigValue(config, "saveName", stringConfigValue(config, "clusterName", world.name)))} />
+                <DetailTile label={t("worldSize")} value={worldSizeLabel(stringConfigValue(config, "worldSize", ""), t)} />
+                <DetailTile label={t("difficulty")} value={difficultyLabel(stringConfigValue(config, "difficulty", ""), t)} />
+                <DetailTile label={t("maxPlayers")} value={String(numberConfigValue(config, "maxPlayers"))} />
+                <DetailTile label={t("languageSetting")} value={getTerrariaLanguageLabel(stringConfigValue(config, "language", "en-US"), t)} />
+                <DetailTile label={t("motd")} value={stringConfigValue(config, "motd") || t("none")} />
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-500">{t("worldTemplateConfigUnavailable")}</p>
@@ -214,6 +230,18 @@ export default function WorldDetailPage() {
         onConfirm={() => remove.mutate(world.id)}
       />
     </>
+  );
+}
+
+function HiddenFeaturePage() {
+  return (
+    <Card className="p-6">
+      <h1 className="text-xl font-semibold text-white">Page not found</h1>
+      <p className="mt-2 text-sm text-slate-400">The requested GamePanel Lite page does not exist.</p>
+      <Link className="mt-4 inline-flex text-sm font-medium text-panel-green hover:underline" href="/dashboard">
+        Back to dashboard
+      </Link>
+    </Card>
   );
 }
 

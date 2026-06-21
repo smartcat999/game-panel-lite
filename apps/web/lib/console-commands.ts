@@ -1,10 +1,10 @@
 import type { MessageKey } from "./i18n";
-import type { Server } from "./types";
+import type { GameKey, ProviderKey } from "./types";
 
-type ConsoleServer = Pick<Server, "gameKey" | "providerKey">;
+type ConsoleServer = { gameKey?: GameKey; providerKey?: ProviderKey };
 
 export function supportsTerrariaConsoleShortcuts(server: ConsoleServer) {
-  return server.gameKey === "terraria" || server.providerKey === "terraria-vanilla" || server.providerKey === "terraria-tmodloader";
+  return server.providerKey === "terraria-vanilla" || server.providerKey === "terraria-tmodloader";
 }
 
 export function consoleReadyMessageKey(server: ConsoleServer): MessageKey {

@@ -12,17 +12,27 @@ func TestTerrariaProvidersExposePlayerListCommand(t *testing.T) {
 	englishConfig := chineseConfig
 	englishConfig.Language = "en-US"
 
-	if command := NewVanillaProvider().PlayerListCommand(chineseConfig); command != "游戏中" {
+	if command := NewVanillaProvider().PlayerListCommand(testServerWithConfig(domain.ProviderTerrariaVanilla, chineseConfig)); command != "游戏中" {
 		t.Fatalf("expected localized vanilla player list command 游戏中, got %q", command)
 	}
-	if command := NewVanillaProvider().PlayerListCommand(englishConfig); command != "playing" {
+	if command := NewVanillaProvider().PlayerListCommand(testServerWithConfig(domain.ProviderTerrariaVanilla, englishConfig)); command != "playing" {
 		t.Fatalf("expected English vanilla player list command playing, got %q", command)
 	}
-	if command := NewTModLoaderProvider().PlayerListCommand(chineseConfig); command != "游戏中" {
+	if command := NewTModLoaderProvider().PlayerListCommand(testServerWithConfig(domain.ProviderTerrariaTModLoader, chineseConfig)); command != "游戏中" {
 		t.Fatalf("expected localized tModLoader player list command 游戏中, got %q", command)
 	}
-	if command := NewTModLoaderProvider().PlayerListCommand(englishConfig); command != "playing" {
+	if command := NewTModLoaderProvider().PlayerListCommand(testServerWithConfig(domain.ProviderTerrariaTModLoader, englishConfig)); command != "playing" {
 		t.Fatalf("expected English tModLoader player list command playing, got %q", command)
+	}
+}
+
+func testServerWithConfig(providerKey domain.ProviderKey, config Config) domain.GameServer {
+	return domain.GameServer{
+		GameKey:     domain.GameTerraria,
+		ProviderKey: providerKey,
+		Spec: domain.ServerSpec{
+			Config: terrariaPayloadFromConfig(config),
+		},
 	}
 }
 

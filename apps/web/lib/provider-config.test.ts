@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, providerPayloadToTerrariaConfig, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog } from "./types";
 
 const provider: ProviderCatalog = {
@@ -48,35 +48,5 @@ describe("provider config helpers", () => {
     expect(communityField).toBeDefined();
     expect(updateProviderConfigPayload(payload, maxPlayersField!, "12")).toMatchObject({ maxPlayers: 12 });
     expect(updateProviderConfigPayload(payload, communityField!, true)).toMatchObject({ community: true });
-  });
-
-  it("maps semantic payload into the compatibility config envelope", () => {
-    const config = providerPayloadToTerrariaConfig("palworld", {
-      maxPlayers: 16,
-      saveName: "Guild Save",
-      serverName: "Guild Server",
-      serverPassword: "secret"
-    });
-
-    expect(config.serverName).toBe("Guild Server");
-    expect(config.worldName).toBe("Guild Save");
-    expect(config.maxPlayers).toBe(16);
-    expect(config.password).toBe("secret");
-  });
-
-  it("maps DST cluster fields into the compatibility config envelope", () => {
-    const config = providerPayloadToTerrariaConfig("dont-starve-together", {
-      clusterName: "FriendsCluster",
-      clusterToken: "klei-token",
-      maxPlayers: 6,
-      serverName: "DST Friends",
-      serverPassword: "join-secret"
-    });
-
-    expect(config.serverName).toBe("DST Friends");
-    expect(config.worldName).toBe("FriendsCluster");
-    expect(config.maxPlayers).toBe(6);
-    expect(config.password).toBe("join-secret");
-    expect(config.motd).toBe("klei-token");
   });
 });

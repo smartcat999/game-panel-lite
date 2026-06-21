@@ -31,7 +31,7 @@ func (c *Collector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Collector) Text(ctx context.Context) (string, error) {
-	servers, err := c.store.ListServers(ctx)
+	servers, err := c.store.ListGameServers(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -49,10 +49,10 @@ func (c *Collector) Text(ctx context.Context) (string, error) {
 	return b.String(), nil
 }
 
-func writeServersByStatus(b *strings.Builder, servers []domain.GameServerInstance) {
+func writeServersByStatus(b *strings.Builder, servers []domain.GameServer) {
 	counts := map[string]float64{}
 	for _, server := range servers {
-		counts[string(server.Status)]++
+		counts[string(legacyServerStatus(server))]++
 	}
 	writeHeader(b, "gamepanel_servers_by_status", "Servers by lifecycle status.", "gauge")
 	for _, status := range sortedFloatKeys(counts) {
@@ -60,7 +60,7 @@ func writeServersByStatus(b *strings.Builder, servers []domain.GameServerInstanc
 	}
 }
 
-func writeServerMetrics(b *strings.Builder, servers []domain.GameServerInstance) {
+func writeServerMetrics(b *strings.Builder, servers []domain.GameServer) {
 	writeHeader(b, "gamepanel_server_info", "Server metadata with low-cardinality labels.", "gauge")
 	writeHeader(b, "gamepanel_server_running", "Whether the server is running.", "gauge")
 	writeHeader(b, "gamepanel_server_status", "Current server lifecycle status as a labelled gauge.", "gauge")
@@ -72,19 +72,19 @@ func writeServerMetrics(b *strings.Builder, servers []domain.GameServerInstance)
 		labels := serverLabels(server)
 		writeSample(b, "gamepanel_server_info", labels, 1)
 		running := 0.0
-		if server.Status == domain.StatusRunning {
+		if server.Status.Phase == domain.PhaseRunning {
 			running = 1
 		}
 		writeSample(b, "gamepanel_server_running", labels, running)
 		writeSample(b, "gamepanel_server_status", serverStatusLabels(server), 1)
-		writeSample(b, "gamepanel_server_players_online", labels, float64(server.PlayersOnline))
-		writeSample(b, "gamepanel_server_players_max", labels, float64(server.MaxPlayers))
-		writeSample(b, "gamepanel_server_config_revision", labels, float64(server.ConfigRevision))
-		writeSample(b, "gamepanel_server_applied_config_revision", labels, float64(server.AppliedConfigRevision))
+		writeSample(b, "gamepanel_server_players_online", labels, float64(server.Status.PlayersOnline))
+		writeSample(b, "gamepanel_server_players_max", labels, float64(domain.ServerMaxPlayers(server)))
+		writeSample(b, "gamepanel_server_config_revision", labels, float64(server.Spec.Generation))
+		writeSample(b, "gamepanel_server_applied_config_revision", labels, float64(server.Status.AppliedGeneration))
 	}
 }
 
-func writeAssets(b *strings.Builder, collector *Collector, ctx context.Context, servers []domain.GameServerInstance, backups assetStats, worlds assetStats) {
+func writeAssets(b *strings.Builder, collector *Collector, ctx context.Context, servers []domain.GameServer, backups assetStats, worlds assetStats) {
 	writeHeader(b, "gamepanel_backups_total", "Backups by server.", "gauge")
 	writeHeader(b, "gamepanel_worlds_total", "Worlds by server.", "gauge")
 	writeHeader(b, "gamepanel_mods_total", "Mods by server.", "gauge")
@@ -166,17 +166,17 @@ func worldsByInstance(worlds []domain.World) assetStats {
 	return counts
 }
 
-func serverLabels(server domain.GameServerInstance) map[string]string {
+func serverLabels(server domain.GameServer) map[string]string {
 	return map[string]string{
 		"server_id":    server.ID,
 		"game_key":     string(server.GameKey),
 		"provider_key": string(server.ProviderKey),
-		"status":       string(server.Status),
-		"version":      server.Version,
+		"status":       string(legacyServerStatus(server)),
+		"version":      server.Spec.Version,
 	}
 }
 
-func serverStaticLabels(server domain.GameServerInstance) map[string]string {
+func serverStaticLabels(server domain.GameServer) map[string]string {
 	return map[string]string{
 		"server_id":    server.ID,
 		"game_key":     string(server.GameKey),
@@ -184,10 +184,14 @@ func serverStaticLabels(server domain.GameServerInstance) map[string]string {
 	}
 }
 
-func serverStatusLabels(server domain.GameServerInstance) map[string]string {
+func serverStatusLabels(server domain.GameServer) map[string]string {
 	labels := serverStaticLabels(server)
-	labels["status"] = string(server.Status)
+	labels["status"] = string(legacyServerStatus(server))
 	return labels
+}
+
+func legacyServerStatus(server domain.GameServer) domain.ServerStatus {
+	return domain.ServerStatusFromRuntime(server.Spec.DesiredState, server.Status)
 }
 
 func labelsWithKind(labels map[string]string, kind string) map[string]string {

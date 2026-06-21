@@ -24,7 +24,7 @@ func NewService(store *store.Store, prom *PrometheusClient) *Service {
 
 func (s *Service) Overview(ctx context.Context) (OverviewResponse, error) {
 	now := s.now().UTC()
-	servers, err := s.store.ListServers(ctx)
+	servers, err := s.store.ListGameServers(ctx)
 	if err != nil {
 		return OverviewResponse{}, err
 	}
@@ -56,16 +56,16 @@ func (s *Service) Overview(ctx context.Context) (OverviewResponse, error) {
 	}, nil
 }
 
-func (s *Service) kpisFromStore(servers []domain.GameServerInstance) KPIs {
+func (s *Service) kpisFromStore(servers []domain.GameServer) KPIs {
 	kpis := KPIs{}
 	for _, server := range servers {
 		kpis.TotalServers++
-		kpis.OnlinePlayers += server.PlayersOnline
-		kpis.PlayerCapacity += server.MaxPlayers
-		if server.Status == domain.StatusRunning {
+		kpis.OnlinePlayers += server.Status.PlayersOnline
+		kpis.PlayerCapacity += domain.ServerMaxPlayers(server)
+		if server.Status.Phase == domain.PhaseRunning {
 			kpis.RunningServers++
 		}
-		if isIssueStatus(server.Status) || server.LastError != "" {
+		if isIssuePhase(server.Status.Phase) || server.Status.LastError != "" {
 			kpis.Issues++
 		}
 	}
@@ -102,7 +102,7 @@ func (s *Service) kpisFromPrometheus(ctx context.Context, fallback KPIs) KPIs {
 	return kpis
 }
 
-func (s *Service) storageBytesFromStore(ctx context.Context, servers []domain.GameServerInstance) int {
+func (s *Service) storageBytesFromStore(ctx context.Context, servers []domain.GameServer) int {
 	total := int64(0)
 	if backups, err := s.store.ListBackups(ctx); err == nil {
 		for _, backup := range backups {
@@ -169,7 +169,7 @@ func (s *Service) Platform(ctx context.Context, window string, stepText string) 
 }
 
 func (s *Service) ServerMetrics(ctx context.Context, serverID string, window string, stepText string) (MetricsResponse, error) {
-	server, err := s.store.GetServer(ctx, serverID)
+	server, err := s.store.GetGameServer(ctx, serverID)
 	if err != nil {
 		return MetricsResponse{}, err
 	}
@@ -180,23 +180,16 @@ func (s *Service) ServerMetrics(ctx context.Context, serverID string, window str
 	series := map[string]Series{
 		"cpu":     s.series(ctx, rng, "cpu", "CPU Usage", "%", "area", containerCPUQuery(containerFilter), ptr(80)),
 		"memory":  s.series(ctx, rng, "memory", "Memory Usage", "MB", "area", containerMemoryQuery(containerFilter), memoryThreshold(server)),
-		"players": s.series(ctx, rng, "players", "Player Count", "players", "line", `gamepanel_server_players_online`+labelFilter, floatPtr(float64(server.MaxPlayers))),
+		"players": s.series(ctx, rng, "players", "Player Count", "players", "line", `gamepanel_server_players_online`+labelFilter, floatPtr(float64(domain.ServerMaxPlayers(server)))),
 		"uptime":  s.series(ctx, rng, "uptime", "Uptime", "s", "line", `gamepanel_server_running`+labelFilter, nil),
 	}
-	if server.Status != domain.StatusRunning {
-		for key, item := range series {
-			if len(item.Points) == 0 {
-				item.EmptyReason = "server_stopped"
-				series[key] = item
-			}
-		}
-	}
+	markInactiveServerSeries(series, rng)
 	applyDataSourceEmptyReason(series, ds)
 	return MetricsResponse{CollectedAt: s.now().UTC(), Range: rng, DataSource: ds, Series: series}, nil
 }
 
 func (s *Service) ServerLoad(ctx context.Context) (ServerLoadResponse, error) {
-	servers, err := s.store.ListServers(ctx)
+	servers, err := s.store.ListGameServers(ctx)
 	if err != nil {
 		return ServerLoadResponse{}, err
 	}
@@ -206,12 +199,12 @@ func (s *Service) ServerLoad(ctx context.Context) (ServerLoadResponse, error) {
 		containerFilter := fmt.Sprintf(`{container_label_gamepanel_instance="%s"}`, escapePromLabel(server.ID))
 		cpu := s.latestQuery(ctx, containerCPUQuery(containerFilter))
 		memory := s.latestQuery(ctx, containerMemoryBytesQuery(containerFilter)) / 1024 / 1024
-		limit := float64(server.MemoryLimitMB)
+		limit := float64(server.Spec.Resources.MemoryLimitMB)
 		if limit <= 0 {
 			limit = s.latestQuery(ctx, containerMemoryLimitBytesQuery(containerFilter)) / 1024 / 1024
 		}
 		severity := "normal"
-		if isIssueStatus(server.Status) || server.LastError != "" {
+		if isIssuePhase(server.Status.Phase) || server.Status.LastError != "" {
 			severity = "critical"
 		} else if cpu > 80 || (limit > 0 && memory/limit*100 > 85) {
 			severity = "warning"
@@ -221,13 +214,13 @@ func (s *Service) ServerLoad(ctx context.Context) (ServerLoadResponse, error) {
 			ServerName:    server.Name,
 			GameKey:       string(server.GameKey),
 			ProviderKey:   string(server.ProviderKey),
-			Version:       server.Version,
-			Status:        string(server.Status),
+			Version:       server.Spec.Version,
+			Status:        string(domain.ServerStatusFromRuntime(server.Spec.DesiredState, server.Status)),
 			CPUPercent:    cpu,
 			MemoryMB:      memory,
 			MemoryLimitMB: limit,
-			PlayersOnline: server.PlayersOnline,
-			MaxPlayers:    server.MaxPlayers,
+			PlayersOnline: server.Status.PlayersOnline,
+			MaxPlayers:    domain.ServerMaxPlayers(server),
 			LastActive:    server.UpdatedAt.UTC().Format(time.RFC3339),
 			Severity:      severity,
 		})
@@ -243,8 +236,8 @@ func (s *Service) Events(ctx context.Context, serverID string, limit int, severi
 	if err != nil {
 		return EventsResponse{}, err
 	}
-	servers, _ := s.store.ListServers(ctx)
-	serverByID := map[string]domain.GameServerInstance{}
+	servers, _ := s.store.ListGameServers(ctx)
+	serverByID := map[string]domain.GameServer{}
 	for _, server := range servers {
 		serverByID[server.ID] = server
 	}
@@ -451,11 +444,34 @@ func summarize(points []Point) (float64, float64, float64) {
 	return current, sum / float64(len(points)), max
 }
 
+func markInactiveServerSeries(series map[string]Series, rng Range) {
+	step, err := time.ParseDuration(rng.Step)
+	if err != nil || step <= 0 {
+		step = 30 * time.Second
+	}
+	staleAfter := 2*step + 15*time.Second
+	for key, item := range series {
+		if len(item.Points) == 0 {
+			continue
+		}
+		latest := item.Points[len(item.Points)-1].Timestamp
+		if rng.End.Sub(latest) <= staleAfter {
+			continue
+		}
+		item.CurrentValue = nil
+		item.Avg = nil
+		item.Max = nil
+		item.Points = nil
+		item.EmptyReason = "no_active_samples"
+		series[key] = item
+	}
+}
+
 func sortPoints(points []Point) {
 	sort.Slice(points, func(i, j int) bool { return points[i].Timestamp.Before(points[j].Timestamp) })
 }
 
-func eventFromActivity(event domain.ActivityEvent, server domain.GameServerInstance) Event {
+func eventFromActivity(event domain.ActivityEvent, server domain.GameServer) Event {
 	severity := "info"
 	if strings.Contains(event.Type, "failed") || strings.Contains(event.Type, "error") {
 		severity = "error"
@@ -485,8 +501,8 @@ func titleFromType(value string) string {
 	return strings.Title(value)
 }
 
-func isIssueStatus(status domain.ServerStatus) bool {
-	return status == domain.StatusErrored
+func isIssuePhase(phase domain.ServerPhase) bool {
+	return phase == domain.PhaseFailed
 }
 
 func severityRank(value string) int {
@@ -579,10 +595,10 @@ func floatPtr(value float64) *float64 {
 	return &value
 }
 
-func memoryThreshold(server domain.GameServerInstance) *float64 {
-	if server.MemoryLimitMB <= 0 {
+func memoryThreshold(server domain.GameServer) *float64 {
+	if server.Spec.Resources.MemoryLimitMB <= 0 {
 		return nil
 	}
-	value := float64(server.MemoryLimitMB)
+	value := float64(server.Spec.Resources.MemoryLimitMB)
 	return &value
 }

@@ -3,8 +3,6 @@ package terraria
 import (
 	"strings"
 	"testing"
-
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
 
 func TestPresetsValidate(t *testing.T) {
@@ -19,7 +17,7 @@ func TestPresetsValidate(t *testing.T) {
 }
 
 func TestRenderServerConfig(t *testing.T) {
-	rendered, err := RenderServerConfig(domain.TerrariaConfig{
+	rendered, err := RenderServerConfig(Config{
 		WorldName: "Moon Garden", WorldSize: "large", WorldEvil: "corruption", Difficulty: "master",
 		MaxPlayers: 12, Port: 7778, Password: "stars", MOTD: "Mind the wyverns",
 		Seed: "05162020", Secure: true, Language: "zh-Hans",
@@ -30,7 +28,7 @@ func TestRenderServerConfig(t *testing.T) {
 	for _, expected := range []string{
 		"world=/home/container/Worlds/Moon Garden.wld", "autocreate=3", "worldname=Moon Garden", "worldevil=1", "difficulty=3",
 		"maxplayers=12", "port=7778", "password=stars", "secure=1",
-		"worldpath=/home/container/Worlds", "language=en-US", "upnp=0",
+		"worldpath=/home/container/Worlds", "language=zh-Hans", "upnp=0",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("expected rendered config to contain %q, got:\n%s", expected, rendered)
@@ -38,12 +36,24 @@ func TestRenderServerConfig(t *testing.T) {
 	}
 }
 
+func TestRenderServerConfigDefaultsLanguageWhenUnset(t *testing.T) {
+	config := Presets[0].Config
+	config.Language = ""
+	rendered, err := RenderServerConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rendered, "language=en-US") {
+		t.Fatalf("expected unset language to default to en-US, got:\n%s", rendered)
+	}
+}
+
 func TestValidateConfigRejectsUnsafeValues(t *testing.T) {
 	base := Presets[0].Config
-	cases := []domain.TerrariaConfig{
-		func() domain.TerrariaConfig { c := base; c.Port = 80; return c }(),
-		func() domain.TerrariaConfig { c := base; c.MaxPlayers = 0; return c }(),
-		func() domain.TerrariaConfig { c := base; c.WorldName = "../outside"; return c }(),
+	cases := []Config{
+		func() Config { c := base; c.Port = 80; return c }(),
+		func() Config { c := base; c.MaxPlayers = 0; return c }(),
+		func() Config { c := base; c.WorldName = "../outside"; return c }(),
 	}
 	for _, item := range cases {
 		if err := ValidateConfig(item); err == nil {
@@ -53,7 +63,7 @@ func TestValidateConfigRejectsUnsafeValues(t *testing.T) {
 }
 
 func TestVanillaRuntimeOptionsUseSelfBuiltImageAndConfig(t *testing.T) {
-	config := domain.TerrariaConfig{
+	config := Config{
 		WorldName: "Vanilla Smoke", WorldSize: "medium", WorldEvil: "crimson", Difficulty: "expert",
 		MaxPlayers: 8, Port: 17777, MOTD: "Vanilla online", Secure: true, Language: "zh-Hans",
 	}
@@ -63,8 +73,8 @@ func TestVanillaRuntimeOptionsUseSelfBuiltImageAndConfig(t *testing.T) {
 	if provider.Image() != "smartcat99999/terraria-vanilla:1.4.5.6" {
 		t.Fatalf("unexpected vanilla image: %s", provider.Image())
 	}
-	if provider.ImageFor("1.4.4.9") != "smartcat99999/terraria-vanilla:1.4.4.9" {
-		t.Fatalf("unexpected vanilla version image: %s", provider.ImageFor("1.4.4.9"))
+	if versions := provider.Versions(); len(versions) != 1 || versions[0] != "1.4.5.6" {
+		t.Fatalf("unexpected vanilla versions: %v", versions)
 	}
 	if got := strings.Join(options.Cmd, " "); !strings.Contains(got, "./server/gamepanel-terraria-entrypoint.sh") || !strings.Contains(got, "-config /home/container/serverconfig.txt") {
 		t.Fatalf("expected vanilla self-built image command, got %q", got)
@@ -87,7 +97,7 @@ func TestVanillaRuntimeOptionsUseSelfBuiltImageAndConfig(t *testing.T) {
 		"motd=Vanilla online",
 		"worldpath=/home/container/Worlds",
 		"secure=1",
-		"language=en-US",
+		"language=zh-Hans",
 		"upnp=0",
 	} {
 		if !strings.Contains(rendered, expected) {
@@ -97,7 +107,7 @@ func TestVanillaRuntimeOptionsUseSelfBuiltImageAndConfig(t *testing.T) {
 }
 
 func TestTModLoaderRuntimeOptionsUseNonInteractiveConfig(t *testing.T) {
-	config := domain.TerrariaConfig{
+	config := Config{
 		WorldName: "Modded Smoke", WorldSize: "small", Difficulty: "classic",
 		MaxPlayers: 4, Port: 17784, MOTD: "Mods online", Secure: true, Language: "zh-Hans",
 	}
@@ -130,7 +140,7 @@ func TestTModLoaderRuntimeOptionsUseNonInteractiveConfig(t *testing.T) {
 		"motd=Mods online",
 		"worldpath=/home/container/Worlds",
 		"secure=1",
-		"language=en-US",
+		"language=zh-Hans",
 		"upnp=0",
 	} {
 		if !strings.Contains(rendered, expected) {

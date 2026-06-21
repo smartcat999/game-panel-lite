@@ -1,4 +1,10 @@
-import type { ActivityEvent, GameCatalogEntry, Server } from "./types";
+import {
+  gameServerMaxPlayers,
+  gameServerMode,
+  gameServerStatus,
+  gameServerVersion
+} from "./game-server-resource";
+import type { ActivityEvent, GameCatalogEntry, GameServerResource } from "./types";
 import type { ObservabilityMetrics, ObservabilityServerMetric } from "./api";
 
 export type MonitoringSeverity = "success" | "warning" | "error" | "info";
@@ -98,13 +104,13 @@ export function createMonitoringModel({
   displayByEventId: Map<string, { message: string; typeLabel: string }>;
   games: GameCatalogEntry[];
   metrics?: ObservabilityMetrics;
-  servers: Server[];
+  servers: GameServerResource[];
 }): MonitoringModel {
   const metricServers = metrics?.servers ?? [];
   const serverById = new Map(servers.map((server) => [server.id, server]));
   const metricById = new Map(metricServers.map((server) => [server.id, server]));
   const gameByKey = new Map(games.map((game) => [game.key, game.name]));
-  const rows = buildServerRows(servers, metricById, gameByKey);
+  const rows = buildGameServerRows(servers, metricById, gameByKey);
   const events = activity.map((event) => {
     const display = displayByEventId.get(event.id);
     const server = event.instanceId ? serverById.get(event.instanceId) : undefined;
@@ -141,7 +147,7 @@ export function createMonitoringModel({
   return {
     events,
     health: {
-      dockerRuntime: metrics ? (metrics.host.runningContainers >= runningServers ? "healthy" : "degraded") : "down",
+      dockerRuntime: metrics ? (metrics.host.runningWorkloads >= runningServers ? "healthy" : "degraded") : "down",
       failedTargets,
       lastSyncLabel: "Just now",
       overall: failedTargets > 0 ? "warning" : "healthy",
@@ -166,14 +172,15 @@ export function createMonitoringModel({
   };
 }
 
-function buildServerRows(servers: Server[], metricById: Map<string, ObservabilityServerMetric>, gameByKey: Map<string, string>): MonitoringServerRow[] {
+function buildGameServerRows(servers: GameServerResource[], metricById: Map<string, ObservabilityServerMetric>, gameByKey: Map<string, string>): MonitoringServerRow[] {
   return servers.map((server) => {
     const metric = metricById.get(server.id);
-    const cpuPercent = metric?.cpuPercent ?? parsePercent(server.cpu);
-    const memoryMb = metric?.memoryMb ?? parseMemoryMb(server.memory);
-    const memoryLimit = metric?.memoryLimitMb ?? server.memoryLimitMb;
+    const status = gameServerStatus(server);
+    const cpuPercent = metric?.cpuPercent ?? 0;
+    const memoryMb = metric?.memoryMb ?? 0;
+    const memoryLimit = metric?.memoryLimitMb ?? server.spec.resources?.memoryLimitMb ?? 0;
     const memoryPercent = memoryLimit > 0 ? Math.min(100, memoryMb / memoryLimit * 100) : 0;
-    const severity: MonitoringSeverity = server.status === "errored" || server.lastError ? "error" : cpuPercent > 80 || memoryPercent > 85 ? "warning" : server.status === "running" ? "success" : "info";
+    const severity: MonitoringSeverity = status === "errored" || server.status.lastError ? "error" : cpuPercent > 80 || memoryPercent > 85 ? "warning" : status === "running" ? "success" : "info";
     return {
       actionHref: `/servers/${server.id}`,
       cpuPercent,
@@ -183,12 +190,12 @@ function buildServerRows(servers: Server[], metricById: Map<string, Observabilit
       memoryMb,
       memoryPercent,
       name: server.name,
-      playersOnline: metric?.playersOnline ?? server.players,
-      providerLabel: server.providerKey ?? server.mode,
+      playersOnline: metric?.playersOnline ?? server.status.playersOnline ?? 0,
+      providerLabel: server.providerKey ?? gameServerMode(server),
       severity,
-      status: server.status,
-      version: server.version || "latest",
-      maxPlayers: metric?.maxPlayers ?? server.maxPlayers
+      status,
+      version: metric?.version || gameServerVersion(server),
+      maxPlayers: metric?.maxPlayers ?? gameServerMaxPlayers(server)
     };
   }).sort((a, b) => severityRank(b.severity) - severityRank(a.severity) || b.cpuPercent - a.cpuPercent);
 }
@@ -208,20 +215,6 @@ function eventKind(type: string): MonitoringEventType {
   if (type.includes("player")) return "player";
   if (type.startsWith("server.")) return "lifecycle";
   return "other";
-}
-
-function parsePercent(value?: string) {
-  if (!value) return 0;
-  const parsed = Number.parseFloat(value.replace("%", ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseMemoryMb(value?: string) {
-  if (!value) return 0;
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed)) return 0;
-  if (value.toLowerCase().includes("gb")) return parsed * 1024;
-  return parsed;
 }
 
 function average(values: number[]) {

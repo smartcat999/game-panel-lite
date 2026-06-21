@@ -8,12 +8,6 @@ type GameKey string
 
 type ServerStatus string
 
-type WorldSize string
-
-type WorldEvil string
-
-type Difficulty string
-
 type Player struct {
 	Name string `json:"name,omitempty"`
 }
@@ -45,6 +39,16 @@ type ProviderConfigField struct {
 type ProviderConfigFieldOption struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
+}
+
+type ProviderConfigSummary struct {
+	ServerName string
+	WorldName  string
+	MaxPlayers int
+	Port       int
+	Password   string
+	MOTD       string
+	Secure     bool
 }
 
 type GameCatalogEntry struct {
@@ -103,36 +107,6 @@ const (
 	PlayerLeft   PlayerLogEvent = "left"
 )
 
-type GameServerInstance struct {
-	ID                    string         `json:"id" gorm:"primaryKey"`
-	Name                  string         `json:"name"`
-	GameKey               GameKey        `json:"gameKey"`
-	ProviderKey           ProviderKey    `json:"providerKey"`
-	Status                ServerStatus   `json:"status"`
-	WorldName             string         `json:"worldName"`
-	PlayersOnline         int            `json:"playersOnline"`
-	Port                  int            `json:"port"`
-	MaxPlayers            int            `json:"maxPlayers"`
-	Password              string         `json:"password,omitempty"`
-	DataDir               string         `json:"dataDir,omitempty"`
-	ContainerID           string         `json:"containerId,omitempty"`
-	HostPort              int            `json:"hostPort,omitempty"`
-	CPULimitCores         float64        `json:"cpuLimitCores,omitempty"`
-	MemoryLimitMB         int            `json:"memoryLimitMb,omitempty"`
-	Version               string         `json:"version,omitempty"`
-	LastError             string         `json:"lastError,omitempty"`
-	SourceWorldID         string         `json:"sourceWorldId,omitempty"`
-	SourceWorldName       string         `json:"sourceWorldName,omitempty"`
-	Config                TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
-	ConfigPayloadJSON     string         `json:"-" gorm:"column:config_payload_json"`
-	ConfigPayload         map[string]any `json:"configPayload,omitempty" gorm:"-"`
-	JoinInfo              ServerJoinInfo `json:"joinInfo,omitempty" gorm:"-"`
-	ConfigRevision        int            `json:"configRevision"`
-	AppliedConfigRevision int            `json:"appliedConfigRevision"`
-	CreatedAt             time.Time      `json:"createdAt"`
-	UpdatedAt             time.Time      `json:"updatedAt"`
-}
-
 type ServerJoinInfo struct {
 	Address      string   `json:"address"`
 	Port         int      `json:"port"`
@@ -155,7 +129,7 @@ type ConfigPreset struct {
 	GameKey           GameKey        `json:"gameKey" gorm:"index"`
 	ProviderKey       ProviderKey    `json:"providerKey" gorm:"index"`
 	Version           string         `json:"version,omitempty"`
-	Config            TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
+	Config            map[string]any `json:"config,omitempty" gorm:"-"`
 	ConfigPayloadJSON string         `json:"-" gorm:"column:config_payload_json"`
 	ConfigPayload     map[string]any `json:"configPayload,omitempty" gorm:"-"`
 	CPULimitCores     float64        `json:"cpuLimitCores,omitempty"`
@@ -163,22 +137,6 @@ type ConfigPreset struct {
 	ModPackID         string         `json:"modPackId,omitempty" gorm:"index"`
 	CreatedAt         time.Time      `json:"createdAt"`
 	UpdatedAt         time.Time      `json:"updatedAt"`
-}
-
-type TerrariaConfig struct {
-	ServerName      string     `json:"serverName"`
-	WorldName       string     `json:"worldName"`
-	WorldSize       WorldSize  `json:"worldSize"`
-	WorldEvil       WorldEvil  `json:"worldEvil"`
-	Difficulty      Difficulty `json:"difficulty"`
-	MaxPlayers      int        `json:"maxPlayers"`
-	Port            int        `json:"port"`
-	Password        string     `json:"password,omitempty"`
-	MOTD            string     `json:"motd,omitempty"`
-	Seed            string     `json:"seed,omitempty"`
-	Secure          bool       `json:"secure"`
-	Language        string     `json:"language"`
-	AutoCreateWorld bool       `json:"autoCreateWorld"`
 }
 
 type Backup struct {
@@ -194,18 +152,20 @@ type Backup struct {
 }
 
 type World struct {
-	ID               string         `json:"id" gorm:"primaryKey"`
-	InstanceID       string         `json:"instanceId" gorm:"index"`
-	GameKey          GameKey        `json:"gameKey,omitempty" gorm:"-"`
-	ProviderKey      ProviderKey    `json:"providerKey,omitempty" gorm:"index"`
-	Name             string         `json:"name"`
-	FileName         string         `json:"fileName"`
-	SizeBytes        int64          `json:"sizeBytes"`
-	Source           string         `json:"source,omitempty"`
-	Config           TerrariaConfig `json:"config" gorm:"embedded;embeddedPrefix:config_"`
-	ActiveInstanceID string         `json:"activeInstanceId,omitempty"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
+	ID                string         `json:"id" gorm:"primaryKey"`
+	InstanceID        string         `json:"instanceId" gorm:"index"`
+	GameKey           GameKey        `json:"gameKey,omitempty" gorm:"-"`
+	ProviderKey       ProviderKey    `json:"providerKey,omitempty" gorm:"index"`
+	Name              string         `json:"name"`
+	FileName          string         `json:"fileName"`
+	SizeBytes         int64          `json:"sizeBytes"`
+	Source            string         `json:"source,omitempty"`
+	Config            map[string]any `json:"config,omitempty" gorm:"-"`
+	ConfigPayloadJSON string         `json:"-" gorm:"column:config_payload_json"`
+	ConfigPayload     map[string]any `json:"configPayload,omitempty" gorm:"-"`
+	ActiveInstanceID  string         `json:"activeInstanceId,omitempty"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
 }
 
 type ModFile struct {
@@ -248,11 +208,13 @@ type ModPack struct {
 }
 
 type ActivityEvent struct {
-	ID         string    `json:"id" gorm:"primaryKey"`
-	InstanceID string    `json:"instanceId,omitempty" gorm:"index"`
-	Type       string    `json:"type"`
-	Message    string    `json:"message"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID          string         `json:"id" gorm:"primaryKey"`
+	InstanceID  string         `json:"instanceId,omitempty" gorm:"index"`
+	Type        string         `json:"type"`
+	Message     string         `json:"message"`
+	PayloadJSON string         `json:"-" gorm:"column:payload_json"`
+	Payload     map[string]any `json:"payload,omitempty" gorm:"-"`
+	CreatedAt   time.Time      `json:"createdAt"`
 }
 
 type AdminAccount struct {

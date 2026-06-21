@@ -1,21 +1,20 @@
-import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { assignMod, assignWorld, createServer } from "./api";
-import type { ProviderKey, ResourceLimits, Server, World } from "./types";
+import { assignMod, assignWorld, createGameServer } from "./api";
+import type { GameServerResource, ProviderKey, ResourceLimits, World } from "./types";
 
 type CreateMode = "vanilla" | "tmodloader";
 
-type CreateServerWithWorldDeps = {
-  createServer: typeof createServer;
+type CreateGameServerDeps = {
+  createServer: typeof createGameServer;
   assignWorld: typeof assignWorld;
   assignMod: typeof assignMod;
 };
 
-export type CreateServerWithWorldInput = {
-  config: TerrariaConfig;
-  configPayload?: Record<string, unknown>;
-  deps?: CreateServerWithWorldDeps;
+export type CreateGameServerInput = {
+  config: Record<string, unknown>;
+  deps?: CreateGameServerDeps;
   hostPort?: number;
   mode: CreateMode;
+  name: string;
   providerKey?: ProviderKey;
   resources?: ResourceLimits;
   worldId?: string;
@@ -23,34 +22,34 @@ export type CreateServerWithWorldInput = {
   version?: string;
 };
 
-export type CreatedServerWithWorld = {
+export type CreatedGameServer = {
   assignedWorld?: World;
-  server: Server;
+  server: GameServerResource;
 };
 
-const defaultDeps: CreateServerWithWorldDeps = {
+const defaultDeps: CreateGameServerDeps = {
   assignWorld,
-  createServer,
+  createServer: createGameServer,
   assignMod
 };
 
-export async function createTerrariaServerWithWorld({
+export async function createGameServerWithResources({
   config,
-  configPayload,
   deps = defaultDeps,
   hostPort,
   mode,
+  name,
   providerKey,
   resources,
   worldId,
   modIds = [],
   version
-}: CreateServerWithWorldInput): Promise<CreatedServerWithWorld> {
+}: CreateGameServerInput): Promise<CreatedGameServer> {
   const nextProviderKey = providerKey ?? (mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla");
   let server = await deps.createServer({
-    name: config.serverName || "Terraria Server",
+    name: name || "Game Server",
     providerKey: nextProviderKey,
-    config: configPayload ?? config,
+    config,
     hostPort,
     resources,
     version
@@ -61,8 +60,11 @@ export async function createTerrariaServerWithWorld({
     assignedWorld = await deps.assignWorld(worldId, server.id);
     server = {
       ...server,
-      sourceWorldId: assignedWorld.id,
-      sourceWorldName: assignedWorld.name
+      spec: {
+        ...server.spec,
+        sourceWorldId: assignedWorld.id,
+        sourceWorldName: assignedWorld.name
+      }
     };
   }
 

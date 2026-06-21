@@ -2,23 +2,26 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Database, Globe, HardDrive, KeyRound, Network } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Database, Globe, HardDrive, KeyRound, Languages, Network } from "lucide-react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
-import { changeAdminPassword, getSettings, updatePublicHost } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { changeAdminPassword, getSettings, updateLocale, updatePublicHost } from "@/lib/api";
+import { useI18n, type Locale } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const { t } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
   const [publicHost, setPublicHost] = useState<string | null>(null);
   const [publicHostMessage, setPublicHostMessage] = useState("");
+  const [languageMessage, setLanguageMessage] = useState("");
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false });
   const configuredHost = settings.data?.dockerHost ?? "GAMEPANEL_DOCKER_HOST";
   const publicHostValue = publicHost ?? settings.data?.publicHost ?? "";
+  const languageValue = locale;
   const passwordMutation = useMutation({
     mutationFn: () => changeAdminPassword(currentPassword, newPassword),
     onSuccess: () => {
@@ -37,6 +40,15 @@ export default function SettingsPage() {
     },
     onError: (err) => setPublicHostMessage(err instanceof Error ? err.message : t("publicHostSaveFailed"))
   });
+  const localeMutation = useMutation({
+    mutationFn: (nextLocale: Locale) => updateLocale(nextLocale),
+    onSuccess: (result) => {
+      setLocale(result.locale);
+      setLanguageMessage(t("languageSaved"));
+      settings.refetch();
+    },
+    onError: (err) => setLanguageMessage(err instanceof Error ? err.message : t("languageSaveFailed"))
+  });
 
   const submitPasswordChange = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -49,6 +61,17 @@ export default function SettingsPage() {
     publicHostMutation.mutate();
   };
 
+  useEffect(() => {
+    if (settings.data?.locale) {
+      setLocale(settings.data.locale);
+    }
+  }, [settings.data?.locale, setLocale]);
+
+  const saveLocale = (nextLocale: Locale) => {
+    setLanguageMessage("");
+    localeMutation.mutate(nextLocale);
+  };
+
   return (
     <>
       <PageHeader title={t("settingsTitle")} description={t("settingsDescription")} />
@@ -56,6 +79,7 @@ export default function SettingsPage() {
       <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
         <Card className="h-fit p-2 xl:sticky xl:top-24">
           <nav aria-label={t("settingsTitle")} className="flex gap-1 overflow-x-auto xl:flex-col xl:overflow-visible">
+            <SettingsNavItem href="#appearance" icon={<Languages aria-hidden="true" className="size-4" />} label={t("appearanceTitle")} />
             <SettingsNavItem href="#docker-host" icon={<Network aria-hidden="true" className="size-4" />} label={t("dockerSockTitle")} />
             <SettingsNavItem href="#network" icon={<Network aria-hidden="true" className="size-4" />} label={t("publicHostTitle")} />
             <SettingsNavItem href="#storage" icon={<HardDrive aria-hidden="true" className="size-4" />} label={t("dataDirectories")} />
@@ -64,6 +88,41 @@ export default function SettingsPage() {
         </Card>
 
         <Card className="overflow-hidden">
+          <SettingsSection
+            id="appearance"
+            icon={<Languages aria-hidden="true" className="size-5 text-panel-green" />}
+            title={t("appearanceTitle")}
+            description={t("appearanceDescription")}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="inline-flex w-fit rounded-md border border-panel-line bg-slate-950/60 p-1 text-sm" aria-label={t("language")}>
+                <button
+                  className={cn(
+                    "min-w-24 rounded px-3 py-2 text-center text-slate-300 transition-colors",
+                    languageValue === "zh" && "bg-panel-green text-slate-950"
+                  )}
+                  type="button"
+                  disabled={localeMutation.isPending}
+                  onClick={() => saveLocale("zh")}
+                >
+                  {t("chinese")}
+                </button>
+                <button
+                  className={cn(
+                    "min-w-24 rounded px-3 py-2 text-center text-slate-300 transition-colors",
+                    languageValue === "en" && "bg-panel-green text-slate-950"
+                  )}
+                  type="button"
+                  disabled={localeMutation.isPending}
+                  onClick={() => saveLocale("en")}
+                >
+                  {t("languageEnglish")}
+                </button>
+              </div>
+              {languageMessage ? <p className="text-sm text-slate-400">{languageMessage}</p> : null}
+            </div>
+          </SettingsSection>
+
           <SettingsSection
             id="docker-host"
             icon={<Network aria-hidden="true" className="size-5 text-slate-400" />}

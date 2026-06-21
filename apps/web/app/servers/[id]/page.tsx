@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
+import { Archive, ArrowRight, Ban, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, UserX, Users, Waves, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds } from "@gamepanel-lite/shared";
+import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
@@ -14,7 +14,7 @@ import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { Button, Card, Input } from "@/components/ui";
 import { ActivityTimeline, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
-import type { MetricSeries, MonitoringEvent } from "@/features/monitoring/types";
+import type { MetricSeries, MonitoringEvent, MonitoringRange } from "@/features/monitoring/types";
 import {
   assignMod,
   createBackup,
@@ -27,12 +27,11 @@ import {
   downloadWorldFile,
   enableServerShare,
   getDockerStatus,
+  getGameServer,
   listGames,
-  getServer,
   getServerLogSnapshot,
   getServerShare,
   getServerStats,
-  listActivity,
   listBackups,
   listGlobalMods,
   listModPacks,
@@ -41,28 +40,53 @@ import {
   previewTerrariaConfig,
   restoreBackup,
   sendServerCommand,
-  serverAction,
+  gameServerAction,
   setModEnabled,
   serverLogsUrl,
-  updateServerConfig,
+  updateGameServerConfig,
+  type ServerConfigUpdatePayload,
 } from "@/lib/api";
-import { formatActivityEvent } from "@/lib/activity-display";
+import { copyText } from "@/lib/clipboard";
 import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/console-commands";
 import { saveBlob } from "@/lib/download";
-import { localizeRelativeTime, useI18n } from "@/lib/i18n";
+import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
+import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
+import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
+import { updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
-import { serverInviteText, serverJoinAddress, serverJoinPassword, serverJoinPort } from "@/lib/server-join";
+import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
-import type { ActivityEvent, Backup, ModFile, ModPack, ProviderCapabilities, ResourceLimits, Server, World } from "@/lib/types";
+import type { Backup, GameServerResource, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
-type TabId = "overview" | "monitoring" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
+type TabId = "overview" | "monitoring" | "activity" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
 
 const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
 const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
+const terrariaProviderKeys = new Set(["terraria-vanilla", "terraria-tmodloader"]);
+const providerFieldLabelKeys: Record<string, MessageKey> = {
+  cavesEnabled: "cavesEnabled",
+  clusterDescription: "clusterDescription",
+  serverName: "serverName",
+  saveName: "saveName",
+  clusterName: "clusterName",
+  worldName: "worldName",
+  maxPlayers: "maxPlayersInput",
+  serverPassword: "serverPassword",
+  adminPassword: "adminPassword",
+  clusterToken: "clusterToken",
+  consoleEnabled: "consoleEnabled",
+  gameMode: "gameMode",
+  offlineServer: "offlineServer",
+  onlineMode: "onlineMode",
+  pauseWhenEmpty: "pauseWhenEmpty",
+  pvp: "pvp",
+  worldPreset: "worldPreset",
+  eulaAccepted: "minecraftEulaAccepted"
+};
 
 const defaultCapabilities: ProviderCapabilities = {
   consoleCommands: true,
@@ -84,30 +108,6 @@ function formatMemoryLimitLabel(value: number, t: (key: "unlimited" | "memoryGbV
   return value > 0 ? t("memoryGbValue", { gb: value / 1024 }) : t("unlimited");
 }
 
-const lifecycleProgressTypes = new Set([
-  "server.start.queued",
-  "server.start.container.prepare",
-  "server.start.container.created",
-  "server.start.container.ready",
-  "server.start.runtime.starting",
-  "server.started",
-  "server.start.failed",
-  "server.restart.queued",
-  "server.restart.container.prepare",
-  "server.restart.container.created",
-  "server.restart.container.ready",
-  "server.restart.runtime.starting",
-  "server.restarted",
-  "server.restart.failed",
-  "server.stop.queued",
-  "server.stopped",
-  "server.stop.failed"
-]);
-
-function isLifecycleProgressEvent(type: string) {
-  return lifecycleProgressTypes.has(type);
-}
-
 export default function ServerDetailPage() {
   const { locale, t } = useI18n();
   const params = useParams<{ id: string }>();
@@ -117,48 +117,51 @@ export default function ServerDetailPage() {
   const logServerIdRef = useRef("");
   const logReplayIndexRef = useRef(0);
 
-  const query = useQuery({ queryKey: ["server", id], queryFn: () => getServer(id), retry: false, refetchInterval: 5000 });
-  const server = query.data;
-  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, enabled: Boolean(server), staleTime: 5 * 60 * 1000, retry: false });
+  const query = useQuery({ queryKey: ["game-server", id], queryFn: () => getGameServer(id), retry: false, refetchInterval: 5000 });
+  const serverResource = query.data;
+  const resourceStatus = serverResource ? gameServerStatus(serverResource) : undefined;
+  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, enabled: Boolean(serverResource), staleTime: 5 * 60 * 1000, retry: false });
   const providerCatalog = useMemo(
-    () => gamesQuery.data?.flatMap((game) => game.providers).find((provider) => provider.key === server?.providerKey),
-    [gamesQuery.data, server?.providerKey]
+    () => gamesQuery.data?.flatMap((game) => game.providers).find((provider) => provider.key === serverResource?.providerKey),
+    [gamesQuery.data, serverResource?.providerKey]
   );
   const capabilities = providerCatalog?.capabilities ?? {
     ...defaultCapabilities,
-    mods: server?.mode === "tmodloader"
+    mods: serverResource ? gameServerMode(serverResource) === "tmodloader" : false
   };
-  const statsQuery = useQuery({ queryKey: ["server-stats", id], queryFn: () => getServerStats(id), enabled: server?.status === "running", refetchInterval: 3000, retry: false });
-  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(server && capabilities.saveSnapshots), retry: false });
-  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(server && capabilities.backups), retry: false });
+  const visibleCapabilities = useMemo(
+    () => ({
+      ...capabilities,
+      saveSnapshots: showWorldAndBackupFeatures && capabilities.saveSnapshots,
+      backups: showWorldAndBackupFeatures && capabilities.backups
+    }),
+    [capabilities]
+  );
+  const statsQuery = useQuery({ queryKey: ["server-stats", id], queryFn: () => getServerStats(id), enabled: resourceStatus === "running", refetchInterval: 3000, retry: false });
+  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(serverResource && visibleCapabilities.saveSnapshots), retry: false });
+  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(serverResource && visibleCapabilities.backups), retry: false });
   const modsQuery = useQuery({
     queryKey: ["mods", id],
     queryFn: () => listMods(id),
-    enabled: Boolean(server && capabilities.mods),
+    enabled: Boolean(serverResource && capabilities.mods),
     retry: false
   });
   const globalModsQuery = useQuery({
     queryKey: ["global-mods"],
     queryFn: listGlobalMods,
-    enabled: Boolean(server && capabilities.mods),
+    enabled: Boolean(serverResource && capabilities.mods),
     retry: false
   });
   const modPacksQuery = useQuery({
     queryKey: ["mod-packs"],
     queryFn: listModPacks,
-    enabled: Boolean(server && capabilities.mods),
+    enabled: Boolean(serverResource && capabilities.mods),
     retry: false
   });
-  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(server && capabilities.mods), retry: false, refetchInterval: 5000 });
-  const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(server), retry: false });
-  const lifecycleActivityQuery = useQuery({
-    queryKey: ["server-lifecycle-activity", id],
-    queryFn: listActivity,
-    enabled: Boolean(server && isServerLifecyclePending(server.status)),
-    retry: false,
-    refetchInterval: 2000
-  });
+  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, refetchInterval: 5000 });
+  const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [activitySeenAt, setActivitySeenAt] = useState(() => Date.now());
   const [monitoringRange, setMonitoringRange] = useState<MonitoringRangeValue>("1h");
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -179,18 +182,18 @@ export default function ServerDetailPage() {
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
   const [downloadingResourceId, setDownloadingResourceId] = useState("");
-  const monitoringStep = monitoringRange === "15m" ? "30s" : monitoringRange === "1h" ? "1m" : "5m";
+  const monitoringStep = monitoringRange === "15m" ? "30s" : monitoringRange === "1h" ? "1m" : monitoringRange === "6h" ? "5m" : "15m";
   const serverMetricsQuery = useQuery({
     queryKey: ["server-monitoring-metrics", id, monitoringRange],
     queryFn: () => getServerMonitoringMetrics(id, monitoringRange, monitoringStep),
-    enabled: Boolean(server && activeTab === "monitoring"),
+    enabled: Boolean(serverResource && activeTab === "monitoring"),
     retry: false,
     refetchInterval: 5000
   });
   const serverEventsQuery = useQuery({
     queryKey: ["server-monitoring-events", id],
     queryFn: () => getServerMonitoringEvents(id, 50),
-    enabled: Boolean(server && activeTab === "monitoring"),
+    enabled: Boolean(serverResource),
     retry: false,
     refetchInterval: 5000
   });
@@ -224,8 +227,15 @@ export default function ServerDetailPage() {
     setErrorMessage(message);
   };
 
+  const setServerResourceCache = (updatedServer: GameServerResource | null | undefined) => {
+    if (!updatedServer) {
+      return;
+    }
+    client.setQueryData(["game-server", id], updatedServer);
+  };
+
   const markModsChanged = () => {
-    if (server?.status === "running") {
+    if (resourceStatus === "running") {
       setModsPendingRestart(true);
     }
   };
@@ -254,12 +264,13 @@ export default function ServerDetailPage() {
     commandMutation.mutate(next);
   };
   const configSave = useMutation({
-    mutationFn: ({ config, hostPort }: { config: TerrariaConfig; hostPort: number }) => updateServerConfig(id, config, hostPort),
+    mutationFn: ({ config, hostPort }: { config: ServerConfigUpdatePayload; hostPort: number }) => updateGameServerConfig(id, config, hostPort),
     onSuccess: async (updatedServer) => {
       showSuccess(t("configSaved"));
       setConfigSaved(true);
-      client.setQueryData(["server", id], updatedServer);
-      await client.invalidateQueries({ queryKey: ["servers"] });
+      setServerResourceCache(updatedServer);
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
       window.setTimeout(() => setConfigSaved(false), 1800);
     },
     onError: (error) => {
@@ -269,27 +280,26 @@ export default function ServerDetailPage() {
   });
   const resourceSave = useMutation({
     mutationFn: ({ resources }: { resources: ResourceLimits }) => {
-      if (!server) throw new Error("server not loaded");
-      return updateServerConfig(id, server.config, serverJoinPort(server), resources);
+      if (!serverResource) throw new Error("server not loaded");
+      return updateGameServerConfig(id, terrariaConfigFromGameServer(serverResource), gameServerJoinPort(serverResource), resources);
     },
     onSuccess: async (updatedServer) => {
       showSuccess(t("resourceLimitsSaved"));
       setResourceDialogOpen(false);
-      client.setQueryData(["server", id], updatedServer);
-      await client.invalidateQueries({ queryKey: ["servers"] });
+      setServerResourceCache(updatedServer);
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
     },
     onError: (error) => showError(formatActionError(error, t("unableUpdateConfig")))
   });
   const configRestart = useMutation({
-    mutationFn: () => serverAction(id, "restart"),
+    mutationFn: () => gameServerAction(id, "restart"),
     onSuccess: async (updatedServer) => {
       showSuccess(t("serverRestartQueued"));
       setPendingConfigRestart(false);
-      if (updatedServer) {
-        client.setQueryData(["server", id], updatedServer);
-      }
-      await client.invalidateQueries({ queryKey: ["server", id] });
-      await client.invalidateQueries({ queryKey: ["servers"] });
+      setServerResourceCache(updatedServer);
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
     },
     onError: (error) => showError(formatActionError(error, t("unableAction", { action: t("actionRestart") })))
   });
@@ -336,8 +346,8 @@ export default function ServerDetailPage() {
       showSuccess(t("backupRestored"));
       setPendingRestore(null);
       await client.invalidateQueries({ queryKey: ["backups"] });
-      await client.invalidateQueries({ queryKey: ["server", id] });
-      await client.invalidateQueries({ queryKey: ["servers"] });
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
     },
     onError: (error) => showError(formatActionError(error, t("unableRestoreBackup")))
   });
@@ -425,7 +435,7 @@ export default function ServerDetailPage() {
         setLogs(snapshotLines);
         logReplayIndexRef.current = 0;
         setConsoleError("");
-        if (server?.status !== "running") {
+        if (resourceStatus !== "running") {
           setLogStatus("idle");
           return;
         }
@@ -465,7 +475,7 @@ export default function ServerDetailPage() {
       alive = false;
       source?.close();
     };
-  }, [activeTab, id, server?.status, logStreamPaused, t]);
+  }, [activeTab, id, resourceStatus, logStreamPaused, t]);
 
   useEffect(() => {
     const viewport = logViewportRef.current;
@@ -473,22 +483,22 @@ export default function ServerDetailPage() {
   }, [logs, activeTab]);
 
   useEffect(() => {
-    if (server?.status !== "running") {
+    if (resourceStatus !== "running") {
       setModsPendingRestart(false);
     }
-  }, [server?.status]);
+  }, [resourceStatus]);
 
   const serverWorlds = useMemo(
     () => (
-      server
-        ? (worldsQuery.data ?? []).filter((world) => world.instanceId === server.id)
+      serverResource && visibleCapabilities.saveSnapshots
+        ? (worldsQuery.data ?? []).filter((world) => world.instanceId === serverResource.id)
         : []
     ),
-    [server, worldsQuery.data]
+    [serverResource, visibleCapabilities.saveSnapshots, worldsQuery.data]
   );
   const serverBackups = useMemo(
-    () => (server ? (backupsQuery.data ?? []).filter((backup) => backup.instanceId === server.id).sort(sortBackupsNewestFirst) : []),
-    [backupsQuery.data, server]
+    () => (serverResource && visibleCapabilities.backups ? (backupsQuery.data ?? []).filter((backup) => backup.instanceId === serverResource.id).sort(sortBackupsNewestFirst) : []),
+    [backupsQuery.data, serverResource, visibleCapabilities.backups]
   );
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
@@ -497,24 +507,35 @@ export default function ServerDetailPage() {
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
     { id: "overview", label: t("tabOverview") },
     { id: "monitoring", label: t("monitoringTabTitle") },
+    { id: "activity", label: t("activityTitle") },
     ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
     { id: "logs", label: t("tabLogs") },
     { id: "config", label: t("tabConfig") },
-    ...(capabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
-    ...(capabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
+    ...(visibleCapabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
+    ...(visibleCapabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
     ...(capabilities.mods ? [{ id: "mods" as const, label: t("tabMods") }] : [])
-  ], [capabilities.backups, capabilities.consoleCommands, capabilities.mods, capabilities.saveSnapshots, t]);
+  ], [capabilities.consoleCommands, capabilities.mods, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
   useEffect(() => {
-    if (server && !tabs.some((tab) => tab.id === activeTab)) {
+    if (serverResource && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
     }
-  }, [activeTab, server, tabs]);
+  }, [activeTab, serverResource, tabs]);
   useEffect(() => {
     if (shareQuery.data) {
       setShareIncludePassword(shareQuery.data.includePassword);
     }
   }, [shareQuery.data]);
-  if (!server) {
+  const visibleServerEvents = useMemo(
+    () => (serverEventsQuery.data?.events ?? []).filter((event) => showWorldAndBackupFeatures || !isWorldOrBackupEventType(event.type)),
+    [serverEventsQuery.data?.events]
+  );
+  const latestActivityAt = latestMonitoringEventTime(visibleServerEvents);
+  useEffect(() => {
+    if (activeTab === "activity") {
+      setActivitySeenAt((current) => Math.max(current, latestActivityAt, Date.now()));
+    }
+  }, [activeTab, latestActivityAt]);
+  if (!serverResource) {
     return (
       <>
         <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
@@ -523,17 +544,24 @@ export default function ServerDetailPage() {
     );
   }
 
-  const invite = serverInviteText(server);
-  const joinAddress = serverJoinAddress(server);
-  const joinPassword = serverJoinPassword(server);
+  const mode = gameServerMode(serverResource);
+  const status = gameServerStatus(serverResource);
+  const playersOnline = serverResource.status.playersOnline ?? 0;
+  const maxPlayers = gameServerMaxPlayers(serverResource);
+  const joinPort = gameServerJoinPort(serverResource);
+  const invite = serverInviteText(serverResource);
+  const joinAddress = serverJoinAddress(serverResource);
+  const joinPassword = serverJoinPassword(serverResource);
   const share = shareQuery.data;
   const sharePath = share?.sharePath ?? "";
   const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
-  const lifecycleEvents = (lifecycleActivityQuery.data ?? []).filter((event) => event.instanceId === server.id && isLifecycleProgressEvent(event.type)).slice(0, 3);
+  const runtimeErrorMessage = status === "errored" && serverResource.status.lastError ? formatActionError(new Error(serverResource.status.lastError), serverResource.status.lastError) : "";
+  const hasUnreadActivity = latestActivityAt > activitySeenAt;
+  const showActivityIndicator = activeTab !== "activity" && (Boolean(runtimeErrorMessage) || hasUnreadActivity);
   const copy = async (label: string, value: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyText(value);
       setCopied(label);
       setErrorMessage("");
       window.setTimeout(() => setCopied(""), 1500);
@@ -575,50 +603,36 @@ export default function ServerDetailPage() {
     <>
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
-      {server.status === "errored" && server.lastError && (
-        <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
-          <p className="font-medium">{t("serverRuntimeError")}</p>
-          <p className="mt-1 break-words text-red-100/85">{formatActionError(new Error(server.lastError), server.lastError)}</p>
-        </div>
-      )}
       {errorMessage && <p className="mt-3 rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mt-3 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm text-panel-green">{successMessage}</p>}
-      {isServerLifecyclePending(server.status) && (
-        <LifecycleProgressCard
-          events={lifecycleEvents}
-          loading={lifecycleActivityQuery.isLoading}
-          locale={locale}
-          server={server}
-        />
-      )}
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold">{server.name}</h1>
-            <ServerModeBadge mode={server.mode} />
-            <ServerStatusBadge status={server.status} />
+            <h1 className="text-2xl font-semibold">{serverResource.name}</h1>
+            <ServerModeBadge mode={mode} />
+            <ServerStatusBadge status={status} />
             <PlayerCountBadge
               label={t("players")}
-              value={`${server.players} / ${server.maxPlayers}`}
+              value={`${playersOnline} / ${maxPlayers}`}
             />
           </div>
         </div>
         <div className="hidden md:block">
-          <ServerActions server={server} showInvite={false} />
+          <ServerActions server={serverResource} showInvite={false} />
         </div>
       </div>
       <MobileServerControls
         copied={copied}
         invite={invite}
         joinAddress={joinAddress}
-        joinPort={serverJoinPort(server)}
-        server={server}
+        joinPort={joinPort}
+        server={serverResource}
         onCopy={copy}
       />
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="min-w-0 p-4">
-          <div className="mb-4 flex gap-2 overflow-x-auto border-b border-panel-line px-1 pb-4 pt-1" role="tablist" aria-label={server.name}>
+          <div className="mb-4 flex gap-2 overflow-x-auto border-b border-panel-line px-1 pb-4 pt-1" role="tablist" aria-label={serverResource.name}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -631,15 +645,26 @@ export default function ServerDetailPage() {
                 )}
                 onClick={() => setActiveTab(tab.id)}
               >
-                {tab.label}
+                <span className="inline-flex items-center gap-2">
+                  {tab.label}
+                  {tab.id === "activity" ? (
+                    <span
+                      className={cn(
+                        "size-1.5 rounded-full transition-opacity",
+                        showActivityIndicator ? runtimeErrorMessage ? "bg-red-400 opacity-100" : "bg-panel-green opacity-100" : "opacity-0"
+                      )}
+                      aria-label={showActivityIndicator ? t("serverActivityUnread") : undefined}
+                    />
+                  ) : null}
+                </span>
               </button>
             ))}
           </div>
 
           {activeTab === "overview" && (
             <OverviewTab
-              capabilities={capabilities}
-              server={server}
+              capabilities={visibleCapabilities}
+              resource={serverResource}
               worldCount={serverWorlds.length}
               backupCount={serverBackups.length}
               modCount={serverMods.length}
@@ -648,11 +673,18 @@ export default function ServerDetailPage() {
           )}
           {activeTab === "monitoring" && (
             <MonitoringTab
-              events={serverEventsQuery.data?.events ?? []}
               metrics={serverMetricsQuery.data?.series}
+              metricsRange={serverMetricsQuery.data?.range}
               range={monitoringRange}
-              server={server}
+              server={serverResource}
               onRangeChange={setMonitoringRange}
+            />
+          )}
+          {activeTab === "activity" && (
+            <ServerActivityTab
+              events={visibleServerEvents}
+              loading={serverEventsQuery.isLoading}
+              runtimeError={runtimeErrorMessage}
             />
           )}
           {activeTab === "console" && (
@@ -665,7 +697,8 @@ export default function ServerDetailPage() {
               logStatusLabel={logStatusLabel}
               logStreamPaused={logStreamPaused}
               capabilities={capabilities}
-              server={server}
+              server={serverResource}
+              serverStatus={status}
               viewportRef={logViewportRef}
               onChangeCommand={(value) => {
                 setCommand(value);
@@ -690,22 +723,23 @@ export default function ServerDetailPage() {
           )}
           {activeTab === "config" && (
             <ConfigTab
+              provider={providerCatalog}
+              resource={serverResource}
               saveError={configSave.error instanceof Error ? configSave.error.message : ""}
               savePending={configSave.isPending}
               saveSuccess={configSaved}
               restartPending={configRestart.isPending}
-              server={server}
               onRestart={() => setPendingConfigRestart(true)}
               onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
             />
           )}
-          {activeTab === "worlds" && (
+          {activeTab === "worlds" && visibleCapabilities.saveSnapshots && (
             <WorldsTab
               isError={worldsQuery.isError}
               isLoading={worldsQuery.isLoading}
               items={serverWorlds}
               deleting={worldDelete.isPending}
-              currentServerId={server.id}
+              currentServerId={serverResource.id}
               downloadingId={downloadingResourceId}
               snapshotting={worldSnapshotCreate.isPending}
               onDelete={setPendingWorldDelete}
@@ -713,7 +747,7 @@ export default function ServerDetailPage() {
               onCreateSnapshot={() => setPendingWorldSnapshot(true)}
             />
           )}
-          {activeTab === "backups" && (
+          {activeTab === "backups" && visibleCapabilities.backups && (
             <BackupsTab
               creating={backupCreate.isPending}
               isError={backupsQuery.isError}
@@ -722,7 +756,7 @@ export default function ServerDetailPage() {
               deleting={backupDelete.isPending}
               downloadingId={downloadingResourceId}
               restoring={backupRestore.isPending}
-              serverStatus={server.status}
+              serverStatus={status}
               onDelete={setPendingBackupDelete}
               onDownload={(backup) => void downloadBackup(backup)}
               onCreate={() => setPendingBackupCreate(true)}
@@ -741,7 +775,7 @@ export default function ServerDetailPage() {
               modPacks={modPacks}
               pendingRestart={modsPendingRestart}
               packInstalling={modPackAssign.isPending}
-              serverStatus={server.status}
+              serverStatus={status}
               toggling={modEnabled.isPending}
               workshopUnsupported={workshopUnsupported}
               onAssignMod={setPendingModAssign}
@@ -756,7 +790,7 @@ export default function ServerDetailPage() {
           <Card className="p-4">
             <h2 className="font-semibold">{t("joinServer")}</h2>
             <CopyRow label={t("ipAddress")} value={joinAddress} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <CopyRow label={t("port")} value={String(serverJoinPort(server))} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
+            <CopyRow label={t("port")} value={String(joinPort)} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <CopyRow label={t("password")} value={joinPassword || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
             <Button className="mt-4 w-full" variant="secondary" onClick={() => void copy("Invite", invite)}>
               <Copy aria-hidden="true" />
@@ -803,24 +837,24 @@ export default function ServerDetailPage() {
               )}
             </div>
           </Card>
-          {capabilities.playerList && <PlayersPanel serverId={server.id} />}
+          {capabilities.playerList && <PlayersPanel serverId={serverResource.id} />}
           <ResourceLimitsCard
             cpuPercent={statsQuery.data?.cpuPercent}
             memoryMb={statsQuery.data?.memoryMb}
+            resource={serverResource}
             restartPending={configRestart.isPending}
-            server={server}
             onEdit={() => setResourceDialogOpen(true)}
             onRestart={() => setPendingConfigRestart(true)}
           />
-          {capabilities.saveSnapshots && (
+          {visibleCapabilities.saveSnapshots && (
             <Card className="p-4">
               <h2 className="font-semibold">{t("worldTemplate")}</h2>
-              {server.sourceWorldId ? (
+              {serverResource.spec.sourceWorldId ? (
                 <Link
-                  href={`/worlds/${server.sourceWorldId}`}
+                  href={`/worlds/${serverResource.spec.sourceWorldId}`}
                   className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
                 >
-                  <p className="truncate text-sm font-medium text-slate-100">{server.sourceWorldName || t("worldTemplate")}</p>
+                  <p className="truncate text-sm font-medium text-slate-100">{serverResource.spec.sourceWorldName || t("worldTemplate")}</p>
                   <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
                 </Link>
               ) : (
@@ -838,8 +872,8 @@ export default function ServerDetailPage() {
         open={pendingConfigRestart}
         eyebrow={t("confirmActionEyebrow")}
         title={t("confirmServerActionTitle", { action: t("actionRestart") })}
-        description={t("confirmRestartForConfigDescription", { name: server.name })}
-        detail={<DetailLine label={t("server")} value={server.name} />}
+        description={t("confirmRestartForConfigDescription", { name: serverResource.name })}
+        detail={<DetailLine label={t("server")} value={serverResource.name} />}
         cancelLabel={t("cancel")}
         confirmLabel={configRestart.isPending ? t("actionWorking") : t("confirmServerActionButton", { action: t("actionRestart") })}
         confirmVariant="gold"
@@ -849,13 +883,13 @@ export default function ServerDetailPage() {
       />
       <ResourceLimitsDialog
         open={resourceDialogOpen}
+        resource={serverResource}
         savePending={resourceSave.isPending}
-        server={server}
         onCancel={() => setResourceDialogOpen(false)}
         onSave={(resources) => resourceSave.mutate({ resources })}
       />
       <ConfirmDialog
-        open={Boolean(pendingWorldDelete)}
+        open={showWorldAndBackupFeatures && Boolean(pendingWorldDelete)}
         eyebrow={t("destructiveAction")}
         title={t("deleteWorldConfirm", { name: pendingWorldDelete?.name ?? "" })}
         description={t("confirmDeleteWorldDescription", { name: pendingWorldDelete?.name ?? "" })}
@@ -867,11 +901,11 @@ export default function ServerDetailPage() {
         onConfirm={() => pendingWorldDelete && worldDelete.mutate(pendingWorldDelete.id)}
       />
       <ConfirmDialog
-        open={pendingWorldSnapshot}
+        open={showWorldAndBackupFeatures && pendingWorldSnapshot}
         eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmWorldSnapshotTitle", { name: server.name })}
-        description={t("confirmWorldSnapshotDescription", { name: server.name })}
-        detail={<DetailLine label={t("server")} value={server.name} />}
+        title={t("confirmWorldSnapshotTitle", { name: serverResource.name })}
+        description={t("confirmWorldSnapshotDescription", { name: serverResource.name })}
+        detail={<DetailLine label={t("server")} value={serverResource.name} />}
         cancelLabel={t("cancel")}
         confirmLabel={worldSnapshotCreate.isPending ? t("actionWorking") : t("saveWorldSnapshot")}
         confirmVariant="gold"
@@ -880,11 +914,11 @@ export default function ServerDetailPage() {
         onConfirm={() => worldSnapshotCreate.mutate()}
       />
       <ConfirmDialog
-        open={pendingBackupCreate}
+        open={showWorldAndBackupFeatures && pendingBackupCreate}
         eyebrow={t("confirmActionEyebrow")}
-        title={t("confirmBackupCreateTitle", { name: server.name })}
-        description={t("confirmBackupCreateDescription", { name: server.name })}
-        detail={<DetailLine label={t("server")} value={server.name} />}
+        title={t("confirmBackupCreateTitle", { name: serverResource.name })}
+        description={t("confirmBackupCreateDescription", { name: serverResource.name })}
+        detail={<DetailLine label={t("server")} value={serverResource.name} />}
         cancelLabel={t("cancel")}
         confirmLabel={backupCreate.isPending ? t("actionWorking") : t("createBackupNow")}
         confirmVariant="gold"
@@ -893,7 +927,7 @@ export default function ServerDetailPage() {
         onConfirm={() => backupCreate.mutate()}
       />
       <ConfirmDialog
-        open={Boolean(pendingRestore)}
+        open={showWorldAndBackupFeatures && Boolean(pendingRestore)}
         eyebrow={t("destructiveAction")}
         title={t("restoreBackupConfirm", { name: pendingRestore?.name ?? "" })}
         description={t("confirmRestoreBackupDescription", { name: pendingRestore?.name ?? "" })}
@@ -906,7 +940,7 @@ export default function ServerDetailPage() {
         onConfirm={() => pendingRestore && backupRestore.mutate(pendingRestore.id)}
       />
       <ConfirmDialog
-        open={Boolean(pendingBackupDelete)}
+        open={showWorldAndBackupFeatures && Boolean(pendingBackupDelete)}
         eyebrow={t("destructiveAction")}
         title={t("deleteBackupConfirm", { name: pendingBackupDelete?.name ?? "" })}
         description={t("confirmDeleteBackupDescription", { name: pendingBackupDelete?.name ?? "" })}
@@ -934,7 +968,7 @@ export default function ServerDetailPage() {
         open={Boolean(pendingModAssign)}
         eyebrow={t("confirmActionEyebrow")}
         title={t("confirmModInstallTitle", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "" })}
-        description={t("confirmModInstallDescription", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "", server: server.name })}
+        description={t("confirmModInstallDescription", { name: pendingModAssign ? modDisplayName(pendingModAssign, locale) : "", server: serverResource.name })}
         detail={pendingModAssign ? (
           <InstallDependencyDetail
             dependencies={pendingModAssign.dependencies ?? []}
@@ -953,7 +987,7 @@ export default function ServerDetailPage() {
         open={Boolean(pendingModPackInstall)}
         eyebrow={t("confirmActionEyebrow")}
         title={t("confirmModPackInstallTitle", { name: pendingModPackInstall?.name ?? "" })}
-        description={t("confirmModPackInstallDescription", { name: pendingModPackInstall?.name ?? "", server: server.name })}
+        description={t("confirmModPackInstallDescription", { name: pendingModPackInstall?.name ?? "", server: serverResource.name })}
         detail={pendingModPackInstall ? (
           <InstallDependencyDetail
             dependencies={dependencyNamesForMods(pendingModPackInstall.mods)}
@@ -987,27 +1021,28 @@ export default function ServerDetailPage() {
 
 function OverviewTab({
   capabilities,
-  server,
+  resource,
   worldCount,
   backupCount,
   modCount,
   onSelectTab
 }: {
   capabilities: ProviderCapabilities;
-  server: Server;
+  resource: GameServerResource;
   worldCount: number;
   backupCount: number;
   modCount: number;
   onSelectTab: (tab: TabId) => void;
 }) {
   const { t } = useI18n();
+  const resourceConfig = resource.spec.config ?? {};
+  const hostPort = resource.spec.network?.hostPort ?? 0;
+  const internalPort = resource.spec.network?.port ?? 0;
   const detailItems = [
-    { label: t("world"), value: server.world },
-    { label: t("difficulty"), value: difficultyLabel(server.config.difficulty, t) },
-    { label: t("worldSize"), value: worldSizeLabel(server.config.worldSize, t) },
-    { label: t("maxPlayers"), value: String(server.maxPlayers) },
-    { label: t("version"), value: server.version },
-    ...(server.hostPort > 0 && server.hostPort !== server.port ? [{ label: t("hostPort"), value: String(server.hostPort) }] : [])
+    { label: t("difficulty"), value: difficultyLabel(stringProviderValue(resourceConfig, "difficulty", "classic"), t) },
+    { label: t("maxPlayers"), value: String(gameServerMaxPlayers(resource)) },
+    { label: t("version"), value: gameServerVersion(resource) },
+    ...(hostPort > 0 && hostPort !== internalPort ? [{ label: t("hostPort"), value: String(hostPort) }] : [])
   ];
   return (
     <div className="space-y-4">
@@ -1026,17 +1061,29 @@ function OverviewTab({
   );
 }
 
+function stringProviderValue(payload: Record<string, unknown> | undefined, key: string, fallback = "") {
+  const value = payload?.[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function latestMonitoringEventTime(events: MonitoringEvent[]) {
+  return events.reduce((latest, event) => {
+    const next = Date.parse(event.timestamp);
+    return Number.isFinite(next) ? Math.max(latest, next) : latest;
+  }, 0);
+}
+
 function MonitoringTab({
-  events,
   metrics,
+  metricsRange,
   range,
   server,
   onRangeChange
 }: {
-  events: MonitoringEvent[];
   metrics?: Record<string, MetricSeries>;
+  metricsRange?: MonitoringRange;
   range: MonitoringRangeValue;
-  server: Server;
+  server: GameServerResource;
   onRangeChange: (range: MonitoringRangeValue) => void;
 }) {
   const { t } = useI18n();
@@ -1065,18 +1112,34 @@ function MonitoringTab({
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} series={metrics?.cpu} />
-        <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} series={metrics?.memory} />
-        <MonitoringChartCard color="#59d46f" icon={<Users aria-hidden="true" className="size-4" />} series={metrics?.players} />
-        <MonitoringChartCard color="#e6b84a" icon={<Clock aria-hidden="true" className="size-4" />} series={metrics?.uptime} />
+        <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.cpu} />
+        <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.memory} />
+        <MonitoringChartCard color="#59d46f" icon={<Users aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.players} />
+        <MonitoringChartCard color="#e6b84a" icon={<Clock aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.uptime} />
       </div>
-      <div>
-        <div className="mb-3 rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
-          <p className="mt-1 text-xs text-slate-500">{t("serverRecentEventsDescription")}</p>
+    </div>
+  );
+}
+
+function ServerActivityTab({ events, loading, runtimeError }: { events: MonitoringEvent[]; loading: boolean; runtimeError: string }) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3">
+        <h2 className="text-sm font-semibold text-slate-100">{t("recentAlertsTitle")}</h2>
+        <p className="mt-1 text-xs text-slate-500">{t("serverRecentEventsDescription")}</p>
+      </div>
+      {runtimeError ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <p className="font-medium">{t("serverRuntimeError")}</p>
+          <p className="mt-1 break-words text-red-100/85">{runtimeError}</p>
         </div>
+      ) : null}
+      {loading ? (
+        <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-8 text-center text-sm text-slate-500">{t("loading")}</div>
+      ) : (
         <ActivityTimeline events={events} />
-      </div>
+      )}
     </div>
   );
 }
@@ -1084,21 +1147,25 @@ function MonitoringTab({
 function ResourceLimitsCard({
   cpuPercent,
   memoryMb,
+  resource,
   restartPending,
-  server,
   onEdit,
   onRestart
 }: {
   cpuPercent?: number;
   memoryMb?: number;
+  resource: GameServerResource;
   restartPending: boolean;
-  server: Server;
   onEdit: () => void;
   onRestart: () => void;
 }) {
   const { t } = useI18n();
-  const running = server.status === "running";
-  const lifecycleLocked = isServerLifecyclePending(server.status);
+  const status = gameServerStatus(resource);
+  const running = status === "running";
+  const lifecycleLocked = isServerLifecyclePending(status);
+  const cpuLimitCores = resource.spec.resources?.cpuLimitCores ?? 0;
+  const memoryLimitMb = resource.spec.resources?.memoryLimitMb ?? 0;
+  const configPendingRestart = gameServerConfigPendingRestart(resource);
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
@@ -1114,17 +1181,17 @@ function ResourceLimitsCard({
         <ResourceMetric
           icon={<Cpu aria-hidden="true" className="size-4" />}
           label={t("cpuLimit")}
-          value={formatCpuLimitLabel(server.cpuLimitCores ?? 0, t)}
+          value={formatCpuLimitLabel(cpuLimitCores, t)}
           subValue={running && cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : t("notRunning")}
         />
         <ResourceMetric
           icon={<MemoryStick aria-hidden="true" className="size-4" />}
           label={t("memoryLimit")}
-          value={formatMemoryLimitLabel(server.memoryLimitMb ?? 0, t)}
+          value={formatMemoryLimitLabel(memoryLimitMb, t)}
           subValue={running && memoryMb !== undefined ? `${memoryMb} MB` : t("notRunning")}
         />
       </div>
-      {server.configPendingRestart && (
+      {configPendingRestart && (
         <div className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 p-3">
           <p className="text-xs font-medium text-panel-gold">{t("resourceLimitsPendingRestart")}</p>
           <Button className="mt-2 h-8 px-2 text-xs" variant="gold" onClick={onRestart} disabled={restartPending || lifecycleLocked}>
@@ -1160,6 +1227,7 @@ function ConsoleTab({
   logStatusLabel,
   logStreamPaused,
   server,
+  serverStatus,
   viewportRef,
   onChangeCommand,
   onClear,
@@ -1175,7 +1243,8 @@ function ConsoleTab({
   logStatus: "idle" | "connecting" | "connected" | "error" | "paused";
   logStatusLabel: string;
   logStreamPaused: boolean;
-  server: Server;
+  server: GameServerResource;
+  serverStatus: ServerStatus;
   viewportRef: React.RefObject<HTMLDivElement | null>;
   onChangeCommand: (value: string) => void;
   onClear: () => void;
@@ -1184,7 +1253,7 @@ function ConsoleTab({
   onTogglePause: () => void;
 }) {
   const { t } = useI18n();
-  const consoleEnabled = server.status === "running";
+  const consoleEnabled = serverStatus === "running";
   const showTerrariaShortcuts = supportsTerrariaConsoleShortcuts(server);
   const readyMessage = t(consoleReadyMessageKey(server));
   return (
@@ -1334,13 +1403,15 @@ function ConsoleCommandPanel({
             <QuickCommandButton disabled={blocked} icon={<KeyRound aria-hidden="true" className="size-3.5" />} label={t("consoleActionShowPassword")} onClick={() => runSimple(t("consoleActionShowPassword"), "password")} />
             <QuickCommandButton disabled={blocked} icon={<Megaphone aria-hidden="true" className="size-3.5" />} label={t("consoleActionShowMotd")} onClick={() => runSimple(t("consoleActionShowMotd"), "motd")} />
           </CommandGroup>
-          <CommandGroup title={t("consoleWorldGroup")}>
-            <QuickCommandButton disabled={blocked} icon={<Sunrise aria-hidden="true" className="size-3.5" />} label={t("consoleActionDawn")} onClick={() => runSimple(t("consoleActionDawn"), "dawn")} />
-            <QuickCommandButton disabled={blocked} icon={<Sun aria-hidden="true" className="size-3.5" />} label={t("consoleActionNoon")} onClick={() => runSimple(t("consoleActionNoon"), "noon")} />
-            <QuickCommandButton disabled={blocked} icon={<Moon aria-hidden="true" className="size-3.5" />} label={t("consoleActionDusk")} onClick={() => runSimple(t("consoleActionDusk"), "dusk")} />
-            <QuickCommandButton disabled={blocked} icon={<Moon aria-hidden="true" className="size-3.5" />} label={t("consoleActionMidnight")} onClick={() => runSimple(t("consoleActionMidnight"), "midnight")} />
-            <QuickCommandButton disabled={blocked} icon={<Waves aria-hidden="true" className="size-3.5" />} label={t("consoleActionSettle")} onClick={() => runSimple(t("consoleActionSettle"), "settle")} />
-          </CommandGroup>
+          {showWorldAndBackupFeatures && (
+            <CommandGroup title={t("consoleWorldGroup")}>
+              <QuickCommandButton disabled={blocked} icon={<Sunrise aria-hidden="true" className="size-3.5" />} label={t("consoleActionDawn")} onClick={() => runSimple(t("consoleActionDawn"), "dawn")} />
+              <QuickCommandButton disabled={blocked} icon={<Sun aria-hidden="true" className="size-3.5" />} label={t("consoleActionNoon")} onClick={() => runSimple(t("consoleActionNoon"), "noon")} />
+              <QuickCommandButton disabled={blocked} icon={<Moon aria-hidden="true" className="size-3.5" />} label={t("consoleActionDusk")} onClick={() => runSimple(t("consoleActionDusk"), "dusk")} />
+              <QuickCommandButton disabled={blocked} icon={<Moon aria-hidden="true" className="size-3.5" />} label={t("consoleActionMidnight")} onClick={() => runSimple(t("consoleActionMidnight"), "midnight")} />
+              <QuickCommandButton disabled={blocked} icon={<Waves aria-hidden="true" className="size-3.5" />} label={t("consoleActionSettle")} onClick={() => runSimple(t("consoleActionSettle"), "settle")} />
+            </CommandGroup>
+          )}
           <CommandGroup title={t("consoleManageGroup")}>
             {parameterCommands.slice(1).map((item) => (
               <QuickCommandButton key={item.key} disabled={blocked} icon={item.icon} label={item.label} onClick={() => selectParameterCommand(item)} />
@@ -1459,48 +1530,60 @@ function LogsTab({
 function ConfigTab({
   onRestart,
   onSave,
+  provider,
+  resource,
   restartPending,
   saveError,
   savePending,
-  saveSuccess,
-  server
+  saveSuccess
 }: {
   onRestart: () => void;
-  onSave: (config: TerrariaConfig, hostPort: number) => void;
+  onSave: (config: ServerConfigUpdatePayload, hostPort: number) => void;
+  provider?: ProviderCatalog;
+  resource: GameServerResource;
   restartPending: boolean;
   saveError: string;
   savePending: boolean;
   saveSuccess: boolean;
-  server: Server;
 }) {
   const { t } = useI18n();
-  const [draft, setDraft] = useState<TerrariaConfig>(server.config);
-  const [hostPortDraft, setHostPortDraft] = useState(serverJoinPort(server));
+  const resourceTerrariaConfig = useMemo(() => terrariaConfigFromGameServer(resource), [resource]);
+  const resourceProviderPayload = useMemo(() => initialProviderDraftFromResource(resource, provider), [provider, resource]);
+  const resourceHostPort = gameServerJoinPort(resource);
+  const resourceStatus = gameServerStatus(resource);
+  const [draft, setDraft] = useState<TerrariaConfig>(resourceTerrariaConfig);
+  const [providerDraft, setProviderDraft] = useState<ProviderConfigPayload>(() => resourceProviderPayload);
+  const [hostPortDraft, setHostPortDraft] = useState(resourceHostPort);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [restartRecommended, setRestartRecommended] = useState(false);
-  useEffect(() => setDraft(server.config), [server.config, server.id]);
-  useEffect(() => setHostPortDraft(serverJoinPort(server)), [server.hostPort, server.id, server.port]);
+  useEffect(() => setDraft(resourceTerrariaConfig), [resource.id, resourceTerrariaConfig]);
+  useEffect(() => setProviderDraft(resourceProviderPayload), [resource.id, resourceProviderPayload]);
+  useEffect(() => setHostPortDraft(resourceHostPort), [resource.id, resourceHostPort]);
+  const isTerrariaProvider = terrariaProviderKeys.has(resource.providerKey);
   const normalizedDraft = useMemo(() => ({ ...draft, port: terrariaInternalPort }), [draft]);
   const preview = useQuery({
-    queryKey: ["server-config-preview", server.id, normalizedDraft],
+    queryKey: ["server-config-preview", resource.id, normalizedDraft],
     queryFn: () => previewTerrariaConfig(normalizedDraft),
-    enabled: previewOpen,
+    enabled: previewOpen && isTerrariaProvider,
     retry: false
   });
-  const configDirty = JSON.stringify(normalizedDraft) !== JSON.stringify({ ...server.config, port: terrariaInternalPort });
-  const hostPortDirty = hostPortDraft !== serverJoinPort(server);
+  const currentProviderPayload = resourceProviderPayload;
+  const configDirty = isTerrariaProvider
+    ? JSON.stringify(normalizedDraft) !== JSON.stringify({ ...resourceTerrariaConfig, port: terrariaInternalPort })
+    : JSON.stringify(providerDraft) !== JSON.stringify(currentProviderPayload);
+  const hostPortDirty = hostPortDraft !== resourceHostPort;
   const dirty = configDirty || hostPortDirty;
-  const lifecycleLocked = isServerLifecyclePending(server.status);
-  const running = server.status === "running";
+  const lifecycleLocked = isServerLifecyclePending(resourceStatus);
+  const running = resourceStatus === "running";
   const disabled = lifecycleLocked || savePending;
-  const restartRequired = running && !dirty && (server.configPendingRestart || restartRecommended);
+  const restartRequired = running && !dirty && (gameServerConfigPendingRestart(resource) || restartRecommended);
   const showConfigActions = dirty || savePending || saveSuccess || restartRequired || lifecycleLocked;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
   useEffect(() => {
-    if (dirty || !running || !server.configPendingRestart) {
+    if (dirty || !running || !gameServerConfigPendingRestart(resource)) {
       setRestartRecommended(false);
     }
-  }, [dirty, running, server.configPendingRestart]);
+  }, [dirty, resource, running]);
   useEffect(() => {
     if (saveSuccess && running) {
       setRestartRecommended(true);
@@ -1523,10 +1606,11 @@ function ConfigTab({
   const seedLabel = secretSeed
     ? terrariaSecretSeeds.find((s) => s.key === secretSeed)?.label ?? draft.seed ?? ""
     : (draft.seed || t("tagRandom"));
+  const seedModeCount = terrariaSeedModeCodes(draft).length;
   return (
     <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault();
-      if (!disabled && dirty) onSave(normalizedDraft, hostPortDraft);
+      if (!disabled && dirty) onSave(isTerrariaProvider ? normalizedDraft : providerDraft, hostPortDraft);
     }}>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1534,51 +1618,79 @@ function ConfigTab({
             <h2 className="font-semibold">{t("serverConfig")}</h2>
             {lifecycleLocked && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configLifecycleLocked")}</span>}
           </div>
-          <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => setPreviewOpen(true)}>
-            <FileText aria-hidden="true" className="size-3.5" />
-            {t("showPreview")}
-          </Button>
+          {isTerrariaProvider ? (
+            <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => setPreviewOpen(true)}>
+              <FileText aria-hidden="true" className="size-3.5" />
+              {t("showPreview")}
+            </Button>
+          ) : null}
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="space-y-3">
-            <Field label={t("serverName")}>
-              <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
-            </Field>
-            <Field label={t("password")}>
-              <Input value={draft.password ?? ""} onChange={(event) => update("password", event.target.value)} disabled={disabled} />
-            </Field>
-            <Field label={t("motd")}>
-              <Input value={draft.motd ?? ""} onChange={(event) => update("motd", event.target.value)} disabled={disabled} />
-            </Field>
-          </div>
-          <div className="space-y-3">
-            <Field label={t("externalPort")}>
-              <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
-            </Field>
-            <Field label={t("maxPlayers")}>
-              <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
-            </Field>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-2 rounded-md border border-panel-line bg-slate-950/50 p-3">
-          <Checkbox label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
-          <Checkbox label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
-        </div>
+        {isTerrariaProvider ? (
+          <>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="space-y-3">
+                <Field label={t("serverName")}>
+                  <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
+                </Field>
+                <Field label={t("password")}>
+                  <Input value={draft.password ?? ""} onChange={(event) => update("password", event.target.value)} disabled={disabled} />
+                </Field>
+                <Field label={t("motd")}>
+                  <Input
+                    type="text"
+                    value={draft.motd ?? ""}
+                    onChange={(event) => update("motd", event.target.value)}
+                    disabled={disabled}
+                  />
+                </Field>
+              </div>
+              <div className="space-y-3">
+                <Field label={t("externalPort")}>
+                  <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
+                </Field>
+                <Field label={t("maxPlayers")}>
+                  <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
+                </Field>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 rounded-md border border-panel-line bg-slate-950/50 p-3">
+              <Checkbox label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
+              <Checkbox label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
+            </div>
+          </>
+        ) : (
+          <>
+            <ProviderConfigFields
+              disabled={disabled}
+              fields={provider?.configSchema ?? []}
+              payload={providerDraft}
+              onChange={(field, value) => setProviderDraft((current) => updateProviderConfigPayload(current, field, value))}
+            />
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <Field label={t("externalPort")}>
+                <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
+              </Field>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
+      {isTerrariaProvider ? <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <h2 className="font-semibold">{t("worldCreationSettings")}</h2>
         <p className="mt-1 text-xs text-slate-500">{t("worldCreationReadonlyHint")}</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <ReadOnlyField label={t("worldName")} value={draft.worldName} />
-          <ReadOnlyField label={t("gameVersion")} value={server.version || "1.4.5.6"} />
+          <ReadOnlyField label={t("gameVersion")} value={gameServerVersion(resource)} />
           <ReadOnlyField label={t("worldSize")} value={worldSizeLabel} />
           <ReadOnlyField label={t("worldEvil")} value={worldEvilLabel} />
           <ReadOnlyField label={t("difficulty")} value={difficultyLabel} />
           <ReadOnlyField label={t("internalPort")} value={String(terrariaInternalPort)} />
-          <ReadOnlyField label={t("customSeed")} value={seedLabel} />
+          <ReadOnlyField label={t("customSeed")} value={seedLabel} help={t("worldSeedHint")} />
+          {seedModeCount > 0 ? (
+            <ReadOnlyField label={t("seedModes")} value={t("seedModesSummary", { special: draft.specialSeeds?.length ?? 0, secret: draft.secretSeeds?.length ?? 0 })} />
+          ) : null}
         </div>
-      </div>
+      </div> : null}
 
       {showConfigActions && (
         <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-lg border border-panel-line bg-panel-card/95 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.25)] sm:flex-row sm:items-center sm:justify-between">
@@ -1606,8 +1718,9 @@ function ConfigTab({
               variant="secondary"
               disabled={savePending || !dirty}
               onClick={() => {
-                setDraft(server.config);
-                setHostPortDraft(serverJoinPort(server));
+                setDraft(resourceTerrariaConfig);
+                setProviderDraft(resourceProviderPayload);
+                setHostPortDraft(resourceHostPort);
               }}
             >
               {t("resetChanges")}
@@ -1619,7 +1732,7 @@ function ConfigTab({
         </div>
       )}
       {saveError && <p className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
-      {previewOpen && (
+      {previewOpen && isTerrariaProvider && (
         <div
           className="fixed inset-0 z-50 flex justify-end bg-slate-950/50 backdrop-blur-sm"
           role="presentation"
@@ -1665,37 +1778,149 @@ function ConfigTab({
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyField({ help, label, value }: { help?: string; label: string; value: string }) {
   return (
     <div className="grid gap-1.5">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <span className="flex items-center gap-2 text-xs font-medium text-slate-500">
+        <span>{label}</span>
+        {help ? <FieldHelp text={help} /> : null}
+      </span>
       <div className="flex h-10 items-center rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-400">{value}</div>
+    </div>
+  );
+}
+
+function FieldHelp({ text }: { text: string }) {
+  return (
+    <span className="group/help relative inline-flex shrink-0">
+      <button
+        aria-label={text}
+        className="flex size-4 cursor-help select-none items-center justify-center rounded-full border border-slate-600 bg-slate-950/70 text-[10px] font-bold leading-none text-slate-300 transition hover:border-panel-green/70 hover:text-panel-green focus:border-panel-green focus:text-panel-green focus:outline-none focus:ring-2 focus:ring-panel-green/30"
+        type="button"
+      >
+        ?
+      </button>
+      <span className="pointer-events-none absolute left-1/2 top-6 z-20 hidden w-64 -translate-x-1/2 rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-xs font-normal leading-5 text-slate-300 shadow-[0_10px_30px_rgba(0,0,0,0.35)] group-hover/help:block group-focus-within/help:block">
+        {text}
+      </span>
+    </span>
+  );
+}
+
+function initialProviderDraftFromResource(resource: GameServerResource, provider?: ProviderCatalog): ProviderConfigPayload {
+  const payload: ProviderConfigPayload = {};
+  const configPayload = resource.spec.config ?? {};
+  for (const field of provider?.configSchema ?? []) {
+    payload[field.name] = configPayload[field.name] ?? defaultProviderFieldValue(field);
+  }
+  return {
+    ...payload,
+    ...configPayload
+  };
+}
+
+function defaultProviderFieldValue(field: ProviderConfigField): unknown {
+  if (field.default !== undefined) return field.default;
+  if (field.type === "number") return 0;
+  if (field.type === "boolean") return false;
+  return "";
+}
+
+function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
+  const key = providerFieldLabelKeys[field.name];
+  return key ? t(key) : field.label;
+}
+
+function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
+  if (field.name === "adminPassword") return t("adminPasswordHelp");
+  if (field.name === "clusterToken") return t("clusterTokenHelp");
+  if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
+  return field.help ?? "";
+}
+
+function ProviderConfigFields({
+  disabled,
+  fields,
+  onChange,
+  payload
+}: {
+  disabled: boolean;
+  fields: ProviderConfigField[];
+  onChange: (field: ProviderConfigField, value: string | boolean) => void;
+  payload: ProviderConfigPayload;
+}) {
+  const { t } = useI18n();
+  if (fields.length === 0) {
+    return <p className="mt-4 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-sm text-slate-500">{t("none")}</p>;
+  }
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      {fields.map((field) => {
+        const label = providerFieldLabel(field, t);
+        const help = providerFieldHelp(field, t);
+        const value = payload[field.name];
+        if (field.type === "boolean") {
+          return (
+            <div key={field.name} className="rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
+              <Checkbox label={label} checked={Boolean(value)} onChange={(checked) => onChange(field, checked)} disabled={disabled} />
+              {help ? <p className="mt-1 text-xs text-slate-500">{help}</p> : null}
+            </div>
+          );
+        }
+        return (
+          <Field key={field.name} label={label} required={field.required}>
+            {field.type === "select" ? (
+              <Select disabled={disabled} value={String(value ?? "")} onChange={(nextValue) => onChange(field, nextValue)}>
+                {(field.options ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+            ) : (
+              <Input
+                disabled={disabled}
+                type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
+                onChange={(event) => onChange(field, event.target.value)}
+              />
+            )}
+            {help ? <span className="text-xs text-slate-500">{help}</span> : null}
+          </Field>
+        );
+      })}
     </div>
   );
 }
 
 function ResourceLimitsDialog({
   open,
+  resource,
   savePending,
-  server,
   onCancel,
   onSave
 }: {
   open: boolean;
+  resource: GameServerResource;
   savePending: boolean;
-  server: Server;
   onCancel: () => void;
   onSave: (resources: ResourceLimits) => void;
 }) {
   const { t } = useI18n();
-  const [draft, setDraft] = useState<ResourceLimits>({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
-  const lifecycleLocked = isServerLifecyclePending(server.status);
-  const dirty = draft.cpuLimitCores !== (server.cpuLimitCores ?? 0) || draft.memoryLimitMb !== (server.memoryLimitMb ?? 0);
+  const resourceLimits = useMemo<ResourceLimits>(
+    () => ({
+      cpuLimitCores: resource.spec.resources?.cpuLimitCores ?? 0,
+      memoryLimitMb: resource.spec.resources?.memoryLimitMb ?? 0
+    }),
+    [resource.spec.resources?.cpuLimitCores, resource.spec.resources?.memoryLimitMb]
+  );
+  const status = gameServerStatus(resource);
+  const [draft, setDraft] = useState<ResourceLimits>(resourceLimits);
+  const lifecycleLocked = isServerLifecyclePending(status);
+  const dirty = draft.cpuLimitCores !== resourceLimits.cpuLimitCores || draft.memoryLimitMb !== resourceLimits.memoryLimitMb;
   useEffect(() => {
     if (open) {
-      setDraft({ cpuLimitCores: server.cpuLimitCores ?? 0, memoryLimitMb: server.memoryLimitMb ?? 0 });
+      setDraft(resourceLimits);
     }
-  }, [open, server.cpuLimitCores, server.id, server.memoryLimitMb]);
+  }, [open, resource.id, resourceLimits]);
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1727,7 +1952,7 @@ function ResourceLimitsDialog({
           <div>
             <p className="text-sm font-medium text-panel-green">{t("runtimeResources")}</p>
             <h2 className="mt-2 text-lg font-semibold text-white" id="resource-dialog-title">{t("adjustResources")}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">{server.status === "running" ? t("resourceLimitsApplyAfterRestart") : t("resourceLimitsApplyOnStart")}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">{status === "running" ? t("resourceLimitsApplyAfterRestart") : t("resourceLimitsApplyOnStart")}</p>
           </div>
           <button
             aria-label={t("cancel")}
@@ -1765,10 +1990,14 @@ function ResourceLimitsDialog({
   );
 }
 
-function Field({ children, label }: { children: ReactNode; label: string }) {
+function Field({ children, label, required }: { children: ReactNode; label: string; required?: boolean }) {
+  const { t } = useI18n();
   return (
     <label className="grid gap-1.5">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
+      <span className="flex items-center gap-2 text-xs font-medium text-slate-500">
+        <span>{label}</span>
+        {required ? <span className="rounded bg-panel-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-panel-gold">{t("requiredField")}</span> : null}
+      </span>
       {children}
     </label>
   );
@@ -1895,7 +2124,7 @@ function BackupsTab({
   onDelete: (backup: Backup) => void;
   onDownload: (backup: Backup) => void;
   restoring: boolean;
-  serverStatus: Server["status"];
+  serverStatus: ServerStatus;
   onCreate: () => void;
   onRestore: (backup: Backup) => void;
 }) {
@@ -1994,7 +2223,7 @@ function ModsTab({
   modPacks: ModPack[];
   pendingRestart: boolean;
   packInstalling: boolean;
-  serverStatus: Server["status"];
+  serverStatus: ServerStatus;
   toggling: boolean;
   workshopUnsupported: boolean;
   onAssignMod: (mod: ModFile) => void;
@@ -2472,59 +2701,6 @@ function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label
   );
 }
 
-function LifecycleProgressCard({
-  events,
-  loading,
-  locale,
-  server
-}: {
-  events: ActivityEvent[];
-  loading: boolean;
-  locale: "zh" | "en";
-  server: Server;
-}) {
-  const { t } = useI18n();
-  const title = server.status === "restarting"
-    ? t("serverLifecycleRestartingTitle")
-    : server.status === "stopping"
-      ? t("serverLifecycleStoppingTitle")
-      : t("serverLifecycleStartingTitle");
-  return (
-    <div className="mt-3 rounded-lg border border-panel-gold/30 bg-panel-gold/10 px-4 py-3">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-panel-gold/35 bg-slate-950/45 text-panel-gold">
-          <Activity aria-hidden="true" className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-medium text-slate-100">{title}</p>
-            <span className="text-xs font-medium text-panel-gold">{t("serverLifecycleRuntimeReady")}</span>
-          </div>
-          <p className="mt-1 text-sm leading-6 text-slate-400">{t("serverLifecycleProgressDescription")}</p>
-          <div className="mt-3 grid gap-2">
-            {events.length > 0 ? events.map((event) => {
-              const display = formatActivityEvent(event, locale);
-              return (
-                <div key={event.id} className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-panel-line/80 bg-slate-950/45 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-200">{display.typeLabel}</p>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">{display.message}</p>
-                  </div>
-                  <span className="shrink-0 text-xs text-slate-500">{event.created}</span>
-                </div>
-              );
-            }) : (
-              <p className="rounded-md border border-panel-line/80 bg-slate-950/45 px-3 py-2 text-sm text-slate-400">
-                {loading ? t("serverLifecycleProgressLoading") : t("serverLifecycleProgressWaiting")}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function MobileServerControls({
   copied,
   invite,
@@ -2538,7 +2714,7 @@ function MobileServerControls({
   joinAddress: string;
   joinPort: number;
   onCopy: (label: string, value: string) => void;
-  server: Server;
+  server: GameServerResource;
 }) {
   const { t } = useI18n();
   const joinValue = `${joinAddress}:${joinPort}`;
@@ -2615,21 +2791,12 @@ function PlayerCountBadge({ label, value }: { label: string; value: string }) {
   );
 }
 
-function difficultyLabel(value: Server["config"]["difficulty"], t: ReturnType<typeof useI18n>["t"]) {
-  const labels = {
+function difficultyLabel(value: string, t: ReturnType<typeof useI18n>["t"]) {
+  const labels: Record<string, string> = {
     journey: t("tagJourney"),
     classic: t("tagClassic"),
     expert: t("tagExpert"),
     master: t("tagMaster")
-  };
-  return labels[value] ?? value;
-}
-
-function worldSizeLabel(value: Server["config"]["worldSize"], t: ReturnType<typeof useI18n>["t"]) {
-  const labels = {
-    small: t("tagSmallWorld"),
-    medium: t("tagMediumWorld"),
-    large: t("tagLargeWorld")
   };
   return labels[value] ?? value;
 }

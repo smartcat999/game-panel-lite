@@ -8,8 +8,9 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card } from "@/components/ui";
-import { deleteBackup, downloadBackupFile, listBackups, listGames, listServers } from "@/lib/api";
+import { deleteBackup, downloadBackupFile, listBackups, listGameServers, listGames } from "@/lib/api";
 import { saveBlob } from "@/lib/download";
+import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
@@ -27,9 +28,14 @@ const backupTypeFilters = [
 ] as const satisfies readonly { key: BackupTypeFilter; labelKey: MessageKey }[];
 
 export default function BackupsPage() {
+  if (!showWorldAndBackupFeatures) return <HiddenFeaturePage />;
+  return <EnabledBackupsPage />;
+}
+
+function EnabledBackupsPage() {
   const { locale, t } = useI18n();
   const client = useQueryClient();
-  const serversQuery = useQuery({ queryKey: ["servers"], queryFn: listServers, retry: false });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false });
   const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, retry: false });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const [search, setSearch] = useState("");
@@ -45,7 +51,7 @@ export default function BackupsPage() {
   const serverNameById = useMemo(() => new Map(servers.map((server) => [server.id, server.name])), [servers]);
   const serverById = useMemo(() => new Map(servers.map((server) => [server.id, server])), [servers]);
   const backupGameFilters = useMemo(
-    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), backups.map((backup) => backup.gameKey ?? serverById.get(backup.instanceId ?? "")?.gameKey)),
+    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), backups.map((backup) => backup.gameKey ?? serverById.get(backup.instanceId ?? "")?.gameKey), t),
     [backups, gamesQuery.data, serverById, t]
   );
   const providerFilters = useMemo(
@@ -204,6 +210,18 @@ export default function BackupsPage() {
         onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
       />
     </>
+  );
+}
+
+function HiddenFeaturePage() {
+  return (
+    <Card className="p-6">
+      <h1 className="text-xl font-semibold text-white">Page not found</h1>
+      <p className="mt-2 text-sm text-slate-400">The requested GamePanel Lite page does not exist.</p>
+      <Link className="mt-4 inline-flex text-sm font-medium text-panel-green hover:underline" href="/dashboard">
+        Back to dashboard
+      </Link>
+    </Card>
   );
 }
 

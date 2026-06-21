@@ -7,40 +7,28 @@ import {
   isWorldActiveOnServer,
   providerKeyForServer
 } from "./server-detail-resources";
-import type { Server, World } from "./types";
+import type { GameServerResource, World } from "./types";
 
-const baseServer: Server = {
+const baseServer: GameServerResource = {
   id: "server-1",
   name: "Friends Server",
-  mode: "vanilla",
-  status: "stopped",
-  world: "Home",
-  players: 0,
-  maxPlayers: 8,
-  port: 7777,
-  version: "1.4.4.9",
-  hostPort: 7777,
-  cpuLimitCores: 0,
-  memoryLimitMb: 0,
-  lastBackup: "Not yet",
-  password: "",
-  cpu: "0%",
-  memory: "0 MB",
-  config: {
-    serverName: "Friends Server",
-    worldName: "Home",
-    worldSize: "medium",
-    worldEvil: "random",
-    difficulty: "classic",
-    maxPlayers: 8,
-    port: 7777,
-    password: "",
-    motd: "",
-    seed: "",
-    secure: true,
-    language: "en-US",
-    autoCreateWorld: true
-  }
+  gameKey: "terraria",
+  providerKey: "terraria-vanilla",
+  spec: {
+    generation: 1,
+    desiredState: "stopped",
+    version: "1.4.5.6",
+    config: { worldName: "Home", maxPlayers: 8, port: 7777 },
+    network: { port: 7777, hostPort: 7777 }
+  },
+  status: {
+    phase: "stopped",
+    actualState: "stopped",
+    observedGeneration: 1,
+    appliedGeneration: 1
+  },
+  createdAt: "2026-06-20T00:00:00Z",
+  updatedAt: "2026-06-20T00:00:00Z"
 };
 
 describe("server detail resource helpers", () => {
@@ -58,16 +46,15 @@ describe("server detail resource helpers", () => {
 
     expect(providerKeyForServer(baseServer)).toBe("terraria-vanilla");
     expect(isWorldCompatibleWithServer(vanillaWorld, baseServer)).toBe(true);
-    expect(isWorldCompatibleWithServer(vanillaWorld, { ...baseServer, mode: "tmodloader" })).toBe(false);
+    expect(isWorldCompatibleWithServer(vanillaWorld, { ...baseServer, providerKey: "terraria-tmodloader" })).toBe(false);
   });
 
   it("uses explicit provider metadata before legacy Terraria mode fallback", () => {
-    const palworldServer: Server = {
+    const palworldServer: GameServerResource = {
       ...baseServer,
       gameKey: "palworld",
       providerKey: "palworld",
-      mode: "vanilla",
-      world: "Pal Save"
+      spec: { ...baseServer.spec, config: { saveName: "Pal Save" } }
     };
     const palworldSave: World = {
       id: "save-1",
@@ -95,7 +82,7 @@ describe("server detail resource helpers", () => {
   });
 
   it("can fall back to game metadata for older world records without provider keys", () => {
-    const minecraftServer: Server = {
+    const minecraftServer: GameServerResource = {
       ...baseServer,
       gameKey: "minecraft",
       providerKey: "minecraft"

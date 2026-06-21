@@ -1,4 +1,4 @@
-import type { Server } from "./types";
+import type { ServerStatus } from "./types";
 import type { MessageKey } from "./i18n";
 
 type ResourceActionKind = "restoreBackup" | "modifyMods";
@@ -9,11 +9,11 @@ type ServerDetailErrorCopy = {
   portAlreadyAllocated?: (port: string) => string;
 };
 
-export function isServerLifecyclePending(status?: Server["status"]) {
+export function isServerLifecyclePending(status?: ServerStatus) {
   return status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
 }
 
-export function isServerLockedForResourceChanges(status?: Server["status"]) {
+export function isServerLockedForResourceChanges(status?: ServerStatus) {
   return status === "running" || isServerLifecyclePending(status);
 }
 
@@ -64,7 +64,7 @@ export function describeResourceAction({
   serverStatus
 }: {
   kind: ResourceActionKind;
-  serverStatus?: Server["status"];
+  serverStatus?: ServerStatus;
 }): { disabled: boolean; reasonKey?: MessageKey } {
   if (kind === "restoreBackup" && isServerLockedForResourceChanges(serverStatus)) {
     return { disabled: true, reasonKey: "restoreRequiresStopped" };

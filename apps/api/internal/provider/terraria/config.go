@@ -10,11 +10,35 @@ import (
 )
 
 type Preset struct {
-	Key         string                `json:"key"`
-	Label       string                `json:"label"`
-	Description string                `json:"description"`
-	ProviderKey domain.ProviderKey    `json:"providerKey"`
-	Config      domain.TerrariaConfig `json:"config"`
+	Key         string             `json:"key"`
+	Label       string             `json:"label"`
+	Description string             `json:"description"`
+	ProviderKey domain.ProviderKey `json:"providerKey"`
+	Config      Config             `json:"config"`
+}
+
+type WorldSize string
+
+type WorldEvil string
+
+type Difficulty string
+
+type Config struct {
+	ServerName      string     `json:"serverName"`
+	WorldName       string     `json:"worldName"`
+	WorldSize       WorldSize  `json:"worldSize"`
+	WorldEvil       WorldEvil  `json:"worldEvil"`
+	Difficulty      Difficulty `json:"difficulty"`
+	MaxPlayers      int        `json:"maxPlayers"`
+	Port            int        `json:"port"`
+	Password        string     `json:"password,omitempty"`
+	MOTD            string     `json:"motd,omitempty"`
+	Seed            string     `json:"seed,omitempty"`
+	SpecialSeeds    []string   `json:"specialSeeds,omitempty"`
+	SecretSeeds     []string   `json:"secretSeeds,omitempty"`
+	Secure          bool       `json:"secure"`
+	Language        string     `json:"language"`
+	AutoCreateWorld bool       `json:"autoCreateWorld"`
 }
 
 const (
@@ -23,19 +47,21 @@ const (
 )
 
 var Presets = []Preset{
-	{"friends-casual", "Friends Casual", "Relaxed co-op defaults for a small friend group.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Friends Server", WorldName: "Friends World", WorldSize: "medium", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 8, Port: DefaultInternalPort, MOTD: "Welcome to GamePanel Lite", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
-	{"expert-adventure", "Expert Adventure", "A tougher cooperative world for experienced players.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Expert Adventure", WorldName: "Expert Adventure", WorldSize: "large", WorldEvil: "random", Difficulty: "expert", MaxPlayers: 8, Port: DefaultInternalPort, MOTD: "Bring potions", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
-	{"master-challenge", "Master Challenge", "High-intensity defaults for players who want pressure.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Master Challenge", WorldName: "Master Challenge", WorldSize: "large", WorldEvil: "random", Difficulty: "master", MaxPlayers: 6, Port: DefaultInternalPort, MOTD: "Good luck", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
-	{"building-world", "Building World", "Roomy, calm defaults for builders and decorators.", domain.ProviderTerrariaVanilla, domain.TerrariaConfig{ServerName: "Building World", WorldName: "Builder Base", WorldSize: "large", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 12, Port: DefaultInternalPort, MOTD: "Build something sharp", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
-	{"modded-starter", "Modded Starter", "A conservative starting point for tModLoader servers.", domain.ProviderTerrariaTModLoader, domain.TerrariaConfig{ServerName: "Modded Starter", WorldName: "Modded Starter", WorldSize: "medium", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 8, Port: DefaultInternalPort, MOTD: "Mods enabled", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
+	{"friends-casual", "Friends Casual", "Relaxed co-op defaults for a small friend group.", domain.ProviderTerrariaVanilla, Config{ServerName: "Friends Server", WorldName: "Friends World", WorldSize: "medium", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 8, Port: DefaultInternalPort, MOTD: "Welcome to GamePanel Lite", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
+	{"expert-adventure", "Expert Adventure", "A tougher cooperative world for experienced players.", domain.ProviderTerrariaVanilla, Config{ServerName: "Expert Adventure", WorldName: "Expert Adventure", WorldSize: "large", WorldEvil: "random", Difficulty: "expert", MaxPlayers: 8, Port: DefaultInternalPort, MOTD: "Bring potions", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
+	{"master-challenge", "Master Challenge", "High-intensity defaults for players who want pressure.", domain.ProviderTerrariaVanilla, Config{ServerName: "Master Challenge", WorldName: "Master Challenge", WorldSize: "large", WorldEvil: "random", Difficulty: "master", MaxPlayers: 6, Port: DefaultInternalPort, MOTD: "Good luck", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
+	{"building-world", "Building World", "Roomy, calm defaults for builders and decorators.", domain.ProviderTerrariaVanilla, Config{ServerName: "Building World", WorldName: "Builder Base", WorldSize: "large", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 12, Port: DefaultInternalPort, MOTD: "Build something sharp", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
+	{"modded-starter", "Modded Starter", "A conservative starting point for tModLoader servers.", domain.ProviderTerrariaTModLoader, Config{ServerName: "Modded Starter", WorldName: "Modded Starter", WorldSize: "medium", WorldEvil: "random", Difficulty: "classic", MaxPlayers: 8, Port: DefaultInternalPort, MOTD: "Mods enabled", Secure: true, Language: DefaultLanguage, AutoCreateWorld: true}},
 }
 
-func NormalizeConfig(config domain.TerrariaConfig) domain.TerrariaConfig {
-	config.Language = DefaultLanguage
+func NormalizeConfig(config Config) Config {
+	if strings.TrimSpace(config.Language) == "" {
+		config.Language = DefaultLanguage
+	}
 	return config
 }
 
-func ValidateConfig(config domain.TerrariaConfig) error {
+func ValidateConfig(config Config) error {
 	if strings.TrimSpace(config.WorldName) == "" {
 		return fmt.Errorf("world name is required")
 	}
@@ -66,7 +92,7 @@ func ValidateConfig(config domain.TerrariaConfig) error {
 	return nil
 }
 
-func RenderServerConfig(config domain.TerrariaConfig) (string, error) {
+func RenderServerConfig(config Config) (string, error) {
 	config = NormalizeConfig(config)
 	if err := ValidateConfig(config); err != nil {
 		return "", err
@@ -74,7 +100,7 @@ func RenderServerConfig(config domain.TerrariaConfig) (string, error) {
 	return renderVanillaRuntimeConfig(config), nil
 }
 
-func ParseServerConfig(base domain.TerrariaConfig, input string) (domain.TerrariaConfig, error) {
+func ParseServerConfig(base Config, input string) (Config, error) {
 	next := base
 	for _, rawLine := range strings.Split(input, "\n") {
 		line := strings.TrimSpace(rawLine)
