@@ -690,12 +690,27 @@ function emptyText(reason: string | undefined, t: ReturnType<typeof useI18n>["t"
 }
 
 function formatValue(value: number, unit: string) {
+  if (unit === "MB/s") return formatNetworkRate(value);
   const rounded = Math.abs(value) >= 100 ? Math.round(value) : Number(value.toFixed(1));
   if (unit === "%") return `${rounded}%`;
   if (unit === "MB") return `${rounded} MB`;
   if (unit === "ms") return `${rounded} ms`;
   if (unit === "s") return formatDuration(Number(value.toFixed(0)));
   return unit ? `${rounded} ${unit}` : String(rounded);
+}
+
+function formatNetworkRate(value: number) {
+  const abs = Math.abs(value);
+  if (abs >= 1) {
+    const rounded = abs >= 100 ? Math.round(value) : Number(value.toFixed(1));
+    return `${rounded} MB/s`;
+  }
+  const kb = value * 1024;
+  if (Math.abs(kb) >= 1) {
+    const rounded = Math.abs(kb) >= 100 ? Math.round(kb) : Number(kb.toFixed(1));
+    return `${rounded} KB/s`;
+  }
+  return `${Math.round(value * 1024 * 1024)} B/s`;
 }
 
 function formatDuration(value: number) {
