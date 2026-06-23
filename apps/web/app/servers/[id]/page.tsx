@@ -145,7 +145,8 @@ export default function ServerDetailPage() {
   const statsQuery = useQuery({
     queryKey: ["server-stats", id],
     queryFn: () => getServerStats(id),
-    enabled: false,
+    enabled: resourceStatus === "running",
+    refetchInterval: resourceStatus === "running" ? 5000 : false,
     retry: false
   });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(serverResource && visibleCapabilities.saveSnapshots), retry: false });
