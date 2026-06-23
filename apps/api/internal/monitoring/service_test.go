@@ -10,3 +10,11 @@ func TestManagedContainerQueriesUseGamePanelServerMetrics(t *testing.T) {
 		t.Fatalf("unexpected managed memory query %q", got)
 	}
 }
+
+func TestNodeDiskQueryUsesRootFilesystem(t *testing.T) {
+	got := nodeDiskQuery()
+	want := `max(100 * (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay|squashfs|aufs|fuse.*"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay|squashfs|aufs|fuse.*"})))`
+	if got != want {
+		t.Fatalf("unexpected node disk query %q", got)
+	}
+}

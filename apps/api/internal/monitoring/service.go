@@ -590,8 +590,8 @@ func nodeMemoryTotalQuery() string {
 }
 
 func nodeDiskQuery() string {
-	filter := `{fstype!~"tmpfs|overlay|squashfs|aufs",mountpoint!~"/run($|/.*)|/var/lib/docker($|/.*)"}`
-	return fmt.Sprintf(`100 * (1 - (sum(node_filesystem_avail_bytes%s) / sum(node_filesystem_size_bytes%s)))`, filter, filter)
+	filter := `{mountpoint="/",fstype!~"tmpfs|overlay|squashfs|aufs|fuse.*"}`
+	return fmt.Sprintf(`max(100 * (1 - (node_filesystem_avail_bytes%s / node_filesystem_size_bytes%s)))`, filter, filter)
 }
 
 func nodeNetworkQuery() string {
