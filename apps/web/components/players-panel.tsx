@@ -88,18 +88,11 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
     }
   };
 
-  if (!playersQuery.data?.supported) {
-    return (
-      <Card className="p-4">
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Users aria-hidden="true" className="size-4 text-slate-500" />
-          {t("playersUnsupported")}
-        </div>
-      </Card>
-    );
+  if (playersQuery.data && !playersQuery.data.supported) {
+    return null;
   }
 
-  const players = playersQuery.data.players ?? [];
+  const players = playersQuery.data?.players ?? [];
 
   return (
     <Card className="space-y-4 p-4">
