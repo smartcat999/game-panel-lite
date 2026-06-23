@@ -558,27 +558,11 @@ func escapePromLabel(value string) string {
 }
 
 func managedContainersCPUQuery() string {
-	return containerCPUQuery(`{container_label_gamepanel_instance!=""}`)
+	return serverCPUQuery(`{status="running"}`)
 }
 
 func managedContainersMemoryQuery() string {
-	return containerMemoryQuery(`{container_label_gamepanel_instance!=""}`)
-}
-
-func containerCPUQuery(filter string) string {
-	return fmt.Sprintf(`sum(rate(container_cpu_usage_seconds_total%s[2m])) * 100`, filter)
-}
-
-func containerMemoryQuery(filter string) string {
-	return containerMemoryBytesQuery(filter) + ` / 1024 / 1024`
-}
-
-func containerMemoryBytesQuery(filter string) string {
-	return fmt.Sprintf(`sum(container_memory_working_set_bytes%s)`, filter)
-}
-
-func containerMemoryLimitBytesQuery(filter string) string {
-	return fmt.Sprintf(`sum(container_spec_memory_limit_bytes%s)`, filter)
+	return serverMemoryQuery(`{status="running"}`)
 }
 
 func serverCPUQuery(filter string) string {
