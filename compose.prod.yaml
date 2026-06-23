@@ -64,6 +64,8 @@ services:
       - gamepanel-exporter
       - cadvisor
       - node-exporter
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   cadvisor:
     image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:v0.52.1
@@ -83,6 +85,7 @@ services:
     pull_policy: missing
     command:
       - --path.rootfs=/host
+    network_mode: host
     pid: host
     volumes:
       - /:/host:ro,rslave
