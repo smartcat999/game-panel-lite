@@ -12,7 +12,7 @@ import (
 
 const DefaultInternalPort = 8211
 
-var versions = []string{"v2.4.1", "v2.4.0", "v2.3.2"}
+var versions = []string{"v2.5.0", "v2.4.2", "v2.4.1"}
 
 type Provider struct {
 	runtime runtimecatalog.RuntimeConfig

@@ -451,7 +451,7 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "smartcat99999/palworld-server:v2.4.1" {
+	if spec.Image != "smartcat99999/palworld-server:v2.5.0" {
 		t.Fatalf("expected Palworld image, got %q", spec.Image)
 	}
 	if spec.Port != 8211 || spec.Options.PortProtocol != "udp" {

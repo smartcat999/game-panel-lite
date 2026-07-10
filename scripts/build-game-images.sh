@@ -6,13 +6,14 @@ usage() {
 Build GamePanel Lite game runtime images.
 
 Usage:
-  scripts/build-game-images.sh [all|vanilla|tmodloader|dst] [options]
+  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld] [options]
 
 Targets:
   all           Build vanilla Terraria and tModLoader images. Default.
   vanilla       Build only vanilla Terraria images.
   tmodloader    Build only tModLoader images.
   dst           Build only Don't Starve Together images. linux/amd64 only.
+  palworld      Build only the Palworld dedicated server image.
 
 Options:
   --registry NAME       Image namespace. Default: smartcat99999
@@ -29,6 +30,7 @@ Examples:
   scripts/build-game-images.sh all --platform linux/amd64,linux/arm64 --push
   scripts/build-game-images.sh dst --platform linux/amd64 --load
   scripts/build-game-images.sh dst --builder amd64-builder --platform linux/amd64 --push
+  scripts/build-game-images.sh palworld --platform linux/amd64,linux/arm64 --push
 USAGE
 }
 
@@ -83,7 +85,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$target" in
-  all|vanilla|tmodloader|dst) ;;
+  all|vanilla|tmodloader|dst|palworld) ;;
   *)
     echo "Unknown target: $target" >&2
     usage >&2
@@ -163,6 +165,18 @@ build_dst() {
     "${root_dir}"
 }
 
+build_palworld() {
+  local version="${PALWORLD_RUNTIME_VERSION:-v2.5.0}"
+  local image="${registry}/palworld-server:${version}"
+
+  echo "==> Building ${image}"
+  docker "${buildx_args[@]}" \
+    -f docker/palworld/Dockerfile \
+    --build-arg "PALWORLD_RUNTIME_VERSION=${version}" \
+    -t "${image}" \
+    "${root_dir}"
+}
+
 cd "$root_dir"
 
 if [[ "$target" == "all" || "$target" == "vanilla" ]]; then
@@ -176,6 +190,10 @@ fi
 
 if [[ "$target" == "dst" ]]; then
   build_dst "v2026.06.21"
+fi
+
+if [[ "$target" == "palworld" ]]; then
+  build_palworld
 fi
 
 echo "Done."
