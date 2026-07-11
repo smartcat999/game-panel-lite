@@ -49,6 +49,7 @@ type WorkloadStats struct {
 
 type HostStats struct {
 	RunningWorkloads int     `json:"runningWorkloads"`
+	CPUCores         int     `json:"cpuCores"`
 	TotalCPUPercent  float64 `json:"totalCpuPercent"`
 	TotalMemoryMB    int64   `json:"totalMemoryMb"`
 	MemoryLimitMB    int64   `json:"memoryLimitMb"`

@@ -28,6 +28,7 @@ import {
   enableServerShare,
   getDockerStatus,
   getGameServer,
+  getRuntimeStats,
   getServerJoinInfo,
   listGames,
   getServerLogSnapshot,
@@ -170,6 +171,7 @@ export default function ServerDetailPage() {
   });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
+  const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, enabled: Boolean(serverResource), retry: false, staleTime: 30_000 });
   const joinInfoQuery = useQuery({
     queryKey: ["server-join-info", id],
     queryFn: () => getServerJoinInfo(id),
@@ -943,6 +945,8 @@ export default function ServerDetailPage() {
       <ResourceLimitsDialog
         open={resourceDialogOpen}
         resource={serverResource}
+        hostCpuCores={runtimeStatsQuery.data?.cpuCores}
+        hostMemoryMb={runtimeStatsQuery.data?.memoryLimitMb}
         savePending={resourceSave.isPending}
         onCancel={() => setResourceDialogOpen(false)}
         onSave={(resources) => resourceSave.mutate({ resources })}
@@ -1905,12 +1909,16 @@ function ProviderConfigFields({
 function ResourceLimitsDialog({
   open,
   resource,
+  hostCpuCores,
+  hostMemoryMb,
   savePending,
   onCancel,
   onSave
 }: {
   open: boolean;
   resource: GameServerResource;
+  hostCpuCores?: number;
+  hostMemoryMb?: number;
   savePending: boolean;
   onCancel: () => void;
   onSave: (resources: ResourceLimits) => void;
@@ -1930,6 +1938,9 @@ function ResourceLimitsDialog({
   const cpuInvalid = draft.cpuLimitCores < 0 || (draft.cpuLimitCores > 0 && (draft.cpuLimitCores < 0.25 || draft.cpuLimitCores > 64));
   const memoryInvalid = draft.memoryLimitMb < 0 || (draft.memoryLimitMb > 0 && (draft.memoryLimitMb < 256 || draft.memoryLimitMb > 262144));
   const invalid = cpuInvalid || memoryInvalid;
+  const cpuSliderMax = Math.max(1, hostCpuCores ?? 8, Math.ceil(draft.cpuLimitCores));
+  const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 128) * 128, draft.memoryLimitMb);
+  const recommendedMemoryMb = hostMemoryMb ? Math.max(256, Math.floor((hostMemoryMb - 768) / 128) * 128) : 0;
   useEffect(() => {
     if (open) {
       setDraft(resourceLimits);
@@ -1980,6 +1991,14 @@ function ResourceLimitsDialog({
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Field label={t("cpuLimit")}>
+            <ResourceRange
+              disabled={savePending || lifecycleLocked}
+              label={t("cpuLimit")}
+              max={cpuSliderMax}
+              step={0.25}
+              value={draft.cpuLimitCores}
+              onChange={(value) => setDraft((current) => ({ ...current, cpuLimitCores: value }))}
+            />
             <div className="relative">
               <Input
                 aria-describedby="cpu-limit-help"
@@ -1998,6 +2017,15 @@ function ResourceLimitsDialog({
             <p className={cn("text-xs leading-5", cpuInvalid ? "text-red-300" : "text-slate-500")} id="cpu-limit-help">{cpuInvalid ? t("cpuLimitRange") : t("cpuLimitFineHint")}</p>
           </Field>
           <Field label={t("memoryLimit")}>
+            <ResourceRange
+              disabled={savePending || lifecycleLocked}
+              label={t("memoryLimit")}
+              max={memorySliderMax}
+              recommendedMax={recommendedMemoryMb}
+              step={128}
+              value={draft.memoryLimitMb}
+              onChange={(value) => setDraft((current) => ({ ...current, memoryLimitMb: value }))}
+            />
             <div className="relative">
               <Input
                 aria-describedby="memory-limit-help"
@@ -2023,6 +2051,41 @@ function ResourceLimitsDialog({
           <Button disabled={savePending || lifecycleLocked || !dirty || invalid}>{savePending ? t("savingConfig") : t("saveResourceLimits")}</Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ResourceRange({ disabled, label, max, onChange, recommendedMax = 0, step, value }: {
+  disabled: boolean;
+  label: string;
+  max: number;
+  onChange: (value: number) => void;
+  recommendedMax?: number;
+  step: number;
+  value: number;
+}) {
+  const { t } = useI18n();
+  const safePercent = recommendedMax > 0 ? Math.min(100, (recommendedMax / max) * 100) : 100;
+  return (
+    <div className="mb-1 grid gap-1.5">
+      <input
+        aria-label={t("resourceSliderLabel", { resource: label })}
+        className="h-6 w-full cursor-pointer accent-panel-green disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        max={max}
+        min={0}
+        step={step}
+        type="range"
+        value={Math.min(value, max)}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <div className="relative h-1 overflow-hidden rounded bg-slate-800" aria-hidden="true">
+        <span className="absolute inset-y-0 left-0 bg-panel-green/45" style={{ width: `${safePercent}%` }} />
+      </div>
+      <div className="flex justify-between text-[11px] text-slate-500">
+        <span>{t("unlimited")}: 0</span>
+        <span>{recommendedMax > 0 ? t("resourceRecommendedMax", { value: recommendedMax }) : t("resourceHostMaximum", { value: max })}</span>
+      </div>
     </div>
   );
 }

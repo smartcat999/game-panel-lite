@@ -50,6 +50,7 @@ const metrics = {
   collectedAt: "2026-06-14T02:00:00.000Z",
   host: {
     runningWorkloads: 1,
+    cpuCores: 4,
     totalCpuPercent: 40,
     totalMemoryMb: 512,
     memoryLimitMb: 4096,
