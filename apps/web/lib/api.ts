@@ -417,6 +417,7 @@ export function serverWatchUrl(id: string) {
 
 export type HostStats = {
   runningWorkloads: number;
+  cpuCores: number;
   totalCpuPercent: number;
   totalMemoryMb: number;
   memoryLimitMb: number;

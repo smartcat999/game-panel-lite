@@ -37,13 +37,21 @@ func (a *Adapter) StatsWorkload(ctx context.Context, runtimeID string) (runtime.
 }
 
 func (a *Adapter) HostStats(ctx context.Context) (runtime.HostStats, error) {
+	info, err := a.client.Info(ctx)
+	if err != nil {
+		return runtime.HostStats{}, err
+	}
 	containers, err := a.client.ContainerList(ctx, types.ContainerListOptions{
 		Filters: filters.NewArgs(filters.Arg("label", "gamepanel.instance")),
 	})
 	if err != nil {
 		return runtime.HostStats{}, err
 	}
-	result := runtime.HostStats{RunningWorkloads: len(containers)}
+	result := runtime.HostStats{
+		RunningWorkloads: len(containers),
+		CPUCores:         info.NCPU,
+		MemoryLimitMB:    info.MemTotal / 1024 / 1024,
+	}
 	for _, c := range containers {
 		resp, err := a.client.ContainerStats(ctx, c.ID, false)
 		if err != nil {
