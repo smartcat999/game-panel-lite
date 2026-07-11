@@ -80,6 +80,10 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 	hostConfig := &container.HostConfig{
 		Binds:        binds,
 		PortBindings: natPortMap(spec.Port, spec.HostPort, spec.Options.PortProtocol),
+		// Docker remembers containers stopped explicitly by the user. With
+		// unless-stopped, desired-running game servers recover after a host or
+		// daemon restart while instances stopped through GamePanel stay stopped.
+		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 	}
 	if spec.Resources.CPULimitCores > 0 {
 		hostConfig.Resources.NanoCPUs = int64(spec.Resources.CPULimitCores * 1_000_000_000)

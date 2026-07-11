@@ -8,6 +8,7 @@ services:
   nginx-https:
     image: nginx:1.27-alpine
     pull_policy: missing
+    restart: unless-stopped
     depends_on:
       - api
       - web
