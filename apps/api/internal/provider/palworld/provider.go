@@ -112,12 +112,13 @@ func validateConfig(config Config) error {
 	if config.MaxPlayers < 1 || config.MaxPlayers > 32 {
 		return fmt.Errorf("max players must be between 1 and 32")
 	}
-	for name, value := range map[string]float64{"egg hatching time": config.EggHatchingTime, "experience rate": config.ExpRate, "capture rate": config.CaptureRate, "pal spawn rate": config.PalSpawnRate, "enemy drop rate": config.EnemyDropRate, "collection drop rate": config.CollectionDropRate, "day speed": config.DayTimeSpeedRate, "night speed": config.NightTimeSpeedRate, "building deterioration rate": config.BuildingDeteriorationRate} {
-		if value < 0 || value > 100 {
-			return fmt.Errorf("%s must be between 0 and 100", name)
+	ranges := map[string][3]float64{"egg hatching time": {config.EggHatchingTime, 0, 240}, "experience rate": {config.ExpRate, .1, 20}, "capture rate": {config.CaptureRate, .1, 5}, "pal spawn rate": {config.PalSpawnRate, .1, 3}, "enemy drop rate": {config.EnemyDropRate, .1, 5}, "collection drop rate": {config.CollectionDropRate, .1, 5}, "day speed": {config.DayTimeSpeedRate, .1, 5}, "night speed": {config.NightTimeSpeedRate, .1, 5}, "building deterioration rate": {config.BuildingDeteriorationRate, 0, 10}}
+	for name, bounds := range ranges {
+		if bounds[0] < bounds[1] || bounds[0] > bounds[2] {
+			return fmt.Errorf("%s must be between %g and %g", name, bounds[1], bounds[2])
 		}
 	}
-	if config.BaseCampMaxNum < 1 || config.BaseCampMaxNumInGuild < 1 || config.BaseCampMaxNumInGuild > 10 || config.BaseCampWorkerMaxNum < 1 || config.BaseCampWorkerMaxNum > 50 || config.GuildPlayerMaxNum < 1 || config.GuildPlayerMaxNum > 100 {
+	if config.BaseCampMaxNum < 1 || config.BaseCampMaxNum > 256 || config.BaseCampMaxNumInGuild < 1 || config.BaseCampMaxNumInGuild > 10 || config.BaseCampWorkerMaxNum < 1 || config.BaseCampWorkerMaxNum > 50 || config.GuildPlayerMaxNum < 1 || config.GuildPlayerMaxNum > 100 {
 		return fmt.Errorf("invalid Palworld base or guild limit")
 	}
 	if !map[string]bool{"None": true, "Item": true, "ItemAndEquipment": true, "All": true}[config.DeathPenalty] {
@@ -226,6 +227,27 @@ func normalizeConfig(config Config) Config {
 	}
 	if config.MaxPlayers == 0 {
 		config.MaxPlayers = 8
+	}
+	if config.ExpRate == 0 {
+		config.ExpRate = 1
+	}
+	if config.CaptureRate == 0 {
+		config.CaptureRate = 1
+	}
+	if config.PalSpawnRate == 0 {
+		config.PalSpawnRate = 1
+	}
+	if config.EnemyDropRate == 0 {
+		config.EnemyDropRate = 1
+	}
+	if config.CollectionDropRate == 0 {
+		config.CollectionDropRate = 1
+	}
+	if config.DayTimeSpeedRate == 0 {
+		config.DayTimeSpeedRate = 1
+	}
+	if config.NightTimeSpeedRate == 0 {
+		config.NightTimeSpeedRate = 1
 	}
 	if config.BaseCampMaxNum == 0 {
 		config.BaseCampMaxNum = 128

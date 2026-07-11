@@ -23,6 +23,9 @@ export type ProviderConfigField = {
   default?: unknown;
   help?: string;
   options?: Array<{ value: string; label: string }>;
+  min?: number;
+  max?: number;
+  step?: number;
 };
 
 export type RuntimeImageStatus = {

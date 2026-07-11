@@ -1635,12 +1635,15 @@ function ProviderSchemaField({
                   <Input
                     type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
                     value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
+                    min={field.type === "number" ? field.min : undefined}
+                    max={field.type === "number" ? field.max : undefined}
+                    step={field.type === "number" ? field.step ?? 1 : undefined}
                     aria-invalid={Boolean(error)}
                     className={error ? "border-red-400/70 focus:border-red-300" : undefined}
                     onChange={(event) => onChange(event.target.value)}
                   />
                 )}
-                {help && <span className="text-xs text-slate-500">{help}</span>}
+                {(help || (field.type === "number" && (field.min !== undefined || field.max !== undefined))) && <span className="text-xs text-slate-500">{[help, field.type === "number" && field.min !== undefined && field.max !== undefined ? `${field.min}–${field.max}` : ""].filter(Boolean).join(" · ")}</span>}
     </WizardField>
   );
 }
