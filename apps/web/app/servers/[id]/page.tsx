@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -1989,8 +1989,27 @@ function ResourceLimitsDialog({
             <X aria-hidden="true" className="size-4" />
           </button>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <Field label={t("cpuLimit")}>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <label className="text-sm font-medium text-slate-300" htmlFor="cpu-limit-input">{t("cpuLimit")}</label>
+              <div className="relative w-28">
+                <Input
+                  id="cpu-limit-input"
+                  aria-describedby="cpu-limit-help"
+                  aria-invalid={cpuInvalid}
+                  className={cn("h-9 pr-10 text-right font-mono", cpuInvalid && "border-red-400 focus:border-red-400")}
+                  disabled={savePending || lifecycleLocked}
+                  min={0}
+                  max={64}
+                  step={0.25}
+                  type="number"
+                  value={draft.cpuLimitCores}
+                  onChange={(event) => setDraft((current) => ({ ...current, cpuLimitCores: event.target.value === "" ? 0 : Number(event.target.value) }))}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">{t("cpuUnit")}</span>
+              </div>
+            </div>
             <ResourceRange
               disabled={savePending || lifecycleLocked}
               label={t("cpuLimit")}
@@ -1999,24 +2018,28 @@ function ResourceLimitsDialog({
               value={draft.cpuLimitCores}
               onChange={(value) => setDraft((current) => ({ ...current, cpuLimitCores: value }))}
             />
-            <div className="relative">
-              <Input
-                aria-describedby="cpu-limit-help"
-                aria-invalid={cpuInvalid}
-                className={cn("pr-14", cpuInvalid && "border-red-400 focus:border-red-400")}
-                disabled={savePending || lifecycleLocked}
-                min={0}
-                max={64}
-                step={0.25}
-                type="number"
-                value={draft.cpuLimitCores}
-                onChange={(event) => setDraft((current) => ({ ...current, cpuLimitCores: event.target.value === "" ? 0 : Number(event.target.value) }))}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">{t("cpuUnit")}</span>
-            </div>
             <p className={cn("text-xs leading-5", cpuInvalid ? "text-red-300" : "text-slate-500")} id="cpu-limit-help">{cpuInvalid ? t("cpuLimitRange") : t("cpuLimitFineHint")}</p>
-          </Field>
-          <Field label={t("memoryLimit")}>
+          </div>
+          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <label className="text-sm font-medium text-slate-300" htmlFor="memory-limit-input">{t("memoryLimit")}</label>
+              <div className="relative w-32">
+                <Input
+                  id="memory-limit-input"
+                  aria-describedby="memory-limit-help"
+                  aria-invalid={memoryInvalid}
+                  className={cn("h-9 pr-10 text-right font-mono", memoryInvalid && "border-red-400 focus:border-red-400")}
+                  disabled={savePending || lifecycleLocked}
+                  min={0}
+                  max={262144}
+                  step={128}
+                  type="number"
+                  value={draft.memoryLimitMb}
+                  onChange={(event) => setDraft((current) => ({ ...current, memoryLimitMb: event.target.value === "" ? 0 : Number(event.target.value) }))}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">MB</span>
+              </div>
+            </div>
             <ResourceRange
               disabled={savePending || lifecycleLocked}
               label={t("memoryLimit")}
@@ -2026,25 +2049,10 @@ function ResourceLimitsDialog({
               value={draft.memoryLimitMb}
               onChange={(value) => setDraft((current) => ({ ...current, memoryLimitMb: value }))}
             />
-            <div className="relative">
-              <Input
-                aria-describedby="memory-limit-help"
-                aria-invalid={memoryInvalid}
-                className={cn("pr-14", memoryInvalid && "border-red-400 focus:border-red-400")}
-                disabled={savePending || lifecycleLocked}
-                min={0}
-                max={262144}
-                step={128}
-                type="number"
-                value={draft.memoryLimitMb}
-                onChange={(event) => setDraft((current) => ({ ...current, memoryLimitMb: event.target.value === "" ? 0 : Number(event.target.value) }))}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">MB</span>
-            </div>
             <p className={cn("text-xs leading-5", memoryInvalid ? "text-red-300" : "text-slate-500")} id="memory-limit-help">{memoryInvalid ? t("memoryLimitRange") : t("memoryLimitFineHint")}</p>
-          </Field>
+          </div>
         </div>
-        <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs leading-5 text-panel-gold">{t("resourceHostReserveHint")}</p>
+        <p className="mt-3 rounded-md bg-panel-gold/10 px-3 py-2 text-xs leading-5 text-panel-gold">{hostMemoryMb && recommendedMemoryMb ? t("resourceHostReserveDetected", { total: hostMemoryMb, recommended: recommendedMemoryMb }) : t("resourceHostReserveGeneric")}</p>
         {lifecycleLocked && <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">{t("configLifecycleLocked")}</p>}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={savePending}>{t("cancel")}</Button>
@@ -2066,21 +2074,26 @@ function ResourceRange({ disabled, label, max, onChange, recommendedMax = 0, ste
 }) {
   const { t } = useI18n();
   const safePercent = recommendedMax > 0 ? Math.min(100, (recommendedMax / max) * 100) : 100;
+  const valuePercent = Math.min(100, (value / max) * 100);
+  const rangeStyle = {
+    "--range-fill": `${valuePercent}%`,
+    "--range-safe": `${safePercent}%`
+  } as CSSProperties;
   return (
-    <div className="mb-1 grid gap-1.5">
-      <input
-        aria-label={t("resourceSliderLabel", { resource: label })}
-        className="h-6 w-full cursor-pointer accent-panel-green disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={disabled}
-        max={max}
-        min={0}
-        step={step}
-        type="range"
-        value={Math.min(value, max)}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-      <div className="relative h-1 overflow-hidden rounded bg-slate-800" aria-hidden="true">
-        <span className="absolute inset-y-0 left-0 bg-panel-green/45" style={{ width: `${safePercent}%` }} />
+    <div className="mb-2 grid gap-2">
+      <div className="relative h-5" style={rangeStyle}>
+        <input
+          aria-label={t("resourceSliderLabel", { resource: label })}
+          className="resource-range absolute inset-0 w-full cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled}
+          max={max}
+          min={0}
+          step={step}
+          type="range"
+          value={Math.min(value, max)}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        {recommendedMax > 0 && safePercent < 100 ? <span className="pointer-events-none absolute top-0 h-5 w-px bg-panel-gold" style={{ left: `${safePercent}%` }} aria-hidden="true" /> : null}
       </div>
       <div className="flex justify-between text-[11px] text-slate-500">
         <span>{t("unlimited")}: 0</span>
