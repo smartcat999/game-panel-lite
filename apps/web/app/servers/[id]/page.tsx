@@ -1844,9 +1844,18 @@ function ProviderConfigFields({
   if (fields.length === 0) {
     return <p className="mt-4 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-sm text-slate-500">{t("none")}</p>;
   }
+  const groupedFields = Array.from(fields.reduce((groups, field) => {
+    const group = field.group || "其他设置";
+    groups.set(group, [...(groups.get(group) ?? []), field]);
+    return groups;
+  }, new Map<string, ProviderConfigField[]>()));
   return (
-    <div className="mt-4 grid gap-4 lg:grid-cols-2">
-      {fields.map((field) => {
+    <div className="mt-4 grid gap-3">
+      {groupedFields.map(([group, groupFields], groupIndex) => (
+        <details key={group} open={groupIndex === 0} className="rounded-lg border border-panel-line bg-slate-950/35">
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{group}<span className="ml-2 text-xs font-normal text-slate-500">{groupFields.length}</span></summary>
+          <div className="grid gap-4 border-t border-panel-line px-4 py-4 lg:grid-cols-2">
+      {groupFields.map((field) => {
         const label = providerFieldLabel(field, t);
         const help = providerFieldHelp(field, t);
         const value = providerConfigValue(payload, field.name);
@@ -1881,6 +1890,9 @@ function ProviderConfigFields({
           </Field>
         );
       })}
+          </div>
+        </details>
+      ))}
     </div>
   );
 }

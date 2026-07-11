@@ -4,7 +4,7 @@ import "github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 
 func configSchema() []domain.ProviderConfigField {
 	n := func(value float64) *float64 { return &value }
-	return []domain.ProviderConfigField{
+	fields := []domain.ProviderConfigField{
 		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Palworld Server"},
 		{Name: "saveName", Label: "存档名称", Type: "text", Required: true, Default: "Palworld Save"},
 		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 8, Min: n(1), Max: n(32), Step: n(1)},
@@ -40,4 +40,15 @@ func configSchema() []domain.ProviderConfigField {
 		{Name: "enableFastTravel", Label: "开启快速传送", Type: "boolean", Default: true},
 		{Name: "pvp", Label: "开启 PVP", Type: "boolean", Default: false},
 	}
+	groups := map[string]string{
+		"serverName": "基础设置", "saveName": "基础设置", "maxPlayers": "基础设置", "serverPassword": "基础设置", "adminPassword": "基础设置", "deathPenalty": "基础设置",
+		"eggHatchingTime": "世界倍率", "expRate": "世界倍率", "captureRate": "世界倍率", "palSpawnRate": "世界倍率", "enemyDropRate": "世界倍率", "collectionDropRate": "世界倍率", "dayTimeSpeedRate": "世界倍率", "nightTimeSpeedRate": "世界倍率", "collectionRespawnRate": "世界倍率", "supplyDropSpan": "世界倍率",
+		"baseCampMaxNum": "据点与公会", "baseCampMaxNumInGuild": "据点与公会", "baseCampWorkerMaxNum": "据点与公会", "guildPlayerMaxNum": "据点与公会", "buildingDeteriorationRate": "据点与公会",
+		"playerDamageAttackRate": "生存与战斗", "playerDamageDefenseRate": "生存与战斗", "palDamageAttackRate": "生存与战斗", "palDamageDefenseRate": "生存与战斗", "playerStaminaRate": "生存与战斗", "playerHungerRate": "生存与战斗", "palStaminaRate": "生存与战斗", "palHungerRate": "生存与战斗", "itemCorruptionRate": "生存与战斗", "equipmentDurabilityRate": "生存与战斗",
+		"enableInvaderEnemy": "功能开关", "enableFastTravel": "功能开关", "pvp": "功能开关",
+	}
+	for index := range fields {
+		fields[index].Group = groups[fields[index].Name]
+	}
+	return fields
 }
