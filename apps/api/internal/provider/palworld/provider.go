@@ -178,7 +178,10 @@ func runtimeOptions(config Config) runtime.ContainerOptions {
 			"ADMIN_PASSWORD=" + config.AdminPassword,
 			"MULTITHREADING=true",
 			"COMMUNITY=false",
-			"UPDATE_ON_BOOT=true",
+			// GamePanel manages runtime image upgrades explicitly. Re-running
+			// SteamCMD on every container restart needlessly verifies ~5 GB and
+			// can replace PalServer.sh while the instance is recovering.
+			"UPDATE_ON_BOOT=false",
 			fmt.Sprintf("PAL_EGG_DEFAULT_HATCHING_TIME=%g", config.EggHatchingTime),
 			fmt.Sprintf("EXP_RATE=%g", config.ExpRate), fmt.Sprintf("PAL_CAPTURE_RATE=%g", config.CaptureRate),
 			fmt.Sprintf("PAL_SPAWN_NUM_RATE=%g", config.PalSpawnRate), fmt.Sprintf("ENEMY_DROP_ITEM_RATE=%g", config.EnemyDropRate),
