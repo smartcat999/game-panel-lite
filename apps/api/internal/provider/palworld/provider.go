@@ -19,12 +19,18 @@ type Provider struct {
 }
 
 type Config struct {
-	ServerName     string
-	SaveName       string
-	MaxPlayers     int
-	Port           int
-	ServerPassword string
-	AdminPassword  string
+	ServerName                                                                     string
+	SaveName                                                                       string
+	MaxPlayers                                                                     int
+	Port                                                                           int
+	ServerPassword                                                                 string
+	AdminPassword                                                                  string
+	EggHatchingTime, ExpRate, CaptureRate, PalSpawnRate                            float64
+	EnemyDropRate, CollectionDropRate, DayTimeSpeedRate, NightTimeSpeedRate        float64
+	BuildingDeteriorationRate                                                      float64
+	BaseCampMaxNum, BaseCampMaxNumInGuild, BaseCampWorkerMaxNum, GuildPlayerMaxNum int
+	DeathPenalty                                                                   string
+	EnableInvaderEnemy, EnableFastTravel, PVP                                      bool
 }
 
 func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
@@ -65,7 +71,7 @@ func (p Provider) ImageFor(version string) string {
 	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
 }
 func defaultConfig() Config {
-	return normalizeConfig(Config{})
+	return normalizeConfig(Config{EggHatchingTime: 72, ExpRate: 1, CaptureRate: 1, PalSpawnRate: 1, EnemyDropRate: 1, CollectionDropRate: 1, DayTimeSpeedRate: 1, NightTimeSpeedRate: 1, BuildingDeteriorationRate: 1, BaseCampMaxNum: 128, BaseCampMaxNumInGuild: 4, BaseCampWorkerMaxNum: 15, GuildPlayerMaxNum: 20, DeathPenalty: "All", EnableInvaderEnemy: true, EnableFastTravel: true})
 }
 func (p Provider) DefaultConfigPayload() map[string]any {
 	return payloadFromConfig(defaultConfig())
@@ -106,6 +112,17 @@ func validateConfig(config Config) error {
 	if config.MaxPlayers < 1 || config.MaxPlayers > 32 {
 		return fmt.Errorf("max players must be between 1 and 32")
 	}
+	for name, value := range map[string]float64{"egg hatching time": config.EggHatchingTime, "experience rate": config.ExpRate, "capture rate": config.CaptureRate, "pal spawn rate": config.PalSpawnRate, "enemy drop rate": config.EnemyDropRate, "collection drop rate": config.CollectionDropRate, "day speed": config.DayTimeSpeedRate, "night speed": config.NightTimeSpeedRate, "building deterioration rate": config.BuildingDeteriorationRate} {
+		if value < 0 || value > 100 {
+			return fmt.Errorf("%s must be between 0 and 100", name)
+		}
+	}
+	if config.BaseCampMaxNum < 1 || config.BaseCampMaxNumInGuild < 1 || config.BaseCampMaxNumInGuild > 10 || config.BaseCampWorkerMaxNum < 1 || config.BaseCampWorkerMaxNum > 50 || config.GuildPlayerMaxNum < 1 || config.GuildPlayerMaxNum > 100 {
+		return fmt.Errorf("invalid Palworld base or guild limit")
+	}
+	if !map[string]bool{"None": true, "Item": true, "ItemAndEquipment": true, "All": true}[config.DeathPenalty] {
+		return fmt.Errorf("invalid death penalty")
+	}
 	if strings.TrimSpace(config.AdminPassword) == "" {
 		return fmt.Errorf("admin password is required")
 	}
@@ -145,6 +162,15 @@ func runtimeOptions(config Config) runtime.ContainerOptions {
 			"MULTITHREADING=true",
 			"COMMUNITY=false",
 			"UPDATE_ON_BOOT=true",
+			fmt.Sprintf("PAL_EGG_DEFAULT_HATCHING_TIME=%g", config.EggHatchingTime),
+			fmt.Sprintf("EXP_RATE=%g", config.ExpRate), fmt.Sprintf("PAL_CAPTURE_RATE=%g", config.CaptureRate),
+			fmt.Sprintf("PAL_SPAWN_NUM_RATE=%g", config.PalSpawnRate), fmt.Sprintf("ENEMY_DROP_ITEM_RATE=%g", config.EnemyDropRate),
+			fmt.Sprintf("COLLECTION_DROP_RATE=%g", config.CollectionDropRate), fmt.Sprintf("DAY_TIME_SPEED_RATE=%g", config.DayTimeSpeedRate),
+			fmt.Sprintf("NIGHT_TIME_SPEED_RATE=%g", config.NightTimeSpeedRate), fmt.Sprintf("BASE_CAMP_MAX_NUM=%d", config.BaseCampMaxNum),
+			fmt.Sprintf("BASE_CAMP_MAX_NUM_IN_GUILD=%d", config.BaseCampMaxNumInGuild), fmt.Sprintf("BASE_CAMP_WORKER_MAX_NUM=%d", config.BaseCampWorkerMaxNum),
+			fmt.Sprintf("GUILD_PLAYER_MAX_NUM=%d", config.GuildPlayerMaxNum), fmt.Sprintf("BUILD_OBJECT_DETERIORATION_DAMAGE_RATE=%g", config.BuildingDeteriorationRate),
+			"DEATH_PENALTY=" + config.DeathPenalty, fmt.Sprintf("ENABLE_INVADER_ENEMY=%t", config.EnableInvaderEnemy),
+			fmt.Sprintf("ENABLE_FAST_TRAVEL=%t", config.EnableFastTravel), fmt.Sprintf("IS_PVP=%t", config.PVP),
 		},
 		DataMounts:   []string{"/palworld"},
 		PortProtocol: "udp",
@@ -201,6 +227,21 @@ func normalizeConfig(config Config) Config {
 	if config.MaxPlayers == 0 {
 		config.MaxPlayers = 8
 	}
+	if config.BaseCampMaxNum == 0 {
+		config.BaseCampMaxNum = 128
+	}
+	if config.BaseCampMaxNumInGuild == 0 {
+		config.BaseCampMaxNumInGuild = 4
+	}
+	if config.BaseCampWorkerMaxNum == 0 {
+		config.BaseCampWorkerMaxNum = 15
+	}
+	if config.GuildPlayerMaxNum == 0 {
+		config.GuildPlayerMaxNum = 20
+	}
+	if config.DeathPenalty == "" {
+		config.DeathPenalty = "All"
+	}
 	config.Port = DefaultInternalPort
 	return config
 }
@@ -231,21 +272,70 @@ func configFromPayload(payload map[string]any, fallback Config) Config {
 	} else if value := stringPayload(payload, "motd"); value != "" {
 		config.AdminPassword = value
 	}
+	for key, target := range map[string]*float64{"eggHatchingTime": &config.EggHatchingTime, "expRate": &config.ExpRate, "captureRate": &config.CaptureRate, "palSpawnRate": &config.PalSpawnRate, "enemyDropRate": &config.EnemyDropRate, "collectionDropRate": &config.CollectionDropRate, "dayTimeSpeedRate": &config.DayTimeSpeedRate, "nightTimeSpeedRate": &config.NightTimeSpeedRate, "buildingDeteriorationRate": &config.BuildingDeteriorationRate} {
+		if value, ok := floatPayload(payload, key); ok {
+			*target = value
+		}
+	}
+	for key, target := range map[string]*int{"baseCampMaxNum": &config.BaseCampMaxNum, "baseCampMaxNumInGuild": &config.BaseCampMaxNumInGuild, "baseCampWorkerMaxNum": &config.BaseCampWorkerMaxNum, "guildPlayerMaxNum": &config.GuildPlayerMaxNum} {
+		if value, ok := intPayload(payload, key); ok {
+			*target = value
+		}
+	}
+	if value := stringPayload(payload, "deathPenalty"); value != "" {
+		config.DeathPenalty = value
+	}
+	if value, ok := boolPayload(payload, "enableInvaderEnemy"); ok {
+		config.EnableInvaderEnemy = value
+	}
+	if value, ok := boolPayload(payload, "enableFastTravel"); ok {
+		config.EnableFastTravel = value
+	}
+	if value, ok := boolPayload(payload, "pvp"); ok {
+		config.PVP = value
+	}
 	return normalizeConfig(config)
 }
 
 func payloadFromConfig(config Config) map[string]any {
 	config = normalizeConfig(config)
 	payload := map[string]any{
-		"serverName":    config.ServerName,
-		"saveName":      config.SaveName,
-		"maxPlayers":    config.MaxPlayers,
-		"adminPassword": config.AdminPassword,
+		"serverName":      config.ServerName,
+		"saveName":        config.SaveName,
+		"maxPlayers":      config.MaxPlayers,
+		"adminPassword":   config.AdminPassword,
+		"eggHatchingTime": config.EggHatchingTime, "expRate": config.ExpRate, "captureRate": config.CaptureRate, "palSpawnRate": config.PalSpawnRate, "enemyDropRate": config.EnemyDropRate, "collectionDropRate": config.CollectionDropRate, "dayTimeSpeedRate": config.DayTimeSpeedRate, "nightTimeSpeedRate": config.NightTimeSpeedRate, "buildingDeteriorationRate": config.BuildingDeteriorationRate,
+		"baseCampMaxNum": config.BaseCampMaxNum, "baseCampMaxNumInGuild": config.BaseCampMaxNumInGuild, "baseCampWorkerMaxNum": config.BaseCampWorkerMaxNum, "guildPlayerMaxNum": config.GuildPlayerMaxNum, "deathPenalty": config.DeathPenalty, "enableInvaderEnemy": config.EnableInvaderEnemy, "enableFastTravel": config.EnableFastTravel, "pvp": config.PVP,
 	}
 	if config.ServerPassword != "" {
 		payload["serverPassword"] = config.ServerPassword
 	}
 	return payload
+}
+
+func floatPayload(payload map[string]any, key string) (float64, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case int:
+		return float64(typed), true
+	case json.Number:
+		got, err := typed.Float64()
+		return got, err == nil
+	}
+	return 0, false
+}
+func boolPayload(payload map[string]any, key string) (bool, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return false, false
+	}
+	got, ok := value.(bool)
+	return got, ok
 }
 
 func workloadOptions(options runtime.ContainerOptions) domain.WorkloadOptions {
