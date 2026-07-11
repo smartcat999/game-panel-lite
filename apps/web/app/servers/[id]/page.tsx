@@ -68,8 +68,6 @@ type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" |
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
 
-const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
-const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
 const terrariaProviderKeys = new Set(["terraria-vanilla", "terraria-tmodloader"]);
 const providerFieldLabelKeys: Record<string, MessageKey> = {
   cavesEnabled: "cavesEnabled",
@@ -1929,6 +1927,9 @@ function ResourceLimitsDialog({
   const [draft, setDraft] = useState<ResourceLimits>(resourceLimits);
   const lifecycleLocked = isServerLifecyclePending(status);
   const dirty = draft.cpuLimitCores !== resourceLimits.cpuLimitCores || draft.memoryLimitMb !== resourceLimits.memoryLimitMb;
+  const cpuInvalid = draft.cpuLimitCores < 0 || (draft.cpuLimitCores > 0 && (draft.cpuLimitCores < 0.25 || draft.cpuLimitCores > 64));
+  const memoryInvalid = draft.memoryLimitMb < 0 || (draft.memoryLimitMb > 0 && (draft.memoryLimitMb < 256 || draft.memoryLimitMb > 262144));
+  const invalid = cpuInvalid || memoryInvalid;
   useEffect(() => {
     if (open) {
       setDraft(resourceLimits);
@@ -1958,7 +1959,7 @@ function ResourceLimitsDialog({
         role="dialog"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!savePending && !lifecycleLocked && dirty) onSave(draft);
+          if (!savePending && !lifecycleLocked && dirty && !invalid) onSave(draft);
         }}
       >
         <div className="flex items-start justify-between gap-4">
@@ -1979,24 +1980,47 @@ function ResourceLimitsDialog({
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Field label={t("cpuLimit")}>
-            <Select value={String(draft.cpuLimitCores)} onChange={(value) => setDraft((current) => ({ ...current, cpuLimitCores: Number(value) }))} disabled={savePending || lifecycleLocked}>
-              {cpuLimitOptions.map((value) => (
-                <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
-              ))}
-            </Select>
+            <div className="relative">
+              <Input
+                aria-describedby="cpu-limit-help"
+                aria-invalid={cpuInvalid}
+                className={cn("pr-14", cpuInvalid && "border-red-400 focus:border-red-400")}
+                disabled={savePending || lifecycleLocked}
+                min={0}
+                max={64}
+                step={0.25}
+                type="number"
+                value={draft.cpuLimitCores}
+                onChange={(event) => setDraft((current) => ({ ...current, cpuLimitCores: event.target.value === "" ? 0 : Number(event.target.value) }))}
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">{t("cpuUnit")}</span>
+            </div>
+            <p className={cn("text-xs leading-5", cpuInvalid ? "text-red-300" : "text-slate-500")} id="cpu-limit-help">{cpuInvalid ? t("cpuLimitRange") : t("cpuLimitFineHint")}</p>
           </Field>
           <Field label={t("memoryLimit")}>
-            <Select value={String(draft.memoryLimitMb)} onChange={(value) => setDraft((current) => ({ ...current, memoryLimitMb: Number(value) }))} disabled={savePending || lifecycleLocked}>
-              {memoryLimitOptions.map((value) => (
-                <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
-              ))}
-            </Select>
+            <div className="relative">
+              <Input
+                aria-describedby="memory-limit-help"
+                aria-invalid={memoryInvalid}
+                className={cn("pr-14", memoryInvalid && "border-red-400 focus:border-red-400")}
+                disabled={savePending || lifecycleLocked}
+                min={0}
+                max={262144}
+                step={128}
+                type="number"
+                value={draft.memoryLimitMb}
+                onChange={(event) => setDraft((current) => ({ ...current, memoryLimitMb: event.target.value === "" ? 0 : Number(event.target.value) }))}
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">MB</span>
+            </div>
+            <p className={cn("text-xs leading-5", memoryInvalid ? "text-red-300" : "text-slate-500")} id="memory-limit-help">{memoryInvalid ? t("memoryLimitRange") : t("memoryLimitFineHint")}</p>
           </Field>
         </div>
+        <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs leading-5 text-panel-gold">{t("resourceHostReserveHint")}</p>
         {lifecycleLocked && <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">{t("configLifecycleLocked")}</p>}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={savePending}>{t("cancel")}</Button>
-          <Button disabled={savePending || lifecycleLocked || !dirty}>{savePending ? t("savingConfig") : t("saveResourceLimits")}</Button>
+          <Button disabled={savePending || lifecycleLocked || !dirty || invalid}>{savePending ? t("savingConfig") : t("saveResourceLimits")}</Button>
         </div>
       </form>
     </div>
