@@ -28,6 +28,7 @@ import {
   enableServerShare,
   getDockerStatus,
   getGameServer,
+  getServerJoinInfo,
   listGames,
   getServerLogSnapshot,
   getServerShare,
@@ -171,6 +172,12 @@ export default function ServerDetailPage() {
   });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
+  const joinInfoQuery = useQuery({
+    queryKey: ["server-join-info", id],
+    queryFn: () => getServerJoinInfo(id),
+    enabled: Boolean(serverResource),
+    retry: false
+  });
   const monitoringRange: MonitoringRangeValue = "1h";
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -598,10 +605,10 @@ export default function ServerDetailPage() {
   const status = gameServerStatus(serverResource);
   const playersOnline = serverResource.status.playersOnline ?? 0;
   const maxPlayers = gameServerMaxPlayers(serverResource);
-  const joinPort = gameServerJoinPort(serverResource);
-  const invite = serverInviteText(serverResource);
-  const joinAddress = serverJoinAddress(serverResource);
-  const joinPassword = serverJoinPassword(serverResource);
+  const joinPort = joinInfoQuery.data?.port ?? gameServerJoinPort(serverResource);
+  const invite = joinInfoQuery.data?.inviteText ?? serverInviteText(serverResource);
+  const joinAddress = joinInfoQuery.data?.address ?? serverJoinAddress(serverResource);
+  const joinPassword = joinInfoQuery.data?.password ?? serverJoinPassword(serverResource);
   const share = shareQuery.data;
   const sharePath = share?.sharePath ?? "";
   const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
