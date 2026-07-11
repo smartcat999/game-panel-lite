@@ -102,6 +102,7 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 		"SERVER_NAME=Payload Name",
 		"SERVER_PASSWORD=payload-password",
 		"ADMIN_PASSWORD=payload-admin",
+		"UPDATE_ON_BOOT=false",
 	} {
 		if !strings.Contains(env, expected) {
 			t.Fatalf("expected payload env to contain %q, got:\n%s", expected, env)

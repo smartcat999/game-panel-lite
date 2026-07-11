@@ -1,6 +1,6 @@
 # Palworld Server Image
 
-This image packages the stable `thijsvanloef/palworld-server-docker` runtime under the GamePanel Lite image namespace. The runtime installs or updates Palworld Dedicated Server (Steam app `2394010`) when the container starts because the provider sets `UPDATE_ON_BOOT=true`.
+This image packages the stable `thijsvanloef/palworld-server-docker` runtime under the GamePanel Lite image namespace. GamePanel sets `UPDATE_ON_BOOT=false` after the initial installation so ordinary container restarts reuse the installed Palworld Dedicated Server files instead of verifying roughly 5 GB through SteamCMD every time. Runtime image upgrades are managed explicitly by GamePanel.
 
 Build and load the current version for the local Docker architecture:
 
