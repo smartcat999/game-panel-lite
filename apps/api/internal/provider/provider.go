@@ -60,6 +60,12 @@ type PlayerActivityProvider interface {
 	ParsePlayerLogEvent(string) (domain.PlayerLogEvent, bool)
 }
 
+// PlayerCountLogProvider derives the current online count from a bounded
+// workload log snapshot. A nil result means the snapshot is incomplete.
+type PlayerCountLogProvider interface {
+	ParsePlayerCount([]string) *int
+}
+
 type Registry struct {
 	providers map[domain.ProviderKey]GameProvider
 }

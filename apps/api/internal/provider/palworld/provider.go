@@ -3,6 +3,7 @@ package palworld
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -13,6 +14,8 @@ import (
 const DefaultInternalPort = 8211
 
 var versions = []string{"v2.5.0", "v2.4.2", "v2.4.1"}
+
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
 type Provider struct {
 	runtime runtimecatalog.RuntimeConfig
@@ -232,6 +235,35 @@ func (p Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 			"Join by address using the host and port shown here.",
 		},
 	}
+}
+
+// ParsePlayerCount replays the image's REST-backed player logging from the
+// most recent server start. Only the helper's "has joined/left" messages are
+// consumed because Palworld also logs native events for the same player.
+func (Provider) ParsePlayerCount(lines []string) *int {
+	start := -1
+	for index, raw := range lines {
+		line := ansiEscapePattern.ReplaceAllString(raw, "")
+		if strings.Contains(line, "Running Palworld dedicated server") {
+			start = index
+		}
+	}
+	if start < 0 {
+		return nil
+	}
+	count := 0
+	for _, raw := range lines[start+1:] {
+		line := strings.TrimSpace(ansiEscapePattern.ReplaceAllString(raw, ""))
+		switch {
+		case strings.HasSuffix(line, " has joined"):
+			count++
+		case strings.HasSuffix(line, " has left"):
+			if count > 0 {
+				count--
+			}
+		}
+	}
+	return &count
 }
 
 func normalizeConfig(config Config) Config {
