@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+.resource-range {
+  appearance: none;
+  height: 20px;
+  background: transparent;
+}
+
+.resource-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to right, rgb(89 212 111) 0 var(--range-fill), rgb(30 41 59) var(--range-fill) 100%);
+}
+
+.resource-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: 3px solid rgb(15 23 42);
+  border-radius: 999px;
+  background: rgb(89 212 111);
+}
+
+.resource-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(30 41 59);
+}
+
+.resource-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(89 212 111);
+}
+
+.resource-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 3px solid rgb(15 23 42);
+  border-radius: 999px;
+  background: rgb(89 212 111);
+}
+
+.resource-range:focus-visible {
+  outline: 2px solid rgb(89 212 111 / 0.55);
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+
 :root {
   color-scheme: dark;
   background: #070a0f;
