@@ -37,6 +37,7 @@ type ProviderConfigField struct {
 	Min      *float64                    `json:"min,omitempty"`
 	Max      *float64                    `json:"max,omitempty"`
 	Step     *float64                    `json:"step,omitempty"`
+	Group    string                      `json:"group,omitempty"`
 }
 
 type ProviderConfigFieldOption struct {

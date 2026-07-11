@@ -26,6 +26,7 @@ export type ProviderConfigField = {
   min?: number;
   max?: number;
   step?: number;
+  group?: string;
 };
 
 export type RuntimeImageStatus = {
