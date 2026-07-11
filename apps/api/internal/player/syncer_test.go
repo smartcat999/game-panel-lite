@@ -10,6 +10,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -140,5 +141,34 @@ func TestRunOnceClearsPlayerCountForStoppedServer(t *testing.T) {
 	}
 	if updated.Status.PlayersOnline != 0 {
 		t.Fatalf("expected stopped server player count to reset, got %+v", updated)
+	}
+}
+
+func TestRunOnceUpdatesPalworldCountFromPlayerLogging(t *testing.T) {
+	db, err := store.Open(t.TempDir() + "/gamepanel.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	server := domain.GameServer{
+		ID: "palworld-1", Name: "Pal Friends", GameKey: domain.GamePalworld, ProviderKey: domain.ProviderPalworld,
+		Spec:      domain.ServerSpec{Config: map[string]any{"maxPlayers": 8}},
+		Status:    domain.ServerRuntimeStatus{Phase: domain.PhaseRunning, ActualState: domain.ActualRunning, RuntimeID: "container-palworld"},
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	runtimeAdapter := &playerRuntime{logs: "Running Palworld dedicated server on :8211\nAlice has joined\nBob has joined\nAlice has left\n"}
+	syncer := NewSyncer(db, provider.NewRegistry(palworld.NewProvider()), runtimeAdapter, config.Config{})
+	if err := syncer.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.PlayersOnline != 1 {
+		t.Fatalf("expected one Palworld player online, got %d", updated.Status.PlayersOnline)
 	}
 }

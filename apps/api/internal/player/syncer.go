@@ -77,8 +77,9 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 		if !ok {
 			continue
 		}
-		playerProvider, ok := gameProvider.(provider.PlayerListProvider)
-		if !ok {
+		playerProvider, hasPlayerList := gameProvider.(provider.PlayerListProvider)
+		countProvider, hasPlayerCount := gameProvider.(provider.PlayerCountLogProvider)
+		if !hasPlayerList && !hasPlayerCount {
 			continue
 		}
 		lines, err := s.recentLogLines(ctx, server.Status.RuntimeID)
@@ -86,13 +87,18 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 			s.logger.Warn("failed to read player log output", "server", server.ID, "error", err)
 			continue
 		}
-		players := playerProvider.ParsePlayerListOutput(lines)
-		if players == nil {
+		var nextCount *int
+		if hasPlayerCount {
+			nextCount = countProvider.ParsePlayerCount(lines)
+		} else if players := playerProvider.ParsePlayerListOutput(lines); players != nil {
+			count := len(players)
+			nextCount = &count
+		}
+		if nextCount == nil {
 			continue
 		}
-		nextCount := len(players)
-		if nextCount != server.Status.PlayersOnline {
-			server.Status.PlayersOnline = nextCount
+		if *nextCount != server.Status.PlayersOnline {
+			server.Status.PlayersOnline = *nextCount
 			server.UpdatedAt = time.Now()
 			if err := s.store.SaveGameServer(ctx, &server); err != nil {
 				return err

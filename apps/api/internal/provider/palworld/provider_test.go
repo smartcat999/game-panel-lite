@@ -132,3 +132,23 @@ func TestRenderConfigSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePlayerCount(t *testing.T) {
+	provider := NewProvider()
+	count := provider.ParsePlayerCount([]string{
+		"old player has joined",
+		"\x1b[0mRunning Palworld dedicated server on :8211",
+		"[LOG] Alice joined the server.",
+		"\x1b[0;37mAlice has joined\x1b[0m",
+		"Bob has joined",
+		"[LOG] Alice left the server.",
+		"Alice has left",
+	})
+	if count == nil || *count != 1 {
+		t.Fatalf("expected one online player, got %v", count)
+	}
+
+	if count := provider.ParsePlayerCount([]string{"Alice has joined"}); count != nil {
+		t.Fatalf("expected incomplete snapshot to preserve prior count, got %d", *count)
+	}
+}
