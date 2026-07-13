@@ -135,6 +135,16 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if !strings.Contains(options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"], `preset = "forest_classic"`) {
 		t.Fatalf("expected payload world preset in Master leveldataoverride, got:\n%s", options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"])
 	}
+	for _, expected := range []string{`name = "Forest"`, `desc = ""`} {
+		if !strings.Contains(options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"], expected) {
+			t.Fatalf("expected current DST level data field %q, got:\n%s", expected, options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"])
+		}
+	}
+	for _, expected := range []string{"[SHARD]", "shard_enabled = true", "master_port = 10888", "cluster_key = gamepanel-lite"} {
+		if !strings.Contains(options.Files["dst/Payload Cluster/cluster.ini"], expected) {
+			t.Fatalf("expected caves shard setting %q, got:\n%s", expected, options.Files["dst/Payload Cluster/cluster.ini"])
+		}
+	}
 	if _, ok := options.Files["dst/Payload Cluster/Caves/server.ini"]; !ok {
 		t.Fatalf("expected caves shard files when caves are enabled, got %+v", options.Files)
 	}

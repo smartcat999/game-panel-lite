@@ -424,6 +424,17 @@ func renderClusterINI(config Config) string {
 		"console_enabled = " + boolINI(config.Gameplay.ConsoleEnabled),
 		"",
 	}
+	if config.Caves != nil && config.Caves.Enabled {
+		lines = append(lines,
+			"[SHARD]",
+			"shard_enabled = true",
+			"bind_ip = 127.0.0.1",
+			"master_ip = 127.0.0.1",
+			"master_port = 10888",
+			"cluster_key = gamepanel-lite",
+			"",
+		)
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -460,9 +471,15 @@ func renderLevelDataOverrideLua(location string, preset string, overrides map[st
 			preset = "forest_default"
 		}
 	}
+	name := "Forest"
+	if location == "cave" {
+		name = "Caves"
+	}
 	lines := []string{
 		"return {",
 		"  id = \"SURVIVAL_TOGETHER\",",
+		fmt.Sprintf("  name = %q,", name),
+		"  desc = \"\",",
 		fmt.Sprintf("  location = %q,", location),
 		"  version = 4,",
 		"  override_enabled = true,",
