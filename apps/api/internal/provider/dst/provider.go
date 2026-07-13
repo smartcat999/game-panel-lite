@@ -483,13 +483,16 @@ func renderLevelDataOverrideLua(location string, preset string, overrides map[st
 		fmt.Sprintf("  name = %q,", name),
 		"  desc = \"\",",
 		fmt.Sprintf("  location = %q,", location),
-		fmt.Sprintf("  task_set = %q,", taskSet),
 		"  version = 4,",
 		"  override_enabled = true,",
 		fmt.Sprintf("  preset = %q,", preset),
 		"  overrides = {",
+		fmt.Sprintf("    task_set = %q,", taskSet),
 	}
 	for _, key := range sortedStringKeys(overrides) {
+		if key == "task_set" {
+			continue
+		}
 		lines = append(lines, fmt.Sprintf("    %s = %q,", key, overrides[key]))
 	}
 	lines = append(lines, "  },", "}", "")
