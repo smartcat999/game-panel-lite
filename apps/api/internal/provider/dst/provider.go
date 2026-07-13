@@ -472,8 +472,10 @@ func renderLevelDataOverrideLua(location string, preset string, overrides map[st
 		}
 	}
 	name := "Forest"
+	taskSet := "default"
 	if location == "cave" {
 		name = "Caves"
+		taskSet = "cave_default"
 	}
 	lines := []string{
 		"return {",
@@ -481,6 +483,7 @@ func renderLevelDataOverrideLua(location string, preset string, overrides map[st
 		fmt.Sprintf("  name = %q,", name),
 		"  desc = \"\",",
 		fmt.Sprintf("  location = %q,", location),
+		fmt.Sprintf("  task_set = %q,", taskSet),
 		"  version = 4,",
 		"  override_enabled = true,",
 		fmt.Sprintf("  preset = %q,", preset),
