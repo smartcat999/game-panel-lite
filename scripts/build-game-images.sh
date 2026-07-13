@@ -147,17 +147,6 @@ build_dst() {
     echo "Don't Starve Together image builds are currently supported only for linux/amd64." >&2
     exit 1
   fi
-  if [[ -n "${STEAM_USERNAME:-}" && -z "${STEAM_PASSWORD:-}" || -z "${STEAM_USERNAME:-}" && -n "${STEAM_PASSWORD:-}" ]]; then
-    echo "Set both STEAM_USERNAME and STEAM_PASSWORD when building the Don't Starve Together image with Steam credentials." >&2
-    exit 1
-  fi
-  if [[ -n "${STEAM_USERNAME:-}" ]]; then
-    dst_buildx_args+=(--secret id=steam_username,env=STEAM_USERNAME)
-  fi
-  if [[ -n "${STEAM_PASSWORD:-}" ]]; then
-    dst_buildx_args+=(--secret id=steam_password,env=STEAM_PASSWORD)
-  fi
-
   echo "==> Building ${image}"
   docker "${dst_buildx_args[@]}" \
     -f docker/dst/Dockerfile \

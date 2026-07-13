@@ -1,51 +1,17 @@
 # syntax=docker/dockerfile:1.7
 
-FROM debian:bookworm-slim AS installer
-
-ARG STEAMCMD_URL=https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz
-ARG DST_APP_ID=343050
-
-RUN dpkg --add-architecture i386 \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl tar lib32gcc-s1 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN --mount=type=secret,id=steam_username,required=false \
-    --mount=type=secret,id=steam_password,required=false \
-    mkdir -p /opt/steamcmd /opt/dst \
-    && curl -fsSL "${STEAMCMD_URL}" -o /tmp/steamcmd_linux.tar.gz \
-    && tar -xzf /tmp/steamcmd_linux.tar.gz -C /opt/steamcmd \
-    && if [ -s /run/secrets/steam_username ] && [ -s /run/secrets/steam_password ]; then \
-        steam_user="$(cat /run/secrets/steam_username)"; \
-        steam_password="$(cat /run/secrets/steam_password)"; \
-        /opt/steamcmd/steamcmd.sh \
-          +@ShutdownOnFailedCommand 1 \
-          +@NoPromptForPassword 1 \
-          +@sSteamCmdForcePlatformType linux \
-          +force_install_dir /opt/dst \
-          +login "${steam_user}" "${steam_password}" \
-          +app_update "${DST_APP_ID}" validate \
-          +quit; \
-      else \
-        /opt/steamcmd/steamcmd.sh \
-        +@ShutdownOnFailedCommand 1 \
-        +@NoPromptForPassword 1 \
-        +@sSteamCmdForcePlatformType linux \
-        +force_install_dir /opt/dst \
-        +login anonymous \
-        +app_update "${DST_APP_ID}" validate \
-        +quit || { \
-          echo "DST Steam app ${DST_APP_ID} could not be installed anonymously." >&2; \
-          echo "Set STEAM_USERNAME and STEAM_PASSWORD when building this image so BuildKit can pass them as temporary secrets." >&2; \
-          exit 1; \
-        }; \
-      fi \
-    && rm -f /tmp/steamcmd_linux.tar.gz
+# SteamCMD occasionally returns "Missing configuration" for the public DST app
+# even though app 343050 supports anonymous installation. Use a digest-pinned,
+# preinstalled upstream image as the binary source so builds stay reproducible
+# and never require a personal Steam account.
+ARG DST_BASE_IMAGE=webhippie/dst@sha256:f4479666ebb55903f2f1e5a94f4c4dcd5fae5d6a7eb896cb6285d1860d789bad
+FROM ${DST_BASE_IMAGE} AS installer
 
 FROM debian:bookworm-slim
 
 LABEL org.opencontainers.image.title="GamePanel Lite Don't Starve Together"
 LABEL org.opencontainers.image.description="Prebuilt Don't Starve Together dedicated server runtime for GamePanel Lite"
+LABEL org.opencontainers.image.base.name="docker.io/webhippie/dst@sha256:f4479666ebb55903f2f1e5a94f4c4dcd5fae5d6a7eb896cb6285d1860d789bad"
 
 RUN dpkg --add-architecture i386 \
     && apt-get update \
@@ -57,7 +23,7 @@ RUN dpkg --add-architecture i386 \
 
 USER container
 WORKDIR /home/container
-COPY --from=installer --chown=container:container /opt/dst/ /home/container/server/
+COPY --from=installer --chown=container:container /usr/share/game/ /home/container/server/
 COPY --chmod=755 --chown=container:container docker/dst/gamepanel-dst-entrypoint.sh /home/container/gamepanel-dst-entrypoint.sh
 
 ENV DST_PERSISTENT_ROOT=/data
