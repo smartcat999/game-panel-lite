@@ -472,14 +472,36 @@ func renderLevelDataOverrideLua(location string, preset string, overrides map[st
 		}
 	}
 	name := "Forest"
-	taskSet := "default"
+	levelID := "SURVIVAL_TOGETHER"
+	defaultOverrides := map[string]string{
+		"has_ocean":                          "true",
+		"keep_disconnected_tiles":            "true",
+		"layout_mode":                        `"LinkNodesByKeys"`,
+		"no_joining_islands":                 "true",
+		"no_wormholes_to_disconnected_tiles": "true",
+		"roads":                              `"default"`,
+		"season_start":                       `"default"`,
+		"start_location":                     `"default"`,
+		"task_set":                           `"default"`,
+		"world_size":                         `"default"`,
+		"wormhole_prefab":                    `"wormhole"`,
+	}
 	if location == "cave" {
 		name = "Caves"
-		taskSet = "cave_default"
+		levelID = "DST_CAVE"
+		defaultOverrides = map[string]string{
+			"layout_mode":     `"RestrictNodesByKey"`,
+			"roads":           `"never"`,
+			"season_start":    `"default"`,
+			"start_location":  `"caves"`,
+			"task_set":        `"cave_default"`,
+			"world_size":      `"default"`,
+			"wormhole_prefab": `"tentacle_pillar"`,
+		}
 	}
 	lines := []string{
 		"return {",
-		"  id = \"SURVIVAL_TOGETHER\",",
+		fmt.Sprintf("  id = %q,", levelID),
 		fmt.Sprintf("  name = %q,", name),
 		"  desc = \"\",",
 		fmt.Sprintf("  location = %q,", location),
@@ -487,15 +509,32 @@ func renderLevelDataOverrideLua(location string, preset string, overrides map[st
 		"  override_enabled = true,",
 		fmt.Sprintf("  preset = %q,", preset),
 		"  overrides = {",
-		fmt.Sprintf("    task_set = %q,", taskSet),
 	}
-	for _, key := range sortedStringKeys(overrides) {
-		if key == "task_set" {
+	for _, key := range sortedStringKeys(defaultOverrides) {
+		if _, overridden := overrides[key]; overridden {
 			continue
 		}
+		lines = append(lines, fmt.Sprintf("    %s = %s,", key, defaultOverrides[key]))
+	}
+	for _, key := range sortedStringKeys(overrides) {
 		lines = append(lines, fmt.Sprintf("    %s = %q,", key, overrides[key]))
 	}
-	lines = append(lines, "  },", "}", "")
+	lines = append(lines, "  },")
+	if location == "cave" {
+		lines = append(lines, "  background_node_range = { 0, 1 },")
+	} else {
+		lines = append(lines,
+			"  required_setpieces = { \"Sculptures_1\", \"Maxwell5\" },",
+			"  numrandom_set_pieces = 4,",
+			"  random_set_pieces = {",
+			"    \"Sculptures_2\", \"Sculptures_3\", \"Sculptures_4\", \"Sculptures_5\",",
+			"    \"Chessy_1\", \"Chessy_2\", \"Chessy_3\", \"Chessy_4\", \"Chessy_5\", \"Chessy_6\",",
+			"    \"Maxwell1\", \"Maxwell2\", \"Maxwell3\", \"Maxwell4\", \"Maxwell6\", \"Maxwell7\",",
+			"    \"Warzone_1\", \"Warzone_2\", \"Warzone_3\",",
+			"  },",
+		)
+	}
+	lines = append(lines, "}", "")
 	return strings.Join(lines, "\n")
 }
 
