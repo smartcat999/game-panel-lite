@@ -135,7 +135,7 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if !strings.Contains(options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"], `preset = "forest_classic"`) {
 		t.Fatalf("expected payload world preset in Master leveldataoverride, got:\n%s", options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"])
 	}
-	for _, expected := range []string{`name = "Forest"`, `desc = ""`, `task_set = "default"`} {
+	for _, expected := range []string{`name = "Forest"`, `desc = ""`, "overrides = {\n    task_set = \"default\","} {
 		if !strings.Contains(options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"], expected) {
 			t.Fatalf("expected current DST level data field %q, got:\n%s", expected, options.Files["dst/Payload Cluster/Master/leveldataoverride.lua"])
 		}
@@ -148,7 +148,7 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if _, ok := options.Files["dst/Payload Cluster/Caves/server.ini"]; !ok {
 		t.Fatalf("expected caves shard files when caves are enabled, got %+v", options.Files)
 	}
-	if !strings.Contains(options.Files["dst/Payload Cluster/Caves/leveldataoverride.lua"], `task_set = "cave_default"`) {
+	if !strings.Contains(options.Files["dst/Payload Cluster/Caves/leveldataoverride.lua"], "overrides = {\n    task_set = \"cave_default\",") {
 		t.Fatalf("expected cave task set in Caves leveldataoverride, got:\n%s", options.Files["dst/Payload Cluster/Caves/leveldataoverride.lua"])
 	}
 	if !strings.Contains(options.Files["dst/Payload Cluster/dedicated_server_mods_setup.lua"], `ServerModSetup("123456789")`) {
