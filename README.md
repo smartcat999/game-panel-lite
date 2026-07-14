@@ -45,6 +45,19 @@ If you have a domain pointed at the server, enable HTTPS:
 cd ~/gamepanel-lite && sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
 ```
 
+## Remote Server Operations
+
+Update the control-plane images and recreate only changed services:
+
+```bash
+cd ~/gamepanel-lite
+sudo sh scripts/manage.sh update
+```
+
+Use `start`, `stop`, or `status` in place of `update` for routine operations. The script automatically selects HTTP or HTTPS mode. It manages the panel control plane only; game containers remain under GamePanel Lite and are not recreated by these commands.
+
+Production uses `compose.prod.yaml`. The HTTPS override replaces the same `nginx` service, so only one reverse proxy owns ports 80 and 443. Do not add the development `compose.yaml` to production commands.
+
 ## Data Location
 
 GamePanel Lite stores its data in the `data/` directory inside the install folder. This includes the local database, server instances, worlds, backups, and mod files.

@@ -46,3 +46,4 @@ echo
 echo "GamePanel Lite is starting."
 echo "Open: http://localhost:3001"
 echo "Data directory: $ROOT_DIR/data"
+echo "Manage with: sh scripts/manage.sh <start|update|stop|status>"

@@ -59,8 +59,6 @@ sed "s/__GAMEPANEL_DOMAIN__/$DOMAIN/g" \
 
 cd "$ROOT_DIR"
 
-docker compose -f compose.prod.yaml -f compose.https.yaml stop nginx-https >/dev/null 2>&1 || true
-docker compose -f compose.prod.yaml -f compose.https.yaml rm -f nginx-https >/dev/null 2>&1 || true
 docker compose -f compose.prod.yaml pull api web nginx
 docker compose -f compose.prod.yaml up -d api web nginx
 
@@ -73,11 +71,11 @@ fi
 
 docker compose -f compose.prod.yaml -f compose.https.yaml run --rm certbot $CERTBOT_ARGS
 
-docker compose -f compose.prod.yaml stop nginx >/dev/null 2>&1 || true
-docker compose -f compose.prod.yaml rm -f nginx >/dev/null 2>&1 || true
-docker compose -f compose.prod.yaml -f compose.https.yaml up -d api web nginx-https gamepanel-exporter prometheus cadvisor node-exporter
+docker compose -f compose.prod.yaml -f compose.https.yaml up -d --remove-orphans --force-recreate nginx
+sh scripts/manage.sh start
 
 echo
 echo "HTTPS is ready."
 echo "Open: https://$DOMAIN"
 echo "Renew with: sh scripts/renew-https.sh"
+echo "Update with: sh scripts/manage.sh update"
