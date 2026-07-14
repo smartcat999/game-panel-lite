@@ -16,7 +16,7 @@ import { gameDescription, gameDisplayName } from "@/lib/game-display";
 import { providerDescription, providerDisplayName } from "@/lib/provider-display";
 import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { createConfigPreset, getGameVersions, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
+import { createConfigPreset, getGameVersions, getSettings, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
@@ -380,6 +380,7 @@ export function CreateServerWizard() {
   const modsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const configPresetsQuery = useQuery({ queryKey: ["config-presets"], queryFn: listConfigPresets, retry: false });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
   const games = gamesQuery.data ?? [];
   const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games[0] ?? games.find((game) => game.key === "terraria");
   const selectedGameArt = getGameArt(selectedGame?.coverImage ?? selectedGame?.key ?? selectedGameKey);
@@ -765,6 +766,7 @@ export function CreateServerWizard() {
             )}
             {currentStepId === "review" && (
               <ReviewStep
+                address={settingsQuery.data?.publicHost.trim() || undefined}
                 configModel={createReviewConfigModel({
                   config,
                   gameKey: selectedGameKey,
@@ -2111,6 +2113,7 @@ function ModsStep({
 }
 
 function ReviewStep({
+  address,
   configModel,
   gameKey,
   gameName,
@@ -2128,6 +2131,7 @@ function ReviewStep({
   onOpenPreset,
   onSavePreset
 }: {
+  address?: string;
   configModel: ReviewConfigModel;
   gameKey: string;
   gameName: string;
@@ -2147,6 +2151,7 @@ function ReviewStep({
 }) {
   const { t } = useI18n();
   const invitePreview = createReviewInvitePreview({
+    address,
     gameKey,
     gameName,
     hostPortLabel,
