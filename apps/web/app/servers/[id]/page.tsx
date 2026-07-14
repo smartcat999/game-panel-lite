@@ -91,6 +91,17 @@ const providerFieldLabelKeys: Record<string, MessageKey> = {
   eulaAccepted: "minecraftEulaAccepted"
 };
 
+const providerGroupLabelKeys: Record<string, MessageKey> = {
+  "dst.world.basics": "dstGroupWorldBasics",
+  "dst.world.seasons": "dstGroupSeasons",
+  "dst.world.resources": "dstGroupResources",
+  "dst.world.creatures": "dstGroupCreatures",
+  "dst.world.threats": "dstGroupThreats",
+  "dst.caves.world": "dstGroupCaveWorld",
+  "dst.caves.resources": "dstGroupCaveResources",
+  "dst.caves.threats": "dstGroupCaveThreats"
+};
+
 const defaultCapabilities: ProviderCapabilities = {
   consoleCommands: true,
   playerList: true,
@@ -1862,7 +1873,7 @@ function ProviderConfigFields({
     <div className="mt-4 grid gap-3">
       {groupedFields.map(([group, groupFields], groupIndex) => (
         <details key={group} open={groupIndex === 0} className="rounded-lg border border-panel-line bg-slate-950/35">
-          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{group}<span className="ml-2 text-xs font-normal text-slate-500">{groupFields.length}</span></summary>
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{providerGroupLabelKeys[group] ? t(providerGroupLabelKeys[group]) : group}<span className="ml-2 text-xs font-normal text-slate-500">{groupFields.length}</span></summary>
           <div className="grid gap-4 border-t border-panel-line px-4 py-4 lg:grid-cols-2">
       {groupFields.map((field) => {
         const label = providerFieldLabel(field, t);
