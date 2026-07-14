@@ -5,7 +5,7 @@ services:
       - ./data/certbot/www:/var/www/certbot
       - ./data/certbot/conf:/etc/letsencrypt
 
-  nginx-https:
+  nginx:
     image: nginx:1.27-alpine
     pull_policy: missing
     restart: unless-stopped

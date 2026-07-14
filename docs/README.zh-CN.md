@@ -45,6 +45,29 @@ http://服务器IP:3001
 cd ~/gamepanel-lite && sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
 ```
 
+## 远程服务器维护
+
+生产环境只使用 `compose.prod.yaml`。启用 HTTPS 后，`compose.https.yaml` 会替换同一个 `nginx` 服务的端口和配置，不会再创建第二个 Nginx。
+
+在远程服务器更新控制平面镜像并重建有变化的服务：
+
+```bash
+cd ~/gamepanel-lite
+sudo sh scripts/manage.sh update
+```
+
+启动、停止和查看状态：
+
+```bash
+sudo sh scripts/manage.sh start
+sudo sh scripts/manage.sh stop
+sudo sh scripts/manage.sh status
+```
+
+`manage.sh` 会自动检测当前是 HTTP 还是 HTTPS 部署。它只管理面板、API、Nginx 和监控服务；帕鲁、饥荒等游戏容器仍由 GamePanel Lite 管理，不会在更新控制平面时被重建。
+
+不要在生产服务器叠加使用 `compose.yaml`。该文件用于本地开发，可能额外暴露 Web 端口。
+
 ## 数据保存
 
 GamePanel Lite 默认把数据保存在安装目录下的 `data/`，包括本地数据库、服务器实例、世界、备份和模组文件。
