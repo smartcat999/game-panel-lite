@@ -97,6 +97,34 @@ const providerFieldLabelKeys: Record<string, MessageKey> = {
   worldPreset: "worldPreset"
 };
 
+Object.assign(providerFieldLabelKeys, {
+  "caves.enabled": "cavesEnabled",
+  "gameplay.consoleEnabled": "consoleEnabled",
+  "gameplay.gameMode": "gameMode",
+  "gameplay.maxPlayers": "maxPlayersInput",
+  "gameplay.pauseWhenEmpty": "pauseWhenEmpty",
+  "gameplay.pvp": "pvp",
+  "identity.clusterName": "clusterName",
+  "identity.clusterToken": "clusterToken",
+  "identity.description": "clusterDescription",
+  "identity.password": "serverPassword",
+  "identity.serverName": "serverName",
+  "identity.visibility": "visibility",
+  "world.preset": "worldPreset"
+} satisfies Record<string, MessageKey>);
+
+const providerOptionLabelKeys: Record<string, MessageKey> = {
+  "gameplay.gameMode:endless": "dstGameModeEndless",
+  "gameplay.gameMode:survival": "dstGameModeSurvival",
+  "gameplay.gameMode:wilderness": "dstGameModeWilderness",
+  "identity.visibility:lan": "dstVisibilityLan",
+  "identity.visibility:offline": "dstVisibilityOffline",
+  "identity.visibility:public": "dstVisibilityPublic",
+  "world.preset:forest_classic": "dstWorldPresetClassic",
+  "world.preset:forest_default": "dstWorldPresetDefault",
+  "world.preset:forest_survival": "dstWorldPresetSurvival"
+};
+
 function createNameSuffix(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
@@ -131,23 +159,31 @@ function editableTerrariaConfig(config: EditableTerrariaConfigInput): TerrariaCo
   };
 }
 
-function createGameDefaultNames(gameName: string) {
+function createGameDefaultNames(gameName: string, locale: "zh" | "en") {
   const suffix = createNameSuffix();
+  const label = (zh: string, en: string) => locale === "zh" ? zh : en;
   return {
-    clusterName: appendNameSuffix(`${gameName} Cluster`, suffix),
-    saveName: appendNameSuffix(`${gameName} Save`, suffix),
-    serverName: appendNameSuffix(`${gameName} Server`, suffix),
-    worldName: appendNameSuffix(`${gameName} World`, suffix)
+    clusterName: appendNameSuffix(`${gameName} ${label("集群", "Cluster")}`, suffix),
+    saveName: appendNameSuffix(`${gameName} ${label("存档", "Save")}`, suffix),
+    serverName: appendNameSuffix(`${gameName} ${label("服务器", "Server")}`, suffix),
+    worldName: appendNameSuffix(`${gameName} ${label("世界", "World")}`, suffix)
   };
 }
 
-function createProviderDefaultOverrides(names: ReturnType<typeof createGameDefaultNames>) {
-  return {
+function createProviderDefaultOverrides(names: ReturnType<typeof createGameDefaultNames>, gameKey: string, locale: "zh" | "en") {
+  const overrides: ProviderConfigPayload = {
     clusterName: names.clusterName,
     saveName: names.saveName,
     serverName: names.serverName,
     worldName: names.worldName
   };
+  if (gameKey === "dont-starve-together") {
+    overrides.identity = {
+      description: locale === "zh" ? "由 GamePanel Lite 管理" : "Managed by GamePanel Lite",
+      serverName: names.serverName
+    };
+  }
+  return overrides;
 }
 
 function formatCpuLimitLabel(value: number, t: (key: MessageKey, values?: Record<string, string | number>) => string) {
@@ -177,6 +213,11 @@ function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, valu
   if (field.name === "clusterToken" || field.name === "identity.clusterToken") return t("clusterTokenHelp");
   if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
   return field.help ?? "";
+}
+
+function providerOptionLabel(field: ProviderConfigField, value: string, fallback: string, t: (key: MessageKey) => string) {
+  const key = providerOptionLabelKeys[`${field.name}:${value}`];
+  return key ? t(key) : fallback;
 }
 
 function validateCreateConfig({
@@ -515,7 +556,8 @@ export function CreateServerWizard() {
     if (game.key === "terraria") {
       chooseMode(nextProvider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
-      const names = createGameDefaultNames(game.name);
+      const localizedGameName = gameDisplayName(game.key, game.name, t);
+      const names = createGameDefaultNames(localizedGameName, locale);
       setSelectedPreset("custom");
       setConfig(editableTerrariaConfig({
         ...defaultCreateServerConfig,
@@ -525,7 +567,7 @@ export function CreateServerWizard() {
         password: "",
         motd: ""
       }));
-      setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, createProviderDefaultOverrides(names)));
+      setProviderConfigPayload(createDefaultProviderConfigPayload(nextProvider, createProviderDefaultOverrides(names, game.key, locale)));
       setSelectedWorldId("");
       setAppliedWorldConfigId("");
       setSelectedModIds([]);
@@ -537,9 +579,11 @@ export function CreateServerWizard() {
     if (provider.key === "terraria-tmodloader" || provider.key === "terraria-vanilla") {
       chooseMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
-      const names = createGameDefaultNames(selectedGame?.name ?? provider.name);
+      const gameKey = selectedGame?.key ?? selectedGameKey;
+      const localizedGameName = gameDisplayName(gameKey, selectedGame?.name ?? provider.name, t);
+      const names = createGameDefaultNames(localizedGameName, locale);
       setSelectedPreset("custom");
-      setProviderConfigPayload(createDefaultProviderConfigPayload(provider, createProviderDefaultOverrides(names)));
+      setProviderConfigPayload(createDefaultProviderConfigPayload(provider, createProviderDefaultOverrides(names, gameKey, locale)));
       setSelectedModIds([]);
       setSelectedModPackId("");
     }
@@ -1630,7 +1674,7 @@ function ProviderSchemaField({
                 {field.type === "select" ? (
                   <WizardSelect value={String(value ?? "")} onChange={onChange} invalid={Boolean(error)}>
                     {(field.options ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
+                      <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>
                     ))}
                   </WizardSelect>
                 ) : (
@@ -1687,10 +1731,10 @@ function ProviderSchemaFieldsGrid({
 }
 
 const dstConfigSections = [
-  { title: "Identity and Access", prefix: "identity.", summary: ["identity.visibility"] },
-  { title: "Gameplay", prefix: "gameplay.", summary: ["gameplay.gameMode", "gameplay.maxPlayers"] },
-  { title: "World Generation", prefix: "world.", summary: ["world.preset"] },
-  { title: "Caves", prefix: "caves.", summary: ["caves.enabled"] }
+  { titleKey: "dstSectionIdentity", prefix: "identity.", summary: ["identity.visibility"] },
+  { titleKey: "dstSectionGameplay", prefix: "gameplay.", summary: ["gameplay.gameMode", "gameplay.maxPlayers"] },
+  { titleKey: "dstSectionWorld", prefix: "world.", summary: ["world.preset"] },
+  { titleKey: "dstSectionCaves", prefix: "caves.", summary: ["caves.enabled"] }
 ] as const;
 
 function DSTProviderConfigSections(props: {
@@ -1701,21 +1745,29 @@ function DSTProviderConfigSections(props: {
   setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
   validationErrors: ConfigValidationErrors;
 }) {
+  const { t } = useI18n();
   return (
     <div className="mt-4 grid gap-3">
       {dstConfigSections.map((section) => {
         const fields = props.fields.filter((field) => field.name.startsWith(section.prefix));
         if (fields.length === 0) return null;
         return (
-          <section key={section.title} className="rounded-md border border-panel-line bg-slate-950/40 p-3">
+          <section key={section.titleKey} className="rounded-md border border-panel-line bg-slate-950/40 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{section.title}</h4>
+              <h4 className="text-xs font-semibold tracking-[0.08em] text-slate-400">{t(section.titleKey)}</h4>
               <div className="flex flex-wrap gap-1.5">
                 {section.summary.map((path) => {
                   const value = providerConfigValue(props.payload, path);
+                  const field = props.fields.find((item) => item.name === path);
+                  const option = field?.options?.find((item) => item.value === String(value));
+                  const label = typeof value === "boolean"
+                    ? t(value ? "enabled" : "disabled")
+                    : field && option
+                      ? providerOptionLabel(field, option.value, option.label, t)
+                      : String(value ?? t("defaultValue"));
                   return (
                     <span key={path} className="rounded border border-panel-line bg-slate-900 px-2 py-1 text-[11px] text-slate-400">
-                      {String(value ?? "default")}
+                      {label}
                     </span>
                   );
                 })}
