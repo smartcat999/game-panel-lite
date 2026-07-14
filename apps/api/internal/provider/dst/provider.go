@@ -162,6 +162,9 @@ func validateConfig(config Config) error {
 		if err := validateOverride(key, value); err != nil {
 			return fmt.Errorf("world override %s: %w", key, err)
 		}
+		if err := validateKnownOverride("world", key, value); err != nil {
+			return err
+		}
 	}
 	if config.Caves != nil {
 		if config.Caves.Enabled && strings.TrimSpace(config.Caves.Preset) == "" {
@@ -171,7 +174,26 @@ func validateConfig(config Config) error {
 			if err := validateOverride(key, value); err != nil {
 				return fmt.Errorf("cave override %s: %w", key, err)
 			}
+			if err := validateKnownOverride("caves", key, value); err != nil {
+				return err
+			}
 		}
+	}
+	return nil
+}
+
+func validateKnownOverride(shard string, key string, value string) error {
+	name := shard + ".overrides." + key
+	for _, field := range configSchema() {
+		if field.Name != name || len(field.Options) == 0 {
+			continue
+		}
+		for _, option := range field.Options {
+			if value == option.Value {
+				return nil
+			}
+		}
+		return fmt.Errorf("%s override %s has unsupported value %q", shard, key, value)
 	}
 	return nil
 }

@@ -27,8 +27,50 @@ func TestProviderCatalogMetadata(t *testing.T) {
 			t.Fatalf("expected config schema field %q, got %+v", expected, provider.ConfigSchema())
 		}
 	}
+	for _, expected := range []string{"world.overrides.day", "world.overrides.world_size", "world.overrides.regrowth", "caves.overrides.cavelight", "caves.overrides.wormattacks"} {
+		if !names[expected] {
+			t.Fatalf("expected world setting field %q", expected)
+		}
+	}
+	for _, field := range provider.ConfigSchema() {
+		if strings.Contains(field.Name, ".overrides.") && (field.Group == "" || len(field.Options) == 0) {
+			t.Fatalf("world setting %q must be grouped and constrained", field.Name)
+		}
+	}
 	if names["workshopIds"] {
 		t.Fatalf("workshop IDs should be managed from the mod library, not the config schema: %+v", provider.ConfigSchema())
+	}
+}
+
+func TestWorldOverridesFromPayloadRenderIntoBothShards(t *testing.T) {
+	config := configFromPayload(map[string]any{
+		"identity": map[string]any{"serverName": "DST", "clusterName": "Cluster", "clusterToken": "token"},
+		"world":    map[string]any{"overrides": map[string]any{"day": "longday", "world_size": "huge"}},
+		"caves":    map[string]any{"enabled": true, "overrides": map[string]any{"cavelight": "slow", "wormattacks": "rare"}},
+	}, defaultConfig())
+	forest := renderLevelDataOverrideLua("forest", config.World.Preset, config.World.Overrides)
+	if config.Caves == nil {
+		t.Fatal("expected caves config to remain enabled")
+	}
+	caves := renderLevelDataOverrideLua("cave", config.Caves.Preset, config.Caves.Overrides)
+	for _, expected := range []string{"day = \"longday\"", "world_size = \"huge\""} {
+		if !strings.Contains(forest, expected) {
+			t.Fatalf("forest override missing %q:\n%s", expected, forest)
+		}
+	}
+	for _, expected := range []string{"cavelight = \"slow\"", "wormattacks = \"rare\""} {
+		if !strings.Contains(caves, expected) {
+			t.Fatalf("cave override missing %q:\n%s", expected, caves)
+		}
+	}
+}
+
+func TestKnownWorldOverrideRejectsUnsupportedValue(t *testing.T) {
+	config := defaultConfig()
+	config.Identity.ClusterToken = "token"
+	config.World.Overrides = map[string]string{"day": "sometimes"}
+	if err := validateConfig(config); err == nil || !strings.Contains(err.Error(), "unsupported value") {
+		t.Fatalf("expected constrained override validation, got %v", err)
 	}
 }
 

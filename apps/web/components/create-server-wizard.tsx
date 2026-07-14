@@ -113,7 +113,82 @@ Object.assign(providerFieldLabelKeys, {
   "world.preset": "worldPreset"
 } satisfies Record<string, MessageKey>);
 
+Object.assign(providerFieldLabelKeys, {
+  "world.overrides.world_size": "dstWorldSize",
+  "world.overrides.day": "dstDayCycle",
+  "world.overrides.season_start": "dstSeasonStart",
+  "world.overrides.autumn": "dstAutumnLength",
+  "world.overrides.winter": "dstWinterLength",
+  "world.overrides.spring": "dstSpringLength",
+  "world.overrides.summer": "dstSummerLength",
+  "world.overrides.grass": "dstGrass",
+  "world.overrides.sapling": "dstSaplings",
+  "world.overrides.berrybush": "dstBerryBushes",
+  "world.overrides.flint": "dstFlint",
+  "world.overrides.rock": "dstRocks",
+  "world.overrides.rabbits": "dstRabbits",
+  "world.overrides.pigs": "dstPigs",
+  "world.overrides.beefalo": "dstBeefalo",
+  "world.overrides.spiders": "dstSpiderDens",
+  "world.overrides.houndmound": "dstHoundMounds",
+  "world.overrides.hounds": "dstHoundAttacks",
+  "world.overrides.wildfires": "dstWildfires",
+  "world.overrides.deerclops": "dstDeerclops",
+  "world.overrides.bearger": "dstBearger",
+  "world.overrides.goosemoose": "dstMooseGoose",
+  "world.overrides.dragonfly": "dstDragonfly",
+  "world.overrides.regrowth": "dstRegrowth",
+  "caves.overrides.world_size": "dstCaveSize",
+  "caves.overrides.cavelight": "dstCaveLight",
+  "caves.overrides.grass": "dstCaveGrass",
+  "caves.overrides.sapling": "dstCaveSaplings",
+  "caves.overrides.berrybush": "dstCaveBerryBushes",
+  "caves.overrides.flower_cave": "dstLightFlowers",
+  "caves.overrides.wormlights": "dstGlowBerries",
+  "caves.overrides.cave_spiders": "dstCaveSpiderDens",
+  "caves.overrides.bats": "dstBatCaves",
+  "caves.overrides.earthquakes": "dstEarthquakes",
+  "caves.overrides.wormattacks": "dstWormAttacks",
+  "caves.overrides.toadstool": "dstToadstool"
+} satisfies Record<string, MessageKey>);
+
 const providerOptionLabelKeys: Record<string, MessageKey> = {
+  "*:always": "dstOptionAlways",
+  "*:autumn|spring": "dstOptionAutumnOrSpring",
+  "*:autumn|winter|spring|summer": "dstOptionRandomSeason",
+  "*:default": "defaultValue",
+  "*:fast": "dstOptionFast",
+  "*:huge": "dstOptionHuge",
+  "*:insane": "dstOptionInsane",
+  "*:longday": "dstOptionLongDay",
+  "*:longdusk": "dstOptionLongDusk",
+  "*:longnight": "dstOptionLongNight",
+  "*:longseason": "dstOptionLong",
+  "*:medium": "dstOptionMedium",
+  "*:mostly": "dstOptionMostly",
+  "*:noday": "dstOptionNoDay",
+  "*:nodusk": "dstOptionNoDusk",
+  "*:nonight": "dstOptionNoNight",
+  "*:noseason": "dstOptionNone",
+  "*:never": "dstOptionNever",
+  "*:often": "dstOptionOften",
+  "*:onlyday": "dstOptionOnlyDay",
+  "*:onlydusk": "dstOptionOnlyDusk",
+  "*:onlynight": "dstOptionOnlyNight",
+  "*:random": "dstOptionRandom",
+  "*:rare": "dstOptionRare",
+  "*:shortseason": "dstOptionShort",
+  "*:slow": "dstOptionSlow",
+  "*:small": "dstOptionSmall",
+  "*:spring": "dstOptionSpring",
+  "*:summer": "dstOptionSummer",
+  "*:uncommon": "dstOptionUncommon",
+  "*:veryfast": "dstOptionVeryFast",
+  "*:verylongseason": "dstOptionVeryLong",
+  "*:veryshortseason": "dstOptionVeryShort",
+  "*:veryslow": "dstOptionVerySlow",
+  "*:winter": "dstOptionWinter",
+  "*:winter|summer": "dstOptionWinterOrSummer",
   "gameplay.gameMode:endless": "dstGameModeEndless",
   "gameplay.gameMode:survival": "dstGameModeSurvival",
   "gameplay.gameMode:wilderness": "dstGameModeWilderness",
@@ -216,7 +291,7 @@ function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, valu
 }
 
 function providerOptionLabel(field: ProviderConfigField, value: string, fallback: string, t: (key: MessageKey) => string) {
-  const key = providerOptionLabelKeys[`${field.name}:${value}`];
+  const key = providerOptionLabelKeys[`${field.name}:${value}`] ?? providerOptionLabelKeys[`*:${value}`];
   return key ? t(key) : fallback;
 }
 
@@ -1737,6 +1812,17 @@ const dstConfigSections = [
   { titleKey: "dstSectionCaves", prefix: "caves.", summary: ["caves.enabled"] }
 ] as const;
 
+const dstConfigGroupLabelKeys: Record<string, MessageKey> = {
+  "dst.world.basics": "dstGroupWorldBasics",
+  "dst.world.seasons": "dstGroupSeasons",
+  "dst.world.resources": "dstGroupResources",
+  "dst.world.creatures": "dstGroupCreatures",
+  "dst.world.threats": "dstGroupThreats",
+  "dst.caves.world": "dstGroupCaveWorld",
+  "dst.caves.resources": "dstGroupCaveResources",
+  "dst.caves.threats": "dstGroupCaveThreats"
+};
+
 function DSTProviderConfigSections(props: {
   fields: ProviderConfigField[];
   onClearValidationError: (field: string) => void;
@@ -1751,6 +1837,8 @@ function DSTProviderConfigSections(props: {
       {dstConfigSections.map((section) => {
         const fields = props.fields.filter((field) => field.name.startsWith(section.prefix));
         if (fields.length === 0) return null;
+        const primaryFields = fields.filter((field) => !field.group);
+        const groups = Array.from(new Set(fields.map((field) => field.group).filter((group): group is string => Boolean(group))));
         return (
           <section key={section.titleKey} className="rounded-md border border-panel-line bg-slate-950/40 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1773,7 +1861,26 @@ function DSTProviderConfigSections(props: {
                 })}
               </div>
             </div>
-            <ProviderSchemaFieldsGrid {...props} fields={fields} />
+            <ProviderSchemaFieldsGrid {...props} fields={primaryFields} />
+            {groups.length > 0 ? (
+              <div className="mt-4 grid gap-2">
+                {groups.map((group, index) => {
+                  const groupFields = fields.filter((field) => field.group === group);
+                  const labelKey = dstConfigGroupLabelKeys[group];
+                  return (
+                    <details key={group} open={index === 0} className="group rounded-md border border-panel-line bg-slate-950/45">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:text-slate-100">
+                        <span>{labelKey ? t(labelKey) : group}</span>
+                        <span className="text-xs font-normal text-slate-500">{t("dstSettingsCount", { count: groupFields.length })}</span>
+                      </summary>
+                      <div className="border-t border-panel-line px-3 pb-3">
+                        <ProviderSchemaFieldsGrid {...props} fields={groupFields} />
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            ) : null}
           </section>
         );
       })}
