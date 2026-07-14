@@ -2,7 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
-import { Database, Network, Package } from "lucide-react";
+import { CheckCircle2, CircleAlert, Database, Network, Package, RotateCcw, Save } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button, Card, Input } from "@/components/ui";
@@ -20,12 +20,15 @@ export default function SettingsPage() {
   const imageRegistry = settings.data?.imageRegistry ?? "smartcat99999";
   const imageTag = settings.data?.imageTag ?? "v0.1.0";
   const providerCatalogPath = settings.data?.providerCatalogPath ?? "GAMEPANEL_PROVIDER_CATALOG_PATH";
+  const savedPublicHost = settings.data?.publicHost ?? "";
+  const normalizedPublicHost = publicHostValue.trim();
+  const publicHostDirty = publicHost !== null && normalizedPublicHost !== savedPublicHost.trim();
   const publicHostMutation = useMutation({
-    mutationFn: () => updatePublicHost(publicHostValue),
-    onSuccess: () => {
+    mutationFn: () => updatePublicHost(normalizedPublicHost),
+    onSuccess: async () => {
+      await settings.refetch();
       setPublicHost(null);
       setPublicHostMessage(t("publicHostSaved"));
-      settings.refetch();
     },
     onError: (err) => setPublicHostMessage(err instanceof Error ? err.message : t("publicHostSaveFailed"))
   });
@@ -48,20 +51,47 @@ export default function SettingsPage() {
         >
           <div className="grid gap-4">
             <SettingValue label={t("configuredDockerHost")} value={configuredHost} />
-            <form className="grid gap-3 lg:grid-cols-[minmax(260px,520px)_auto] lg:items-end" onSubmit={submitPublicHost}>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-500">{t("publicHostTitle")}</span>
+            <form className="max-w-3xl" onSubmit={submitPublicHost}>
+              <label className="block max-w-xl">
+                <span className="text-sm font-medium text-slate-300">{t("publicHostTitle")}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{t("publicHostDescription")}</span>
                 <Input
-                  className="mt-2 w-full"
+                  className="mt-2 w-full font-mono"
                   placeholder={t("publicHostPlaceholder")}
                   value={publicHostValue}
-                  onChange={(event) => setPublicHost(event.target.value)}
+                  onChange={(event) => {
+                    setPublicHost(event.target.value);
+                    setPublicHostMessage("");
+                  }}
                 />
               </label>
-              <Button className="h-10 px-4" type="submit" disabled={publicHostMutation.isPending}>
-                {publicHostMutation.isPending ? t("saving") : t("saveButton")}
-              </Button>
-              {publicHostMessage ? <p className="text-sm text-slate-400 lg:col-span-2">{publicHostMessage}</p> : null}
+              {publicHostDirty ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button className="h-9 w-auto px-3" type="submit" disabled={publicHostMutation.isPending}>
+                    <Save aria-hidden="true" className="size-4" />
+                    {publicHostMutation.isPending ? t("saving") : t("savePublicHost")}
+                  </Button>
+                  <Button
+                    className="h-9 w-auto px-3"
+                    type="button"
+                    variant="ghost"
+                    disabled={publicHostMutation.isPending}
+                    onClick={() => {
+                      setPublicHost(null);
+                      setPublicHostMessage("");
+                    }}
+                  >
+                    <RotateCcw aria-hidden="true" className="size-4" />
+                    {t("discardChanges")}
+                  </Button>
+                </div>
+              ) : null}
+              {publicHostMessage ? (
+                <p className={`mt-3 flex items-center gap-2 text-sm ${publicHostMutation.isError ? "text-red-300" : "text-panel-green"}`} role="status" aria-live="polite">
+                  {publicHostMutation.isError ? <CircleAlert aria-hidden="true" className="size-4" /> : <CheckCircle2 aria-hidden="true" className="size-4" />}
+                  {publicHostMessage}
+                </p>
+              ) : null}
             </form>
           </div>
         </SettingsSection>
