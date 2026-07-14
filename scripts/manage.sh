@@ -26,11 +26,11 @@ SERVICES="api web nginx gamepanel-exporter prometheus cadvisor node-exporter"
 
 case "$ACTION" in
   start)
-    docker compose "$@" up -d --remove-orphans $SERVICES
+    docker compose "$@" up -d --remove-orphans --pull never $SERVICES
     ;;
   update)
     docker compose "$@" pull $SERVICES
-    docker compose "$@" up -d --remove-orphans $SERVICES
+    docker compose "$@" up -d --remove-orphans --pull never $SERVICES
     ;;
   stop)
     docker compose "$@" stop $SERVICES
