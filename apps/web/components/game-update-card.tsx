@@ -50,7 +50,7 @@ export function GameUpdateCard({
   playersOnline: number;
   serverId: string;
   serverStatus: ServerStatus;
-  onActiveChange?: (active: boolean) => void;
+  onActiveChange?: (active: boolean, status?: string) => void;
 }) {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
@@ -112,7 +112,6 @@ export function GameUpdateCard({
       : state?.job?.status === "failed"
         ? state.job.operation === "check" ? t("gameUpdateCheckFailed") : gameUpdateFailureMessage(state.job.error, locale, t)
         : "";
-
   const openUpdate = () => {
     applyMutation.reset();
     setStartAfterUpdate(shouldResumeServer(serverStatus));
@@ -120,13 +119,13 @@ export function GameUpdateCard({
   };
 
   useEffect(() => {
-    onActiveChange?.(active);
+    onActiveChange?.(active, active ? status : undefined);
     return () => onActiveChange?.(false);
-  }, [active, onActiveChange]);
+  }, [active, onActiveChange, status]);
 
   return (
     <>
-      <Card className="p-4">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
@@ -159,7 +158,7 @@ export function GameUpdateCard({
           <p className="mt-4 rounded-md border border-panel-line bg-slate-950/35 p-3 text-xs leading-5 text-slate-400">{t("gameUpdateUnsupported")}</p>
         ) : (
           <>
-            <dl className="mt-4 divide-y divide-panel-line rounded-md border border-panel-line bg-slate-950/35 px-3">
+            <dl className="mt-5 grid gap-3 sm:grid-cols-3">
               <VersionRow label={t("gameUpdateCurrentBuild")} value={state?.installedBuildId || "—"} />
               <VersionRow label={t("gameUpdateLatestBuild")} value={state?.latestBuildId || "—"} />
               <VersionRow label={t("gameUpdateLastChecked")} value={formatCheckedAt(state?.checkedAt, locale, t("gameUpdateNeverChecked"))} />
@@ -191,14 +190,14 @@ export function GameUpdateCard({
               </div>
             ) : null}
 
-            <div className="mt-4">
+            <div className="mt-4 flex justify-end">
               {status === "available" && !active ? (
-                <Button className="w-full" variant="gold" onClick={openUpdate}>
+                <Button className="w-full sm:w-auto" variant="gold" onClick={openUpdate}>
                   {t("gameUpdateView")}
                 </Button>
               ) : (
                 <Button
-                  className="w-full"
+                  className="w-full sm:w-auto"
                   variant="secondary"
                   disabled={active || checkMutation.isPending}
                   onClick={() => {
@@ -280,9 +279,9 @@ export function GameUpdateCard({
 
 function VersionRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
+    <div className="min-w-0 rounded-md border border-panel-line bg-slate-950/35 p-3">
       <dt className="text-xs text-slate-400">{label}</dt>
-      <dd className="truncate text-right font-mono text-xs font-medium text-slate-200">{value}</dd>
+      <dd className="mt-1 truncate font-mono text-sm font-semibold text-slate-100" title={value}>{value}</dd>
     </div>
   );
 }

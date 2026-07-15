@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -66,7 +66,7 @@ import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/s
 import { cn } from "@/lib/utils";
 import type { Backup, GameServerResource, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
-type TabId = "overview" | "console" | "logs" | "config" | "worlds" | "backups" | "mods";
+type TabId = "overview" | "console" | "logs" | "players" | "version" | "config" | "worlds" | "backups" | "mods";
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
 
@@ -134,6 +134,11 @@ export default function ServerDetailPage() {
   const logReplayIndexRef = useRef(0);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [gameUpdateActive, setGameUpdateActive] = useState(false);
+  const [gameUpdateActivity, setGameUpdateActivity] = useState<"checking" | "updating" | null>(null);
+  const handleGameUpdateActiveChange = useCallback((active: boolean, updateStatus?: string) => {
+    setGameUpdateActive(active);
+    setGameUpdateActivity(active ? updateStatus === "checking" ? "checking" : "updating" : null);
+  }, []);
 
   const query = useQuery({ queryKey: ["game-server", id], queryFn: () => getGameServer(id), retry: false });
   const serverResource = query.data;
@@ -196,6 +201,7 @@ export default function ServerDetailPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
   const [shareIncludePassword, setShareIncludePassword] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [consoleError, setConsoleError] = useState("");
@@ -355,6 +361,7 @@ export default function ServerDetailPage() {
   const shareEnable = useMutation({
     mutationFn: () => enableServerShare(id, shareIncludePassword),
     onSuccess: async () => {
+      setShareDialogOpen(false);
       showSuccess(t("sharePageEnabled"));
       await client.invalidateQueries({ queryKey: ["server-share", id] });
     },
@@ -363,6 +370,7 @@ export default function ServerDetailPage() {
   const shareDisable = useMutation({
     mutationFn: () => disableServerShare(id),
     onSuccess: async () => {
+      setShareDialogOpen(false);
       showSuccess(t("sharePageDisabled"));
       await client.invalidateQueries({ queryKey: ["server-share", id] });
     },
@@ -586,11 +594,13 @@ export default function ServerDetailPage() {
     { id: "overview", label: t("tabOverview") },
     ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
     ...(!capabilities.consoleCommands ? [{ id: "logs" as const, label: t("tabLogs") }] : []),
+    ...(capabilities.playerList ? [{ id: "players" as const, label: t("tabPlayers") }] : []),
+    ...(serverResource?.providerKey === "palworld" ? [{ id: "version" as const, label: t("tabVersion") }] : []),
     { id: "config", label: t("tabConfig") },
     ...(visibleCapabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
     ...(visibleCapabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
     ...(capabilities.mods ? [{ id: "mods" as const, label: t("tabMods") }] : [])
-  ], [capabilities.consoleCommands, capabilities.mods, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
+  ], [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
   useEffect(() => {
     if (serverResource && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
@@ -623,6 +633,7 @@ export default function ServerDetailPage() {
   const joinAddress = joinInfoQuery.data?.address ?? serverJoinAddress(serverResource);
   const joinPassword = joinInfoQuery.data?.password ?? serverJoinPassword(serverResource);
   const share = shareQuery.data;
+  const savedShareIncludePassword = share?.includePassword ?? false;
   const sharePath = share?.sharePath ?? "";
   const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
@@ -637,6 +648,14 @@ export default function ServerDetailPage() {
       setCopied("");
       showError(error instanceof Error ? error.message : t("copyInviteFailed"));
     }
+  };
+  const openShareDialog = () => {
+    setShareIncludePassword(savedShareIncludePassword);
+    setShareDialogOpen(true);
+  };
+  const closeShareDialog = () => {
+    setShareIncludePassword(savedShareIncludePassword);
+    setShareDialogOpen(false);
   };
   const submitCommand = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -719,31 +738,86 @@ export default function ServerDetailPage() {
         disabled={gameUpdateActive}
         invite={invite}
         joinAddress={joinAddress}
+        joinPassword={joinPassword}
         joinPort={joinPort}
+        shareEnabled={Boolean(share?.enabled)}
         server={serverResource}
         onCopy={copy}
+        onOpenShare={openShareDialog}
       />
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="min-w-0 p-4">
-          <div className="mb-4 flex gap-2 overflow-x-auto border-b border-panel-line px-1 pb-4 pt-1" role="tablist" aria-label={serverResource.name}>
+      <JoinServerBar
+        copied={copied}
+        invite={invite}
+        joinAddress={joinAddress}
+        joinPassword={joinPassword}
+        joinPort={joinPort}
+        shareEnabled={Boolean(share?.enabled)}
+        onCopy={copy}
+        onOpenShare={openShareDialog}
+      />
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="min-w-0">
+          <div className="mb-4 flex gap-2 overflow-x-auto rounded-lg border border-panel-line bg-panel-card px-3 py-3" role="tablist" aria-label={serverResource.name}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                id={`server-detail-tab-${tab.id}`}
                 type="button"
                 role="tab"
+                aria-controls="server-detail-tabpanel"
                 aria-selected={activeTab === tab.id}
+                tabIndex={activeTab === tab.id ? 0 : -1}
                 className={cn(
                   "relative shrink-0 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
                   activeTab === tab.id && "border-panel-green/40 bg-panel-green/15 text-white shadow-[inset_0_0_0_1px_rgba(123,217,120,0.18)]"
                 )}
                 onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => {
+                  const currentIndex = tabs.findIndex((item) => item.id === tab.id);
+                  const nextIndex = event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : event.key === "ArrowRight"
+                        ? (currentIndex + 1) % tabs.length
+                        : event.key === "ArrowLeft"
+                          ? (currentIndex - 1 + tabs.length) % tabs.length
+                          : -1;
+                  if (nextIndex < 0) return;
+                  event.preventDefault();
+                  const nextTab = tabs[nextIndex];
+                  if (!nextTab) return;
+                  setActiveTab(nextTab.id);
+                  window.requestAnimationFrame(() => document.getElementById(`server-detail-tab-${nextTab.id}`)?.focus());
+                }}
               >
                 <span>{tab.label}</span>
               </button>
             ))}
           </div>
 
+          {gameUpdateActive && activeTab !== "version" ? (
+            <button
+              className="mb-4 flex w-full items-center justify-between gap-3 rounded-lg border border-panel-green/30 bg-panel-green/10 px-4 py-3 text-left text-sm text-panel-green transition hover:bg-panel-green/15 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+              type="button"
+              onClick={() => setActiveTab("version")}
+            >
+              <span className="flex min-w-0 items-center gap-2 font-medium">
+                <RotateCcw aria-hidden="true" className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
+                <span className="truncate">{gameUpdateActivity === "checking" ? t("gameUpdateStatusChecking") : t("gameUpdateStatusUpdating")}</span>
+              </span>
+              <span className="shrink-0 text-xs">{t("gameUpdateView")}</span>
+            </button>
+          ) : null}
+
+          <div
+            id="server-detail-tabpanel"
+            role="tabpanel"
+            aria-labelledby={`server-detail-tab-${activeTab}`}
+            tabIndex={0}
+          >
           {activeTab === "overview" && (
             <OverviewTab
               capabilities={visibleCapabilities}
@@ -793,31 +867,57 @@ export default function ServerDetailPage() {
               onTogglePause={() => setLogStreamPaused((current) => !current)}
             />
           )}
+          {activeTab === "players" && capabilities.playerList && (
+            <PlayersPanel serverId={serverResource.id} />
+          )}
+          {serverResource.providerKey === "palworld" ? (
+            <div className={activeTab === "version" ? "" : "hidden"}>
+              <GameUpdateCard
+                playersOnline={playersOnline}
+                serverId={serverResource.id}
+                serverStatus={status}
+                onActiveChange={handleGameUpdateActiveChange}
+              />
+            </div>
+          ) : null}
           {activeTab === "config" && (
-            <ConfigTab
-              provider={providerCatalog}
-              resource={serverResource}
-              saveError={configSave.error instanceof Error ? configSave.error.message : ""}
-              savePending={configSave.isPending}
-              saveSuccess={configSaved}
-              restartPending={configRestart.isPending}
-              onRestart={() => setPendingConfigRestart(true)}
-              onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
-            />
+            <div className="space-y-4">
+              <ResourceLimitsCard
+                cpuPercent={statsQuery.data?.cpuPercent}
+                memoryMb={statsQuery.data?.memoryMb}
+                resource={serverResource}
+                restartPending={configRestart.isPending}
+                onEdit={() => setResourceDialogOpen(true)}
+                onRestart={() => setPendingConfigRestart(true)}
+              />
+              <ConfigTab
+                provider={providerCatalog}
+                resource={serverResource}
+                saveError={configSave.error instanceof Error ? configSave.error.message : ""}
+                savePending={configSave.isPending}
+                saveSuccess={configSaved}
+                restartPending={configRestart.isPending}
+                onRestart={() => setPendingConfigRestart(true)}
+                onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
+              />
+            </div>
           )}
           {activeTab === "worlds" && visibleCapabilities.saveSnapshots && (
-            <WorldsTab
-              isError={worldsQuery.isError}
-              isLoading={worldsQuery.isLoading}
-              items={serverWorlds}
-              deleting={worldDelete.isPending}
-              currentServerId={serverResource.id}
-              downloadingId={downloadingResourceId}
-              snapshotting={worldSnapshotCreate.isPending}
-              onDelete={setPendingWorldDelete}
-              onDownload={(world) => void downloadWorld(world)}
-              onCreateSnapshot={() => setPendingWorldSnapshot(true)}
-            />
+            <div className="space-y-4">
+              <WorldTemplatePanel resource={serverResource} />
+              <WorldsTab
+                isError={worldsQuery.isError}
+                isLoading={worldsQuery.isLoading}
+                items={serverWorlds}
+                deleting={worldDelete.isPending}
+                currentServerId={serverResource.id}
+                downloadingId={downloadingResourceId}
+                snapshotting={worldSnapshotCreate.isPending}
+                onDelete={setPendingWorldDelete}
+                onDownload={(world) => void downloadWorld(world)}
+                onCreateSnapshot={() => setPendingWorldSnapshot(true)}
+              />
+            </div>
           )}
           {activeTab === "backups" && visibleCapabilities.backups && (
             <BackupsTab
@@ -859,96 +959,47 @@ export default function ServerDetailPage() {
               onToggle={(mod) => setPendingModToggle({ mod, enabled: !mod.enabled })}
             />
           )}
-        </Card>
+          </div>
+        </div>
 
-        <div className="flex flex-col gap-4">
-          {serverResource.providerKey === "palworld" && (
-            <GameUpdateCard
-              playersOnline={playersOnline}
-              serverId={serverResource.id}
-              serverStatus={status}
-              onActiveChange={setGameUpdateActive}
-            />
-          )}
-          <Card className="p-4">
-            <h2 className="font-semibold">{t("joinServer")}</h2>
-            <CopyRow label={t("ipAddress")} value={joinAddress} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <CopyRow label={t("port")} value={String(joinPort)} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <CopyRow label={t("password")} value={joinPassword || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
-            <Button className="mt-4 w-full" variant="secondary" onClick={() => void copy("Invite", invite)}>
-              <Copy aria-hidden="true" />
-              {copied === "Invite" ? t("copied") : t("copyInviteText")}
-            </Button>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
-                <Share2 aria-hidden="true" className="size-4" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="font-semibold">{t("shareServer")}</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{t("shareServerDescription")}</p>
-              </div>
-            </div>
-            <label className="mt-4 flex items-center gap-2 rounded-md border border-panel-line bg-slate-950/35 px-3 py-2 text-sm text-slate-300">
-              <input
-                className="size-4 accent-panel-green"
-                type="checkbox"
-                checked={shareIncludePassword}
-                onChange={(event) => setShareIncludePassword(event.target.checked)}
-              />
-              {t("includePasswordInShare")}
-            </label>
-            <div className="mt-3 grid gap-2">
-              <Button className="w-full" variant={share?.enabled ? "secondary" : "primary"} onClick={() => shareEnable.mutate()} disabled={shareEnable.isPending || shareQuery.isLoading}>
-                {shareEnable.isPending ? t("saving") : share?.enabled ? t("saveButton") : t("enableSharePage")}
-              </Button>
-              {share?.enabled && shareUrl && (
-                <>
-                  <Button className="w-full" variant="secondary" onClick={() => void copy("ShareLink", shareUrl)}>
-                    <Copy aria-hidden="true" />
-                    {copied === "ShareLink" ? t("shareLinkCopied") : t("copyShareLink")}
-                  </Button>
-                  <Link className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-950/45 px-3 text-sm font-medium text-slate-200 transition hover:border-panel-green/40 hover:text-panel-green" href={sharePath} target="_blank">
-                    <ExternalLink aria-hidden="true" className="size-4" />
-                    {t("openSharePage")}
-                  </Link>
-                  <Button className="w-full" variant="danger" onClick={() => shareDisable.mutate()} disabled={shareDisable.isPending}>
-                    {shareDisable.isPending ? t("saving") : t("disableSharePage")}
-                  </Button>
-                </>
-              )}
-            </div>
-          </Card>
-          {capabilities.playerList && <PlayersPanel serverId={serverResource.id} />}
-          <ResourceLimitsCard
+        <aside className="hidden space-y-4 xl:sticky xl:top-24 xl:block xl:self-start" data-testid="server-detail-side-panel">
+          <JoinServerPanel
+            copied={copied}
+            invite={invite}
+            joinAddress={joinAddress}
+            joinPassword={joinPassword}
+            joinPort={joinPort}
+            onCopy={copy}
+          />
+          <ShareServerPanel
+            enabled={Boolean(share?.enabled)}
+            onOpen={openShareDialog}
+          />
+          <RuntimeMonitorCard
             cpuPercent={statsQuery.data?.cpuPercent}
             memoryMb={statsQuery.data?.memoryMb}
             resource={serverResource}
-            restartPending={configRestart.isPending}
-            onEdit={() => setResourceDialogOpen(true)}
-            onRestart={() => setPendingConfigRestart(true)}
           />
-          {visibleCapabilities.saveSnapshots && (
-            <Card className="p-4">
-              <h2 className="font-semibold">{t("worldTemplate")}</h2>
-              {serverResource.spec.sourceWorldId ? (
-                <Link
-                  href={`/worlds/${serverResource.spec.sourceWorldId}`}
-                  className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-                >
-                  <p className="truncate text-sm font-medium text-slate-100">{serverResource.spec.sourceWorldName || t("worldTemplate")}</p>
-                  <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
-                </Link>
-              ) : (
-                <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
-                  <p className="truncate text-sm font-medium text-slate-500">{t("noWorldTemplate")}</p>
-                </div>
-              )}
-            </Card>
-          )}
-        </div>
+        </aside>
       </div>
+
+      <ShareServerDialog
+        copied={copied}
+        open={shareDialogOpen}
+        shareDisabling={shareDisable.isPending}
+        shareEnabled={Boolean(share?.enabled)}
+        shareIncludePassword={shareIncludePassword}
+        savedIncludePassword={savedShareIncludePassword}
+        shareLoading={shareQuery.isLoading}
+        sharePath={sharePath}
+        shareSaving={shareEnable.isPending}
+        shareUrl={shareUrl}
+        onCancel={closeShareDialog}
+        onCopy={copy}
+        onDisableShare={() => shareDisable.mutate()}
+        onEnableShare={() => shareEnable.mutate()}
+        onShareIncludePasswordChange={setShareIncludePassword}
+      />
 
 
       <ConfirmDialog
@@ -1121,13 +1172,20 @@ function OverviewTab({
     { label: t("metricTitleUptime"), value: formatServerUptime(resource, t) },
     ...(hostPort > 0 && hostPort !== internalPort ? [{ label: t("hostPort"), value: String(hostPort) }] : [])
   ];
+  const summaryItems: Array<{ id: TabId; icon: ReactNode; label: string; value: string }> = [
+    ...(capabilities.saveSnapshots ? [{ id: "worlds" as const, icon: <FileText aria-hidden="true" />, label: t("tabWorlds"), value: String(worldCount) }] : []),
+    ...(capabilities.backups ? [{ id: "backups" as const, icon: <Archive aria-hidden="true" />, label: t("tabBackups"), value: String(backupCount) }] : []),
+    ...(capabilities.mods ? [{ id: "mods" as const, icon: <Package aria-hidden="true" />, label: t("tabMods"), value: String(modCount) }] : [])
+  ];
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-3">
-        {capabilities.saveSnapshots && <SummaryButton icon={<FileText aria-hidden="true" />} label={t("tabWorlds")} value={String(worldCount)} onClick={() => onSelectTab("worlds")} />}
-        {capabilities.backups && <SummaryButton icon={<Archive aria-hidden="true" />} label={t("tabBackups")} value={String(backupCount)} onClick={() => onSelectTab("backups")} />}
-        {capabilities.mods && <SummaryButton icon={<Package aria-hidden="true" />} label={t("tabMods")} value={String(modCount)} onClick={() => onSelectTab("mods")} />}
-      </div>
+      {summaryItems.length > 1 ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          {summaryItems.map((item) => (
+            <SummaryButton key={item.id} icon={item.icon} label={item.label} value={item.value} onClick={() => onSelectTab(item.id)} />
+          ))}
+        </div>
+      ) : null}
       <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
         <h2 className="font-semibold">{t("serverInfo")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1199,7 +1257,7 @@ function ResourceLimitsCard({
           {t("adjustResources")}
         </Button>
       </div>
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid gap-2 md:grid-cols-2">
         <ResourceMetric
           icon={<Cpu aria-hidden="true" className="size-4" />}
           label={t("cpuLimit")}
@@ -1223,6 +1281,93 @@ function ResourceLimitsCard({
         </div>
       )}
     </Card>
+  );
+}
+
+function RuntimeMonitorCard({
+  cpuPercent,
+  memoryMb,
+  resource
+}: {
+  cpuPercent?: number;
+  memoryMb?: number;
+  resource: GameServerResource;
+}) {
+  const { t } = useI18n();
+  const running = gameServerStatus(resource) === "running";
+  const cpuLimitCores = resource.spec.resources?.cpuLimitCores ?? 0;
+  const memoryLimitMb = resource.spec.resources?.memoryLimitMb ?? 0;
+  const memoryPercent = running && memoryMb !== undefined && memoryLimitMb > 0
+    ? memoryMb / memoryLimitMb * 100
+    : undefined;
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">{t("runtimeOverview")}</h2>
+          <p className="mt-1 text-xs text-slate-400">{t("runtimeOverviewHint")}</p>
+        </div>
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-panel-green/30 bg-panel-green/10 text-panel-green">
+          <Activity aria-hidden="true" className="size-4" />
+        </span>
+      </div>
+      <div className="mt-4 space-y-2.5">
+        <RuntimeMonitorMetric
+          icon={<Cpu aria-hidden="true" className="size-4" />}
+          label={t("cpu")}
+          value={running && cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : t("notRunning")}
+          hint={formatCpuLimitLabel(cpuLimitCores, t)}
+          percent={running && cpuPercent !== undefined ? cpuPercent : undefined}
+        />
+        <RuntimeMonitorMetric
+          icon={<MemoryStick aria-hidden="true" className="size-4" />}
+          label={t("memory")}
+          value={running && memoryMb !== undefined ? `${memoryMb} MB` : t("notRunning")}
+          hint={formatMemoryLimitLabel(memoryLimitMb, t)}
+          percent={memoryPercent}
+          tone="neutral"
+        />
+      </div>
+    </Card>
+  );
+}
+
+function RuntimeMonitorMetric({
+  hint,
+  icon,
+  label,
+  percent,
+  tone = "green",
+  value
+}: {
+  hint: string;
+  icon: ReactNode;
+  label: string;
+  percent?: number;
+  tone?: "green" | "neutral";
+  value: string;
+}) {
+  const accentClass = tone === "neutral" ? "text-slate-300" : "text-panel-green";
+  const barClass = tone === "neutral" ? "bg-slate-400" : "bg-panel-green";
+  return (
+    <div className="rounded-md border border-panel-line bg-slate-950/35 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={accentClass}>{icon}</span>
+          <span className="text-xs text-slate-400">{label}</span>
+        </div>
+        <div className="min-w-0 text-right">
+          <p className="truncate font-mono text-sm font-semibold text-slate-100">{value}</p>
+          <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p>
+        </div>
+      </div>
+      {percent !== undefined ? (
+        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+          <div className={cn("h-full rounded-full", barClass)} style={{ width: `${Math.max(3, Math.min(percent, 100))}%` }} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -2954,6 +3099,245 @@ function ActionButton({
   );
 }
 
+function JoinServerPanel({
+  copied,
+  invite,
+  joinAddress,
+  joinPassword,
+  joinPort,
+  onCopy
+}: {
+  copied: string;
+  invite: string;
+  joinAddress: string;
+  joinPassword: string;
+  joinPort: number;
+  onCopy: (label: string, value: string) => void | Promise<void>;
+}) {
+  const { t } = useI18n();
+  const endpoint = `${joinAddress}:${joinPort}`;
+  return (
+    <Card className="p-4">
+      <h2 className="font-semibold">{t("joinServer")}</h2>
+      <CopyRow className="mt-3" label={t("serverAddress")} value={endpoint} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
+      <CopyRow className="mt-2" label={t("password")} value={joinPassword || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
+      <div className="mt-3">
+        <Button className="w-full px-2 text-xs" variant="secondary" onClick={() => void onCopy("Invite", invite)}>
+          <Copy aria-hidden="true" />
+          {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function ShareServerPanel({ enabled, onOpen }: { enabled: boolean; onOpen: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Card className="p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
+          <Share2 aria-hidden="true" className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">{t("shareServer")}</h2>
+            <span className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium",
+              enabled
+                ? "border-panel-green/30 bg-panel-green/10 text-panel-green"
+                : "border-panel-line bg-slate-950/45 text-slate-400"
+            )}>
+              <span className="size-1.5 rounded-full bg-current" />
+              {enabled ? t("sharePageEnabled") : t("sharePageDisabled")}
+            </span>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-slate-400">{t("shareServerDescription")}</p>
+        </div>
+      </div>
+      <Button className="mt-3 w-full text-xs" variant="secondary" onClick={onOpen}>
+        <Share2 aria-hidden="true" className="size-3.5" />
+        {t("manageShareServer")}
+      </Button>
+    </Card>
+  );
+}
+
+function JoinServerBar({
+  copied,
+  invite,
+  joinAddress,
+  joinPassword,
+  joinPort,
+  shareEnabled,
+  onCopy,
+  onOpenShare
+}: {
+  copied: string;
+  invite: string;
+  joinAddress: string;
+  joinPassword: string;
+  joinPort: number;
+  shareEnabled: boolean;
+  onCopy: (label: string, value: string) => void | Promise<void>;
+  onOpenShare: () => void;
+}) {
+  const { t } = useI18n();
+  const endpoint = `${joinAddress}:${joinPort}`;
+  return (
+    <Card className="mt-4 hidden min-h-16 flex-wrap items-center gap-3 p-3 md:flex xl:hidden">
+      <div className="flex min-w-0 items-center gap-3 sm:min-w-48">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
+          <Plug aria-hidden="true" className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs text-slate-400">{t("joinServer")}</p>
+          <p className="truncate text-sm font-semibold text-slate-100">{endpoint}</p>
+        </div>
+      </div>
+      <div className="min-w-32">
+        <p className="text-xs text-slate-400">{t("password")}</p>
+        <p className="truncate text-sm text-slate-200">{joinPassword || t("none")}</p>
+      </div>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        <Button className="h-9 px-2.5 text-xs" variant="secondary" onClick={() => void onCopy(t("serverAddress"), endpoint)}>
+          <Copy aria-hidden="true" className="size-3.5" />
+          {copied === t("serverAddress") ? t("copied") : t("copy")}
+        </Button>
+        <Button className="h-9 px-2.5 text-xs" variant="secondary" onClick={() => void onCopy("Invite", invite)}>
+          <Copy aria-hidden="true" className="size-3.5" />
+          {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
+        </Button>
+        <Button
+          aria-label={`${t("shareServer")} · ${shareEnabled ? t("sharePageEnabled") : t("sharePageDisabled")}`}
+          aria-pressed={shareEnabled}
+          className="relative h-9 px-2.5 text-xs"
+          variant="secondary"
+          onClick={onOpenShare}
+        >
+          <Share2 aria-hidden="true" className="size-3.5" />
+          {t("shareServer")}
+          {shareEnabled ? <span aria-label={t("sharePageEnabled")} className="absolute right-1 top-1 size-1.5 rounded-full bg-panel-green" /> : null}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function ShareServerDialog({
+  copied,
+  open,
+  shareDisabling,
+  shareEnabled,
+  shareIncludePassword,
+  shareLoading,
+  sharePath,
+  shareSaving,
+  shareUrl,
+  savedIncludePassword,
+  onCancel,
+  onCopy,
+  onDisableShare,
+  onEnableShare,
+  onShareIncludePasswordChange
+}: {
+  copied: string;
+  open: boolean;
+  shareDisabling: boolean;
+  shareEnabled: boolean;
+  shareIncludePassword: boolean;
+  shareLoading: boolean;
+  sharePath: string;
+  shareSaving: boolean;
+  shareUrl: string;
+  savedIncludePassword: boolean;
+  onCancel: () => void;
+  onCopy: (label: string, value: string) => void | Promise<void>;
+  onDisableShare: () => void;
+  onEnableShare: () => void;
+  onShareIncludePasswordChange: (value: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const busy = shareSaving || shareDisabling;
+  const shareDraftDirty = shareIncludePassword !== savedIncludePassword;
+  return (
+    <ConfirmDialog
+      open={open}
+      eyebrow={shareEnabled ? t("sharePageEnabled") : t("sharePageDisabled")}
+      eyebrowTone={shareEnabled ? "green" : "neutral"}
+      title={t("shareServer")}
+      description={t("shareServerDescription")}
+      detail={(
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 rounded-md border border-panel-line bg-slate-900/45 px-3 py-2.5 text-sm text-slate-300">
+            <input
+              className="size-4 accent-panel-green"
+              type="checkbox"
+              checked={shareIncludePassword}
+              onChange={(event) => onShareIncludePasswordChange(event.target.checked)}
+            />
+            {t("includePasswordInShare")}
+          </label>
+          {shareEnabled && shareUrl ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button variant="secondary" disabled={busy || shareDraftDirty} onClick={() => void onCopy("ShareLink", shareUrl)}>
+                <Copy aria-hidden="true" />
+                {copied === "ShareLink" ? t("shareLinkCopied") : t("copyShareLink")}
+              </Button>
+              <Link
+                aria-disabled={busy || shareDraftDirty}
+                className={cn(
+                  "inline-flex h-10 items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 text-sm font-medium text-slate-200 transition hover:border-panel-green/40 hover:text-panel-green",
+                  (busy || shareDraftDirty) && "pointer-events-none opacity-50"
+                )}
+                href={sharePath}
+                tabIndex={busy || shareDraftDirty ? -1 : undefined}
+                target="_blank"
+              >
+                <ExternalLink aria-hidden="true" className="size-4" />
+                {t("openSharePage")}
+              </Link>
+              <Button className="sm:col-span-2" variant="danger" onClick={onDisableShare} disabled={busy}>
+                {shareDisabling ? t("saving") : t("disableSharePage")}
+              </Button>
+            </div>
+          ) : null}
+          {shareDraftDirty ? <p className="text-xs leading-5 text-panel-gold">{t("shareSaveBeforeOpen")}</p> : null}
+        </div>
+      )}
+      cancelLabel={t("cancel")}
+      confirmLabel={shareSaving ? t("saving") : shareEnabled ? t("saveButton") : t("enableSharePage")}
+      confirmVariant="primary"
+      busy={busy}
+      confirmDisabled={shareLoading}
+      onCancel={onCancel}
+      onConfirm={onEnableShare}
+    />
+  );
+}
+
+function WorldTemplatePanel({ resource }: { resource: GameServerResource }) {
+  const { t } = useI18n();
+  return (
+    <Card className="p-4">
+      <h2 className="font-semibold">{t("worldTemplate")}</h2>
+      {resource.spec.sourceWorldId ? (
+        <Link
+          href={`/worlds/${resource.spec.sourceWorldId}`}
+          className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+        >
+          <p className="truncate text-sm font-medium text-slate-100">{resource.spec.sourceWorldName || t("worldTemplate")}</p>
+          <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
+        </Link>
+      ) : (
+        <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
+          <p className="truncate text-sm font-medium text-slate-500">{t("noWorldTemplate")}</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label: string; onClick: () => void; value: string }) {
   return (
     <button
@@ -2975,16 +3359,22 @@ function MobileServerControls({
   disabled,
   invite,
   joinAddress,
+  joinPassword,
   joinPort,
   onCopy,
+  onOpenShare,
+  shareEnabled,
   server
 }: {
   copied: string;
   disabled: boolean;
   invite: string;
   joinAddress: string;
+  joinPassword: string;
   joinPort: number;
   onCopy: (label: string, value: string) => void;
+  onOpenShare: () => void;
+  shareEnabled: boolean;
   server: GameServerResource;
 }) {
   const { t } = useI18n();
@@ -2993,20 +3383,42 @@ function MobileServerControls({
     <Card className="mt-4 p-3 md:hidden">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs text-slate-500">{t("joinServer")}</p>
+          <p className="text-xs text-slate-400">{t("joinServer")}</p>
           <p className="mt-1 truncate text-sm font-medium text-slate-100">{joinValue}</p>
         </div>
-        <Button className="h-10 shrink-0 px-3" variant="secondary" onClick={() => onCopy("Invite", invite)}>
-          <Copy aria-hidden="true" />
-          {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button className="h-10 px-3" variant="secondary" onClick={() => onCopy("Invite", invite)}>
+            <Copy aria-hidden="true" />
+            {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
+          </Button>
+          <Button
+            aria-label={`${t("shareServer")} · ${shareEnabled ? t("sharePageEnabled") : t("sharePageDisabled")}`}
+            aria-pressed={shareEnabled}
+            className="relative size-10 p-0"
+            variant="secondary"
+            onClick={onOpenShare}
+          >
+            <Share2 aria-hidden="true" className="size-4" />
+            {shareEnabled ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-panel-green" /> : null}
+          </Button>
+        </div>
       </div>
+      <CopyRow
+        className="mt-3"
+        copied={copied}
+        copiedLabel={t("copied")}
+        copyLabel={t("copy")}
+        label={t("password")}
+        value={joinPassword || t("none")}
+        onCopy={onCopy}
+      />
       <ServerActions className="mt-3" compact disabled={disabled} server={server} showDelete={false} showInvite={false} />
     </Card>
   );
 }
 
 function CopyRow({
+  className,
   copied,
   copiedLabel,
   copyLabel,
@@ -3014,6 +3426,7 @@ function CopyRow({
   onCopy,
   value
 }: {
+  className?: string;
   copied: string;
   copiedLabel: string;
   copyLabel: string;
@@ -3022,12 +3435,12 @@ function CopyRow({
   value: string;
 }) {
   return (
-    <div className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
+    <div className={cn("flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2", className)}>
       <div className="min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-xs text-slate-400">{label}</p>
         <p className="truncate text-sm">{value}</p>
       </div>
-      <Button variant="secondary" onClick={() => onCopy(label, value)}>
+      <Button className="h-8 px-2 text-xs" variant="secondary" onClick={() => onCopy(label, value)}>
         {copied === label ? copiedLabel : copyLabel}
       </Button>
     </div>

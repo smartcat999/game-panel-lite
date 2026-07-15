@@ -3,10 +3,12 @@
 import { X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 export function ConfirmDialog({
   open,
   eyebrow,
+  eyebrowTone = "gold",
   title,
   description,
   detail,
@@ -20,12 +22,13 @@ export function ConfirmDialog({
 }: {
   open: boolean;
   eyebrow: string;
+  eyebrowTone?: "gold" | "green" | "neutral";
   title: string;
   description: string;
   detail?: ReactNode;
   cancelLabel: string;
   confirmLabel: string;
-  confirmVariant?: "danger" | "gold";
+  confirmVariant?: "primary" | "danger" | "gold";
   busy?: boolean;
   confirmDisabled?: boolean;
   onCancel: () => void;
@@ -121,7 +124,10 @@ export function ConfirmDialog({
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-panel-gold">{eyebrow}</p>
+            <p className={cn(
+              "text-sm font-medium",
+              eyebrowTone === "green" ? "text-panel-green" : eyebrowTone === "neutral" ? "text-slate-400" : "text-panel-gold"
+            )}>{eyebrow}</p>
             <h2 className="mt-2 text-lg font-semibold text-white" id="confirm-dialog-title">{title}</h2>
           </div>
           <button
