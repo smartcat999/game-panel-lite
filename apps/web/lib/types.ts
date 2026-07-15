@@ -65,6 +65,49 @@ export type ServerPlayerListResponse = {
   players: Array<{ name?: string }>;
 };
 
+export type GameUpdateJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type GameUpdateJobStage =
+  | "queued"
+  | "preflight"
+  | "backing_up"
+  | "stopping"
+  | "refreshing_metadata"
+  | "validating"
+  | "downloading"
+  | "installing"
+  | "starting"
+  | "health_check"
+  | "completed";
+
+export type GameUpdateJob = {
+  id: string;
+  instanceId: string;
+  providerKey: ProviderKey;
+  operation: "check" | "apply";
+  status: GameUpdateJobStatus;
+  stage: GameUpdateJobStage;
+  progress: number;
+  installedBuildId?: string;
+  latestBuildId?: string;
+  error?: string;
+  startAfterUpdate: boolean;
+  wasRunning: boolean;
+  createdAt: string;
+  updatedAt: string;
+  checkedAt?: string;
+  completedAt?: string;
+};
+
+export type GameUpdateState = {
+  supported: boolean;
+  status: "unknown" | "checking" | "up_to_date" | "available" | "updating" | "failed";
+  installedBuildId?: string;
+  latestBuildId?: string;
+  checkedAt?: string;
+  job?: GameUpdateJob;
+};
+
 export type ServerWhitelistResponse = {
   supported: boolean;
   running: boolean;
@@ -205,7 +248,7 @@ export type Backup = {
   providerKey?: ProviderKey;
   server: string;
   world: string;
-  type: "Auto" | "Manual";
+  type: "Auto" | "Manual" | "Pre-update";
   size: string;
   sizeBytes: number;
   created: string;

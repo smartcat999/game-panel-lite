@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { GameUpdateCard } from "@/components/game-update-card";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
@@ -132,6 +133,7 @@ export default function ServerDetailPage() {
   const logServerIdRef = useRef("");
   const logReplayIndexRef = useRef(0);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [gameUpdateActive, setGameUpdateActive] = useState(false);
 
   const query = useQuery({ queryKey: ["game-server", id], queryFn: () => getGameServer(id), retry: false });
   const serverResource = query.data;
@@ -709,11 +711,12 @@ export default function ServerDetailPage() {
           </div>
         </div>
         <div className="hidden md:block">
-          <ServerActions server={serverResource} showInvite={false} />
+          <ServerActions disabled={gameUpdateActive} server={serverResource} showInvite={false} />
         </div>
       </div>
       <MobileServerControls
         copied={copied}
+        disabled={gameUpdateActive}
         invite={invite}
         joinAddress={joinAddress}
         joinPort={joinPort}
@@ -859,6 +862,14 @@ export default function ServerDetailPage() {
         </Card>
 
         <div className="flex flex-col gap-4">
+          {serverResource.providerKey === "palworld" && (
+            <GameUpdateCard
+              playersOnline={playersOnline}
+              serverId={serverResource.id}
+              serverStatus={status}
+              onActiveChange={setGameUpdateActive}
+            />
+          )}
           <Card className="p-4">
             <h2 className="font-semibold">{t("joinServer")}</h2>
             <CopyRow label={t("ipAddress")} value={joinAddress} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={copy} />
@@ -2293,7 +2304,7 @@ function BackupsTab({
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <Link href={`/backups/${backup.id}`} className="truncate font-medium text-white transition hover:text-panel-green">{backup.name}</Link>
                     <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
-                      {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
+                      {backup.type === "Auto" ? t("typeAuto") : backup.type === "Pre-update" ? t("typePreUpdate") : t("typeManual")}
                     </span>
                   </div>
                   <p className="mt-1 truncate text-sm text-slate-500">{backup.world}</p>
@@ -2961,6 +2972,7 @@ function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label
 
 function MobileServerControls({
   copied,
+  disabled,
   invite,
   joinAddress,
   joinPort,
@@ -2968,6 +2980,7 @@ function MobileServerControls({
   server
 }: {
   copied: string;
+  disabled: boolean;
   invite: string;
   joinAddress: string;
   joinPort: number;
@@ -2988,7 +3001,7 @@ function MobileServerControls({
           {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
         </Button>
       </div>
-      <ServerActions className="mt-3" compact server={server} showDelete={false} showInvite={false} />
+      <ServerActions className="mt-3" compact disabled={disabled} server={server} showDelete={false} showInvite={false} />
     </Card>
   );
 }

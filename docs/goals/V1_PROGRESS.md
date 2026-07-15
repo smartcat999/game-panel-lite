@@ -1,5 +1,15 @@
 # V1 Progress
 
+## 2026-07-15
+
+- Added persistent asynchronous Palworld update checks and installs with explicit task status, stage, progress, build IDs, and failure details.
+- Added pre-update save backups, player-online protection, atomic per-server mutation locking, optional restart-after-update, and safe restoration of a previously running server when failure occurs before SteamCMD modifies game files.
+- Added global exclusion for heavy update/image tasks, 512 MiB check and 1536 MiB install helper limits, disk and managed-memory headroom checks, and a longer API shutdown grace period.
+- Added restart-safe recovery: updater containers are labeled by task, canceled tasks remain active, interrupted installs are cleaned up and revalidated before any optional restart, and stale manifests plus `PalServer.sh` permissions are repaired on retry/failure paths.
+- Added the server-detail update card for checking availability, confirming an install, and following background progress without blocking the page.
+- Documented the game update state, check, and apply endpoints in the OpenAPI contract.
+- Verified the OpenAPI YAML and production Compose merge, full Go tests and vet, race tests for the update-critical backend packages, 79 frontend tests, frontend lint/typecheck, and the production frontend build.
+
 ## 2026-07-14
 
 - Refined the public-host settings form with compact, change-aware save and discard actions plus accessible success/error feedback.

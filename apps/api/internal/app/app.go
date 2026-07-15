@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -25,9 +26,12 @@ import (
 )
 
 type App struct {
-	router http.Handler
-	ctx    context.Context
-	cancel context.CancelFunc
+	router    http.Handler
+	ctx       context.Context
+	cancel    context.CancelFunc
+	handler   *apihttp.Handler
+	logger    *slog.Logger
+	closeOnce sync.Once
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
@@ -82,7 +86,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	handler.Register(router)
-	return &App{router: router, ctx: appCtx, cancel: cancel}, nil
+	return &App{router: router, ctx: appCtx, cancel: cancel, handler: handler, logger: logger}, nil
 }
 
 func (a *App) Routes() http.Handler {
@@ -97,7 +101,16 @@ func (a *App) Context() context.Context {
 }
 
 func (a *App) Close() {
-	if a.cancel != nil {
-		a.cancel()
-	}
+	a.closeOnce.Do(func() {
+		if a.cancel != nil {
+			a.cancel()
+		}
+		if a.handler != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			if err := a.handler.WaitForGameUpdates(ctx); err != nil && a.logger != nil {
+				a.logger.Warn("timed out waiting for game update workers", "error", err)
+			}
+		}
+	})
 }

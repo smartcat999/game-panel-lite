@@ -20,12 +20,14 @@ export function ServerActions({
   showInvite = true,
   showDelete = true,
   compact = false,
+  disabled = false,
   className
 }: {
   server: GameServerResource;
   showInvite?: boolean;
   showDelete?: boolean;
   compact?: boolean;
+  disabled?: boolean;
   className?: string;
 }) {
   const client = useQueryClient();
@@ -40,7 +42,7 @@ export function ServerActions({
   const noticeTimerRef = useRef<number | null>(null);
   const status = gameServerStatus(server);
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
-  const controlsDisabled = Boolean(busyAction) || lifecycleBusy;
+  const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy;
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
   const successLabel = (action: "start" | "stop" | "restart" | "delete") =>

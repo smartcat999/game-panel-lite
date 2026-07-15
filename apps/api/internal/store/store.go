@@ -34,7 +34,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
@@ -127,6 +127,56 @@ func (s *Store) getStoredGameServer(ctx context.Context, id string) (domain.Game
 
 func (s *Store) DeleteGameServer(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&domain.GameServer{}, "id = ?", id).Error
+}
+
+func (s *Store) CreateGameUpdateJob(ctx context.Context, job *domain.GameUpdateJob) error {
+	return s.db.WithContext(ctx).Create(job).Error
+}
+
+func (s *Store) SaveGameUpdateJob(ctx context.Context, job *domain.GameUpdateJob) error {
+	return s.db.WithContext(ctx).Save(job).Error
+}
+
+func (s *Store) GetGameUpdateJobByID(ctx context.Context, id string) (domain.GameUpdateJob, error) {
+	var job domain.GameUpdateJob
+	err := s.db.WithContext(ctx).First(&job, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return job, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) GetLatestGameUpdateJobByInstance(ctx context.Context, instanceID string) (domain.GameUpdateJob, error) {
+	var job domain.GameUpdateJob
+	err := s.db.WithContext(ctx).
+		Where("instance_id = ?", instanceID).
+		Order("created_at desc, rowid desc").
+		First(&job).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return job, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) GetActiveGameUpdateJobByInstance(ctx context.Context, instanceID string) (domain.GameUpdateJob, error) {
+	var job domain.GameUpdateJob
+	err := s.db.WithContext(ctx).
+		Where("instance_id = ? AND status IN ?", instanceID, []domain.GameUpdateJobStatus{domain.GameUpdateJobQueued, domain.GameUpdateJobRunning}).
+		Order("created_at desc, rowid desc").
+		First(&job).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return job, ErrNotFound
+	}
+	return job, err
+}
+
+func (s *Store) ListActiveGameUpdateJobs(ctx context.Context) ([]domain.GameUpdateJob, error) {
+	var jobs []domain.GameUpdateJob
+	err := s.db.WithContext(ctx).
+		Where("status IN ?", []domain.GameUpdateJobStatus{domain.GameUpdateJobQueued, domain.GameUpdateJobRunning}).
+		Order("created_at asc, rowid asc").
+		Find(&jobs).Error
+	return jobs, err
 }
 
 func hydratePresetConfigPayload(preset *domain.ConfigPreset) {

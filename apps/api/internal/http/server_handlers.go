@@ -45,9 +45,22 @@ func (h *Handler) getServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	h.gameUpdateJobsMu.Lock()
+	defer h.gameUpdateJobsMu.Unlock()
+	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
+		writeError(w, http.StatusConflict, "a game update or runtime image task is in progress")
+		return
+	}
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	var payload struct {
@@ -112,6 +125,12 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
+	h.gameUpdateJobsMu.Lock()
+	defer h.gameUpdateJobsMu.Unlock()
+	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
+		writeError(w, http.StatusConflict, "a game update task is in progress")
+		return
+	}
 	var payload struct {
 		Name        string               `json:"name"`
 		ProviderKey domain.ProviderKey   `json:"providerKey"`
@@ -254,7 +273,16 @@ func withDSTWorkshopIDs(config map[string]any, workshopIDs []string) map[string]
 }
 
 func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
-	server, err := serverctrl.NewService(h.store).RequestStart(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	h.gameUpdateJobsMu.Lock()
+	defer h.gameUpdateJobsMu.Unlock()
+	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
+		writeError(w, http.StatusConflict, "server game update is in progress")
+		return
+	}
+	server, err := serverctrl.NewService(h.store).RequestStart(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -264,7 +292,14 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
-	server, err := serverctrl.NewService(h.store).RequestStop(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	if h.gameUpdateLocked(r.Context(), id) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
+		return
+	}
+	server, err := serverctrl.NewService(h.store).RequestStop(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -274,7 +309,16 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
-	server, err := serverctrl.NewService(h.store).RequestRestart(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	h.gameUpdateJobsMu.Lock()
+	defer h.gameUpdateJobsMu.Unlock()
+	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
+		writeError(w, http.StatusConflict, "server game update is in progress")
+		return
+	}
+	server, err := serverctrl.NewService(h.store).RequestRestart(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -284,9 +328,16 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	var payload struct {
@@ -322,7 +373,14 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
-	server, err := serverctrl.NewService(h.store).RequestDelete(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	if h.gameUpdateLocked(r.Context(), id) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
+		return
+	}
+	server, err := serverctrl.NewService(h.store).RequestDelete(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return

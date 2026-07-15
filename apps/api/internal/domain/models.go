@@ -8,6 +8,12 @@ type GameKey string
 
 type ServerStatus string
 
+type GameUpdateJobStatus string
+
+type GameUpdateJobStage string
+
+type GameUpdateOperation string
+
 type Player struct {
 	Name string `json:"name,omitempty"`
 }
@@ -109,6 +115,26 @@ const (
 
 	PlayerJoined PlayerLogEvent = "joined"
 	PlayerLeft   PlayerLogEvent = "left"
+
+	GameUpdateJobQueued    GameUpdateJobStatus = "queued"
+	GameUpdateJobRunning   GameUpdateJobStatus = "running"
+	GameUpdateJobSucceeded GameUpdateJobStatus = "succeeded"
+	GameUpdateJobFailed    GameUpdateJobStatus = "failed"
+
+	GameUpdateOperationCheck GameUpdateOperation = "check"
+	GameUpdateOperationApply GameUpdateOperation = "apply"
+
+	GameUpdateStageQueued             GameUpdateJobStage = "queued"
+	GameUpdateStagePreflight          GameUpdateJobStage = "preflight"
+	GameUpdateStageBackingUp          GameUpdateJobStage = "backing_up"
+	GameUpdateStageStopping           GameUpdateJobStage = "stopping"
+	GameUpdateStageRefreshingMetadata GameUpdateJobStage = "refreshing_metadata"
+	GameUpdateStageValidating         GameUpdateJobStage = "validating"
+	GameUpdateStageDownloading        GameUpdateJobStage = "downloading"
+	GameUpdateStageInstalling         GameUpdateJobStage = "installing"
+	GameUpdateStageStarting           GameUpdateJobStage = "starting"
+	GameUpdateStageHealthCheck        GameUpdateJobStage = "health_check"
+	GameUpdateStageCompleted          GameUpdateJobStage = "completed"
 )
 
 type ServerJoinInfo struct {
@@ -220,6 +246,25 @@ type ActivityEvent struct {
 	PayloadJSON string         `json:"-" gorm:"column:payload_json"`
 	Payload     map[string]any `json:"payload,omitempty" gorm:"-"`
 	CreatedAt   time.Time      `json:"createdAt"`
+}
+
+type GameUpdateJob struct {
+	ID               string              `json:"id" gorm:"primaryKey"`
+	InstanceID       string              `json:"instanceId" gorm:"index"`
+	ProviderKey      ProviderKey         `json:"providerKey" gorm:"index"`
+	Operation        GameUpdateOperation `json:"operation" gorm:"index"`
+	Status           GameUpdateJobStatus `json:"status" gorm:"index"`
+	Stage            GameUpdateJobStage  `json:"stage"`
+	Progress         int                 `json:"progress"`
+	InstalledBuildID string              `json:"installedBuildId,omitempty"`
+	LatestBuildID    string              `json:"latestBuildId,omitempty"`
+	StartAfterUpdate bool                `json:"startAfterUpdate"`
+	WasRunning       bool                `json:"wasRunning"`
+	Error            string              `json:"error,omitempty"`
+	CreatedAt        time.Time           `json:"createdAt"`
+	UpdatedAt        time.Time           `json:"updatedAt"`
+	CheckedAt        *time.Time          `json:"checkedAt,omitempty"`
+	CompletedAt      *time.Time          `json:"completedAt,omitempty"`
 }
 
 type AdminAccount struct {

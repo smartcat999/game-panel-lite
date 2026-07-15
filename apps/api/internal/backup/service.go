@@ -21,6 +21,47 @@ func NewService(dataDir string) *Service {
 }
 
 func (s *Service) Create(instanceID string, sourceDir string) (string, int64, error) {
+	return s.create(instanceID, sourceDir, sourceDir)
+}
+
+// CreateSubtree archives only the requested subtree while preserving its path
+// relative to rootDir. This keeps save-only backups small and still allows the
+// regular Restore method to put every file back in its original location.
+func (s *Service) CreateSubtree(instanceID string, rootDir string, relativeSubtree string) (string, int64, error) {
+	cleanRoot, err := filepath.Abs(rootDir)
+	if err != nil {
+		return "", 0, err
+	}
+	if filepath.IsAbs(relativeSubtree) {
+		return "", 0, fmt.Errorf("backup subtree must be relative")
+	}
+	cleanRelative := filepath.Clean(relativeSubtree)
+	if cleanRelative == "." || cleanRelative == ".." || strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
+		return "", 0, fmt.Errorf("invalid backup subtree")
+	}
+	sourceDir, err := filepath.Abs(filepath.Join(cleanRoot, cleanRelative))
+	if err != nil {
+		return "", 0, err
+	}
+	if sourceDir != cleanRoot && !strings.HasPrefix(sourceDir, cleanRoot+string(filepath.Separator)) {
+		return "", 0, fmt.Errorf("backup subtree escapes data directory")
+	}
+	realRoot, err := filepath.EvalSymlinks(cleanRoot)
+	if err != nil {
+		return "", 0, fmt.Errorf("resolve backup data directory: %w", err)
+	}
+	realSource, err := filepath.EvalSymlinks(sourceDir)
+	if err != nil {
+		return "", 0, fmt.Errorf("resolve backup subtree: %w", err)
+	}
+	realRelative, err := filepath.Rel(realRoot, realSource)
+	if err != nil || realRelative == ".." || filepath.IsAbs(realRelative) || strings.HasPrefix(realRelative, ".."+string(filepath.Separator)) {
+		return "", 0, fmt.Errorf("backup subtree resolves outside data directory")
+	}
+	return s.create(instanceID, cleanRoot, sourceDir)
+}
+
+func (s *Service) create(instanceID string, archiveRoot string, sourceDir string) (string, int64, error) {
 	dir, err := safety.SafeJoin(s.dataDir, "backups", instanceID)
 	if err != nil {
 		return "", 0, err
@@ -33,12 +74,21 @@ func (s *Service) Create(instanceID string, sourceDir string) (string, int64, er
 	if err != nil {
 		return "", 0, err
 	}
+	completed := false
+	defer func() {
+		if !completed {
+			_ = os.Remove(target)
+		}
+	}()
 	zipper := zip.NewWriter(out)
 	walkErr := filepath.WalkDir(sourceDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		rel, err := filepath.Rel(sourceDir, path)
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("backup source contains a symbolic link")
+		}
+		rel, err := filepath.Rel(archiveRoot, path)
 		if err != nil {
 			return err
 		}
@@ -69,6 +119,7 @@ func (s *Service) Create(instanceID string, sourceDir string) (string, int64, er
 	if err != nil {
 		return "", 0, err
 	}
+	completed = true
 	return target, info.Size(), nil
 }
 

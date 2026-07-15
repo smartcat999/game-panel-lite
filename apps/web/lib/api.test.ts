@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadWorldFile, getGameServer, listBackups, listGames, listWorlds, setModEnabled } from "./api";
+import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, listBackups, listGames, listWorlds, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -258,5 +258,38 @@ describe("api mappers", () => {
       })
     );
     expect(mod.enabled).toBe(false);
+  });
+
+  it("uses server-scoped asynchronous game update endpoints", async () => {
+    const job = {
+      id: "update-1",
+      instanceId: "server-1",
+      providerKey: "palworld",
+      operation: "apply",
+      status: "queued",
+      stage: "queued",
+      progress: 0,
+      startAfterUpdate: true,
+      wasRunning: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ supported: true, status: "available", installedBuildId: "100", latestBuildId: "101" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(job), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(job), { status: 202 }));
+
+    const update = await getGameUpdate("server-1");
+    await checkGameUpdate("server-1");
+    const queued = await applyGameUpdate("server-1", true);
+
+    expect(update.status).toBe("available");
+    expect(queued.id).toBe("update-1");
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("/api/servers/server-1/game-update"), expect.objectContaining({ cache: "no-store" }));
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, expect.stringContaining("/api/servers/server-1/game-update/check"), expect.objectContaining({ method: "POST" }));
+    expect(fetchSpy).toHaveBeenNthCalledWith(3, expect.stringContaining("/api/servers/server-1/game-update/apply"), expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ startAfterUpdate: true })
+    }));
   });
 });

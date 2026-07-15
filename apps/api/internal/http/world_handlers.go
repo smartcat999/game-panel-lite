@@ -107,9 +107,16 @@ func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createWorldSnapshot(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	var payload struct {
@@ -163,9 +170,15 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "instanceId is required")
 		return
 	}
+	unlock := h.lockServerMutation(payload.InstanceID)
+	defer unlock()
 	resource, err := h.store.GetGameServer(r.Context(), payload.InstanceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), resource.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerLockedForMutation(resource) {
