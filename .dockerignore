@@ -1,11 +1,14 @@
 .git
 .cache
+.gocache
 .crush
 .idea
+.playwright-cli
 .pnpm-store
 node_modules
 **/node_modules
 apps/web/.next
+output
 test-results
 tmp
 data
@@ -13,4 +16,3 @@ data
 .env
 .env.local
 .env.*.local
-
