@@ -84,7 +84,7 @@ function EnabledBackupDetailPage() {
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <DetailTile label={t("server")} value={serverName} />
               <DetailTile label={t("world")} value={backup.world} />
-              <DetailTile label={t("type")} value={backup.type === "Auto" ? t("typeAuto") : t("typeManual")} />
+              <DetailTile label={t("type")} value={backup.type === "Auto" ? t("typeAuto") : backup.type === "Pre-update" ? t("typePreUpdate") : t("typeManual")} />
               <DetailTile label={t("size")} value={backup.size} />
               <DetailTile label={t("created")} value={localizeRelativeTime(backup.created, locale)} />
               <DetailTile label={t("backupName")} value={backup.name} />

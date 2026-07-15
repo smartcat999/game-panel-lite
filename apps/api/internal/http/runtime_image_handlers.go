@@ -56,11 +56,21 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 	version := normalizeStoredProviderVersion(gameProvider, payload.Version)
 	image := gameProvider.ImageFor(version)
 	ref := runtimeInstallRef{ProviderKey: payload.ProviderKey, Version: version, Image: image}
+	h.gameUpdateJobsMu.Lock()
+	defer h.gameUpdateJobsMu.Unlock()
+	if h.gameUpdateRuntimeLocked(r.Context()) {
+		writeError(w, http.StatusConflict, "a game update task is in progress")
+		return
+	}
 	if status := h.runtimeInstallStatus(r.Context(), ref); status.Status == runtime.ImageStatusReady {
 		writeJSON(w, http.StatusOK, status)
 		return
 	} else if status.Status == runtime.ImageStatusPreparing {
 		writeJSON(w, http.StatusAccepted, status)
+		return
+	}
+	if h.runtimeImagePrepareActive() {
+		writeError(w, http.StatusConflict, "another runtime image task is already running")
 		return
 	}
 	status := domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusPreparing, UpdatedAt: time.Now()}
@@ -308,6 +318,17 @@ func (h *Handler) setRuntimeImageJob(status domain.RuntimeImageStatus) {
 	h.runtimeImageJobsMu.Lock()
 	defer h.runtimeImageJobsMu.Unlock()
 	h.runtimeImageJobs[status.Image] = status
+}
+
+func (h *Handler) runtimeImagePrepareActive() bool {
+	h.runtimeImageJobsMu.Lock()
+	defer h.runtimeImageJobsMu.Unlock()
+	for _, status := range h.runtimeImageJobs {
+		if status.Status == runtime.ImageStatusPreparing {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) workshopSyncUnsupported() bool {

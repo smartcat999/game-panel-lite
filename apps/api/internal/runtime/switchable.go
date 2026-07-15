@@ -64,6 +64,52 @@ func (s *SwitchableAdapter) LoadImageArchive(ctx context.Context, path string) e
 	return fmt.Errorf("runtime adapter does not support local image archives")
 }
 
+func (s *SwitchableAdapter) CheckGameUpdate(ctx context.Context, request GameUpdateRequest) (GameUpdateResult, error) {
+	executor, ok := s.current().(GameUpdateExecutor)
+	if !ok {
+		return GameUpdateResult{}, fmt.Errorf("runtime adapter does not support game updates")
+	}
+	return executor.CheckGameUpdate(ctx, request)
+}
+
+func (s *SwitchableAdapter) ApplyGameUpdate(ctx context.Context, request GameUpdateRequest, onProgress GameUpdateProgressFunc) (GameUpdateResult, error) {
+	executor, ok := s.current().(GameUpdateExecutor)
+	if !ok {
+		return GameUpdateResult{}, fmt.Errorf("runtime adapter does not support game updates")
+	}
+	return executor.ApplyGameUpdate(ctx, request, onProgress)
+}
+
+func (s *SwitchableAdapter) SupportsGameUpdates() bool {
+	current := s.current()
+	_, executorOK := current.(GameUpdateExecutor)
+	_, cleanerOK := current.(GameUpdateCleaner)
+	return executorOK && cleanerOK
+}
+
+func (s *SwitchableAdapter) CleanupGameUpdate(ctx context.Context, jobID string) error {
+	cleaner, ok := s.current().(GameUpdateCleaner)
+	if !ok {
+		return fmt.Errorf("runtime adapter does not support game update recovery")
+	}
+	return cleaner.CleanupGameUpdate(ctx, jobID)
+}
+
+func (s *SwitchableAdapter) InspectWorkloadHealth(ctx context.Context, runtimeID string) (WorkloadHealth, error) {
+	current := s.current()
+	if inspector, ok := current.(WorkloadHealthInspector); ok {
+		return inspector.InspectWorkloadHealth(ctx, runtimeID)
+	}
+	status, err := current.InspectWorkload(ctx, runtimeID)
+	if err != nil {
+		return WorkloadHealth{}, err
+	}
+	if status.State != domain.ActualRunning {
+		return WorkloadHealth{Status: WorkloadHealthUnhealthy}, nil
+	}
+	return WorkloadHealth{Status: WorkloadHealthHealthy, HasHealthCheck: false}, nil
+}
+
 func (s *SwitchableAdapter) CreateWorkload(ctx context.Context, spec domain.WorkloadSpec) (string, error) {
 	return s.current().CreateWorkload(ctx, spec)
 }

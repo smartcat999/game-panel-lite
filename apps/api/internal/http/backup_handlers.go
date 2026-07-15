@@ -42,9 +42,16 @@ func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	dataDir, err := serverDataDir(server)
@@ -105,9 +112,15 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "backup not found")
 		return
 	}
+	unlock := h.lockServerMutation(item.InstanceID)
+	defer unlock()
 	resource, err := h.store.GetGameServer(r.Context(), item.InstanceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), resource.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerLockedForMutation(resource) {
@@ -182,9 +195,16 @@ func (h *Handler) listServerSaves(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	dataDir, err := serverDataDir(server)
@@ -237,6 +257,8 @@ func (h *Handler) downloadServerSave(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 	instanceID := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(instanceID)
+	defer unlock()
 	saveID := chi.URLParam(r, "saveId")
 	item, err := h.store.GetBackup(r.Context(), saveID)
 	if err != nil {
@@ -250,6 +272,10 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 	resource, err := h.store.GetGameServer(r.Context(), instanceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), resource.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerLockedForMutation(resource) {

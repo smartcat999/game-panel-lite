@@ -144,6 +144,26 @@ func (a *Adapter) InspectWorkload(ctx context.Context, runtimeID string) (domain
 	return runtime.WorkloadStatusFromServerStatus(runtimeID, status), nil
 }
 
+func (a *Adapter) InspectWorkloadHealth(ctx context.Context, runtimeID string) (runtime.WorkloadHealth, error) {
+	got, err := a.client.ContainerInspect(ctx, runtimeID)
+	if err != nil {
+		return runtime.WorkloadHealth{}, err
+	}
+	if got.State == nil || !got.State.Running {
+		return runtime.WorkloadHealth{Status: runtime.WorkloadHealthUnhealthy}, nil
+	}
+	if got.State.Health == nil {
+		return runtime.WorkloadHealth{Status: runtime.WorkloadHealthHealthy, HasHealthCheck: false}, nil
+	}
+	status := strings.ToLower(strings.TrimSpace(got.State.Health.Status))
+	switch status {
+	case runtime.WorkloadHealthHealthy, runtime.WorkloadHealthUnhealthy, runtime.WorkloadHealthStarting:
+		return runtime.WorkloadHealth{Status: status, HasHealthCheck: true}, nil
+	default:
+		return runtime.WorkloadHealth{Status: runtime.WorkloadHealthStarting, HasHealthCheck: true}, nil
+	}
+}
+
 func (a *Adapter) inspectContainerState(ctx context.Context, containerID string) (domain.ServerStatus, error) {
 	got, err := a.client.ContainerInspect(ctx, containerID)
 	if err != nil {

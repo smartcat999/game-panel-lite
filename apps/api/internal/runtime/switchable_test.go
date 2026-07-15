@@ -15,6 +15,36 @@ type testAdapter struct {
 	ids    []string
 }
 
+type gameUpdateTestAdapter struct {
+	*testAdapter
+	checked GameUpdateRequest
+	applied GameUpdateRequest
+	cleaned string
+	health  WorkloadHealth
+}
+
+func (a *gameUpdateTestAdapter) CheckGameUpdate(_ context.Context, request GameUpdateRequest) (GameUpdateResult, error) {
+	a.checked = request
+	return GameUpdateResult{InstalledBuildID: "10", LatestBuildID: "11"}, nil
+}
+
+func (a *gameUpdateTestAdapter) ApplyGameUpdate(_ context.Context, request GameUpdateRequest, onProgress GameUpdateProgressFunc) (GameUpdateResult, error) {
+	a.applied = request
+	if onProgress != nil {
+		onProgress(GameUpdateProgress{Stage: GameUpdateStageSucceeded, Progress: 100})
+	}
+	return GameUpdateResult{InstalledBuildID: "11", LatestBuildID: "11"}, nil
+}
+
+func (a *gameUpdateTestAdapter) CleanupGameUpdate(_ context.Context, jobID string) error {
+	a.cleaned = jobID
+	return nil
+}
+
+func (a *gameUpdateTestAdapter) InspectWorkloadHealth(_ context.Context, _ string) (WorkloadHealth, error) {
+	return a.health, nil
+}
+
 func (a testAdapter) Check(context.Context) DockerStatus { return a.status }
 func (a testAdapter) ImageStatus(_ context.Context, image string) domain.RuntimeImageStatus {
 	return domain.RuntimeImageStatus{Image: image, Status: ImageStatusReady}
@@ -140,5 +170,55 @@ func TestSwitchableAdapterBridgesWorkloadLifecycle(t *testing.T) {
 	expected := []string{"start:runtime-1", "stop:runtime-2", "remove:runtime-3", "inspect:runtime-4"}
 	if strings.Join(adapter.ids, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected ids %v, got %v", expected, adapter.ids)
+	}
+}
+
+func TestSwitchableAdapterForwardsGameUpdates(t *testing.T) {
+	adapter := &gameUpdateTestAdapter{testAdapter: &testAdapter{}}
+	switchable := NewSwitchableAdapter(adapter)
+	request := GameUpdateRequest{JobID: "job-1", RuntimeID: "runtime-1", Image: "palworld:latest", DataDir: "/data/server", AppID: "2394010"}
+
+	checked, err := switchable.CheckGameUpdate(context.Background(), request)
+	if err != nil {
+		t.Fatalf("check game update: %v", err)
+	}
+	if checked.InstalledBuildID != "10" || adapter.checked.AppID != "2394010" {
+		t.Fatalf("unexpected check result=%+v request=%+v", checked, adapter.checked)
+	}
+
+	var progress GameUpdateProgress
+	applied, err := switchable.ApplyGameUpdate(context.Background(), request, func(update GameUpdateProgress) {
+		progress = update
+	})
+	if err != nil {
+		t.Fatalf("apply game update: %v", err)
+	}
+	if applied.InstalledBuildID != "11" || adapter.applied.RuntimeID != "runtime-1" {
+		t.Fatalf("unexpected apply result=%+v request=%+v", applied, adapter.applied)
+	}
+	if progress.Stage != GameUpdateStageSucceeded || progress.Progress != 100 {
+		t.Fatalf("unexpected progress: %+v", progress)
+	}
+
+	if err := switchable.CleanupGameUpdate(context.Background(), "job-1"); err != nil {
+		t.Fatalf("cleanup game update: %v", err)
+	}
+	if adapter.cleaned != "job-1" {
+		t.Fatalf("expected cleanup job ID to be forwarded, got %q", adapter.cleaned)
+	}
+	adapter.health = WorkloadHealth{Status: WorkloadHealthHealthy, HasHealthCheck: true}
+	health, err := switchable.InspectWorkloadHealth(context.Background(), "runtime-1")
+	if err != nil || health != adapter.health {
+		t.Fatalf("unexpected forwarded health: health=%+v err=%v", health, err)
+	}
+}
+
+func TestSwitchableAdapterRejectsUnsupportedGameUpdates(t *testing.T) {
+	switchable := NewSwitchableAdapter(&testAdapter{})
+	if _, err := switchable.CheckGameUpdate(context.Background(), GameUpdateRequest{}); err == nil {
+		t.Fatal("expected unsupported check to fail")
+	}
+	if _, err := switchable.ApplyGameUpdate(context.Background(), GameUpdateRequest{}, nil); err == nil {
+		t.Fatal("expected unsupported apply to fail")
 	}
 }

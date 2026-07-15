@@ -21,6 +21,7 @@ import (
 )
 
 type Handler struct {
+	ctx            context.Context
 	cfg            config.Config
 	logger         *slog.Logger
 	store          *store.Store
@@ -31,8 +32,13 @@ type Handler struct {
 	apiMetrics     *metrics.Registry
 	observability  *observability.CachedService
 
-	runtimeImageJobsMu sync.Mutex
-	runtimeImageJobs   map[string]domain.RuntimeImageStatus
+	runtimeImageJobsMu  sync.Mutex
+	runtimeImageJobs    map[string]domain.RuntimeImageStatus
+	gameUpdateJobsMu    sync.Mutex
+	gameUpdateWorkersMu sync.Mutex
+	gameUpdateClosing   bool
+	gameUpdateJobsWG    sync.WaitGroup
+	serverMutationLocks sync.Map
 }
 
 type resourceLimitPayload struct {
@@ -74,7 +80,27 @@ func (h *Handler) Start(ctx context.Context) {
 	if h == nil || h.observability == nil {
 		return
 	}
+	h.ctx = ctx
+	startedAt := time.Now().UTC()
 	go h.observability.Start(ctx)
+	h.startGameUpdateWorker(func() { h.recoverInterruptedGameUpdates(ctx, startedAt) })
+}
+
+func (h *Handler) WaitForGameUpdates(ctx context.Context) error {
+	h.gameUpdateWorkersMu.Lock()
+	h.gameUpdateClosing = true
+	h.gameUpdateWorkersMu.Unlock()
+	done := make(chan struct{})
+	go func() {
+		h.gameUpdateJobsWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (h *Handler) Register(r chi.Router) {
@@ -120,6 +146,9 @@ func (h *Handler) Register(r chi.Router) {
 		r.Post("/api/servers/{id}/start", h.startServer)
 		r.Post("/api/servers/{id}/stop", h.stopServer)
 		r.Post("/api/servers/{id}/restart", h.restartServer)
+		r.Get("/api/servers/{id}/game-update", h.getGameUpdate)
+		r.Post("/api/servers/{id}/game-update/check", h.checkGameUpdate)
+		r.Post("/api/servers/{id}/game-update/apply", h.applyGameUpdate)
 		r.Post("/api/servers/{id}/command", h.sendServerCommand)
 		r.Delete("/api/servers/{id}", h.deleteServer)
 		r.Get("/api/servers/{id}/logs", h.serverLogs)

@@ -33,13 +33,20 @@ func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
 	if !providerSupportsUploadedMods(server.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "uploaded mods are not supported for this provider")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -107,13 +114,20 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
 	if !providerSupportsWorkshopMods(server.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -241,7 +255,10 @@ func decodeWorkshopIDs(r *http.Request) ([]string, error) {
 }
 
 func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -249,6 +266,10 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
 	if err != nil || item.InstanceID != server.ID {
 		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -289,7 +310,10 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
-	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+	server, err := h.store.GetGameServer(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -297,6 +321,10 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
 	if err != nil || item.InstanceID != server.ID {
 		writeError(w, http.StatusNotFound, "mod not found")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), server.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -526,6 +554,8 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "instanceId is required")
 		return
 	}
+	unlock := h.lockServerMutation(payload.InstanceID)
+	defer unlock()
 	targetServer, err := h.store.GetGameServer(r.Context(), payload.InstanceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
@@ -533,6 +563,10 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 	}
 	if !providerSupportsMods(targetServer.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
+		return
+	}
+	if h.gameUpdateLocked(r.Context(), targetServer.ID) {
+		writeError(w, http.StatusConflict, "server game update is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(targetServer) {

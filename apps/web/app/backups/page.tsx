@@ -24,7 +24,8 @@ type BackupProviderFilter = "all" | string;
 const backupTypeFilters = [
   { key: "all", labelKey: "filterAll" },
   { key: "Manual", labelKey: "typeManual" },
-  { key: "Auto", labelKey: "typeAuto" }
+  { key: "Auto", labelKey: "typeAuto" },
+  { key: "Pre-update", labelKey: "typePreUpdate" }
 ] as const satisfies readonly { key: BackupTypeFilter; labelKey: MessageKey }[];
 
 export default function BackupsPage() {
@@ -150,7 +151,7 @@ function EnabledBackupsPage() {
                         <h2 className="truncate font-semibold text-white transition hover:text-panel-green">{backup.name}</h2>
                       </Link>
                       <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
-                        {backup.type === "Auto" ? t("typeAuto") : t("typeManual")}
+                        {backup.type === "Auto" ? t("typeAuto") : backup.type === "Pre-update" ? t("typePreUpdate") : t("typeManual")}
                       </span>
                     </div>
                     <div className="mt-2 flex min-w-0 flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400">

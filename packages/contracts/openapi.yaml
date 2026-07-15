@@ -27,6 +27,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DockerStatus"
+  /api/runtime/images/prepare:
+    post:
+      summary: Queue runtime image preparation
+      description: Pulls and archives one provider runtime image asynchronously. Heavy runtime-image and game-update tasks are mutually exclusive.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerKey]
+              properties:
+                providerKey:
+                  $ref: "#/components/schemas/ProviderKey"
+                version:
+                  type: string
+      responses:
+        "200":
+          description: Runtime image is already ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeImageStatus"
+        "202":
+          description: Runtime image preparation accepted or already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeImageStatus"
+        "400":
+          description: Invalid JSON body
+        "404":
+          description: Provider not found
+        "409":
+          description: Another runtime image or game update task is active, or the provider is unsupported
+        "503":
+          description: Docker runtime is unavailable
   /api/settings:
     get:
       summary: Read local API settings
@@ -150,7 +187,7 @@ paths:
                   $ref: "#/components/schemas/GameServer"
     post:
       summary: Create server
-      description: Creates a server resource with desired state stopped. Runtime reconciliation is handled asynchronously by the server controller.
+      description: Creates a server resource with desired state running. Runtime reconciliation is handled asynchronously by the server controller.
       requestBody:
         required: true
         content:
@@ -164,6 +201,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "409":
+          description: A game update or runtime image task is active
   /api/servers/{id}:
     get:
       summary: Get server
@@ -184,6 +223,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "409":
+          description: This server has an active game update task
   /api/servers/{id}/config:
     put:
       summary: Update desired server configuration
@@ -201,6 +242,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "409":
+          description: A game update or runtime image task is active
   /api/servers/{id}/start:
     post:
       summary: Request server start
@@ -212,6 +255,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "409":
+          description: A game update or runtime image task is active
   /api/servers/{id}/stop:
     post:
       summary: Request server stop
@@ -223,6 +268,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "409":
+          description: This server has an active game update task
   /api/servers/{id}/restart:
     post:
       summary: Request server restart
@@ -234,6 +281,97 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "409":
+          description: A game update or runtime image task is active
+  /api/servers/{id}/game-update:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Server instance ID.
+        schema:
+          type: string
+    get:
+      summary: Read game update state
+      description: Returns the latest persisted update task and build metadata. Only the Palworld provider currently reports supported=true.
+      responses:
+        "200":
+          description: Current game update state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameUpdateState"
+        "404":
+          description: Server not found
+        "500":
+          description: Update state could not be read
+  /api/servers/{id}/game-update/check:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Server instance ID.
+        schema:
+          type: string
+    post:
+      summary: Queue a game update check
+      description: Creates a persistent asynchronous task that refreshes Steam metadata and compares the installed and latest build IDs.
+      responses:
+        "202":
+          description: Update check accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameUpdateJob"
+        "400":
+          description: Game updates are not supported for this provider
+        "404":
+          description: Server not found
+        "409":
+          description: Another game update or runtime image task is already active
+        "500":
+          description: Update check task could not be created
+        "503":
+          description: Docker runtime is unavailable or lacks safe update support
+  /api/servers/{id}/game-update/apply:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Server instance ID.
+        schema:
+          type: string
+    post:
+      summary: Queue a game server update
+      description: Creates a persistent asynchronous task that stops the server when needed, backs up Palworld save data, installs the latest build, and optionally starts the server afterward.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startAfterUpdate:
+                  type: boolean
+                  default: false
+                  description: Start the game server after a successful update.
+      responses:
+        "202":
+          description: Game update accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameUpdateJob"
+        "400":
+          description: Invalid JSON body or game updates are not supported for this provider
+        "404":
+          description: Server not found
+        "409":
+          description: Players are online or another game update or runtime image task is already active
+        "500":
+          description: Update task could not be created
+        "503":
+          description: Docker runtime is unavailable or lacks safe update support
   /api/servers/{id}/command:
     post:
       summary: Send a console command to a running server
@@ -252,7 +390,7 @@ paths:
         "200":
           description: Command sent
         "409":
-          description: Server is not running
+          description: Server is not running or a game update is active for this server
   /api/servers/{id}/logs:
     get:
       summary: Stream server logs with SSE
@@ -313,6 +451,8 @@ paths:
           description: Updated existing mod file record
         "201":
           description: Uploaded mod file
+        "409":
+          description: A game update is active for this server
   /api/servers/{id}/mods/workshop:
     post:
       summary: Import tModLoader Workshop IDs as server mod records
@@ -337,6 +477,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ModFile"
+        "409":
+          description: A game update is active for this server
   /api/servers/{id}/mods/{modId}:
     patch:
       summary: Enable or disable a tModLoader mod
@@ -353,11 +495,15 @@ paths:
       responses:
         "200":
           description: Updated mod state
+        "409":
+          description: A game update is active for this server
     delete:
       summary: Delete tModLoader mod file
       responses:
         "200":
           description: Deleted mod
+        "409":
+          description: A game update is active for this server
   /api/mods:
     get:
       summary: List unassigned global mod library files
@@ -404,6 +550,8 @@ paths:
           description: Updated existing assigned mod file record
         "201":
           description: Assigned mod
+        "409":
+          description: A game update is active for the target server
   /api/mods/{id}:
     delete:
       summary: Delete an unassigned global mod library item
@@ -463,6 +611,8 @@ paths:
       responses:
         "200":
           description: Assigned world
+        "409":
+          description: A game update is active for the target server
   /api/worlds/{id}/download:
     get:
       summary: Download world file
@@ -487,12 +637,16 @@ paths:
       responses:
         "201":
           description: Created backup
+        "409":
+          description: A game update is active for this server
   /api/backups/{id}/restore:
     post:
       summary: Restore backup
       responses:
         "200":
           description: Restored backup
+        "409":
+          description: A game update is active for the backup's server
   /api/backups/{id}/download:
     get:
       summary: Download backup archive
@@ -555,6 +709,24 @@ components:
         host:
           type: string
         lastCheckedAt:
+          type: string
+          format: date-time
+    RuntimeImageStatus:
+      type: object
+      required: [image, status]
+      properties:
+        image:
+          type: string
+        status:
+          type: string
+          enum: [ready, missing, preparing, failed, unsupported]
+        message:
+          type: string
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        updatedAt:
           type: string
           format: date-time
     AppSettings:
@@ -669,6 +841,69 @@ components:
         updatedAt:
           type: string
           format: date-time
+    GameUpdateJob:
+      type: object
+      required: [id, instanceId, providerKey, operation, status, stage, progress, startAfterUpdate, wasRunning, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        providerKey:
+          $ref: "#/components/schemas/ProviderKey"
+        operation:
+          type: string
+          enum: [check, apply]
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        stage:
+          type: string
+          enum: [queued, preflight, backing_up, stopping, refreshing_metadata, validating, downloading, installing, starting, health_check, completed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        installedBuildId:
+          type: string
+        latestBuildId:
+          type: string
+        startAfterUpdate:
+          type: boolean
+        wasRunning:
+          type: boolean
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        checkedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    GameUpdateState:
+      type: object
+      required: [supported, status]
+      properties:
+        supported:
+          type: boolean
+        status:
+          type: string
+          enum: [unknown, checking, up_to_date, available, updating, failed]
+        installedBuildId:
+          type: string
+        latestBuildId:
+          type: string
+        checkedAt:
+          type: string
+          format: date-time
+        job:
+          $ref: "#/components/schemas/GameUpdateJob"
     ServerSpec:
       type: object
       required: [generation, desiredState]

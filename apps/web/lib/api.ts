@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -159,7 +159,7 @@ type ApiBackup = {
   fileName: string;
   worldName: string;
   sizeBytes: number;
-  type: "Auto" | "Manual";
+  type: "Auto" | "Manual" | "Pre-update";
   createdAt: string;
 };
 
@@ -413,6 +413,25 @@ export function serverLogsUrl(id: string) {
 
 export function serverWatchUrl(id: string) {
   return `${API_BASE}/api/servers/${id}/watch`;
+}
+
+export async function getGameUpdate(id: string): Promise<GameUpdateState> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update`, { cache: "no-store" });
+  return readPayload<GameUpdateState>(response, "Unable to load game update status");
+}
+
+export async function checkGameUpdate(id: string): Promise<GameUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/check`, { method: "POST" });
+  return readPayload<GameUpdateJob>(response, "Unable to check for game updates");
+}
+
+export async function applyGameUpdate(id: string, startAfterUpdate: boolean): Promise<GameUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startAfterUpdate })
+  });
+  return readPayload<GameUpdateJob>(response, "Unable to update game server");
 }
 
 export type HostStats = {

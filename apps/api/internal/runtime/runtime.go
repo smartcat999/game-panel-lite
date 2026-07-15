@@ -63,6 +63,64 @@ type ImagePrepareProgress struct {
 
 type ImagePrepareProgressFunc func(ImagePrepareProgress)
 
+// GameUpdateRequest contains only the runtime-owned inputs required to inspect
+// or update a dedicated server installation. The executor never accepts a
+// caller-provided command: each runtime implementation owns the fixed updater
+// command it runs.
+type GameUpdateRequest struct {
+	JobID     string
+	RuntimeID string
+	Image     string
+	DataDir   string
+	AppID     string
+}
+
+type GameUpdateResult struct {
+	InstalledBuildID string
+	LatestBuildID    string
+}
+
+type GameUpdateProgress struct {
+	Stage    string
+	Progress int
+	Message  string
+}
+
+type GameUpdateProgressFunc func(GameUpdateProgress)
+
+const (
+	GameUpdateStageRefreshingMetadata = "refreshing_metadata"
+	GameUpdateStageValidating         = "validating"
+	GameUpdateStageDownloading        = "downloading"
+	GameUpdateStageInstalling         = "installing"
+	GameUpdateStageFinalizing         = "finalizing"
+	GameUpdateStageSucceeded          = "succeeded"
+)
+
+type GameUpdateExecutor interface {
+	CheckGameUpdate(ctx context.Context, request GameUpdateRequest) (GameUpdateResult, error)
+	ApplyGameUpdate(ctx context.Context, request GameUpdateRequest, onProgress GameUpdateProgressFunc) (GameUpdateResult, error)
+}
+
+type GameUpdateCleaner interface {
+	CleanupGameUpdate(ctx context.Context, jobID string) error
+}
+
+type WorkloadHealth struct {
+	Status         string
+	HasHealthCheck bool
+}
+
+const (
+	WorkloadHealthStarting  = "starting"
+	WorkloadHealthHealthy   = "healthy"
+	WorkloadHealthUnhealthy = "unhealthy"
+)
+
+type WorkloadHealthInspector interface {
+	InspectWorkloadHealth(ctx context.Context, runtimeID string) (WorkloadHealth, error)
+}
+
 type ImageProgressPreparer interface {
 	PrepareImageWithProgress(ctx context.Context, image string, onProgress ImagePrepareProgressFunc) error
 }
