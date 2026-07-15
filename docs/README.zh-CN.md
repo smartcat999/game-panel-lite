@@ -45,6 +45,23 @@ http://服务器IP:3001
 cd ~/gamepanel-lite && sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
 ```
 
+在使用 systemd 的主机上，HTTPS 初始化会安装持久化的每日证书续期检查。Certbot 只有在证书进入续期窗口后才会真正替换证书，因此每天检查是安全的。已有 HTTPS 部署可以执行：
+
+```bash
+cd ~/gamepanel-lite
+sudo sh scripts/install-https-renewal-timer.sh
+sudo systemctl status gamepanel-lite-https-renewal.timer
+```
+
+立即执行一次续期检查或查看日志：
+
+```bash
+sudo systemctl start gamepanel-lite-https-renewal.service
+sudo journalctl -u gamepanel-lite-https-renewal.service
+```
+
+Certbot Compose 服务已放入 `certificate` profile，普通控制平面启动不会再创建一个退出状态的 Certbot 容器。
+
 ## 远程服务器维护
 
 生产环境只使用 `compose.prod.yaml`。启用 HTTPS 后，`compose.https.yaml` 会替换同一个 `nginx` 服务的端口和配置，不会再创建第二个 Nginx。

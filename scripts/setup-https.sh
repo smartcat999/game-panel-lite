@@ -74,8 +74,28 @@ docker compose -f compose.prod.yaml -f compose.https.yaml run --rm certbot $CERT
 docker compose -f compose.prod.yaml -f compose.https.yaml up -d --remove-orphans --force-recreate nginx
 sh scripts/manage.sh start
 
+TIMER_AVAILABLE="false"
+TIMER_INSTALLED="false"
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  TIMER_AVAILABLE="true"
+  if [ "$(id -u)" -eq 0 ]; then
+    if sh scripts/install-https-renewal-timer.sh; then
+      TIMER_INSTALLED="true"
+    else
+      echo "Warning: HTTPS is ready, but the automatic renewal timer could not be installed."
+    fi
+  fi
+fi
+
 echo
 echo "HTTPS is ready."
 echo "Open: https://$DOMAIN"
 echo "Renew with: sh scripts/renew-https.sh"
+if [ "$TIMER_INSTALLED" != "true" ]; then
+  if [ "$TIMER_AVAILABLE" = "true" ]; then
+    echo "Enable automatic renewal with: sudo sh scripts/install-https-renewal-timer.sh"
+  else
+    echo "No running systemd manager was detected; schedule scripts/renew-https.sh with your host scheduler."
+  fi
+fi
 echo "Update with: sh scripts/manage.sh update"

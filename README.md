@@ -45,6 +45,23 @@ If you have a domain pointed at the server, enable HTTPS:
 cd ~/gamepanel-lite && sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
 ```
 
+On a systemd host, HTTPS setup installs a persistent daily certificate-renewal timer. Certbot only replaces a certificate after it enters the renewal window; the check itself is safe to run every day. Existing HTTPS installs can enable the timer with:
+
+```bash
+cd ~/gamepanel-lite
+sudo sh scripts/install-https-renewal-timer.sh
+sudo systemctl status gamepanel-lite-https-renewal.timer
+```
+
+Run a renewal check immediately or inspect its logs with:
+
+```bash
+sudo systemctl start gamepanel-lite-https-renewal.service
+sudo journalctl -u gamepanel-lite-https-renewal.service
+```
+
+The Certbot Compose service is isolated behind the `certificate` profile, so ordinary control-plane starts no longer create a stopped Certbot container.
+
 ## Remote Server Operations
 
 Update the control-plane images and recreate only changed services:
