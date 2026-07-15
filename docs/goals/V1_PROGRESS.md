@@ -1,5 +1,11 @@
 # V1 Progress
 
+## 2026-07-16
+
+- Isolated Certbot behind an opt-in Compose profile so normal control-plane operations do not create a misleading exited container.
+- Added a reusable systemd installer for persistent daily HTTPS renewal checks, using a root-owned runner/config with randomized scheduling and journald logs.
+- Integrated automatic renewal setup into the HTTPS bootstrap flow and documented installation, status, manual checks, and logs in English and Chinese.
+
 ## 2026-07-15
 
 - Added persistent asynchronous Palworld update checks and installs with explicit task status, stage, progress, build IDs, and failure details.

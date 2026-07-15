@@ -28,7 +28,7 @@ tar -xzf "$TMP_DIR/gamepanel-lite.tar.gz" -C "$TMP_DIR/source" --strip-component
 
 echo "Installing to $INSTALL_DIR..."
 cp -R "$TMP_DIR/source/." "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/scripts/install.sh" "$INSTALL_DIR/scripts/setup-https.sh" "$INSTALL_DIR/scripts/renew-https.sh" "$INSTALL_DIR/scripts/manage.sh" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/scripts/install.sh" "$INSTALL_DIR/scripts/setup-https.sh" "$INSTALL_DIR/scripts/renew-https.sh" "$INSTALL_DIR/scripts/install-https-renewal-timer.sh" "$INSTALL_DIR/scripts/https-renewal-runner.sh" "$INSTALL_DIR/scripts/manage.sh" 2>/dev/null || true
 
 sh "$INSTALL_DIR/scripts/install.sh"
 

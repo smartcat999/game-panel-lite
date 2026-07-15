@@ -15,6 +15,7 @@ fi
 
 cd "$ROOT_DIR"
 docker compose -f compose.prod.yaml -f compose.https.yaml run --rm certbot renew
+docker compose -f compose.prod.yaml -f compose.https.yaml exec -T nginx nginx -t
 docker compose -f compose.prod.yaml -f compose.https.yaml exec -T nginx nginx -s reload
 
 echo "HTTPS certificate renewal check completed."
