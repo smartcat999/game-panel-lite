@@ -155,13 +155,14 @@ build_dst() {
 }
 
 build_palworld() {
-  local version="${PALWORLD_RUNTIME_VERSION:-v2.5.0}"
-  local image="${registry}/palworld-server:${version}"
+  local runtime_version="${PALWORLD_RUNTIME_VERSION:-v2.5.0}"
+  local image_version="${PALWORLD_IMAGE_VERSION:-${runtime_version}}"
+  local image="${registry}/palworld-server:${image_version}"
 
   echo "==> Building ${image}"
   docker "${buildx_args[@]}" \
     -f docker/palworld/Dockerfile \
-    --build-arg "PALWORLD_RUNTIME_VERSION=${version}" \
+    --build-arg "PALWORLD_RUNTIME_VERSION=${runtime_version}" \
     -t "${image}" \
     "${root_dir}"
 }
