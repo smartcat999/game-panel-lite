@@ -2,6 +2,9 @@
 
 ## 2026-07-16
 
+- Fixed the Palworld runtime logger FIFO ownership race by atomically publishing
+  a private FIFO owned by the configured `PUID` and `PGID`, with a strict
+  build-time upstream compatibility check and focused patch tests.
 - Isolated Certbot behind an opt-in Compose profile so normal control-plane operations do not create a misleading exited container.
 - Added a reusable systemd installer for persistent daily HTTPS renewal checks, using a root-owned runner/config with randomized scheduling and journald logs.
 - Integrated automatic renewal setup into the HTTPS bootstrap flow and documented installation, status, manual checks, and logs in English and Chinese.
