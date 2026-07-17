@@ -253,10 +253,15 @@ func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.Pro
 		options.Files[clusterDir+"/Caves/leveldataoverride.lua"] = renderLevelDataOverrideLua("cave", config.Caves.Preset, config.Caves.Overrides)
 		options.Files[clusterDir+"/Caves/modoverrides.lua"] = renderModOverrides(config.Mods.WorkshopIDs)
 	}
+	additionalPorts := []int(nil)
+	if config.Caves != nil && config.Caves.Enabled {
+		additionalPorts = []int{config.Port + 1}
+	}
 	return domain.ProviderRuntimeConfig{
-		Port:     config.Port,
-		Protocol: options.PortProtocol,
-		Options:  workloadOptions(options),
+		Port:            config.Port,
+		AdditionalPorts: additionalPorts,
+		Protocol:        options.PortProtocol,
+		Options:         workloadOptions(options),
 	}, nil
 }
 

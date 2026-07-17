@@ -79,7 +79,7 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 	}
 	hostConfig := &container.HostConfig{
 		Binds:        binds,
-		PortBindings: natPortMap(spec.Port, spec.HostPort, spec.Options.PortProtocol),
+		PortBindings: natPortMaps(spec),
 		// Docker remembers containers stopped explicitly by the user. With
 		// unless-stopped, desired-running game servers recover after a host or
 		// daemon restart while instances stopped through GamePanel stay stopped.
@@ -95,7 +95,7 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 		Image:        spec.Image,
 		Env:          spec.Options.Env,
 		Cmd:          spec.Options.Cmd,
-		ExposedPorts: natPortSet(spec.Port, spec.Options.PortProtocol),
+		ExposedPorts: natPortSets(spec),
 		OpenStdin:    true,
 		AttachStdin:  true,
 		Labels: map[string]string{

@@ -6,8 +6,15 @@ type WorkloadResources struct {
 }
 
 type WorkloadNetwork struct {
-	Port     int    `json:"port,omitempty"`
-	HostPort int    `json:"hostPort,omitempty"`
+	Port            int            `json:"port,omitempty"`
+	HostPort        int            `json:"hostPort,omitempty"`
+	Protocol        string         `json:"protocol,omitempty"`
+	AdditionalPorts []WorkloadPort `json:"additionalPorts,omitempty"`
+}
+
+type WorkloadPort struct {
+	Port     int    `json:"port"`
+	HostPort int    `json:"hostPort"`
 	Protocol string `json:"protocol,omitempty"`
 }
 
@@ -29,10 +36,11 @@ type WorkloadSpec struct {
 }
 
 type ProviderRuntimeConfig struct {
-	Port       int             `json:"port,omitempty"`
-	Protocol   string          `json:"protocol,omitempty"`
-	ConfigText string          `json:"configText,omitempty"`
-	Options    WorkloadOptions `json:"options,omitempty"`
+	Port            int             `json:"port,omitempty"`
+	AdditionalPorts []int           `json:"additionalPorts,omitempty"`
+	Protocol        string          `json:"protocol,omitempty"`
+	ConfigText      string          `json:"configText,omitempty"`
+	Options         WorkloadOptions `json:"options,omitempty"`
 }
 
 type WorkloadStatus struct {
