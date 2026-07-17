@@ -167,6 +167,9 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if runtimeConfig.ConfigText != "" {
 		t.Fatalf("DST resource runtime should not render legacy serverconfig.txt, got %q", runtimeConfig.ConfigText)
 	}
+	if len(runtimeConfig.AdditionalPorts) != 1 || runtimeConfig.AdditionalPorts[0] != 11000 {
+		t.Fatalf("expected Caves UDP port 11000, got %v", runtimeConfig.AdditionalPorts)
+	}
 	options := runtimeConfig.Options
 	if !strings.Contains(options.Files["dst/Payload Cluster/cluster.ini"], "game_mode = endless") {
 		t.Fatalf("expected payload game mode in cluster.ini, got:\n%s", options.Files["dst/Payload Cluster/cluster.ini"])

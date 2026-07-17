@@ -60,14 +60,23 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 	for name, content := range runtimeConfig.Options.Files {
 		files[name] = content
 	}
+	additionalPorts := make([]domain.WorkloadPort, 0, len(runtimeConfig.AdditionalPorts))
+	for _, port := range runtimeConfig.AdditionalPorts {
+		additionalPorts = append(additionalPorts, domain.WorkloadPort{
+			Port:     port,
+			HostPort: server.Spec.Network.HostPort + (port - runtimeConfig.Port),
+			Protocol: runtimeConfig.Protocol,
+		})
+	}
 	return domain.WorkloadSpec{
 		ServerID: server.ID,
 		Name:     server.Name,
 		Image:    gameProvider.ImageFor(version),
 		Network: domain.WorkloadNetwork{
-			Port:     runtimeConfig.Port,
-			HostPort: server.Spec.Network.HostPort,
-			Protocol: runtimeConfig.Protocol,
+			Port:            runtimeConfig.Port,
+			HostPort:        server.Spec.Network.HostPort,
+			Protocol:        runtimeConfig.Protocol,
+			AdditionalPorts: additionalPorts,
 		},
 		Resources: domain.WorkloadResources{
 			CPULimitCores: server.Spec.Resources.CPULimitCores,

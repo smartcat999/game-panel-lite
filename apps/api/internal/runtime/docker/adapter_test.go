@@ -92,6 +92,23 @@ func TestNatPortSetSupportsUdp(t *testing.T) {
 	}
 }
 
+func TestNatPortMapsIncludesAdditionalUdpPort(t *testing.T) {
+	ports := natPortMaps(runtime.ContainerSpec{
+		Port:     10999,
+		HostPort: 10999,
+		Options:  runtime.ContainerOptions{PortProtocol: "udp"},
+		AdditionalPorts: []runtime.ContainerPort{
+			{Port: 11000, HostPort: 11000, Protocol: "udp"},
+		},
+	})
+	if got := ports["10999/udp"]; len(got) != 1 || got[0].HostPort != "10999" {
+		t.Fatalf("expected Master UDP mapping, got %v", got)
+	}
+	if got := ports["11000/udp"]; len(got) != 1 || got[0].HostPort != "11000" {
+		t.Fatalf("expected Caves UDP mapping, got %v", got)
+	}
+}
+
 func TestPrepareDataMountsRepairsExistingDirectoryPermissions(t *testing.T) {
 	dataDir := t.TempDir()
 	if err := os.Chmod(dataDir, 0o755); err != nil {

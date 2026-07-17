@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/docker/go-connections/nat"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
 func writeDataFile(dataDir string, name string, content string) error {
@@ -165,6 +166,31 @@ func natPortMap(containerPort int, hostPort int, protocol string) nat.PortMap {
 
 func natPortSet(containerPort int, protocol string) nat.PortSet {
 	return nat.PortSet{nat.Port(fmt.Sprintf("%d/%s", containerPort, normalizePortProtocol(protocol))): struct{}{}}
+}
+
+func natPortMaps(spec runtime.ContainerSpec) nat.PortMap {
+	ports := natPortMap(spec.Port, spec.HostPort, spec.Options.PortProtocol)
+	for _, port := range spec.AdditionalPorts {
+		protocol := port.Protocol
+		if strings.TrimSpace(protocol) == "" {
+			protocol = spec.Options.PortProtocol
+		}
+		p := nat.Port(fmt.Sprintf("%d/%s", port.Port, normalizePortProtocol(protocol)))
+		ports[p] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port.HostPort)}}
+	}
+	return ports
+}
+
+func natPortSets(spec runtime.ContainerSpec) nat.PortSet {
+	ports := natPortSet(spec.Port, spec.Options.PortProtocol)
+	for _, port := range spec.AdditionalPorts {
+		protocol := port.Protocol
+		if strings.TrimSpace(protocol) == "" {
+			protocol = spec.Options.PortProtocol
+		}
+		ports[nat.Port(fmt.Sprintf("%d/%s", port.Port, normalizePortProtocol(protocol)))] = struct{}{}
+	}
+	return ports
 }
 
 func normalizePortProtocol(protocol string) string {

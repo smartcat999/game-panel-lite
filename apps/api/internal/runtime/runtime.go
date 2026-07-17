@@ -9,15 +9,22 @@ import (
 )
 
 type ContainerSpec struct {
-	InstanceID string
-	Name       string
-	Image      string
-	Port       int
-	HostPort   int
-	Resources  ContainerResources
-	DataDir    string
-	ConfigText string
-	Options    ContainerOptions
+	InstanceID      string
+	Name            string
+	Image           string
+	Port            int
+	HostPort        int
+	AdditionalPorts []ContainerPort
+	Resources       ContainerResources
+	DataDir         string
+	ConfigText      string
+	Options         ContainerOptions
+}
+
+type ContainerPort struct {
+	Port     int
+	HostPort int
+	Protocol string
 }
 
 type ContainerResources struct {
@@ -178,6 +185,13 @@ func ContainerSpecFromWorkload(spec domain.WorkloadSpec) ContainerSpec {
 		Image:      spec.Image,
 		Port:       spec.Network.Port,
 		HostPort:   spec.Network.HostPort,
+		AdditionalPorts: func() []ContainerPort {
+			ports := make([]ContainerPort, 0, len(spec.Network.AdditionalPorts))
+			for _, port := range spec.Network.AdditionalPorts {
+				ports = append(ports, ContainerPort{Port: port.Port, HostPort: port.HostPort, Protocol: port.Protocol})
+			}
+			return ports
+		}(),
 		Resources: ContainerResources{
 			CPULimitCores: spec.Resources.CPULimitCores,
 			MemoryLimitMB: spec.Resources.MemoryLimitMB,
@@ -211,6 +225,13 @@ func WorkloadSpecFromContainer(spec ContainerSpec) domain.WorkloadSpec {
 			Port:     spec.Port,
 			HostPort: spec.HostPort,
 			Protocol: spec.Options.PortProtocol,
+			AdditionalPorts: func() []domain.WorkloadPort {
+				ports := make([]domain.WorkloadPort, 0, len(spec.AdditionalPorts))
+				for _, port := range spec.AdditionalPorts {
+					ports = append(ports, domain.WorkloadPort{Port: port.Port, HostPort: port.HostPort, Protocol: port.Protocol})
+				}
+				return ports
+			}(),
 		},
 		Resources: domain.WorkloadResources{
 			CPULimitCores: spec.Resources.CPULimitCores,
