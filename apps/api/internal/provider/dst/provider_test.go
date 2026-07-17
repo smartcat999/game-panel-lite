@@ -109,7 +109,7 @@ func TestRuntimeOptionsRenderDSTFiles(t *testing.T) {
 	provider := NewProvider()
 	options := runtimeOptions(config)
 
-	if provider.ImageFor("") != "smartcat99999/dst-server:v2026.06.21" {
+	if provider.ImageFor("") != "smartcat99999/dst-server:v2026.07.17" {
 		t.Fatalf("unexpected DST image: %s", provider.ImageFor(""))
 	}
 	if options.PortProtocol != "udp" {

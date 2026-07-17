@@ -179,7 +179,7 @@ if [[ "$target" == "all" || "$target" == "tmodloader" ]]; then
 fi
 
 if [[ "$target" == "dst" ]]; then
-  build_dst "v2026.06.21"
+  build_dst "v2026.07.17"
 fi
 
 if [[ "$target" == "palworld" ]]; then
