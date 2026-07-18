@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, Globe2, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GameUpdateCard } from "@/components/game-update-card";
-import { WorldRegenerationCard } from "@/components/world-regeneration-card";
+import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
@@ -138,6 +138,7 @@ export default function ServerDetailPage() {
   const [gameUpdateActive, setGameUpdateActive] = useState(false);
   const [gameUpdateActivity, setGameUpdateActivity] = useState<"checking" | "updating" | null>(null);
   const [worldRegenerationActive, setWorldRegenerationActive] = useState(false);
+  const [worldRegenerationDialogOpen, setWorldRegenerationDialogOpen] = useState(false);
   const handleGameUpdateActiveChange = useCallback((active: boolean, updateStatus?: string) => {
     setGameUpdateActive(active);
     setGameUpdateActivity(active ? updateStatus === "checking" ? "checking" : "updating" : null);
@@ -733,18 +734,26 @@ export default function ServerDetailPage() {
           </div>
         </div>
         <div className="hidden md:block">
-          <ServerActions disabled={gameUpdateActive} server={serverResource} showInvite={false} />
+          <ServerActions
+            disabled={gameUpdateActive || worldRegenerationActive}
+            regenerationBusy={worldRegenerationActive}
+            server={serverResource}
+            showInvite={false}
+            onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
+          />
         </div>
       </div>
       <MobileServerControls
         copied={copied}
-        disabled={gameUpdateActive}
+        disabled={gameUpdateActive || worldRegenerationActive}
         invite={invite}
         joinAddress={joinAddress}
         joinPassword={joinPassword}
         joinPort={joinPort}
         shareEnabled={Boolean(share?.enabled)}
         server={serverResource}
+        regenerationBusy={worldRegenerationActive}
+        onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
         onCopy={copy}
         onOpenShare={openShareDialog}
       />
@@ -815,17 +824,17 @@ export default function ServerDetailPage() {
             </button>
           ) : null}
 
-          {worldRegenerationActive && activeTab !== "config" ? (
+          {worldRegenerationActive ? (
             <button
               className="mb-4 flex w-full items-center justify-between gap-3 rounded-lg border border-panel-green/30 bg-panel-green/10 px-4 py-3 text-left text-sm text-panel-green transition hover:bg-panel-green/15 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
               type="button"
-              onClick={() => setActiveTab("config")}
+              onClick={() => setActiveTab("logs")}
             >
               <span className="flex min-w-0 items-center gap-2 font-medium">
-                <Globe2 aria-hidden="true" className="size-4 shrink-0" />
-                <span className="truncate">{t("worldRegenerationProgress")}</span>
+                <RotateCcw aria-hidden="true" className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
+                <span className="truncate">{t("worldRegenerationRunning")}</span>
               </span>
-              <span className="shrink-0 text-xs">{t("tabConfig")}</span>
+              <span className="shrink-0 text-xs">{t("tabLogs")}</span>
             </button>
           ) : null}
 
@@ -919,18 +928,8 @@ export default function ServerDetailPage() {
               />
             </div>
           )}
-          {capabilities.worldRegeneration ? (
-            <div className={activeTab === "config" ? "mt-4" : "hidden"}>
-              <WorldRegenerationCard
-                playersOnline={playersOnline}
-                resource={serverResource}
-                serverStatus={status}
-                onActiveChange={setWorldRegenerationActive}
-              />
-            </div>
-          ) : null}
           {activeTab === "worlds" && visibleCapabilities.saveSnapshots ? (
-            <div className={capabilities.worldRegeneration ? "mt-4 space-y-4" : "space-y-4"}>
+            <div className="space-y-4">
               <WorldTemplatePanel resource={serverResource} />
               <WorldsTab
                 isError={worldsQuery.isError}
@@ -1028,6 +1027,16 @@ export default function ServerDetailPage() {
         onShareIncludePasswordChange={setShareIncludePassword}
       />
 
+      {capabilities.worldRegeneration ? (
+        <WorldRegenerationAction
+          open={worldRegenerationDialogOpen}
+          playersOnline={playersOnline}
+          serverId={serverResource.id}
+          serverStatus={status}
+          onActiveChange={setWorldRegenerationActive}
+          onOpenChange={setWorldRegenerationDialogOpen}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={pendingConfigRestart}
@@ -3388,8 +3397,10 @@ function MobileServerControls({
   joinAddress,
   joinPassword,
   joinPort,
+  onRegenerateWorld,
   onCopy,
   onOpenShare,
+  regenerationBusy,
   shareEnabled,
   server
 }: {
@@ -3399,8 +3410,10 @@ function MobileServerControls({
   joinAddress: string;
   joinPassword: string;
   joinPort: number;
+  onRegenerateWorld?: () => void;
   onCopy: (label: string, value: string) => void;
   onOpenShare: () => void;
+  regenerationBusy?: boolean;
   shareEnabled: boolean;
   server: GameServerResource;
 }) {
@@ -3439,7 +3452,16 @@ function MobileServerControls({
         value={joinPassword || t("none")}
         onCopy={onCopy}
       />
-      <ServerActions className="mt-3" compact disabled={disabled} server={server} showDelete={false} showInvite={false} />
+      <ServerActions
+        className="mt-3"
+        compact
+        disabled={disabled}
+        regenerationBusy={regenerationBusy}
+        server={server}
+        showDelete={false}
+        showInvite={false}
+        onRegenerateWorld={onRegenerateWorld}
+      />
     </Card>
   );
 }
