@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, Globe2, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GameUpdateCard } from "@/components/game-update-card";
+import { WorldRegenerationCard } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
@@ -112,7 +113,8 @@ const defaultCapabilities: ProviderCapabilities = {
   saveSnapshots: true,
   backups: true,
   mods: false,
-  versions: true
+  versions: true,
+  worldRegeneration: false
 };
 
 function formatCpuLimitLabel(value: number, t: (key: "unlimited" | "cpuCoresValue", values?: Record<string, string | number>) => string) {
@@ -135,6 +137,7 @@ export default function ServerDetailPage() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [gameUpdateActive, setGameUpdateActive] = useState(false);
   const [gameUpdateActivity, setGameUpdateActivity] = useState<"checking" | "updating" | null>(null);
+  const [worldRegenerationActive, setWorldRegenerationActive] = useState(false);
   const handleGameUpdateActiveChange = useCallback((active: boolean, updateStatus?: string) => {
     setGameUpdateActive(active);
     setGameUpdateActivity(active ? updateStatus === "checking" ? "checking" : "updating" : null);
@@ -812,6 +815,20 @@ export default function ServerDetailPage() {
             </button>
           ) : null}
 
+          {worldRegenerationActive && activeTab !== "config" ? (
+            <button
+              className="mb-4 flex w-full items-center justify-between gap-3 rounded-lg border border-panel-green/30 bg-panel-green/10 px-4 py-3 text-left text-sm text-panel-green transition hover:bg-panel-green/15 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+              type="button"
+              onClick={() => setActiveTab("config")}
+            >
+              <span className="flex min-w-0 items-center gap-2 font-medium">
+                <Globe2 aria-hidden="true" className="size-4 shrink-0" />
+                <span className="truncate">{t("worldRegenerationProgress")}</span>
+              </span>
+              <span className="shrink-0 text-xs">{t("tabConfig")}</span>
+            </button>
+          ) : null}
+
           <div
             id="server-detail-tabpanel"
             role="tabpanel"
@@ -902,8 +919,18 @@ export default function ServerDetailPage() {
               />
             </div>
           )}
-          {activeTab === "worlds" && visibleCapabilities.saveSnapshots && (
-            <div className="space-y-4">
+          {capabilities.worldRegeneration ? (
+            <div className={activeTab === "config" ? "mt-4" : "hidden"}>
+              <WorldRegenerationCard
+                playersOnline={playersOnline}
+                resource={serverResource}
+                serverStatus={status}
+                onActiveChange={setWorldRegenerationActive}
+              />
+            </div>
+          ) : null}
+          {activeTab === "worlds" && visibleCapabilities.saveSnapshots ? (
+            <div className={capabilities.worldRegeneration ? "mt-4 space-y-4" : "space-y-4"}>
               <WorldTemplatePanel resource={serverResource} />
               <WorldsTab
                 isError={worldsQuery.isError}
@@ -918,7 +945,7 @@ export default function ServerDetailPage() {
                 onCreateSnapshot={() => setPendingWorldSnapshot(true)}
               />
             </div>
-          )}
+          ) : null}
           {activeTab === "backups" && visibleCapabilities.backups && (
             <BackupsTab
               creating={backupCreate.isPending}

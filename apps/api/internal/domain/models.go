@@ -14,6 +14,10 @@ type GameUpdateJobStage string
 
 type GameUpdateOperation string
 
+type WorldRegenerationJobStatus string
+
+type WorldRegenerationJobStage string
+
 type Player struct {
 	Name string `json:"name,omitempty"`
 }
@@ -21,15 +25,16 @@ type Player struct {
 type PlayerLogEvent string
 
 type ProviderCapabilities struct {
-	ConsoleCommands bool `json:"consoleCommands"`
-	PlayerList      bool `json:"playerList"`
-	KickPlayer      bool `json:"kickPlayer"`
-	BanPlayer       bool `json:"banPlayer"`
-	Whitelist       bool `json:"whitelist"`
-	SaveSnapshots   bool `json:"saveSnapshots"`
-	Backups         bool `json:"backups"`
-	Mods            bool `json:"mods"`
-	Versions        bool `json:"versions"`
+	ConsoleCommands   bool `json:"consoleCommands"`
+	PlayerList        bool `json:"playerList"`
+	KickPlayer        bool `json:"kickPlayer"`
+	BanPlayer         bool `json:"banPlayer"`
+	Whitelist         bool `json:"whitelist"`
+	SaveSnapshots     bool `json:"saveSnapshots"`
+	Backups           bool `json:"backups"`
+	Mods              bool `json:"mods"`
+	Versions          bool `json:"versions"`
+	WorldRegeneration bool `json:"worldRegeneration"`
 }
 
 type ProviderConfigField struct {
@@ -59,6 +64,10 @@ type ProviderConfigSummary struct {
 	Password   string
 	MOTD       string
 	Secure     bool
+}
+
+type WorldRegenerationPlan struct {
+	SavePaths []string
 }
 
 type GameCatalogEntry struct {
@@ -135,6 +144,20 @@ const (
 	GameUpdateStageStarting           GameUpdateJobStage = "starting"
 	GameUpdateStageHealthCheck        GameUpdateJobStage = "health_check"
 	GameUpdateStageCompleted          GameUpdateJobStage = "completed"
+
+	WorldRegenerationJobQueued    WorldRegenerationJobStatus = "queued"
+	WorldRegenerationJobRunning   WorldRegenerationJobStatus = "running"
+	WorldRegenerationJobSucceeded WorldRegenerationJobStatus = "succeeded"
+	WorldRegenerationJobFailed    WorldRegenerationJobStatus = "failed"
+
+	WorldRegenerationStageQueued      WorldRegenerationJobStage = "queued"
+	WorldRegenerationStageStopping    WorldRegenerationJobStage = "stopping"
+	WorldRegenerationStageBackingUp   WorldRegenerationJobStage = "backing_up"
+	WorldRegenerationStageResetting   WorldRegenerationJobStage = "resetting"
+	WorldRegenerationStageStarting    WorldRegenerationJobStage = "starting"
+	WorldRegenerationStageHealthCheck WorldRegenerationJobStage = "health_check"
+	WorldRegenerationStageRollingBack WorldRegenerationJobStage = "rolling_back"
+	WorldRegenerationStageCompleted   WorldRegenerationJobStage = "completed"
 )
 
 type ServerJoinInfo struct {
@@ -265,6 +288,22 @@ type GameUpdateJob struct {
 	UpdatedAt        time.Time           `json:"updatedAt"`
 	CheckedAt        *time.Time          `json:"checkedAt,omitempty"`
 	CompletedAt      *time.Time          `json:"completedAt,omitempty"`
+}
+
+type WorldRegenerationJob struct {
+	ID          string                     `json:"id" gorm:"primaryKey"`
+	InstanceID  string                     `json:"instanceId" gorm:"index"`
+	ProviderKey ProviderKey                `json:"providerKey" gorm:"index"`
+	Status      WorldRegenerationJobStatus `json:"status" gorm:"index"`
+	Stage       WorldRegenerationJobStage  `json:"stage"`
+	Progress    int                        `json:"progress"`
+	BackupID    string                     `json:"backupId,omitempty"`
+	StartAfter  bool                       `json:"startAfter"`
+	WasRunning  bool                       `json:"wasRunning"`
+	Error       string                     `json:"error,omitempty"`
+	CreatedAt   time.Time                  `json:"createdAt"`
+	UpdatedAt   time.Time                  `json:"updatedAt"`
+	CompletedAt *time.Time                 `json:"completedAt,omitempty"`
 }
 
 type AdminAccount struct {

@@ -1,5 +1,13 @@
 # V1 Progress
 
+## 2026-07-18
+
+- Added provider-scoped world recreation as an extra maintenance action on the current server configuration page, without exposing the hidden global world library or adding a separate navigation tab.
+- Added persistent asynchronous world recreation jobs with stop, required full backup, provider-declared save isolation, optional restart, health checking, and automatic rollback stages.
+- Added the first provider implementation for Don't Starve Together, safely recreating the Master and enabled Caves shard saves while preserving cluster identity, token, ports, mods, and configuration.
+- Added path traversal and symbolic-link protection for save isolation, startup recovery for interrupted jobs, maintenance-task mutation locking, bilingual progress and confirmation UI, and OpenAPI coverage.
+- Verified full Go tests and vet, 80 frontend tests, frontend lint/typecheck, and the production frontend build.
+
 ## 2026-07-16
 
 - Fixed the Palworld runtime logger FIFO ownership race by atomically publishing

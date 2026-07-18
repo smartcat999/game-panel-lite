@@ -51,7 +51,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 	h.gameUpdateJobsMu.Lock()
 	defer h.gameUpdateJobsMu.Unlock()
 	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
-		writeError(w, http.StatusConflict, "a game update or runtime image task is in progress")
+		writeError(w, http.StatusConflict, "a server maintenance or runtime image task is in progress")
 		return
 	}
 	server, err := h.store.GetGameServer(r.Context(), id)
@@ -60,7 +60,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	var payload struct {
@@ -279,7 +279,7 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 	h.gameUpdateJobsMu.Lock()
 	defer h.gameUpdateJobsMu.Unlock()
 	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	server, err := serverctrl.NewService(h.store).RequestStart(r.Context(), id)
@@ -296,7 +296,7 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 	unlock := h.lockServerMutation(id)
 	defer unlock()
 	if h.gameUpdateLocked(r.Context(), id) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	server, err := serverctrl.NewService(h.store).RequestStop(r.Context(), id)
@@ -315,7 +315,7 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 	h.gameUpdateJobsMu.Lock()
 	defer h.gameUpdateJobsMu.Unlock()
 	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	server, err := serverctrl.NewService(h.store).RequestRestart(r.Context(), id)
@@ -337,7 +337,7 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	var payload struct {
@@ -377,7 +377,7 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 	unlock := h.lockServerMutation(id)
 	defer unlock()
 	if h.gameUpdateLocked(r.Context(), id) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	server, err := serverctrl.NewService(h.store).RequestDelete(r.Context(), id)

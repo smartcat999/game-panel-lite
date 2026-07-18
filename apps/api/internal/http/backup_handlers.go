@@ -51,7 +51,7 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	dataDir, err := serverDataDir(server)
@@ -120,7 +120,7 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), resource.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerLockedForMutation(resource) {
@@ -204,7 +204,7 @@ func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	dataDir, err := serverDataDir(server)
@@ -275,7 +275,7 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), resource.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerLockedForMutation(resource) {

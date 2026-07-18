@@ -80,15 +80,29 @@ func (Provider) Description() string {
 }
 func (Provider) Capabilities() domain.ProviderCapabilities {
 	return domain.ProviderCapabilities{
-		ConsoleCommands: false,
-		PlayerList:      false,
-		KickPlayer:      false,
-		BanPlayer:       false,
-		SaveSnapshots:   true,
-		Backups:         true,
-		Mods:            true,
-		Versions:        true,
+		ConsoleCommands:   false,
+		PlayerList:        false,
+		KickPlayer:        false,
+		BanPlayer:         false,
+		SaveSnapshots:     true,
+		Backups:           true,
+		Mods:              true,
+		Versions:          true,
+		WorldRegeneration: true,
 	}
+}
+
+func (p Provider) WorldRegenerationPlan(server domain.GameServer) (domain.WorldRegenerationPlan, error) {
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	if err := validateConfig(config); err != nil {
+		return domain.WorldRegenerationPlan{}, err
+	}
+	clusterDir := clusterConfigDir(config)
+	paths := []string{clusterDir + "/Master/save"}
+	if config.Caves != nil && config.Caves.Enabled {
+		paths = append(paths, clusterDir+"/Caves/save")
+	}
+	return domain.WorldRegenerationPlan{SavePaths: paths}, nil
 }
 func (Provider) SaveDisplayName() string { return "cluster save" }
 func (Provider) ConfigSchema() []domain.ProviderConfigField {

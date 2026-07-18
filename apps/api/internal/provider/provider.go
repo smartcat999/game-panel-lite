@@ -40,6 +40,10 @@ type SaveMetadataProvider interface {
 	SaveDisplayName() string
 }
 
+type WorldRegenerationProvider interface {
+	WorldRegenerationPlan(domain.GameServer) (domain.WorldRegenerationPlan, error)
+}
+
 type PlayerListProvider interface {
 	PlayerListCommand(domain.GameServer) string
 	ParsePlayerListOutput([]string) []domain.Player

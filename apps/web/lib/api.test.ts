@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, listBackups, listGames, listWorlds, setModEnabled } from "./api";
+import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getWorldRegeneration, listBackups, listGames, listWorlds, regenerateWorld, setModEnabled } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -290,6 +290,35 @@ describe("api mappers", () => {
     expect(fetchSpy).toHaveBeenNthCalledWith(3, expect.stringContaining("/api/servers/server-1/game-update/apply"), expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ startAfterUpdate: true })
+    }));
+  });
+
+  it("uses server-scoped asynchronous world regeneration endpoints", async () => {
+    const job = {
+      id: "regeneration-1",
+      instanceId: "server-1",
+      providerKey: "dont-starve-together",
+      status: "queued",
+      stage: "queued",
+      progress: 0,
+      startAfter: true,
+      wasRunning: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ supported: true, job }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(job), { status: 202 }));
+
+    const state = await getWorldRegeneration("server-1");
+    const queued = await regenerateWorld("server-1", true);
+
+    expect(state.supported).toBe(true);
+    expect(queued.id).toBe("regeneration-1");
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("/api/servers/server-1/world-regeneration"), expect.objectContaining({ cache: "no-store" }));
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, expect.stringContaining("/api/servers/server-1/world-regeneration"), expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ startAfter: true })
     }));
   });
 });

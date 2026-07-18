@@ -13,6 +13,7 @@ export type ProviderCapabilities = {
   backups: boolean;
   mods: boolean;
   versions: boolean;
+  worldRegeneration?: boolean;
 };
 
 export type ProviderConfigField = {
@@ -106,6 +107,39 @@ export type GameUpdateState = {
   latestBuildId?: string;
   checkedAt?: string;
   job?: GameUpdateJob;
+};
+
+export type WorldRegenerationJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type WorldRegenerationJobStage =
+  | "queued"
+  | "stopping"
+  | "backing_up"
+  | "resetting"
+  | "starting"
+  | "health_check"
+  | "rolling_back"
+  | "completed";
+
+export type WorldRegenerationJob = {
+  id: string;
+  instanceId: string;
+  providerKey: ProviderKey;
+  status: WorldRegenerationJobStatus;
+  stage: WorldRegenerationJobStage;
+  progress: number;
+  backupId?: string;
+  startAfter: boolean;
+  wasRunning: boolean;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+};
+
+export type WorldRegenerationState = {
+  supported: boolean;
+  job?: WorldRegenerationJob;
 };
 
 export type ServerWhitelistResponse = {
@@ -248,7 +282,7 @@ export type Backup = {
   providerKey?: ProviderKey;
   server: string;
   world: string;
-  type: "Auto" | "Manual" | "Pre-update";
+  type: "Auto" | "Manual" | "Pre-update" | "Pre-regeneration";
   size: string;
   sizeBytes: number;
   created: string;
