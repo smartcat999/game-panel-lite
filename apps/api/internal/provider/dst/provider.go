@@ -338,6 +338,15 @@ func normalizeConfig(config Config) Config {
 			config.Caves.Preset = "cave_default"
 		}
 		config.Caves.Overrides = cleanOverrides(config.Caves.Overrides)
+		// Older schemas exposed forest defaults for these cave-only options.
+		// Normalize persisted values so enabling caves repairs the legacy payload
+		// instead of rejecting it during runtime preparation.
+		if config.Caves.Overrides["task_set"] == "default" {
+			config.Caves.Overrides["task_set"] = "cave_default"
+		}
+		if config.Caves.Overrides["start_location"] == "default" {
+			config.Caves.Overrides["start_location"] = "caves"
+		}
 		if !config.Caves.Enabled {
 			config.Caves = nil
 		}

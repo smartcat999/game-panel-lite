@@ -134,6 +134,43 @@ func TestKnownWorldOverrideRejectsUnsupportedValue(t *testing.T) {
 	}
 }
 
+func TestCaveSchemaUsesCaveSpecificWorldGenerationDefaults(t *testing.T) {
+	defaults := map[string]any{}
+	for _, field := range configSchema() {
+		if field.Name == "caves.overrides.task_set" || field.Name == "caves.overrides.start_location" {
+			defaults[field.Name] = field.Default
+		}
+	}
+	if defaults["caves.overrides.task_set"] != "cave_default" {
+		t.Fatalf("expected cave task set default, got %v", defaults["caves.overrides.task_set"])
+	}
+	if defaults["caves.overrides.start_location"] != "caves" {
+		t.Fatalf("expected cave start location default, got %v", defaults["caves.overrides.start_location"])
+	}
+}
+
+func TestLegacyCaveWorldGenerationDefaultsAreNormalized(t *testing.T) {
+	config := configFromPayload(map[string]any{
+		"identity": map[string]any{"serverName": "DST", "clusterName": "Cluster", "clusterToken": "token"},
+		"caves": map[string]any{
+			"enabled": true,
+			"overrides": map[string]any{
+				"task_set":       "default",
+				"start_location": "default",
+			},
+		},
+	}, defaultConfig())
+	if got := config.Caves.Overrides["task_set"]; got != "cave_default" {
+		t.Fatalf("expected legacy cave task set to normalize, got %q", got)
+	}
+	if got := config.Caves.Overrides["start_location"]; got != "caves" {
+		t.Fatalf("expected legacy cave start location to normalize, got %q", got)
+	}
+	if err := validateConfig(config); err != nil {
+		t.Fatalf("expected normalized cave config to validate: %v", err)
+	}
+}
+
 func TestNormalizeAndValidateConfig(t *testing.T) {
 	config := normalizeConfig(Config{
 		Identity: DSTIdentityConfig{ServerName: "DST Friends", ClusterName: "Cluster", ClusterToken: "klei-token"},

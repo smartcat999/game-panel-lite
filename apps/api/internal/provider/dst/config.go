@@ -78,12 +78,24 @@ func worldOptionFields(prefix string, world string) []domain.ProviderConfigField
 			Name:    prefix + ".overrides." + item.Key,
 			Label:   item.Label,
 			Type:    "select",
-			Default: item.Default,
+			Default: defaultForWorld(item, world),
 			Options: options,
 			Group:   strings.Join([]string{"dst", prefix, item.Category, item.Group}, "."),
 		})
 	}
 	return fields
+}
+
+func defaultForWorld(item dstWorldOption, world string) string {
+	if world == "cave" {
+		switch item.Key {
+		case "task_set":
+			return "cave_default"
+		case "start_location":
+			return "caves"
+		}
+	}
+	return item.Default
 }
 
 func valuesForWorld(item dstWorldOption, world string) []string {

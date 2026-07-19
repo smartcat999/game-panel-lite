@@ -10,7 +10,15 @@ export function createDefaultProviderConfigPayload(
   for (const field of provider?.configSchema ?? []) {
     setProviderConfigValue(payload, field.name, defaultProviderFieldValue(field));
   }
-  return deepMergeProviderPayload(payload, overrides);
+  const merged = deepMergeProviderPayload(payload, overrides);
+  for (const field of provider?.configSchema ?? []) {
+    if (field.type !== "select" || !field.options?.length) continue;
+    const current = String(providerConfigValue(merged, field.name) ?? "");
+    if (!field.options.some((option) => option.value === current)) {
+      setProviderConfigValue(merged, field.name, defaultProviderFieldValue(field));
+    }
+  }
+  return merged;
 }
 
 export function updateProviderConfigPayload(
