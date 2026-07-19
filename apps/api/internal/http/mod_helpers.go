@@ -624,7 +624,6 @@ func (h *Handler) unmarkModDesired(ctx context.Context, server *domain.GameServe
 	if server.Spec.Generation <= 0 {
 		server.Spec.Generation = 1
 	}
-	server.Status.Phase = domain.PhasePending
 	server.UpdatedAt = time.Now()
 	return h.store.SaveGameServer(ctx, server)
 }
@@ -644,7 +643,6 @@ func (h *Handler) markModsDesired(ctx context.Context, server *domain.GameServer
 	if server.Spec.Generation <= 0 {
 		server.Spec.Generation = 1
 	}
-	server.Status.Phase = domain.PhasePending
 	server.UpdatedAt = time.Now()
 	return h.store.SaveGameServer(ctx, server)
 }

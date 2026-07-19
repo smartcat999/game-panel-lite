@@ -23,6 +23,22 @@ func TestReconcilerNeedsReconcileForNewGeneration(t *testing.T) {
 	}
 }
 
+func TestReconcilerSkipsUnrequestedRunningSpecChange(t *testing.T) {
+	reconciler := NewReconciler()
+	server := domain.GameServer{
+		Spec: domain.ServerSpec{Generation: 2, DesiredState: domain.DesiredRunning},
+		Status: domain.ServerRuntimeStatus{
+			ObservedGeneration: 1,
+			AppliedGeneration:  1,
+			ActualState:        domain.ActualRunning,
+			Phase:              domain.PhaseRunning,
+		},
+	}
+	if reconciler.NeedsReconcile(server) {
+		t.Fatal("expected saved running spec change to wait for an explicit restart")
+	}
+}
+
 func TestReconcilerSkipsMatchedStoppedState(t *testing.T) {
 	reconciler := NewReconciler()
 	server := domain.GameServer{

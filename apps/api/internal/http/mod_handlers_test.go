@@ -138,8 +138,11 @@ func TestPalworldPakUploadCreatesDesiredAsset(t *testing.T) {
 	if len(persisted.Spec.ModIDs) != 1 || persisted.Spec.ModIDs[0] != mod.ID {
 		t.Fatalf("expected uploaded pak to be desired mod, got %+v", persisted.Spec.ModIDs)
 	}
-	if persisted.Status.Phase != domain.PhasePending {
-		t.Fatalf("expected Palworld mod upload to queue reconcile, got %+v", persisted.Status)
+	if persisted.Status.Phase != domain.PhaseStopped {
+		t.Fatalf("expected Palworld mod upload to preserve stopped state, got %+v", persisted.Status)
+	}
+	if persisted.Spec.Generation <= persisted.Status.AppliedGeneration {
+		t.Fatalf("expected Palworld mod upload to remain pending until an explicit start, got generation=%d applied=%d", persisted.Spec.Generation, persisted.Status.AppliedGeneration)
 	}
 }
 

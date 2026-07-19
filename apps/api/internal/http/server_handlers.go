@@ -114,7 +114,6 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 	if server.Spec.Generation <= 0 {
 		server.Spec.Generation = 1
 	}
-	server.Status.Phase = domain.PhasePending
 	server.UpdatedAt = time.Now()
 	if err := h.store.SaveGameServer(r.Context(), &server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

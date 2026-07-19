@@ -52,14 +52,11 @@ func (r *Reconciler) WithImageLoader(loader ImageLoader) *Reconciler {
 }
 
 func (r *Reconciler) NeedsReconcile(server domain.GameServer) bool {
-	if server.Status.ObservedGeneration < server.Spec.Generation {
-		return true
-	}
 	switch server.Status.Phase {
 	case domain.PhasePending, domain.PhaseReconciling, domain.PhaseDeleting:
 		return true
 	case domain.PhaseFailed:
-		return server.Status.ObservedGeneration < server.Spec.Generation || server.Spec.DesiredState == domain.DesiredDeleted
+		return server.Spec.DesiredState == domain.DesiredDeleted
 	default:
 		return desiredMatchesActual(server.Spec.DesiredState, server.Status.ActualState) == false
 	}
