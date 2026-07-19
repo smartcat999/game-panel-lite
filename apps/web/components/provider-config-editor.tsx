@@ -117,7 +117,7 @@ export function ProviderConfigEditor({
                   </div>
                   <div className="grid gap-3 xl:grid-cols-2">
                     {groupFields.map((field) => (
-                      <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+                      <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} resettable slider={providerKey === "palworld"} />
                     ))}
                   </div>
                 </section>
@@ -161,7 +161,7 @@ export function ProviderConfigEditor({
   );
 }
 
-function ConfigField({ disabled, error, field, help, label, onChange, payload, slider }: {
+function ConfigField({ disabled, error, field, help, label, onChange, payload, resettable = false, slider }: {
   disabled: boolean;
   error?: string;
   field: ProviderConfigField;
@@ -169,6 +169,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
   label: string;
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
   payload: ProviderConfigPayload;
+  resettable?: boolean;
   slider: boolean;
 }) {
   const { t } = useI18n();
@@ -187,7 +188,11 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
         <span className="flex shrink-0 items-center gap-2">
           {isRangeSlider ? <output className="min-w-10 rounded-md bg-slate-900 px-2 py-1 text-center text-sm font-semibold tabular-nums text-slate-100">{numericValue}</output> : null}
-          {modified ? <button type="button" className="flex items-center gap-1 text-[11px] text-panel-green hover:text-panel-green/80" onClick={reset} disabled={disabled}><RotateCcw aria-hidden="true" className="size-3" />{t("restoreDefault")}</button> : null}
+          {resettable && modified ? (
+            <button type="button" aria-label={t("restoreDefault")} title={t("restoreDefault")} className="flex size-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-panel-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40 disabled:opacity-50" onClick={reset} disabled={disabled}>
+              <RotateCcw aria-hidden="true" className="size-3.5" />
+            </button>
+          ) : null}
         </span>
       </div>
       {field.type === "boolean" ? (

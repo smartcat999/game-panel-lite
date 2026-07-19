@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Removed noisy per-field reset actions from basic provider settings, where generated names and credentials are valid initial values, and reduced modified advanced-field resets to accessible icon actions.
 - Simplified Palworld number sliders to a compact current-value readout, one full-width track, and range endpoints, removing the redundant number input and default-value caption while retaining keyboard precision.
 - Replaced the inline advanced-settings expansion with an in-place basic/advanced view switch, explicit back navigation, and a directional entry affordance on both creation and server-detail forms.
 - Fixed the shared provider boolean switch thumb positioning so enabled, disabled, and keyboard-focused states stay aligned inside the track on creation and server-detail forms.
