@@ -1,9 +1,9 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, RotateCcw, Search, SlidersHorizontal } from "lucide-react";
+import { RotateCcw, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { SecretInput } from "@/components/secret-input";
-import { Button, Input } from "@/components/ui";
+import { Input } from "@/components/ui";
 import { dstConfigGroupLabelKey } from "@/lib/dst-config";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, type ProviderConfigPayload } from "@/lib/provider-config";
@@ -33,7 +33,7 @@ export function ProviderConfigEditor({
   providerKey: string;
 }) {
   const { locale, t } = useI18n();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [activeView, setActiveView] = useState<"basic" | "advanced">("basic");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "modified">("all");
 
@@ -51,6 +51,12 @@ export function ProviderConfigEditor({
     if (!groups.includes(activeGroup)) setActiveGroup(groups[0] ?? "");
   }, [activeGroup, groups]);
 
+  useEffect(() => {
+    setActiveView("basic");
+    setQuery("");
+    setFilter("all");
+  }, [providerKey]);
+
   const normalizedQuery = query.trim().toLocaleLowerCase(locale === "zh" ? "zh-CN" : "en-US");
   const matchedFields = advancedFields.filter((field) => {
     if (filter === "modified" && !isProviderFieldModified(payload, field)) return false;
@@ -61,102 +67,85 @@ export function ProviderConfigEditor({
 
   if (fields.length === 0) return <p className="mt-4 text-sm text-slate-500">{t("none")}</p>;
 
-  if (advancedOpen && advancedFields.length > 0) {
-    return (
-      <div className="mt-4 overflow-hidden rounded-lg border border-panel-line bg-slate-950/25">
-        <div className="border-b border-panel-line p-3 lg:p-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 items-center gap-3">
-              <Button type="button" variant="ghost" className="h-9 shrink-0 px-2 text-xs" onClick={() => setAdvancedOpen(false)}>
-                <ChevronLeft aria-hidden="true" className="mr-1 size-4" />
-                {t("backToBasicSettings")}
-              </Button>
-              <span aria-hidden="true" className="hidden h-6 w-px bg-panel-line sm:block" />
-              <div className="min-w-0">
-                <h4 className="truncate text-sm font-semibold text-slate-100">{t("advancedGameSettings")}</h4>
-                <p className="mt-0.5 text-xs text-slate-500">{t("modifiedSettingsCount", { count: modifiedCount })}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="relative min-w-52 flex-1 xl:w-64 xl:flex-none">
-                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
-                <Input className="w-full pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchGameSettings")} />
-              </label>
-              <div className="flex rounded-md border border-panel-line bg-slate-950 p-0.5">
-                {(["all", "modified"] as const).map((value) => (
-                  <button key={value} type="button" className={cn("rounded px-2.5 py-1.5 text-xs font-medium transition", filter === value ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:text-slate-300")} onClick={() => setFilter(value)}>
-                    {t(value === "all" ? "allSettings" : "modifiedSettings")}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:grid lg:grid-cols-[210px_minmax(0,1fr)]">
-          <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line p-2 lg:block lg:border-b-0 lg:border-r lg:p-2">
-            {groups.map((group) => {
-              const count = advancedFields.filter((field) => field.group === group && isProviderFieldModified(payload, field)).length;
-              return (
-                <button key={group} type="button" className={cn("flex shrink-0 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-xs transition lg:mb-1 lg:w-full", activeGroup === group && !normalizedQuery ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:bg-slate-900 hover:text-slate-300")} onClick={() => { setQuery(""); setActiveGroup(group); }}>
-                  <span>{groupLabel(group, locale, t)}</span>
-                  {count > 0 ? <span className="text-panel-green">{count}</span> : null}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="min-w-0 p-3 lg:p-4">
-            {visibleGroups.map((group) => {
-              const groupFields = matchedFields.filter((field) => field.group === group);
-              if (groupFields.length === 0) return null;
-              return (
-                <section key={group} className="mb-6 last:mb-0">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
-                    <span className="text-xs text-slate-500">{t("settingsCount", { count: groupFields.length })}</span>
-                  </div>
-                  <div className="grid gap-3 xl:grid-cols-2">
-                    {groupFields.map((field) => (
-                      <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} resettable slider={providerKey === "palworld"} />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
-            {matchedFields.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">{t("noGameSettingsMatch")}</p> : null}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="mt-4 space-y-4">
-      <div className="grid gap-4 lg:grid-cols-2">
-        {baseFields.map((field) => (
-          <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
-        ))}
-      </div>
-
       {advancedFields.length > 0 ? (
-        <div className="border-t border-panel-line pt-4">
-          <button type="button" className="flex w-full items-center justify-between gap-4 rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3 text-left transition hover:border-slate-600 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/40" onClick={() => setAdvancedOpen(true)}>
-            <span className="flex min-w-0 items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-slate-900 text-panel-green"><SlidersHorizontal aria-hidden="true" className="size-4" /></span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-slate-100">{t("advancedGameSettings")}</span>
-                <span className="mt-0.5 block text-xs text-slate-500">{t("advancedGameSettingsSummary", { count: advancedFields.length })}</span>
-              </span>
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              <span className={cn("rounded px-2 py-1 text-xs", modifiedCount > 0 ? "bg-panel-green/12 text-panel-green" : "bg-slate-900 text-slate-500")}>
-                {t("modifiedSettingsCount", { count: modifiedCount })}
-              </span>
-              <ChevronRight aria-hidden="true" className="size-4 text-slate-600" />
-            </span>
-          </button>
+        <div role="tablist" aria-label={t("gameSettingsViews")} className="inline-flex rounded-md border border-panel-line bg-slate-950/50 p-1">
+          {(["basic", "advanced"] as const).map((view) => (
+            <button
+              key={view}
+              type="button"
+              role="tab"
+              aria-selected={activeView === view}
+              className={cn("flex h-8 items-center gap-2 rounded px-3 text-xs font-medium transition", activeView === view ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:text-slate-300")}
+              onClick={() => setActiveView(view)}
+            >
+              {t(view === "basic" ? "basicGameSettings" : "advancedGameSettings")}
+              {view === "advanced" && modifiedCount > 0 ? (
+                <span aria-label={t("modifiedSettingsCount", { count: modifiedCount })} className="min-w-5 rounded bg-panel-green/15 px-1.5 py-0.5 text-center text-[10px] tabular-nums text-panel-green">{modifiedCount}</span>
+              ) : null}
+            </button>
+          ))}
         </div>
       ) : null}
+
+      {activeView === "advanced" && advancedFields.length > 0 ? (
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 pb-3">
+            <label className="relative min-w-52 flex-1 sm:max-w-72">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+              <Input className="w-full pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchGameSettings")} />
+            </label>
+            <div className="flex rounded-md border border-panel-line bg-slate-950 p-0.5">
+              {(["all", "modified"] as const).map((value) => (
+                <button key={value} type="button" className={cn("rounded px-2.5 py-1.5 text-xs font-medium transition", filter === value ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:text-slate-300")} onClick={() => setFilter(value)}>
+                  {t(value === "all" ? "allSettings" : "modifiedSettings")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-panel-line lg:grid lg:grid-cols-[190px_minmax(0,1fr)]">
+            <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line py-2 lg:block lg:border-b-0 lg:border-r lg:pr-3">
+              {groups.map((group) => {
+                const count = advancedFields.filter((field) => field.group === group && isProviderFieldModified(payload, field)).length;
+                return (
+                  <button key={group} type="button" className={cn("flex shrink-0 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-xs transition lg:mb-1 lg:w-full", activeGroup === group && !normalizedQuery ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:bg-slate-900 hover:text-slate-300")} onClick={() => { setQuery(""); setActiveGroup(group); }}>
+                    <span>{groupLabel(group, locale, t)}</span>
+                    {count > 0 ? <span className="text-panel-green">{count}</span> : null}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="min-w-0 py-3 lg:pl-4">
+              {visibleGroups.map((group) => {
+                const groupFields = matchedFields.filter((field) => field.group === group);
+                if (groupFields.length === 0) return null;
+                return (
+                  <section key={group} className="mb-6 last:mb-0">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                      <span className="text-xs text-slate-500">{t("settingsCount", { count: groupFields.length })}</span>
+                    </div>
+                    <div className="grid gap-3 xl:grid-cols-2">
+                      {groupFields.map((field) => (
+                        <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} resettable slider={providerKey === "palworld"} />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+              {matchedFields.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">{t("noGameSettingsMatch")}</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {baseFields.map((field) => (
+            <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -181,19 +170,17 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, r
   const rangeFill = field.min !== undefined && field.max !== undefined && field.max > field.min
     ? ((numericValue - field.min) / (field.max - field.min)) * 100
     : 0;
+  const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
   const reset = () => onChange(field, field.type === "boolean" ? field.default === true : String(field.default ?? (field.type === "number" ? 0 : "")));
   return (
     <div className={cn("min-w-0 rounded-md border bg-slate-950/35 p-3", error ? "border-red-400/60" : "border-panel-line")}>
       <div className="mb-2 flex min-h-5 items-start justify-between gap-3">
         <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
-        <span className="flex shrink-0 items-center gap-2">
-          {isRangeSlider ? <output className="min-w-10 rounded-md bg-slate-900 px-2 py-1 text-center text-sm font-semibold tabular-nums text-slate-100">{numericValue}</output> : null}
-          {resettable && modified ? (
-            <button type="button" aria-label={t("restoreDefault")} title={t("restoreDefault")} className="flex size-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-panel-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40 disabled:opacity-50" onClick={reset} disabled={disabled}>
-              <RotateCcw aria-hidden="true" className="size-3.5" />
-            </button>
-          ) : null}
-        </span>
+        {resettable && modified ? (
+          <button type="button" aria-label={t("restoreDefault")} title={t("restoreDefault")} className="flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-panel-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40 disabled:opacity-50" onClick={reset} disabled={disabled}>
+            <RotateCcw aria-hidden="true" className="size-3.5" />
+          </button>
+        ) : null}
       </div>
       {field.type === "boolean" ? (
         <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} disabled={disabled} className="flex w-full items-center justify-between rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm text-slate-200 outline-none transition focus-visible:border-panel-green focus-visible:ring-2 focus-visible:ring-panel-green/30 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
@@ -203,8 +190,15 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, r
           </span>
         </button>
       ) : isRangeSlider ? (
-        <div className="space-y-1.5">
-          <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range w-full" style={{ "--range-fill": `${Math.max(0, Math.min(100, rangeFill))}%` } as CSSProperties} type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+        <div className="relative space-y-1.5 pt-7" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
+          <output
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 min-w-8 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
+            style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
+          >
+            {numericValue}
+          </output>
+          <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
           <div className="flex justify-between text-[11px] tabular-nums text-slate-600">
             <span>{field.min}</span>
             <span>{field.max}</span>
