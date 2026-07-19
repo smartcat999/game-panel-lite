@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Merged Palworld slider bounds into the control row as `minimum | track | maximum`, removing the separate range-caption row while retaining the thumb-anchored current value.
 - Anchored each Palworld slider's current-value readout above its thumb so the value moves with the control instead of occupying a disconnected title-row column.
 - Replaced the advanced-settings entry/return flow with a stable basic/advanced tab switch, flattening the editor hierarchy and keeping search, filters, and categories inside the advanced view without a nested panel shell.
 - Fixed DST mod status rendering so client-only mods no longer claim to await a server restart, server-managed mods without runtime inspection show the honest configured state, and pending restart remains reserved for actual synchronization flows.

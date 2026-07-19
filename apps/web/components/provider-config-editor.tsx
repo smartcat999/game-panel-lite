@@ -190,19 +190,19 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, r
           </span>
         </button>
       ) : isRangeSlider ? (
-        <div className="relative space-y-1.5 pt-7" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
-          <output
-            aria-hidden="true"
-            className="pointer-events-none absolute top-0 min-w-8 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
-            style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
-          >
-            {numericValue}
-          </output>
-          <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
-          <div className="flex justify-between text-[11px] tabular-nums text-slate-600">
-            <span>{field.min}</span>
-            <span>{field.max}</span>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3 text-[11px] tabular-nums text-slate-600">
+          <span className="pb-0.5">{field.min}</span>
+          <div className="relative min-w-0 pt-7" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
+            <output
+              aria-hidden="true"
+              className="pointer-events-none absolute top-0 min-w-8 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
+              style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
+            >
+              {numericValue}
+            </output>
+            <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range block w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
           </div>
+          <span className="pb-0.5">{field.max}</span>
         </div>
       ) : field.type === "select" ? (
         <select id={`provider-field-${field.name}`} className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green" disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)}>
