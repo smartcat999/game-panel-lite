@@ -65,6 +65,40 @@ func TestProviderWorkloadBuilderUsesProviderRuntimeContract(t *testing.T) {
 	}
 }
 
+func TestProviderWorkloadBuilderPassesDSTModSyncMode(t *testing.T) {
+	registry := provider.NewRegistry(dst.NewProvider(runtimecatalog.Catalog{}))
+	builder := NewProviderWorkloadBuilder(registry)
+	server := domain.GameServer{
+		ID:          "dst-sync",
+		Name:        "DST Sync",
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+		Spec: domain.ServerSpec{
+			Version: "latest",
+			Config: map[string]any{
+				"identity": map[string]any{
+					"serverName":   "DST Sync",
+					"clusterName":  "GamePanelLite",
+					"clusterToken": "token",
+				},
+				"gameplay": map[string]any{"maxPlayers": float64(6)},
+				"world":    map[string]any{"preset": "forest_default"},
+				"port":     float64(10999),
+			},
+			Network: domain.ServerNetworkSpec{Port: 10999, HostPort: 10999},
+			Runtime: domain.ServerRuntimeSpec{DataDir: t.TempDir(), ModSyncMode: "refresh"},
+		},
+	}
+
+	spec, err := builder.BuildWorkloadSpec(context.Background(), server)
+	if err != nil {
+		t.Fatalf("build workload spec: %v", err)
+	}
+	if !containsEnv(spec.Options.Env, "DST_MOD_SYNC_MODE=refresh") {
+		t.Fatalf("expected DST refresh mode in workload env, got %+v", spec.Options.Env)
+	}
+}
+
 func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 	root := t.TempDir()
 	db, err := store.Open(filepath.Join(root, "gamepanel.db"))

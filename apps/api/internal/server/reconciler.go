@@ -123,13 +123,8 @@ func (r *Reconciler) reconcileRunning(ctx context.Context, server domain.GameSer
 			return r.markRunning(server, now), nil
 		}
 	}
-	if needsRecreate && server.Status.RuntimeID != "" {
-		if err := r.removeWorkload(ctx, server.Status.RuntimeID, recorder); err != nil {
-			return r.markFailed(server, now, "RemoveFailed", err.Error()), nil
-		}
-		server.Status.RuntimeID = ""
-	}
-	if server.Status.RuntimeID == "" {
+	var replacementSpec *domain.WorkloadSpec
+	if needsRecreate {
 		spec, err := r.builder.BuildWorkloadSpec(ctx, server)
 		if err != nil {
 			recorder.failed("server.container.prepare.failed", "Build runtime container spec", "", "", err)
@@ -143,14 +138,26 @@ func (r *Reconciler) reconcileRunning(ctx context.Context, server domain.GameSer
 			}
 			recorder.event("server.image.load.succeeded", "Loaded runtime image for server "+server.Name, map[string]any{"image": spec.Image})
 		}
-		recorder.event("server.container.create.started", "Create runtime container for server "+server.Name, map[string]any{"image": spec.Image})
-		runtimeID, err := r.runtime.Create(ctx, spec)
+		replacementSpec = &spec
+	}
+	if needsRecreate && server.Status.RuntimeID != "" {
+		if err := r.removeWorkload(ctx, server.Status.RuntimeID, recorder); err != nil {
+			return r.markFailed(server, now, "RemoveFailed", err.Error()), nil
+		}
+		server.Status.RuntimeID = ""
+	}
+	if server.Status.RuntimeID == "" {
+		if replacementSpec == nil {
+			return r.markFailed(server, now, "BuildSpecFailed", "replacement workload spec is unavailable"), nil
+		}
+		recorder.event("server.container.create.started", "Create runtime container for server "+server.Name, map[string]any{"image": replacementSpec.Image})
+		runtimeID, err := r.runtime.Create(ctx, *replacementSpec)
 		if err != nil {
-			recorder.failed("server.container.create.failed", "Create runtime container", "", spec.Image, err)
+			recorder.failed("server.container.create.failed", "Create runtime container", "", replacementSpec.Image, err)
 			return r.markFailed(server, now, "CreateFailed", err.Error()), nil
 		}
 		server.Status.RuntimeID = runtimeID
-		recorder.event("server.container.create.succeeded", "Created runtime container for server "+server.Name, map[string]any{"image": spec.Image, "runtimeId": runtimeID})
+		recorder.event("server.container.create.succeeded", "Created runtime container for server "+server.Name, map[string]any{"image": replacementSpec.Image, "runtimeId": runtimeID})
 	}
 	recorder.event("server.container.start.started", "Start runtime container for server "+server.Name, map[string]any{"runtimeId": server.Status.RuntimeID})
 	if err := r.runtime.Start(ctx, server.Status.RuntimeID); err != nil {
@@ -245,6 +252,7 @@ func (r *Reconciler) removeWorkload(ctx context.Context, runtimeID string, recor
 }
 
 func (r *Reconciler) markRunning(server domain.GameServer, now time.Time) domain.GameServer {
+	server.Spec.Runtime.ModSyncMode = ""
 	server.Status.ActualState = domain.ActualRunning
 	server.Status.ObservedGeneration = server.Spec.Generation
 	server.Status.AppliedGeneration = server.Spec.Generation
