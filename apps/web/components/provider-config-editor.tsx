@@ -176,6 +176,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
   const modified = isProviderFieldModified(payload, field);
   const checked = value === true;
   const numericValue = Number(value ?? field.default ?? 0);
+  const isRangeSlider = field.type === "number" && slider && field.min !== undefined && field.max !== undefined;
   const rangeFill = field.min !== undefined && field.max !== undefined && field.max > field.min
     ? ((numericValue - field.min) / (field.max - field.min)) * 100
     : 0;
@@ -184,7 +185,10 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     <div className={cn("min-w-0 rounded-md border bg-slate-950/35 p-3", error ? "border-red-400/60" : "border-panel-line")}>
       <div className="mb-2 flex min-h-5 items-start justify-between gap-3">
         <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
-        {modified ? <button type="button" className="flex shrink-0 items-center gap-1 text-[11px] text-panel-green hover:text-panel-green/80" onClick={reset} disabled={disabled}><RotateCcw aria-hidden="true" className="size-3" />{t("restoreDefault")}</button> : null}
+        <span className="flex shrink-0 items-center gap-2">
+          {isRangeSlider ? <output className="min-w-10 rounded-md bg-slate-900 px-2 py-1 text-center text-sm font-semibold tabular-nums text-slate-100">{numericValue}</output> : null}
+          {modified ? <button type="button" className="flex items-center gap-1 text-[11px] text-panel-green hover:text-panel-green/80" onClick={reset} disabled={disabled}><RotateCcw aria-hidden="true" className="size-3" />{t("restoreDefault")}</button> : null}
+        </span>
       </div>
       {field.type === "boolean" ? (
         <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} disabled={disabled} className="flex w-full items-center justify-between rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm text-slate-200 outline-none transition focus-visible:border-panel-green focus-visible:ring-2 focus-visible:ring-panel-green/30 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
@@ -193,13 +197,11 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
             <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white transition-transform", checked ? "translate-x-4" : "translate-x-0")} />
           </span>
         </button>
-      ) : field.type === "number" && slider && field.min !== undefined && field.max !== undefined ? (
-        <div className="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-3">
-          <input id={`provider-field-${field.name}`} className="resource-range w-full" style={{ "--range-fill": `${Math.max(0, Math.min(100, rangeFill))}%` } as CSSProperties} type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
-          <Input aria-label={label} className="w-full text-right tabular-nums" type="number" min={field.min} max={field.max} step={field.step ?? 1} value={Number(value ?? 0)} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
-          <div className="col-start-1 flex justify-between text-[11px] tabular-nums text-slate-600">
+      ) : isRangeSlider ? (
+        <div className="space-y-1.5">
+          <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range w-full" style={{ "--range-fill": `${Math.max(0, Math.min(100, rangeFill))}%` } as CSSProperties} type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+          <div className="flex justify-between text-[11px] tabular-nums text-slate-600">
             <span>{field.min}</span>
-            <span>{t("rangeDefaultValue", { value: String(field.default ?? 0) })}</span>
             <span>{field.max}</span>
           </div>
         </div>
