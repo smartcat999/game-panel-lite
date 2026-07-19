@@ -3314,7 +3314,6 @@ function MobileServerControls({
         disabled={disabled}
         regenerationBusy={regenerationBusy}
         server={server}
-        showDelete={false}
         showInvite={false}
         onRegenerateWorld={onRegenerateWorld}
       />
