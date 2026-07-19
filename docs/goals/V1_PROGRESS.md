@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Shared provider option localization across creation, review, and server-detail forms so DST enum values render in Chinese while retaining their backend values.
 - Fixed DST detail configuration initialization to deep-merge stored nested values with provider schema defaults, preventing empty world override groups from rendering as `never`.
 - Added an accessible show/hide control for saved provider secrets so existing Klei server tokens and other password fields can be verified without changing their stored values; secrets remain masked by default and are hidden again while saving.
 

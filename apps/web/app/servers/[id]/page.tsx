@@ -62,6 +62,7 @@ import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayer
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { providerOptionLabel } from "@/lib/provider-option-label";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -2070,7 +2071,7 @@ function ProviderConfigFields({
             {field.type === "select" ? (
               <Select disabled={disabled} value={String(value ?? "")} onChange={(nextValue) => onChange(field, nextValue)}>
                 {(field.options ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>
                 ))}
               </Select>
             ) : field.type === "password" ? (
