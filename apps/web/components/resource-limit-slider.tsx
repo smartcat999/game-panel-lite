@@ -26,12 +26,12 @@ export function ResourceLimitSlider({
   return (
     <div className="min-w-0">
       <p className="mb-2 text-sm font-medium text-slate-300">{label}</p>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+      <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_4.5rem] items-center gap-3">
         <span className="text-[11px] tabular-nums text-slate-500">{formatValue(0)}</span>
         <div className="relative min-w-0 pt-7" style={rangeStyle}>
           <output
             className="pointer-events-none absolute top-0 min-w-12 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
-            style={{ left: `clamp(2rem, ${valuePercent}%, calc(100% - 2rem))` }}
+            style={{ left: `${valuePercent}%` }}
           >
             {formatValue(clampedValue)}
           </output>
@@ -47,7 +47,7 @@ export function ResourceLimitSlider({
             onChange={(event) => onChange(Number(event.target.value))}
           />
         </div>
-        <span className="text-[11px] tabular-nums text-slate-500">{formatValue(max)}</span>
+        <span className="text-right text-[11px] tabular-nums text-slate-500">{formatValue(max)}</span>
       </div>
     </div>
   );

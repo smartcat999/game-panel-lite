@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Aligned resource slider value badges exactly over their thumbs and fixed endpoint column widths so CPU and memory tracks share identical horizontal geometry.
 - Changed GamePanel Lite's Palworld new-server death-penalty default from the official `All` setting to the friendlier `None` setting across schema defaults, normalization, and runtime environment generation; existing saved servers remain unchanged.
 - Stacked CPU and memory resource controls vertically, and removed redundant per-step tick labels and memory recommendations, keeping only endpoints and the thumb-aligned current value.
 - Restored the delete-server action to the mobile server-detail overflow menu while retaining the existing destructive confirmation flow.
