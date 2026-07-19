@@ -151,8 +151,7 @@ start_shard() {
     -conf_dir "${CONF_DIR}" \
     -cluster "${CLUSTER_NAME}" \
     -shard "${shard}" \
-    -ugc_directory "${UGC_DIR}" \
-    -console
+    -ugc_directory "${UGC_DIR}"
 }
 
 terminate_children() {

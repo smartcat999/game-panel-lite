@@ -218,10 +218,14 @@ func TestRuntimeOptionsRenderDSTFiles(t *testing.T) {
 		"cluster_password = join-secret",
 		"max_players = 5",
 		"game_mode = survival",
+		"offline_cluster = false",
 	} {
 		if !strings.Contains(cluster, expected) {
 			t.Fatalf("expected cluster.ini to contain %q, got:\n%s", expected, cluster)
 		}
+	}
+	if strings.Contains(cluster, "offline_server") {
+		t.Fatalf("cluster.ini must not use deprecated offline_server:\n%s", cluster)
 	}
 	if got := options.Files["dst/Cluster/cluster_token.txt"]; got != "klei-token\n" {
 		t.Fatalf("expected server token file, got %q", got)

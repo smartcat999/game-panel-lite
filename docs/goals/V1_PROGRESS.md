@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Removed deprecated DST `-console` and `offline_server` usage while retaining console control through the supported cluster setting.
 - Fixed cave shard creation by publishing cave-specific defaults for biome and spawn-area generation settings and transparently repairing legacy payloads that stored their forest-only `default` values.
 - Separated DST mod synchronization by explicit lifecycle action: Start reuses the verified persistent Workshop cache and downloads only missing entries, while Restart refreshes every configured server mod through a validated staging directory and atomically replaces the live cache only after a complete download.
 - Blocked DST client-only and unclassified Workshop mods from entering the server mod library or server installer in the frontend, while preserving raw Workshop tags in discovery and separating server-only from all-clients-required labeling without changing backend behavior.
