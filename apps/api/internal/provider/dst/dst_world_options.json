@@ -1,0 +1,4352 @@
+{
+  "sourceBuild": "740477",
+  "options": [
+    {
+      "key": "spiders",
+      "label": "蜘蛛巢",
+      "labelEn": "Spider Dens",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "cave_spiders",
+      "label": "蛛网岩",
+      "labelEn": "Spilagmites",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "houndmound",
+      "label": "猎犬丘",
+      "labelEn": "Hound Mounds",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "merm",
+      "label": "漏雨的小屋",
+      "labelEn": "Leaky Shack",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "tentacles",
+      "label": "触手",
+      "labelEn": "Tentacles",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "chess",
+      "label": "发条装置",
+      "labelEn": "Clockworks",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "walrus",
+      "label": "海象营地",
+      "labelEn": "MacTusk Camps",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bats",
+      "label": "蝙蝠",
+      "labelEn": "Bats",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "fissure",
+      "label": "梦魇裂缝",
+      "labelEn": "Nightmare Fissures",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "worms",
+      "label": "洞穴蠕虫",
+      "labelEn": "Cave Worms",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_spiders",
+      "label": "破碎蜘蛛洞",
+      "labelEn": "Shattered Spider Holes",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ocean_waterplant",
+      "label": "海草",
+      "labelEn": "Sea Weeds",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "ocean_default",
+      "values": [
+        "ocean_never",
+        "ocean_rare",
+        "ocean_uncommon",
+        "ocean_default",
+        "ocean_often",
+        "ocean_mostly",
+        "ocean_always",
+        "ocean_insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "angrybees",
+      "label": "杀人蜂蜂窝",
+      "labelEn": "Killer Bee Hives",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "tallbirds",
+      "label": "高脚鸟",
+      "labelEn": "Tallbirds",
+      "category": "worldgen",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "rabbits",
+      "label": "兔洞",
+      "labelEn": "Rabbit Holes",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moles",
+      "label": "鼹鼠丘",
+      "labelEn": "Mole Burrows",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "buzzard",
+      "label": "秃鹫",
+      "labelEn": "Buzzards",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "catcoon",
+      "label": "空心树桩",
+      "labelEn": "Hollow Stump",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "pigs",
+      "label": "猪屋",
+      "labelEn": "Pig Houses",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "lightninggoat",
+      "label": "伏特羊",
+      "labelEn": "Volt Goats",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "beefalo",
+      "label": "皮弗娄牛",
+      "labelEn": "Beefalos",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bees",
+      "label": "蜜蜂蜂窝",
+      "labelEn": "Bee Hives",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "slurper",
+      "label": "啜食者",
+      "labelEn": "Slurpers",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bunnymen",
+      "label": "兔屋",
+      "labelEn": "Rabbit Hutches",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "slurtles",
+      "label": "蛞蝓龟窝",
+      "labelEn": "Slurtle Mounds",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "rocky",
+      "label": "石虾",
+      "labelEn": "Rock Lobsters",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "monkey",
+      "label": "穴居猴桶",
+      "labelEn": "Splumonkey Pods",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_carrot",
+      "label": "胡萝卜鼠",
+      "labelEn": "Carrats",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_fruitdragon",
+      "label": "沙拉蝾螈",
+      "labelEn": "Saladmander",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ocean_shoal",
+      "label": "鱼群",
+      "labelEn": "Shoals",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ocean_wobsterden",
+      "label": "龙虾窝",
+      "labelEn": "Wobster Mounds",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ocean_otterdens",
+      "label": "水獭掠夺者窝点",
+      "labelEn": "Marotter Dens",
+      "category": "worldgen",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "flowers",
+      "label": "花，邪恶花",
+      "labelEn": "Flowers, Evil Flowers",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "grass",
+      "label": "草",
+      "labelEn": "Grass",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "sapling",
+      "label": "树苗",
+      "labelEn": "Saplings",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "marshbush",
+      "label": "尖刺灌木",
+      "labelEn": "Spiky Bushes",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "tumbleweed",
+      "label": "风滚草",
+      "labelEn": "Tumbleweeds",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "reeds",
+      "label": "芦苇",
+      "labelEn": "Reeds",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "trees",
+      "label": "树（所有）",
+      "labelEn": "Trees (All)",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "flint",
+      "label": "燧石",
+      "labelEn": "Flint",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "rock",
+      "label": "巨石",
+      "labelEn": "Boulders",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "rock_ice",
+      "label": "迷你冰川",
+      "labelEn": "Mini Glaciers",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "meteorspawner",
+      "label": "流星区域",
+      "labelEn": "Meteor Fields",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mushtree",
+      "label": "蘑菇树",
+      "labelEn": "Mushroom Trees",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "fern",
+      "label": "洞穴蕨类",
+      "labelEn": "Cave Ferns",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "flower_cave",
+      "label": "荧光花",
+      "labelEn": "Light Flowers",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wormlights",
+      "label": "发光浆果",
+      "labelEn": "Glow Berries",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "tree_rock",
+      "label": "巨石枝",
+      "labelEn": "Boulderboughs",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "berrybush",
+      "label": "浆果丛",
+      "labelEn": "Berry Bushes",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "carrot",
+      "label": "胡萝卜",
+      "labelEn": "Carrots",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mushroom",
+      "label": "蘑菇",
+      "labelEn": "Mushrooms",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "cactus",
+      "label": "仙人掌",
+      "labelEn": "Cacti",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "banana",
+      "label": "香蕉",
+      "labelEn": "Bananas",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "lichen",
+      "label": "苔藓",
+      "labelEn": "Lichen",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_tree",
+      "label": "月树",
+      "labelEn": "Lune Trees",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_sapling",
+      "label": "月亮树苗",
+      "labelEn": "Lunar Saplings",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_berrybush",
+      "label": "石果灌木丛",
+      "labelEn": "Stone Fruit Bushes",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_rock",
+      "label": "月亮石",
+      "labelEn": "Lunar Rocks",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_hotspring",
+      "label": "温泉",
+      "labelEn": "Hot Springs",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_starfish",
+      "label": "海星",
+      "labelEn": "Anenemies",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_bullkelp",
+      "label": "海岸公牛海带",
+      "labelEn": "Beached Bull Kelp",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ponds",
+      "label": "池塘",
+      "labelEn": "Ponds",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "cave_ponds",
+      "label": "池塘",
+      "labelEn": "Ponds",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ocean_bullkelp",
+      "label": "公牛海带",
+      "labelEn": "Bull Kelp",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "ocean_seastack",
+      "label": "海蚀柱",
+      "labelEn": "Sea Stacks",
+      "category": "worldgen",
+      "group": "resources",
+      "default": "ocean_default",
+      "values": [
+        "ocean_never",
+        "ocean_rare",
+        "ocean_uncommon",
+        "ocean_default",
+        "ocean_often",
+        "ocean_mostly",
+        "ocean_always",
+        "ocean_insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "task_set",
+      "label": "生物群落",
+      "labelEn": "Biomes",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "default",
+        "classic",
+        "cave_default"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "start_location",
+      "label": "出生点",
+      "labelEn": "Spawn Area",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "default",
+        "plus",
+        "darkness",
+        "caves"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "world_size",
+      "label": "世界大小",
+      "labelEn": "World Size",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "small",
+        "medium",
+        "default",
+        "huge"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "branching",
+      "label": "分支",
+      "labelEn": "Branches",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "least",
+        "default",
+        "most",
+        "random"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "loop",
+      "label": "环形",
+      "labelEn": "Loops",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "roads",
+      "label": "道路",
+      "labelEn": "Roads",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "touchstone",
+      "label": "试金石",
+      "labelEn": "Touch Stones",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "boons",
+      "label": "失败的冒险家",
+      "labelEn": "Failed Survivors",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "cavelight",
+      "label": "洞穴光照",
+      "labelEn": "Sinkhole Lights",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "prefabswaps_start",
+      "label": "开始资源多样化",
+      "labelEn": "Starting Resource Variety",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "classic",
+        "default",
+        "highly random"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_fissure",
+      "label": "天体裂缝",
+      "labelEn": "Celestial Fissures",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "uncommon",
+        "default",
+        "often",
+        "mostly",
+        "always",
+        "insane"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "terrariumchest",
+      "label": "盒中泰拉",
+      "labelEn": "Terrarium",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "stageplays",
+      "label": "舞台剧",
+      "labelEn": "Stage Plays",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "junkyard",
+      "label": "垃圾场",
+      "labelEn": "Junk Yard",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "balatro",
+      "label": "小丑",
+      "labelEn": "JIMBO",
+      "category": "worldgen",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "season_start",
+      "label": "起始季节",
+      "labelEn": "Starting Season",
+      "category": "worldgen",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "default",
+        "winter",
+        "spring",
+        "summer",
+        "autumn|spring",
+        "winter|summer",
+        "autumn|winter|spring|summer"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "mutated_hounds",
+      "label": "恐怖猎犬",
+      "labelEn": "Horror Hounds",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "penguins_moon",
+      "label": "永冻企鸥",
+      "labelEn": "Permafrost Pengulls",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_spider",
+      "label": "破碎蜘蛛",
+      "labelEn": "Shattered Spiders",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_birds",
+      "label": "变异的鸟",
+      "labelEn": "Mutated Birds",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_merm",
+      "label": "变异鱼人",
+      "labelEn": "Mutated Merms",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_spiderqueen",
+      "label": "破碎蜘蛛洞",
+      "labelEn": "Shattered Spider Holes",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_bird_gestalt",
+      "label": "亮喙鸟",
+      "labelEn": "Bright-Beaked Birds",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_buzzard_gestalt",
+      "label": "水晶冠秃鹫",
+      "labelEn": "Crystal-Crested Buzzards",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_deerclops",
+      "label": "晶体独眼巨鹿",
+      "labelEn": "Crystal Deerclops",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_bearger",
+      "label": "装甲熊獾",
+      "labelEn": "Armored Bearger",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mutated_warg",
+      "label": "附身座狼",
+      "labelEn": "Possessed Vargs",
+      "category": "worldsettings",
+      "group": "lunar_mutations",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "liefs",
+      "label": "树精守卫",
+      "labelEn": "Treeguards",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "deciduousmonster",
+      "label": "毒桦栗树",
+      "labelEn": "Poison Birchnut Trees",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bearger",
+      "label": "熊獾",
+      "labelEn": "Bearger",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "deerclops",
+      "label": "独眼巨鹿",
+      "labelEn": "Deerclops",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "goosemoose",
+      "label": "麋鹿鹅",
+      "labelEn": "Meese/Geese",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "dragonfly",
+      "label": "龙蝇",
+      "labelEn": "Dragonfly",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "antliontribute",
+      "label": "蚁狮贡品",
+      "labelEn": "Antlion Tribute",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "crabking",
+      "label": "帝王蟹",
+      "labelEn": "Crabking",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "beequeen",
+      "label": "蜂王",
+      "labelEn": "Bee Queen",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "toadstool",
+      "label": "毒菌蟾蜍",
+      "labelEn": "Toadstool",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "malbatross",
+      "label": "邪天翁",
+      "labelEn": "Malbatross",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "fruitfly",
+      "label": "果蝇王",
+      "labelEn": "Lord of the Fruit Flies",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "klaus",
+      "label": "克劳斯",
+      "labelEn": "Klaus",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "spiderqueen",
+      "label": "蜘蛛女王",
+      "labelEn": "Spider Queen",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "eyeofterror",
+      "label": "恐怖之眼",
+      "labelEn": "Eye of Terror",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "daywalker",
+      "label": "梦魇疯猪",
+      "labelEn": "Nightmare Werepig",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "daywalker2",
+      "label": "拾荒疯猪",
+      "labelEn": "Scrappy Werepig",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "sharkboi",
+      "label": "大霜鲨",
+      "labelEn": "Frostjaw",
+      "category": "worldsettings",
+      "group": "giants",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "lureplants",
+      "label": "食人花",
+      "labelEn": "Lureplants",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "hound_mounds",
+      "label": "猎犬",
+      "labelEn": "Hounds",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mosquitos",
+      "label": "蚊子",
+      "labelEn": "Mosquitos",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "sharks",
+      "label": "鲨鱼",
+      "labelEn": "Sharks",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "squid",
+      "label": "鱿鱼",
+      "labelEn": "Skittersquids",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wasps",
+      "label": "杀人蜂",
+      "labelEn": "Killer Bees",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "frogs",
+      "label": "青蛙",
+      "labelEn": "Frogs",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "walrus_setting",
+      "label": "海象",
+      "labelEn": "MacTusk",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "cookiecutters",
+      "label": "饼干切割机",
+      "labelEn": "Cookie Cutters",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "merms",
+      "label": "鱼人",
+      "labelEn": "Merms",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "spiders_setting",
+      "label": "蜘蛛",
+      "labelEn": "Spiders",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "spider_warriors",
+      "label": "蜘蛛战士",
+      "labelEn": "Spider Warriors",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bats_setting",
+      "label": "蝙蝠",
+      "labelEn": "Bats",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "nightmarecreatures",
+      "label": "遗迹梦魇",
+      "labelEn": "Ruins Nightmares",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "spider_hider",
+      "label": "洞穴蜘蛛",
+      "labelEn": "Cave Spiders",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "spider_spitter",
+      "label": "喷射蜘蛛",
+      "labelEn": "Spitter Spiders",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "spider_dropper",
+      "label": "穴居悬蛛",
+      "labelEn": "Dangling Depth Dwellers",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "molebats",
+      "label": "裸鼹蝠",
+      "labelEn": "Naked Mole Bats",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "itemmimics",
+      "label": "拟态蠕虫",
+      "labelEn": "Mimicreeps",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "chest_mimics",
+      "label": "暴躁箱子",
+      "labelEn": "Ornery Chests",
+      "category": "worldsettings",
+      "group": "monsters",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "butterfly",
+      "label": "蝴蝶",
+      "labelEn": "Butterflies",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "birds",
+      "label": "鸟",
+      "labelEn": "Birds",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "perd",
+      "label": "火鸡",
+      "labelEn": "Gobblers",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "penguins",
+      "label": "企鸥",
+      "labelEn": "Pengulls",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bees_setting",
+      "label": "蜜蜂",
+      "labelEn": "Bees",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "catcoons",
+      "label": "浣猫",
+      "labelEn": "Catcoons",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "rabbits_setting",
+      "label": "兔子",
+      "labelEn": "Rabbits",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wobsters",
+      "label": "龙虾",
+      "labelEn": "Wobsters",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "gnarwail",
+      "label": "一角鲸",
+      "labelEn": "Gnarwails",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "fishschools",
+      "label": "鱼群",
+      "labelEn": "Schools of Fish",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "otters_setting",
+      "label": "水獭掠夺者",
+      "labelEn": "Marotters",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "pigs_setting",
+      "label": "猪",
+      "labelEn": "Pigs",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "bunnymen_setting",
+      "label": "兔人",
+      "labelEn": "Bunnymen",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moles_setting",
+      "label": "鼹鼠",
+      "labelEn": "Moles",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "grassgekkos",
+      "label": "草壁虎转化",
+      "labelEn": "Grass Gekko Morphing",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "slurtles_setting",
+      "label": "蛞蝓龟",
+      "labelEn": "Slurtles",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "snurtles",
+      "label": "蜗牛龟",
+      "labelEn": "Snurtles",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "rocky_setting",
+      "label": "石虾",
+      "labelEn": "Rock Lobsters",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "monkey_setting",
+      "label": "穴居猴",
+      "labelEn": "Splumonkeys",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "dustmoths",
+      "label": "尘蛾",
+      "labelEn": "Dust Moths",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "lightfliers",
+      "label": "球状光虫",
+      "labelEn": "Bulbous Lightbugs",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mushgnome",
+      "label": "蘑菇地精",
+      "labelEn": "Mush Gnomes",
+      "category": "worldsettings",
+      "group": "animals",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "regrowth",
+      "label": "再生速度",
+      "labelEn": "Regrowth Multiplier",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "evergreen_regrowth",
+      "label": "常青树",
+      "labelEn": "Evergreens",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "deciduoustree_regrowth",
+      "label": "桦栗树",
+      "labelEn": "Birchnut Trees",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "twiggytrees_regrowth",
+      "label": "多枝树",
+      "labelEn": "Twiggy Trees",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "moon_tree_regrowth",
+      "label": "月树",
+      "labelEn": "Lune Trees",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "flowers_regrowth",
+      "label": "花",
+      "labelEn": "Flowers",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "carrots_regrowth",
+      "label": "胡萝卜",
+      "labelEn": "Carrots",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "reeds_regrowth",
+      "label": "芦苇",
+      "labelEn": "Reeds",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "cactus_regrowth",
+      "label": "仙人掌",
+      "labelEn": "Cacti",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "saltstack_regrowth",
+      "label": "盐堆",
+      "labelEn": "Salt Formations",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "flower_cave_regrowth",
+      "label": "荧光花",
+      "labelEn": "Light Flower",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "lightflier_flower_regrowth",
+      "label": "光虫花",
+      "labelEn": "Lightbug Flower",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mushtree_regrowth",
+      "label": "蘑菇树",
+      "labelEn": "Mushroom Trees",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "mushtree_moon_regrowth",
+      "label": "月亮蘑菇树",
+      "labelEn": "Lunar Mushtrees",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "tree_rock_regrowth",
+      "label": "巨石枝",
+      "labelEn": "Boulderboughs",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "default",
+      "values": [
+        "never",
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "basicresource_regrowth",
+      "label": "基础资源",
+      "labelEn": "Basic Resources",
+      "category": "worldsettings",
+      "group": "resources",
+      "default": "none",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "lightning",
+      "label": "闪电",
+      "labelEn": "Lightning",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "frograin",
+      "label": "青蛙雨",
+      "labelEn": "Frog Rain",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wildfires",
+      "label": "野火",
+      "labelEn": "Wildfires",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "petrification",
+      "label": "森林石化",
+      "labelEn": "Forest Petrification",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "none",
+        "few",
+        "default",
+        "many",
+        "max"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "meteorshowers",
+      "label": "流星频率",
+      "labelEn": "Meteor Frequency",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "hunt",
+      "label": "狩猎",
+      "labelEn": "Hunts",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "alternatehunt",
+      "label": "狩猎惊喜",
+      "labelEn": "Hunt Surprises",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "hounds",
+      "label": "猎犬袭击",
+      "labelEn": "Hound Attacks",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "winterhounds",
+      "label": "寒冰猎犬群",
+      "labelEn": "Ice Hound Waves",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "summerhounds",
+      "label": "火焰猎犬群",
+      "labelEn": "Fire Hound Waves",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wanderingtrader_enabled",
+      "label": "流浪商人",
+      "labelEn": "Wandering Trader",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "always",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "weather",
+      "label": "雨",
+      "labelEn": "Rain",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest",
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "earthquakes",
+      "label": "地震",
+      "labelEn": "Earthquakes",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wormattacks",
+      "label": "洞穴蠕虫袭击",
+      "labelEn": "Cave Worm Attacks",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "wormattacks_boss",
+      "label": "大蠕虫",
+      "labelEn": "Great Worm",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "atriumgate",
+      "label": "远古大门",
+      "labelEn": "Ancient Gateway",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "default",
+      "values": [
+        "veryslow",
+        "slow",
+        "default",
+        "fast",
+        "veryfast"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "acidrain_enabled",
+      "label": "酸雨",
+      "labelEn": "Acid Rain",
+      "category": "worldsettings",
+      "group": "misc",
+      "default": "always",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "cave"
+      ],
+      "masterControlled": false
+    },
+    {
+      "key": "extrastartingitems",
+      "label": "额外起始资源",
+      "labelEn": "Extra Starting Resources",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "0",
+        "5",
+        "default",
+        "15",
+        "20",
+        "none"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "seasonalstartingitems",
+      "label": "季节起始物品",
+      "labelEn": "Seasonal Starting Items",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "never",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "spawnprotection",
+      "label": "防骚扰出生保护",
+      "labelEn": "Griefer Spawn Protection",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "never",
+        "default",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "dropeverythingondespawn",
+      "label": "离开游戏后物品掉落",
+      "labelEn": "Drop Items on Disconnect",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "default",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "healthpenalty",
+      "label": "生命值上限惩罚",
+      "labelEn": "Max Health Penalty",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "always",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "lessdamagetaken",
+      "label": "受到的伤害",
+      "labelEn": "Damage Taken",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "none",
+      "values": [
+        "always",
+        "none",
+        "more"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "temperaturedamage",
+      "label": "温度伤害",
+      "labelEn": "Temperature Damage",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "nonlethal",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "hunger",
+      "label": "饥饿伤害",
+      "labelEn": "Hunger Damage",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "nonlethal",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "darkness",
+      "label": "黑暗伤害",
+      "labelEn": "Darkness Damage",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "nonlethal",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "shadowcreatures",
+      "label": "理智怪兽",
+      "labelEn": "Sanity Monsters",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "brightmarecreatures",
+      "label": "启蒙怪兽",
+      "labelEn": "Enlightenment Monsters",
+      "category": "worldsettings",
+      "group": "survivors",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "crow_carnival",
+      "label": "盛夏鸦年华",
+      "labelEn": "Midsummer Cawnival",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "hallowed_nights",
+      "label": "万圣夜",
+      "labelEn": "Hallowed Nights",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "winters_feast",
+      "label": "冬季盛宴",
+      "labelEn": "Winter's Feast",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_gobbler",
+      "label": "火鸡之年",
+      "labelEn": "Year of the Gobbler",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_varg",
+      "label": "座狼之年",
+      "labelEn": "Year of the Varg",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_pig",
+      "label": "猪王之年",
+      "labelEn": "Year of the Pig King",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_carrat",
+      "label": "胡萝卜鼠之年",
+      "labelEn": "Year of the Carrat",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_beefalo",
+      "label": "皮弗娄牛之年",
+      "labelEn": "Year of the Beefalo",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_catcoon",
+      "label": "浣猫之年",
+      "labelEn": "Year of the Catcoon",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_bunnyman",
+      "label": "兔人之年",
+      "labelEn": "Year of the Bunnyman",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_dragonfly",
+      "label": "龙蝇之年",
+      "labelEn": "Year of the Dragonfly",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_snake",
+      "label": "洞穴蠕虫之年",
+      "labelEn": "Year of the Depths Worm",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "year_of_the_knight",
+      "label": "发条骑士之年",
+      "labelEn": "Year of the Clockwork Knight",
+      "category": "worldsettings",
+      "group": "events",
+      "default": "default",
+      "values": [
+        "default",
+        "enabled"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "specialevent",
+      "label": "活动",
+      "labelEn": "Events",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "none",
+        "default"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "autumn",
+      "label": "秋",
+      "labelEn": "Autumn",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "noseason",
+        "veryshortseason",
+        "shortseason",
+        "default",
+        "longseason",
+        "verylongseason",
+        "random"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "winter",
+      "label": "冬",
+      "labelEn": "Winter",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "noseason",
+        "veryshortseason",
+        "shortseason",
+        "default",
+        "longseason",
+        "verylongseason",
+        "random"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "spring",
+      "label": "春",
+      "labelEn": "Spring",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "noseason",
+        "veryshortseason",
+        "shortseason",
+        "default",
+        "longseason",
+        "verylongseason",
+        "random"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "summer",
+      "label": "夏",
+      "labelEn": "Summer",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "noseason",
+        "veryshortseason",
+        "shortseason",
+        "default",
+        "longseason",
+        "verylongseason",
+        "random"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "day",
+      "label": "昼夜选项",
+      "labelEn": "Day Type",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "default",
+        "longday",
+        "longdusk",
+        "longnight",
+        "noday",
+        "nodusk",
+        "nonight",
+        "onlyday",
+        "onlydusk",
+        "onlynight"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "spawnmode",
+      "label": "出生模式",
+      "labelEn": "Spawn Mode",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "fixed",
+      "values": [
+        "fixed",
+        "scatter"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "ghostenabled",
+      "label": "冒险家死亡",
+      "labelEn": "Survivor Death",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "always",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "portalresurection",
+      "label": "在绚丽之门复活",
+      "labelEn": "Revive At Florid Postern",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "none",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "ghostsanitydrain",
+      "label": "鬼魂理智值惩罚",
+      "labelEn": "Ghost Sanity Drain",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "always",
+      "values": [
+        "none",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "resettime",
+      "label": "死亡重置倒计时",
+      "labelEn": "Death Reset Timer",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "none",
+        "slow",
+        "default",
+        "fast",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "beefaloheat",
+      "label": "皮弗娄牛交配频率",
+      "labelEn": "Beefalo Mating Frequency",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    },
+    {
+      "key": "krampus",
+      "label": "坎普斯",
+      "labelEn": "Krampii",
+      "category": "worldsettings",
+      "group": "global",
+      "default": "default",
+      "values": [
+        "never",
+        "rare",
+        "default",
+        "often",
+        "always"
+      ],
+      "worlds": [
+        "forest"
+      ],
+      "masterControlled": true
+    }
+  ]
+}

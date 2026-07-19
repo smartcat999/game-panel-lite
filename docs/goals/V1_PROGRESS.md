@@ -2,6 +2,11 @@
 
 ## 2026-07-19
 
+- Unified creation and server-detail provider configuration with a progressive advanced editor: basic fields stay visible, while DST and Palworld rules use category navigation, global search, modified-only filtering, per-field reset, and compact review summaries.
+- Added bounded Palworld number sliders with synchronized precise inputs, visible minimum/default/maximum values, and retained selects for non-continuous DST frequency settings.
+- Replaced the partial DST world configuration list with a generated manifest of all 222 options exposed by dedicated-server build 740477, including official Chinese labels, valid values, defaults, forest/cave applicability, and grass gecko mutation controls.
+- Fixed DST Workshop installation by publishing the generated setup file into the server installation's `mods` directory, persisting the UGC download directory, excluding known client-only mods from server registration, and rendering per-mod configuration options for both shards.
+- Added a reproducible DST option generator plus provider and frontend tests for schema completeness, Chinese rendering, client/server mod classification, and `configuration_options` output.
 - Shared provider option localization across creation, review, and server-detail forms so DST enum values render in Chinese while retaining their backend values.
 - Fixed DST detail configuration initialization to deep-merge stored nested values with provider schema defaults, preventing empty world override groups from rendering as `never`.
 - Added an accessible show/hide control for saved provider secrets so existing Klei server tokens and other password fields can be verified without changing their stored values; secrets remain masked by default and are hidden again while saving.

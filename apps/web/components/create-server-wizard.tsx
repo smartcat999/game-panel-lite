@@ -8,6 +8,7 @@ import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, G
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
+import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
@@ -21,7 +22,7 @@ import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServer
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
-import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { providerOptionLabel } from "@/lib/provider-option-label";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import {
@@ -394,7 +395,10 @@ function createReviewConfigModel({
     };
   }
 
-  const fields = (provider?.configSchema ?? [])
+  const providerFields = provider?.configSchema ?? [];
+  const modifiedAdvancedCount = providerFields.filter((field) => isAdvancedProviderConfigField(provider?.key ?? "", field) && isProviderFieldModified(providerConfigPayload, field)).length;
+  const fields = providerFields
+    .filter((field) => !isAdvancedProviderConfigField(provider?.key ?? "", field))
     .map((field): ReviewConfigField | null => {
       const value = providerConfigValue(providerConfigPayload, field.name);
       const formatted = providerReviewValue(field, value, t);
@@ -408,6 +412,9 @@ function createReviewConfigModel({
     password: providerJoinPassword(providerConfigPayload),
     fields: [
       ...fields,
+      ...(providerFields.some((field) => isAdvancedProviderConfigField(provider?.key ?? "", field))
+        ? [{ label: t("advancedGameSettings"), value: t("modifiedSettingsCount", { count: modifiedAdvancedCount }) }]
+        : []),
       ...(version ? [{ label: t("gameVersion"), value: version }] : []),
       { label: t("externalPort"), value: hostPortLabel }
     ]
@@ -1251,25 +1258,19 @@ function ConfigStep({
                 <p className="mt-1 text-xs leading-5 text-slate-500">{t("gameConfigurationHint")}</p>
               </div>
             </div>
-            {provider?.key === "dont-starve-together" ? (
-              <DSTProviderConfigSections
-                fields={providerFields}
-                payload={providerConfigPayload}
-                validationErrors={validationErrors}
-                onCustomize={onCustomize}
-                onClearValidationError={onClearValidationError}
-                setProviderConfigPayload={setProviderConfigPayload}
-              />
-            ) : (
-              <ProviderSchemaFieldsGrid
-                fields={providerFields}
-                payload={providerConfigPayload}
-                validationErrors={validationErrors}
-                onCustomize={onCustomize}
-                onClearValidationError={onClearValidationError}
-                setProviderConfigPayload={setProviderConfigPayload}
-              />
-            )}
+            <ProviderConfigEditor
+              fields={providerFields}
+              payload={providerConfigPayload}
+              providerKey={provider?.key ?? ""}
+              errors={validationErrors}
+              fieldLabel={(field) => providerFieldLabel(field, t)}
+              fieldHelp={(field) => providerFieldHelp(field, t)}
+              onChange={(field, nextValue) => {
+                onCustomize();
+                onClearValidationError(field.name);
+                setProviderConfigPayload(updateProviderConfigPayload(providerConfigPayload, field, nextValue));
+              }}
+            />
           </section>
           <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
             <div className="flex items-start gap-3">
@@ -1664,178 +1665,6 @@ function ResourcesStep({
   );
 }
 
-function ProviderSchemaField({
-  error,
-  field,
-  label,
-  onChange,
-  value
-}: {
-  error?: string;
-  field: ProviderConfigField;
-  label: string;
-  onChange: (value: string | boolean) => void;
-  value: unknown;
-}) {
-  const { t } = useI18n();
-  const help = providerFieldHelp(field, t);
-  if (field.type === "boolean") {
-    return (
-      <div className="grid w-full min-w-0 self-start content-start gap-1.5">
-        <span className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
-          <span className="truncate">{label}</span>
-          {field.required && <RequiredFieldBadge />}
-        </span>
-        <WizardCheckbox label={help || label} checked={Boolean(value)} onChange={onChange} invalid={Boolean(error)} />
-        {error && <span className="text-xs font-medium text-red-200">{error}</span>}
-      </div>
-    );
-  }
-
-  return (
-    <WizardField label={label} required={field.required} error={error}>
-                {field.type === "select" ? (
-                  <WizardSelect value={String(value ?? "")} onChange={onChange} invalid={Boolean(error)}>
-                    {(field.options ?? []).map((option) => (
-                      <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>
-                    ))}
-                  </WizardSelect>
-                ) : (
-                  <Input
-                    type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
-                    value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
-                    min={field.type === "number" ? field.min : undefined}
-                    max={field.type === "number" ? field.max : undefined}
-                    step={field.type === "number" ? field.step ?? 1 : undefined}
-                    aria-invalid={Boolean(error)}
-                    className={error ? "border-red-400/70 focus:border-red-300" : undefined}
-                    onChange={(event) => onChange(event.target.value)}
-                  />
-                )}
-                {(help || (field.type === "number" && (field.min !== undefined || field.max !== undefined))) && <span className="text-xs text-slate-500">{[help, field.type === "number" && field.min !== undefined && field.max !== undefined ? `${field.min}–${field.max}` : ""].filter(Boolean).join(" · ")}</span>}
-    </WizardField>
-  );
-}
-
-function ProviderSchemaFieldsGrid({
-  fields,
-  onClearValidationError,
-  onCustomize,
-  payload,
-  setProviderConfigPayload,
-  validationErrors
-}: {
-  fields: ProviderConfigField[];
-  onClearValidationError: (field: string) => void;
-  onCustomize: () => void;
-  payload: ProviderConfigPayload;
-  setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
-  validationErrors: ConfigValidationErrors;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="mt-4 grid gap-4 md:grid-cols-2">
-      {fields.map((field) => (
-        <ProviderSchemaField
-          key={field.name}
-          error={validationErrors[field.name]}
-          field={field}
-          label={providerFieldLabel(field, t)}
-          value={providerConfigValue(payload, field.name)}
-          onChange={(nextValue) => {
-            onCustomize();
-            onClearValidationError(field.name);
-            setProviderConfigPayload(updateProviderConfigPayload(payload, field, nextValue));
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-const dstConfigSections = [
-  { titleKey: "dstSectionIdentity", prefix: "identity.", summary: ["identity.visibility"] },
-  { titleKey: "dstSectionGameplay", prefix: "gameplay.", summary: ["gameplay.gameMode", "gameplay.maxPlayers"] },
-  { titleKey: "dstSectionWorld", prefix: "world.", summary: ["world.preset"] },
-  { titleKey: "dstSectionCaves", prefix: "caves.", summary: ["caves.enabled"] }
-] as const;
-
-const dstConfigGroupLabelKeys: Record<string, MessageKey> = {
-  "dst.world.basics": "dstGroupWorldBasics",
-  "dst.world.seasons": "dstGroupSeasons",
-  "dst.world.resources": "dstGroupResources",
-  "dst.world.creatures": "dstGroupCreatures",
-  "dst.world.threats": "dstGroupThreats",
-  "dst.caves.world": "dstGroupCaveWorld",
-  "dst.caves.resources": "dstGroupCaveResources",
-  "dst.caves.threats": "dstGroupCaveThreats"
-};
-
-function DSTProviderConfigSections(props: {
-  fields: ProviderConfigField[];
-  onClearValidationError: (field: string) => void;
-  onCustomize: () => void;
-  payload: ProviderConfigPayload;
-  setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
-  validationErrors: ConfigValidationErrors;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="mt-4 grid gap-3">
-      {dstConfigSections.map((section) => {
-        const fields = props.fields.filter((field) => field.name.startsWith(section.prefix));
-        if (fields.length === 0) return null;
-        const primaryFields = fields.filter((field) => !field.group);
-        const groups = Array.from(new Set(fields.map((field) => field.group).filter((group): group is string => Boolean(group))));
-        return (
-          <section key={section.titleKey} className="rounded-md border border-panel-line bg-slate-950/40 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h4 className="text-xs font-semibold tracking-[0.08em] text-slate-400">{t(section.titleKey)}</h4>
-              <div className="flex flex-wrap gap-1.5">
-                {section.summary.map((path) => {
-                  const value = providerConfigValue(props.payload, path);
-                  const field = props.fields.find((item) => item.name === path);
-                  const option = field?.options?.find((item) => item.value === String(value));
-                  const label = typeof value === "boolean"
-                    ? t(value ? "enabled" : "disabled")
-                    : field && option
-                      ? providerOptionLabel(field, option.value, option.label, t)
-                      : String(value ?? t("defaultValue"));
-                  return (
-                    <span key={path} className="rounded border border-panel-line bg-slate-900 px-2 py-1 text-[11px] text-slate-400">
-                      {label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-            <ProviderSchemaFieldsGrid {...props} fields={primaryFields} />
-            {groups.length > 0 ? (
-              <div className="mt-4 grid gap-2">
-                {groups.map((group, index) => {
-                  const groupFields = fields.filter((field) => field.group === group);
-                  const labelKey = dstConfigGroupLabelKeys[group];
-                  return (
-                    <details key={group} open={index === 0} className="group rounded-md border border-panel-line bg-slate-950/45">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:text-slate-100">
-                        <span>{labelKey ? t(labelKey) : group}</span>
-                        <span className="text-xs font-normal text-slate-500">{t("dstSettingsCount", { count: groupFields.length })}</span>
-                      </summary>
-                      <div className="border-t border-panel-line px-3 pb-3">
-                        <ProviderSchemaFieldsGrid {...props} fields={groupFields} />
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
 function ConfigStepHeader() {
   const { t } = useI18n();
   return (
@@ -2021,15 +1850,6 @@ function FieldHelp({ text }: { text: string }) {
       <span className="pointer-events-none absolute left-1/2 top-6 z-20 hidden w-64 -translate-x-1/2 rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-xs font-normal leading-5 text-slate-300 shadow-[0_10px_30px_rgba(0,0,0,0.35)] group-hover/help:block group-focus-within/help:block">
         {text}
       </span>
-    </span>
-  );
-}
-
-function RequiredFieldBadge() {
-  const { t } = useI18n();
-  return (
-    <span className="shrink-0 rounded border border-panel-gold/30 bg-panel-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-panel-gold">
-      {t("requiredField")}
     </span>
   );
 }

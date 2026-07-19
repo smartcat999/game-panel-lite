@@ -13,7 +13,7 @@ import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
-import { SecretInput } from "@/components/secret-input";
+import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
@@ -60,9 +60,8 @@ import { saveBlob } from "@/lib/download";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { modDisplayName } from "@/lib/mod-display";
-import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
-import { providerOptionLabel } from "@/lib/provider-option-label";
+import { dstModScope, modDisplayName } from "@/lib/mod-display";
+import { createDefaultProviderConfigPayload, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -93,17 +92,6 @@ const providerFieldLabelKeys: Record<string, MessageKey> = {
   pvp: "pvp",
   worldPreset: "worldPreset",
   eulaAccepted: "minecraftEulaAccepted"
-};
-
-const providerGroupLabelKeys: Record<string, MessageKey> = {
-  "dst.world.basics": "dstGroupWorldBasics",
-  "dst.world.seasons": "dstGroupSeasons",
-  "dst.world.resources": "dstGroupResources",
-  "dst.world.creatures": "dstGroupCreatures",
-  "dst.world.threats": "dstGroupThreats",
-  "dst.caves.world": "dstGroupCaveWorld",
-  "dst.caves.resources": "dstGroupCaveResources",
-  "dst.caves.threats": "dstGroupCaveThreats"
 };
 
 const defaultCapabilities: ProviderCapabilities = {
@@ -1865,10 +1853,13 @@ function ConfigTab({
           </>
         ) : (
           <>
-            <ProviderConfigFields
+            <ProviderConfigEditor
               disabled={disabled}
               fields={provider?.configSchema ?? []}
               payload={providerDraft}
+              providerKey={provider?.key ?? ""}
+              fieldLabel={(field) => providerFieldLabel(field, t)}
+              fieldHelp={(field) => providerFieldHelp(field, t)}
               onChange={(field, value) => setProviderDraft((current) => updateProviderConfigPayload(current, field, value))}
             />
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -2026,82 +2017,6 @@ function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, para
   if (field.name === "clusterToken" || field.name === "identity.clusterToken") return t("clusterTokenHelp");
   if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
   return field.help ?? "";
-}
-
-function ProviderConfigFields({
-  disabled,
-  fields,
-  onChange,
-  payload
-}: {
-  disabled: boolean;
-  fields: ProviderConfigField[];
-  onChange: (field: ProviderConfigField, value: string | boolean) => void;
-  payload: ProviderConfigPayload;
-}) {
-  const { t } = useI18n();
-  if (fields.length === 0) {
-    return <p className="mt-4 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-sm text-slate-500">{t("none")}</p>;
-  }
-  const groupedFields = Array.from(fields.reduce((groups, field) => {
-    const group = field.group || "其他设置";
-    groups.set(group, [...(groups.get(group) ?? []), field]);
-    return groups;
-  }, new Map<string, ProviderConfigField[]>()));
-  return (
-    <div className="mt-4 grid gap-3">
-      {groupedFields.map(([group, groupFields], groupIndex) => (
-        <details key={group} open={groupIndex === 0} className="rounded-lg border border-panel-line bg-slate-950/35">
-          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{providerGroupLabelKeys[group] ? t(providerGroupLabelKeys[group]) : group}<span className="ml-2 text-xs font-normal text-slate-500">{groupFields.length}</span></summary>
-          <div className="grid gap-4 border-t border-panel-line px-4 py-4 lg:grid-cols-2">
-      {groupFields.map((field) => {
-        const label = providerFieldLabel(field, t);
-        const help = providerFieldHelp(field, t);
-        const value = providerConfigValue(payload, field.name);
-        if (field.type === "boolean") {
-          return (
-            <div key={field.name} className="rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
-              <Checkbox label={label} checked={Boolean(value)} onChange={(checked) => onChange(field, checked)} disabled={disabled} />
-              {help ? <p className="mt-1 text-xs text-slate-500">{help}</p> : null}
-            </div>
-          );
-        }
-        return (
-          <Field key={field.name} label={label} required={field.required}>
-            {field.type === "select" ? (
-              <Select disabled={disabled} value={String(value ?? "")} onChange={(nextValue) => onChange(field, nextValue)}>
-                {(field.options ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>
-                ))}
-              </Select>
-            ) : field.type === "password" ? (
-              <SecretInput
-                disabled={disabled}
-                hideLabel={t("hideSensitiveValue", { label })}
-                showLabel={t("showSensitiveValue", { label })}
-                value={String(value ?? "")}
-                onChange={(event) => onChange(field, event.target.value)}
-              />
-            ) : (
-              <Input
-                disabled={disabled}
-                type={field.type === "number" ? "number" : "text"}
-                value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
-                min={field.type === "number" ? field.min : undefined}
-                max={field.type === "number" ? field.max : undefined}
-                step={field.type === "number" ? field.step ?? 1 : undefined}
-                onChange={(event) => onChange(field, event.target.value)}
-              />
-            )}
-            {(help || (field.type === "number" && field.min !== undefined && field.max !== undefined)) ? <span className="text-xs text-slate-500">{[help, field.type === "number" && field.min !== undefined && field.max !== undefined ? `${field.min}–${field.max}` : ""].filter(Boolean).join(" · ")}</span> : null}
-          </Field>
-        );
-      })}
-          </div>
-        </details>
-      ))}
-    </div>
-  );
 }
 
 function ResourceLimitsDialog({
@@ -2311,19 +2226,6 @@ function Field({ children, label, required }: { children: ReactNode; label: stri
       </span>
       {children}
     </label>
-  );
-}
-
-function Select({ children, disabled, onChange, value }: { children: ReactNode; disabled?: boolean; onChange: (value: string) => void; value: string }) {
-  return (
-    <select
-      className="h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green disabled:cursor-not-allowed disabled:opacity-60"
-      disabled={disabled}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      {children}
-    </select>
   );
 }
 
@@ -2838,6 +2740,7 @@ function ServerModRow({
 }) {
   const { locale, t } = useI18n();
   const status = modRuntimeStatus(mod);
+  const scope = dstModScope(mod);
   return (
     <div className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex min-w-0 items-start gap-3">
@@ -2855,6 +2758,14 @@ function ServerModRow({
             <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", status.className)}>
               {t(status.labelKey)}
             </span>
+            {scope !== "unknown" ? (
+              <span className={cn(
+                "shrink-0 rounded border px-2 py-0.5 text-xs font-medium",
+                scope === "client" ? "border-sky-400/25 bg-sky-400/10 text-sky-300" : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
+              )}>
+                {t(scope === "client" ? "dstClientOnlyMod" : "dstServerRequiredMod")}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
             {mod.size} · {localizeRelativeTime(mod.created, locale)}

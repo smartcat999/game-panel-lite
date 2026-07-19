@@ -33,6 +33,20 @@ export function providerConfigValue(payload: ProviderConfigPayload | undefined, 
   return cursor;
 }
 
+export function isAdvancedProviderConfigField(providerKey: string, field: ProviderConfigField): boolean {
+  if (providerKey === "dont-starve-together") return Boolean(field.group);
+  if (providerKey === "palworld") return Boolean(field.group && field.group !== "基础设置");
+  return false;
+}
+
+export function isProviderFieldModified(payload: ProviderConfigPayload | undefined, field: ProviderConfigField): boolean {
+  const current = providerConfigValue(payload, field.name);
+  const fallback = defaultProviderFieldValue(field);
+  if (field.type === "number") return Number(current) !== Number(fallback);
+  if (field.type === "boolean") return Boolean(current) !== Boolean(fallback);
+  return String(current ?? "") !== String(fallback ?? "");
+}
+
 function defaultProviderFieldValue(field: ProviderConfigField): unknown {
   if (field.default !== undefined) return field.default;
   if (field.type === "number") return 0;

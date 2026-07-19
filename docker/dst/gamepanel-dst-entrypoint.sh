@@ -7,6 +7,7 @@ PERSISTENT_ROOT="${DST_PERSISTENT_ROOT:-/data}"
 CONF_DIR="${DST_CONF_DIR:-dst}"
 CLUSTER_NAME="${DST_CLUSTER_NAME:-GamePanelLite}"
 CLUSTER_DIR="${PERSISTENT_ROOT}/${CONF_DIR}/${CLUSTER_NAME}"
+UGC_DIR="${DST_UGC_DIRECTORY:-${PERSISTENT_ROOT}/ugc_mods}"
 
 server_bin() {
   if [[ -x "${SERVER_DIR}/bin64/dontstarve_dedicated_server_nullrenderer_x64" ]]; then
@@ -22,7 +23,7 @@ server_bin() {
 }
 
 ensure_cluster_layout() {
-  mkdir -p "${CLUSTER_DIR}/Master"
+  mkdir -p "${CLUSTER_DIR}/Master" "${UGC_DIR}"
   if [[ -f "${CLUSTER_DIR}/server_token.txt" && ! -f "${CLUSTER_DIR}/cluster_token.txt" ]]; then
     cp "${CLUSTER_DIR}/server_token.txt" "${CLUSTER_DIR}/cluster_token.txt"
   fi
@@ -33,6 +34,16 @@ ensure_cluster_layout() {
   if [[ ! -f "${CLUSTER_DIR}/cluster.ini" ]]; then
     echo "Missing DST cluster config at ${CLUSTER_DIR}/cluster.ini" >&2
     exit 1
+  fi
+
+  local generated_mod_setup="${CLUSTER_DIR}/dedicated_server_mods_setup.lua"
+  local runtime_mod_setup="${SERVER_DIR}/mods/dedicated_server_mods_setup.lua"
+  if [[ -f "${generated_mod_setup}" ]]; then
+    mkdir -p "${SERVER_DIR}/mods"
+    cp "${generated_mod_setup}" "${runtime_mod_setup}.tmp"
+    chmod 0644 "${runtime_mod_setup}.tmp"
+    mv "${runtime_mod_setup}.tmp" "${runtime_mod_setup}"
+    echo "Installed GamePanel DST Workshop manifest."
   fi
 }
 
@@ -46,6 +57,7 @@ start_shard() {
     -conf_dir "${CONF_DIR}" \
     -cluster "${CLUSTER_NAME}" \
     -shard "${shard}" \
+    -ugc_directory "${UGC_DIR}" \
     -console
 }
 
