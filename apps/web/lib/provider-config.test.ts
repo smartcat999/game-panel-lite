@@ -134,6 +134,27 @@ describe("provider config helpers", () => {
     });
   });
 
+  it("repairs stored select values that are no longer valid for the schema", () => {
+    const caveProvider: ProviderCatalog = {
+      ...provider,
+      key: "dont-starve-together",
+      configSchema: [
+        {
+          name: "caves.overrides.task_set",
+          label: "Biomes",
+          type: "select",
+          required: false,
+          default: "cave_default",
+          options: [{ value: "cave_default", label: "Default caves" }]
+        }
+      ]
+    };
+
+    expect(createDefaultProviderConfigPayload(caveProvider, {
+      caves: { overrides: { task_set: "default" } }
+    })).toEqual({ caves: { overrides: { task_set: "cave_default" } } });
+  });
+
   it("separates advanced DST and Palworld settings from their basic fields", () => {
     const dstRule: ProviderConfigField = { name: "world.overrides.grass", label: "Grass", type: "select", required: false, default: "default", group: "dst.world.worldsettings.resources" };
     const palRate: ProviderConfigField = { name: "expRate", label: "EXP", type: "number", required: true, default: 1, group: "世界倍率" };
