@@ -474,7 +474,7 @@ func renderClusterINI(config Config) string {
 		"cluster_description = " + config.Identity.Description,
 		"cluster_password = " + config.Identity.Password,
 		"lan_only_cluster = " + boolINI(lanOnly),
-		"offline_server = " + boolINI(offline),
+		"offline_cluster = " + boolINI(offline),
 		"",
 		"[MISC]",
 		"console_enabled = " + boolINI(config.Gameplay.ConsoleEnabled),

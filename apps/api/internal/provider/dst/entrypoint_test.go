@@ -25,6 +25,9 @@ func TestDSTEntrypointReusesCompleteWorkshopCacheOnStart(t *testing.T) {
 	if strings.Contains(log, "-only_update_server_mods") {
 		t.Fatalf("expected start to skip mod download, got %q", log)
 	}
+	if strings.Contains(log, "-console") {
+		t.Fatalf("expected shard startup to omit deprecated -console, got %q", log)
+	}
 }
 
 func TestDSTEntrypointRefreshesAllWorkshopModsOnRestart(t *testing.T) {
