@@ -174,9 +174,11 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         {modified ? <button type="button" className="flex shrink-0 items-center gap-1 text-[11px] text-panel-green hover:text-panel-green/80" onClick={reset} disabled={disabled}><RotateCcw aria-hidden="true" className="size-3" />{t("restoreDefault")}</button> : null}
       </div>
       {field.type === "boolean" ? (
-        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} disabled={disabled} className="flex w-full items-center justify-between rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm text-slate-200 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
+        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} disabled={disabled} className="flex w-full items-center justify-between rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm text-slate-200 outline-none transition focus-visible:border-panel-green focus-visible:ring-2 focus-visible:ring-panel-green/30 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
           <span>{checked ? t("enabled") : t("disabled")}</span>
-          <span className={cn("relative h-5 w-9 rounded-full transition", checked ? "bg-panel-green" : "bg-slate-700")}><span className={cn("absolute top-0.5 size-4 rounded-full bg-white transition-transform", checked ? "translate-x-[18px]" : "translate-x-0.5")} /></span>
+          <span aria-hidden="true" className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-panel-green" : "bg-slate-700")}>
+            <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white transition-transform", checked ? "translate-x-4" : "translate-x-0")} />
+          </span>
         </button>
       ) : field.type === "number" && slider && field.min !== undefined && field.max !== undefined ? (
         <div className="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-3">
