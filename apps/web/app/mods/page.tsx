@@ -181,6 +181,12 @@ export default function ModsPage() {
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
   const requestWorkshopImport = (ids: string[], providerKey: ProviderKey = workshopProviderKey) => {
+    const dstBlockReason = dstWorkshopImportBlockReason(ids, providerKey, recommendedMods, t);
+    if (dstBlockReason) {
+      setSuccessMessage("");
+      setErrorMessage(dstBlockReason);
+      return;
+    }
     if (workshopUnsupported) {
       setSuccessMessage("");
       setErrorMessage(t("workshopArmUnsupported"));
@@ -676,7 +682,6 @@ function RecommendedModCard({
   disabledReason: string;
   onAdd: () => void;
 }) {
-  const scope = dstModScopeFromTags(item.providerKey, item.tags);
   return (
     <Card className="overflow-hidden p-0 transition hover:border-panel-green/25">
       <div className="flex gap-4 p-4">
@@ -687,10 +692,7 @@ function RecommendedModCard({
           <div className="min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
-                  {scope !== "unknown" ? <DSTScopeBadge scope={scope} locale={locale} /> : null}
-                </div>
+                <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
                 <p className="mt-1 text-xs text-slate-500">{recommendedSourceLabel(item, locale)}</p>
               </div>
               <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300">
@@ -710,7 +712,7 @@ function RecommendedModCard({
             </p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            {visibleWorkshopTags(item.tags).slice(0, 4).map((tag) => (
+            {(item.tags ?? []).slice(0, 4).map((tag) => (
               <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
             ))}
           </div>
@@ -734,31 +736,11 @@ function RecommendedModCard({
         ) : (
           <Button variant="secondary" onClick={onAdd} disabled={busy || Boolean(disabledReason)} title={disabledReason || undefined}>
             <Download aria-hidden="true" />
-            {scope === "client" ? (locale === "zh" ? "仅客户端" : "Client only") : (locale === "zh" ? "加入模组库" : "Add to library")}
+            {locale === "zh" ? "加入模组库" : "Add to library"}
           </Button>
         )}
       </div>
     </Card>
-  );
-}
-
-function DSTScopeBadge({ scope, locale }: { scope: "client" | "server" | "required"; locale: string }) {
-  const label = scope === "client"
-    ? (locale === "zh" ? "仅客户端" : "Client only")
-    : scope === "server"
-      ? (locale === "zh" ? "仅服务端" : "Server only")
-      : (locale === "zh" ? "全员必需" : "Required by all");
-  return (
-    <span className={cn(
-      "shrink-0 rounded border px-2 py-0.5 text-[11px] font-medium",
-      scope === "client"
-        ? "border-sky-400/25 bg-sky-400/10 text-sky-300"
-        : scope === "server"
-          ? "border-panel-green/25 bg-panel-green/10 text-panel-green"
-          : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
-    )}>
-      {label}
-    </span>
   );
 }
 
@@ -768,9 +750,17 @@ function recommendedModDisabledReason(item: RecommendedMod, workshopUnsupported:
   return "";
 }
 
-function visibleWorkshopTags(tags: string[] | undefined) {
-  const internalScopeTags = new Set(["client_only_mod", "server_only_mod", "all_clients_require_mod"]);
-  return (tags ?? []).filter((tag) => !internalScopeTags.has(tag.toLowerCase()));
+function dstWorkshopImportBlockReason(ids: string[], providerKey: ProviderKey, recommendedMods: RecommendedMod[], t: (key: MessageKey) => string) {
+  if (providerKey !== "dont-starve-together") return "";
+  const catalog = new Map(recommendedMods
+    .filter((mod) => mod.providerKey === providerKey && mod.workshopId)
+    .map((mod) => [mod.workshopId ?? "", mod]));
+  for (const id of ids) {
+    const item = catalog.get(id);
+    if (!item || dstModScopeFromTags(item.providerKey, item.tags) === "unknown") return t("dstUnknownWorkshopBlocked");
+    if (dstModScopeFromTags(item.providerKey, item.tags) === "client") return t("dstClientOnlyLibraryBlocked");
+  }
+  return "";
 }
 
 function dependencyNamesForSelectedMods(mods: ModFile[], selectedIds: string[]) {

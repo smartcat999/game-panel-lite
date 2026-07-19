@@ -35,6 +35,12 @@ export function dstModScope(mod: ModFile): DSTModScope {
   return dstModScopeFromTags(mod.providerKey, mod.tags);
 }
 
+export function isServerAssignableMod(mod: ModFile): boolean {
+  if (mod.providerKey !== "dont-starve-together") return true;
+  const scope = dstModScope(mod);
+  return scope === "server" || scope === "required";
+}
+
 export type ModRuntimeState = "configured" | "disabled" | "enabled" | "notApplied" | "notSynced" | "pendingRestart";
 
 export function modRuntimeState(mod: ModFile): ModRuntimeState | null {

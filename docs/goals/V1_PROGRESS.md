@@ -2,7 +2,7 @@
 
 ## 2026-07-19
 
-- Blocked DST client-only mods from entering the server mod library or server installer in the frontend, added clear discovery scope badges, and separated server-only from all-clients-required labeling without changing backend behavior.
+- Blocked DST client-only and unclassified Workshop mods from entering the server mod library or server installer in the frontend, while preserving raw Workshop tags in discovery and separating server-only from all-clients-required labeling without changing backend behavior.
 - Prevented configuration and mod edits from implicitly restarting or starting game servers; saved revisions now wait for an explicit restart/start while preserving the current lifecycle state.
 - Aligned resource slider value badges exactly over their thumbs and fixed endpoint column widths so CPU and memory tracks share identical horizontal geometry.
 - Changed GamePanel Lite's Palworld new-server death-penalty default from the official `All` setting to the friendlier `None` setting across schema defaults, normalization, and runtime environment generation; existing saved servers remain unchanged.

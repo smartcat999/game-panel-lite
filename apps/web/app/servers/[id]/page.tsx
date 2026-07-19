@@ -61,7 +61,7 @@ import { saveBlob } from "@/lib/download";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { dstModScope, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
+import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
@@ -2417,17 +2417,17 @@ function ModsTab({
   const blocked = modAction.disabled;
   const workshopBlockReason = workshopUnsupported ? t("workshopArmUnsupported") : "";
   const selectedMods = useMemo(
-    () => availableMods.filter((mod) => dstModScope(mod) !== "client" && selectedModIds.includes(mod.id) && !isModInstalledOnServer(mod, items)),
+    () => availableMods.filter((mod) => isServerAssignableMod(mod) && selectedModIds.includes(mod.id) && !isModInstalledOnServer(mod, items)),
     [availableMods, items, selectedModIds]
   );
   const serverAssignableMods = useMemo(
-    () => availableMods.filter((mod) => dstModScope(mod) !== "client"),
+    () => availableMods.filter(isServerAssignableMod),
     [availableMods]
   );
   useEffect(() => {
     setSelectedModIds((current) => current.filter((modId) => {
       const mod = availableMods.find((item) => item.id === modId);
-      return mod ? dstModScope(mod) !== "client" && !isModInstalledOnServer(mod, items) : false;
+      return mod ? isServerAssignableMod(mod) && !isModInstalledOnServer(mod, items) : false;
     }));
   }, [availableMods, items]);
   useEffect(() => {
@@ -2607,7 +2607,7 @@ function ModsTab({
                   <div className="divide-y divide-panel-line">
                     {modPacks.map((pack) => {
                       const blockedByArchitecture = workshopUnsupported && modPackHasWorkshopMods(pack);
-                      const containsClientOnlyDSTMod = pack.mods.some((mod) => dstModScope(mod) === "client");
+                      const containsUnsupportedDSTMod = pack.mods.some((mod) => !isServerAssignableMod(mod));
                       const installedCount = pack.mods.filter((mod) => isModInstalledOnServer(mod, items)).length;
                       const allInstalled = pack.mods.length > 0 && installedCount === pack.mods.length;
                       return (
@@ -2623,8 +2623,8 @@ function ModsTab({
                                 setInstallerOpen(false);
                                 onInstallPack(pack);
                               }}
-                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture || containsClientOnlyDSTMod || allInstalled}
-                              title={containsClientOnlyDSTMod ? t("dstClientOnlyPackBlocked") : blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture || containsUnsupportedDSTMod || allInstalled}
+                              title={containsUnsupportedDSTMod ? t("dstUnsupportedPackBlocked") : blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
                             >
                               {allInstalled ? <CheckCircle2 aria-hidden="true" /> : <Package aria-hidden="true" />}
                               {allInstalled ? t("alreadyInstalled") : t("installModPack")}
@@ -2723,7 +2723,13 @@ function ServerModRow({
                     ? "border-panel-green/25 bg-panel-green/10 text-panel-green"
                     : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
               )}>
-                {t(scope === "client" ? "dstClientOnlyMod" : scope === "server" ? "dstServerOnlyMod" : "dstServerRequiredMod")}
+                {t(scope === "client"
+                  ? "dstClientOnlyMod"
+                  : scope === "server"
+                    ? "dstServerOnlyMod"
+                    : scope === "required"
+                      ? "dstServerRequiredMod"
+                      : "dstUnknownModScope")}
               </span>
             ) : null}
           </div>
