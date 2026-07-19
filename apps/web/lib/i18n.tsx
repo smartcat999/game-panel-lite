@@ -464,7 +464,7 @@ const messages = {
     worldRegenerationStartRunningHint: "完成后恢复运行。",
     worldRegenerationStartStoppedHint: "完成后保持停止。",
     worldRegenerationPlayersBlocked: "当前有 {count} 名在线玩家。请先让玩家离线。",
-    worldRegenerationConfirm: "确认重新生成",
+    worldRegenerationConfirm: "重新生成",
     worldRegenerationStartFailed: "无法开始重新生成，请检查任务状态后重试。",
     worldRegenerationFailureDetail: "世界生成未完成，系统已尝试恢复旧世界。请查看服务器日志。",
     worldRegenerationStageQueued: "等待执行",
