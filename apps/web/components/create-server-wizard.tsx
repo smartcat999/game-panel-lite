@@ -1705,7 +1705,7 @@ function RuntimeResourceSection({
         <h3 className="text-sm font-semibold text-slate-100">{t("runtimeResources")}</h3>
         <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{t("resourceLimitsHint")}</p>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-3">
         <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
           <ResourceLimitSlider
             formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
