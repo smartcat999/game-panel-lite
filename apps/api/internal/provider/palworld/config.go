@@ -35,7 +35,7 @@ func configSchema() []domain.ProviderConfigField {
 		{Name: "itemCorruptionRate", Label: "食物腐败速度倍率", Type: "number", Required: true, Default: 1, Min: n(0), Max: n(10), Step: n(0.1)},
 		{Name: "equipmentDurabilityRate", Label: "装备耐久消耗倍率", Type: "number", Required: true, Default: 1, Min: n(0), Max: n(10), Step: n(0.1)},
 		{Name: "supplyDropSpan", Label: "陨石与补给间隔（分钟）", Type: "number", Required: true, Default: 180, Min: n(1), Max: n(1440), Step: n(1)},
-		{Name: "deathPenalty", Label: "死亡惩罚", Type: "select", Required: true, Default: "All", Options: []domain.ProviderConfigFieldOption{{Value: "None", Label: "不掉落"}, {Value: "Item", Label: "掉落物品"}, {Value: "ItemAndEquipment", Label: "掉落物品和装备"}, {Value: "All", Label: "掉落全部及队伍帕鲁"}}},
+		{Name: "deathPenalty", Label: "死亡惩罚", Type: "select", Required: true, Default: "None", Options: []domain.ProviderConfigFieldOption{{Value: "None", Label: "不掉落"}, {Value: "Item", Label: "掉落物品"}, {Value: "ItemAndEquipment", Label: "掉落物品和装备"}, {Value: "All", Label: "掉落全部及队伍帕鲁"}}},
 		{Name: "enableInvaderEnemy", Label: "开启入侵事件", Type: "boolean", Default: true},
 		{Name: "enableFastTravel", Label: "开启快速传送", Type: "boolean", Default: true},
 		{Name: "pvp", Label: "开启 PVP", Type: "boolean", Default: false},

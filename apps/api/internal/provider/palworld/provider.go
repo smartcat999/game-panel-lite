@@ -78,7 +78,7 @@ func (p Provider) ImageFor(version string) string {
 	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
 }
 func defaultConfig() Config {
-	return normalizeConfig(Config{EggHatchingTime: 72, ExpRate: 1, CaptureRate: 1, PalSpawnRate: 1, EnemyDropRate: 1, CollectionDropRate: 1, DayTimeSpeedRate: 1, NightTimeSpeedRate: 1, BuildingDeteriorationRate: 1, PlayerDamageAttackRate: 1, PlayerDamageDefenseRate: 1, PalDamageAttackRate: 1, PalDamageDefenseRate: 1, PlayerStaminaRate: 1, PlayerHungerRate: 1, PalStaminaRate: 1, PalHungerRate: 1, CollectionRespawnRate: 1, ItemCorruptionRate: 1, EquipmentDurabilityRate: 1, SupplyDropSpan: 180, BaseCampMaxNum: 128, BaseCampMaxNumInGuild: 4, BaseCampWorkerMaxNum: 15, GuildPlayerMaxNum: 20, DeathPenalty: "All", EnableInvaderEnemy: true, EnableFastTravel: true})
+	return normalizeConfig(Config{EggHatchingTime: 72, ExpRate: 1, CaptureRate: 1, PalSpawnRate: 1, EnemyDropRate: 1, CollectionDropRate: 1, DayTimeSpeedRate: 1, NightTimeSpeedRate: 1, BuildingDeteriorationRate: 1, PlayerDamageAttackRate: 1, PlayerDamageDefenseRate: 1, PalDamageAttackRate: 1, PalDamageDefenseRate: 1, PlayerStaminaRate: 1, PlayerHungerRate: 1, PalStaminaRate: 1, PalHungerRate: 1, CollectionRespawnRate: 1, ItemCorruptionRate: 1, EquipmentDurabilityRate: 1, SupplyDropSpan: 180, BaseCampMaxNum: 128, BaseCampMaxNumInGuild: 4, BaseCampWorkerMaxNum: 15, GuildPlayerMaxNum: 20, DeathPenalty: "None", EnableInvaderEnemy: true, EnableFastTravel: true})
 }
 func (p Provider) DefaultConfigPayload() map[string]any {
 	return payloadFromConfig(defaultConfig())
@@ -321,7 +321,7 @@ func normalizeConfig(config Config) Config {
 		config.GuildPlayerMaxNum = 20
 	}
 	if config.DeathPenalty == "" {
-		config.DeathPenalty = "All"
+		config.DeathPenalty = "None"
 	}
 	config.Port = DefaultInternalPort
 	return config
