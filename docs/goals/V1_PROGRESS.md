@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Fixed DST mod status rendering so client-only mods no longer claim to await a server restart, server-managed mods without runtime inspection show the honest configured state, and pending restart remains reserved for actual synchronization flows.
 - Removed noisy per-field reset actions from basic provider settings, where generated names and credentials are valid initial values, and reduced modified advanced-field resets to accessible icon actions.
 - Simplified Palworld number sliders to a compact current-value readout, one full-width track, and range endpoints, removing the redundant number input and default-value caption while retaining keyboard precision.
 - Replaced the inline advanced-settings expansion with an in-place basic/advanced view switch, explicit back navigation, and a directional entry affordance on both creation and server-detail forms.
