@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dstModScope, modRuntimeState } from "./mod-display";
+import { dstModScope, isServerAssignableMod, modRuntimeState } from "./mod-display";
 import type { ModFile } from "./types";
 
 function mod(tags: string[]): ModFile {
@@ -23,6 +23,14 @@ describe("dstModScope", () => {
   it("separates client-only mods from server-required mods", () => {
     expect(dstModScope(mod(["client_only_mod", "interface"]))).toBe("client");
     expect(dstModScope(mod(["all_clients_require_mod", "utility"]))).toBe("required");
+    expect(dstModScope(mod(["server_only_mod", "utility"]))).toBe("server");
+  });
+
+  it("only allows classified DST server mods to be assigned", () => {
+    expect(isServerAssignableMod(mod(["client_only_mod"]))).toBe(false);
+    expect(isServerAssignableMod(mod([]))).toBe(false);
+    expect(isServerAssignableMod(mod(["server_only_mod"]))).toBe(true);
+    expect(isServerAssignableMod(mod(["all_clients_require_mod"]))).toBe(true);
   });
 });
 

@@ -12,7 +12,7 @@ import { Badge, Button, Card, Input } from "@/components/ui";
 import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
 import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
+import { dstModScopeFromTags, modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack, ProviderKey, RecommendedMod } from "@/lib/types";
@@ -181,6 +181,12 @@ export default function ModsPage() {
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
   const requestWorkshopImport = (ids: string[], providerKey: ProviderKey = workshopProviderKey) => {
+    const dstBlockReason = dstWorkshopImportBlockReason(ids, providerKey, recommendedMods, t);
+    if (dstBlockReason) {
+      setSuccessMessage("");
+      setErrorMessage(dstBlockReason);
+      return;
+    }
     if (workshopUnsupported) {
       setSuccessMessage("");
       setErrorMessage(t("workshopArmUnsupported"));
@@ -278,7 +284,7 @@ export default function ModsPage() {
                 item={item}
                 locale={locale}
                 busy={workshopImport.isPending || recommendedImport.isPending || (isWorkshopRecommended(item) && workshopUnsupported)}
-                disabledReason={isWorkshopRecommended(item) && workshopUnsupported ? t("workshopArmUnsupported") : ""}
+                disabledReason={recommendedModDisabledReason(item, workshopUnsupported, t)}
                 onAdd={() => {
                   if (isWorkshopRecommended(item) && item.workshopId) {
                     requestWorkshopImport([item.workshopId], item.providerKey ?? "terraria-tmodloader");
@@ -728,7 +734,7 @@ function RecommendedModCard({
         {item.inLibrary ? (
           <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
         ) : (
-          <Button variant="secondary" onClick={onAdd} disabled={busy} title={disabledReason || undefined}>
+          <Button variant="secondary" onClick={onAdd} disabled={busy || Boolean(disabledReason)} title={disabledReason || undefined}>
             <Download aria-hidden="true" />
             {locale === "zh" ? "加入模组库" : "Add to library"}
           </Button>
@@ -736,6 +742,25 @@ function RecommendedModCard({
       </div>
     </Card>
   );
+}
+
+function recommendedModDisabledReason(item: RecommendedMod, workshopUnsupported: boolean, t: (key: MessageKey) => string) {
+  if (dstModScopeFromTags(item.providerKey, item.tags) === "client") return t("dstClientOnlyLibraryBlocked");
+  if (isWorkshopRecommended(item) && workshopUnsupported) return t("workshopArmUnsupported");
+  return "";
+}
+
+function dstWorkshopImportBlockReason(ids: string[], providerKey: ProviderKey, recommendedMods: RecommendedMod[], t: (key: MessageKey) => string) {
+  if (providerKey !== "dont-starve-together") return "";
+  const catalog = new Map(recommendedMods
+    .filter((mod) => mod.providerKey === providerKey && mod.workshopId)
+    .map((mod) => [mod.workshopId ?? "", mod]));
+  for (const id of ids) {
+    const item = catalog.get(id);
+    if (!item || dstModScopeFromTags(item.providerKey, item.tags) === "unknown") return t("dstUnknownWorkshopBlocked");
+    if (dstModScopeFromTags(item.providerKey, item.tags) === "client") return t("dstClientOnlyLibraryBlocked");
+  }
+  return "";
 }
 
 function dependencyNamesForSelectedMods(mods: ModFile[], selectedIds: string[]) {

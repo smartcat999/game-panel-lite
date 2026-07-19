@@ -798,6 +798,9 @@ func TestUpdateServerConfigPersistsResourceLimitsAndRequiresRestartWhenRunning(t
 	if updated.Spec.Generation != 3 || updated.Status.AppliedGeneration != 2 {
 		t.Fatalf("expected running config update to wait for restart, got generation=%d applied=%d", updated.Spec.Generation, updated.Status.AppliedGeneration)
 	}
+	if updated.Status.Phase != domain.PhaseRunning || updated.Status.ActualState != domain.ActualRunning {
+		t.Fatalf("expected running config update to preserve the live server, got %+v", updated.Status)
+	}
 	stored, err := loadTestServer(db, server.ID)
 	if err != nil {
 		t.Fatal(err)
