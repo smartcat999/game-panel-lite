@@ -60,7 +60,7 @@ import { saveBlob } from "@/lib/download";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { dstModScope, modDisplayName } from "@/lib/mod-display";
+import { dstModScope, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
@@ -2739,7 +2739,7 @@ function ServerModRow({
   onToggle: (mod: ModFile) => void;
 }) {
   const { locale, t } = useI18n();
-  const status = modRuntimeStatus(mod);
+  const status = modRuntimeState(mod);
   const scope = dstModScope(mod);
   return (
     <div className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:flex-row lg:items-center lg:justify-between">
@@ -2755,9 +2755,11 @@ function ServerModRow({
             <Link href={`/mods/${mod.id}`} className="truncate text-sm font-semibold text-white transition hover:text-panel-green">
               {modDisplayName(mod, locale)}
             </Link>
-            <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", status.className)}>
-              {t(status.labelKey)}
-            </span>
+            {status ? (
+              <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", modRuntimeStatusClassName(status))}>
+                {t(status)}
+              </span>
+            ) : null}
             {scope !== "unknown" ? (
               <span className={cn(
                 "shrink-0 rounded border px-2 py-0.5 text-xs font-medium",
@@ -2859,20 +2861,11 @@ function isArmArchitecture(architecture: string | undefined) {
   return value.startsWith("arm") || value.includes("aarch64");
 }
 
-function modRuntimeStatus(mod: ModFile): { labelKey: "enabled" | "disabled" | "notSynced" | "notApplied" | "pendingRestart"; className: string } {
-  if (!mod.enabled) {
-    return { labelKey: "disabled", className: "bg-slate-800 text-slate-400" };
-  }
-  if (mod.runtimePresent === false) {
-    return { labelKey: "notSynced", className: "bg-sky-500/10 text-sky-300" };
-  }
-  if (mod.runtimeEnabled === false) {
-    return { labelKey: "notApplied", className: "bg-panel-gold/15 text-panel-gold" };
-  }
-  if (mod.runtimeEnabled === undefined) {
-    return { labelKey: "pendingRestart", className: "bg-slate-800 text-slate-300" };
-  }
-  return { labelKey: "enabled", className: "bg-panel-green/15 text-panel-green" };
+function modRuntimeStatusClassName(status: ModRuntimeState): string {
+  if (status === "enabled") return "bg-panel-green/15 text-panel-green";
+  if (status === "notApplied") return "bg-panel-gold/15 text-panel-gold";
+  if (status === "notSynced") return "bg-sky-500/10 text-sky-300";
+  return "bg-slate-800 text-slate-300";
 }
 
 function LogViewport({

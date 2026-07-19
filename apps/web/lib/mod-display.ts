@@ -27,3 +27,18 @@ export function dstModScope(mod: ModFile): "client" | "required" | "unknown" {
   if (tags.has("all_clients_require_mod") || tags.has("server_only_mod")) return "required";
   return "unknown";
 }
+
+export type ModRuntimeState = "configured" | "disabled" | "enabled" | "notApplied" | "notSynced" | "pendingRestart";
+
+export function modRuntimeState(mod: ModFile): ModRuntimeState | null {
+  if (!mod.enabled) return "disabled";
+  if (mod.runtimePresent === false) return "notSynced";
+  if (mod.runtimeEnabled === false) return "notApplied";
+  if (mod.runtimeEnabled === true) return "enabled";
+
+  if (mod.providerKey === "dont-starve-together") {
+    return dstModScope(mod) === "client" ? null : "configured";
+  }
+
+  return "pendingRestart";
+}
