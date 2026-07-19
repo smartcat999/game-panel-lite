@@ -9,6 +9,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
+import { ResourceLimitSlider, cpuResourceMarkers, formatCpuResourceLimit, formatMemoryResourceLimit, memoryResourceMarkers } from "@/components/resource-limit-slider";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
@@ -17,7 +18,7 @@ import { gameDescription, gameDisplayName } from "@/lib/game-display";
 import { providerDescription, providerDisplayName } from "@/lib/provider-display";
 import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { createConfigPreset, getGameVersions, getSettings, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
+import { createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
@@ -62,8 +63,6 @@ type BuiltInPresetKey = (typeof presets)[number]["key"];
 type PresetKey = BuiltInPresetKey | typeof customPreset.key;
 type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset)["tags"][number];
 
-const cpuLimitOptions = [0, 0.5, 1, 2, 4] as const;
-const memoryLimitOptions = [0, 1024, 2048, 4096, 8192] as const;
 type ConfigValidationErrors = Record<string, string>;
 type ReviewConfigField = { label: string; value: string };
 type ReviewConfigModel = {
@@ -452,6 +451,7 @@ export function CreateServerWizard() {
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const configPresetsQuery = useQuery({ queryKey: ["config-presets"], queryFn: listConfigPresets, retry: false });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
+  const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, retry: false, staleTime: 30_000 });
   const games = gamesQuery.data ?? [];
   const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games[0] ?? games.find((game) => game.key === "terraria");
   const selectedGameArt = getGameArt(selectedGame?.coverImage ?? selectedGame?.key ?? selectedGameKey);
@@ -815,6 +815,8 @@ export function CreateServerWizard() {
             )}
             {currentStepId === "resources" && (
               <ResourcesStep
+                hostCpuCores={runtimeStatsQuery.data?.cpuCores}
+                hostMemoryMb={runtimeStatsQuery.data?.memoryLimitMb}
                 resourceLimits={resourceLimits}
                 onChange={(limits) => {
                   setSelectedPreset("custom");
@@ -1656,15 +1658,19 @@ function SeedModeSection({
 }
 
 function ResourcesStep({
+  hostCpuCores,
+  hostMemoryMb,
   onChange,
   resourceLimits
 }: {
+  hostCpuCores?: number;
+  hostMemoryMb?: number;
   onChange: (limits: ResourceLimits) => void;
   resourceLimits: ResourceLimits;
 }) {
   return (
     <div>
-      <RuntimeResourceSection resourceLimits={resourceLimits} onChange={onChange} />
+      <RuntimeResourceSection hostCpuCores={hostCpuCores} hostMemoryMb={hostMemoryMb} resourceLimits={resourceLimits} onChange={onChange} />
     </div>
   );
 }
@@ -1680,40 +1686,55 @@ function ConfigStepHeader() {
 }
 
 function RuntimeResourceSection({
+  hostCpuCores,
+  hostMemoryMb,
   onChange,
   resourceLimits
 }: {
+  hostCpuCores?: number;
+  hostMemoryMb?: number;
   onChange: (limits: ResourceLimits) => void;
   resourceLimits: ResourceLimits;
 }) {
   const { t } = useI18n();
+  const cpuSliderMax = Math.max(1, hostCpuCores ?? 8, Math.ceil(resourceLimits.cpuLimitCores));
+  const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 1024) * 1024, Math.ceil(resourceLimits.memoryLimitMb / 1024) * 1024);
+  const recommendedMemoryMb = hostMemoryMb ? Math.max(1024, Math.floor((hostMemoryMb - 768) / 1024) * 1024) : 0;
   return (
     <section className="rounded-lg border border-panel-line bg-slate-950/35 p-4 md:col-span-2">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-100">{t("runtimeResources")}</h3>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{t("resourceLimitsHint")}</p>
-        </div>
-        <div className="shrink-0 rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-xs font-medium text-slate-300">
-          {formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} · {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}
-        </div>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-100">{t("runtimeResources")}</h3>
+        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{t("resourceLimitsHint")}</p>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <WizardField label={t("cpuLimit")}>
-          <WizardSelect value={String(resourceLimits.cpuLimitCores)} onChange={(value) => onChange({ ...resourceLimits, cpuLimitCores: Number(value) })}>
-            {cpuLimitOptions.map((value) => (
-              <option key={value} value={value}>{formatCpuLimitLabel(value, t)}</option>
-            ))}
-          </WizardSelect>
-        </WizardField>
-        <WizardField label={t("memoryLimit")}>
-          <WizardSelect value={String(resourceLimits.memoryLimitMb)} onChange={(value) => onChange({ ...resourceLimits, memoryLimitMb: Number(value) })}>
-            {memoryLimitOptions.map((value) => (
-              <option key={value} value={value}>{formatMemoryLimitLabel(value, t)}</option>
-            ))}
-          </WizardSelect>
-        </WizardField>
+        <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+          <ResourceLimitSlider
+            formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
+            label={t("cpuLimit")}
+            markers={cpuResourceMarkers(cpuSliderMax)}
+            max={cpuSliderMax}
+            step={0.25}
+            value={resourceLimits.cpuLimitCores}
+            onChange={(value) => onChange({ ...resourceLimits, cpuLimitCores: value })}
+          />
+        </div>
+        <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
+          <ResourceLimitSlider
+            formatValue={(value) => formatMemoryResourceLimit(value, t("unlimited"))}
+            label={t("memoryLimit")}
+            markers={memoryResourceMarkers(memorySliderMax, recommendedMemoryMb, t("recommended"))}
+            max={memorySliderMax}
+            step={1024}
+            value={resourceLimits.memoryLimitMb}
+            onChange={(value) => onChange({ ...resourceLimits, memoryLimitMb: value })}
+          />
+        </div>
       </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        {hostMemoryMb && recommendedMemoryMb
+          ? t("resourceHostReserveSummary", { total: formatMemoryResourceLimit(hostMemoryMb, t("unlimited")), recommended: formatMemoryResourceLimit(recommendedMemoryMb, t("unlimited")) })
+          : t("resourceHostReserveGeneric")}
+      </p>
     </section>
   );
 }
