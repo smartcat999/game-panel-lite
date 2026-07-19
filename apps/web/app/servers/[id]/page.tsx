@@ -14,7 +14,7 @@ import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
-import { ResourceLimitSlider, cpuResourceMarkers, formatCpuResourceLimit, formatMemoryResourceLimit, memoryResourceMarkers } from "@/components/resource-limit-slider";
+import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
@@ -2081,7 +2081,6 @@ function ResourceLimitsDialog({
   const invalid = cpuInvalid || memoryInvalid;
   const cpuSliderMax = Math.max(1, hostCpuCores ?? 8, Math.ceil(draft.cpuLimitCores));
   const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 1024) * 1024, Math.ceil(draft.memoryLimitMb / 1024) * 1024);
-  const recommendedMemoryMb = hostMemoryMb ? Math.max(1024, Math.floor((hostMemoryMb - 768) / 1024) * 1024) : 0;
   useEffect(() => {
     if (open) {
       setDraft(resourceLimits);
@@ -2107,7 +2106,7 @@ function ResourceLimitsDialog({
       <form
         aria-labelledby="resource-dialog-title"
         aria-modal="true"
-        className="w-full max-w-2xl rounded-lg border border-panel-line bg-panel-card p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-lg rounded-lg border border-panel-line bg-panel-card p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
         role="dialog"
         onSubmit={(event) => {
           event.preventDefault();
@@ -2130,13 +2129,12 @@ function ResourceLimitsDialog({
             <X aria-hidden="true" className="size-4" />
           </button>
         </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid gap-4">
           <div className={cn("rounded-lg border bg-slate-950/35 p-4", cpuInvalid ? "border-red-400/60" : "border-panel-line")}>
             <ResourceLimitSlider
               disabled={savePending || lifecycleLocked}
               formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
               label={t("cpuLimit")}
-              markers={cpuResourceMarkers(cpuSliderMax)}
               max={cpuSliderMax}
               step={0.25}
               value={draft.cpuLimitCores}
@@ -2149,7 +2147,6 @@ function ResourceLimitsDialog({
               disabled={savePending || lifecycleLocked}
               formatValue={(value) => formatMemoryResourceLimit(value, t("unlimited"))}
               label={t("memoryLimit")}
-              markers={memoryResourceMarkers(memorySliderMax, recommendedMemoryMb, t("recommended"))}
               max={memorySliderMax}
               step={1024}
               value={draft.memoryLimitMb}
@@ -2158,11 +2155,6 @@ function ResourceLimitsDialog({
             {memoryInvalid ? <p className="mt-2 text-xs text-red-300">{t("memoryLimitRange")}</p> : null}
           </div>
         </div>
-        <p className="mt-3 rounded-md bg-panel-gold/10 px-3 py-2 text-xs leading-5 text-panel-gold">
-          {hostMemoryMb && recommendedMemoryMb
-            ? t("resourceHostReserveSummary", { total: formatMemoryResourceLimit(hostMemoryMb, t("unlimited")), recommended: formatMemoryResourceLimit(recommendedMemoryMb, t("unlimited")) })
-            : t("resourceHostReserveGeneric")}
-        </p>
         {lifecycleLocked && <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">{t("configLifecycleLocked")}</p>}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={savePending}>{t("cancel")}</Button>

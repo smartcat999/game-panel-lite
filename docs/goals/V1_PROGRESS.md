@@ -2,6 +2,7 @@
 
 ## 2026-07-19
 
+- Stacked CPU and memory resource controls vertically, and removed redundant per-step tick labels and memory recommendations, keeping only endpoints and the thumb-aligned current value.
 - Restored the delete-server action to the mobile server-detail overflow menu while retaining the existing destructive confirmation flow.
 - Unified creation and server-detail resource limits around compact sliders with thumb-aligned values, every whole-core CPU marker on common hosts, readable memory capacity markers, and a detected recommended memory ceiling.
 - Collapsed provider boolean settings into single-row label-and-switch controls and replaced per-field reset icons with one advanced-settings-wide restore-defaults action.
