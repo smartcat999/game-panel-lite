@@ -22,6 +22,19 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	for _, field := range provider.ConfigSchema() {
 		names[field.Name] = true
 	}
+	if got := len(provider.ConfigSchema()); got < 200 {
+		t.Fatalf("expected current DST schema to expose the complete world menu, got %d fields", got)
+	}
+	grassGekkoFound := false
+	for _, field := range provider.ConfigSchema() {
+		if field.Name != "world.overrides.grassgekkos" {
+			continue
+		}
+		grassGekkoFound = field.Label == "草壁虎转化" && len(field.Options) == 5
+	}
+	if !grassGekkoFound {
+		t.Fatal("expected official Chinese Grass Gekko Morphing world setting")
+	}
 	for _, expected := range []string{"identity.serverName", "identity.clusterName", "identity.description", "identity.password", "identity.clusterToken", "identity.visibility", "gameplay.maxPlayers", "gameplay.gameMode", "gameplay.pvp", "gameplay.pauseWhenEmpty", "gameplay.consoleEnabled", "world.preset", "caves.enabled"} {
 		if !names[expected] {
 			t.Fatalf("expected config schema field %q, got %+v", expected, provider.ConfigSchema())
@@ -39,6 +52,32 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	}
 	if names["workshopIds"] {
 		t.Fatalf("workshop IDs should be managed from the mod library, not the config schema: %+v", provider.ConfigSchema())
+	}
+}
+
+func TestDSTWorkshopRenderingFiltersClientOnlyModsAndRendersConfiguration(t *testing.T) {
+	config := normalizeConfig(Config{
+		Identity: DSTIdentityConfig{ServerName: "DST", ClusterName: "Mods", ClusterToken: "token"},
+		Mods: DSTModConfig{
+			WorkshopIDs: []string{"376333686", "378160973"}, // Combined Status is client-only; Global Positions is server-required.
+			Configurations: map[string]map[string]any{
+				"378160973": {"ENABLEPINGS": false, "SHOWPLAYERSOPTIONS": true, "position": "right"},
+			},
+		},
+	})
+	options := runtimeOptions(config)
+	setup := options.Files["dst/Mods/dedicated_server_mods_setup.lua"]
+	if strings.Contains(setup, "376333686") || !strings.Contains(setup, `ServerModSetup("378160973")`) {
+		t.Fatalf("expected only server-required mods in setup file, got:\n%s", setup)
+	}
+	overrides := options.Files["dst/Mods/Master/modoverrides.lua"]
+	for _, expected := range []string{`["workshop-378160973"]`, `["ENABLEPINGS"] = false`, `["SHOWPLAYERSOPTIONS"] = true`, `["position"] = "right"`} {
+		if !strings.Contains(overrides, expected) {
+			t.Fatalf("expected configured server mod value %q, got:\n%s", expected, overrides)
+		}
+	}
+	if strings.Contains(overrides, "376333686") {
+		t.Fatalf("client-only mod must not be activated on the dedicated server:\n%s", overrides)
 	}
 }
 

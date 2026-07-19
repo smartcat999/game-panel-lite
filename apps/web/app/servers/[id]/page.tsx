@@ -60,9 +60,10 @@ import { saveBlob } from "@/lib/download";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { modDisplayName } from "@/lib/mod-display";
+import { dstModScope, modDisplayName } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { providerOptionLabel } from "@/lib/provider-option-label";
+import { dstConfigGroupLabelKey } from "@/lib/dst-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -93,17 +94,6 @@ const providerFieldLabelKeys: Record<string, MessageKey> = {
   pvp: "pvp",
   worldPreset: "worldPreset",
   eulaAccepted: "minecraftEulaAccepted"
-};
-
-const providerGroupLabelKeys: Record<string, MessageKey> = {
-  "dst.world.basics": "dstGroupWorldBasics",
-  "dst.world.seasons": "dstGroupSeasons",
-  "dst.world.resources": "dstGroupResources",
-  "dst.world.creatures": "dstGroupCreatures",
-  "dst.world.threats": "dstGroupThreats",
-  "dst.caves.world": "dstGroupCaveWorld",
-  "dst.caves.resources": "dstGroupCaveResources",
-  "dst.caves.threats": "dstGroupCaveThreats"
 };
 
 const defaultCapabilities: ProviderCapabilities = {
@@ -2052,7 +2042,7 @@ function ProviderConfigFields({
     <div className="mt-4 grid gap-3">
       {groupedFields.map(([group, groupFields], groupIndex) => (
         <details key={group} open={groupIndex === 0} className="rounded-lg border border-panel-line bg-slate-950/35">
-          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{providerGroupLabelKeys[group] ? t(providerGroupLabelKeys[group]) : group}<span className="ml-2 text-xs font-normal text-slate-500">{groupFields.length}</span></summary>
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{dstConfigGroupLabelKey(group) ? t(dstConfigGroupLabelKey(group)!) : group}<span className="ml-2 text-xs font-normal text-slate-500">{groupFields.length}</span></summary>
           <div className="grid gap-4 border-t border-panel-line px-4 py-4 lg:grid-cols-2">
       {groupFields.map((field) => {
         const label = providerFieldLabel(field, t);
@@ -2838,6 +2828,7 @@ function ServerModRow({
 }) {
   const { locale, t } = useI18n();
   const status = modRuntimeStatus(mod);
+  const scope = dstModScope(mod);
   return (
     <div className="flex flex-col gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex min-w-0 items-start gap-3">
@@ -2855,6 +2846,14 @@ function ServerModRow({
             <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", status.className)}>
               {t(status.labelKey)}
             </span>
+            {scope !== "unknown" ? (
+              <span className={cn(
+                "shrink-0 rounded border px-2 py-0.5 text-xs font-medium",
+                scope === "client" ? "border-sky-400/25 bg-sky-400/10 text-sky-300" : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
+              )}>
+                {t(scope === "client" ? "dstClientOnlyMod" : "dstServerRequiredMod")}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">
             {mod.size} · {localizeRelativeTime(mod.created, locale)}

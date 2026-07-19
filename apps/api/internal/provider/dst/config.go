@@ -1,39 +1,48 @@
 package dst
 
-import "github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"strings"
 
-const (
-	groupWorldBasics    = "dst.world.basics"
-	groupWorldSeasons   = "dst.world.seasons"
-	groupWorldResources = "dst.world.resources"
-	groupWorldCreatures = "dst.world.creatures"
-	groupWorldThreats   = "dst.world.threats"
-	groupCaveWorld      = "dst.caves.world"
-	groupCaveResources  = "dst.caves.resources"
-	groupCaveThreats    = "dst.caves.threats"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
 
-func options(values ...string) []domain.ProviderConfigFieldOption {
-	result := make([]domain.ProviderConfigFieldOption, 0, len(values))
-	for _, value := range values {
-		result = append(result, domain.ProviderConfigFieldOption{Value: value, Label: value})
-	}
-	return result
+//go:embed dst_world_options.json
+var dstWorldOptionsJSON []byte
+
+type dstWorldOptionManifest struct {
+	SourceBuild string           `json:"sourceBuild"`
+	Options     []dstWorldOption `json:"options"`
 }
 
-func overrideField(prefix string, key string, label string, group string, values ...string) domain.ProviderConfigField {
-	return domain.ProviderConfigField{
-		Name: prefix + ".overrides." + key, Label: label, Type: "select", Default: "default",
-		Options: options(values...), Group: group,
+type dstWorldOption struct {
+	Key              string   `json:"key"`
+	Label            string   `json:"label"`
+	LabelEn          string   `json:"labelEn"`
+	Category         string   `json:"category"`
+	Group            string   `json:"group"`
+	Default          string   `json:"default"`
+	Values           []string `json:"values"`
+	Worlds           []string `json:"worlds"`
+	MasterControlled bool     `json:"masterControlled"`
+}
+
+var dstWorldManifest = mustLoadDSTWorldManifest()
+
+func mustLoadDSTWorldManifest() dstWorldOptionManifest {
+	var manifest dstWorldOptionManifest
+	if err := json.Unmarshal(dstWorldOptionsJSON, &manifest); err != nil {
+		panic(fmt.Sprintf("load embedded DST world options: %v", err))
 	}
+	if len(manifest.Options) == 0 {
+		panic("embedded DST world options are empty")
+	}
+	return manifest
 }
 
 func configSchema() []domain.ProviderConfigField {
-	frequency := []string{"never", "rare", "default", "often", "always"}
-	worldgenFrequency := []string{"never", "rare", "uncommon", "default", "often", "mostly", "always", "insane"}
-	seasonLength := []string{"noseason", "veryshortseason", "shortseason", "default", "longseason", "verylongseason", "random"}
-	speed := []string{"never", "veryslow", "slow", "default", "fast", "veryfast"}
-
 	fields := []domain.ProviderConfigField{
 		{Name: "identity.serverName", Label: "服务器名称", Type: "text", Required: true, Default: "DST Friends"},
 		{Name: "identity.clusterName", Label: "集群名称", Type: "text", Required: true, Default: "GamePanelLite"},
@@ -49,46 +58,81 @@ func configSchema() []domain.ProviderConfigField {
 		{Name: "world.preset", Label: "世界预设", Type: "select", Required: true, Default: "forest_default", Options: []domain.ProviderConfigFieldOption{{Value: "forest_default", Label: "默认森林"}, {Value: "forest_classic", Label: "经典森林"}, {Value: "forest_survival", Label: "生存森林"}}},
 		{Name: "caves.enabled", Label: "启用洞穴", Type: "boolean", Default: false, Help: "创建额外洞穴分片配置。"},
 	}
-
-	fields = append(fields,
-		overrideField("world", "world_size", "世界大小", groupWorldBasics, "small", "medium", "default", "huge"),
-		overrideField("world", "day", "昼夜长度", groupWorldBasics, "default", "longday", "longdusk", "longnight", "noday", "nodusk", "nonight", "onlyday", "onlydusk", "onlynight"),
-		overrideField("world", "season_start", "起始季节", groupWorldSeasons, "default", "winter", "spring", "summer", "autumn|spring", "winter|summer", "autumn|winter|spring|summer"),
-		overrideField("world", "autumn", "秋季长度", groupWorldSeasons, seasonLength...),
-		overrideField("world", "winter", "冬季长度", groupWorldSeasons, seasonLength...),
-		overrideField("world", "spring", "春季长度", groupWorldSeasons, seasonLength...),
-		overrideField("world", "summer", "夏季长度", groupWorldSeasons, seasonLength...),
-		overrideField("world", "grass", "草丛数量", groupWorldResources, worldgenFrequency...),
-		overrideField("world", "sapling", "树苗数量", groupWorldResources, worldgenFrequency...),
-		overrideField("world", "berrybush", "浆果丛数量", groupWorldResources, worldgenFrequency...),
-		overrideField("world", "flint", "燧石数量", groupWorldResources, worldgenFrequency...),
-		overrideField("world", "rock", "岩石数量", groupWorldResources, worldgenFrequency...),
-		overrideField("world", "rabbits", "兔子洞数量", groupWorldCreatures, worldgenFrequency...),
-		overrideField("world", "pigs", "猪人房数量", groupWorldCreatures, worldgenFrequency...),
-		overrideField("world", "beefalo", "皮弗娄牛数量", groupWorldCreatures, worldgenFrequency...),
-		overrideField("world", "spiders", "蜘蛛巢数量", groupWorldThreats, worldgenFrequency...),
-		overrideField("world", "houndmound", "猎犬丘数量", groupWorldThreats, worldgenFrequency...),
-		overrideField("world", "hounds", "猎犬袭击", groupWorldThreats, frequency...),
-		overrideField("world", "wildfires", "自燃", groupWorldThreats, frequency...),
-		overrideField("world", "deerclops", "独眼巨鹿", groupWorldThreats, frequency...),
-		overrideField("world", "bearger", "熊獾", groupWorldThreats, frequency...),
-		overrideField("world", "goosemoose", "麋鹿鹅", groupWorldThreats, frequency...),
-		overrideField("world", "dragonfly", "龙蝇", groupWorldThreats, frequency...),
-		overrideField("world", "regrowth", "资源再生速度", groupWorldResources, speed...),
-		overrideField("caves", "world_size", "洞穴大小", groupCaveWorld, "small", "medium", "default", "huge"),
-		overrideField("caves", "cavelight", "洞穴光照变化", groupCaveWorld, speed...),
-		overrideField("caves", "grass", "洞穴草丛数量", groupCaveResources, worldgenFrequency...),
-		overrideField("caves", "sapling", "洞穴树苗数量", groupCaveResources, worldgenFrequency...),
-		overrideField("caves", "berrybush", "洞穴浆果丛数量", groupCaveResources, worldgenFrequency...),
-		overrideField("caves", "flower_cave", "荧光花数量", groupCaveResources, worldgenFrequency...),
-		overrideField("caves", "wormlights", "发光浆果数量", groupCaveResources, worldgenFrequency...),
-		overrideField("caves", "cave_spiders", "洞穴蜘蛛巢", groupCaveThreats, worldgenFrequency...),
-		overrideField("caves", "bats", "蝙蝠洞", groupCaveThreats, worldgenFrequency...),
-		overrideField("caves", "earthquakes", "地震", groupCaveThreats, frequency...),
-		overrideField("caves", "wormattacks", "洞穴蠕虫袭击", groupCaveThreats, frequency...),
-		overrideField("caves", "toadstool", "毒菌蟾蜍", groupCaveThreats, frequency...),
-	)
+	fields = append(fields, worldOptionFields("world", "forest")...)
+	fields = append(fields, worldOptionFields("caves", "cave")...)
 	return fields
+}
+
+func worldOptionFields(prefix string, world string) []domain.ProviderConfigField {
+	fields := make([]domain.ProviderConfigField, 0, len(dstWorldManifest.Options))
+	for _, item := range dstWorldManifest.Options {
+		if !containsString(item.Worlds, world) || (world == "cave" && item.MasterControlled) {
+			continue
+		}
+		values := valuesForWorld(item, world)
+		options := make([]domain.ProviderConfigFieldOption, 0, len(values))
+		for _, value := range values {
+			options = append(options, domain.ProviderConfigFieldOption{Value: value, Label: dstOptionLabel(value)})
+		}
+		fields = append(fields, domain.ProviderConfigField{
+			Name:    prefix + ".overrides." + item.Key,
+			Label:   item.Label,
+			Type:    "select",
+			Default: item.Default,
+			Options: options,
+			Group:   strings.Join([]string{"dst", prefix, item.Category, item.Group}, "."),
+		})
+	}
+	return fields
+}
+
+func valuesForWorld(item dstWorldOption, world string) []string {
+	if item.Key == "task_set" {
+		if world == "cave" {
+			return []string{"cave_default"}
+		}
+		return []string{"default", "classic"}
+	}
+	if item.Key == "start_location" {
+		if world == "cave" {
+			return []string{"caves"}
+		}
+		return []string{"default", "plus", "darkness"}
+	}
+	return item.Values
+}
+
+func dstOptionLabel(value string) string {
+	labels := map[string]string{
+		"0": "立即", "5": "5 天", "15": "15 天", "20": "20 天",
+		"always": "总是", "autumn|spring": "秋季或春季", "autumn|winter|spring|summer": "随机季节",
+		"cave_default": "默认洞穴", "caves": "洞穴入口", "classic": "经典", "darkness": "黑暗", "default": "默认",
+		"enabled": "启用", "fast": "快", "few": "少", "fixed": "固定出生门", "highly random": "高度随机",
+		"huge": "巨大", "insane": "疯狂", "least": "最少", "longday": "长白天", "longdusk": "长黄昏",
+		"longnight": "长夜晚", "longseason": "长", "many": "多", "max": "最大", "medium": "中等",
+		"more": "更多伤害", "most": "最多", "mostly": "很多", "never": "从不", "noday": "无白天",
+		"nodusk": "无黄昏", "none": "无", "nonight": "无夜晚", "nonlethal": "非致命", "noseason": "无",
+		"often": "较多", "onlyday": "仅白天", "onlydusk": "仅黄昏", "onlynight": "仅夜晚", "plus": "额外资源",
+		"random": "随机", "rare": "稀少", "scatter": "随机出生", "shortseason": "短", "slow": "慢",
+		"small": "小", "spring": "春季", "summer": "夏季", "uncommon": "较少", "veryfast": "非常快",
+		"verylongseason": "非常长", "veryshortseason": "非常短", "veryslow": "非常慢", "winter": "冬季",
+		"winter|summer": "冬季或夏季",
+		"ocean_never":   "从不", "ocean_rare": "稀少", "ocean_uncommon": "较少", "ocean_default": "默认",
+		"ocean_often": "较多", "ocean_mostly": "很多", "ocean_always": "总是", "ocean_insane": "疯狂",
+	}
+	if label := labels[value]; label != "" {
+		return label
+	}
+	return value
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func floatPtr(value float64) *float64 { return &value }

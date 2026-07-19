@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
@@ -58,8 +59,9 @@ type DSTCaveConfig struct {
 }
 
 type DSTModConfig struct {
-	WorkshopIDs []string
-	ModPackIDs  []string
+	WorkshopIDs    []string
+	ModPackIDs     []string
+	Configurations map[string]map[string]any
 }
 
 func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
@@ -231,6 +233,7 @@ func renderConfig(config Config) (string, error) {
 func runtimeOptions(config Config) runtime.ContainerOptions {
 	config = normalizeConfig(config)
 	clusterDir := clusterConfigDir(config)
+	serverModIDs := serverWorkshopIDs(config.Mods.WorkshopIDs)
 	return runtime.ContainerOptions{
 		Env: []string{
 			"DST_CLUSTER_NAME=" + config.Identity.ClusterName,
@@ -243,8 +246,8 @@ func runtimeOptions(config Config) runtime.ContainerOptions {
 			clusterDir + "/cluster_token.txt":               strings.TrimSpace(config.Identity.ClusterToken) + "\n",
 			clusterDir + "/Master/server.ini":               renderShardServerINI(config.Port, true, "Master"),
 			clusterDir + "/Master/leveldataoverride.lua":    renderLevelDataOverrideLua("forest", config.World.Preset, config.World.Overrides),
-			clusterDir + "/Master/modoverrides.lua":         renderModOverrides(config.Mods.WorkshopIDs),
-			clusterDir + "/dedicated_server_mods_setup.lua": renderWorkshopSetup(config.Mods.WorkshopIDs),
+			clusterDir + "/Master/modoverrides.lua":         renderModOverrides(serverModIDs, config.Mods.Configurations),
+			clusterDir + "/dedicated_server_mods_setup.lua": renderWorkshopSetup(serverModIDs),
 		},
 		PortProtocol: "udp",
 	}
@@ -265,7 +268,7 @@ func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.Pro
 	if config.Caves != nil && config.Caves.Enabled {
 		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
 		options.Files[clusterDir+"/Caves/leveldataoverride.lua"] = renderLevelDataOverrideLua("cave", config.Caves.Preset, config.Caves.Overrides)
-		options.Files[clusterDir+"/Caves/modoverrides.lua"] = renderModOverrides(config.Mods.WorkshopIDs)
+		options.Files[clusterDir+"/Caves/modoverrides.lua"] = renderModOverrides(serverWorkshopIDs(config.Mods.WorkshopIDs), config.Mods.Configurations)
 	}
 	additionalPorts := []int(nil)
 	if config.Caves != nil && config.Caves.Enabled {
@@ -341,6 +344,7 @@ func normalizeConfig(config Config) Config {
 	}
 	config.Mods.WorkshopIDs = uniqueDigits(config.Mods.WorkshopIDs)
 	config.Mods.ModPackIDs = uniqueStrings(config.Mods.ModPackIDs)
+	config.Mods.Configurations = cleanModConfigurations(config.Mods.Configurations)
 	return config
 }
 
@@ -378,6 +382,7 @@ func configFromPayload(payload map[string]any, fallback Config) Config {
 	if mods := objectPayload(payload, "mods"); mods != nil {
 		config.Mods.WorkshopIDs = workshopIDsPayload(mods, "workshopIds")
 		config.Mods.ModPackIDs = stringSlicePayload(mods, "modPackIds")
+		config.Mods.Configurations = modConfigurationsPayload(mods, "configurations")
 	}
 	return normalizeConfig(config)
 }
@@ -405,8 +410,9 @@ func payloadFromConfig(config Config) map[string]any {
 			"overrides": cloneStringMap(config.World.Overrides),
 		},
 		"mods": map[string]any{
-			"workshopIds": append([]string{}, config.Mods.WorkshopIDs...),
-			"modPackIds":  append([]string{}, config.Mods.ModPackIDs...),
+			"workshopIds":    append([]string{}, config.Mods.WorkshopIDs...),
+			"modPackIds":     append([]string{}, config.Mods.ModPackIDs...),
+			"configurations": cloneModConfigurations(config.Mods.Configurations),
 		},
 	}
 	identity := payload["identity"].(map[string]any)
@@ -590,13 +596,137 @@ func renderWorkshopSetup(workshopIDs []string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func renderModOverrides(workshopIDs []string) string {
+func renderModOverrides(workshopIDs []string, configurations map[string]map[string]any) string {
 	lines := []string{"return {"}
 	for _, id := range workshopIDs {
-		lines = append(lines, fmt.Sprintf("  [\"workshop-%s\"] = { enabled = true },", id))
+		line := fmt.Sprintf("  [\"workshop-%s\"] = { enabled = true", id)
+		if values := configurations[id]; len(values) > 0 {
+			keys := make([]string, 0, len(values))
+			for key := range values {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			parts := make([]string, 0, len(keys))
+			for _, key := range keys {
+				parts = append(parts, fmt.Sprintf("[%q] = %s", key, renderLuaScalar(values[key])))
+			}
+			line += ", configuration_options = { " + strings.Join(parts, ", ") + " }"
+		}
+		lines = append(lines, line+" },")
 	}
 	lines = append(lines, "}", "")
 	return strings.Join(lines, "\n")
+}
+
+func serverWorkshopIDs(workshopIDs []string) []string {
+	result := make([]string, 0, len(workshopIDs))
+	for _, id := range workshopIDs {
+		item, ok := modcatalog.RecommendedDSTModByWorkshopID(id)
+		if ok && containsFold(item.Tags, "client_only_mod") {
+			continue
+		}
+		result = append(result, id)
+	}
+	return result
+}
+
+func containsFold(values []string, target string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), target) {
+			return true
+		}
+	}
+	return false
+}
+
+func renderLuaScalar(value any) string {
+	switch typed := value.(type) {
+	case bool:
+		return boolINI(typed)
+	case float64:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", typed), "0"), ".")
+	case float32:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", typed), "0"), ".")
+	case int:
+		return fmt.Sprintf("%d", typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	default:
+		payload, _ := json.Marshal(fmt.Sprint(value))
+		return string(payload)
+	}
+}
+
+func cleanModConfigurations(input map[string]map[string]any) map[string]map[string]any {
+	result := map[string]map[string]any{}
+	for id, values := range input {
+		id = strings.TrimSpace(id)
+		if !digitsOnly(id) || len(values) == 0 {
+			continue
+		}
+		clean := map[string]any{}
+		for key, value := range values {
+			key = strings.TrimSpace(key)
+			if key == "" || !isLuaScalar(value) {
+				continue
+			}
+			clean[key] = value
+		}
+		if len(clean) > 0 {
+			result[id] = clean
+		}
+	}
+	return result
+}
+
+func modConfigurationsPayload(payload map[string]any, key string) map[string]map[string]any {
+	raw, ok := payload[key].(map[string]any)
+	if !ok {
+		return nil
+	}
+	result := make(map[string]map[string]any, len(raw))
+	for id, value := range raw {
+		values, ok := value.(map[string]any)
+		if ok {
+			result[id] = values
+		}
+	}
+	return cleanModConfigurations(result)
+}
+
+func cloneModConfigurations(input map[string]map[string]any) map[string]map[string]any {
+	if len(input) == 0 {
+		return map[string]map[string]any{}
+	}
+	result := make(map[string]map[string]any, len(input))
+	for id, values := range input {
+		result[id] = make(map[string]any, len(values))
+		for key, value := range values {
+			result[id][key] = value
+		}
+	}
+	return result
+}
+
+func isLuaScalar(value any) bool {
+	switch value.(type) {
+	case string, bool, float64, float32, int, int64:
+		return true
+	default:
+		return false
+	}
+}
+
+func digitsOnly(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func boolINI(value bool) string {

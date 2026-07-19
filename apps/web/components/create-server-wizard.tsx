@@ -23,6 +23,7 @@ import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/creat
 import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { providerOptionLabel } from "@/lib/provider-option-label";
+import { dstConfigGroupLabelKey } from "@/lib/dst-config";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import {
   getTerrariaPreset,
@@ -1760,17 +1761,6 @@ const dstConfigSections = [
   { titleKey: "dstSectionCaves", prefix: "caves.", summary: ["caves.enabled"] }
 ] as const;
 
-const dstConfigGroupLabelKeys: Record<string, MessageKey> = {
-  "dst.world.basics": "dstGroupWorldBasics",
-  "dst.world.seasons": "dstGroupSeasons",
-  "dst.world.resources": "dstGroupResources",
-  "dst.world.creatures": "dstGroupCreatures",
-  "dst.world.threats": "dstGroupThreats",
-  "dst.caves.world": "dstGroupCaveWorld",
-  "dst.caves.resources": "dstGroupCaveResources",
-  "dst.caves.threats": "dstGroupCaveThreats"
-};
-
 function DSTProviderConfigSections(props: {
   fields: ProviderConfigField[];
   onClearValidationError: (field: string) => void;
@@ -1814,7 +1804,7 @@ function DSTProviderConfigSections(props: {
               <div className="mt-4 grid gap-2">
                 {groups.map((group, index) => {
                   const groupFields = fields.filter((field) => field.group === group);
-                  const labelKey = dstConfigGroupLabelKeys[group];
+                  const labelKey = dstConfigGroupLabelKey(group);
                   return (
                     <details key={group} open={index === 0} className="group rounded-md border border-panel-line bg-slate-950/45">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:text-slate-100">
