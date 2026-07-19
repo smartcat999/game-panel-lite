@@ -61,7 +61,7 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScope, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
-import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -1887,6 +1887,7 @@ function ConfigTab({
               fieldHelp={(field) => providerFieldHelp(field, t)}
               onChange={(field, value) => setProviderDraft((current) => updateProviderConfigPayload(current, field, value))}
               onRegenerateWorld={onRegenerateWorld}
+              onRestoreDefaults={(fields) => setProviderDraft((current) => restoreProviderConfigDefaults(current, fields))}
             />
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <Field label={t("externalPort")}>

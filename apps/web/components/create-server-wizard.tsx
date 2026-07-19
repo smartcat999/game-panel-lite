@@ -22,7 +22,7 @@ import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServer
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
-import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { providerOptionLabel } from "@/lib/provider-option-label";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import {
@@ -1269,6 +1269,10 @@ function ConfigStep({
                 onCustomize();
                 onClearValidationError(field.name);
                 setProviderConfigPayload(updateProviderConfigPayload(providerConfigPayload, field, nextValue));
+              }}
+              onRestoreDefaults={(fields) => {
+                onCustomize();
+                setProviderConfigPayload(restoreProviderConfigDefaults(providerConfigPayload, fields));
               }}
             />
           </section>

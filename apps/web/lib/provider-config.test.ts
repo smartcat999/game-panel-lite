@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 const provider: ProviderCatalog = {
@@ -61,6 +61,15 @@ describe("provider config helpers", () => {
     const numeric = field({ name: "gameplay.rate", type: "number", default: 1 });
     expect(providerConfigFieldChanged({ gameplay: { rate: 1 } }, { gameplay: { rate: "1" } }, numeric)).toBe(false);
     expect(providerConfigFieldChanged({ gameplay: { rate: 1 } }, { gameplay: { rate: 2 } }, numeric)).toBe(true);
+  });
+
+  it("restores multiple provider fields in one payload update", () => {
+    const enabled = field({ name: "features.enabled", type: "boolean", default: false });
+    const rate = field({ name: "gameplay.rate", type: "number", default: 1 });
+    expect(restoreProviderConfigDefaults(
+      { features: { enabled: true }, gameplay: { rate: 3 } },
+      [enabled, rate]
+    )).toEqual({ features: { enabled: false }, gameplay: { rate: 1 } });
   });
 
   it("coerces updated schema values", () => {

@@ -58,6 +58,16 @@ export function providerConfigFieldChanged(
   return String(currentValue ?? "") !== String(draftValue ?? "");
 }
 
+export function restoreProviderConfigDefaults(
+  payload: ProviderConfigPayload,
+  fields: ProviderConfigField[]
+): ProviderConfigPayload {
+  return fields.reduce(
+    (current, field) => updateProviderConfigPayload(current, field, providerFieldDefaultInputValue(field)),
+    payload
+  );
+}
+
 export function isProviderFieldModified(payload: ProviderConfigPayload | undefined, field: ProviderConfigField): boolean {
   const current = providerConfigValue(payload, field.name);
   const fallback = defaultProviderFieldValue(field);
@@ -80,6 +90,11 @@ function coerceProviderFieldValue(field: ProviderConfigField, value: string | bo
     return Number.isFinite(nextValue) ? nextValue : 0;
   }
   return String(value);
+}
+
+function providerFieldDefaultInputValue(field: ProviderConfigField): string | boolean {
+  if (field.type === "boolean") return field.default === true;
+  return String(field.default ?? (field.type === "number" ? 0 : ""));
 }
 
 function setProviderConfigValue(payload: ProviderConfigPayload, path: string, value: unknown): ProviderConfigPayload {
