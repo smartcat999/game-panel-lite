@@ -2,6 +2,8 @@
 
 ## 2026-07-19
 
+- Distinguished DST world settings from world-generation options in the server editor with explicit restart/regeneration applicability, a direct route into the existing high-risk regeneration flow, and no misleading restart prompt after world-generation-only saves.
+- Stabilized provider field header geometry so the modified-field reset action can appear or disappear without shifting Palworld slider controls.
 - Merged Palworld slider bounds into the control row as `minimum | track | maximum`, removing the separate range-caption row while retaining the thumb-anchored current value.
 - Anchored each Palworld slider's current-value readout above its thumb so the value moves with the control instead of occupying a disconnected title-row column.
 - Replaced the advanced-settings entry/return flow with a stable basic/advanced tab switch, flattening the editor hierarchy and keeping search, filters, and categories inside the advanced view without a nested panel shell.

@@ -39,6 +39,25 @@ export function isAdvancedProviderConfigField(providerKey: string, field: Provid
   return false;
 }
 
+export function isWorldGenerationProviderConfigField(providerKey: string, field: ProviderConfigField): boolean {
+  if (providerKey !== "dont-starve-together") return false;
+  return field.name === "world.preset"
+    || field.name === "caves.enabled"
+    || Boolean(field.group?.includes(".worldgen."));
+}
+
+export function providerConfigFieldChanged(
+  current: ProviderConfigPayload | undefined,
+  draft: ProviderConfigPayload | undefined,
+  field: ProviderConfigField
+): boolean {
+  const currentValue = providerConfigValue(current, field.name);
+  const draftValue = providerConfigValue(draft, field.name);
+  if (field.type === "number") return Number(currentValue) !== Number(draftValue);
+  if (field.type === "boolean") return Boolean(currentValue) !== Boolean(draftValue);
+  return String(currentValue ?? "") !== String(draftValue ?? "");
+}
+
 export function isProviderFieldModified(payload: ProviderConfigPayload | undefined, field: ProviderConfigField): boolean {
   const current = providerConfigValue(payload, field.name);
   const fallback = defaultProviderFieldValue(field);

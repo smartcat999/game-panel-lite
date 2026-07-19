@@ -3,7 +3,7 @@
 import { RotateCcw, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { SecretInput } from "@/components/secret-input";
-import { Input } from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import { dstConfigGroupLabelKey } from "@/lib/dst-config";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, type ProviderConfigPayload } from "@/lib/provider-config";
@@ -19,18 +19,24 @@ export function ProviderConfigEditor({
   fieldHelp,
   fieldLabel,
   fields,
+  hasUnsavedWorldGenerationChanges = false,
   onChange,
+  onRegenerateWorld,
   payload,
-  providerKey
+  providerKey,
+  surface = "create"
 }: {
   disabled?: boolean;
   errors?: Record<string, string>;
   fieldHelp: (field: ProviderConfigField) => string;
   fieldLabel: (field: ProviderConfigField) => string;
   fields: ProviderConfigField[];
+  hasUnsavedWorldGenerationChanges?: boolean;
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
+  onRegenerateWorld?: () => void;
   payload: ProviderConfigPayload;
   providerKey: string;
+  surface?: "create" | "server";
 }) {
   const { locale, t } = useI18n();
   const [activeView, setActiveView] = useState<"basic" | "advanced">("basic");
@@ -120,13 +126,35 @@ export function ProviderConfigEditor({
             <div className="min-w-0 py-3 lg:pl-4">
               {visibleGroups.map((group) => {
                 const groupFields = matchedFields.filter((field) => field.group === group);
+                const effect = dstConfigGroupEffect(providerKey, group);
                 if (groupFields.length === 0) return null;
                 return (
                   <section key={group} className="mb-6 last:mb-0">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                        {surface === "server" && effect ? (
+                          <span className={cn(
+                            "rounded px-2 py-0.5 text-[11px] font-medium",
+                            effect === "worldgen" ? "bg-panel-gold/15 text-panel-gold" : "bg-slate-800 text-slate-400"
+                          )}>
+                            {t(effect === "worldgen" ? "worldGenerationAppliesOnRegenerate" : "worldSettingsApplyAfterRestart")}
+                          </span>
+                        ) : null}
+                      </div>
                       <span className="text-xs text-slate-500">{t("settingsCount", { count: groupFields.length })}</span>
                     </div>
+                    {surface === "server" && effect === "worldgen" && onRegenerateWorld && !normalizedQuery ? (
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-panel-gold/25 bg-panel-gold/5 px-3 py-2">
+                        <p className="text-xs text-slate-400">
+                          {hasUnsavedWorldGenerationChanges ? t("saveWorldGenerationBeforeRegenerate") : t("worldGenerationConfigHint")}
+                        </p>
+                        <Button type="button" variant="gold" className="h-8 shrink-0 px-2.5 text-xs" disabled={disabled || hasUnsavedWorldGenerationChanges} onClick={onRegenerateWorld}>
+                          <RotateCcw aria-hidden="true" className="size-3.5" />
+                          {t("regenerateWithCurrentSettings")}
+                        </Button>
+                      </div>
+                    ) : null}
                     <div className="grid gap-3 xl:grid-cols-2">
                       {groupFields.map((field) => (
                         <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} resettable slider={providerKey === "palworld"} />
@@ -174,7 +202,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, r
   const reset = () => onChange(field, field.type === "boolean" ? field.default === true : String(field.default ?? (field.type === "number" ? 0 : "")));
   return (
     <div className={cn("min-w-0 rounded-md border bg-slate-950/35 p-3", error ? "border-red-400/60" : "border-panel-line")}>
-      <div className="mb-2 flex min-h-5 items-start justify-between gap-3">
+      <div className="mb-2 flex min-h-7 items-center justify-between gap-3">
         <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
         {resettable && modified ? (
           <button type="button" aria-label={t("restoreDefault")} title={t("restoreDefault")} className="flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-panel-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40 disabled:opacity-50" onClick={reset} disabled={disabled}>
@@ -227,4 +255,11 @@ function groupLabel(group: string, locale: "zh" | "en", t: (key: MessageKey, val
     return labels[group] ?? group;
   }
   return group;
+}
+
+function dstConfigGroupEffect(providerKey: string, group: string): "worldgen" | "worldsettings" | undefined {
+  if (providerKey !== "dont-starve-together") return undefined;
+  if (group.includes(".worldgen.")) return "worldgen";
+  if (group.includes(".worldsettings.")) return "worldsettings";
+  return undefined;
 }

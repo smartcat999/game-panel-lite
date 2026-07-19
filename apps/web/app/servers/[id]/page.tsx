@@ -61,7 +61,7 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScope, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
-import { createDefaultProviderConfigPayload, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -913,6 +913,7 @@ export default function ServerDetailPage() {
                 savePending={configSave.isPending}
                 saveSuccess={configSaved}
                 restartPending={configRestart.isPending}
+                onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
                 onRestart={() => setPendingConfigRestart(true)}
                 onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
               />
@@ -1721,6 +1722,7 @@ function LogsTab({
 }
 
 function ConfigTab({
+  onRegenerateWorld,
   onRestart,
   onSave,
   provider,
@@ -1730,6 +1732,7 @@ function ConfigTab({
   savePending,
   saveSuccess
 }: {
+  onRegenerateWorld?: () => void;
   onRestart: () => void;
   onSave: (config: ServerConfigUpdatePayload, hostPort: number) => void;
   provider?: ProviderCatalog;
@@ -1749,6 +1752,9 @@ function ConfigTab({
   const [hostPortDraft, setHostPortDraft] = useState(resourceHostPort);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [restartRecommended, setRestartRecommended] = useState(false);
+  const [worldGenerationOnlyPending, setWorldGenerationOnlyPending] = useState(false);
+  const submittedRestartRequiredRef = useRef(false);
+  const submittedWorldGenerationRef = useRef(false);
   useEffect(() => setDraft(resourceTerrariaConfig), [resource.id, resourceTerrariaConfig]);
   useEffect(() => setProviderDraft(resourceProviderPayload), [resource.id, resourceProviderPayload]);
   useEffect(() => setHostPortDraft(resourceHostPort), [resource.id, resourceHostPort]);
@@ -1761,6 +1767,15 @@ function ConfigTab({
     retry: false
   });
   const currentProviderPayload = resourceProviderPayload;
+  const providerFields = provider?.configSchema ?? [];
+  const worldGenerationDirty = !isTerrariaProvider && providerFields.some((field) =>
+    isWorldGenerationProviderConfigField(resource.providerKey, field)
+      && providerConfigFieldChanged(currentProviderPayload, providerDraft, field)
+  );
+  const providerRuntimeDirty = !isTerrariaProvider && providerFields.some((field) =>
+    !isWorldGenerationProviderConfigField(resource.providerKey, field)
+      && providerConfigFieldChanged(currentProviderPayload, providerDraft, field)
+  );
   const configDirty = isTerrariaProvider
     ? JSON.stringify(normalizedDraft) !== JSON.stringify({ ...resourceTerrariaConfig, port: terrariaInternalPort })
     : JSON.stringify(providerDraft) !== JSON.stringify(currentProviderPayload);
@@ -1769,7 +1784,7 @@ function ConfigTab({
   const lifecycleLocked = isServerLifecyclePending(resourceStatus);
   const running = resourceStatus === "running";
   const disabled = lifecycleLocked || savePending;
-  const restartRequired = running && !dirty && (gameServerConfigPendingRestart(resource) || restartRecommended);
+  const restartRequired = running && !dirty && (restartRecommended || (!worldGenerationOnlyPending && gameServerConfigPendingRestart(resource)));
   const showConfigActions = dirty || savePending || saveSuccess || restartRequired || lifecycleLocked;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
   useEffect(() => {
@@ -1779,9 +1794,13 @@ function ConfigTab({
   }, [dirty, resource, running]);
   useEffect(() => {
     if (saveSuccess && running) {
-      setRestartRecommended(true);
+      setRestartRecommended(submittedRestartRequiredRef.current);
+      setWorldGenerationOnlyPending(submittedWorldGenerationRef.current && !submittedRestartRequiredRef.current);
     }
   }, [running, saveSuccess]);
+  useEffect(() => {
+    if (!running) setWorldGenerationOnlyPending(false);
+  }, [running]);
   useEffect(() => {
     if (!previewOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1803,7 +1822,11 @@ function ConfigTab({
   return (
     <form className="space-y-4" onSubmit={(event) => {
       event.preventDefault();
-      if (!disabled && dirty) onSave(isTerrariaProvider ? normalizedDraft : providerDraft, hostPortDraft);
+      if (!disabled && dirty) {
+        submittedRestartRequiredRef.current = isTerrariaProvider || hostPortDirty || providerRuntimeDirty;
+        submittedWorldGenerationRef.current = worldGenerationDirty;
+        onSave(isTerrariaProvider ? normalizedDraft : providerDraft, hostPortDraft);
+      }
     }}>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1856,11 +1879,14 @@ function ConfigTab({
             <ProviderConfigEditor
               disabled={disabled}
               fields={provider?.configSchema ?? []}
+              hasUnsavedWorldGenerationChanges={worldGenerationDirty}
               payload={providerDraft}
               providerKey={provider?.key ?? ""}
+              surface="server"
               fieldLabel={(field) => providerFieldLabel(field, t)}
               fieldHelp={(field) => providerFieldHelp(field, t)}
               onChange={(field, value) => setProviderDraft((current) => updateProviderConfigPayload(current, field, value))}
+              onRegenerateWorld={onRegenerateWorld}
             />
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <Field label={t("externalPort")}>

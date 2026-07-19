@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 const provider: ProviderCatalog = {
@@ -28,6 +28,16 @@ const provider: ProviderCatalog = {
   ]
 };
 
+function field(overrides: Partial<ProviderConfigField>): ProviderConfigField {
+  return {
+    name: "setting",
+    label: "Setting",
+    type: "select",
+    required: false,
+    ...overrides
+  };
+}
+
 describe("provider config helpers", () => {
   it("creates defaults from provider schema", () => {
     expect(createDefaultProviderConfigPayload(provider)).toEqual({
@@ -37,6 +47,20 @@ describe("provider config helpers", () => {
       serverName: "Palworld Server",
       serverPassword: ""
     });
+  });
+
+  it("separates DST world generation fields from restart-applied settings", () => {
+    const worldgen = field({ name: "world.overrides.world_size", group: "dst.world.worldgen.global", default: "default" });
+    const worldSettings = field({ name: "world.overrides.day", group: "dst.world.worldsettings.global", default: "default" });
+    expect(isWorldGenerationProviderConfigField("dont-starve-together", worldgen)).toBe(true);
+    expect(isWorldGenerationProviderConfigField("dont-starve-together", worldSettings)).toBe(false);
+    expect(isWorldGenerationProviderConfigField("dont-starve-together", field({ name: "world.preset" }))).toBe(true);
+  });
+
+  it("compares provider field values using their declared type", () => {
+    const numeric = field({ name: "gameplay.rate", type: "number", default: 1 });
+    expect(providerConfigFieldChanged({ gameplay: { rate: 1 } }, { gameplay: { rate: "1" } }, numeric)).toBe(false);
+    expect(providerConfigFieldChanged({ gameplay: { rate: 1 } }, { gameplay: { rate: 2 } }, numeric)).toBe(true);
   });
 
   it("coerces updated schema values", () => {
