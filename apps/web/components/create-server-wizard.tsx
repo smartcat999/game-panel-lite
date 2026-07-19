@@ -9,7 +9,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
-import { ResourceLimitSlider, cpuResourceMarkers, formatCpuResourceLimit, formatMemoryResourceLimit, memoryResourceMarkers } from "@/components/resource-limit-slider";
+import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
@@ -927,7 +927,7 @@ function GameStep({
     <div>
       <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
       <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-4 grid gap-3">
         {orderedGames.map((game) => {
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
@@ -1699,7 +1699,6 @@ function RuntimeResourceSection({
   const { t } = useI18n();
   const cpuSliderMax = Math.max(1, hostCpuCores ?? 8, Math.ceil(resourceLimits.cpuLimitCores));
   const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 1024) * 1024, Math.ceil(resourceLimits.memoryLimitMb / 1024) * 1024);
-  const recommendedMemoryMb = hostMemoryMb ? Math.max(1024, Math.floor((hostMemoryMb - 768) / 1024) * 1024) : 0;
   return (
     <section className="rounded-lg border border-panel-line bg-slate-950/35 p-4 md:col-span-2">
       <div>
@@ -1711,7 +1710,6 @@ function RuntimeResourceSection({
           <ResourceLimitSlider
             formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
             label={t("cpuLimit")}
-            markers={cpuResourceMarkers(cpuSliderMax)}
             max={cpuSliderMax}
             step={0.25}
             value={resourceLimits.cpuLimitCores}
@@ -1722,7 +1720,6 @@ function RuntimeResourceSection({
           <ResourceLimitSlider
             formatValue={(value) => formatMemoryResourceLimit(value, t("unlimited"))}
             label={t("memoryLimit")}
-            markers={memoryResourceMarkers(memorySliderMax, recommendedMemoryMb, t("recommended"))}
             max={memorySliderMax}
             step={1024}
             value={resourceLimits.memoryLimitMb}
@@ -1730,11 +1727,6 @@ function RuntimeResourceSection({
           />
         </div>
       </div>
-      <p className="mt-3 text-xs leading-5 text-slate-500">
-        {hostMemoryMb && recommendedMemoryMb
-          ? t("resourceHostReserveSummary", { total: formatMemoryResourceLimit(hostMemoryMb, t("unlimited")), recommended: formatMemoryResourceLimit(recommendedMemoryMb, t("unlimited")) })
-          : t("resourceHostReserveGeneric")}
-      </p>
     </section>
   );
 }
