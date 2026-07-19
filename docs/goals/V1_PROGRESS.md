@@ -1,5 +1,9 @@
 # V1 Progress
 
+## 2026-07-19
+
+- Added an accessible show/hide control for saved provider secrets so existing Klei server tokens and other password fields can be verified without changing their stored values; secrets remain masked by default and are hidden again while saving.
+
 ## 2026-07-18
 
 - Added provider-scoped world recreation as a compact server overflow action with an on-demand confirmation dialog, without exposing the hidden global world library, adding a separate navigation tab, or occupying the configuration page with a persistent card.

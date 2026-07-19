@@ -13,6 +13,7 @@ import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
+import { SecretInput } from "@/components/secret-input";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
@@ -2087,10 +2088,18 @@ function ProviderConfigFields({
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </Select>
+            ) : field.type === "password" ? (
+              <SecretInput
+                disabled={disabled}
+                hideLabel={t("hideSensitiveValue", { label })}
+                showLabel={t("showSensitiveValue", { label })}
+                value={String(value ?? "")}
+                onChange={(event) => onChange(field, event.target.value)}
+              />
             ) : (
               <Input
                 disabled={disabled}
-                type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                type={field.type === "number" ? "number" : "text"}
                 value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
                 min={field.type === "number" ? field.min : undefined}
                 max={field.type === "number" ? field.max : undefined}
