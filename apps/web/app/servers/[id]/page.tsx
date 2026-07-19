@@ -2417,13 +2417,17 @@ function ModsTab({
   const blocked = modAction.disabled;
   const workshopBlockReason = workshopUnsupported ? t("workshopArmUnsupported") : "";
   const selectedMods = useMemo(
-    () => availableMods.filter((mod) => selectedModIds.includes(mod.id) && !isModInstalledOnServer(mod, items)),
+    () => availableMods.filter((mod) => dstModScope(mod) !== "client" && selectedModIds.includes(mod.id) && !isModInstalledOnServer(mod, items)),
     [availableMods, items, selectedModIds]
+  );
+  const serverAssignableMods = useMemo(
+    () => availableMods.filter((mod) => dstModScope(mod) !== "client"),
+    [availableMods]
   );
   useEffect(() => {
     setSelectedModIds((current) => current.filter((modId) => {
       const mod = availableMods.find((item) => item.id === modId);
-      return mod ? !isModInstalledOnServer(mod, items) : false;
+      return mod ? dstModScope(mod) !== "client" && !isModInstalledOnServer(mod, items) : false;
     }));
   }, [availableMods, items]);
   useEffect(() => {
@@ -2552,10 +2556,10 @@ function ModsTab({
                 </div>
 
                 {installSource === "library" ? (
-                  availableMods.length > 0 ? (
+                  serverAssignableMods.length > 0 ? (
                     <>
                     <div className="max-h-[44vh] divide-y divide-panel-line overflow-y-auto">
-                      {availableMods.map((mod) => {
+                      {serverAssignableMods.map((mod) => {
                         const blockedByArchitecture = workshopUnsupported && isWorkshopBackedMod(mod);
                         const installed = isModInstalledOnServer(mod, items);
                         const selected = selectedModIds.includes(mod.id);
@@ -2603,6 +2607,7 @@ function ModsTab({
                   <div className="divide-y divide-panel-line">
                     {modPacks.map((pack) => {
                       const blockedByArchitecture = workshopUnsupported && modPackHasWorkshopMods(pack);
+                      const containsClientOnlyDSTMod = pack.mods.some((mod) => dstModScope(mod) === "client");
                       const installedCount = pack.mods.filter((mod) => isModInstalledOnServer(mod, items)).length;
                       const allInstalled = pack.mods.length > 0 && installedCount === pack.mods.length;
                       return (
@@ -2618,8 +2623,8 @@ function ModsTab({
                                 setInstallerOpen(false);
                                 onInstallPack(pack);
                               }}
-                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture || allInstalled}
-                              title={blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
+                              disabled={packInstalling || blocked || pack.modIds.length === 0 || blockedByArchitecture || containsClientOnlyDSTMod || allInstalled}
+                              title={containsClientOnlyDSTMod ? t("dstClientOnlyPackBlocked") : blockedByArchitecture ? workshopBlockReason : modAction.reasonKey ? t(modAction.reasonKey) : undefined}
                             >
                               {allInstalled ? <CheckCircle2 aria-hidden="true" /> : <Package aria-hidden="true" />}
                               {allInstalled ? t("alreadyInstalled") : t("installModPack")}
@@ -2712,9 +2717,13 @@ function ServerModRow({
             {scope !== "unknown" ? (
               <span className={cn(
                 "shrink-0 rounded border px-2 py-0.5 text-xs font-medium",
-                scope === "client" ? "border-sky-400/25 bg-sky-400/10 text-sky-300" : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
+                scope === "client"
+                  ? "border-sky-400/25 bg-sky-400/10 text-sky-300"
+                  : scope === "server"
+                    ? "border-panel-green/25 bg-panel-green/10 text-panel-green"
+                    : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
               )}>
-                {t(scope === "client" ? "dstClientOnlyMod" : "dstServerRequiredMod")}
+                {t(scope === "client" ? "dstClientOnlyMod" : scope === "server" ? "dstServerOnlyMod" : "dstServerRequiredMod")}
               </span>
             ) : null}
           </div>

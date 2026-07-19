@@ -12,7 +12,7 @@ import { Badge, Button, Card, Input } from "@/components/ui";
 import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, uploadGlobalMod } from "@/lib/api";
 import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { modDisplayName, modSourceLabel } from "@/lib/mod-display";
+import { dstModScopeFromTags, modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
 import { cn } from "@/lib/utils";
 import type { ModFile, ModPack, ProviderKey, RecommendedMod } from "@/lib/types";
@@ -278,7 +278,7 @@ export default function ModsPage() {
                 item={item}
                 locale={locale}
                 busy={workshopImport.isPending || recommendedImport.isPending || (isWorkshopRecommended(item) && workshopUnsupported)}
-                disabledReason={isWorkshopRecommended(item) && workshopUnsupported ? t("workshopArmUnsupported") : ""}
+                disabledReason={recommendedModDisabledReason(item, workshopUnsupported, t)}
                 onAdd={() => {
                   if (isWorkshopRecommended(item) && item.workshopId) {
                     requestWorkshopImport([item.workshopId], item.providerKey ?? "terraria-tmodloader");
@@ -676,6 +676,7 @@ function RecommendedModCard({
   disabledReason: string;
   onAdd: () => void;
 }) {
+  const scope = dstModScopeFromTags(item.providerKey, item.tags);
   return (
     <Card className="overflow-hidden p-0 transition hover:border-panel-green/25">
       <div className="flex gap-4 p-4">
@@ -686,7 +687,10 @@ function RecommendedModCard({
           <div className="min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="truncate text-base font-semibold text-white">{item.title}</h3>
+                  {scope !== "unknown" ? <DSTScopeBadge scope={scope} locale={locale} /> : null}
+                </div>
                 <p className="mt-1 text-xs text-slate-500">{recommendedSourceLabel(item, locale)}</p>
               </div>
               <span className="rounded bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300">
@@ -706,7 +710,7 @@ function RecommendedModCard({
             </p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            {(item.tags ?? []).slice(0, 4).map((tag) => (
+            {visibleWorkshopTags(item.tags).slice(0, 4).map((tag) => (
               <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
             ))}
           </div>
@@ -728,14 +732,45 @@ function RecommendedModCard({
         {item.inLibrary ? (
           <Badge className="bg-panel-green/15 text-panel-green">{locale === "zh" ? "已在模组库" : "In library"}</Badge>
         ) : (
-          <Button variant="secondary" onClick={onAdd} disabled={busy} title={disabledReason || undefined}>
+          <Button variant="secondary" onClick={onAdd} disabled={busy || Boolean(disabledReason)} title={disabledReason || undefined}>
             <Download aria-hidden="true" />
-            {locale === "zh" ? "加入模组库" : "Add to library"}
+            {scope === "client" ? (locale === "zh" ? "仅客户端" : "Client only") : (locale === "zh" ? "加入模组库" : "Add to library")}
           </Button>
         )}
       </div>
     </Card>
   );
+}
+
+function DSTScopeBadge({ scope, locale }: { scope: "client" | "server" | "required"; locale: string }) {
+  const label = scope === "client"
+    ? (locale === "zh" ? "仅客户端" : "Client only")
+    : scope === "server"
+      ? (locale === "zh" ? "仅服务端" : "Server only")
+      : (locale === "zh" ? "全员必需" : "Required by all");
+  return (
+    <span className={cn(
+      "shrink-0 rounded border px-2 py-0.5 text-[11px] font-medium",
+      scope === "client"
+        ? "border-sky-400/25 bg-sky-400/10 text-sky-300"
+        : scope === "server"
+          ? "border-panel-green/25 bg-panel-green/10 text-panel-green"
+          : "border-panel-gold/25 bg-panel-gold/10 text-panel-gold"
+    )}>
+      {label}
+    </span>
+  );
+}
+
+function recommendedModDisabledReason(item: RecommendedMod, workshopUnsupported: boolean, t: (key: MessageKey) => string) {
+  if (dstModScopeFromTags(item.providerKey, item.tags) === "client") return t("dstClientOnlyLibraryBlocked");
+  if (isWorkshopRecommended(item) && workshopUnsupported) return t("workshopArmUnsupported");
+  return "";
+}
+
+function visibleWorkshopTags(tags: string[] | undefined) {
+  const internalScopeTags = new Set(["client_only_mod", "server_only_mod", "all_clients_require_mod"]);
+  return (tags ?? []).filter((tag) => !internalScopeTags.has(tag.toLowerCase()));
 }
 
 function dependencyNamesForSelectedMods(mods: ModFile[], selectedIds: string[]) {

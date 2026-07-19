@@ -23,6 +23,7 @@ describe("dstModScope", () => {
   it("separates client-only mods from server-required mods", () => {
     expect(dstModScope(mod(["client_only_mod", "interface"]))).toBe("client");
     expect(dstModScope(mod(["all_clients_require_mod", "utility"]))).toBe("required");
+    expect(dstModScope(mod(["server_only_mod", "utility"]))).toBe("server");
   });
 });
 

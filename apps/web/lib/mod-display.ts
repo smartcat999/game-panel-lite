@@ -20,12 +20,19 @@ export function modSourceLabel(mod: ModFile, locale: string) {
   return ".tmod";
 }
 
-export function dstModScope(mod: ModFile): "client" | "required" | "unknown" {
-  if (mod.providerKey !== "dont-starve-together") return "unknown";
-  const tags = new Set((mod.tags ?? []).map((tag) => tag.toLowerCase()));
+export type DSTModScope = "client" | "server" | "required" | "unknown";
+
+export function dstModScopeFromTags(providerKey: string | undefined, values: string[] | undefined): DSTModScope {
+  if (providerKey !== "dont-starve-together") return "unknown";
+  const tags = new Set((values ?? []).map((tag) => tag.toLowerCase()));
   if (tags.has("client_only_mod")) return "client";
-  if (tags.has("all_clients_require_mod") || tags.has("server_only_mod")) return "required";
+  if (tags.has("server_only_mod")) return "server";
+  if (tags.has("all_clients_require_mod")) return "required";
   return "unknown";
+}
+
+export function dstModScope(mod: ModFile): DSTModScope {
+  return dstModScopeFromTags(mod.providerKey, mod.tags);
 }
 
 export type ModRuntimeState = "configured" | "disabled" | "enabled" | "notApplied" | "notSynced" | "pendingRestart";
