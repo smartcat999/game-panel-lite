@@ -1,9 +1,9 @@
 "use client";
 
 import { RotateCcw, Search } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { SecretInput } from "@/components/secret-input";
-import { Input } from "@/components/ui";
+import { Button, Input } from "@/components/ui";
 import { dstConfigGroupLabelKey } from "@/lib/dst-config";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, type ProviderConfigPayload } from "@/lib/provider-config";
@@ -19,18 +19,26 @@ export function ProviderConfigEditor({
   fieldHelp,
   fieldLabel,
   fields,
+  hasUnsavedWorldGenerationChanges = false,
   onChange,
+  onRegenerateWorld,
+  onRestoreDefaults,
   payload,
-  providerKey
+  providerKey,
+  surface = "create"
 }: {
   disabled?: boolean;
   errors?: Record<string, string>;
   fieldHelp: (field: ProviderConfigField) => string;
   fieldLabel: (field: ProviderConfigField) => string;
   fields: ProviderConfigField[];
+  hasUnsavedWorldGenerationChanges?: boolean;
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
+  onRegenerateWorld?: () => void;
+  onRestoreDefaults?: (fields: ProviderConfigField[]) => void;
   payload: ProviderConfigPayload;
   providerKey: string;
+  surface?: "create" | "server";
 }) {
   const { locale, t } = useI18n();
   const [activeView, setActiveView] = useState<"basic" | "advanced">("basic");
@@ -103,6 +111,12 @@ export function ProviderConfigEditor({
                 </button>
               ))}
             </div>
+            {modifiedCount > 0 && onRestoreDefaults ? (
+              <Button type="button" variant="ghost" className="h-9 px-2.5 text-xs text-slate-400" disabled={disabled} onClick={() => onRestoreDefaults(advancedFields)}>
+                <RotateCcw aria-hidden="true" className="size-3.5" />
+                {t("restoreDefaultConfiguration")}
+              </Button>
+            ) : null}
           </div>
 
           <div className="border-t border-panel-line lg:grid lg:grid-cols-[190px_minmax(0,1fr)]">
@@ -120,16 +134,38 @@ export function ProviderConfigEditor({
             <div className="min-w-0 py-3 lg:pl-4">
               {visibleGroups.map((group) => {
                 const groupFields = matchedFields.filter((field) => field.group === group);
+                const effect = dstConfigGroupEffect(providerKey, group);
                 if (groupFields.length === 0) return null;
                 return (
                   <section key={group} className="mb-6 last:mb-0">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                        {surface === "server" && effect ? (
+                          <span className={cn(
+                            "rounded px-2 py-0.5 text-[11px] font-medium",
+                            effect === "worldgen" ? "bg-panel-gold/15 text-panel-gold" : "bg-slate-800 text-slate-400"
+                          )}>
+                            {t(effect === "worldgen" ? "worldGenerationAppliesOnRegenerate" : "worldSettingsApplyAfterRestart")}
+                          </span>
+                        ) : null}
+                      </div>
                       <span className="text-xs text-slate-500">{t("settingsCount", { count: groupFields.length })}</span>
                     </div>
+                    {surface === "server" && effect === "worldgen" && onRegenerateWorld && !normalizedQuery ? (
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-panel-gold/25 bg-panel-gold/5 px-3 py-2">
+                        <p className="text-xs text-slate-400">
+                          {hasUnsavedWorldGenerationChanges ? t("saveWorldGenerationBeforeRegenerate") : t("worldGenerationConfigHint")}
+                        </p>
+                        <Button type="button" variant="gold" className="h-8 shrink-0 px-2.5 text-xs" disabled={disabled || hasUnsavedWorldGenerationChanges} onClick={onRegenerateWorld}>
+                          <RotateCcw aria-hidden="true" className="size-3.5" />
+                          {t("regenerateWithCurrentSettings")}
+                        </Button>
+                      </div>
+                    ) : null}
                     <div className="grid gap-3 xl:grid-cols-2">
                       {groupFields.map((field) => (
-                        <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} resettable slider={providerKey === "palworld"} />
+                        <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
                       ))}
                     </div>
                   </section>
@@ -150,7 +186,7 @@ export function ProviderConfigEditor({
   );
 }
 
-function ConfigField({ disabled, error, field, help, label, onChange, payload, resettable = false, slider }: {
+function ConfigField({ disabled, error, field, help, label, onChange, payload, slider }: {
   disabled: boolean;
   error?: string;
   field: ProviderConfigField;
@@ -158,12 +194,10 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, r
   label: string;
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
   payload: ProviderConfigPayload;
-  resettable?: boolean;
   slider: boolean;
 }) {
   const { t } = useI18n();
   const value = providerConfigValue(payload, field.name);
-  const modified = isProviderFieldModified(payload, field);
   const checked = value === true;
   const numericValue = Number(value ?? field.default ?? 0);
   const isRangeSlider = field.type === "number" && slider && field.min !== undefined && field.max !== undefined;
@@ -171,51 +205,64 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, r
     ? ((numericValue - field.min) / (field.max - field.min)) * 100
     : 0;
   const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
-  const reset = () => onChange(field, field.type === "boolean" ? field.default === true : String(field.default ?? (field.type === "number" ? 0 : "")));
   return (
     <div className={cn("min-w-0 rounded-md border bg-slate-950/35 p-3", error ? "border-red-400/60" : "border-panel-line")}>
-      <div className="mb-2 flex min-h-5 items-start justify-between gap-3">
-        <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
-        {resettable && modified ? (
-          <button type="button" aria-label={t("restoreDefault")} title={t("restoreDefault")} className="flex size-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-panel-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40 disabled:opacity-50" onClick={reset} disabled={disabled}>
-            <RotateCcw aria-hidden="true" className="size-3.5" />
-          </button>
-        ) : null}
-      </div>
       {field.type === "boolean" ? (
-        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} disabled={disabled} className="flex w-full items-center justify-between rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm text-slate-200 outline-none transition focus-visible:border-panel-green focus-visible:ring-2 focus-visible:ring-panel-green/30 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
-          <span>{checked ? t("enabled") : t("disabled")}</span>
+        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-0.5 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-panel-green/30 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
+          <span className="text-sm font-medium text-slate-300">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
           <span aria-hidden="true" className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-panel-green" : "bg-slate-700")}>
             <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white transition-transform", checked ? "translate-x-4" : "translate-x-0")} />
           </span>
         </button>
       ) : isRangeSlider ? (
-        <div className="relative space-y-1.5 pt-7" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
-          <output
-            aria-hidden="true"
-            className="pointer-events-none absolute top-0 min-w-8 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
-            style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
-          >
-            {numericValue}
-          </output>
-          <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
-          <div className="flex justify-between text-[11px] tabular-nums text-slate-600">
-            <span>{field.min}</span>
-            <span>{field.max}</span>
+        <>
+          <div className="mb-2 flex min-h-5 items-center">
+            <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
           </div>
-        </div>
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3 text-[11px] tabular-nums text-slate-600">
+          <span className="pb-0.5">{field.min}</span>
+          <div className="relative min-w-0 pt-7" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
+            <output
+              aria-hidden="true"
+              className="pointer-events-none absolute top-0 min-w-8 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
+              style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
+            >
+              {numericValue}
+            </output>
+            <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range block w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+          </div>
+          <span className="pb-0.5">{field.max}</span>
+          </div>
+        </>
       ) : field.type === "select" ? (
-        <select id={`provider-field-${field.name}`} className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green" disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)}>
-          {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>)}
-        </select>
+        <LabeledControl field={field} label={label}>
+          <select id={`provider-field-${field.name}`} className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green" disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)}>
+            {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>)}
+          </select>
+        </LabeledControl>
       ) : field.type === "password" ? (
-        <SecretInput disabled={disabled} hideLabel={t("hideSensitiveValue", { label })} showLabel={t("showSensitiveValue", { label })} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)} />
+        <LabeledControl field={field} label={label}>
+          <SecretInput disabled={disabled} hideLabel={t("hideSensitiveValue", { label })} showLabel={t("showSensitiveValue", { label })} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)} />
+        </LabeledControl>
       ) : (
-        <Input id={`provider-field-${field.name}`} className="w-full" type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.step ?? 1} value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+        <LabeledControl field={field} label={label}>
+          <Input id={`provider-field-${field.name}`} className="w-full" type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.step ?? 1} value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+        </LabeledControl>
       )}
       {help ? <p className="mt-2 text-xs leading-5 text-slate-500">{help}</p> : null}
       {error ? <p className="mt-2 text-xs font-medium text-red-200">{error}</p> : null}
     </div>
+  );
+}
+
+function LabeledControl({ children, field, label }: { children: ReactNode; field: ProviderConfigField; label: string }) {
+  return (
+    <>
+      <div className="mb-2 flex min-h-5 items-center">
+        <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
+      </div>
+      {children}
+    </>
   );
 }
 
@@ -227,4 +274,11 @@ function groupLabel(group: string, locale: "zh" | "en", t: (key: MessageKey, val
     return labels[group] ?? group;
   }
   return group;
+}
+
+function dstConfigGroupEffect(providerKey: string, group: string): "worldgen" | "worldsettings" | undefined {
+  if (providerKey !== "dont-starve-together") return undefined;
+  if (group.includes(".worldgen.")) return "worldgen";
+  if (group.includes(".worldsettings.")) return "worldsettings";
+  return undefined;
 }
