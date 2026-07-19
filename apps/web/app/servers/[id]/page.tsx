@@ -61,7 +61,7 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
-import { providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -2012,22 +2012,7 @@ function FieldHelp({ text }: { text: string }) {
 }
 
 function initialProviderDraftFromResource(resource: GameServerResource, provider?: ProviderCatalog): ProviderConfigPayload {
-  let payload: ProviderConfigPayload = {};
-  const configPayload = resource.spec.config ?? {};
-  for (const field of provider?.configSchema ?? []) {
-    payload = updateProviderConfigPayload(payload, field, (providerConfigValue(configPayload, field.name) ?? defaultProviderFieldValue(field)) as string | boolean);
-  }
-  return {
-    ...payload,
-    ...configPayload
-  };
-}
-
-function defaultProviderFieldValue(field: ProviderConfigField): unknown {
-  if (field.default !== undefined) return field.default;
-  if (field.type === "number") return 0;
-  if (field.type === "boolean") return false;
-  return "";
+  return createDefaultProviderConfigPayload(provider, resource.spec.config ?? {});
 }
 
 function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
