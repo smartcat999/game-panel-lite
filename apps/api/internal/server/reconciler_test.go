@@ -173,6 +173,62 @@ func TestReconcileRunningCreatesAndStartsWorkload(t *testing.T) {
 	}
 }
 
+func TestReconcileRunningPreparesReplacementBeforeStoppingCurrentWorkload(t *testing.T) {
+	builder := &fakeBuilder{err: errors.New("invalid desired mod")}
+	runtime := newFakeRuntime()
+	runtime.states["runtime-srv-safe"] = domain.ActualRunning
+	reconciler := NewRuntimeReconciler(builder, runtime)
+	server := domain.GameServer{
+		ID:   "srv-safe",
+		Name: "Safe Restart",
+		Spec: domain.ServerSpec{Generation: 2, DesiredState: domain.DesiredRunning},
+		Status: domain.ServerRuntimeStatus{
+			Phase:             domain.PhasePending,
+			ActualState:       domain.ActualRunning,
+			RuntimeID:         "runtime-srv-safe",
+			AppliedGeneration: 1,
+		},
+	}
+
+	updated, err := reconciler.Reconcile(context.Background(), server)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if updated.Status.Phase != domain.PhaseFailed || updated.Status.LastError != "invalid desired mod" {
+		t.Fatalf("expected failed replacement preparation, got %+v", updated.Status)
+	}
+	if runtime.stopped != 0 || runtime.removed != 0 {
+		t.Fatalf("expected current workload to remain untouched, stopped=%d removed=%d", runtime.stopped, runtime.removed)
+	}
+	if runtime.states["runtime-srv-safe"] != domain.ActualRunning {
+		t.Fatal("expected current workload to remain running")
+	}
+}
+
+func TestReconcileRunningClearsOneShotModSyncMode(t *testing.T) {
+	builder := &fakeBuilder{}
+	runtime := newFakeRuntime()
+	reconciler := NewRuntimeReconciler(builder, runtime)
+	server := domain.GameServer{
+		ID:   "srv-refresh",
+		Name: "Refresh Once",
+		Spec: domain.ServerSpec{
+			Generation:   1,
+			DesiredState: domain.DesiredRunning,
+			Runtime:      domain.ServerRuntimeSpec{ModSyncMode: "refresh"},
+		},
+		Status: domain.ServerRuntimeStatus{Phase: domain.PhasePending, ActualState: domain.ActualMissing},
+	}
+
+	updated, err := reconciler.Reconcile(context.Background(), server)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if updated.Spec.Runtime.ModSyncMode != "" {
+		t.Fatalf("expected one-shot mod sync mode to clear, got %q", updated.Spec.Runtime.ModSyncMode)
+	}
+}
+
 func TestReconcileRunningRecordsLifecycleEvents(t *testing.T) {
 	builder := &fakeBuilder{}
 	runtime := newFakeRuntime()

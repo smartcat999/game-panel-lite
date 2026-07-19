@@ -84,12 +84,21 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 		},
 		DataDir: server.Spec.Runtime.DataDir,
 		Options: domain.WorkloadOptions{
-			Env:        append([]string{}, runtimeConfig.Options.Env...),
+			Env:        runtimeEnvironment(runtimeConfig.Options.Env, server),
 			Cmd:        append([]string{}, runtimeConfig.Options.Cmd...),
 			Files:      files,
 			DataMounts: append([]string{}, runtimeConfig.Options.DataMounts...),
 		},
 	}, nil
+}
+
+func runtimeEnvironment(providerEnv []string, server domain.GameServer) []string {
+	env := append([]string{}, providerEnv...)
+	env = append(env, server.Spec.Runtime.Env...)
+	if server.ProviderKey == domain.ProviderDST && server.Spec.Runtime.ModSyncMode != "" {
+		env = append(env, "DST_MOD_SYNC_MODE="+server.Spec.Runtime.ModSyncMode)
+	}
+	return env
 }
 
 func runtimeConfigForResource(gameProvider provider.GameProvider, server domain.GameServer) (domain.ProviderRuntimeConfig, error) {

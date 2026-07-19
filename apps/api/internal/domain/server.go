@@ -48,10 +48,11 @@ type ServerNetworkSpec struct {
 }
 
 type ServerRuntimeSpec struct {
-	DataDir string   `json:"dataDir,omitempty"`
-	Image   string   `json:"image,omitempty"`
-	Env     []string `json:"env,omitempty"`
-	Cmd     []string `json:"cmd,omitempty"`
+	DataDir     string   `json:"dataDir,omitempty"`
+	Image       string   `json:"image,omitempty"`
+	Env         []string `json:"env,omitempty"`
+	Cmd         []string `json:"cmd,omitempty"`
+	ModSyncMode string   `json:"modSyncMode,omitempty"`
 }
 
 type ServerSpec struct {

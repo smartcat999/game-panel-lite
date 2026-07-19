@@ -58,25 +58,26 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (domain.GameSer
 }
 
 func (s *Service) RequestStart(ctx context.Context, id string) (domain.GameServer, error) {
-	return s.updateIntent(ctx, id, domain.DesiredRunning, markPending)
+	return s.updateIntent(ctx, id, domain.DesiredRunning, "reuse", markPending)
 }
 
 func (s *Service) RequestStop(ctx context.Context, id string) (domain.GameServer, error) {
-	return s.updateIntent(ctx, id, domain.DesiredStopped, markPending)
+	return s.updateIntent(ctx, id, domain.DesiredStopped, "", markPending)
 }
 
 func (s *Service) RequestRestart(ctx context.Context, id string) (domain.GameServer, error) {
-	return s.updateIntent(ctx, id, domain.DesiredRunning, markPending)
+	return s.updateIntent(ctx, id, domain.DesiredRunning, "refresh", markPending)
 }
 
 func (s *Service) RequestDelete(ctx context.Context, id string) (domain.GameServer, error) {
-	return s.updateIntent(ctx, id, domain.DesiredDeleted, markDeleting)
+	return s.updateIntent(ctx, id, domain.DesiredDeleted, "", markDeleting)
 }
 
 func (s *Service) updateIntent(
 	ctx context.Context,
 	id string,
 	desired domain.ServerDesiredState,
+	modSyncMode string,
 	updateStatus func(*domain.ServerRuntimeStatus, time.Time),
 ) (domain.GameServer, error) {
 	server, err := s.store.GetGameServer(ctx, id)
@@ -85,6 +86,9 @@ func (s *Service) updateIntent(
 	}
 	now := s.clock()
 	server.Spec.DesiredState = desired
+	if server.ProviderKey == domain.ProviderDST {
+		server.Spec.Runtime.ModSyncMode = modSyncMode
+	}
 	bumpSpecGeneration(&server.Spec)
 	updateStatus(&server.Status, now)
 	server.UpdatedAt = now

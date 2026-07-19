@@ -95,3 +95,40 @@ func TestServiceRequestsBumpGeneration(t *testing.T) {
 		t.Fatalf("expected generation 3, got %d", deleting.Spec.Generation)
 	}
 }
+
+func TestDSTStartReusesModsAndRestartRefreshesMods(t *testing.T) {
+	store := newMemoryStore()
+	service := NewService(store)
+	server, err := service.Create(context.Background(), CreateCommand{
+		Name:        "DST Friends",
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+	})
+	if err != nil {
+		t.Fatalf("create server: %v", err)
+	}
+
+	started, err := service.RequestStart(context.Background(), server.ID)
+	if err != nil {
+		t.Fatalf("request start: %v", err)
+	}
+	if started.Spec.Runtime.ModSyncMode != "reuse" {
+		t.Fatalf("expected start to reuse DST mod cache, got %q", started.Spec.Runtime.ModSyncMode)
+	}
+
+	restarted, err := service.RequestRestart(context.Background(), server.ID)
+	if err != nil {
+		t.Fatalf("request restart: %v", err)
+	}
+	if restarted.Spec.Runtime.ModSyncMode != "refresh" {
+		t.Fatalf("expected restart to refresh DST mod cache, got %q", restarted.Spec.Runtime.ModSyncMode)
+	}
+
+	stopped, err := service.RequestStop(context.Background(), server.ID)
+	if err != nil {
+		t.Fatalf("request stop: %v", err)
+	}
+	if stopped.Spec.Runtime.ModSyncMode != "" {
+		t.Fatalf("expected stop to clear DST mod sync mode, got %q", stopped.Spec.Runtime.ModSyncMode)
+	}
+}
