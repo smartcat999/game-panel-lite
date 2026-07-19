@@ -47,6 +47,29 @@ func TestNormalizeAndValidateConfig(t *testing.T) {
 	}
 }
 
+func TestDefaultDeathPenaltyDoesNotDropItems(t *testing.T) {
+	config := defaultConfig()
+	if config.DeathPenalty != "None" {
+		t.Fatalf("expected panel default death penalty None, got %q", config.DeathPenalty)
+	}
+
+	var schemaDefault any
+	for _, field := range configSchema() {
+		if field.Name == "deathPenalty" {
+			schemaDefault = field.Default
+			break
+		}
+	}
+	if schemaDefault != "None" {
+		t.Fatalf("expected schema death penalty default None, got %#v", schemaDefault)
+	}
+
+	env := strings.Join(runtimeOptions(normalizeConfig(Config{})).Env, "\n")
+	if !strings.Contains(env, "DEATH_PENALTY=None") {
+		t.Fatalf("expected runtime default to disable death drops, got:\n%s", env)
+	}
+}
+
 func TestRuntimeOptionsUsePalworldImageAndUdpPort(t *testing.T) {
 	config := normalizeConfig(Config{
 		ServerName:     "Pal Friends",
