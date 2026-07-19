@@ -9,9 +9,11 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GameUpdateCard } from "@/components/game-update-card";
+import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
+import { SecretInput } from "@/components/secret-input";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
@@ -59,7 +61,8 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
-import { providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { providerOptionLabel } from "@/lib/provider-option-label";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -112,7 +115,8 @@ const defaultCapabilities: ProviderCapabilities = {
   saveSnapshots: true,
   backups: true,
   mods: false,
-  versions: true
+  versions: true,
+  worldRegeneration: false
 };
 
 function formatCpuLimitLabel(value: number, t: (key: "unlimited" | "cpuCoresValue", values?: Record<string, string | number>) => string) {
@@ -135,6 +139,8 @@ export default function ServerDetailPage() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [gameUpdateActive, setGameUpdateActive] = useState(false);
   const [gameUpdateActivity, setGameUpdateActivity] = useState<"checking" | "updating" | null>(null);
+  const [worldRegenerationActive, setWorldRegenerationActive] = useState(false);
+  const [worldRegenerationDialogOpen, setWorldRegenerationDialogOpen] = useState(false);
   const handleGameUpdateActiveChange = useCallback((active: boolean, updateStatus?: string) => {
     setGameUpdateActive(active);
     setGameUpdateActivity(active ? updateStatus === "checking" ? "checking" : "updating" : null);
@@ -730,18 +736,26 @@ export default function ServerDetailPage() {
           </div>
         </div>
         <div className="hidden md:block">
-          <ServerActions disabled={gameUpdateActive} server={serverResource} showInvite={false} />
+          <ServerActions
+            disabled={gameUpdateActive || worldRegenerationActive}
+            regenerationBusy={worldRegenerationActive}
+            server={serverResource}
+            showInvite={false}
+            onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
+          />
         </div>
       </div>
       <MobileServerControls
         copied={copied}
-        disabled={gameUpdateActive}
+        disabled={gameUpdateActive || worldRegenerationActive}
         invite={invite}
         joinAddress={joinAddress}
         joinPassword={joinPassword}
         joinPort={joinPort}
         shareEnabled={Boolean(share?.enabled)}
         server={serverResource}
+        regenerationBusy={worldRegenerationActive}
+        onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
         onCopy={copy}
         onOpenShare={openShareDialog}
       />
@@ -809,6 +823,20 @@ export default function ServerDetailPage() {
                 <span className="truncate">{gameUpdateActivity === "checking" ? t("gameUpdateStatusChecking") : t("gameUpdateStatusUpdating")}</span>
               </span>
               <span className="shrink-0 text-xs">{t("gameUpdateView")}</span>
+            </button>
+          ) : null}
+
+          {worldRegenerationActive ? (
+            <button
+              className="mb-4 flex w-full items-center justify-between gap-3 rounded-lg border border-panel-green/30 bg-panel-green/10 px-4 py-3 text-left text-sm text-panel-green transition hover:bg-panel-green/15 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+              type="button"
+              onClick={() => setActiveTab("logs")}
+            >
+              <span className="flex min-w-0 items-center gap-2 font-medium">
+                <RotateCcw aria-hidden="true" className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
+                <span className="truncate">{t("worldRegenerationRunning")}</span>
+              </span>
+              <span className="shrink-0 text-xs">{t("tabLogs")}</span>
             </button>
           ) : null}
 
@@ -902,7 +930,7 @@ export default function ServerDetailPage() {
               />
             </div>
           )}
-          {activeTab === "worlds" && visibleCapabilities.saveSnapshots && (
+          {activeTab === "worlds" && visibleCapabilities.saveSnapshots ? (
             <div className="space-y-4">
               <WorldTemplatePanel resource={serverResource} />
               <WorldsTab
@@ -918,7 +946,7 @@ export default function ServerDetailPage() {
                 onCreateSnapshot={() => setPendingWorldSnapshot(true)}
               />
             </div>
-          )}
+          ) : null}
           {activeTab === "backups" && visibleCapabilities.backups && (
             <BackupsTab
               creating={backupCreate.isPending}
@@ -1001,6 +1029,16 @@ export default function ServerDetailPage() {
         onShareIncludePasswordChange={setShareIncludePassword}
       />
 
+      {capabilities.worldRegeneration ? (
+        <WorldRegenerationAction
+          open={worldRegenerationDialogOpen}
+          playersOnline={playersOnline}
+          serverId={serverResource.id}
+          serverStatus={status}
+          onActiveChange={setWorldRegenerationActive}
+          onOpenChange={setWorldRegenerationDialogOpen}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={pendingConfigRestart}
@@ -1975,22 +2013,7 @@ function FieldHelp({ text }: { text: string }) {
 }
 
 function initialProviderDraftFromResource(resource: GameServerResource, provider?: ProviderCatalog): ProviderConfigPayload {
-  let payload: ProviderConfigPayload = {};
-  const configPayload = resource.spec.config ?? {};
-  for (const field of provider?.configSchema ?? []) {
-    payload = updateProviderConfigPayload(payload, field, (providerConfigValue(configPayload, field.name) ?? defaultProviderFieldValue(field)) as string | boolean);
-  }
-  return {
-    ...payload,
-    ...configPayload
-  };
-}
-
-function defaultProviderFieldValue(field: ProviderConfigField): unknown {
-  if (field.default !== undefined) return field.default;
-  if (field.type === "number") return 0;
-  if (field.type === "boolean") return false;
-  return "";
+  return createDefaultProviderConfigPayload(provider, resource.spec.config ?? {});
 }
 
 function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
@@ -2048,13 +2071,21 @@ function ProviderConfigFields({
             {field.type === "select" ? (
               <Select disabled={disabled} value={String(value ?? "")} onChange={(nextValue) => onChange(field, nextValue)}>
                 {(field.options ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>
                 ))}
               </Select>
+            ) : field.type === "password" ? (
+              <SecretInput
+                disabled={disabled}
+                hideLabel={t("hideSensitiveValue", { label })}
+                showLabel={t("showSensitiveValue", { label })}
+                value={String(value ?? "")}
+                onChange={(event) => onChange(field, event.target.value)}
+              />
             ) : (
               <Input
                 disabled={disabled}
-                type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                type={field.type === "number" ? "number" : "text"}
                 value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")}
                 min={field.type === "number" ? field.min : undefined}
                 max={field.type === "number" ? field.max : undefined}
@@ -3361,8 +3392,10 @@ function MobileServerControls({
   joinAddress,
   joinPassword,
   joinPort,
+  onRegenerateWorld,
   onCopy,
   onOpenShare,
+  regenerationBusy,
   shareEnabled,
   server
 }: {
@@ -3372,8 +3405,10 @@ function MobileServerControls({
   joinAddress: string;
   joinPassword: string;
   joinPort: number;
+  onRegenerateWorld?: () => void;
   onCopy: (label: string, value: string) => void;
   onOpenShare: () => void;
+  regenerationBusy?: boolean;
   shareEnabled: boolean;
   server: GameServerResource;
 }) {
@@ -3412,7 +3447,16 @@ function MobileServerControls({
         value={joinPassword || t("none")}
         onCopy={onCopy}
       />
-      <ServerActions className="mt-3" compact disabled={disabled} server={server} showDelete={false} showInvite={false} />
+      <ServerActions
+        className="mt-3"
+        compact
+        disabled={disabled}
+        regenerationBusy={regenerationBusy}
+        server={server}
+        showDelete={false}
+        showInvite={false}
+        onRegenerateWorld={onRegenerateWorld}
+      />
     </Card>
   );
 }

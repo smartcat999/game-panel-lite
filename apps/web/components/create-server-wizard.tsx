@@ -22,6 +22,7 @@ import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { providerOptionLabel } from "@/lib/provider-option-label";
 import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import {
   getTerrariaPreset,
@@ -152,54 +153,6 @@ Object.assign(providerFieldLabelKeys, {
   "caves.overrides.toadstool": "dstToadstool"
 } satisfies Record<string, MessageKey>);
 
-const providerOptionLabelKeys: Record<string, MessageKey> = {
-  "*:always": "dstOptionAlways",
-  "*:autumn|spring": "dstOptionAutumnOrSpring",
-  "*:autumn|winter|spring|summer": "dstOptionRandomSeason",
-  "*:default": "defaultValue",
-  "*:fast": "dstOptionFast",
-  "*:huge": "dstOptionHuge",
-  "*:insane": "dstOptionInsane",
-  "*:longday": "dstOptionLongDay",
-  "*:longdusk": "dstOptionLongDusk",
-  "*:longnight": "dstOptionLongNight",
-  "*:longseason": "dstOptionLong",
-  "*:medium": "dstOptionMedium",
-  "*:mostly": "dstOptionMostly",
-  "*:noday": "dstOptionNoDay",
-  "*:nodusk": "dstOptionNoDusk",
-  "*:nonight": "dstOptionNoNight",
-  "*:noseason": "dstOptionNone",
-  "*:never": "dstOptionNever",
-  "*:often": "dstOptionOften",
-  "*:onlyday": "dstOptionOnlyDay",
-  "*:onlydusk": "dstOptionOnlyDusk",
-  "*:onlynight": "dstOptionOnlyNight",
-  "*:random": "dstOptionRandom",
-  "*:rare": "dstOptionRare",
-  "*:shortseason": "dstOptionShort",
-  "*:slow": "dstOptionSlow",
-  "*:small": "dstOptionSmall",
-  "*:spring": "dstOptionSpring",
-  "*:summer": "dstOptionSummer",
-  "*:uncommon": "dstOptionUncommon",
-  "*:veryfast": "dstOptionVeryFast",
-  "*:verylongseason": "dstOptionVeryLong",
-  "*:veryshortseason": "dstOptionVeryShort",
-  "*:veryslow": "dstOptionVerySlow",
-  "*:winter": "dstOptionWinter",
-  "*:winter|summer": "dstOptionWinterOrSummer",
-  "gameplay.gameMode:endless": "dstGameModeEndless",
-  "gameplay.gameMode:survival": "dstGameModeSurvival",
-  "gameplay.gameMode:wilderness": "dstGameModeWilderness",
-  "identity.visibility:lan": "dstVisibilityLan",
-  "identity.visibility:offline": "dstVisibilityOffline",
-  "identity.visibility:public": "dstVisibilityPublic",
-  "world.preset:forest_classic": "dstWorldPresetClassic",
-  "world.preset:forest_default": "dstWorldPresetDefault",
-  "world.preset:forest_survival": "dstWorldPresetSurvival"
-};
-
 function createNameSuffix(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
@@ -288,11 +241,6 @@ function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, valu
   if (field.name === "clusterToken" || field.name === "identity.clusterToken") return t("clusterTokenHelp");
   if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
   return field.help ?? "";
-}
-
-function providerOptionLabel(field: ProviderConfigField, value: string, fallback: string, t: (key: MessageKey) => string) {
-  const key = providerOptionLabelKeys[`${field.name}:${value}`] ?? providerOptionLabelKeys[`*:${value}`];
-  return key ? t(key) : fallback;
 }
 
 function validateCreateConfig({
@@ -392,7 +340,7 @@ function providerReviewValue(field: ProviderConfigField, value: unknown, t: (key
   if (field.type === "password") return String(value ?? "").trim() ? t("enabled") : t("none");
   if (field.type === "select") {
     const option = field.options?.find((item) => item.value === value);
-    return option?.label ?? String(value ?? "");
+    return option ? providerOptionLabel(field, option.value, option.label, t) : String(value ?? "");
   }
   return String(value ?? "");
 }

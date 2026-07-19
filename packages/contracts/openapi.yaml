@@ -372,6 +372,51 @@ paths:
           description: Update task could not be created
         "503":
           description: Docker runtime is unavailable or lacks safe update support
+  /api/servers/{id}/world-regeneration:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Server instance ID.
+        schema:
+          type: string
+    get:
+      summary: Read world regeneration state for a server
+      responses:
+        "200":
+          description: Current world regeneration capability and latest task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorldRegenerationState"
+        "404":
+          description: Server not found
+    post:
+      summary: Recreate the current server world
+      description: Queues a persistent server-scoped maintenance task that stops the server, creates a required full backup, isolates the provider-declared save paths, and optionally starts the server to generate a new world. Failures restore the isolated saves.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                startAfter:
+                  type: boolean
+                  description: Start this server after its new world is generated.
+      responses:
+        "202":
+          description: World regeneration accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorldRegenerationJob"
+        "400":
+          description: Invalid request or unsupported provider
+        "404":
+          description: Server not found
+        "409":
+          description: Players are online or another maintenance task is active
   /api/servers/{id}/command:
     post:
       summary: Send a console command to a running server
@@ -904,6 +949,51 @@ components:
           format: date-time
         job:
           $ref: "#/components/schemas/GameUpdateJob"
+    WorldRegenerationJob:
+      type: object
+      required: [id, instanceId, providerKey, status, stage, progress, startAfter, wasRunning, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        providerKey:
+          $ref: "#/components/schemas/ProviderKey"
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        stage:
+          type: string
+          enum: [queued, stopping, backing_up, resetting, starting, health_check, rolling_back, completed]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        backupId:
+          type: string
+        startAfter:
+          type: boolean
+        wasRunning:
+          type: boolean
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    WorldRegenerationState:
+      type: object
+      required: [supported]
+      properties:
+        supported:
+          type: boolean
+        job:
+          $ref: "#/components/schemas/WorldRegenerationJob"
     ServerSpec:
       type: object
       required: [generation, desiredState]

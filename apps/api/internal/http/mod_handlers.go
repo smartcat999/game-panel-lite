@@ -46,7 +46,7 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -127,7 +127,7 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -269,7 +269,7 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -324,7 +324,7 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(server) {
@@ -566,7 +566,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), targetServer.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerBusyForModMutation(targetServer) {

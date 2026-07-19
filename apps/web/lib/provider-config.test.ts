@@ -72,4 +72,32 @@ describe("provider config helpers", () => {
     const updated = updateProviderConfigPayload(payload, playersField!, "12");
     expect(providerConfigValue(updated, "gameplay.maxPlayers")).toBe(12);
   });
+
+  it("keeps nested schema defaults when stored override groups are empty", () => {
+    const nestedProvider: ProviderCatalog = {
+      ...provider,
+      key: "dont-starve-together",
+      configSchema: [
+        { name: "world.overrides.grass", label: "Grass", type: "select", required: false, default: "default" },
+        { name: "world.overrides.sapling", label: "Saplings", type: "select", required: false, default: "default" }
+      ]
+    };
+
+    const payload = createDefaultProviderConfigPayload(nestedProvider, {
+      world: {
+        preset: "forest_default",
+        overrides: {}
+      }
+    });
+
+    expect(payload).toEqual({
+      world: {
+        preset: "forest_default",
+        overrides: {
+          grass: "default",
+          sapling: "default"
+        }
+      }
+    });
+  });
 });

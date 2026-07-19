@@ -165,6 +165,15 @@ func (h *Handler) newGameUpdateJob(w http.ResponseWriter, r *http.Request, serve
 		writeError(w, http.StatusConflict, message)
 		return domain.GameUpdateJob{}, false
 	}
+	worldJobs, err := h.store.ListActiveWorldRegenerationJobs(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return domain.GameUpdateJob{}, false
+	}
+	if len(worldJobs) > 0 {
+		writeError(w, http.StatusConflict, "a world regeneration task is already running")
+		return domain.GameUpdateJob{}, false
+	}
 	if h.runtimeImagePrepareActive() {
 		writeError(w, http.StatusConflict, "a runtime image task is already running")
 		return domain.GameUpdateJob{}, false
@@ -754,12 +763,24 @@ func maxInt(a, b int) int {
 
 func (h *Handler) gameUpdateLocked(ctx context.Context, instanceID string) bool {
 	_, err := h.store.GetActiveGameUpdateJobByInstance(ctx, instanceID)
+	if err == nil || !errors.Is(err, store.ErrNotFound) {
+		return true
+	}
+	_, err = h.store.GetActiveWorldRegenerationJobByInstance(ctx, instanceID)
 	return err == nil || !errors.Is(err, store.ErrNotFound)
 }
 
 func (h *Handler) gameUpdateRuntimeLocked(ctx context.Context) bool {
+	return h.maintenanceRuntimeLocked(ctx)
+}
+
+func (h *Handler) maintenanceRuntimeLocked(ctx context.Context) bool {
 	jobs, err := h.store.ListActiveGameUpdateJobs(ctx)
-	return err != nil || len(jobs) > 0
+	if err != nil || len(jobs) > 0 {
+		return true
+	}
+	worldJobs, err := h.store.ListActiveWorldRegenerationJobs(ctx)
+	return err != nil || len(worldJobs) > 0
 }
 
 func (h *Handler) lockServerMutation(instanceID string) func() {

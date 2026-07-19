@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
+import { Copy, Ellipsis, Globe2, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -21,6 +21,8 @@ export function ServerActions({
   showDelete = true,
   compact = false,
   disabled = false,
+  regenerationBusy = false,
+  onRegenerateWorld,
   className
 }: {
   server: GameServerResource;
@@ -28,6 +30,8 @@ export function ServerActions({
   showDelete?: boolean;
   compact?: boolean;
   disabled?: boolean;
+  regenerationBusy?: boolean;
+  onRegenerateWorld?: () => void;
   className?: string;
 }) {
   const client = useQueryClient();
@@ -39,7 +43,9 @@ export function ServerActions({
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const noticeTimerRef = useRef<number | null>(null);
+  const moreRef = useRef<HTMLDetailsElement>(null);
   const status = gameServerStatus(server);
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy;
@@ -62,6 +68,22 @@ export function ServerActions({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [busyAction, pendingAction]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeMenu = (event: PointerEvent) => {
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [moreOpen]);
 
   useEffect(() => {
     return () => {
@@ -166,12 +188,64 @@ export function ServerActions({
             {copiedInvite ? t("copied") : t("actionCopyInvite")}
           </Button>
         )}
-        {showDelete && (
+        {showDelete && !onRegenerateWorld && (
           <Button className={buttonClassName} variant="danger" onClick={() => runAction("delete")} disabled={controlsDisabled}>
             <Trash2 aria-hidden="true" />
             {deleteLabel}
           </Button>
         )}
+        {onRegenerateWorld ? (
+          <details
+            ref={moreRef}
+            className={cn("relative", compact && "col-span-2 md:col-span-1")}
+            open={moreOpen}
+            onToggle={(event) => setMoreOpen(event.currentTarget.open)}
+          >
+            <summary
+              aria-label={t("serverMoreActions")}
+              className={cn(
+                "flex h-10 cursor-pointer list-none items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 text-slate-100 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50 [&::-webkit-details-marker]:hidden",
+                compact && "w-full",
+                controlsDisabled && "cursor-not-allowed opacity-50"
+              )}
+              onClick={(event) => {
+                if (controlsDisabled) event.preventDefault();
+              }}
+              title={t("serverMoreActions")}
+            >
+              <Ellipsis aria-hidden="true" className="size-4" />
+            </summary>
+            <div className="absolute right-0 top-12 z-30 min-w-52 rounded-md border border-panel-line bg-slate-950 p-1.5 shadow-[0_8px_16px_rgba(0,0,0,0.35)]">
+              <button
+                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-panel-gold transition hover:bg-panel-gold/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-gold/40 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={controlsDisabled || regenerationBusy}
+                onClick={() => {
+                  setMoreOpen(false);
+                  onRegenerateWorld();
+                }}
+                type="button"
+              >
+                <Globe2 aria-hidden="true" className="size-4" />
+                {regenerationBusy ? t("worldRegenerationProgress") : t("worldRegenerateAction")}
+              </button>
+              {showDelete ? <div className="my-1 border-t border-panel-line" /> : null}
+              {showDelete ? (
+                <button
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-400/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    runAction("delete");
+                  }}
+                  type="button"
+                >
+                  <Trash2 aria-hidden="true" className="size-4" />
+                  {deleteLabel}
+                </button>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
       </div>
       {(errorMessage || successMessage) && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">

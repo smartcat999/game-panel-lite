@@ -116,7 +116,7 @@ func (h *Handler) createWorldSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), server.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	var payload struct {
@@ -178,7 +178,7 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), resource.ID) {
-		writeError(w, http.StatusConflict, "server game update is in progress")
+		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
 	if isGameServerLockedForMutation(resource) {

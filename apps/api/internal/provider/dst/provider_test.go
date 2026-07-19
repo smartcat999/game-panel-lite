@@ -15,7 +15,7 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	if provider.Capabilities().ConsoleCommands {
 		t.Fatal("DST console commands should not be exposed in the first provider slice")
 	}
-	if !provider.Capabilities().SaveSnapshots || !provider.Capabilities().Backups {
+	if !provider.Capabilities().SaveSnapshots || !provider.Capabilities().Backups || !provider.Capabilities().WorldRegeneration {
 		t.Fatalf("expected save and backup support, got %+v", provider.Capabilities())
 	}
 	names := map[string]bool{}
@@ -39,6 +39,27 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	}
 	if names["workshopIds"] {
 		t.Fatalf("workshop IDs should be managed from the mod library, not the config schema: %+v", provider.ConfigSchema())
+	}
+}
+
+func TestWorldRegenerationPlanTargetsEnabledShardsOnly(t *testing.T) {
+	provider := NewProvider()
+	server := domain.GameServer{Spec: domain.ServerSpec{Config: map[string]any{
+		"identity": map[string]any{"serverName": "DST", "clusterName": "Friends", "clusterToken": "token"},
+		"caves":    map[string]any{"enabled": true, "preset": "cave_default"},
+	}}}
+	plan, err := provider.WorldRegenerationPlan(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"dst/Friends/Master/save", "dst/Friends/Caves/save"}
+	if len(plan.SavePaths) != len(want) {
+		t.Fatalf("expected both shard saves, got %+v", plan.SavePaths)
+	}
+	for index := range want {
+		if plan.SavePaths[index] != want[index] {
+			t.Fatalf("expected path %q, got %+v", want[index], plan.SavePaths)
+		}
 	}
 }
 

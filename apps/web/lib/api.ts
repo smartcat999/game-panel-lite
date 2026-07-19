@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -432,6 +432,20 @@ export async function applyGameUpdate(id: string, startAfterUpdate: boolean): Pr
     body: JSON.stringify({ startAfterUpdate })
   });
   return readPayload<GameUpdateJob>(response, "Unable to update game server");
+}
+
+export async function getWorldRegeneration(id: string): Promise<WorldRegenerationState> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/world-regeneration`, { cache: "no-store" });
+  return readPayload<WorldRegenerationState>(response, "Unable to load world regeneration status");
+}
+
+export async function regenerateWorld(id: string, startAfter: boolean): Promise<WorldRegenerationJob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/world-regeneration`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startAfter })
+  });
+  return readPayload<WorldRegenerationJob>(response, "Unable to regenerate world");
 }
 
 export type HostStats = {

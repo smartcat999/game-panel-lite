@@ -1,5 +1,19 @@
 # V1 Progress
 
+## 2026-07-19
+
+- Shared provider option localization across creation, review, and server-detail forms so DST enum values render in Chinese while retaining their backend values.
+- Fixed DST detail configuration initialization to deep-merge stored nested values with provider schema defaults, preventing empty world override groups from rendering as `never`.
+- Added an accessible show/hide control for saved provider secrets so existing Klei server tokens and other password fields can be verified without changing their stored values; secrets remain masked by default and are hidden again while saving.
+
+## 2026-07-18
+
+- Added provider-scoped world recreation as a compact server overflow action with an on-demand confirmation dialog, without exposing the hidden global world library, adding a separate navigation tab, or occupying the configuration page with a persistent card.
+- Added persistent asynchronous world recreation jobs with stop, required full backup, provider-declared save isolation, optional restart, health checking, and automatic rollback stages.
+- Added the first provider implementation for Don't Starve Together, safely recreating the Master and enabled Caves shard saves while preserving cluster identity, token, ports, mods, and configuration.
+- Added path traversal and symbolic-link protection for save isolation, startup recovery for interrupted jobs, maintenance-task mutation locking, bilingual progress and confirmation UI, and OpenAPI coverage.
+- Verified full Go tests and vet, 80 frontend tests, frontend lint/typecheck, and the production frontend build.
+
 ## 2026-07-16
 
 - Fixed the Palworld runtime logger FIFO ownership race by atomically publishing
