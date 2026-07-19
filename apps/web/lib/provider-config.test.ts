@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, providerConfigValue, updateProviderConfigPayload } from "./provider-config";
-import type { ProviderCatalog } from "./types";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, updateProviderConfigPayload } from "./provider-config";
+import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 const provider: ProviderCatalog = {
   key: "palworld",
@@ -99,5 +99,24 @@ describe("provider config helpers", () => {
         }
       }
     });
+  });
+
+  it("separates advanced DST and Palworld settings from their basic fields", () => {
+    const dstRule: ProviderConfigField = { name: "world.overrides.grass", label: "Grass", type: "select", required: false, default: "default", group: "dst.world.worldsettings.resources" };
+    const palRate: ProviderConfigField = { name: "expRate", label: "EXP", type: "number", required: true, default: 1, group: "世界倍率" };
+    const palName: ProviderConfigField = { name: "serverName", label: "Name", type: "text", required: true, default: "Palworld Server", group: "基础设置" };
+
+    expect(isAdvancedProviderConfigField("dont-starve-together", dstRule)).toBe(true);
+    expect(isAdvancedProviderConfigField("palworld", palRate)).toBe(true);
+    expect(isAdvancedProviderConfigField("palworld", palName)).toBe(false);
+  });
+
+  it("detects numeric and nested values that differ from schema defaults", () => {
+    const expRate: ProviderConfigField = { name: "expRate", label: "EXP", type: "number", required: true, default: 1 };
+    const grass: ProviderConfigField = { name: "world.overrides.grass", label: "Grass", type: "select", required: false, default: "default" };
+
+    expect(isProviderFieldModified({ expRate: 1, world: { overrides: { grass: "default" } } }, expRate)).toBe(false);
+    expect(isProviderFieldModified({ expRate: 2 }, expRate)).toBe(true);
+    expect(isProviderFieldModified({ world: { overrides: { grass: "often" } } }, grass)).toBe(true);
   });
 });
