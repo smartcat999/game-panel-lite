@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -14,6 +14,7 @@ import { PlayersPanel } from "@/components/players-panel";
 import { ServerActions } from "@/components/server-actions";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
+import { ResourceLimitSlider, cpuResourceMarkers, formatCpuResourceLimit, formatMemoryResourceLimit, memoryResourceMarkers } from "@/components/resource-limit-slider";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
 import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
@@ -2079,8 +2080,8 @@ function ResourceLimitsDialog({
   const memoryInvalid = draft.memoryLimitMb < 0 || (draft.memoryLimitMb > 0 && (draft.memoryLimitMb < 256 || draft.memoryLimitMb > 262144));
   const invalid = cpuInvalid || memoryInvalid;
   const cpuSliderMax = Math.max(1, hostCpuCores ?? 8, Math.ceil(draft.cpuLimitCores));
-  const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 128) * 128, draft.memoryLimitMb);
-  const recommendedMemoryMb = hostMemoryMb ? Math.max(256, Math.floor((hostMemoryMb - 768) / 128) * 128) : 0;
+  const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 1024) * 1024, Math.ceil(draft.memoryLimitMb / 1024) * 1024);
+  const recommendedMemoryMb = hostMemoryMb ? Math.max(1024, Math.floor((hostMemoryMb - 768) / 1024) * 1024) : 0;
   useEffect(() => {
     if (open) {
       setDraft(resourceLimits);
@@ -2106,7 +2107,7 @@ function ResourceLimitsDialog({
       <form
         aria-labelledby="resource-dialog-title"
         aria-modal="true"
-        className="w-full max-w-lg rounded-lg border border-panel-line bg-panel-card p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-2xl rounded-lg border border-panel-line bg-panel-card p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
         role="dialog"
         onSubmit={(event) => {
           event.preventDefault();
@@ -2130,115 +2131,44 @@ function ResourceLimitsDialog({
           </button>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <label className="text-sm font-medium text-slate-300" htmlFor="cpu-limit-input">{t("cpuLimit")}</label>
-              <div className="relative w-28">
-                <Input
-                  id="cpu-limit-input"
-                  aria-describedby="cpu-limit-help"
-                  aria-invalid={cpuInvalid}
-                  className={cn("h-9 pr-10 text-right font-mono", cpuInvalid && "border-red-400 focus:border-red-400")}
-                  disabled={savePending || lifecycleLocked}
-                  min={0}
-                  max={64}
-                  step={0.25}
-                  type="number"
-                  value={draft.cpuLimitCores}
-                  onChange={(event) => setDraft((current) => ({ ...current, cpuLimitCores: event.target.value === "" ? 0 : Number(event.target.value) }))}
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">{t("cpuUnit")}</span>
-              </div>
-            </div>
-            <ResourceRange
+          <div className={cn("rounded-lg border bg-slate-950/35 p-4", cpuInvalid ? "border-red-400/60" : "border-panel-line")}>
+            <ResourceLimitSlider
               disabled={savePending || lifecycleLocked}
+              formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
               label={t("cpuLimit")}
+              markers={cpuResourceMarkers(cpuSliderMax)}
               max={cpuSliderMax}
               step={0.25}
               value={draft.cpuLimitCores}
               onChange={(value) => setDraft((current) => ({ ...current, cpuLimitCores: value }))}
             />
-            <p className={cn("text-xs leading-5", cpuInvalid ? "text-red-300" : "text-slate-500")} id="cpu-limit-help">{cpuInvalid ? t("cpuLimitRange") : t("cpuLimitFineHint")}</p>
+            {cpuInvalid ? <p className="mt-2 text-xs text-red-300">{t("cpuLimitRange")}</p> : null}
           </div>
-          <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <label className="text-sm font-medium text-slate-300" htmlFor="memory-limit-input">{t("memoryLimit")}</label>
-              <div className="relative w-32">
-                <Input
-                  id="memory-limit-input"
-                  aria-describedby="memory-limit-help"
-                  aria-invalid={memoryInvalid}
-                  className={cn("h-9 pr-10 text-right font-mono", memoryInvalid && "border-red-400 focus:border-red-400")}
-                  disabled={savePending || lifecycleLocked}
-                  min={0}
-                  max={262144}
-                  step={128}
-                  type="number"
-                  value={draft.memoryLimitMb}
-                  onChange={(event) => setDraft((current) => ({ ...current, memoryLimitMb: event.target.value === "" ? 0 : Number(event.target.value) }))}
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">MB</span>
-              </div>
-            </div>
-            <ResourceRange
+          <div className={cn("rounded-lg border bg-slate-950/35 p-4", memoryInvalid ? "border-red-400/60" : "border-panel-line")}>
+            <ResourceLimitSlider
               disabled={savePending || lifecycleLocked}
+              formatValue={(value) => formatMemoryResourceLimit(value, t("unlimited"))}
               label={t("memoryLimit")}
+              markers={memoryResourceMarkers(memorySliderMax, recommendedMemoryMb, t("recommended"))}
               max={memorySliderMax}
-              recommendedMax={recommendedMemoryMb}
-              step={128}
+              step={1024}
               value={draft.memoryLimitMb}
               onChange={(value) => setDraft((current) => ({ ...current, memoryLimitMb: value }))}
             />
-            <p className={cn("text-xs leading-5", memoryInvalid ? "text-red-300" : "text-slate-500")} id="memory-limit-help">{memoryInvalid ? t("memoryLimitRange") : t("memoryLimitFineHint")}</p>
+            {memoryInvalid ? <p className="mt-2 text-xs text-red-300">{t("memoryLimitRange")}</p> : null}
           </div>
         </div>
-        <p className="mt-3 rounded-md bg-panel-gold/10 px-3 py-2 text-xs leading-5 text-panel-gold">{hostMemoryMb && recommendedMemoryMb ? t("resourceHostReserveDetected", { total: hostMemoryMb, recommended: recommendedMemoryMb }) : t("resourceHostReserveGeneric")}</p>
+        <p className="mt-3 rounded-md bg-panel-gold/10 px-3 py-2 text-xs leading-5 text-panel-gold">
+          {hostMemoryMb && recommendedMemoryMb
+            ? t("resourceHostReserveSummary", { total: formatMemoryResourceLimit(hostMemoryMb, t("unlimited")), recommended: formatMemoryResourceLimit(recommendedMemoryMb, t("unlimited")) })
+            : t("resourceHostReserveGeneric")}
+        </p>
         {lifecycleLocked && <p className="mt-3 rounded-md border border-panel-gold/25 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">{t("configLifecycleLocked")}</p>}
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary" onClick={onCancel} disabled={savePending}>{t("cancel")}</Button>
           <Button disabled={savePending || lifecycleLocked || !dirty || invalid}>{savePending ? t("savingConfig") : t("saveResourceLimits")}</Button>
         </div>
       </form>
-    </div>
-  );
-}
-
-function ResourceRange({ disabled, label, max, onChange, recommendedMax = 0, step, value }: {
-  disabled: boolean;
-  label: string;
-  max: number;
-  onChange: (value: number) => void;
-  recommendedMax?: number;
-  step: number;
-  value: number;
-}) {
-  const { t } = useI18n();
-  const safePercent = recommendedMax > 0 ? Math.min(100, (recommendedMax / max) * 100) : 100;
-  const valuePercent = Math.min(100, (value / max) * 100);
-  const rangeStyle = {
-    "--range-fill": `${valuePercent}%`,
-    "--range-safe": `${safePercent}%`
-  } as CSSProperties;
-  return (
-    <div className="mb-2 grid gap-2">
-      <div className="relative h-5" style={rangeStyle}>
-        <input
-          aria-label={t("resourceSliderLabel", { resource: label })}
-          className="resource-range absolute inset-0 w-full cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={disabled}
-          max={max}
-          min={0}
-          step={step}
-          type="range"
-          value={Math.min(value, max)}
-          onChange={(event) => onChange(Number(event.target.value))}
-        />
-        {recommendedMax > 0 && safePercent < 100 ? <span className="pointer-events-none absolute top-0 h-5 w-px bg-panel-gold" style={{ left: `${safePercent}%` }} aria-hidden="true" /> : null}
-      </div>
-      <div className="flex justify-between text-[11px] text-slate-500">
-        <span>{t("unlimited")}: 0</span>
-        <span>{recommendedMax > 0 ? t("resourceRecommendedMax", { value: recommendedMax }) : t("resourceHostMaximum", { value: max })}</span>
-      </div>
     </div>
   );
 }
@@ -3384,7 +3314,6 @@ function MobileServerControls({
         disabled={disabled}
         regenerationBusy={regenerationBusy}
         server={server}
-        showDelete={false}
         showInvite={false}
         onRegenerateWorld={onRegenerateWorld}
       />

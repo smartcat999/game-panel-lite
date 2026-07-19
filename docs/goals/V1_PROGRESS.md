@@ -2,6 +2,8 @@
 
 ## 2026-07-19
 
+- Restored the delete-server action to the mobile server-detail overflow menu while retaining the existing destructive confirmation flow.
+- Unified creation and server-detail resource limits around compact sliders with thumb-aligned values, every whole-core CPU marker on common hosts, readable memory capacity markers, and a detected recommended memory ceiling.
 - Collapsed provider boolean settings into single-row label-and-switch controls and replaced per-field reset icons with one advanced-settings-wide restore-defaults action.
 - Distinguished DST world settings from world-generation options in the server editor with explicit restart/regeneration applicability, a direct route into the existing high-risk regeneration flow, and no misleading restart prompt after world-generation-only saves.
 - Stabilized provider field header geometry so the modified-field reset action can appear or disappear without shifting Palworld slider controls.
