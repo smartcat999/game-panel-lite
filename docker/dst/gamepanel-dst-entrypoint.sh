@@ -185,6 +185,15 @@ install_legacy_mod_links() {
   done < <(configured_workshop_ids)
 }
 
+filter_native_workshop_noise() {
+  # Steam emits these internal contentupdatecontext assertions even when a V2
+  # Workshop download completes successfully. Keep all other stderr output;
+  # missing mods are still rejected by missing_workshop_ids after the process.
+  sed -E \
+    -e '/^src\/clientdll\/contentupdatecontext\.cpp \(2036\) : Staging library folder not found$/d' \
+    -e '/^src\/clientdll\/contentupdatecontext\.cpp \(2037\) : Install library folder not found$/d'
+}
+
 missing_workshop_ids() {
   local ugc_dir="$1"
   local workshop_id
@@ -200,7 +209,10 @@ download_server_mods() {
   local ugc_dir="$1"
   local bin native_count
   bin="$(server_bin)"
-  mkdir -p "${ugc_dir}" "${ugc_dir}/content/322330" "${ugc_dir}/downloads" "${ugc_dir}/temp"
+  mkdir -p \
+    "${ugc_dir}/content/322330" \
+    "${ugc_dir}/downloads/322330" \
+    "${ugc_dir}/temp/322330"
   download_missing_legacy_mods "${ugc_dir}"
   native_count="$(install_native_workshop_manifest "${ugc_dir}")"
   if [[ "${native_count}" == "0" ]]; then
@@ -214,7 +226,8 @@ download_server_mods() {
     -conf_dir "${CONF_DIR}" \
     -cluster "${CLUSTER_NAME}" \
     -shard "Master" \
-    -ugc_directory "${ugc_dir}"
+    -ugc_directory "${ugc_dir}" \
+    2>&1 | filter_native_workshop_noise
 }
 
 sync_server_mods() {

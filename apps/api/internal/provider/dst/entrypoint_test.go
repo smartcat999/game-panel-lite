@@ -126,6 +126,27 @@ cp "${url#file://}" "${out}"
 	}
 }
 
+func TestDSTEntrypointFiltersKnownNativeWorkshopNoise(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, true)
+	t.Setenv("FAKE_WORKSHOP_NOISE", "1")
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("run entrypoint: %v\n%s", err, output)
+	}
+	for _, noise := range []string{
+		"Staging library folder not found",
+		"Install library folder not found",
+	} {
+		if strings.Contains(output, noise) {
+			t.Fatalf("expected known Steam Workshop noise to be filtered, got:\n%s", output)
+		}
+	}
+	if !strings.Contains(output, "native downloader diagnostic") {
+		t.Fatalf("expected unrelated native downloader stderr to be preserved, got:\n%s", output)
+	}
+}
+
 func dstEntrypointFixture(t *testing.T, downloaderCreatesMods bool) (string, string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -144,6 +165,17 @@ if [[ " $* " == *" -only_update_server_mods "* ]]; then
     if [[ "$1" == "-ugc_directory" ]]; then ugc="$2"; break; fi
     shift
   done
+  for path in content/322330 downloads/322330 temp/322330; do
+    if [[ ! -d "${ugc}/${path}" ]]; then
+      printf 'missing UGC directory: %s\n' "${ugc}/${path}" >&2
+      exit 1
+    fi
+  done
+  if [[ "${FAKE_WORKSHOP_NOISE:-0}" == "1" ]]; then
+    printf '%s\n' 'src/clientdll/contentupdatecontext.cpp (2036) : Staging library folder not found' >&2
+    printf '%s\n' 'src/clientdll/contentupdatecontext.cpp (2037) : Install library folder not found' >&2
+    printf '%s\n' 'native downloader diagnostic' >&2
+  fi
   if [[ "${FAKE_DOWNLOAD_MODS:-0}" == "1" ]]; then
     for id in 111 222; do
       mkdir -p "${ugc}/content/322330/${id}"
