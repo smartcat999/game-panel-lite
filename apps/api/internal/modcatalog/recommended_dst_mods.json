@@ -494,23 +494,24 @@
   },
   {
     "rank": 25,
-    "workshopId": "458587300",
-    "title": "Fast Travel",
-    "creatorSteamId": "76561198066992329",
-    "previewUrl": "https://images.steamusercontent.com/ugc/514881580594188793/6A7DD25C0BB632C34BF7E24364EA7B6C510C4B80/",
-    "fileSize": 48497,
-    "subscriptions": 1549548,
-    "favorited": 55170,
-    "views": 2171606,
-    "timeCreated": 1433937629,
-    "timeUpdated": 1460549306,
+    "workshopId": "1530801499",
+    "title": "Fast Travel (GUI)",
+    "creatorSteamId": "76561198326489103",
+    "previewUrl": "https://images.steamusercontent.com/ugc/945085057566751291/01A64689548956CC3208F2DEBFADE32113CB2365/",
+    "fileSize": 125426,
+    "subscriptions": 1008544,
+    "favorited": 39903,
+    "views": 1119242,
+    "timeCreated": 1538742119,
+    "timeUpdated": 1745758909,
     "tags": [
       "environment",
+      "tweak",
       "utility",
-      "version:1.1.0",
+      "version:1.10",
       "all_clients_require_mod"
     ],
-    "description": "Build a fast travel network using home signs. You can travel from one home sign to any other home signs instantly. Instruction - Right click on a home sign to select destination. Right click repeatedly to cycle through all available destinations. After hav"
+    "description": "Build a fast travel network with a destination selection interface. This maintained successor to the original Fast Travel mod also teleports nearby movable heavy objects."
   },
   {
     "rank": 26,
