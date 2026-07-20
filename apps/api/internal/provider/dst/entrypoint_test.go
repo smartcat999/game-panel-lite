@@ -1,6 +1,7 @@
 package dst
 
 import (
+	"archive/zip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +28,9 @@ func TestDSTEntrypointReusesCompleteWorkshopCacheOnStart(t *testing.T) {
 	}
 	if strings.Contains(log, "-console") {
 		t.Fatalf("expected shard startup to omit deprecated -console, got %q", log)
+	}
+	if !strings.Contains(log, "-skip_update_server_mods") {
+		t.Fatalf("expected shard startup to skip duplicate Workshop updates, got %q", log)
 	}
 }
 
@@ -64,6 +68,61 @@ func TestDSTEntrypointPreservesOldCacheWhenRefreshIsIncomplete(t *testing.T) {
 	}
 	if got := readTestFile(t, filepath.Join(dataDir, "ugc_mods", "old-cache")); got != "old" {
 		t.Fatalf("expected old cache to remain intact, got %q", got)
+	}
+}
+
+func TestDSTEntrypointDownloadsAndLinksLegacyWorkshopMod(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, false)
+	clusterDir := filepath.Join(dataDir, "dst", "GamePanelLite")
+	writeTestFile(t, filepath.Join(clusterDir, "dedicated_server_mods_setup.lua"), "ServerModSetup(\"111\")\n")
+
+	archive := filepath.Join(root, "legacy-mod.zip")
+	writeTestZip(t, archive, map[string]string{
+		"modinfo.lua":                "name = \"Legacy Test\"\n",
+		"modmain.lua":                "return nil\n",
+		"scripts\\components\\x.lua": "return nil\n",
+	})
+	binDir := filepath.Join(root, "fake-bin")
+	fakeCurl := `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == *"GetPublishedFileDetails"* ]]; then
+  printf '{"response":{"result":1,"publishedfiledetails":[{"result":1,"file_url":"file://%s"}]}}' "${FAKE_LEGACY_ARCHIVE}"
+  exit 0
+fi
+out=""
+url=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    file://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+cp "${url#file://}" "${out}"
+`
+	writeTestFile(t, filepath.Join(binDir, "curl"), fakeCurl)
+	if err := os.Chmod(filepath.Join(binDir, "curl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FAKE_LEGACY_ARCHIVE", archive)
+	t.Setenv("DST_LEGACY_WORKSHOP_FALLBACK", "1")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("run entrypoint: %v\n%s", err, output)
+	}
+	legacyDir := filepath.Join(dataDir, "ugc_mods", "legacy", "workshop-111")
+	if _, err := os.Stat(filepath.Join(legacyDir, "modinfo.lua")); err != nil {
+		t.Fatalf("expected persisted legacy mod: %v\n%s", err, output)
+	}
+	link := filepath.Join(root, "server", "mods", "workshop-111")
+	if target, err := os.Readlink(link); err != nil || target != legacyDir {
+		t.Fatalf("expected legacy runtime link to %q, got target=%q err=%v", legacyDir, target, err)
+	}
+	log := readTestFile(t, filepath.Join(dataDir, "fake-server.log"))
+	if strings.Contains(log, "-only_update_server_mods") {
+		t.Fatalf("expected legacy-only refresh to bypass native downloader, got %q", log)
 	}
 }
 
@@ -110,6 +169,7 @@ fi
 	} else {
 		t.Setenv("FAKE_DOWNLOAD_MODS", "0")
 	}
+	t.Setenv("DST_LEGACY_WORKSHOP_FALLBACK", "0")
 	return root, dataDir, script
 }
 
@@ -144,4 +204,28 @@ func readTestFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(content)
+}
+
+func writeTestZip(t *testing.T, path string, files map[string]string) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	for name, content := range files {
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
 }

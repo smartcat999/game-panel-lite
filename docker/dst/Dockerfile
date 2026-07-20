@@ -15,7 +15,7 @@ LABEL org.opencontainers.image.base.name="docker.io/webhippie/dst@sha256:798067e
 
 RUN dpkg --add-architecture i386 \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates lib32gcc-s1 libcurl4 libcurl4:i386 libcurl3-gnutls libcurl3-gnutls:i386 libstdc++6 libstdc++6:i386 \
+    && apt-get install -y --no-install-recommends ca-certificates curl lib32gcc-s1 libcurl4 libcurl4:i386 libcurl3-gnutls libcurl3-gnutls:i386 libstdc++6 libstdc++6:i386 unzip \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -m -d /home/container -s /bin/bash container \
     && mkdir -p /home/container/server /data \
