@@ -1,6 +1,8 @@
 package dst
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -186,6 +188,97 @@ func TestNormalizeAndValidateConfig(t *testing.T) {
 	bad.Identity.ClusterToken = ""
 	if err := validateConfig(bad); err == nil {
 		t.Fatal("expected missing Klei token to fail")
+	}
+}
+
+func TestCavesShardIDIsStableAndPersisted(t *testing.T) {
+	provider := NewProvider()
+	normalized, err := provider.NormalizeConfigPayload(map[string]any{
+		"identity": map[string]any{
+			"serverName":   "DST Friends",
+			"clusterName":  "Cluster",
+			"clusterToken": "klei-token",
+		},
+		"caves": map[string]any{"enabled": true},
+		"shards": map[string]any{
+			"cavesId": "4286217238",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shards, _ := normalized["shards"].(map[string]any)
+	if got := shards["cavesId"]; got != "4286217238" {
+		t.Fatalf("expected cave shard id to persist, got %v", got)
+	}
+
+	runtimeConfig, err := provider.RuntimeConfigForResource(domain.GameServer{
+		Spec: domain.ServerSpec{Config: normalized},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverINI := runtimeConfig.Options.Files["dst/Cluster/Caves/server.ini"]
+	if !strings.Contains(serverINI, "id = 4286217238") {
+		t.Fatalf("expected persisted cave shard id in server.ini, got:\n%s", serverINI)
+	}
+}
+
+func TestCavesShardIDDefaultsAndValidates(t *testing.T) {
+	config := defaultConfig()
+	config.Identity.ClusterToken = "klei-token"
+	config.Caves = &DSTCaveConfig{Enabled: true, Preset: "cave_default"}
+	if config.Shards.CavesID != DefaultCavesShardID {
+		t.Fatalf("expected default cave shard id %q, got %q", DefaultCavesShardID, config.Shards.CavesID)
+	}
+	if err := validateConfig(config); err != nil {
+		t.Fatalf("expected default cave shard id to validate: %v", err)
+	}
+
+	for _, invalid := range []string{"1", "0", "-2", "not-a-number", "4294967296"} {
+		bad := config
+		bad.Shards.CavesID = invalid
+		if err := validateConfig(bad); err == nil {
+			t.Fatalf("expected cave shard id %q to fail validation", invalid)
+		}
+	}
+}
+
+func TestExistingCavesShardIDWinsDuringRuntimePreparation(t *testing.T) {
+	dataDir := t.TempDir()
+	cavesDir := filepath.Join(dataDir, "dst", "Cluster", "Caves")
+	if err := os.MkdirAll(cavesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(cavesDir, "server.ini"),
+		[]byte("[SHARD]\nis_master = false\nname = Caves\nid = 4286217238\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := NewProvider()
+	runtimeConfig, err := provider.RuntimeConfigForResource(domain.GameServer{
+		Spec: domain.ServerSpec{
+			Config: map[string]any{
+				"identity": map[string]any{
+					"serverName":   "DST Friends",
+					"clusterName":  "Cluster",
+					"clusterToken": "klei-token",
+				},
+				"caves":  map[string]any{"enabled": true},
+				"shards": map[string]any{"cavesId": DefaultCavesShardID},
+			},
+			Runtime: domain.ServerRuntimeSpec{DataDir: dataDir},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverINI := runtimeConfig.Options.Files["dst/Cluster/Caves/server.ini"]
+	if !strings.Contains(serverINI, "id = 4286217238") {
+		t.Fatalf("expected existing on-disk cave shard id to win, got:\n%s", serverINI)
 	}
 }
 

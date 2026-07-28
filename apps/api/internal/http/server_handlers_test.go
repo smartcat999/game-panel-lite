@@ -508,7 +508,8 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	gameplay, _ := server.Spec.Config["gameplay"].(map[string]any)
 	world, _ := server.Spec.Config["world"].(map[string]any)
 	caves, _ := server.Spec.Config["caves"].(map[string]any)
-	if identity["clusterName"] != "FriendsCluster" || identity["clusterToken"] != "klei-token" || gameplay["gameMode"] != "endless" || world["preset"] != "forest_classic" || caves["enabled"] != true {
+	shards, _ := server.Spec.Config["shards"].(map[string]any)
+	if identity["clusterName"] != "FriendsCluster" || identity["clusterToken"] != "klei-token" || gameplay["gameMode"] != "endless" || world["preset"] != "forest_classic" || caves["enabled"] != true || shards["cavesId"] != "2" {
 		t.Fatalf("expected semantic DST config payload, got %+v", server.Spec.Config)
 	}
 
@@ -535,13 +536,35 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	if !strings.Contains(spec.Options.Files["dst/FriendsCluster/Master/leveldataoverride.lua"], `preset = "forest_classic"`) {
 		t.Fatalf("expected DST world preset in runtime files, got %+v", spec.Options.Files)
 	}
-	if _, ok := spec.Options.Files["dst/FriendsCluster/Caves/server.ini"]; !ok {
+	cavesINI, ok := spec.Options.Files["dst/FriendsCluster/Caves/server.ini"]
+	if !ok {
 		t.Fatalf("expected DST caves shard files, got %+v", spec.Options.Files)
+	}
+	if !strings.Contains(cavesINI, "id = 2") {
+		t.Fatalf("expected stable default caves shard id, got:\n%s", cavesINI)
 	}
 	if spec.Options.Files["dst/FriendsCluster/cluster_token.txt"] != "klei-token\n" {
 		t.Fatalf("expected DST token file, got %q", spec.Options.Files["dst/FriendsCluster/cluster_token.txt"])
 	}
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
+
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(
+		stdhttp.MethodPut,
+		"/api/servers/"+server.ID+"/config",
+		strings.NewReader(`{"config":{"gameplay":{"maxPlayers":8}}}`),
+	))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected config update 200, got %d: %s", update.Code, update.Body.String())
+	}
+	var updated domain.GameServer
+	if err := json.Unmarshal(update.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	updatedShards, _ := updated.Spec.Config["shards"].(map[string]any)
+	if updatedShards["cavesId"] != "2" {
+		t.Fatalf("expected cave shard id to survive config updates, got %+v", updated.Spec.Config)
+	}
 }
 
 func TestCreateDSTServerRejectsArmRuntime(t *testing.T) {
