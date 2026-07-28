@@ -3,7 +3,10 @@ package dst
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -12,7 +15,10 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
-const DefaultInternalPort = 10999
+const (
+	DefaultInternalPort = 10999
+	DefaultCavesShardID = "2"
+)
 
 var versions = []string{"v2026.07.17", "v2026.06.21"}
 
@@ -26,6 +32,7 @@ type Config struct {
 	World    DSTWorldConfig
 	Caves    *DSTCaveConfig
 	Mods     DSTModConfig
+	Shards   DSTShardConfig
 	Port     int
 }
 
@@ -62,6 +69,10 @@ type DSTModConfig struct {
 	WorkshopIDs    []string
 	ModPackIDs     []string
 	Configurations map[string]map[string]any
+}
+
+type DSTShardConfig struct {
+	CavesID string
 }
 
 func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
@@ -186,6 +197,10 @@ func validateConfig(config Config) error {
 		if config.Caves.Enabled && strings.TrimSpace(config.Caves.Preset) == "" {
 			return fmt.Errorf("cave preset is required")
 		}
+		shardID, err := strconv.ParseUint(config.Shards.CavesID, 10, 32)
+		if err != nil || shardID <= 1 {
+			return fmt.Errorf("cave shard id must be an integer between 2 and 4294967295")
+		}
 		for key, value := range config.Caves.Overrides {
 			if err := validateOverride(key, value); err != nil {
 				return fmt.Errorf("cave override %s: %w", key, err)
@@ -244,7 +259,7 @@ func runtimeOptions(config Config) runtime.ContainerOptions {
 		Files: map[string]string{
 			clusterDir + "/cluster.ini":                     renderClusterINI(config),
 			clusterDir + "/cluster_token.txt":               strings.TrimSpace(config.Identity.ClusterToken) + "\n",
-			clusterDir + "/Master/server.ini":               renderShardServerINI(config.Port, true, "Master"),
+			clusterDir + "/Master/server.ini":               renderShardServerINI(config.Port, true, "Master", ""),
 			clusterDir + "/Master/leveldataoverride.lua":    renderLevelDataOverrideLua("forest", config.World.Preset, config.World.Overrides),
 			clusterDir + "/Master/modoverrides.lua":         renderModOverrides(serverModIDs, config.Mods.Configurations),
 			clusterDir + "/dedicated_server_mods_setup.lua": renderWorkshopSetup(serverModIDs),
@@ -261,12 +276,15 @@ func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.Pro
 	if err := validateConfig(config); err != nil {
 		return domain.ProviderRuntimeConfig{}, err
 	}
+	if existingID := existingCavesShardID(server.Spec.Runtime.DataDir, clusterConfigDir(config)); existingID != "" {
+		config.Shards.CavesID = existingID
+	}
 	options := runtimeOptions(config)
 	clusterDir := clusterConfigDir(config)
 	options.Files[clusterDir+"/cluster.ini"] = renderClusterINI(config)
 	options.Files[clusterDir+"/Master/leveldataoverride.lua"] = renderLevelDataOverrideLua("forest", config.World.Preset, config.World.Overrides)
 	if config.Caves != nil && config.Caves.Enabled {
-		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves")
+		options.Files[clusterDir+"/Caves/server.ini"] = renderShardServerINI(config.Port+1, false, "Caves", config.Shards.CavesID)
 		options.Files[clusterDir+"/Caves/leveldataoverride.lua"] = renderLevelDataOverrideLua("cave", config.Caves.Preset, config.Caves.Overrides)
 		options.Files[clusterDir+"/Caves/modoverrides.lua"] = renderModOverrides(serverWorkshopIDs(config.Mods.WorkshopIDs), config.Mods.Configurations)
 	}
@@ -332,6 +350,9 @@ func normalizeConfig(config Config) Config {
 	if strings.TrimSpace(config.World.Preset) == "" {
 		config.World.Preset = "forest_default"
 	}
+	if strings.TrimSpace(config.Shards.CavesID) == "" {
+		config.Shards.CavesID = DefaultCavesShardID
+	}
 	config.World.Overrides = cleanOverrides(config.World.Overrides)
 	if config.Caves != nil {
 		if strings.TrimSpace(config.Caves.Preset) == "" {
@@ -388,6 +409,9 @@ func configFromPayload(payload map[string]any, fallback Config) Config {
 			Overrides: stringMapPayload(caves, "overrides"),
 		}
 	}
+	if shards := objectPayload(payload, "shards"); shards != nil {
+		config.Shards.CavesID = stringPayload(shards, "cavesId")
+	}
 	if mods := objectPayload(payload, "mods"); mods != nil {
 		config.Mods.WorkshopIDs = workshopIDsPayload(mods, "workshopIds")
 		config.Mods.ModPackIDs = stringSlicePayload(mods, "modPackIds")
@@ -422,6 +446,9 @@ func payloadFromConfig(config Config) map[string]any {
 			"workshopIds":    append([]string{}, config.Mods.WorkshopIDs...),
 			"modPackIds":     append([]string{}, config.Mods.ModPackIDs...),
 			"configurations": cloneModConfigurations(config.Mods.Configurations),
+		},
+		"shards": map[string]any{
+			"cavesId": config.Shards.CavesID,
 		},
 	}
 	identity := payload["identity"].(map[string]any)
@@ -498,20 +525,46 @@ func clusterConfigDir(config Config) string {
 	return "dst/" + config.Identity.ClusterName
 }
 
-func renderShardServerINI(port int, isMaster bool, name string) string {
+func existingCavesShardID(dataDir string, clusterDir string) string {
+	if strings.TrimSpace(dataDir) == "" {
+		return ""
+	}
+	content, err := os.ReadFile(filepath.Join(dataDir, filepath.FromSlash(clusterDir), "Caves", "server.ini"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		key, value, found := strings.Cut(line, "=")
+		if !found || strings.TrimSpace(key) != "id" {
+			continue
+		}
+		shardID := strings.TrimSpace(value)
+		parsed, parseErr := strconv.ParseUint(shardID, 10, 32)
+		if parseErr == nil && parsed > 1 {
+			return shardID
+		}
+	}
+	return ""
+}
+
+func renderShardServerINI(port int, isMaster bool, name string, shardID string) string {
 	master := "false"
 	if isMaster {
 		master = "true"
 	}
-	return strings.Join([]string{
+	lines := []string{
 		"[NETWORK]",
 		fmt.Sprintf("server_port = %d", port),
 		"",
 		"[SHARD]",
 		"is_master = " + master,
 		"name = " + name,
-		"",
-	}, "\n")
+	}
+	if !isMaster && strings.TrimSpace(shardID) != "" {
+		lines = append(lines, "id = "+strings.TrimSpace(shardID))
+	}
+	lines = append(lines, "")
+	return strings.Join(lines, "\n")
 }
 
 func renderLevelDataOverrideLua(location string, preset string, overrides map[string]string) string {
