@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcw, Search } from "lucide-react";
+import { ExternalLink, RotateCcw, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { SecretInput } from "@/components/secret-input";
 import { Button, Input } from "@/components/ui";
@@ -12,6 +12,7 @@ import type { ProviderConfigField } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type ConfigValue = string | boolean;
+const kleiServerTokenURL = "https://accounts.klei.com/account/game/servers?game=DontStarveTogether";
 
 export function ProviderConfigEditor({
   disabled = false,
@@ -256,10 +257,23 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
 }
 
 function LabeledControl({ children, field, label }: { children: ReactNode; field: ProviderConfigField; label: string }) {
+  const { t } = useI18n();
+  const isKleiServerToken = field.name === "clusterToken" || field.name === "identity.clusterToken";
   return (
     <>
-      <div className="mb-2 flex min-h-5 items-center">
+      <div className="mb-2 flex min-h-5 items-center justify-between gap-3">
         <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
+        {isKleiServerToken ? (
+          <a
+            className="inline-flex shrink-0 items-center gap-1 text-xs text-slate-400 transition hover:text-panel-green focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40"
+            href={kleiServerTokenURL}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("getKleiServerToken")}
+            <ExternalLink aria-hidden="true" className="size-3" />
+          </a>
+        ) : null}
       </div>
       {children}
     </>
