@@ -18,6 +18,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+	workshopsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/workshop"
 )
 
 type Handler struct {
@@ -39,6 +40,10 @@ type Handler struct {
 	gameUpdateClosing   bool
 	gameUpdateJobsWG    sync.WaitGroup
 	serverMutationLocks sync.Map
+
+	workshopResolver   workshopsvc.Resolver
+	workshopPreviewsMu sync.Mutex
+	workshopPreviews   map[string]cachedWorkshopPreview
 }
 
 type resourceLimitPayload struct {
@@ -71,6 +76,8 @@ func NewHandler(
 		runtimeFactory:   runtimeFactory,
 		apiMetrics:       apiMetrics,
 		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
+		workshopResolver: workshopsvc.NewSteamResolver(),
+		workshopPreviews: map[string]cachedWorkshopPreview{},
 	}
 	handler.observability = observability.NewCachedService(observability.NewService(store, adapter), handler.runtimeStatusAvailable, 5*time.Second)
 	return handler
@@ -192,6 +199,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/mods/recommended", h.listRecommendedMods)
 		r.Post("/api/mods/recommended/import", h.importRecommendedMod)
 		r.Post("/api/mods/upload", h.uploadGlobalMod)
+		r.Post("/api/mods/workshop/preview", h.previewWorkshopCollection)
 		r.Post("/api/mods/workshop", h.importGlobalWorkshopMods)
 		r.Post("/api/mods/{id}/assign", h.assignMod)
 		r.Delete("/api/mods/{id}", h.deleteGlobalMod)

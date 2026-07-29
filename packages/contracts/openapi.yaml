@@ -563,9 +563,41 @@ paths:
           description: Updated existing global mod file record
         "201":
           description: Uploaded global mod
+  /api/mods/workshop/preview:
+    post:
+      summary: Resolve a Steam Workshop collection and preview compatible mods
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                providerKey:
+                  type: string
+                  enum: [terraria-tmodloader, dont-starve-together]
+                  default: terraria-tmodloader
+                value:
+                  type: string
+                  description: Numeric collection ID or an HTTPS steamcommunity.com collection URL.
+                instanceId:
+                  type: string
+                  description: Optional target server used to calculate preview status.
+      responses:
+        "200":
+          description: Server-resolved collection metadata and import status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkshopPreview"
+        "400":
+          description: Invalid, unavailable, oversized, or unsupported collection
+        "502":
+          description: Steam Workshop API request failed
   /api/mods/workshop:
     post:
-      summary: Import tModLoader Workshop IDs as global mod library records
+      summary: Idempotently import Workshop IDs as global mod library records
       requestBody:
         required: true
         content:
@@ -578,6 +610,9 @@ paths:
                   type: array
                   items:
                     type: string
+                previewId:
+                  type: string
+                  description: Optional short-lived preview ID used to apply server-resolved Steam metadata.
       responses:
         "200":
           description: Imported Workshop mod records
@@ -1283,6 +1318,74 @@ components:
           type: array
           items:
             type: string
+    WorkshopPreview:
+      type: object
+      required: [previewId, collectionId, providerKey, expiresAt, items, summary]
+      properties:
+        previewId:
+          type: string
+        collectionId:
+          type: string
+        providerKey:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            type: object
+            required: [workshopId, title, fileSize, status, selectable]
+            properties:
+              workshopId:
+                type: string
+              title:
+                type: string
+              creatorSteamId:
+                type: string
+              previewUrl:
+                type: string
+                format: uri
+              description:
+                type: string
+              fileSize:
+                type: integer
+                format: int64
+              subscriptions:
+                type: integer
+              favorited:
+                type: integer
+              views:
+                type: integer
+              timeCreated:
+                type: integer
+                format: int64
+              timeUpdated:
+                type: integer
+                format: int64
+              tags:
+                type: array
+                items:
+                  type: string
+              status:
+                type: string
+                enum: [new, in_library, in_server, unavailable]
+              selectable:
+                type: boolean
+        summary:
+          type: object
+          required: [total, new, inLibrary, inServer, unavailable]
+          properties:
+            total:
+              type: integer
+            new:
+              type: integer
+            inLibrary:
+              type: integer
+            inServer:
+              type: integer
+            unavailable:
+              type: integer
     ModFile:
       type: object
       required: [id, instanceId, fileName, sizeBytes, enabled, createdAt]

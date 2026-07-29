@@ -112,26 +112,30 @@ func (h *Handler) upsertWorkshopModRecord(ctx context.Context, server domain.Gam
 }
 
 func (h *Handler) upsertWorkshopModRecordForProvider(ctx context.Context, providerKey domain.ProviderKey, instanceID string, workshopID string) (domain.ModFile, bool, error) {
+	return h.upsertWorkshopModRecordWithStore(ctx, h.store, providerKey, instanceID, workshopID)
+}
+
+func (h *Handler) upsertWorkshopModRecordWithStore(ctx context.Context, modStore *store.Store, providerKey domain.ProviderKey, instanceID string, workshopID string) (domain.ModFile, bool, error) {
 	fileName := "workshop-" + workshopID
-	if existing, err := h.store.GetModByInstanceAndWorkshopID(ctx, instanceID, workshopID); err == nil {
+	if existing, err := modStore.GetModByInstanceAndWorkshopID(ctx, instanceID, workshopID); err == nil {
 		existing.Source = "workshop"
 		existing.WorkshopID = workshopID
 		existing.GameKey = gameKeyForProvider(providerKey)
 		existing.ProviderKey = providerKey
 		existing.Enabled = true
 		applyRecommendedModMetadataForProvider(&existing, providerKey, workshopID)
-		return existing, false, h.store.SaveMod(ctx, &existing)
+		return existing, false, modStore.SaveMod(ctx, &existing)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.ModFile{}, false, err
 	}
-	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+	if existing, err := modStore.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.Source = "workshop"
 		existing.WorkshopID = workshopID
 		existing.GameKey = gameKeyForProvider(providerKey)
 		existing.ProviderKey = providerKey
 		existing.Enabled = true
 		applyRecommendedModMetadataForProvider(&existing, providerKey, workshopID)
-		return existing, false, h.store.SaveMod(ctx, &existing)
+		return existing, false, modStore.SaveMod(ctx, &existing)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.ModFile{}, false, err
 	}
@@ -148,7 +152,7 @@ func (h *Handler) upsertWorkshopModRecordForProvider(ctx context.Context, provid
 		CreatedAt:   time.Now(),
 	}
 	applyRecommendedModMetadataForProvider(&item, providerKey, workshopID)
-	return item, true, h.store.CreateMod(ctx, &item)
+	return item, true, modStore.CreateMod(ctx, &item)
 }
 
 func (h *Handler) ensureModDependencies(ctx context.Context, server domain.GameServer, roots []domain.ModFile) ([]domain.ModFile, error) {

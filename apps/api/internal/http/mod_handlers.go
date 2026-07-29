@@ -11,6 +11,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
 func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +139,12 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "workshop mod sync is not supported on ARM Docker hosts; upload .tmod files instead")
 		return
 	}
-	workshopIDs, err := decodeWorkshopIDs(r)
+	workshopIDs, previewID, err := decodeWorkshopIDs(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	previewItems, err := h.workshopPreviewItems(previewID, server.ProviderKey, server.ID, workshopIDs)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -149,6 +155,13 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if metadata, ok := previewItems[workshopID]; ok {
+			applyWorkshopItemMetadata(&item, metadata)
+			if err := h.store.SaveMod(r.Context(), &item); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
 		}
 		items = append(items, item)
 	}
@@ -182,7 +195,7 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusConflict, "workshop mod import is not supported on ARM Docker hosts; upload .tmod files instead")
 		return
 	}
-	providerKey, workshopIDs, err := decodeGlobalWorkshopImport(r)
+	providerKey, workshopIDs, previewID, err := decodeGlobalWorkshopImport(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -191,18 +204,30 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 		return
 	}
+	previewItems, err := h.workshopPreviewItems(previewID, providerKey, "", workshopIDs)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	items := make([]domain.ModFile, 0, len(workshopIDs))
-	for _, workshopID := range workshopIDs {
-		item, _, err := h.createWorkshopModRecord(r.Context(), providerKey, "unassigned", workshopID)
-		if err != nil {
-			if errors.Is(err, errWorkshopModExists) {
-				writeError(w, http.StatusConflict, fmt.Sprintf("workshop mod %s already exists in mod library", workshopID))
-				return
+	if err := h.store.Transaction(r.Context(), func(tx *store.Store) error {
+		for _, workshopID := range workshopIDs {
+			item, _, err := h.upsertWorkshopModRecordWithStore(r.Context(), tx, providerKey, "unassigned", workshopID)
+			if err != nil {
+				return err
 			}
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			if metadata, ok := previewItems[workshopID]; ok {
+				applyWorkshopItemMetadata(&item, metadata)
+				if err := tx.SaveMod(r.Context(), &item); err != nil {
+					return err
+				}
+			}
+			items = append(items, item)
 		}
-		items = append(items, item)
+		return nil
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	h.recordActivity(r.Context(), "", "mod.workshop_imported", fmt.Sprintf("Imported %d workshop mod IDs into mod library", len(workshopIDs)), map[string]any{
 		"workshopIds":   workshopIDs,
@@ -211,13 +236,14 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, items)
 }
 
-func decodeGlobalWorkshopImport(r *http.Request) (domain.ProviderKey, []string, error) {
+func decodeGlobalWorkshopImport(r *http.Request) (domain.ProviderKey, []string, string, error) {
 	var payload struct {
 		ProviderKey domain.ProviderKey `json:"providerKey"`
 		WorkshopIDs []string           `json:"workshopIds"`
+		PreviewID   string             `json:"previewId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		return "", nil, fmt.Errorf("invalid JSON body")
+		return "", nil, "", fmt.Errorf("invalid JSON body")
 	}
 	providerKey := payload.ProviderKey
 	if providerKey == "" {
@@ -225,33 +251,34 @@ func decodeGlobalWorkshopImport(r *http.Request) (domain.ProviderKey, []string, 
 	}
 	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
 	if len(workshopIDs) == 0 {
-		return "", nil, fmt.Errorf("select at least one workshop item")
+		return "", nil, "", fmt.Errorf("select at least one workshop item")
 	}
 	for _, id := range workshopIDs {
 		if !isDigitsOnly(id) {
-			return "", nil, fmt.Errorf("workshop IDs must contain digits only")
+			return "", nil, "", fmt.Errorf("workshop IDs must contain digits only")
 		}
 	}
-	return providerKey, workshopIDs, nil
+	return providerKey, workshopIDs, strings.TrimSpace(payload.PreviewID), nil
 }
 
-func decodeWorkshopIDs(r *http.Request) ([]string, error) {
+func decodeWorkshopIDs(r *http.Request) ([]string, string, error) {
 	var payload struct {
 		WorkshopIDs []string `json:"workshopIds"`
+		PreviewID   string   `json:"previewId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("invalid JSON body")
+		return nil, "", fmt.Errorf("invalid JSON body")
 	}
 	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
 	if len(workshopIDs) == 0 {
-		return nil, fmt.Errorf("select at least one workshop item")
+		return nil, "", fmt.Errorf("select at least one workshop item")
 	}
 	for _, id := range workshopIDs {
 		if !isDigitsOnly(id) {
-			return nil, fmt.Errorf("workshop IDs must contain digits only")
+			return nil, "", fmt.Errorf("workshop IDs must contain digits only")
 		}
 	}
-	return workshopIDs, nil
+	return workshopIDs, strings.TrimSpace(payload.PreviewID), nil
 }
 
 func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {

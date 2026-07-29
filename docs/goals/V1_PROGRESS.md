@@ -1,5 +1,13 @@
 # V1 Progress
 
+## 2026-07-29
+
+- Added server-side Steam Workshop collection resolution for tModLoader and Don't Starve Together using fixed official API endpoints, strict Steam URL parsing, provider AppID validation, bounded nested collection expansion, response size limits, and request timeouts without reading Steam cookies or credentials.
+- Added a short-lived Workshop collection preview flow that reports new, existing, installed, and unavailable items, retains server-fetched metadata for confirmed imports, and prevents importing IDs that were not present in the preview.
+- Made global Workshop batch imports idempotent and transactional so existing items refresh safely and failures cannot leave a partially-created batch.
+- Reworked the Mods import dialog into Steam Collection and Workshop ID paths with live metadata, selectable differences, ARM preview-only guidance, and bilingual copy.
+- Added Go coverage for Steam URL validation, nested collection resolution, game filtering, unavailable collections, preview caching, and idempotent imports; extended the OpenAPI contract with the preview endpoint and response schema.
+
 ## 2026-07-19
 
 - Removed deprecated DST `-console` and `offline_server` usage while retaining console control through the supported cluster setting.

@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -931,11 +931,31 @@ export async function listRecommendedMods(): Promise<RecommendedMod[]> {
   return payload.map(toRecommendedMod);
 }
 
-export async function importGlobalWorkshopMods(workshopIds: string[], providerKey = "terraria-tmodloader"): Promise<ModFile[]> {
+export async function previewWorkshopCollection(input: { value: string; providerKey?: ProviderKey; instanceId?: string }): Promise<WorkshopPreview> {
+  const response = await apiFetch(`${API_BASE}/api/mods/workshop/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      value: input.value,
+      providerKey: input.providerKey ?? "terraria-tmodloader",
+      instanceId: input.instanceId
+    })
+  });
+  const payload = await readPayload<Omit<WorkshopPreview, "items"> & { items: Array<Omit<WorkshopPreview["items"][number], "size">> }>(
+    response,
+    "Unable to preview Workshop collection"
+  );
+  return {
+    ...payload,
+    items: payload.items.map((item) => ({ ...item, size: formatBytes(item.fileSize) }))
+  };
+}
+
+export async function importGlobalWorkshopMods(workshopIds: string[], providerKey = "terraria-tmodloader", previewId?: string): Promise<ModFile[]> {
   const response = await apiFetch(`${API_BASE}/api/mods/workshop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ providerKey, workshopIds })
+    body: JSON.stringify({ providerKey, workshopIds, previewId })
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
