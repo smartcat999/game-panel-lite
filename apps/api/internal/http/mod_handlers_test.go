@@ -564,7 +564,7 @@ func TestGlobalWorkshopImportRejectsArmRuntime(t *testing.T) {
 	}
 }
 
-func TestGlobalWorkshopImportRejectsDuplicateWorkshopID(t *testing.T) {
+func TestGlobalWorkshopImportIsIdempotentForDuplicateWorkshopID(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	_ = cfg
 	existing := domain.ModFile{
@@ -587,8 +587,15 @@ func TestGlobalWorkshopImportRejectsDuplicateWorkshopID(t *testing.T) {
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/workshop", bytes.NewBufferString(`{"workshopIds":["2563309347"]}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
-	if recorder.Code != stdhttp.StatusConflict {
-		t.Fatalf("expected duplicate workshop import 409, got %d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected duplicate workshop import to be idempotent, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var items []domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &items); err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].ID != existing.ID {
+		t.Fatalf("expected existing workshop record, got %+v", items)
 	}
 }
 

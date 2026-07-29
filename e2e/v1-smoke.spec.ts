@@ -277,6 +277,74 @@ async function mockApi(page: Page) {
     });
   });
 
+  await page.route("**/api/mods/workshop/preview", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        previewId: "preview-e2e",
+        collectionId: "123456789",
+        providerKey: "terraria-tmodloader",
+        expiresAt: "2026-07-29T10:10:00.000Z",
+        items: [
+          {
+            workshopId: "2824688072",
+            title: "Calamity Mod",
+            previewUrl: "",
+            fileSize: 3537895424,
+            subscriptions: 9299532,
+            status: "new",
+            selectable: true
+          },
+          {
+            workshopId: "2563309347",
+            title: "Magic Storage",
+            previewUrl: "",
+            fileSize: 5643106,
+            status: "in_library",
+            selectable: true
+          }
+        ],
+        summary: { total: 2, new: 1, inLibrary: 1, inServer: 0, unavailable: 0 }
+      })
+    });
+  });
+
+  await page.route("**/api/mods/workshop", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "workshop-e2e",
+          instanceId: "unassigned",
+          providerKey: "terraria-tmodloader",
+          fileName: "workshop-2824688072",
+          source: "workshop",
+          workshopId: "2824688072",
+          title: "Calamity Mod",
+          sizeBytes: 3537895424,
+          enabled: true,
+          createdAt: "2026-07-29T10:00:00.000Z"
+        }
+      ])
+    });
+  });
+
+  await page.route("**/api/mods/recommended", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: "[]" });
+  });
+
+  await page.route("**/api/mods", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: "[]" });
+  });
+
+  await page.route("**/api/mod-packs", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: "[]" });
+  });
+
+  await page.route("**/api/games", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: "[]" });
+  });
+
   await page.route("**/api/terraria/config/preview", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -360,6 +428,32 @@ test("create server wizard keeps clicked mode and preset selected", async ({ pag
   await createRequest;
   await worldUploadRequest;
   await modUploadRequest;
+});
+
+test("Steam collection preview imports selected Workshop mods", async ({ page }) => {
+  await page.goto("/mods");
+
+  await page.getByRole("button", { name: "从 Steam 导入" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "从 Steam 导入" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByPlaceholder("粘贴 Steam 创意工坊合集链接或合集 ID").fill("123456789");
+
+  const previewRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/mods/workshop/preview"));
+  await dialog.getByRole("button", { name: "解析合集" }).click();
+  await previewRequest;
+
+  await expect(dialog.getByText("Calamity Mod")).toBeVisible();
+  await expect(dialog.getByText("Magic Storage")).toBeVisible();
+  await expect(dialog.getByText("共 2 个 · 新增 1 个 · 模组库已有 1 个")).toBeVisible();
+  const importRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/mods/workshop"));
+  await dialog.getByRole("button", { name: "导入所选模组" }).click();
+  const request = await importRequest;
+  expect(request.postDataJSON()).toMatchObject({
+    providerKey: "terraria-tmodloader",
+    previewId: "preview-e2e",
+    workshopIds: ["2824688072"]
+  });
+  await expect(page.getByText("创意工坊 ID 已导入。")).toBeVisible();
 });
 
 test("server detail and management flows expose live V1 actions", async ({ page, context }) => {

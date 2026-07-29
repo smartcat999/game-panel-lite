@@ -345,6 +345,39 @@ export type RecommendedMod = {
   modId?: string;
 };
 
+export type WorkshopPreviewItem = {
+  workshopId: string;
+  title: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  description?: string;
+  fileSize: number;
+  size: string;
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  timeCreated?: number;
+  timeUpdated?: number;
+  tags?: string[];
+  status: "new" | "in_library" | "in_server" | "unavailable";
+  selectable: boolean;
+};
+
+export type WorkshopPreview = {
+  previewId: string;
+  collectionId: string;
+  providerKey: ProviderKey;
+  expiresAt: string;
+  items: WorkshopPreviewItem[];
+  summary: {
+    total: number;
+    new: number;
+    inLibrary: number;
+    inServer: number;
+    unavailable: number;
+  };
+};
+
 export type ModPack = {
   id: string;
   name: string;

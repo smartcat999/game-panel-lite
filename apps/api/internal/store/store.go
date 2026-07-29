@@ -26,6 +26,13 @@ type activitySubscriber struct {
 	ch         chan domain.ActivityEvent
 }
 
+func (s *Store) Transaction(ctx context.Context, fn func(*Store) error) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		scoped := &Store{db: tx}
+		return fn(scoped)
+	})
+}
+
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
