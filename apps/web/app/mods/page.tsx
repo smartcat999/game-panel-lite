@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Clock3, Compass, Download, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
+import { Check, Clock3, Compass, Download, ExternalLink, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -15,6 +15,7 @@ import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScopeFromTags, modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
 import { cn } from "@/lib/utils";
+import { parseWorkshopIds } from "@/lib/workshop-input";
 import type { ModFile, ModPack, ProviderKey, RecommendedMod, WorkshopPreview } from "@/lib/types";
 
 type ModsView = "discover" | "library" | "packs";
@@ -146,7 +147,7 @@ export default function ModsPage() {
     }
   });
   const workshopCollectionPreview = useMutation({
-    mutationFn: () => previewWorkshopCollection({ value: workshopCollectionValue, providerKey: workshopProviderKey }),
+    mutationFn: (value?: string) => previewWorkshopCollection({ value: value ?? workshopCollectionValue, providerKey: workshopProviderKey }),
     onSuccess: (preview) => {
       setErrorMessage("");
       setWorkshopPreview(preview);
@@ -414,7 +415,6 @@ export default function ModsPage() {
       {workshopDialogOpen && (
         <DialogShell
           title={t("importFromSteam")}
-          description={t("workshopImportLibraryHint")}
           onClose={() => {
             setWorkshopDialogOpen(false);
             setWorkshopPreview(null);
@@ -443,7 +443,7 @@ export default function ModsPage() {
             </button>
           </div>
           <label className="mb-3 grid gap-1.5 text-sm text-slate-300">
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{t("filterGame")}</span>
+            <span className="text-xs font-medium text-slate-400">{t("filterGame")}</span>
             <select
               className="rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-panel-green"
               value={workshopProviderKey}
@@ -466,29 +466,54 @@ export default function ModsPage() {
           {workshopSource === "collection" ? (
             <>
               {!workshopPreview ? (
-                <div className="grid gap-3">
+                <form
+                  className="grid gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    workshopCollectionPreview.mutate(undefined);
+                  }}
+                >
                   <Input
+                    aria-label={t("steamCollectionPlaceholder")}
                     placeholder={t("steamCollectionPlaceholder")}
                     value={workshopCollectionValue}
                     onChange={(event) => setWorkshopCollectionValue(event.target.value)}
+                    onPaste={(event) => {
+                      const value = event.clipboardData.getData("text").trim();
+                      if (!value) return;
+                      event.preventDefault();
+                      setWorkshopCollectionValue(value);
+                      workshopCollectionPreview.mutate(value);
+                    }}
                     disabled={workshopCollectionPreview.isPending}
                   />
-                  <p className="text-xs leading-5 text-slate-500">{t("steamCollectionHint")}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <p className="text-slate-500">{t("steamCollectionHint")}</p>
+                    <a
+                      href={steamWorkshopURL(workshopProviderKey, "collections")}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-slate-400 transition hover:text-panel-green"
+                    >
+                      {t("browseSteamCollections")}
+                      <ExternalLink aria-hidden="true" className="size-3" />
+                    </a>
+                  </div>
                   {workshopCollectionPreview.isError && (
                     <p className="rounded-md border border-panel-gold/25 bg-panel-gold/5 px-3 py-2 text-xs leading-5 text-panel-gold">
                       {workshopCollectionPreview.error instanceof Error ? workshopCollectionPreview.error.message : t("unablePreviewWorkshopCollection")}
                     </p>
                   )}
                   <Button
+                    type="submit"
                     variant="secondary"
                     className="justify-self-end"
-                    onClick={() => workshopCollectionPreview.mutate()}
                     disabled={workshopCollectionPreview.isPending || workshopCollectionValue.trim().length === 0}
                   >
                     <Download aria-hidden="true" />
                     {workshopCollectionPreview.isPending ? t("resolvingCollection") : t("previewCollection")}
                   </Button>
-                </div>
+                </form>
               ) : (
                 <div>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-panel-line bg-slate-950/45 px-3 py-2.5">
@@ -552,20 +577,34 @@ export default function ModsPage() {
             </>
           ) : (
             <>
-              <textarea
-                className="min-h-32 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-panel-green"
-                placeholder={t("workshopIdsPlaceholder")}
-                value={workshopIdsText}
-                onChange={(event) => setWorkshopIdsText(event.target.value)}
-                disabled={workshopImport.isPending}
-              />
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: workshopIds.length })}</span>
+              <div className="grid gap-2">
+                <textarea
+                  aria-label={t("workshopIdsPlaceholder")}
+                  className="min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green"
+                  placeholder={t("workshopIdsPlaceholder")}
+                  value={workshopIdsText}
+                  onChange={(event) => setWorkshopIdsText(event.target.value)}
+                  disabled={workshopImport.isPending}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <p className="text-slate-500">{t("workshopIdHint")}</p>
+                  <a
+                    href={steamWorkshopURL(workshopProviderKey, "items")}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-slate-400 transition hover:text-panel-green"
+                  >
+                    {t("browseSteamWorkshop")}
+                    <ExternalLink aria-hidden="true" className="size-3" />
+                  </a>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
                 <div className="flex gap-2">
                   <Button variant="ghost" onClick={() => setWorkshopDialogOpen(false)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
                   <Button variant="secondary" onClick={() => requestWorkshopImport(workshopIds, workshopProviderKey)} disabled={workshopImport.isPending || workshopIds.length === 0 || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                     <Download aria-hidden="true" />
-                    {workshopImport.isPending ? t("actionWorking") : t("importWorkshopMods")}
+                    {workshopImport.isPending ? t("actionWorking") : workshopIds.length > 0 ? t("importWorkshopModsCount", { count: workshopIds.length }) : t("importWorkshopMods")}
                   </Button>
                 </div>
               </div>
@@ -707,18 +746,6 @@ export default function ModsPage() {
   );
 }
 
-function parseWorkshopIds(value: string) {
-  const seen = new Set<string>();
-  return value
-    .split(/[\s,，]+/)
-    .map((item) => item.trim())
-    .filter((item) => {
-      if (!item || seen.has(item)) return false;
-      seen.add(item);
-      return true;
-    });
-}
-
 function ViewTab({ active, count, icon, label, onClick }: { active: boolean; count: number; icon: ReactNode; label: string; onClick: () => void }) {
   return (
     <button
@@ -751,14 +778,14 @@ function SectionToolbar({ actions, count, hint, title }: { actions: ReactNode; c
   );
 }
 
-function DialogShell({ children, description, onClose, title }: { children: ReactNode; description: string; onClose: () => void; title: string }) {
+function DialogShell({ children, description, onClose, title }: { children: ReactNode; description?: string; onClose: () => void; title: string }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-8">
       <div className="w-full max-w-2xl rounded-lg border border-panel-line bg-panel-card shadow-2xl shadow-black/30">
         <div className="flex items-start justify-between gap-4 border-b border-panel-line p-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-white">{title}</h2>
-            <p className="mt-1 text-sm text-slate-500">{description}</p>
+            {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
           </div>
           <button
             type="button"
@@ -773,6 +800,14 @@ function DialogShell({ children, description, onClose, title }: { children: Reac
       </div>
     </div>
   );
+}
+
+function steamWorkshopURL(providerKey: ProviderKey, section: "collections" | "items") {
+  const appID = providerKey === "dont-starve-together" ? "322330" : "1281930";
+  if (section === "collections") {
+    return `https://steamcommunity.com/workshop/browse/?appid=${appID}&section=collections`;
+  }
+  return `https://steamcommunity.com/app/${appID}/workshop/`;
 }
 
 function ModIdentity({ detail, item, locale }: { detail: string; item: ModFile; locale: string }) {
