@@ -5,7 +5,7 @@ import { AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button, Card } from "@/components/ui";
-import { applyGameUpdate, checkGameUpdate, getGameUpdate } from "@/lib/api";
+import { applyGameUpdate, checkGameUpdate, getGameUpdate, updateGameUpdateAutoCheck } from "@/lib/api";
 import { isGameUpdateStateActive, normalizeGameUpdateProgress } from "@/lib/game-update";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -71,12 +71,25 @@ export function GameUpdateCard({
       queryClient.setQueryData<GameUpdateState>(queryKey, (current) => ({
         supported: current?.supported ?? true,
         status: "checking",
+        autoCheckEnabled: current?.autoCheckEnabled ?? true,
+        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 6,
         installedBuildId: current?.installedBuildId,
         latestBuildId: current?.latestBuildId,
         checkedAt: current?.checkedAt,
         job
       }));
       await queryClient.invalidateQueries({ queryKey });
+    }
+  });
+
+  const autoCheckMutation = useMutation({
+    mutationFn: (enabled: boolean) => updateGameUpdateAutoCheck(serverId, enabled),
+    onSuccess: ({ enabled, intervalHours }) => {
+      queryClient.setQueryData<GameUpdateState>(queryKey, (current) => current ? {
+        ...current,
+        autoCheckEnabled: enabled,
+        autoCheckIntervalHours: intervalHours
+      } : current);
     }
   });
 
@@ -87,6 +100,8 @@ export function GameUpdateCard({
       queryClient.setQueryData<GameUpdateState>(queryKey, (current) => ({
         supported: current?.supported ?? true,
         status: "updating",
+        autoCheckEnabled: current?.autoCheckEnabled ?? true,
+        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 6,
         installedBuildId: current?.installedBuildId,
         latestBuildId: current?.latestBuildId,
         checkedAt: current?.checkedAt,
@@ -107,6 +122,8 @@ export function GameUpdateCard({
   const loadError = updateQuery.isError ? t("gameUpdateUnavailable") : "";
   const actionError = checkMutation.isError
     ? t("gameUpdateCheckFailed")
+    : autoCheckMutation.isError
+      ? t("gameUpdateAutoCheckFailed")
     : applyMutation.isError
       ? t("gameUpdateApplyFailed")
       : state?.job?.status === "failed"
@@ -163,6 +180,35 @@ export function GameUpdateCard({
               <VersionRow label={t("gameUpdateLatestBuild")} value={state?.latestBuildId || "—"} />
               <VersionRow label={t("gameUpdateLastChecked")} value={formatCheckedAt(state?.checkedAt, locale, t("gameUpdateNeverChecked"))} />
             </dl>
+
+            <div className="mt-4 flex items-center justify-between gap-4 border-t border-panel-line pt-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-200">{t("gameUpdateAutoCheck")}</p>
+                <p className="mt-0.5 text-xs leading-5 text-slate-400">
+                  {t("gameUpdateAutoCheckHint", { hours: state?.autoCheckIntervalHours || 6 })}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={state?.autoCheckEnabled ?? true}
+                aria-label={t("gameUpdateAutoCheck")}
+                disabled={autoCheckMutation.isPending}
+                className={cn(
+                  "relative h-6 w-11 shrink-0 rounded-full outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-panel-green/40 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
+                  state?.autoCheckEnabled ?? true ? "bg-panel-green" : "bg-slate-700"
+                )}
+                onClick={() => autoCheckMutation.mutate(!(state?.autoCheckEnabled ?? true))}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute left-0.5 top-0.5 size-5 rounded-full bg-white transition-transform duration-200 motion-reduce:transition-none",
+                    (state?.autoCheckEnabled ?? true) && "translate-x-5"
+                  )}
+                />
+              </button>
+            </div>
 
             {active ? (
               <div className="mt-4 rounded-md border border-panel-green/25 bg-panel-green/10 p-3">

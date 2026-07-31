@@ -92,6 +92,7 @@ func (h *Handler) Start(ctx context.Context) {
 	go h.observability.Start(ctx)
 	h.startGameUpdateWorker(func() { h.recoverInterruptedGameUpdates(ctx, startedAt) })
 	h.startGameUpdateWorker(func() { h.recoverInterruptedWorldRegenerations(ctx, startedAt) })
+	h.startGameUpdateWorker(func() { h.runAutomaticGameUpdateChecks(ctx) })
 }
 
 func (h *Handler) WaitForGameUpdates(ctx context.Context) error {
@@ -157,6 +158,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/servers/{id}/game-update", h.getGameUpdate)
 		r.Post("/api/servers/{id}/game-update/check", h.checkGameUpdate)
 		r.Post("/api/servers/{id}/game-update/apply", h.applyGameUpdate)
+		r.Put("/api/servers/{id}/game-update/auto-check", h.updateGameUpdateAutoCheck)
 		r.Get("/api/servers/{id}/world-regeneration", h.getWorldRegeneration)
 		r.Post("/api/servers/{id}/world-regeneration", h.regenerateWorld)
 		r.Post("/api/servers/{id}/command", h.sendServerCommand)

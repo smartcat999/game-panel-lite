@@ -136,6 +136,102 @@ func TestGameUpdateUnavailableRuntimeDoesNotCreateActiveJob(t *testing.T) {
 	}
 }
 
+func TestGameUpdateAutoCheckDefaultsOnAndCanBeDisabled(t *testing.T) {
+	router, db, cfg := newTestRouterWithAdapter(t, newGameUpdateHTTPAdapter())
+	server := palworldUpdateTestServer("palworld-auto-check-setting", cfg.DataDir)
+	createTestServer(t, db, server)
+
+	readDefault := httptest.NewRecorder()
+	router.ServeHTTP(readDefault, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/game-update", nil))
+	if readDefault.Code != stdhttp.StatusOK {
+		t.Fatalf("expected update status 200, got %d: %s", readDefault.Code, readDefault.Body.String())
+	}
+	var defaultView gameUpdateView
+	if err := json.Unmarshal(readDefault.Body.Bytes(), &defaultView); err != nil {
+		t.Fatal(err)
+	}
+	if !defaultView.AutoCheckEnabled || defaultView.AutoCheckHours != 6 {
+		t.Fatalf("expected six-hour automatic checks by default, got %+v", defaultView)
+	}
+
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/"+server.ID+"/game-update/auto-check", strings.NewReader(`{"enabled":false}`)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected auto-check update 200, got %d: %s", update.Code, update.Body.String())
+	}
+
+	readDisabled := httptest.NewRecorder()
+	router.ServeHTTP(readDisabled, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/"+server.ID+"/game-update", nil))
+	var disabledView gameUpdateView
+	if err := json.Unmarshal(readDisabled.Body.Bytes(), &disabledView); err != nil {
+		t.Fatal(err)
+	}
+	if disabledView.AutoCheckEnabled {
+		t.Fatalf("expected automatic checks to be disabled, got %+v", disabledView)
+	}
+}
+
+func TestAutomaticGameUpdateScanQueuesOnlyStaleEnabledServer(t *testing.T) {
+	adapter := newGameUpdateHTTPAdapter()
+	t.Cleanup(adapter.releaseCheck)
+	handler, db, dataDir := newGameUpdateUnitHandler(t, adapter)
+	handler.ctx = context.Background()
+	disabled := palworldUpdateTestServer("palworld-auto-disabled", dataDir)
+	disabled.CreatedAt = time.Now().Add(time.Minute)
+	createTestServer(t, db, disabled)
+	if err := db.SetSetting(context.Background(), gameUpdateAutoCheckSettingKey(disabled.ID), "false"); err != nil {
+		t.Fatal(err)
+	}
+	fresh := palworldUpdateTestServer("palworld-auto-fresh", dataDir)
+	fresh.CreatedAt = time.Now().Add(2 * time.Minute)
+	createTestServer(t, db, fresh)
+	checkedAt := time.Now().UTC()
+	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{
+		ID: "fresh-check", InstanceID: fresh.ID, ProviderKey: domain.ProviderPalworld,
+		Operation: domain.GameUpdateOperationCheck, Status: domain.GameUpdateJobSucceeded,
+		Stage: domain.GameUpdateStageCompleted, CheckedAt: &checkedAt, CreatedAt: checkedAt, UpdatedAt: checkedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	due := palworldUpdateTestServer("palworld-auto-due", dataDir)
+	due.CreatedAt = time.Now().Add(3 * time.Minute)
+	due.ContainerID = "palworld-auto-runtime"
+	createTestServer(t, db, due)
+	dueResource, err := db.GetGameServer(context.Background(), due.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dueResource.Spec.Runtime.Image = "smartcat99999/palworld-server:v2.7.1"
+	if err := db.SaveGameServer(context.Background(), &dueResource); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := handler.scanAutomaticGameUpdateChecks(context.Background(), checkedAt.Add(gameUpdateAutoCheckInterval)); err != nil {
+		t.Fatal(err)
+	}
+	var request runtime.GameUpdateRequest
+	select {
+	case request = <-adapter.checkStarted:
+	case <-time.After(time.Second):
+		t.Fatal("expected stale enabled server to start an automatic check")
+	}
+	if request.RuntimeID != due.ContainerID {
+		t.Fatalf("expected due server runtime %q, got %+v", due.ContainerID, request)
+	}
+	adapter.releaseCheck()
+	active := waitForGameUpdateJobStatus(t, db, request.JobID, domain.GameUpdateJobSucceeded)
+	if active.Operation != domain.GameUpdateOperationCheck {
+		t.Fatalf("expected automatic check operation, got %+v", active)
+	}
+	if _, err := db.GetLatestGameUpdateJobByInstance(context.Background(), disabled.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected disabled server to remain unchecked, got %v", err)
+	}
+	latestFresh, err := db.GetLatestGameUpdateJobByInstance(context.Background(), fresh.ID)
+	if err != nil || latestFresh.ID != "fresh-check" {
+		t.Fatalf("expected fresh check to remain latest, got %+v err=%v", latestFresh, err)
+	}
+}
+
 func TestCheckGameUpdateReturnsAcceptedAndPersistsResult(t *testing.T) {
 	adapter := newGameUpdateHTTPAdapter()
 	t.Cleanup(adapter.releaseCheck)

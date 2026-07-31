@@ -29,6 +29,9 @@ const (
 	gameUpdateRecoveryRetry      = 10 * time.Second
 	gameUpdatePersistenceRetry   = 100 * time.Millisecond
 	gameUpdateHealthStableWindow = 30 * time.Second
+	gameUpdateAutoCheckInterval  = 6 * time.Hour
+	gameUpdateAutoCheckScanEvery = 15 * time.Minute
+	gameUpdateAutoCheckStartWait = 30 * time.Second
 	minGameUpdateFreeDiskBytes   = int64(8 * 1024 * 1024 * 1024)
 	minGameUpdateFreeMemoryMB    = int64(2560)
 )
@@ -40,6 +43,8 @@ type gameUpdateView struct {
 	LatestBuildID    string                `json:"latestBuildId,omitempty"`
 	CheckedAt        *time.Time            `json:"checkedAt,omitempty"`
 	Job              *domain.GameUpdateJob `json:"job,omitempty"`
+	AutoCheckEnabled bool                  `json:"autoCheckEnabled"`
+	AutoCheckHours   int                   `json:"autoCheckIntervalHours"`
 }
 
 func (h *Handler) getGameUpdate(w http.ResponseWriter, r *http.Request) {
@@ -48,9 +53,19 @@ func (h *Handler) getGameUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	view := gameUpdateView{Supported: server.ProviderKey == domain.ProviderPalworld, Status: "unknown"}
+	view := gameUpdateView{
+		Supported:        server.ProviderKey == domain.ProviderPalworld,
+		Status:           "unknown",
+		AutoCheckEnabled: server.ProviderKey == domain.ProviderPalworld,
+		AutoCheckHours:   int(gameUpdateAutoCheckInterval / time.Hour),
+	}
 	if !view.Supported {
 		writeJSON(w, http.StatusOK, view)
+		return
+	}
+	view.AutoCheckEnabled, err = h.gameUpdateAutoCheckEnabled(r.Context(), server.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	job, err := h.store.GetLatestGameUpdateJobByInstance(r.Context(), server.ID)
@@ -83,6 +98,34 @@ func (h *Handler) getGameUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
+func (h *Handler) updateGameUpdateAutoCheck(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.ProviderKey != domain.ProviderPalworld {
+		writeError(w, http.StatusBadRequest, "automatic game update checks are not supported for this provider")
+		return
+	}
+	var payload struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "enabled must be a boolean")
+		return
+	}
+	if err := h.store.SetSetting(r.Context(), gameUpdateAutoCheckSettingKey(server.ID), fmt.Sprintf("%t", *payload.Enabled)); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), server.ID, "server.game-update.auto-check", "Updated automatic game update checks for "+server.Name, map[string]any{"enabled": *payload.Enabled})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":       *payload.Enabled,
+		"intervalHours": int(gameUpdateAutoCheckInterval / time.Hour),
+	})
+}
+
 func (h *Handler) checkGameUpdate(w http.ResponseWriter, r *http.Request) {
 	unlock := h.lockServerMutation(chi.URLParam(r, "id"))
 	defer unlock()
@@ -96,6 +139,120 @@ func (h *Handler) checkGameUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	h.startGameUpdateWorker(func() { h.runGameUpdateCheck(h.backgroundContext(), server, job) })
 	writeJSON(w, http.StatusAccepted, job)
+}
+
+func gameUpdateAutoCheckSettingKey(instanceID string) string {
+	return "gameUpdate.autoCheck." + instanceID
+}
+
+func (h *Handler) gameUpdateAutoCheckEnabled(ctx context.Context, instanceID string) (bool, error) {
+	value, err := h.store.GetSetting(ctx, gameUpdateAutoCheckSettingKey(instanceID))
+	if err != nil {
+		return false, err
+	}
+	return value != "false", nil
+}
+
+func (h *Handler) runAutomaticGameUpdateChecks(ctx context.Context) {
+	timer := time.NewTimer(gameUpdateAutoCheckStartWait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-timer.C:
+	}
+	ticker := time.NewTicker(gameUpdateAutoCheckScanEvery)
+	defer ticker.Stop()
+	for {
+		if err := h.scanAutomaticGameUpdateChecks(ctx, time.Now().UTC()); err != nil && h.logger != nil {
+			h.logger.Warn("scan automatic game update checks", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (h *Handler) scanAutomaticGameUpdateChecks(ctx context.Context, now time.Time) error {
+	if err := h.requireRuntimeAvailable(ctx); err != nil || !h.runtime.SupportsGameUpdates() {
+		return nil
+	}
+	active, err := h.store.ListActiveGameUpdateJobs(ctx)
+	if err != nil {
+		return err
+	}
+	if len(active) > 0 || h.runtimeImagePrepareActive() {
+		return nil
+	}
+	worldJobs, err := h.store.ListActiveWorldRegenerationJobs(ctx)
+	if err != nil {
+		return err
+	}
+	if len(worldJobs) > 0 {
+		return nil
+	}
+	servers, err := h.store.ListGameServers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, server := range servers {
+		if server.ProviderKey != domain.ProviderPalworld {
+			continue
+		}
+		enabled, err := h.gameUpdateAutoCheckEnabled(ctx, server.ID)
+		if err != nil {
+			return err
+		}
+		if !enabled {
+			continue
+		}
+		previous, err := h.store.GetLatestGameUpdateJobByInstance(ctx, server.ID)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		if err == nil {
+			reference := previous.UpdatedAt
+			if previous.CheckedAt != nil {
+				reference = *previous.CheckedAt
+			}
+			if !reference.IsZero() && now.Sub(reference) < gameUpdateAutoCheckInterval {
+				continue
+			}
+		}
+		job := domain.GameUpdateJob{
+			ID:          uuid.NewString(),
+			InstanceID:  server.ID,
+			ProviderKey: server.ProviderKey,
+			Operation:   domain.GameUpdateOperationCheck,
+			Status:      domain.GameUpdateJobQueued,
+			Stage:       domain.GameUpdateStageRefreshingMetadata,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if err == nil {
+			job.InstalledBuildID = previous.InstalledBuildID
+			job.LatestBuildID = previous.LatestBuildID
+			job.CheckedAt = previous.CheckedAt
+		}
+		h.gameUpdateJobsMu.Lock()
+		active, activeErr := h.store.ListActiveGameUpdateJobs(ctx)
+		if activeErr == nil && len(active) == 0 {
+			activeErr = h.store.CreateGameUpdateJob(ctx, &job)
+		}
+		h.gameUpdateJobsMu.Unlock()
+		if activeErr != nil {
+			return activeErr
+		}
+		if len(active) > 0 {
+			return nil
+		}
+		h.recordActivity(ctx, server.ID, "server.game-update.auto-check.queued", "Queued automatic game update check for "+server.Name, map[string]any{"jobId": job.ID})
+		h.startGameUpdateWorker(func() { h.runGameUpdateCheck(h.backgroundContext(), server, job) })
+		return nil
+	}
+	return nil
 }
 
 func (h *Handler) applyGameUpdate(w http.ResponseWriter, r *http.Request) {

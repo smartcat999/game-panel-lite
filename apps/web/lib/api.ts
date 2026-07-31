@@ -425,6 +425,15 @@ export async function checkGameUpdate(id: string): Promise<GameUpdateJob> {
   return readPayload<GameUpdateJob>(response, "Unable to check for game updates");
 }
 
+export async function updateGameUpdateAutoCheck(id: string, enabled: boolean): Promise<{ enabled: boolean; intervalHours: number }> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/auto-check`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  return readPayload<{ enabled: boolean; intervalHours: number }>(response, "Unable to update automatic game update checks");
+}
+
 export async function applyGameUpdate(id: string, startAfterUpdate: boolean): Promise<GameUpdateJob> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/apply`, {
     method: "POST",
