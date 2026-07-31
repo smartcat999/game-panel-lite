@@ -332,6 +332,9 @@ func (h *Handler) runtimeImagePrepareActive() bool {
 }
 
 func (h *Handler) workshopSyncUnsupported() bool {
+	if h == nil || h.dockerMonitor == nil {
+		return false
+	}
 	architecture := strings.ToLower(strings.TrimSpace(h.dockerMonitor.Status().Architecture))
 	return strings.HasPrefix(architecture, "arm") || strings.Contains(architecture, "aarch64")
 }
