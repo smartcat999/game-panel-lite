@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,18 +18,24 @@ import (
 )
 
 const (
-	defaultSteamAPIBase = "https://api.steampowered.com"
-	maxSteamResponse    = 4 << 20
-	steamBatchSize      = 50
+	defaultSteamAPIBase       = "https://api.steampowered.com"
+	defaultSteamCommunityBase = "https://steamcommunity.com"
+	maxSteamResponse          = 4 << 20
+	steamBatchSize            = 50
 )
 
 type SteamResolver struct {
-	client  *http.Client
-	apiBase string
+	client        *http.Client
+	apiBase       string
+	communityBase string
 }
 
+var workshopItemTitlePattern = regexp.MustCompile(`(?is)<div\s+class=["']workshopItemTitle["']\s*>\s*([^<]+?)\s*</div>`)
+
 func NewSteamResolver() *SteamResolver {
-	return NewSteamResolverWithClient(&http.Client{Timeout: 10 * time.Second}, defaultSteamAPIBase)
+	resolver := NewSteamResolverWithClient(&http.Client{Timeout: 10 * time.Second}, defaultSteamAPIBase)
+	resolver.communityBase = defaultSteamCommunityBase
+	return resolver
 }
 
 func NewSteamResolverWithClient(client *http.Client, apiBase string) *SteamResolver {
@@ -35,8 +43,9 @@ func NewSteamResolverWithClient(client *http.Client, apiBase string) *SteamResol
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
 	return &SteamResolver{
-		client:  client,
-		apiBase: strings.TrimRight(apiBase, "/"),
+		client:        client,
+		apiBase:       strings.TrimRight(apiBase, "/"),
+		communityBase: strings.TrimRight(apiBase, "/"),
 	}
 }
 
@@ -66,7 +75,40 @@ func (r *SteamResolver) ResolveCollection(ctx context.Context, providerKey domai
 	if len(items) == 0 {
 		return Collection{}, fmt.Errorf("%w: collection has no compatible items", ErrInvalidCollection)
 	}
+	if title == "" {
+		title, _ = r.collectionPageTitle(ctx, collectionID)
+	}
 	return Collection{ID: collectionID, Title: title, Items: items}, nil
+}
+
+func (r *SteamResolver) collectionPageTitle(ctx context.Context, collectionID string) (string, error) {
+	requestURL := r.communityBase + "/sharedfiles/filedetails/?id=" + url.QueryEscape(collectionID)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("User-Agent", "GamePanel-Lite/1.0")
+	response, err := r.client.Do(request)
+	if err != nil {
+		return "", fmt.Errorf("Steam Workshop page request failed: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Steam Workshop page returned HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxSteamResponse))
+	if err != nil {
+		return "", err
+	}
+	match := workshopItemTitlePattern.FindSubmatch(body)
+	if len(match) != 2 {
+		return "", fmt.Errorf("Steam Workshop collection title was not found")
+	}
+	title := truncateRunes(strings.TrimSpace(html.UnescapeString(string(match[1]))), 300)
+	if title == "" {
+		return "", fmt.Errorf("Steam Workshop collection title was empty")
+	}
+	return title, nil
 }
 
 func ParseCollectionID(input string) (string, error) {

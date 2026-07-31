@@ -49,6 +49,11 @@ func TestSteamResolverExpandsCollectionAndFiltersAppID(t *testing.T) {
 			t.Fatal(err)
 		}
 		switch r.URL.Path {
+		case "/sharedfiles/filedetails/":
+			if r.Form.Get("id") != "100" {
+				t.Fatalf("unexpected collection page id %q", r.Form.Get("id"))
+			}
+			fmt.Fprint(w, `<html><div class="workshopItemTitle">Calamity &amp; Friends</div></html>`)
 		case "/ISteamRemoteStorage/GetCollectionDetails/v1/":
 			id := r.Form.Get("publishedfileids[0]")
 			if id == "100" {
@@ -65,7 +70,7 @@ func TestSteamResolverExpandsCollectionAndFiltersAppID(t *testing.T) {
 				t.Fatalf("unexpected itemcount %q", r.Form.Get("itemcount"))
 			}
 			fmt.Fprint(w, `{"response":{"publishedfiledetails":[
-				{"publishedfileid":"100","result":1,"consumer_app_id":1281930,"file_size":"0","title":"Calamity Essentials","file_type":2},
+				{"publishedfileid":"100","result":9,"consumer_app_id":1281930,"file_size":"0","file_type":2},
 				{"publishedfileid":"200","result":1,"creator":"7656119","consumer_app_id":1281930,"file_size":"1024","preview_url":"https://steamusercontent.example/preview.png","title":"Calamity","description":"A mod","time_created":10,"time_updated":20,"file_type":0,"subscriptions":100,"favorited":4,"views":200,"tags":[{"tag":"New Content"}]},
 				{"publishedfileid":"201","result":1,"creator":"7656120","consumer_app_id":322330,"file_size":"2048","title":"Wrong game","file_type":0}
 			]}}`)
@@ -80,7 +85,7 @@ func TestSteamResolverExpandsCollectionAndFiltersAppID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if collection.ID != "100" || collection.Title != "Calamity Essentials" || len(collection.Items) != 1 {
+	if collection.ID != "100" || collection.Title != "Calamity & Friends" || len(collection.Items) != 1 {
 		t.Fatalf("unexpected collection: %+v", collection)
 	}
 	item := collection.Items[0]
