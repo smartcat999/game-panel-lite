@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Clock3, Compass, Download, ExternalLink, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
+import { Check, Clock3, Compass, Download, ExternalLink, Eye, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -816,7 +816,7 @@ function ModMetadataStrip({ item }: { item: ModFile }) {
   ].filter(Boolean) as [string, string][];
   if (entries.length === 0) return null;
   return (
-    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+    <div className="grid gap-2 px-4 pb-4 sm:grid-cols-2">
       {entries.map(([label, value]) => (
         <div key={label} className="min-w-0 rounded-md border border-panel-line bg-slate-950/40 px-3 py-2">
           <p className="text-xs text-slate-500">{label}</p>
@@ -838,6 +838,7 @@ function LibraryModCard({
   locale: string;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const sourceURL = item.workshopId
     ? `https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`
     : "";
@@ -892,10 +893,8 @@ function LibraryModCard({
           ))}
         </div>
       ) : null}
-      <div className="px-4 pb-4">
-        <ModMetadataStrip item={item} />
-      </div>
-      <div className="flex min-h-12 items-center justify-between gap-3 border-t border-panel-line px-4 py-2.5">
+      <ModMetadataStrip item={item} />
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-t border-panel-line px-4 py-2.5">
         {sourceURL ? (
           <a
             href={sourceURL}
@@ -907,15 +906,25 @@ function LibraryModCard({
             <ExternalLink aria-hidden="true" className="size-3.5" />
           </a>
         ) : <span />}
-        <Button
-          variant="danger"
-          className="size-8 p-0"
-          aria-label={locale === "zh" ? `从模组库移除 ${modDisplayName(item, locale)}` : `Remove ${modDisplayName(item, locale)} from library`}
-          onClick={onDelete}
-          disabled={deleting}
-        >
-          <Trash2 aria-hidden="true" className="size-4" />
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          <Link
+            href={`/mods/${item.id}`}
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+          >
+            <Eye aria-hidden="true" className="size-3.5" />
+            {t("viewModDetails")}
+          </Link>
+          <Button
+            variant="danger"
+            className="h-8 gap-1.5 px-2.5 py-0 text-xs"
+            aria-label={locale === "zh" ? `从模组库移除 ${modDisplayName(item, locale)}` : `Remove ${modDisplayName(item, locale)} from library`}
+            onClick={onDelete}
+            disabled={deleting}
+          >
+            <Trash2 aria-hidden="true" className="size-3.5" />
+            {t("removeFromModLibrary")}
+          </Button>
+        </div>
       </div>
     </Card>
   );
