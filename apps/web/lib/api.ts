@@ -1034,6 +1034,26 @@ export async function createModPack(input: { name: string; description?: string;
   return toModPack(pack);
 }
 
+export async function createModPackFromWorkshopCollection(input: {
+  name: string;
+  description?: string;
+  providerKey: ProviderKey;
+  previewId: string;
+  workshopIds: string[];
+}): Promise<ModPack> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/workshop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create mod pack from Steam collection");
+  }
+  const pack = (await response.json()) as ApiModPack;
+  return toModPack(pack);
+}
+
 export async function updateModPack(id: string, input: { name: string; description?: string; modIds: string[] }): Promise<ModPack> {
   const response = await apiFetch(`${API_BASE}/api/mod-packs/${id}`, {
     method: "PATCH",

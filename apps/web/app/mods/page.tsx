@@ -2,14 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Clock3, Compass, Download, ExternalLink, Eye, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
+import { Check, Clock3, Compass, Download, ExternalLink, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, previewWorkshopCollection, uploadGlobalMod } from "@/lib/api";
+import { createModPack, createModPackFromWorkshopCollection, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, previewWorkshopCollection, uploadGlobalMod } from "@/lib/api";
 import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScopeFromTags, modDisplayName, modSourceLabel } from "@/lib/mod-display";
@@ -40,9 +40,15 @@ export default function ModsPage() {
   const [search, setSearch] = useState("");
   const [workshopDialogOpen, setWorkshopDialogOpen] = useState(false);
   const [packDialogOpen, setPackDialogOpen] = useState(false);
+  const [packImportDialogOpen, setPackImportDialogOpen] = useState(false);
   const [packName, setPackName] = useState("");
   const [packDescription, setPackDescription] = useState("");
   const [selectedPackModIds, setSelectedPackModIds] = useState<string[]>([]);
+  const [packCollectionValue, setPackCollectionValue] = useState("");
+  const [packCollectionProviderKey, setPackCollectionProviderKey] = useState<ProviderKey>("terraria-tmodloader");
+  const [packCollectionPreview, setPackCollectionPreview] = useState<WorkshopPreview | null>(null);
+  const [packCollectionName, setPackCollectionName] = useState("");
+  const [packCollectionDescription, setPackCollectionDescription] = useState("");
   const [workshopSource, setWorkshopSource] = useState<"collection" | "ids">("collection");
   const [workshopCollectionValue, setWorkshopCollectionValue] = useState("");
   const [workshopPreview, setWorkshopPreview] = useState<WorkshopPreview | null>(null);
@@ -125,6 +131,52 @@ export default function ModsPage() {
     onError: (error) => {
       setSuccessMessage("");
       setErrorMessage(error instanceof Error ? error.message : t("unableDeleteModPack"));
+    }
+  });
+  const packCollectionPreviewMutation = useMutation({
+    mutationFn: (value?: string) => previewWorkshopCollection({
+      value: value ?? packCollectionValue,
+      providerKey: packCollectionProviderKey
+    }),
+    onSuccess: (preview) => {
+      setErrorMessage("");
+      setPackCollectionPreview(preview);
+      setPackCollectionName((current) => current.trim() || t("steamCollectionDefaultPackName", { id: preview.collectionId }));
+    },
+    onError: (error) => {
+      setPackCollectionPreview(null);
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unablePreviewWorkshopCollection"));
+    }
+  });
+  const createPackFromCollection = useMutation({
+    mutationFn: () => {
+      if (!packCollectionPreview) throw new Error(t("unablePreviewWorkshopCollection"));
+      return createModPackFromWorkshopCollection({
+        name: packCollectionName,
+        description: packCollectionDescription,
+        providerKey: packCollectionProviderKey,
+        previewId: packCollectionPreview.previewId,
+        workshopIds: packCollectionPreview.items.filter((item) => item.selectable).map((item) => item.workshopId)
+      });
+    },
+    onSuccess: async () => {
+      setErrorMessage("");
+      setSuccessMessage(t("steamCollectionModPackCreated"));
+      setPackImportDialogOpen(false);
+      setPackCollectionValue("");
+      setPackCollectionPreview(null);
+      setPackCollectionName("");
+      setPackCollectionDescription("");
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["global-mods"] }),
+        client.invalidateQueries({ queryKey: ["mod-packs"] }),
+        client.invalidateQueries({ queryKey: ["recommended-mods"] })
+      ]);
+    },
+    onError: (error) => {
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unableCreateModPack"));
     }
   });
   const workshopImport = useMutation({
@@ -364,10 +416,16 @@ export default function ModsPage() {
             hint={t("modPacksHint")}
             count={searchedModPacks.length}
             actions={(
-              <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
-                <Package aria-hidden="true" />
-                {t("createModPack")}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
+                  <Download aria-hidden="true" />
+                  {t("importPackFromSteam")}
+                </Button>
+                <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
+                  <Package aria-hidden="true" />
+                  {t("createModPack")}
+                </Button>
+              </div>
             )}
           />
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
@@ -631,6 +689,132 @@ export default function ModsPage() {
         </DialogShell>
       )}
 
+      {packImportDialogOpen && (
+        <DialogShell
+          title={t("importPackFromSteam")}
+          description={t("importPackFromSteamHint")}
+          onClose={() => {
+            setPackImportDialogOpen(false);
+            setPackCollectionPreview(null);
+          }}
+        >
+          {!packCollectionPreview ? (
+            <form
+              className="grid gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                packCollectionPreviewMutation.mutate(undefined);
+              }}
+            >
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-slate-400">{t("filterGame")}</span>
+                <select
+                  className="rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-panel-green"
+                  value={packCollectionProviderKey}
+                  onChange={(event) => {
+                    setPackCollectionProviderKey(event.target.value as ProviderKey);
+                    setPackCollectionPreview(null);
+                  }}
+                  disabled={packCollectionPreviewMutation.isPending}
+                >
+                  <option value="terraria-tmodloader">tModLoader</option>
+                  <option value="dont-starve-together">Don't Starve Together</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-slate-400">{t("steamCollection")}</span>
+                <Input
+                  aria-label={t("steamCollectionPlaceholder")}
+                  placeholder={t("steamCollectionPlaceholder")}
+                  value={packCollectionValue}
+                  onChange={(event) => setPackCollectionValue(event.target.value)}
+                  onPaste={(event) => {
+                    const value = event.clipboardData.getData("text").trim();
+                    if (!value) return;
+                    event.preventDefault();
+                    setPackCollectionValue(value);
+                    packCollectionPreviewMutation.mutate(value);
+                  }}
+                  disabled={packCollectionPreviewMutation.isPending}
+                />
+              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <p className="text-slate-500">{t("steamCollectionPackOnlyHint")}</p>
+                <a
+                  href={steamWorkshopURL(packCollectionProviderKey, "collections")}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-slate-400 transition hover:text-panel-green"
+                >
+                  {t("browseSteamCollections")}
+                  <ExternalLink aria-hidden="true" className="size-3" />
+                </a>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setPackImportDialogOpen(false)} disabled={packCollectionPreviewMutation.isPending}>{t("cancel")}</Button>
+                <Button type="submit" variant="secondary" disabled={packCollectionPreviewMutation.isPending || packCollectionValue.trim() === ""}>
+                  <Download aria-hidden="true" />
+                  {packCollectionPreviewMutation.isPending ? t("resolvingCollection") : t("previewCollection")}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-panel-line pb-3">
+                <div>
+                  <p className="font-medium text-slate-100">{t("steamCollectionNumber", { id: packCollectionPreview.collectionId })}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {t("workshopPreviewSummary", {
+                      total: packCollectionPreview.summary.total,
+                      added: packCollectionPreview.summary.new,
+                      existing: packCollectionPreview.summary.inLibrary
+                    })}
+                  </p>
+                </div>
+                <Button variant="ghost" onClick={() => setPackCollectionPreview(null)} disabled={createPackFromCollection.isPending}>{t("changeCollection")}</Button>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-medium text-slate-400">{t("modPackName")}</span>
+                  <Input value={packCollectionName} onChange={(event) => setPackCollectionName(event.target.value)} placeholder={t("modPackName")} disabled={createPackFromCollection.isPending} />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-medium text-slate-400">{t("modPackDescription")}</span>
+                  <Input value={packCollectionDescription} onChange={(event) => setPackCollectionDescription(event.target.value)} placeholder={t("modPackDescription")} disabled={createPackFromCollection.isPending} />
+                </label>
+              </div>
+              <div className="mt-4 max-h-64 divide-y divide-panel-line overflow-y-auto rounded-md border border-panel-line bg-slate-950/35">
+                {packCollectionPreview.items.map((item) => (
+                  <div key={item.workshopId} className={cn("flex items-center gap-3 px-3 py-2.5", !item.selectable && "opacity-50")}>
+                    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded bg-slate-900">
+                      {item.previewUrl ? <Image src={item.previewUrl} alt="" width={40} height={40} className="size-full object-cover" unoptimized /> : <Package aria-hidden="true" className="size-4 text-slate-500" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-100">{item.title || item.workshopId}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{item.size} · {workshopPreviewStatusLabel(item.status, t)}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {packCollectionPreview.summary.unavailable > 0 ? (
+                <p className="mt-3 text-xs leading-5 text-panel-gold">{t("collectionUnavailableModsSkipped", { count: packCollectionPreview.summary.unavailable })}</p>
+              ) : null}
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setPackImportDialogOpen(false)} disabled={createPackFromCollection.isPending}>{t("cancel")}</Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => createPackFromCollection.mutate()}
+                  disabled={createPackFromCollection.isPending || packCollectionName.trim() === "" || !packCollectionPreview.items.some((item) => item.selectable)}
+                >
+                  <Package aria-hidden="true" />
+                  {createPackFromCollection.isPending ? t("actionWorking") : t("createPackFromCollection")}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogShell>
+      )}
+
       {packDialogOpen && (
         <DialogShell
           title={t("createModPack")}
@@ -885,12 +1069,17 @@ function LibraryModCard({
           </div>
         </div>
       </div>
-      {description ? <p className="line-clamp-2 px-4 pb-3 text-sm leading-5 text-slate-400">{description}</p> : null}
+      {description ? (
+        <div className="mx-4 mb-3 h-10 overflow-hidden">
+          <p className="line-clamp-2 text-sm leading-5 text-slate-400" title={description}>{description}</p>
+        </div>
+      ) : null}
       {item.tags && item.tags.length > 0 ? (
-        <div className="flex flex-wrap gap-2 px-4 pb-4">
-          {item.tags.slice(0, 4).map((tag) => (
-            <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
+        <div className="flex min-h-6 items-center gap-2 overflow-hidden px-4 pb-4">
+          {item.tags.slice(0, 3).map((tag) => (
+            <span key={tag} className="max-w-40 shrink-0 truncate rounded bg-slate-900 px-2 py-1 text-xs text-slate-300" title={tag}>{tag}</span>
           ))}
+          {item.tags.length > 3 ? <span className="shrink-0 text-xs text-slate-500">+{item.tags.length - 3}</span> : null}
         </div>
       ) : null}
       <ModMetadataStrip item={item} />
@@ -907,13 +1096,6 @@ function LibraryModCard({
           </a>
         ) : <span />}
         <div className="ml-auto flex items-center gap-1">
-          <Link
-            href={`/mods/${item.id}`}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-          >
-            <Eye aria-hidden="true" className="size-3.5" />
-            {t("viewModDetails")}
-          </Link>
           <Button
             variant="danger"
             className="h-8 gap-1.5 px-2.5 py-0 text-xs"

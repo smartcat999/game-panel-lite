@@ -207,6 +207,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Delete("/api/mods/{id}", h.deleteGlobalMod)
 		r.Get("/api/mod-packs", h.listModPacks)
 		r.Post("/api/mod-packs", h.createModPack)
+		r.Post("/api/mod-packs/workshop", h.createModPackFromWorkshopCollection)
 		r.Patch("/api/mod-packs/{id}", h.updateModPack)
 		r.Delete("/api/mod-packs/{id}", h.deleteModPack)
 		r.Get("/api/terraria/presets", h.presets)

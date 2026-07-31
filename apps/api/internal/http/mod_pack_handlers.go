@@ -80,6 +80,104 @@ func (h *Handler) createModPack(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, response)
 }
 
+func (h *Handler) createModPackFromWorkshopCollection(w http.ResponseWriter, r *http.Request) {
+	if h.workshopSyncUnsupported() {
+		writeError(w, http.StatusConflict, "workshop mod import is not supported on ARM Docker hosts; upload .tmod files instead")
+		return
+	}
+	var payload struct {
+		Name        string             `json:"name"`
+		Description string             `json:"description"`
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		PreviewID   string             `json:"previewId"`
+		WorkshopIDs []string           `json:"workshopIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	name := strings.TrimSpace(payload.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "mod pack name is required")
+		return
+	}
+	if payload.ProviderKey == "" {
+		payload.ProviderKey = domain.ProviderTerrariaTModLoader
+	}
+	if !providerSupportsWorkshopMods(payload.ProviderKey) {
+		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
+		return
+	}
+	workshopIDs := uniqueNonEmptyStrings(payload.WorkshopIDs)
+	if len(workshopIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "select at least one workshop item")
+		return
+	}
+	for _, id := range workshopIDs {
+		if !isDigitsOnly(id) {
+			writeError(w, http.StatusBadRequest, "workshop IDs must contain digits only")
+			return
+		}
+	}
+	previewItems, err := h.workshopPreviewItems(strings.TrimSpace(payload.PreviewID), payload.ProviderKey, "", workshopIDs)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(previewItems) == 0 {
+		writeError(w, http.StatusBadRequest, "preview the Steam collection before creating a mod pack")
+		return
+	}
+
+	pack := domain.ModPack{
+		ID:          uuid.NewString(),
+		Name:        name,
+		Description: strings.TrimSpace(payload.Description),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	if err := h.store.Transaction(r.Context(), func(tx *store.Store) error {
+		modIDs := make([]string, 0, len(workshopIDs))
+		for _, workshopID := range workshopIDs {
+			item, _, err := h.upsertWorkshopModRecordWithStore(r.Context(), tx, payload.ProviderKey, "unassigned", workshopID)
+			if err != nil {
+				return err
+			}
+			metadata, ok := previewItems[workshopID]
+			if !ok {
+				return fmt.Errorf("workshop item %s was not found in the collection preview", workshopID)
+			}
+			applyWorkshopItemMetadata(&item, metadata)
+			if err := tx.SaveMod(r.Context(), &item); err != nil {
+				return err
+			}
+			modIDs = append(modIDs, item.ID)
+		}
+		encoded, err := json.Marshal(uniqueNonEmptyStrings(modIDs))
+		if err != nil {
+			return err
+		}
+		pack.ModIDsJSON = string(encoded)
+		return tx.CreateModPack(r.Context(), &pack)
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response, err := h.modPackResponse(r.Context(), pack)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "mod_pack.workshop_imported", fmt.Sprintf("Created mod pack %s from Steam collection", pack.Name), map[string]any{
+		"modPackId":     pack.ID,
+		"modPackName":   pack.Name,
+		"providerKey":   payload.ProviderKey,
+		"workshopIds":   workshopIDs,
+		"workshopCount": len(workshopIDs),
+	})
+	writeJSON(w, http.StatusCreated, response)
+}
+
 func (h *Handler) updateModPack(w http.ResponseWriter, r *http.Request) {
 	pack, err := h.store.GetModPack(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
