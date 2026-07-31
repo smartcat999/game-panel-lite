@@ -103,6 +103,8 @@ export type GameUpdateJob = {
 export type GameUpdateState = {
   supported: boolean;
   status: "unknown" | "checking" | "up_to_date" | "available" | "updating" | "failed";
+  autoCheckEnabled: boolean;
+  autoCheckIntervalHours: number;
   installedBuildId?: string;
   latestBuildId?: string;
   checkedAt?: string;

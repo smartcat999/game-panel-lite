@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getWorldRegeneration, listBackups, listGames, listWorlds, regenerateWorld, setModEnabled } from "./api";
+import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getWorldRegeneration, listBackups, listGames, listWorlds, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -277,17 +277,23 @@ describe("api mappers", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(JSON.stringify({ supported: true, status: "available", installedBuildId: "100", latestBuildId: "101" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(job), { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ enabled: false, intervalHours: 6 }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(job), { status: 202 }));
 
     const update = await getGameUpdate("server-1");
     await checkGameUpdate("server-1");
+    await updateGameUpdateAutoCheck("server-1", false);
     const queued = await applyGameUpdate("server-1", true);
 
     expect(update.status).toBe("available");
     expect(queued.id).toBe("update-1");
     expect(fetchSpy).toHaveBeenNthCalledWith(1, expect.stringContaining("/api/servers/server-1/game-update"), expect.objectContaining({ cache: "no-store" }));
     expect(fetchSpy).toHaveBeenNthCalledWith(2, expect.stringContaining("/api/servers/server-1/game-update/check"), expect.objectContaining({ method: "POST" }));
-    expect(fetchSpy).toHaveBeenNthCalledWith(3, expect.stringContaining("/api/servers/server-1/game-update/apply"), expect.objectContaining({
+    expect(fetchSpy).toHaveBeenNthCalledWith(3, expect.stringContaining("/api/servers/server-1/game-update/auto-check"), expect.objectContaining({
+      method: "PUT",
+      body: JSON.stringify({ enabled: false })
+    }));
+    expect(fetchSpy).toHaveBeenNthCalledWith(4, expect.stringContaining("/api/servers/server-1/game-update/apply"), expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ startAfterUpdate: true })
     }));
