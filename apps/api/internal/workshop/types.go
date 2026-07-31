@@ -25,6 +25,7 @@ type Resolver interface {
 
 type Collection struct {
 	ID    string `json:"collectionId"`
+	Title string `json:"title,omitempty"`
 	Items []Item `json:"items"`
 }
 

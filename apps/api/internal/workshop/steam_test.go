@@ -61,10 +61,11 @@ func TestSteamResolverExpandsCollectionAndFiltersAppID(t *testing.T) {
 			}
 			t.Fatalf("unexpected collection id %q", id)
 		case "/ISteamRemoteStorage/GetPublishedFileDetails/v1/":
-			if r.Form.Get("itemcount") != "2" {
+			if r.Form.Get("itemcount") != "3" {
 				t.Fatalf("unexpected itemcount %q", r.Form.Get("itemcount"))
 			}
 			fmt.Fprint(w, `{"response":{"publishedfiledetails":[
+				{"publishedfileid":"100","result":1,"consumer_app_id":1281930,"file_size":"0","title":"Calamity Essentials","file_type":2},
 				{"publishedfileid":"200","result":1,"creator":"7656119","consumer_app_id":1281930,"file_size":"1024","preview_url":"https://steamusercontent.example/preview.png","title":"Calamity","description":"A mod","time_created":10,"time_updated":20,"file_type":0,"subscriptions":100,"favorited":4,"views":200,"tags":[{"tag":"New Content"}]},
 				{"publishedfileid":"201","result":1,"creator":"7656120","consumer_app_id":322330,"file_size":"2048","title":"Wrong game","file_type":0}
 			]}}`)
@@ -79,7 +80,7 @@ func TestSteamResolverExpandsCollectionAndFiltersAppID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if collection.ID != "100" || len(collection.Items) != 1 {
+	if collection.ID != "100" || collection.Title != "Calamity Essentials" || len(collection.Items) != 1 {
 		t.Fatalf("unexpected collection: %+v", collection)
 	}
 	item := collection.Items[0]

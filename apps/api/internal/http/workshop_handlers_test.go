@@ -42,7 +42,8 @@ func TestWorkshopCollectionPreviewMarksExistingItemsAndCachesMetadata(t *testing
 	handler := &Handler{
 		store: db,
 		workshopResolver: staticWorkshopResolver{collection: workshopsvc.Collection{
-			ID: "900",
+			ID:    "900",
+			Title: "Friends Pack",
 			Items: []workshopsvc.Item{
 				{WorkshopID: "100", Title: "Existing"},
 				{WorkshopID: "200", Title: "New Mod", FileSize: 2048, Tags: []string{"New Content"}},
@@ -66,6 +67,9 @@ func TestWorkshopCollectionPreviewMarksExistingItemsAndCachesMetadata(t *testing
 	}
 	if response.PreviewID == "" || len(response.Items) != 2 {
 		t.Fatalf("unexpected response: %+v", response)
+	}
+	if response.CollectionName != "Friends Pack" {
+		t.Fatalf("expected collection name in preview, got %+v", response)
 	}
 	selected, err := handler.workshopPreviewItems(response.PreviewID, domain.ProviderTerrariaTModLoader, "", []string{"200"})
 	if err != nil {
