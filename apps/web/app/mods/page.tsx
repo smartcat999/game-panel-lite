@@ -141,7 +141,7 @@ export default function ModsPage() {
     onSuccess: (preview) => {
       setErrorMessage("");
       setPackCollectionPreview(preview);
-      setPackCollectionName((current) => current.trim() || t("steamCollectionDefaultPackName", { id: preview.collectionId }));
+      setPackCollectionName((current) => current.trim() || preview.collectionName?.trim() || t("steamCollectionDefaultPackName", { id: preview.collectionId }));
     },
     onError: (error) => {
       setPackCollectionPreview(null);
@@ -417,13 +417,13 @@ export default function ModsPage() {
             count={searchedModPacks.length}
             actions={(
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
-                  <Download aria-hidden="true" />
-                  {t("importFromSteam")}
-                </Button>
                 <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
                   <Package aria-hidden="true" />
                   {t("createModPack")}
+                </Button>
+                <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
+                  <Download aria-hidden="true" />
+                  {t("importFromSteam")}
                 </Button>
               </div>
             )}
@@ -762,7 +762,7 @@ export default function ModsPage() {
             <div>
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-panel-line pb-3">
                 <div>
-                  <p className="font-medium text-slate-100">{t("steamCollectionNumber", { id: packCollectionPreview.collectionId })}</p>
+                  <p className="font-medium text-slate-100">{packCollectionPreview.collectionName || t("steamCollectionNumber", { id: packCollectionPreview.collectionId })}</p>
                   <p className="mt-1 text-xs text-slate-500">
                     {t("workshopPreviewSummary", {
                       total: packCollectionPreview.summary.total,

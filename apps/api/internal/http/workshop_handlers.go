@@ -36,12 +36,13 @@ type workshopPreviewSummary struct {
 }
 
 type workshopPreviewResponse struct {
-	PreviewID    string                 `json:"previewId"`
-	CollectionID string                 `json:"collectionId"`
-	ProviderKey  domain.ProviderKey     `json:"providerKey"`
-	ExpiresAt    time.Time              `json:"expiresAt"`
-	Items        []workshopPreviewItem  `json:"items"`
-	Summary      workshopPreviewSummary `json:"summary"`
+	PreviewID      string                 `json:"previewId"`
+	CollectionID   string                 `json:"collectionId"`
+	CollectionName string                 `json:"collectionName,omitempty"`
+	ProviderKey    domain.ProviderKey     `json:"providerKey"`
+	ExpiresAt      time.Time              `json:"expiresAt"`
+	Items          []workshopPreviewItem  `json:"items"`
+	Summary        workshopPreviewSummary `json:"summary"`
 }
 
 func (h *Handler) previewWorkshopCollection(w http.ResponseWriter, r *http.Request) {
@@ -102,13 +103,14 @@ func (h *Handler) previewWorkshopCollection(w http.ResponseWriter, r *http.Reque
 	}
 
 	response := workshopPreviewResponse{
-		PreviewID:    uuid.NewString(),
-		CollectionID: collection.ID,
-		ProviderKey:  payload.ProviderKey,
-		ExpiresAt:    time.Now().Add(workshopPreviewTTL),
-		Items:        make([]workshopPreviewItem, 0, len(collection.Items)),
+		PreviewID:      uuid.NewString(),
+		CollectionID:   collection.ID,
+		CollectionName: collection.Title,
+		ProviderKey:    payload.ProviderKey,
+		ExpiresAt:      time.Now().Add(workshopPreviewTTL),
+		Items:          make([]workshopPreviewItem, 0, len(collection.Items)),
 	}
-	importableCollection := workshopsvc.Collection{ID: collection.ID, Items: make([]workshopsvc.Item, 0, len(collection.Items))}
+	importableCollection := workshopsvc.Collection{ID: collection.ID, Title: collection.Title, Items: make([]workshopsvc.Item, 0, len(collection.Items))}
 	for _, item := range collection.Items {
 		status := "new"
 		selectable := true

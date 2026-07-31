@@ -370,6 +370,7 @@ export type WorkshopPreviewItem = {
 export type WorkshopPreview = {
   previewId: string;
   collectionId: string;
+  collectionName?: string;
   providerKey: ProviderKey;
   expiresAt: string;
   items: WorkshopPreviewItem[];

@@ -59,14 +59,14 @@ func (r *SteamResolver) ResolveCollection(ctx context.Context, providerKey domai
 	if len(itemIDs) > MaxCollectionItems {
 		return Collection{}, ErrCollectionTooLarge
 	}
-	items, err := r.publishedFileDetails(ctx, itemIDs, appID)
+	title, items, err := r.publishedFileDetails(ctx, collectionID, itemIDs, appID)
 	if err != nil {
 		return Collection{}, err
 	}
 	if len(items) == 0 {
 		return Collection{}, fmt.Errorf("%w: collection has no compatible items", ErrInvalidCollection)
 	}
-	return Collection{ID: collectionID, Items: items}, nil
+	return Collection{ID: collectionID, Title: title, Items: items}, nil
 }
 
 func ParseCollectionID(input string) (string, error) {
@@ -170,26 +170,31 @@ func (r *SteamResolver) collectionDetails(ctx context.Context, ids []string) (ma
 	return result, nil
 }
 
-func (r *SteamResolver) publishedFileDetails(ctx context.Context, ids []string, expectedAppID int) ([]Item, error) {
+func (r *SteamResolver) publishedFileDetails(ctx context.Context, collectionID string, ids []string, expectedAppID int) (string, []Item, error) {
+	allIDs := append([]string{collectionID}, ids...)
+	collectionTitle := ""
 	items := make([]Item, 0, len(ids))
-	for start := 0; start < len(ids); start += steamBatchSize {
+	for start := 0; start < len(allIDs); start += steamBatchSize {
 		end := start + steamBatchSize
-		if end > len(ids) {
-			end = len(ids)
+		if end > len(allIDs) {
+			end = len(allIDs)
 		}
-		batch, err := r.publishedFileDetailsBatch(ctx, ids[start:end], expectedAppID)
+		title, batch, err := r.publishedFileDetailsBatch(ctx, allIDs[start:end], expectedAppID, collectionID)
 		if err != nil {
-			return nil, err
+			return "", nil, err
+		}
+		if title != "" {
+			collectionTitle = title
 		}
 		items = append(items, batch...)
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return strings.ToLower(items[i].Title) < strings.ToLower(items[j].Title)
 	})
-	return items, nil
+	return collectionTitle, items, nil
 }
 
-func (r *SteamResolver) publishedFileDetailsBatch(ctx context.Context, ids []string, expectedAppID int) ([]Item, error) {
+func (r *SteamResolver) publishedFileDetailsBatch(ctx context.Context, ids []string, expectedAppID int, collectionID string) (string, []Item, error) {
 	form := url.Values{"itemcount": {strconv.Itoa(len(ids))}}
 	for i, id := range ids {
 		form.Set(fmt.Sprintf("publishedfileids[%d]", i), id)
@@ -218,10 +223,17 @@ func (r *SteamResolver) publishedFileDetailsBatch(ctx context.Context, ids []str
 		} `json:"response"`
 	}
 	if err := r.postForm(ctx, "/ISteamRemoteStorage/GetPublishedFileDetails/v1/", form, &payload); err != nil {
-		return nil, err
+		return "", nil, err
 	}
+	collectionTitle := ""
 	items := make([]Item, 0, len(payload.Response.PublishedFileDetails))
 	for _, detail := range payload.Response.PublishedFileDetails {
+		if detail.PublishedFileID == collectionID {
+			if detail.Result == 1 && detail.ConsumerAppID == expectedAppID && detail.FileType == 2 {
+				collectionTitle = truncateRunes(strings.TrimSpace(detail.Title), 300)
+			}
+			continue
+		}
 		if detail.Result != 1 || detail.ConsumerAppID != expectedAppID || detail.FileType == 2 || !isDigits(detail.PublishedFileID) {
 			continue
 		}
@@ -249,7 +261,7 @@ func (r *SteamResolver) publishedFileDetailsBatch(ctx context.Context, ids []str
 			Tags:           tags,
 		})
 	}
-	return items, nil
+	return collectionTitle, items, nil
 }
 
 func (r *SteamResolver) postForm(ctx context.Context, path string, form url.Values, target any) error {
