@@ -81,7 +81,7 @@ func TestRuntimeOptionsUsePalworldImageAndUdpPort(t *testing.T) {
 	provider := NewProvider()
 	options := runtimeOptions(config)
 
-	if provider.ImageFor("") != "smartcat99999/palworld-server:v2.5.0" {
+	if provider.ImageFor("") != "smartcat99999/palworld-server:v2.7.1" {
 		t.Fatalf("unexpected Palworld image: %s", provider.ImageFor(""))
 	}
 	if options.PortProtocol != "udp" {

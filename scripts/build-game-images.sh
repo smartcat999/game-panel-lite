@@ -155,7 +155,7 @@ build_dst() {
 }
 
 build_palworld() {
-  local runtime_version="${PALWORLD_RUNTIME_VERSION:-v2.5.0}"
+  local runtime_version="${PALWORLD_RUNTIME_VERSION:-v2.7.1}"
   local image_version="${PALWORLD_IMAGE_VERSION:-${runtime_version}}"
   local image="${registry}/palworld-server:${image_version}"
 

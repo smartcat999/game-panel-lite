@@ -36,6 +36,15 @@ class PatchPalLoggerTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "found 0"):
                 PATCHER.patch(path)
 
+    def test_upstream_managed_fifo_is_accepted_without_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "pal_logger.py")
+            source = "\n".join(PATCHER.UPSTREAM_MANAGED_MARKERS) + "\n"
+            path.write_text(source, encoding="utf-8")
+
+            self.assertFalse(PATCHER.patch(path))
+            self.assertEqual(source, path.read_text(encoding="utf-8"))
+
     def test_non_root_fifo_is_atomically_published_with_private_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fifo = pathlib.Path(directory, "events.fifo")

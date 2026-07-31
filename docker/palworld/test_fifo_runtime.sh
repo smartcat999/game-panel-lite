@@ -10,6 +10,10 @@ readonly test_gid=12002
 rm -f "${fifo}" "${stdout_file}" "${stderr_file}"
 # Mirror init.sh changing the steam home to the configured runtime identity.
 chown "${test_uid}:${test_gid}" /home/steam
+# Upstream v2.7.1 and newer manage the FIFO in init.sh before starting the
+# logger. Older GamePanel-patched loggers safely replace this FIFO themselves.
+mkfifo -m 600 "${fifo}"
+chown "${test_uid}:${test_gid}" "${fifo}"
 
 tail -f /dev/null | env PUID="${test_uid}" PGID="${test_gid}" \
   python3 /home/steam/server/pal_logger.py >"${stdout_file}" 2>"${stderr_file}" &

@@ -13,7 +13,7 @@ import (
 
 const DefaultInternalPort = 8211
 
-var versions = []string{"v2.5.0", "v2.4.2", "v2.4.1"}
+var versions = []string{"v2.7.1", "v2.5.0", "v2.4.2", "v2.4.1"}
 
 var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 

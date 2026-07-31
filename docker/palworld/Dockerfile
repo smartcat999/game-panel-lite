@@ -1,12 +1,11 @@
-ARG PALWORLD_RUNTIME_VERSION=v2.5.0
+ARG PALWORLD_RUNTIME_VERSION=v2.7.1
 FROM thijsvanloef/palworld-server-docker:${PALWORLD_RUNTIME_VERSION}
 
 COPY docker/palworld/patch_pal_logger.py /tmp/patch_pal_logger.py
 
-# The upstream logger is started asynchronously as root. It can recreate its
-# private FIFO after init.sh has already chowned /home/steam, leaving the game
-# helper unable to write log events. Patch the logger to publish a correctly
-# owned FIFO atomically and fail the build if the upstream block changes.
+# Validate that the upstream logger either uses its fixed init.sh-managed FIFO
+# lifecycle or matches the older layout that GamePanel patches atomically.
+# Unknown layouts fail the build instead of silently reintroducing log loss.
 RUN python3 /tmp/patch_pal_logger.py /home/steam/server/pal_logger.py \
     && python3 -m py_compile /home/steam/server/pal_logger.py \
     && rm -rf /tmp/patch_pal_logger.py /home/steam/server/__pycache__
