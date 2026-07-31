@@ -65,14 +65,39 @@ func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain
 			image := gameProvider.ImageFor(version)
 			if h.providerRuntimeUnsupported(providerCatalog.Key) {
 				providerCatalog.RuntimeImage = domain.RuntimeImageStatus{
-					Image:     image,
-					Status:    runtime.ImageStatusUnsupported,
-					Message:   "server runtime is not supported on this Docker architecture",
-					UpdatedAt: time.Now(),
+					Image:         image,
+					Status:        runtime.ImageStatusUnsupported,
+					Message:       "server runtime is not supported on this Docker architecture",
+					TargetVersion: version,
+					UpdatedAt:     time.Now(),
 				}
 				continue
 			}
-			providerCatalog.RuntimeImage = h.runtimeInstallStatus(ctx, runtimeInstallRef{ProviderKey: providerCatalog.Key, Version: version, Image: image})
+			status := h.runtimeInstallStatus(ctx, runtimeInstallRef{ProviderKey: providerCatalog.Key, Version: version, Image: image})
+			status.TargetVersion = version
+			if status.Status == runtime.ImageStatusReady {
+				status.InstalledVersion = version
+			} else if status.Status == runtime.ImageStatusMissing {
+				for _, installedVersion := range providerCatalog.Versions {
+					if installedVersion == version {
+						continue
+					}
+					installedImage := gameProvider.ImageFor(installedVersion)
+					installedStatus := h.runtimeInstallStatus(ctx, runtimeInstallRef{
+						ProviderKey: providerCatalog.Key,
+						Version:     installedVersion,
+						Image:       installedImage,
+					})
+					if installedStatus.Status != runtime.ImageStatusReady {
+						continue
+					}
+					status.Status = runtime.ImageStatusUpdateReady
+					status.Message = "a newer server runtime version is available"
+					status.InstalledVersion = installedVersion
+					break
+				}
+			}
+			providerCatalog.RuntimeImage = status
 		}
 	}
 }

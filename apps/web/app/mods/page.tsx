@@ -339,18 +339,13 @@ export default function ModsPage() {
           />
           <div className="mt-4 grid gap-3 xl:grid-cols-2">
             {searchedGlobalMods.map((item) => (
-              <Card key={item.id} className="p-4 transition hover:border-panel-green/25">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <ModIdentity item={item} detail={`${item.size} · ${localizeRelativeTime(item.created, locale)}`} locale={locale} />
-                  <Badge className="shrink-0 bg-slate-800 text-slate-300">{modSourceLabel(item, locale)}</Badge>
-                </div>
-                <ModMetadataStrip item={item} />
-                <div className="mt-4 flex justify-end border-t border-panel-line pt-3">
-                  <Button variant="danger" onClick={() => setPendingDelete(item)} disabled={removeGlobal.isPending}>
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              </Card>
+              <LibraryModCard
+                key={item.id}
+                item={item}
+                locale={locale}
+                deleting={removeGlobal.isPending}
+                onDelete={() => setPendingDelete(item)}
+              />
             ))}
             {!globalModsQuery.isLoading && searchedGlobalMods.length === 0 && (
               <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
@@ -810,24 +805,6 @@ function steamWorkshopURL(providerKey: ProviderKey, section: "collections" | "it
   return `https://steamcommunity.com/app/${appID}/workshop/`;
 }
 
-function ModIdentity({ detail, item, locale }: { detail: string; item: ModFile; locale: string }) {
-  return (
-    <div className="flex min-w-0 items-start gap-3">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-panel-line bg-slate-950/55 text-slate-400">
-        <Package aria-hidden="true" className="size-5" />
-      </span>
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <Link href={`/mods/${item.id}`} className="min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
-            <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{modDisplayName(item, locale)}</h3>
-          </Link>
-        </div>
-        <p className="mt-1 truncate text-sm text-slate-400">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
 function ModMetadataStrip({ item }: { item: ModFile }) {
   const { locale, t } = useI18n();
   const displayName = modDisplayName(item, locale);
@@ -847,6 +824,100 @@ function ModMetadataStrip({ item }: { item: ModFile }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function LibraryModCard({
+  deleting,
+  item,
+  locale,
+  onDelete
+}: {
+  deleting: boolean;
+  item: ModFile;
+  locale: string;
+  onDelete: () => void;
+}) {
+  const sourceURL = item.workshopId
+    ? `https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}`
+    : "";
+  const description = sanitizeWorkshopDescription(item.description ?? "");
+  const hasWorkshopStats = Boolean(item.subscriptions || item.updatedAtSteam);
+
+  return (
+    <Card className="overflow-hidden p-0 transition hover:border-panel-green/25">
+      <div className="flex gap-4 p-4">
+        <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-panel-line bg-slate-950/55">
+          {item.previewUrl ? (
+            <Image src={item.previewUrl} alt="" className="size-full object-cover" width={80} height={80} unoptimized />
+          ) : (
+            <Package aria-hidden="true" className="size-5 text-slate-500" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Link href={`/mods/${item.id}`} className="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50">
+                <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{modDisplayName(item, locale)}</h3>
+              </Link>
+              <p className="mt-1 truncate text-xs text-slate-500">
+                {item.workshopId
+                  ? `${locale === "zh" ? "创意工坊" : "Workshop"} ${item.workshopId}`
+                  : modSourceLabel(item, locale)}
+              </p>
+            </div>
+            <Badge className="shrink-0 bg-slate-800 text-slate-300">{modSourceLabel(item, locale)}</Badge>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400">
+            {item.subscriptions ? (
+              <StatPill icon={<Users aria-hidden="true" className="size-3.5" />} label={`${item.subscriptions.toLocaleString()} ${locale === "zh" ? "订阅" : "subs"}`} />
+            ) : null}
+            {item.updatedAtSteam ? (
+              <StatPill icon={<Clock3 aria-hidden="true" className="size-3.5" />} label={formatWorkshopUpdated(item.updatedAtSteam, locale)} />
+            ) : null}
+            <StatPill icon={<Package aria-hidden="true" className="size-3.5" />} label={item.size} />
+            {!hasWorkshopStats ? (
+              <span className="inline-flex items-center rounded bg-slate-900 px-2 py-1 text-slate-500">
+                {localizeRelativeTime(item.created, locale === "zh" ? "zh" : "en")}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      {description ? <p className="line-clamp-2 px-4 pb-3 text-sm leading-5 text-slate-400">{description}</p> : null}
+      {item.tags && item.tags.length > 0 ? (
+        <div className="flex flex-wrap gap-2 px-4 pb-4">
+          {item.tags.slice(0, 4).map((tag) => (
+            <span key={tag} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{tag}</span>
+          ))}
+        </div>
+      ) : null}
+      <div className="px-4 pb-4">
+        <ModMetadataStrip item={item} />
+      </div>
+      <div className="flex min-h-12 items-center justify-between gap-3 border-t border-panel-line px-4 py-2.5">
+        {sourceURL ? (
+          <a
+            href={sourceURL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition hover:text-panel-green"
+          >
+            {locale === "zh" ? "打开 Steam 工坊" : "Open Steam Workshop"}
+            <ExternalLink aria-hidden="true" className="size-3.5" />
+          </a>
+        ) : <span />}
+        <Button
+          variant="danger"
+          className="size-8 p-0"
+          aria-label={locale === "zh" ? `从模组库移除 ${modDisplayName(item, locale)}` : `Remove ${modDisplayName(item, locale)} from library`}
+          onClick={onDelete}
+          disabled={deleting}
+        >
+          <Trash2 aria-hidden="true" className="size-4" />
+        </Button>
+      </div>
+    </Card>
   );
 }
 

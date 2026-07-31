@@ -149,6 +149,7 @@ function ProviderRuntimeRow({
   const preparing = isRuntimeImagePreparing(status) || (isInstalling && installingProvider === provider.key);
   const unsupported = status?.status === "unsupported";
   const failed = status?.status === "failed";
+  const updateAvailable = status?.status === "update_available";
   const displayStatus: RuntimeImageStatus | undefined = preparing
     ? { image: status?.image ?? provider.key, message: status?.message, progress: status?.progress, status: "preparing", updatedAt: status?.updatedAt }
     : status;
@@ -156,7 +157,12 @@ function ProviderRuntimeRow({
     ? t(runtimeInstallPhaseMessageKey(displayStatus))
     : ready
       ? t("gameLibraryReadyHint")
-      : t("gameLibraryInstallHint");
+      : updateAvailable
+        ? t("gameLibraryUpdateHint", {
+          installed: status?.installedVersion ?? "",
+          target: status?.targetVersion ?? provider.recommendedVersion ?? ""
+        })
+        : t("gameLibraryInstallHint");
   return (
     <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1">
@@ -189,7 +195,7 @@ function ProviderRuntimeRow({
             onClick={() => onInstall(provider)}
           >
             {preparing ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Download aria-hidden="true" className="size-4" />}
-            {preparing ? t("gameLibraryInstalling") : t("gameLibraryInstall")}
+            {preparing ? t("gameLibraryInstalling") : updateAvailable ? t("gameLibraryUpdate") : t("gameLibraryInstall")}
           </Button>
         )}
       </div>

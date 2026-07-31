@@ -140,6 +140,7 @@ type ImageArchiveManager interface {
 const (
 	ImageStatusReady       = "ready"
 	ImageStatusMissing     = "missing"
+	ImageStatusUpdateReady = "update_available"
 	ImageStatusPreparing   = "preparing"
 	ImageStatusFailed      = "failed"
 	ImageStatusUnsupported = "unsupported"

@@ -15,6 +15,8 @@ export function runtimeImageLabelKey(status?: RuntimeImageStatus): MessageKey {
       return "gameLibraryInstalled";
     case "preparing":
       return "gameLibraryInstalling";
+    case "update_available":
+      return "gameLibraryUpdateAvailable";
     case "failed":
       return "gameLibraryInstallFailed";
     case "unsupported":
@@ -32,6 +34,7 @@ export function runtimeImageTone(status?: RuntimeImageStatus) {
       return "info";
     case "failed":
     case "unsupported":
+    case "update_available":
       return "warning";
     default:
       return "neutral";
