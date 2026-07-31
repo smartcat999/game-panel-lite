@@ -44,6 +44,7 @@ function GameCard({ game }: { game: GameCatalogEntry }) {
   const Icon = art.icon;
   const count = game.serverCount ?? 0;
   const readyProviders = game.providers.filter((provider) => isRuntimeImageReady(provider.runtimeImage)).length;
+  const updateProviders = game.providers.filter((provider) => provider.runtimeImage?.status === "update_available").length;
 
   return (
     <Link
@@ -80,8 +81,19 @@ function GameCard({ game }: { game: GameCatalogEntry }) {
           <span className="rounded border border-panel-line bg-slate-950/50 px-1.5 py-0.5">
             {t("gameLibraryServers", { count })}
           </span>
-          <span className={cn("rounded border px-1.5 py-0.5", readyProviders > 0 ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-line bg-slate-950/50 text-slate-500")}>
-            {readyProviders > 0 ? t("gameLibraryInstalled") : t("gameLibraryNotInstalled")}
+          <span className={cn(
+            "rounded border px-1.5 py-0.5",
+            readyProviders > 0
+              ? "border-panel-green/30 bg-panel-green/10 text-panel-green"
+              : updateProviders > 0
+                ? "border-panel-gold/30 bg-panel-gold/10 text-panel-gold"
+                : "border-panel-line bg-slate-950/50 text-slate-500"
+          )}>
+            {readyProviders > 0
+              ? t("gameLibraryInstalled")
+              : updateProviders > 0
+                ? t("gameLibraryUpdateAvailable")
+                : t("gameLibraryNotInstalled")}
           </span>
         </div>
       </div>

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -73,6 +74,70 @@ func TestRuntimeInstallStateDoesNotBlockServerCreation(t *testing.T) {
 	if _, err := os.Stat(markerPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected runtime install marker not to be repaired from Docker cache, got %v", err)
 	}
+}
+
+func TestRuntimeInstallStateReportsUpdateWhenOlderVersionIsInstalled(t *testing.T) {
+	router, _, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
+	const (
+		providerKey      = "palworld"
+		installedVersion = "v2.5.0"
+		targetVersion    = "v2.7.1"
+	)
+	archiveRelPath := filepath.Join("runtime-images", providerKey, installedVersion+".tar")
+	archivePath := filepath.Join(cfg.DataDir, archiveRelPath)
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archivePath, []byte("palworld runtime archive\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	markerPath := filepath.Join(cfg.DataDir, "runtime-installs", providerKey, installedVersion+".json")
+	if err := os.MkdirAll(filepath.Dir(markerPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := runtimeInstallMarker{
+		ProviderKey: domain.ProviderPalworld,
+		Version:     installedVersion,
+		Image:       "smartcat99999/palworld-server:" + installedVersion,
+		ArchivePath: archiveRelPath,
+		InstalledAt: time.Now(),
+	}
+	data, err := json.Marshal(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(markerPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected game catalog 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var games []domain.GameCatalogEntry
+	if err := json.Unmarshal(recorder.Body.Bytes(), &games); err != nil {
+		t.Fatal(err)
+	}
+	for _, game := range games {
+		if game.Key != domain.GamePalworld {
+			continue
+		}
+		for _, provider := range game.Providers {
+			if provider.Key != domain.ProviderPalworld {
+				continue
+			}
+			status := provider.RuntimeImage
+			if status.Status != runtime.ImageStatusUpdateReady {
+				t.Fatalf("expected update available, got %+v", status)
+			}
+			if status.InstalledVersion != installedVersion || status.TargetVersion != targetVersion {
+				t.Fatalf("expected %s -> %s, got %+v", installedVersion, targetVersion, status)
+			}
+			return
+		}
+	}
+	t.Fatal("expected Palworld provider in catalog")
 }
 
 func TestRuntimeInstallPullProgressIsReservedBelowComplete(t *testing.T) {

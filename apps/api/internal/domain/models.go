@@ -81,11 +81,13 @@ type GameCatalogEntry struct {
 }
 
 type RuntimeImageStatus struct {
-	Image     string    `json:"image"`
-	Status    string    `json:"status"`
-	Message   string    `json:"message,omitempty"`
-	Progress  int       `json:"progress,omitempty"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	Image            string    `json:"image"`
+	Status           string    `json:"status"`
+	Message          string    `json:"message,omitempty"`
+	Progress         int       `json:"progress,omitempty"`
+	InstalledVersion string    `json:"installedVersion,omitempty"`
+	TargetVersion    string    `json:"targetVersion,omitempty"`
+	UpdatedAt        time.Time `json:"updatedAt,omitempty"`
 }
 
 type ProviderCatalog struct {

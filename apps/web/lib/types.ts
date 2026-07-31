@@ -32,9 +32,11 @@ export type ProviderConfigField = {
 
 export type RuntimeImageStatus = {
   image: string;
-  status: "ready" | "missing" | "preparing" | "failed" | "unsupported" | string;
+  status: "ready" | "missing" | "update_available" | "preparing" | "failed" | "unsupported" | string;
   message?: string;
   progress?: number;
+  installedVersion?: string;
+  targetVersion?: string;
   updatedAt?: string;
 };
 
