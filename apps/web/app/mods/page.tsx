@@ -419,7 +419,7 @@ export default function ModsPage() {
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                   <Download aria-hidden="true" />
-                  {t("importPackFromSteam")}
+                  {t("importFromSteam")}
                 </Button>
                 <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
                   <Package aria-hidden="true" />
@@ -691,7 +691,7 @@ export default function ModsPage() {
 
       {packImportDialogOpen && (
         <DialogShell
-          title={t("importPackFromSteam")}
+          title={t("importFromSteam")}
           description={t("importPackFromSteamHint")}
           onClose={() => {
             setPackImportDialogOpen(false);
