@@ -8,6 +8,11 @@ import sys
 
 
 PATCH_MARKER = "# GamePanel Lite: publish the FIFO with its final owner atomically."
+UPSTREAM_MANAGED_MARKERS = (
+    "# FIFO lifecycle (create/remove/chown) is managed by init.sh.",
+    'if not os.path.exists(FIFO_PATH):',
+    'fifo_fd = os.open(FIFO_PATH, os.O_RDWR | os.O_NONBLOCK)',
+)
 
 UPSTREAM_BLOCK = '''# Setup FIFO
 if os.path.exists(FIFO_PATH):
@@ -61,6 +66,8 @@ def patch(path: pathlib.Path) -> bool:
     source = path.read_text(encoding="utf-8")
     if PATCH_MARKER in source:
         return False
+    if all(marker in source for marker in UPSTREAM_MANAGED_MARKERS):
+        return False
     matches = source.count(UPSTREAM_BLOCK)
     if matches != 1:
         raise RuntimeError(
@@ -76,7 +83,7 @@ def main(argv: list[str]) -> int:
         return 2
     target = pathlib.Path(argv[1])
     changed = patch(target)
-    print(f"{'patched' if changed else 'already patched'} {target}")
+    print(f"{'patched' if changed else 'validated'} {target}")
     return 0
 
 
