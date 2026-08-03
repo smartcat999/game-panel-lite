@@ -191,6 +191,32 @@ describe("formatActivityEvent", () => {
     });
   });
 
+  it("localizes automatic game update checks in Chinese", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      type: "server.game-update.auto-check.queued",
+      message: "Queued automatic game update check for Palworld Server"
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "已提交 Palworld Server 的自动更新检查",
+      typeLabel: "自动检查排队"
+    });
+  });
+
+  it("localizes completed game updates in Chinese", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      type: "server.game-update.succeeded",
+      message: "Game update task completed"
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "游戏更新任务已完成",
+      typeLabel: "游戏更新完成"
+    });
+  });
+
   it("formats container lifecycle failure details from structured payload", () => {
     const event: ActivityEvent = {
       ...baseEvent,
