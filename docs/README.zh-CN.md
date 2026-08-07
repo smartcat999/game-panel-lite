@@ -31,6 +31,9 @@ GamePanel Lite 是一个轻量、现代、可自托管的游戏服务器管理�
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
+
+# 或指定自定义安装路径：
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- /opt/gamepanel-lite
 ```
 
 启动完成后访问：

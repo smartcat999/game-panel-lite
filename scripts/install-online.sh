@@ -2,7 +2,13 @@
 set -eu
 
 REPO_ARCHIVE_URL="${GAMEPANEL_ARCHIVE_URL:-https://github.com/smartcat999/game-panel-lite/archive/refs/heads/main.tar.gz}"
-INSTALL_DIR="${GAMEPANEL_INSTALL_DIR:-$HOME/gamepanel-lite}"
+
+# 第一个命令行参数作为安装路径，为空则默认安装到当前用户目录
+if [ -n "${1:-}" ]; then
+  INSTALL_DIR="$1"
+else
+  INSTALL_DIR="${GAMEPANEL_INSTALL_DIR:-$HOME/gamepanel-lite}"
+fi
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "curl is required. Install curl first, then run this command again."
