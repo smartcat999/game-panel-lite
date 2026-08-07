@@ -30,7 +30,11 @@ Running a game server should not mean juggling shell commands, scattered config 
 Run this on a server with Docker installed:
 
 ```bash
+# Default: installs to ~/gamepanel-lite
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
+
+# Or specify a custom install path:
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- /opt/gamepanel-lite
 ```
 
 Then open:

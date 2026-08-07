@@ -2,7 +2,11 @@
 set -eu
 
 REPO_ARCHIVE_URL="${GAMEPANEL_ARCHIVE_URL:-https://github.com/smartcat999/game-panel-lite/archive/refs/heads/main.tar.gz}"
-INSTALL_DIR="${GAMEPANEL_INSTALL_DIR:-$HOME/gamepanel-lite}"
+if [ -n "${1:-}" ]; then
+  INSTALL_DIR="$1"
+else
+  INSTALL_DIR="${GAMEPANEL_INSTALL_DIR:-$HOME/gamepanel-lite}"
+fi
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "curl is required. Install curl first, then run this command again."
