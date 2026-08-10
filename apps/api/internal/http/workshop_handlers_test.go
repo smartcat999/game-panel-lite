@@ -17,11 +17,16 @@ import (
 
 type staticWorkshopResolver struct {
 	collection workshopsvc.Collection
+	items      []workshopsvc.Item
 	err        error
 }
 
 func (r staticWorkshopResolver) ResolveCollection(context.Context, domain.ProviderKey, string) (workshopsvc.Collection, error) {
 	return r.collection, r.err
+}
+
+func (r staticWorkshopResolver) ResolveItems(context.Context, domain.ProviderKey, []string) ([]workshopsvc.Item, error) {
+	return r.items, r.err
 }
 
 func TestWorkshopCollectionPreviewMarksExistingItemsAndCachesMetadata(t *testing.T) {
@@ -80,6 +85,54 @@ func TestWorkshopCollectionPreviewMarksExistingItemsAndCachesMetadata(t *testing
 	}
 	if _, err := handler.workshopPreviewItems(response.PreviewID, domain.ProviderTerrariaTModLoader, "", []string{"999"}); err == nil {
 		t.Fatal("expected non-preview item to be rejected")
+	}
+}
+
+func TestWorkshopItemPreviewFetchesMetadataBeforeImport(t *testing.T) {
+	_, db, _ := newTestRouter(t)
+	existing := domain.ModFile{
+		ID:          "existing-item",
+		InstanceID:  "unassigned",
+		ProviderKey: domain.ProviderTerrariaTModLoader,
+		Source:      "workshop",
+		WorkshopID:  "100",
+		FileName:    "workshop-100",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &existing); err != nil {
+		t.Fatal(err)
+	}
+	handler := &Handler{
+		store: db,
+		workshopResolver: staticWorkshopResolver{items: []workshopsvc.Item{
+			{WorkshopID: "100", Title: "Existing Mod", FileSize: 1024},
+			{WorkshopID: "200", Title: "Fresh Steam Title", FileSize: 2048, Tags: []string{"New Content"}},
+		}},
+		workshopPreviews: map[string]cachedWorkshopPreview{},
+	}
+	body := bytes.NewBufferString(`{"providerKey":"terraria-tmodloader","workshopIds":["100","200","999"]}`)
+	recorder := httptest.NewRecorder()
+	handler.previewWorkshopItems(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/mods/workshop/items/preview", body))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected preview 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var response workshopPreviewResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Summary.Total != 3 || response.Summary.New != 1 || response.Summary.InLibrary != 1 || response.Summary.Unavailable != 1 {
+		t.Fatalf("unexpected summary: %+v", response.Summary)
+	}
+	if response.Items[1].Title != "Fresh Steam Title" || !response.Items[1].Selectable {
+		t.Fatalf("expected current Steam metadata in preview, got %+v", response.Items[1])
+	}
+	if response.Items[2].Status != "unavailable" || response.Items[2].Selectable {
+		t.Fatalf("expected missing item to be unavailable, got %+v", response.Items[2])
+	}
+	selected, err := handler.workshopPreviewItems(response.PreviewID, domain.ProviderTerrariaTModLoader, "", []string{"200"})
+	if err != nil || selected["200"].Title != "Fresh Steam Title" {
+		t.Fatalf("expected cached preview metadata, selected=%+v err=%v", selected, err)
 	}
 }
 

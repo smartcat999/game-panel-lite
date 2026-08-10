@@ -152,6 +152,99 @@ func (h *Handler) previewWorkshopCollection(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (h *Handler) previewWorkshopItems(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		ProviderKey domain.ProviderKey `json:"providerKey"`
+		WorkshopIDs []string           `json:"workshopIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if payload.ProviderKey == "" {
+		payload.ProviderKey = domain.ProviderTerrariaTModLoader
+	}
+	if !providerSupportsWorkshopMods(payload.ProviderKey) {
+		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
+		return
+	}
+	requested := normalizeWorkshopIDs(payload.WorkshopIDs)
+	items, err := h.workshopResolver.ResolveItems(r.Context(), payload.ProviderKey, requested)
+	if err != nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, workshopsvc.ErrInvalidCollection) ||
+			errors.Is(err, workshopsvc.ErrCollectionTooLarge) ||
+			errors.Is(err, workshopsvc.ErrUnsupportedProvider) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	libraryMods, err := h.store.ListMods(r.Context(), "unassigned")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	libraryIDs := workshopIDSet(libraryMods)
+	resolved := make(map[string]workshopsvc.Item, len(items))
+	for _, item := range items {
+		resolved[item.WorkshopID] = item
+	}
+
+	response := workshopPreviewResponse{
+		PreviewID:   uuid.NewString(),
+		ProviderKey: payload.ProviderKey,
+		ExpiresAt:   time.Now().Add(workshopPreviewTTL),
+		Items:       make([]workshopPreviewItem, 0, len(requested)),
+	}
+	previewCollection := workshopsvc.Collection{Items: make([]workshopsvc.Item, 0, len(items))}
+	for _, id := range requested {
+		item, found := resolved[id]
+		if !found || (payload.ProviderKey == domain.ProviderDST && !isDSTServerWorkshopTags(item.Tags)) {
+			response.Summary.Unavailable++
+			if !found {
+				item.WorkshopID = id
+			}
+			response.Items = append(response.Items, workshopPreviewItem{Item: item, Status: "unavailable", Selectable: false})
+			continue
+		}
+		status := "new"
+		if containsWorkshopID(libraryIDs, id) {
+			status = "in_library"
+			response.Summary.InLibrary++
+		} else {
+			response.Summary.New++
+		}
+		previewCollection.Items = append(previewCollection.Items, item)
+		response.Items = append(response.Items, workshopPreviewItem{Item: item, Status: status, Selectable: true})
+	}
+	response.Summary.Total = len(response.Items)
+	h.cacheWorkshopPreview(response.PreviewID, cachedWorkshopPreview{
+		ProviderKey: payload.ProviderKey,
+		Collection:  previewCollection,
+		ExpiresAt:   response.ExpiresAt,
+	})
+	writeJSON(w, http.StatusOK, response)
+}
+
+func normalizeWorkshopIDs(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
 func (h *Handler) cacheWorkshopPreview(id string, preview cachedWorkshopPreview) {
 	now := time.Now()
 	h.workshopPreviewsMu.Lock()
