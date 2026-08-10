@@ -165,6 +165,18 @@ func (s *Store) GetLatestGameUpdateJobByInstance(ctx context.Context, instanceID
 	return job, err
 }
 
+func (s *Store) GetLatestGameUpdateCheckByProvider(ctx context.Context, providerKey domain.ProviderKey) (domain.GameUpdateJob, error) {
+	var job domain.GameUpdateJob
+	err := s.db.WithContext(ctx).
+		Where("provider_key = ? AND operation = ?", providerKey, domain.GameUpdateOperationCheck).
+		Order("created_at desc, rowid desc").
+		First(&job).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return job, ErrNotFound
+	}
+	return job, err
+}
+
 func (s *Store) GetActiveGameUpdateJobByInstance(ctx context.Context, instanceID string) (domain.GameUpdateJob, error) {
 	var job domain.GameUpdateJob
 	err := s.db.WithContext(ctx).

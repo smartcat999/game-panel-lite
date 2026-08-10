@@ -293,7 +293,7 @@ paths:
           type: string
     get:
       summary: Read game update state
-      description: Returns the latest persisted update task and build metadata. Only the Palworld provider currently reports supported=true.
+      description: Compares this server's installed build with the latest Provider-scoped game-library check. Only the Palworld provider currently reports supported=true.
       responses:
         "200":
           description: Current game update state
@@ -315,7 +315,7 @@ paths:
           type: string
     post:
       summary: Queue a game update check
-      description: Creates a persistent asynchronous task that refreshes Steam metadata and compares the installed and latest build IDs.
+      description: Compatibility alias that queues one Provider-scoped game-library version check shared by every server of this type.
       responses:
         "202":
           description: Update check accepted
@@ -333,6 +333,53 @@ paths:
           description: Update check task could not be created
         "503":
           description: Docker runtime is unavailable or lacks safe update support
+  /api/providers/{providerKey}/game-update/check:
+    parameters:
+      - name: providerKey
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/ProviderKey"
+    post:
+      summary: Queue a Provider-scoped game version check
+      description: Refreshes the latest upstream build once for the game-library Provider. All matching server instances reuse the result.
+      responses:
+        "202":
+          description: Provider version check accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameUpdateJob"
+        "400":
+          description: Version checks are unsupported for this Provider
+        "409":
+          description: Another heavy runtime task is active
+        "503":
+          description: Docker runtime is unavailable
+  /api/providers/{providerKey}/game-update/auto-check:
+    parameters:
+      - name: providerKey
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/ProviderKey"
+    put:
+      summary: Configure Provider-scoped automatic version checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Automatic check setting updated
+        "400":
+          description: Invalid setting or unsupported Provider
   /api/servers/{id}/game-update/apply:
     parameters:
       - name: id

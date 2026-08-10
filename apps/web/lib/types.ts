@@ -51,6 +51,17 @@ export type ProviderCatalog = {
   configSchema: ProviderConfigField[];
   saveDisplayName?: string;
   runtimeImage?: RuntimeImageStatus;
+  gameVersion?: ProviderVersionStatus;
+};
+
+export type ProviderVersionStatus = {
+  supported: boolean;
+  status: "unknown" | "checking" | "ready" | "failed" | "unsupported" | string;
+  latestBuildId?: string;
+  checkedAt?: string;
+  autoCheckEnabled: boolean;
+  autoCheckIntervalHours: number;
+  job?: GameUpdateJob;
 };
 
 export type GameCatalogEntry = {

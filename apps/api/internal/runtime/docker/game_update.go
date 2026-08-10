@@ -96,15 +96,10 @@ var (
 )
 
 func (a *Adapter) CheckGameUpdate(ctx context.Context, request runtime.GameUpdateRequest) (runtime.GameUpdateResult, error) {
-	dataDir, err := validateGameUpdateRequest(request)
-	if err != nil {
+	if err := validateGameUpdateCheckRequest(request); err != nil {
 		return runtime.GameUpdateResult{}, err
 	}
-	installed, err := readInstalledBuildID(dataDir, request.AppID)
-	if err != nil {
-		return runtime.GameUpdateResult{}, err
-	}
-	output, err := a.runGameUpdater(ctx, request, dataDir, true, checkGameUpdateScript, nil)
+	output, err := a.runGameUpdater(ctx, request, "", true, checkGameUpdateScript, nil)
 	if err != nil {
 		return runtime.GameUpdateResult{}, err
 	}
@@ -112,7 +107,20 @@ func (a *Adapter) CheckGameUpdate(ctx context.Context, request runtime.GameUpdat
 	if err != nil {
 		return runtime.GameUpdateResult{}, fmt.Errorf("parse latest Steam build for app %s: %w", request.AppID, err)
 	}
-	return runtime.GameUpdateResult{InstalledBuildID: installed, LatestBuildID: latest}, nil
+	return runtime.GameUpdateResult{LatestBuildID: latest}, nil
+}
+
+func validateGameUpdateCheckRequest(request runtime.GameUpdateRequest) error {
+	if strings.TrimSpace(request.JobID) == "" || containerNameClean.ReplaceAllString(request.JobID, "") != request.JobID {
+		return fmt.Errorf("invalid game update job ID")
+	}
+	if strings.TrimSpace(request.Image) == "" {
+		return fmt.Errorf("game update image is required")
+	}
+	if !appIDPattern.MatchString(request.AppID) {
+		return fmt.Errorf("invalid Steam app ID %q", request.AppID)
+	}
+	return nil
 }
 
 func (a *Adapter) ApplyGameUpdate(ctx context.Context, request runtime.GameUpdateRequest, onProgress runtime.GameUpdateProgressFunc) (runtime.GameUpdateResult, error) {
@@ -205,10 +213,8 @@ func (a *Adapter) runGameUpdater(
 		namePart = namePart[:48]
 	}
 	containerName := fmt.Sprintf("gamepanel-updater-%s-%d", namePart, time.Now().UnixNano())
-	memoryLimit := int64(1536 * 1024 * 1024)
-	if readOnly {
-		memoryLimit = 512 * 1024 * 1024
-	}
+	resources := gameUpdaterResources(readOnly)
+	mounts := gameUpdaterMounts(dataDir, readOnly)
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image:      request.Image,
 		Entrypoint: []string{"/bin/sh", "-lc"},
@@ -224,16 +230,8 @@ func (a *Adapter) runGameUpdater(
 	}, &container.HostConfig{
 		AutoRemove:  false,
 		SecurityOpt: []string{"no-new-privileges:true"},
-		Resources: container.Resources{
-			NanoCPUs: 2_000_000_000,
-			Memory:   memoryLimit,
-		},
-		Mounts: []mount.Mount{{
-			Type:     mount.TypeBind,
-			Source:   dataDir,
-			Target:   "/palworld",
-			ReadOnly: readOnly,
-		}},
+		Resources:   resources,
+		Mounts:      mounts,
 	}, nil, nil, containerName)
 	if err != nil {
 		return "", fmt.Errorf("create controlled game updater: %w", err)
@@ -311,6 +309,36 @@ func (a *Adapter) runGameUpdater(
 		}
 	}
 	return output.String(), fmt.Errorf("controlled game updater exited without a status")
+}
+
+// Metadata checks still need SteamCMD to obtain the public branch Build ID,
+// but they must not compete with a running game server for the host's CPU.
+// They also do not need access to the game files: the installed Build ID is
+// read by the API before the helper starts. Keeping the data directory out of
+// the helper prevents SteamCMD metadata refreshes from generating I/O on the
+// live server mount.
+func gameUpdaterResources(metadataOnly bool) container.Resources {
+	if metadataOnly {
+		return container.Resources{
+			NanoCPUs: 250_000_000,
+			Memory:   512 * 1024 * 1024,
+		}
+	}
+	return container.Resources{
+		NanoCPUs: 2_000_000_000,
+		Memory:   1536 * 1024 * 1024,
+	}
+}
+
+func gameUpdaterMounts(dataDir string, metadataOnly bool) []mount.Mount {
+	if metadataOnly {
+		return nil
+	}
+	return []mount.Mount{{
+		Type:   mount.TypeBind,
+		Source: dataDir,
+		Target: "/palworld",
+	}}
 }
 
 func (a *Adapter) CleanupGameUpdate(ctx context.Context, jobID string) error {

@@ -3,13 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Download, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, Loader2, Plus, RefreshCw } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/page-header";
 import { getGameArt } from "@/lib/game-art";
 import { gameDescription, gameDisplayName } from "@/lib/game-display";
 import { useI18n, type MessageKey } from "@/lib/i18n";
-import { listGames, prepareRuntimeImage } from "@/lib/api";
+import { checkProviderGameUpdate, listGames, prepareRuntimeImage } from "@/lib/api";
 import { providerDescription, providerDisplayName } from "@/lib/provider-display";
 import { formatRuntimeInstallError } from "@/lib/runtime-errors";
 import { isRuntimeImagePreparing, isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
@@ -23,7 +23,7 @@ export default function GamesPage() {
     queryKey: ["games"],
     queryFn: listGames,
     retry: false,
-    refetchInterval: (query) => hasPreparingRuntime(query.state.data) ? 1000 : false
+    refetchInterval: (query) => hasActiveGameLibraryTask(query.state.data) ? 1000 : false
   });
   const install = useMutation({
     mutationFn: ({ providerKey, version }: { providerKey: ProviderKey; version?: string }) => prepareRuntimeImage(providerKey, version),
@@ -32,6 +32,10 @@ export default function GamesPage() {
     }
   });
   const games = gamesQuery.data ?? [];
+  const versionCheck = useMutation({
+    mutationFn: (providerKey: ProviderKey) => checkProviderGameUpdate(providerKey),
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["games"] })
+  });
 
   return (
     <>
@@ -46,6 +50,7 @@ export default function GamesPage() {
             installingProvider={install.variables?.providerKey}
             isInstalling={install.isPending}
             onInstall={(provider) => install.mutate({ providerKey: provider.key, version: provider.recommendedVersion })}
+            onVersionCheck={(provider) => versionCheck.mutate(provider.key)}
           />
         ))}
       </div>
@@ -59,13 +64,15 @@ function GameRuntimeCard({
   installError,
   installingProvider,
   isInstalling,
-  onInstall
+  onInstall,
+  onVersionCheck
 }: {
   game: GameCatalogEntry;
   installError: string;
   installingProvider?: ProviderKey;
   isInstalling: boolean;
   onInstall: (provider: ProviderCatalog) => void;
+  onVersionCheck: (provider: ProviderCatalog) => void;
 }) {
   const { t } = useI18n();
   const art = getGameArt(game.coverImage ?? game.key);
@@ -114,6 +121,7 @@ function GameRuntimeCard({
                 installingProvider={installingProvider}
                 isInstalling={isInstalling}
                 onInstall={onInstall}
+                onVersionCheck={onVersionCheck}
                 provider={provider}
                 showProviderTitle={hasMultipleProviders}
               />
@@ -132,6 +140,7 @@ function ProviderRuntimeRow({
   installingProvider,
   isInstalling,
   onInstall,
+  onVersionCheck,
   provider,
   showProviderTitle
 }: {
@@ -140,6 +149,7 @@ function ProviderRuntimeRow({
   installingProvider?: ProviderKey;
   isInstalling: boolean;
   onInstall: (provider: ProviderCatalog) => void;
+  onVersionCheck: (provider: ProviderCatalog) => void;
   provider: ProviderCatalog;
   showProviderTitle: boolean;
 }) {
@@ -173,11 +183,23 @@ function ProviderRuntimeRow({
         </div>
         <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p>
         <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
+        {provider.gameVersion?.supported ? (
+          <p className="mt-1 text-xs text-slate-500">
+            {t("gameUpdateLatestBuild")}: <span className="font-mono text-slate-300">{provider.gameVersion.latestBuildId || "—"}</span>
+            {provider.gameVersion.checkedAt ? ` · ${new Date(provider.gameVersion.checkedAt).toLocaleString()}` : ""}
+		  </p>
+        ) : null}
         {preparing ? <RuntimeInstallProgress /> : null}
         {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {provider.gameVersion?.supported ? (
+          <Button type="button" variant="secondary" className="h-10" disabled={provider.gameVersion.status === "checking"} onClick={() => onVersionCheck(provider)}>
+            <RefreshCw aria-hidden="true" className={cn("size-4", provider.gameVersion.status === "checking" && "animate-spin")} />
+            {provider.gameVersion.status === "checking" ? t("gameUpdateStatusChecking") : t("gameUpdateCheck")}
+          </Button>
+        ) : null}
         {ready ? (
           <Link
             href={`/servers/new?game=${encodeURIComponent(game.key)}&provider=${encodeURIComponent(provider.key)}${provider.recommendedVersion ? `&version=${encodeURIComponent(provider.recommendedVersion)}` : ""}`}
@@ -235,8 +257,8 @@ function RuntimeStatusBadge({ status }: { status?: RuntimeImageStatus }) {
   );
 }
 
-function hasPreparingRuntime(games?: GameCatalogEntry[]) {
-  return Boolean(games?.some((game) => game.providers.some((provider) => provider.runtimeImage?.status === "preparing")));
+function hasActiveGameLibraryTask(games?: GameCatalogEntry[]) {
+  return Boolean(games?.some((game) => game.providers.some((provider) => provider.runtimeImage?.status === "preparing" || provider.gameVersion?.status === "checking")));
 }
 
 function runtimeInstallPhaseMessageKey(status?: RuntimeImageStatus): MessageKey {

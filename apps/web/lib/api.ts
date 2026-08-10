@@ -121,6 +121,11 @@ export async function prepareRuntimeImage(providerKey: ProviderKey, version?: st
   return readPayload<RuntimeImageStatus>(response, "Unable to install server runtime");
 }
 
+export async function checkProviderGameUpdate(providerKey: ProviderKey): Promise<GameUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/providers/${providerKey}/game-update/check`, { method: "POST" });
+  return readPayload<GameUpdateJob>(response, "Unable to check the provider game version");
+}
+
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
   const response = await apiFetch(`${API_BASE}/api/terraria/config/preview`, {
     method: "POST",
