@@ -38,6 +38,37 @@ func TestValidateGameUpdateRequestRequiresSafeJobID(t *testing.T) {
 	}
 }
 
+func TestValidateGameUpdateCheckRequestDoesNotRequireServerInstance(t *testing.T) {
+	request := runtime.GameUpdateRequest{JobID: "provider-check-1", Image: "palworld:latest", AppID: "2394010"}
+	if err := validateGameUpdateCheckRequest(request); err != nil {
+		t.Fatalf("expected provider-scoped check request to be valid: %v", err)
+	}
+}
+
+func TestGameUpdateMetadataCheckUsesIsolatedLowResources(t *testing.T) {
+	resources := gameUpdaterResources(true)
+	if resources.NanoCPUs != 250_000_000 {
+		t.Fatalf("expected metadata check to use 0.25 CPU, got %d NanoCPUs", resources.NanoCPUs)
+	}
+	if resources.Memory != 512*1024*1024 {
+		t.Fatalf("expected metadata check to use 512 MiB, got %d bytes", resources.Memory)
+	}
+	if mounts := gameUpdaterMounts("/srv/palworld", true); len(mounts) != 0 {
+		t.Fatalf("expected metadata check not to mount live game data, got %#v", mounts)
+	}
+}
+
+func TestGameUpdateApplyKeepsGameDataMountAndResources(t *testing.T) {
+	resources := gameUpdaterResources(false)
+	if resources.NanoCPUs != 2_000_000_000 || resources.Memory != 1536*1024*1024 {
+		t.Fatalf("unexpected apply resources: %#v", resources)
+	}
+	mounts := gameUpdaterMounts("/srv/palworld", false)
+	if len(mounts) != 1 || mounts[0].Source != "/srv/palworld" || mounts[0].Target != "/palworld" || mounts[0].ReadOnly {
+		t.Fatalf("expected writable game data mount for update apply, got %#v", mounts)
+	}
+}
+
 func TestCleanupGameUpdateFiltersByJobAndForceRemovesHelpers(t *testing.T) {
 	var mu sync.Mutex
 	filterValue := ""

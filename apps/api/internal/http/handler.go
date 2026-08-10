@@ -143,6 +143,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/games", h.listGames)
 		r.Get("/api/games/{gameKey}", h.getGame)
 		r.Get("/api/games/{gameKey}/versions", h.gameVersions)
+		r.Post("/api/providers/{providerKey}/game-update/check", h.checkProviderGameUpdate)
+		r.Put("/api/providers/{providerKey}/game-update/auto-check", h.updateProviderGameUpdateAutoCheck)
 		r.Get("/api/config-presets", h.listConfigPresets)
 		r.Post("/api/config-presets", h.createConfigPreset)
 		r.Get("/api/config-presets/{id}", h.getConfigPreset)

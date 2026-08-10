@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
@@ -171,38 +173,17 @@ func TestGameUpdateAutoCheckDefaultsOnAndCanBeDisabled(t *testing.T) {
 	}
 }
 
-func TestAutomaticGameUpdateScanQueuesOnlyStaleEnabledServer(t *testing.T) {
+func TestAutomaticGameUpdateScanQueuesOneStaleProviderCheck(t *testing.T) {
 	adapter := newGameUpdateHTTPAdapter()
 	t.Cleanup(adapter.releaseCheck)
-	handler, db, dataDir := newGameUpdateUnitHandler(t, adapter)
+	handler, db, _ := newGameUpdateUnitHandler(t, adapter)
 	handler.ctx = context.Background()
-	disabled := palworldUpdateTestServer("palworld-auto-disabled", dataDir)
-	disabled.CreatedAt = time.Now().Add(time.Minute)
-	createTestServer(t, db, disabled)
-	if err := db.SetSetting(context.Background(), gameUpdateAutoCheckSettingKey(disabled.ID), "false"); err != nil {
-		t.Fatal(err)
-	}
-	fresh := palworldUpdateTestServer("palworld-auto-fresh", dataDir)
-	fresh.CreatedAt = time.Now().Add(2 * time.Minute)
-	createTestServer(t, db, fresh)
 	checkedAt := time.Now().UTC()
 	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{
-		ID: "fresh-check", InstanceID: fresh.ID, ProviderKey: domain.ProviderPalworld,
+		ID: "stale-provider-check", InstanceID: providerGameUpdateScope(domain.ProviderPalworld), ProviderKey: domain.ProviderPalworld,
 		Operation: domain.GameUpdateOperationCheck, Status: domain.GameUpdateJobSucceeded,
-		Stage: domain.GameUpdateStageCompleted, CheckedAt: &checkedAt, CreatedAt: checkedAt, UpdatedAt: checkedAt,
+		Stage: domain.GameUpdateStageCompleted, CheckedAt: &checkedAt, CreatedAt: checkedAt, UpdatedAt: checkedAt, LatestBuildID: "24000000",
 	}); err != nil {
-		t.Fatal(err)
-	}
-	due := palworldUpdateTestServer("palworld-auto-due", dataDir)
-	due.CreatedAt = time.Now().Add(3 * time.Minute)
-	due.ContainerID = "palworld-auto-runtime"
-	createTestServer(t, db, due)
-	dueResource, err := db.GetGameServer(context.Background(), due.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dueResource.Spec.Runtime.Image = "smartcat99999/palworld-server:v2.7.1"
-	if err := db.SaveGameServer(context.Background(), &dueResource); err != nil {
 		t.Fatal(err)
 	}
 
@@ -213,22 +194,19 @@ func TestAutomaticGameUpdateScanQueuesOnlyStaleEnabledServer(t *testing.T) {
 	select {
 	case request = <-adapter.checkStarted:
 	case <-time.After(time.Second):
-		t.Fatal("expected stale enabled server to start an automatic check")
+		t.Fatal("expected stale provider to start an automatic check")
 	}
-	if request.RuntimeID != due.ContainerID {
-		t.Fatalf("expected due server runtime %q, got %+v", due.ContainerID, request)
+	if request.RuntimeID != providerGameUpdateScope(domain.ProviderPalworld) || request.DataDir != "" {
+		t.Fatalf("expected provider-scoped request without a server data directory, got %+v", request)
 	}
 	adapter.releaseCheck()
 	active := waitForGameUpdateJobStatus(t, db, request.JobID, domain.GameUpdateJobSucceeded)
 	if active.Operation != domain.GameUpdateOperationCheck {
 		t.Fatalf("expected automatic check operation, got %+v", active)
 	}
-	if _, err := db.GetLatestGameUpdateJobByInstance(context.Background(), disabled.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected disabled server to remain unchecked, got %v", err)
-	}
-	latestFresh, err := db.GetLatestGameUpdateJobByInstance(context.Background(), fresh.ID)
-	if err != nil || latestFresh.ID != "fresh-check" {
-		t.Fatalf("expected fresh check to remain latest, got %+v err=%v", latestFresh, err)
+	latest, err := db.GetLatestGameUpdateCheckByProvider(context.Background(), domain.ProviderPalworld)
+	if err != nil || latest.ID != active.ID {
+		t.Fatalf("expected shared provider check to be latest, got %+v err=%v", latest, err)
 	}
 }
 
@@ -259,14 +237,14 @@ func TestCheckGameUpdateReturnsAcceptedAndPersistsResult(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async update check to reach the runtime adapter")
 	}
-	if request.JobID != queued.ID || request.AppID != palworldSteamAppID || request.RuntimeID != server.ContainerID || request.DataDir != server.DataDir {
+	if request.JobID != queued.ID || request.AppID != palworldSteamAppID || request.RuntimeID != providerGameUpdateScope(domain.ProviderPalworld) || request.DataDir != "" {
 		t.Fatalf("unexpected update request: %+v", request)
 	}
 	adapter.releaseCheck()
 
 	completed := waitForGameUpdateJobStatus(t, db, queued.ID, domain.GameUpdateJobSucceeded)
-	if completed.InstalledBuildID != "24088465" || completed.LatestBuildID != "24181105" {
-		t.Fatalf("expected persisted build ids, got %+v", completed)
+	if completed.InstalledBuildID != "" || completed.LatestBuildID != "24181105" {
+		t.Fatalf("expected provider check to persist only the latest build id, got %+v", completed)
 	}
 	if completed.Stage != domain.GameUpdateStageCompleted || completed.Progress != 100 || completed.CheckedAt == nil || completed.CompletedAt == nil {
 		t.Fatalf("expected completed job metadata, got %+v", completed)
@@ -752,6 +730,7 @@ func newGameUpdateUnitHandler(t *testing.T, adapter runtime.Adapter) (*Handler, 
 	dataDir := filepath.Join(root, "data")
 	return &Handler{
 		store:            db,
+		provider:         provider.NewRegistry(palworld.NewProvider()),
 		runtime:          runtime.NewSwitchableAdapter(adapter),
 		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
 	}, db, dataDir

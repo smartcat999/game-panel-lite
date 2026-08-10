@@ -101,6 +101,17 @@ type ProviderCatalog struct {
 	ConfigSchema       []ProviderConfigField `json:"configSchema"`
 	SaveDisplayName    string                `json:"saveDisplayName,omitempty"`
 	RuntimeImage       RuntimeImageStatus    `json:"runtimeImage,omitempty"`
+	GameVersion        ProviderVersionStatus `json:"gameVersion,omitempty"`
+}
+
+type ProviderVersionStatus struct {
+	Supported        bool           `json:"supported"`
+	Status           string         `json:"status"`
+	LatestBuildID    string         `json:"latestBuildId,omitempty"`
+	CheckedAt        *time.Time     `json:"checkedAt,omitempty"`
+	AutoCheckEnabled bool           `json:"autoCheckEnabled"`
+	AutoCheckHours   int            `json:"autoCheckIntervalHours"`
+	Job              *GameUpdateJob `json:"job,omitempty"`
 }
 
 const (

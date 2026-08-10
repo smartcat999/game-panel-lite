@@ -14,6 +14,7 @@ func (h *Handler) listGames(w http.ResponseWriter, r *http.Request) {
 	games := h.provider.Games()
 	h.applyRuntimeGameAvailability(games)
 	h.attachRuntimeImageStatuses(r.Context(), games)
+	h.attachProviderVersionStatuses(r.Context(), games)
 	servers, err := h.store.ListGameServers(r.Context())
 	if err == nil {
 		counts := map[domain.GameKey]int{}
@@ -36,7 +37,37 @@ func (h *Handler) getGame(w http.ResponseWriter, r *http.Request) {
 	games := []domain.GameCatalogEntry{game}
 	h.applyRuntimeGameAvailability(games)
 	h.attachRuntimeImageStatuses(r.Context(), games)
+	h.attachProviderVersionStatuses(r.Context(), games)
 	writeJSON(w, http.StatusOK, games[0])
+}
+
+func (h *Handler) attachProviderVersionStatuses(ctx context.Context, games []domain.GameCatalogEntry) {
+	for gameIndex := range games {
+		for providerIndex := range games[gameIndex].Providers {
+			item := &games[gameIndex].Providers[providerIndex]
+			item.GameVersion = domain.ProviderVersionStatus{Status: "unsupported"}
+			if item.Key != domain.ProviderPalworld {
+				continue
+			}
+			item.GameVersion = domain.ProviderVersionStatus{Supported: true, Status: "unknown", AutoCheckEnabled: true, AutoCheckHours: int(gameUpdateAutoCheckInterval / time.Hour)}
+			if enabled, err := h.gameUpdateAutoCheckEnabled(ctx, item.Key); err == nil {
+				item.GameVersion.AutoCheckEnabled = enabled
+			}
+			job, err := h.store.GetLatestGameUpdateCheckByProvider(ctx, item.Key)
+			if err != nil {
+				continue
+			}
+			item.GameVersion.Job, item.GameVersion.LatestBuildID, item.GameVersion.CheckedAt = &job, job.LatestBuildID, job.CheckedAt
+			switch job.Status {
+			case domain.GameUpdateJobQueued, domain.GameUpdateJobRunning:
+				item.GameVersion.Status = "checking"
+			case domain.GameUpdateJobFailed:
+				item.GameVersion.Status = "failed"
+			default:
+				item.GameVersion.Status = "ready"
+			}
+		}
+	}
 }
 
 func (h *Handler) applyRuntimeGameAvailability(games []domain.GameCatalogEntry) {
