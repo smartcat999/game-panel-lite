@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, createModPackFromWorkshopCollection, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, previewWorkshopCollection, uploadGlobalMod } from "@/lib/api";
+import { createModPack, createModPackFromWorkshopCollection, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, previewWorkshopCollection, previewWorkshopItems, uploadGlobalMod } from "@/lib/api";
 import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScopeFromTags, modDisplayName, modSourceLabel } from "@/lib/mod-display";
@@ -26,7 +26,6 @@ type DependencyImportPlan = {
   dependencyNames: string[];
   providerKey: ProviderKey;
 };
-
 export default function ModsPage() {
   const { locale, t } = useI18n();
   const globalInputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +54,6 @@ export default function ModsPage() {
   const [selectedWorkshopIds, setSelectedWorkshopIds] = useState<string[]>([]);
   const [workshopIdsText, setWorkshopIdsText] = useState("");
   const [workshopProviderKey, setWorkshopProviderKey] = useState<ProviderKey>("terraria-tmodloader");
-  const [pendingDependencyImport, setPendingDependencyImport] = useState<DependencyImportPlan | null>(null);
   const globalModsQuery = useQuery({ queryKey: ["global-mods"], queryFn: listGlobalMods, retry: false });
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const recommendedModsQuery = useQuery({ queryKey: ["recommended-mods"], queryFn: listRecommendedMods, retry: false });
@@ -185,7 +183,6 @@ export default function ModsPage() {
       setErrorMessage("");
       setSuccessMessage(t("workshopModsImported"));
       setWorkshopDialogOpen(false);
-      setPendingDependencyImport(null);
       setWorkshopIdsText("");
       setWorkshopCollectionValue("");
       setWorkshopPreview(null);
@@ -210,6 +207,20 @@ export default function ModsPage() {
       setSelectedWorkshopIds([]);
       setSuccessMessage("");
       setErrorMessage(error instanceof Error ? error.message : t("unablePreviewWorkshopCollection"));
+    }
+  });
+  const workshopItemsPreview = useMutation({
+    mutationFn: ({ ids, providerKey }: { ids: string[]; providerKey: ProviderKey }) => previewWorkshopItems({ workshopIds: ids, providerKey }),
+    onSuccess: (preview) => {
+      setErrorMessage("");
+      setWorkshopPreview(preview);
+      setSelectedWorkshopIds(preview.items.filter((item) => item.selectable && item.status === "new").map((item) => item.workshopId));
+    },
+    onError: (error) => {
+      setWorkshopPreview(null);
+      setSelectedWorkshopIds([]);
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("unablePreviewWorkshopItems"));
     }
   });
   const recommendedImport = useMutation({
@@ -254,24 +265,14 @@ export default function ModsPage() {
   const selectedPackModCount = selectedPackModIds.length;
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
-  const requestWorkshopImport = (ids: string[], providerKey: ProviderKey = workshopProviderKey) => {
-    const dstBlockReason = dstWorkshopImportBlockReason(ids, providerKey, recommendedMods, t);
-    if (dstBlockReason) {
-      setSuccessMessage("");
-      setErrorMessage(dstBlockReason);
-      return;
-    }
+  const requestWorkshopPreview = (ids: string[], providerKey: ProviderKey = workshopProviderKey) => {
     if (workshopUnsupported) {
       setSuccessMessage("");
       setErrorMessage(t("workshopArmUnsupported"));
       return;
     }
     const plan = buildDependencyImportPlan(ids, providerKey, recommendedMods, globalMods);
-    if (plan.dependencyIds.length > 0) {
-      setPendingDependencyImport(plan);
-      return;
-    }
-    workshopImport.mutate({ ids, providerKey });
+    workshopItemsPreview.mutate({ ids: [...plan.primaryIds, ...plan.dependencyIds], providerKey });
   };
   const togglePackMod = (modId: string) => {
     setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
@@ -345,7 +346,7 @@ export default function ModsPage() {
             hint={t("discoverModsHint")}
             count={searchedRecommendedMods.length}
             actions={(
-              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending}>
+              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
                 <Download aria-hidden="true" />
                 {t("importFromSteam")}
               </Button>
@@ -357,11 +358,16 @@ export default function ModsPage() {
                 key={recommendedModKey(item)}
                 item={item}
                 locale={locale}
-                busy={workshopImport.isPending || recommendedImport.isPending || (isWorkshopRecommended(item) && workshopUnsupported)}
+                busy={workshopImport.isPending || workshopItemsPreview.isPending || recommendedImport.isPending || (isWorkshopRecommended(item) && workshopUnsupported)}
                 disabledReason={recommendedModDisabledReason(item, workshopUnsupported, t)}
                 onAdd={() => {
                   if (isWorkshopRecommended(item) && item.workshopId) {
-                    requestWorkshopImport([item.workshopId], item.providerKey ?? "terraria-tmodloader");
+                    const providerKey = item.providerKey ?? "terraria-tmodloader";
+                    setWorkshopSource("ids");
+                    setWorkshopProviderKey(providerKey);
+                    setWorkshopIdsText(item.workshopId);
+                    setWorkshopDialogOpen(true);
+                    requestWorkshopPreview([item.workshopId], providerKey);
                     return;
                   }
                   recommendedImport.mutate({ providerKey: item.providerKey, externalId: item.externalId, workshopId: item.workshopId });
@@ -382,7 +388,7 @@ export default function ModsPage() {
                   <Upload aria-hidden="true" />
                   {globalUpload.isPending ? t("uploading") : t("uploadMod")}
                 </Button>
-              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending}>
+              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
                 <Download aria-hidden="true" />
                 {t("importFromSteam")}
               </Button>
@@ -505,7 +511,7 @@ export default function ModsPage() {
                 setWorkshopPreview(null);
                 setSelectedWorkshopIds([]);
               }}
-              disabled={workshopImport.isPending || workshopCollectionPreview.isPending}
+              disabled={workshopImport.isPending || workshopCollectionPreview.isPending || workshopItemsPreview.isPending}
             >
               <option value="terraria-tmodloader">tModLoader</option>
               <option value="dont-starve-together">Don't Starve Together</option>
@@ -568,124 +574,74 @@ export default function ModsPage() {
                   </Button>
                 </form>
               ) : (
-                <div>
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-panel-line bg-slate-950/45 px-3 py-2.5">
-                    <div>
-                      <p className="text-sm font-medium text-slate-100">{t("steamCollectionNumber", { id: workshopPreview.collectionId })}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {t("workshopPreviewSummary", {
-                          total: workshopPreview.summary.total,
-                          added: workshopPreview.summary.new,
-                          existing: workshopPreview.summary.inLibrary
-                        })}
-                      </p>
-                    </div>
-                    <Button variant="ghost" onClick={() => setWorkshopPreview(null)} disabled={workshopImport.isPending}>{t("changeCollection")}</Button>
-                  </div>
-                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                    {workshopPreview.items.map((item) => {
-                      const checked = selectedWorkshopIds.includes(item.workshopId);
-                      return (
-                        <button
-                          key={item.workshopId}
-                          type="button"
-                          className={cn(
-                            "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition",
-                            checked ? "border-panel-green/50 bg-panel-green/5" : "border-panel-line bg-slate-950/35",
-                            !item.selectable && "cursor-not-allowed opacity-55"
-                          )}
-                          disabled={!item.selectable || workshopImport.isPending}
-                          onClick={() => setSelectedWorkshopIds((current) => current.includes(item.workshopId) ? current.filter((id) => id !== item.workshopId) : [...current, item.workshopId])}
-                        >
-                          <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", checked ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600")}>
-                            {checked && <Check aria-hidden="true" className="size-3" />}
-                          </span>
-                          <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded bg-slate-900">
-                            {item.previewUrl ? <Image src={item.previewUrl} alt="" width={44} height={44} className="size-full object-cover" unoptimized /> : <Package aria-hidden="true" className="size-5 text-slate-500" />}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-slate-100">{item.title || item.workshopId}</span>
-                            <span className="mt-0.5 block text-xs text-slate-500">{item.size} · {workshopPreviewStatusLabel(item.status, t)}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: selectedWorkshopIds.length })}</span>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" onClick={() => setWorkshopDialogOpen(false)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => workshopImport.mutate({ ids: selectedWorkshopIds, providerKey: workshopProviderKey, previewId: workshopPreview.previewId })}
-                        disabled={workshopImport.isPending || selectedWorkshopIds.length === 0 || workshopUnsupported}
-                      >
-                        <Download aria-hidden="true" />
-                        {workshopImport.isPending ? t("actionWorking") : t("importSelectedMods")}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                <WorkshopImportPreview
+                  preview={workshopPreview}
+                  selectedIds={selectedWorkshopIds}
+                  busy={workshopImport.isPending}
+                  unsupported={workshopUnsupported}
+                  onBack={() => setWorkshopPreview(null)}
+                  onCancel={() => setWorkshopDialogOpen(false)}
+                  onToggle={(id) => setSelectedWorkshopIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])}
+                  onImport={() => workshopImport.mutate({ ids: selectedWorkshopIds, providerKey: workshopProviderKey, previewId: workshopPreview.previewId })}
+                />
               )}
             </>
           ) : (
-            <>
-              <div className="grid gap-2">
-                <textarea
-                  aria-label={t("workshopIdsPlaceholder")}
-                  className="min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green"
-                  placeholder={t("workshopIdsPlaceholder")}
-                  value={workshopIdsText}
-                  onChange={(event) => setWorkshopIdsText(event.target.value)}
-                  disabled={workshopImport.isPending}
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <p className="text-slate-500">{t("workshopIdHint")}</p>
-                  <a
-                    href={steamWorkshopURL(workshopProviderKey, "items")}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-slate-400 transition hover:text-panel-green"
-                  >
-                    {t("browseSteamWorkshop")}
-                    <ExternalLink aria-hidden="true" className="size-3" />
-                  </a>
+            workshopPreview ? (
+              <WorkshopImportPreview
+                preview={workshopPreview}
+                selectedIds={selectedWorkshopIds}
+                busy={workshopImport.isPending}
+                unsupported={workshopUnsupported}
+                onBack={() => setWorkshopPreview(null)}
+                onCancel={() => setWorkshopDialogOpen(false)}
+                onToggle={(id) => setSelectedWorkshopIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])}
+                onImport={() => workshopImport.mutate({ ids: selectedWorkshopIds, providerKey: workshopProviderKey, previewId: workshopPreview.previewId })}
+              />
+            ) : (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  requestWorkshopPreview(workshopIds, workshopProviderKey);
+                }}
+              >
+                <div className="grid gap-2">
+                  <textarea
+                    aria-label={t("workshopIdsPlaceholder")}
+                    className="min-h-24 w-full resize-none rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green"
+                    placeholder={t("workshopIdsPlaceholder")}
+                    value={workshopIdsText}
+                    onChange={(event) => setWorkshopIdsText(event.target.value)}
+                    disabled={workshopItemsPreview.isPending}
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <p className="text-slate-500">{t("workshopIdHint")}</p>
+                    <a
+                      href={steamWorkshopURL(workshopProviderKey, "items")}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-slate-400 transition hover:text-panel-green"
+                    >
+                      {t("browseSteamWorkshop")}
+                      <ExternalLink aria-hidden="true" className="size-3" />
+                    </a>
+                  </div>
+                  {workshopItemsPreview.isError ? (
+                    <p className="rounded-md border border-panel-gold/25 bg-panel-gold/5 px-3 py-2 text-xs leading-5 text-panel-gold">
+                      {workshopItemsPreview.error instanceof Error ? workshopItemsPreview.error.message : t("unablePreviewWorkshopItems")}
+                    </p>
+                  ) : null}
                 </div>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => setWorkshopDialogOpen(false)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
-                  <Button variant="secondary" onClick={() => requestWorkshopImport(workshopIds, workshopProviderKey)} disabled={workshopImport.isPending || workshopIds.length === 0 || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setWorkshopDialogOpen(false)} disabled={workshopItemsPreview.isPending}>{t("cancel")}</Button>
+                  <Button type="submit" variant="secondary" disabled={workshopItemsPreview.isPending || workshopIds.length === 0 || workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
                     <Download aria-hidden="true" />
-                    {workshopImport.isPending ? t("actionWorking") : workshopIds.length > 0 ? t("importWorkshopModsCount", { count: workshopIds.length }) : t("importWorkshopMods")}
+                    {workshopItemsPreview.isPending ? t("resolvingWorkshopItems") : t("previewWorkshopItems")}
                   </Button>
                 </div>
-              </div>
-            </>
+              </form>
+            )
           )}
-        </DialogShell>
-      )}
-
-      {pendingDependencyImport && (
-        <DialogShell
-          title={t("importDependenciesTitle")}
-          description={t("importDependenciesDescription", { names: pendingDependencyImport.dependencyNames.join(", ") })}
-          onClose={() => setPendingDependencyImport(null)}
-        >
-          <div className="rounded-md border border-panel-line bg-slate-950/45 px-3 py-3">
-            <p className="text-xs text-slate-500">{t("dependencies")}</p>
-            <p className="mt-1 text-sm font-medium text-slate-100">{pendingDependencyImport.dependencyNames.join(", ")}</p>
-          </div>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={() => setPendingDependencyImport(null)} disabled={workshopImport.isPending}>{t("cancel")}</Button>
-            <Button variant="secondary" onClick={() => workshopImport.mutate({ ids: pendingDependencyImport.primaryIds, providerKey: pendingDependencyImport.providerKey })} disabled={workshopImport.isPending}>
-              {t("importOnlySelected")}
-            </Button>
-            <Button onClick={() => workshopImport.mutate({ ids: [...pendingDependencyImport.primaryIds, ...pendingDependencyImport.dependencyIds], providerKey: pendingDependencyImport.providerKey })} disabled={workshopImport.isPending}>
-              <Download aria-hidden="true" />
-              {workshopImport.isPending ? t("actionWorking") : t("importWithDependencies")}
-            </Button>
-          </div>
         </DialogShell>
       )}
 
@@ -957,10 +913,93 @@ function SectionToolbar({ actions, count, hint, title }: { actions: ReactNode; c
   );
 }
 
+function WorkshopImportPreview({
+  busy,
+  onBack,
+  onCancel,
+  onImport,
+  onToggle,
+  preview,
+  selectedIds,
+  unsupported
+}: {
+  busy: boolean;
+  onBack: () => void;
+  onCancel: () => void;
+  onImport: () => void;
+  onToggle: (id: string) => void;
+  preview: WorkshopPreview;
+  selectedIds: string[];
+  unsupported: boolean;
+}) {
+  const { t } = useI18n();
+  const title = preview.collectionName
+    || (preview.collectionId ? t("steamCollectionNumber", { id: preview.collectionId }) : t("workshopItemsPreviewTitle"));
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-panel-line bg-slate-950/45 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-slate-100">{title}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {t("workshopPreviewSummary", {
+              total: preview.summary.total,
+              added: preview.summary.new,
+              existing: preview.summary.inLibrary
+            })}
+          </p>
+        </div>
+        <Button variant="ghost" onClick={onBack} disabled={busy}>{preview.collectionId ? t("changeCollection") : t("changeWorkshopItems")}</Button>
+      </div>
+      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+        {preview.items.map((item) => {
+          const checked = selectedIds.includes(item.workshopId);
+          return (
+            <button
+              key={item.workshopId}
+              type="button"
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition",
+                checked ? "border-panel-green/50 bg-panel-green/5" : "border-panel-line bg-slate-950/35",
+                !item.selectable && "cursor-not-allowed opacity-55"
+              )}
+              disabled={!item.selectable || busy}
+              onClick={() => onToggle(item.workshopId)}
+            >
+              <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", checked ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600")}>
+                {checked && <Check aria-hidden="true" className="size-3" />}
+              </span>
+              <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded bg-slate-900">
+                {item.previewUrl ? <Image src={item.previewUrl} alt="" width={44} height={44} className="size-full object-cover" unoptimized /> : <Package aria-hidden="true" className="size-5 text-slate-500" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-slate-100">{item.title || item.workshopId}</span>
+                <span className="mt-0.5 block text-xs text-slate-500">{item.size} · {workshopPreviewStatusLabel(item.status, t)}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {preview.summary.unavailable > 0 ? (
+        <p className="mt-3 text-xs leading-5 text-panel-gold">{t("workshopUnavailableItemsSkipped", { count: preview.summary.unavailable })}</p>
+      ) : null}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs text-slate-500">{t("workshopIdsSelected", { count: selectedIds.length })}</span>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>{t("cancel")}</Button>
+          <Button variant="secondary" onClick={onImport} disabled={busy || selectedIds.length === 0 || unsupported}>
+            <Download aria-hidden="true" />
+            {busy ? t("actionWorking") : t("confirmWorkshopImport")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DialogShell({ children, description, onClose, title }: { children: ReactNode; description?: string; onClose: () => void; title: string }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-8">
-      <div className="w-full max-w-2xl rounded-lg border border-panel-line bg-panel-card shadow-2xl shadow-black/30">
+      <div className="w-full max-w-2xl rounded-lg border border-panel-line bg-panel-card shadow-2xl shadow-black/30" role="dialog" aria-modal="true" aria-label={title}>
         <div className="flex items-start justify-between gap-4 border-b border-panel-line p-4">
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-white">{title}</h2>
@@ -1190,19 +1229,6 @@ function RecommendedModCard({
 function recommendedModDisabledReason(item: RecommendedMod, workshopUnsupported: boolean, t: (key: MessageKey) => string) {
   if (dstModScopeFromTags(item.providerKey, item.tags) === "client") return t("dstClientOnlyLibraryBlocked");
   if (isWorkshopRecommended(item) && workshopUnsupported) return t("workshopArmUnsupported");
-  return "";
-}
-
-function dstWorkshopImportBlockReason(ids: string[], providerKey: ProviderKey, recommendedMods: RecommendedMod[], t: (key: MessageKey) => string) {
-  if (providerKey !== "dont-starve-together") return "";
-  const catalog = new Map(recommendedMods
-    .filter((mod) => mod.providerKey === providerKey && mod.workshopId)
-    .map((mod) => [mod.workshopId ?? "", mod]));
-  for (const id of ids) {
-    const item = catalog.get(id);
-    if (!item || dstModScopeFromTags(item.providerKey, item.tags) === "unknown") return t("dstUnknownWorkshopBlocked");
-    if (dstModScopeFromTags(item.providerKey, item.tags) === "client") return t("dstClientOnlyLibraryBlocked");
-  }
   return "";
 }
 

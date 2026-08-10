@@ -960,6 +960,25 @@ export async function previewWorkshopCollection(input: { value: string; provider
   };
 }
 
+export async function previewWorkshopItems(input: { workshopIds: string[]; providerKey?: ProviderKey }): Promise<WorkshopPreview> {
+  const response = await apiFetch(`${API_BASE}/api/mods/workshop/items/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workshopIds: input.workshopIds,
+      providerKey: input.providerKey ?? "terraria-tmodloader"
+    })
+  });
+  const payload = await readPayload<Omit<WorkshopPreview, "items"> & { items: Array<Omit<WorkshopPreview["items"][number], "size">> }>(
+    response,
+    "Unable to preview Workshop items"
+  );
+  return {
+    ...payload,
+    items: payload.items.map((item) => ({ ...item, size: formatBytes(item.fileSize) }))
+  };
+}
+
 export async function importGlobalWorkshopMods(workshopIds: string[], providerKey = "terraria-tmodloader", previewId?: string): Promise<ModFile[]> {
   const response = await apiFetch(`${API_BASE}/api/mods/workshop`, {
     method: "POST",

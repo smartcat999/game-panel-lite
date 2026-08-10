@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getWorldRegeneration, listBackups, listGames, listWorlds, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
+import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getWorldRegeneration, listBackups, listGames, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -297,6 +297,28 @@ describe("api mappers", () => {
       method: "POST",
       body: JSON.stringify({ startAfterUpdate: true })
     }));
+  });
+
+  it("previews Steam Workshop items before import", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      previewId: "preview-1",
+      collectionId: "",
+      providerKey: "terraria-tmodloader",
+      expiresAt: new Date().toISOString(),
+      summary: { total: 1, new: 1, inLibrary: 0, inServer: 0, unavailable: 0 },
+      items: [{ workshopId: "2824688072", title: "Calamity Mod", fileSize: 1048576, status: "new", selectable: true }]
+    }), { status: 200 }));
+
+    const preview = await previewWorkshopItems({ workshopIds: ["2824688072"], providerKey: "terraria-tmodloader" });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/api/mods/workshop/items/preview"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ workshopIds: ["2824688072"], providerKey: "terraria-tmodloader" })
+      })
+    );
+    expect(preview.items[0]).toMatchObject({ title: "Calamity Mod", size: "1.0 MB" });
   });
 
   it("uses server-scoped asynchronous world regeneration endpoints", async () => {

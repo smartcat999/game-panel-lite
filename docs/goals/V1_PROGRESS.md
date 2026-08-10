@@ -1,5 +1,12 @@
 # V1 Progress
 
+## 2026-08-10
+
+- Changed every Steam-backed mod-library import path to preview current Workshop metadata before writing data, including direct IDs, recommended Workshop cards, collections, and collection-based mod packs.
+- Added a short-lived individual-item preview API with provider validation, DST server-mod filtering, library-state detection, metadata caching, and confirmation-token validation for selected items.
+- Unified the bilingual confirmation UI around current titles, images, sizes, availability, dependencies, and import counts; unavailable or client-only entries remain visible but cannot be selected.
+- Added backend resolver/handler coverage, frontend API coverage, Playwright flow coverage, and OpenAPI documentation; full Go tests/vet, 102 frontend tests, lint, typecheck, and production build pass. Browser execution remains unavailable locally because the matching Playwright Chromium binary is not installed.
+
 ## 2026-07-29
 
 - Added server-side Steam Workshop collection resolution for tModLoader and Don't Starve Together using fixed official API endpoints, strict Steam URL parsing, provider AppID validation, bounded nested collection expansion, response size limits, and request timeouts without reading Steam cookies or credentials.

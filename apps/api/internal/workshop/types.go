@@ -21,6 +21,7 @@ var (
 
 type Resolver interface {
 	ResolveCollection(ctx context.Context, providerKey domain.ProviderKey, input string) (Collection, error)
+	ResolveItems(ctx context.Context, providerKey domain.ProviderKey, workshopIDs []string) ([]Item, error)
 }
 
 type Collection struct {

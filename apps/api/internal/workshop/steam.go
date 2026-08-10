@@ -81,6 +81,40 @@ func (r *SteamResolver) ResolveCollection(ctx context.Context, providerKey domai
 	return Collection{ID: collectionID, Title: title, Items: items}, nil
 }
 
+func (r *SteamResolver) ResolveItems(ctx context.Context, providerKey domain.ProviderKey, workshopIDs []string) ([]Item, error) {
+	appID, ok := workshopAppID(providerKey)
+	if !ok {
+		return nil, ErrUnsupportedProvider
+	}
+	unique := make([]string, 0, len(workshopIDs))
+	seen := make(map[string]struct{}, len(workshopIDs))
+	for _, id := range workshopIDs {
+		id = strings.TrimSpace(id)
+		if !isDigits(id) {
+			return nil, fmt.Errorf("%w: invalid item ID %q", ErrInvalidCollection, id)
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return nil, fmt.Errorf("%w: enter at least one item ID", ErrInvalidCollection)
+	}
+	if len(unique) > MaxCollectionItems {
+		return nil, ErrCollectionTooLarge
+	}
+	_, items, err := r.publishedFileDetails(ctx, "", unique, appID)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("%w: items are unavailable or incompatible with the selected game", ErrInvalidCollection)
+	}
+	return items, nil
+}
+
 func (r *SteamResolver) collectionPageTitle(ctx context.Context, collectionID string) (string, error) {
 	requestURL := r.communityBase + "/sharedfiles/filedetails/?id=" + url.QueryEscape(collectionID)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
@@ -213,7 +247,10 @@ func (r *SteamResolver) collectionDetails(ctx context.Context, ids []string) (ma
 }
 
 func (r *SteamResolver) publishedFileDetails(ctx context.Context, collectionID string, ids []string, expectedAppID int) (string, []Item, error) {
-	allIDs := append([]string{collectionID}, ids...)
+	allIDs := append([]string(nil), ids...)
+	if collectionID != "" {
+		allIDs = append([]string{collectionID}, allIDs...)
+	}
 	collectionTitle := ""
 	items := make([]Item, 0, len(ids))
 	for start := 0; start < len(allIDs); start += steamBatchSize {

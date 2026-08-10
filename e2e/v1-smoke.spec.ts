@@ -309,6 +309,30 @@ async function mockApi(page: Page) {
     });
   });
 
+  await page.route("**/api/mods/workshop/items/preview", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        previewId: "item-preview-e2e",
+        collectionId: "",
+        providerKey: "terraria-tmodloader",
+        expiresAt: "2026-07-29T10:10:00.000Z",
+        items: [
+          {
+            workshopId: "2824688072",
+            title: "Calamity Mod",
+            previewUrl: "",
+            fileSize: 3537895424,
+            subscriptions: 9299532,
+            status: "new",
+            selectable: true
+          }
+        ],
+        summary: { total: 1, new: 1, inLibrary: 0, inServer: 0, unavailable: 0 }
+      })
+    });
+  });
+
   await page.route("**/api/mods/workshop", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -446,7 +470,7 @@ test("Steam collection preview imports selected Workshop mods", async ({ page })
   await expect(dialog.getByText("Magic Storage")).toBeVisible();
   await expect(dialog.getByText("共 2 个 · 新增 1 个 · 模组库已有 1 个")).toBeVisible();
   const importRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/mods/workshop"));
-  await dialog.getByRole("button", { name: "导入所选模组" }).click();
+  await dialog.getByRole("button", { name: "确认导入" }).click();
   const request = await importRequest;
   expect(request.postDataJSON()).toMatchObject({
     providerKey: "terraria-tmodloader",
@@ -454,6 +478,31 @@ test("Steam collection preview imports selected Workshop mods", async ({ page })
     workshopIds: ["2824688072"]
   });
   await expect(page.getByText("创意工坊 ID 已导入。")).toBeVisible();
+});
+
+test("Steam Workshop IDs show current metadata before import", async ({ page }) => {
+  await page.goto("/mods");
+
+  await page.getByRole("button", { name: "从 Steam 导入" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "从 Steam 导入" });
+  await dialog.getByRole("button", { name: "创意工坊 ID" }).click();
+  await dialog.getByPlaceholder("粘贴模组链接或 ID，支持多个").fill("2824688072");
+
+  const previewRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/mods/workshop/items/preview"));
+  await dialog.getByRole("button", { name: "预览模组信息" }).click();
+  const preview = await previewRequest;
+  expect(preview.postDataJSON()).toMatchObject({ providerKey: "terraria-tmodloader", workshopIds: ["2824688072"] });
+  await expect(dialog.getByText("Calamity Mod")).toBeVisible();
+  await expect(dialog.getByText("Steam 模组预览")).toBeVisible();
+
+  const importRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/api/mods/workshop"));
+  await dialog.getByRole("button", { name: "确认导入" }).click();
+  const request = await importRequest;
+  expect(request.postDataJSON()).toMatchObject({
+    providerKey: "terraria-tmodloader",
+    previewId: "item-preview-e2e",
+    workshopIds: ["2824688072"]
+  });
 });
 
 test("server detail and management flows expose live V1 actions", async ({ page, context }) => {

@@ -110,3 +110,32 @@ func TestSteamResolverRejectsUnavailableCollection(t *testing.T) {
 		t.Fatalf("expected unavailable collection error, got %v", err)
 	}
 }
+
+func TestSteamResolverResolvesIndividualItems(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if r.URL.Path != "/ISteamRemoteStorage/GetPublishedFileDetails/v1/" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if r.Form.Get("itemcount") != "2" || r.Form.Get("publishedfileids[0]") != "200" {
+			t.Fatalf("unexpected item request: %+v", r.Form)
+		}
+		fmt.Fprint(w, `{"response":{"publishedfiledetails":[
+			{"publishedfileid":"200","result":1,"consumer_app_id":1281930,"file_size":"1024","title":"Calamity","file_type":0},
+			{"publishedfileid":"201","result":1,"consumer_app_id":322330,"file_size":"2048","title":"Wrong game","file_type":0}
+		]}}`)
+	}))
+	defer server.Close()
+
+	resolver := NewSteamResolverWithClient(server.Client(), server.URL)
+	items, err := resolver.ResolveItems(context.Background(), domain.ProviderTerrariaTModLoader, []string{"200", "201"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].WorkshopID != "200" || items[0].Title != "Calamity" {
+		t.Fatalf("unexpected items: %+v", items)
+	}
+}
