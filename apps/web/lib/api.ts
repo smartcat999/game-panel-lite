@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -800,6 +800,40 @@ export async function listMods(serverId: string): Promise<ModFile[]> {
   }
   const payload = (await response.json()) as ApiModFile[];
   return payload.map(toModFile);
+}
+
+export async function listModConfigs(serverId: string): Promise<ModConfigFile[]> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs`, { cache: "no-store" });
+  return readPayload<ModConfigFile[]>(response, "Unable to load mod configs");
+}
+
+export async function getModConfig(serverId: string, name: string): Promise<ModConfigFile> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/${encodeURIComponent(name)}`, { cache: "no-store" });
+  return readPayload<ModConfigFile>(response, "Unable to load mod config");
+}
+
+export async function saveModConfig(serverId: string, name: string, content: string): Promise<ModConfigFile> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content })
+  });
+  return readPayload<ModConfigFile>(response, "Unable to save mod config");
+}
+
+export async function uploadModConfig(serverId: string, file: File): Promise<ModConfigFile> {
+  const body = new FormData();
+  body.set("file", file);
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/upload`, { method: "POST", body });
+  return readPayload<ModConfigFile>(response, "Unable to upload mod config");
+}
+
+export async function deleteModConfig(serverId: string, name: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod config");
+  }
 }
 
 function toModFile(file: ApiModFile): ModFile {

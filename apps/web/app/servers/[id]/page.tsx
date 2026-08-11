@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Ban, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, Package, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Archive, ArrowRight, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -31,6 +31,7 @@ import {
   downloadWorldFile,
   enableServerShare,
   getDockerStatus,
+  getModConfig,
   getGameServer,
   getRuntimeStats,
   getServerJoinInfo,
@@ -41,6 +42,7 @@ import {
   listBackups,
   listGlobalMods,
   listModPacks,
+  listModConfigs,
   listMods,
   listWorlds,
   previewTerrariaConfig,
@@ -48,9 +50,12 @@ import {
   sendServerCommand,
   gameServerAction,
   setModEnabled,
+  saveModConfig,
   serverLogsUrl,
   serverWatchUrl,
   updateGameServerConfig,
+  uploadModConfig,
+  deleteModConfig,
   uploadMod,
   type ServerConfigUpdatePayload,
   type ServerWatchSnapshot,
@@ -67,11 +72,12 @@ import { describeResourceAction, formatServerDetailError, isServerLifecyclePendi
 import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
-import type { Backup, GameServerResource, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
+import type { Backup, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "players" | "version" | "config" | "worlds" | "backups" | "mods";
 type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
+type ModPanelSection = "installed" | "configs";
 
 const terrariaProviderKeys = new Set(["terraria-vanilla", "terraria-tmodloader"]);
 const providerFieldLabelKeys: Record<string, MessageKey> = {
@@ -961,6 +967,8 @@ export default function ServerDetailPage() {
           )}
           {activeTab === "mods" && capabilities.mods && (
             <ModsTab
+              serverId={serverResource.id}
+              supportsModConfigs={serverResource.providerKey === "terraria-tmodloader"}
               availableMods={providerGlobalMods}
               assigning={modAssign.isPending}
               deleting={modDelete.isPending}
@@ -2373,6 +2381,8 @@ function BackupsTab({
 }
 
 function ModsTab({
+  serverId,
+  supportsModConfigs,
   availableMods,
   assigning,
   deleting,
@@ -2394,6 +2404,8 @@ function ModsTab({
   onUpload,
   onToggle
 }: {
+  serverId: string;
+  supportsModConfigs: boolean;
   availableMods: ModFile[];
   assigning: boolean;
   deleting: boolean;
@@ -2419,6 +2431,12 @@ function ModsTab({
   const [installerOpen, setInstallerOpen] = useState(false);
   const [installSource, setInstallSource] = useState<ModInstallSource>("library");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
+  const [activeSection, setActiveSection] = useState<ModPanelSection>("installed");
+  const modConfigsSummary = useQuery({
+    queryKey: ["server-mod-configs", serverId],
+    queryFn: () => listModConfigs(serverId),
+    enabled: supportsModConfigs
+  });
   const modAction = describeResourceAction({ kind: "modifyMods", serverStatus });
   const blocked = modAction.disabled;
   const workshopBlockReason = workshopUnsupported ? t("workshopArmUnsupported") : "";
@@ -2445,25 +2463,45 @@ function ModsTab({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [installerOpen]);
 
+  const sectionTabs = supportsModConfigs ? (
+    <div aria-label={t("detailModActions")} className="inline-flex rounded-lg border border-panel-line bg-slate-950/45 p-1" role="tablist">
+      <button
+        aria-controls="installed-mods-panel"
+        aria-selected={activeSection === "installed"}
+        className={cn(
+          "rounded-md px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+          activeSection === "installed" ? "bg-panel-green/10 text-panel-green" : "text-slate-400 hover:bg-slate-900 hover:text-slate-100"
+        )}
+        id="installed-mods-tab"
+        onClick={() => setActiveSection("installed")}
+        role="tab"
+        type="button"
+      >
+        {t("installedModsTab", { count: items.length })}
+      </button>
+      <button
+        aria-controls="mod-configs-panel"
+        aria-selected={activeSection === "configs"}
+        className={cn(
+          "rounded-md px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+          activeSection === "configs" ? "bg-panel-green/10 text-panel-green" : "text-slate-400 hover:bg-slate-900 hover:text-slate-100"
+        )}
+        id="mod-configs-tab"
+        onClick={() => setActiveSection("configs")}
+        role="tab"
+        type="button"
+      >
+        {t("modConfigsTab", { count: modConfigsSummary.data?.length ?? 0 })}
+      </button>
+    </div>
+  ) : null;
+
   return (
-    <ResourcePanel
-      title={t("detailModActions")}
-      href="/mods"
-      action={
-        <div className="flex flex-wrap gap-2">
-          {onUpload ? (
-            <Button variant="secondary" onClick={onUpload} disabled={uploading || blocked} title={uploadAccept ? `${t("uploadMod")} ${uploadAccept}` : undefined}>
-              <Upload aria-hidden="true" />
-              {uploading ? t("actionWorking") : t("uploadMod")}
-            </Button>
-          ) : null}
-          <Button variant="secondary" onClick={() => setInstallerOpen(true)}>
-            <Package aria-hidden="true" />
-            {t("installMods")}
-          </Button>
-        </div>
-      }
-    >
+    <div>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-white">{t("detailModActions")}</h2>
+        <p className="mt-1 text-sm text-slate-400">{t("serverModsCombinedHint")}</p>
+      </div>
       <div className="space-y-4">
         {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
         {libraryError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
@@ -2473,24 +2511,65 @@ function ModsTab({
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
-          {isError ? <p className="px-4 pb-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
-          {!isError && isLoading ? <p className="px-4 py-4 text-sm text-slate-400">{t("loading")}</p> : null}
-          {!isError && !isLoading && items.length === 0 ? <p className="px-4 py-4 text-sm text-slate-400">{t("noModsUploaded")}</p> : null}
-          <div className="divide-y divide-panel-line">
-            {items.map((mod) => (
-              <ServerModRow
-                key={mod.id}
-                disabled={blocked}
-                deleting={deleting}
-                mod={mod}
-                toggling={toggling}
-                onDelete={onDelete}
-                onToggle={onToggle}
-              />
-            ))}
+        {activeSection === "installed" ? (
+          <div aria-labelledby={supportsModConfigs ? "installed-mods-tab" : undefined} id="installed-mods-panel" role={supportsModConfigs ? "tabpanel" : undefined}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              {sectionTabs}
+              <Button onClick={() => setInstallerOpen(true)} disabled={blocked}>
+                <Package aria-hidden="true" />
+                {t("installMods")}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-panel-line bg-slate-950/35">
+              {isError ? <p className="px-4 py-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
+              {!isError && isLoading ? <p className="px-4 py-4 text-sm text-slate-400">{t("loading")}</p> : null}
+              {!isError && !isLoading && items.length === 0 ? (
+                <div className="flex min-h-40 flex-col items-center justify-center px-5 py-8 text-center">
+                  <Package aria-hidden="true" className="mb-3 size-6 text-slate-500" />
+                  <p className="font-medium text-slate-100">{t("noInstalledMods")}</p>
+                  <p className="mt-1 max-w-md text-sm text-slate-400">{t("noInstalledModsHint")}</p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Link href="/mods" className="inline-flex h-10 items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 text-sm font-medium text-slate-100 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50">
+                      {t("openFullManager")}
+                    </Link>
+                    {onUpload ? (
+                      <Button variant="secondary" onClick={onUpload} disabled={uploading || blocked} title={uploadAccept ? `${t("uploadMod")} ${uploadAccept}` : undefined}>
+                        <Upload aria-hidden="true" />
+                        {uploading ? t("actionWorking") : t("uploadLocalMod")}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {items.length > 0 ? (
+                <>
+                  {onUpload ? (
+                    <div className="flex justify-end border-b border-panel-line px-4 py-2.5">
+                      <button className="text-sm font-medium text-slate-400 transition hover:text-panel-green focus:outline-none focus:ring-2 focus:ring-panel-green/50" disabled={uploading || blocked} onClick={onUpload} type="button">
+                        {uploading ? t("actionWorking") : t("uploadLocalMod")}
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="divide-y divide-panel-line">
+                    {items.map((mod) => (
+                      <ServerModRow
+                        key={mod.id}
+                        disabled={blocked}
+                        deleting={deleting}
+                        mod={mod}
+                        toggling={toggling}
+                        onDelete={onDelete}
+                        onToggle={onToggle}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : supportsModConfigs ? (
+          <ModConfigsPanel serverId={serverId} serverStatus={serverStatus} tabs={sectionTabs} />
+        ) : null}
       </div>
       {installerOpen ? (
         <div
@@ -2648,8 +2727,191 @@ function ModsTab({
           </div>
         </div>
       ) : null}
-    </ResourcePanel>
+    </div>
   );
+}
+
+function ModConfigsPanel({ serverId, serverStatus, tabs }: { serverId: string; serverStatus: ServerStatus; tabs: ReactNode }) {
+  const { locale, t } = useI18n();
+  const client = useQueryClient();
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState<ModConfigFile | null>(null);
+  const [content, setContent] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<ModConfigFile | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [restartRequired, setRestartRequired] = useState(false);
+  const action = describeResourceAction({ kind: "modifyMods", serverStatus });
+  const queryKey = ["server-mod-configs", serverId];
+  const configs = useQuery({
+    queryKey,
+    queryFn: () => listModConfigs(serverId)
+  });
+  const openEditor = useMutation({
+    mutationFn: (name: string) => getModConfig(serverId, name),
+    onSuccess: (item) => {
+      setEditing(item);
+      setContent(item.content ?? "");
+      setError("");
+    },
+    onError: (reason) => setError(reason instanceof Error ? reason.message : t("modConfigLoadFailed"))
+  });
+  const save = useMutation({
+    mutationFn: () => saveModConfig(serverId, editing?.name ?? "", content),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey });
+      setEditing(null);
+      setRestartRequired(true);
+      setNotice(t("modConfigSaved"));
+      setError("");
+    },
+    onError: (reason) => setError(reason instanceof Error ? reason.message : t("modConfigLoadFailed"))
+  });
+  const upload = useMutation({
+    mutationFn: (file: File) => uploadModConfig(serverId, file),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey });
+      setRestartRequired(true);
+      setNotice(t("modConfigUploaded"));
+      setError("");
+    },
+    onError: (reason) => setError(reason instanceof Error ? reason.message : t("modConfigLoadFailed"))
+  });
+  const remove = useMutation({
+    mutationFn: (name: string) => deleteModConfig(serverId, name),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey });
+      setPendingDelete(null);
+      setRestartRequired(true);
+      setNotice(t("modConfigDeleted"));
+      setError("");
+    },
+    onError: (reason) => setError(reason instanceof Error ? reason.message : t("modConfigLoadFailed"))
+  });
+  useEffect(() => {
+    if (!editing) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !save.isPending) setEditing(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editing, save.isPending]);
+
+  return (
+    <section aria-labelledby="mod-configs-tab" id="mod-configs-panel" role="tabpanel">
+      <input
+        ref={uploadRef}
+        className="hidden"
+        type="file"
+        accept=".json,application/json"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) upload.mutate(file);
+          event.target.value = "";
+        }}
+      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        {tabs}
+        <Button onClick={() => uploadRef.current?.click()} disabled={upload.isPending || action.disabled} title={action.reasonKey ? t(action.reasonKey) : undefined}>
+          <Upload aria-hidden="true" />
+          {upload.isPending ? t("actionWorking") : t("uploadModConfig")}
+        </Button>
+      </div>
+      <div className="rounded-lg border border-panel-line bg-slate-950/35">
+        {restartRequired ? <p className="border-b border-panel-gold/20 bg-panel-gold/10 px-4 py-2.5 text-sm text-panel-gold">{t("modConfigRestartRequired")}</p> : null}
+        {error ? <p className="border-b border-red-400/20 bg-red-400/10 px-4 py-2.5 text-sm text-red-200">{error}</p> : null}
+        {notice ? <p className="border-b border-panel-green/20 bg-panel-green/10 px-4 py-2.5 text-sm text-panel-green">{notice}</p> : null}
+        {configs.isLoading ? <p className="px-4 py-4 text-sm text-slate-400">{t("loading")}</p> : null}
+        {configs.isError ? <p className="px-4 py-4 text-sm text-panel-gold">{t("modConfigLoadFailed")}</p> : null}
+        {!configs.isLoading && !configs.isError ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-panel-line px-4 py-3 text-xs text-slate-500">
+            <span>{t("modConfigFileCount", { count: configs.data?.length ?? 0 })}</span>
+            {(configs.data?.length ?? 0) > 0 ? <span>{t("modConfigEffectHint")}</span> : null}
+          </div>
+        ) : null}
+        {!configs.isLoading && !configs.isError && (configs.data?.length ?? 0) === 0 ? (
+          <div className="flex min-h-40 flex-col items-center justify-center px-5 py-8 text-center">
+            <Braces aria-hidden="true" className="mb-3 size-6 text-slate-500" />
+            <p className="font-medium text-slate-100">{t("noModConfigsTitle")}</p>
+            <p className="mt-1 max-w-lg text-sm text-slate-400">{t("noModConfigs")}</p>
+          </div>
+        ) : null}
+        <div className="divide-y divide-panel-line">
+          {(configs.data ?? []).map((item) => (
+            <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 transition hover:bg-slate-900/35" key={item.name}>
+              <div className="min-w-0">
+                <p className="truncate font-medium text-slate-100">{item.name}</p>
+                <p className="mt-1 text-xs text-slate-500">{formatModConfigSize(item.sizeBytes)} · {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.updatedAt))}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="secondary" className="h-9 px-3 text-sm" onClick={() => openEditor.mutate(item.name)} disabled={openEditor.isPending || action.disabled}>
+                  <Pencil aria-hidden="true" />
+                  {t("edit")}
+                </Button>
+                <details className="group relative">
+                  <summary aria-haspopup="menu" aria-label={t("moreActions")} className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md border border-panel-line bg-slate-900/70 text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50 [&::-webkit-details-marker]:hidden" role="button">
+                    <MoreHorizontal aria-hidden="true" className="size-4" />
+                  </summary>
+                  <div className="absolute right-0 top-11 z-20 min-w-36 rounded-md border border-panel-line bg-panel-card p-1">
+                    <button
+                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-300 transition hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-red-400/40"
+                      disabled={remove.isPending || action.disabled}
+                      onClick={(event) => {
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                        setPendingDelete(item);
+                      }}
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" className="size-4" />
+                      {t("deleteModConfig")}
+                    </button>
+                  </div>
+                </details>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {editing ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !save.isPending) setEditing(null); }}>
+          <div className="w-full max-w-3xl overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_12px_40px_rgba(0,0,0,0.35)]" role="dialog" aria-modal="true" aria-labelledby="mod-config-editor-title">
+            <div className="flex items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
+              <div className="min-w-0">
+                <h3 className="truncate font-semibold text-white" id="mod-config-editor-title">{t("editModConfigTitle", { name: editing.name })}</h3>
+                <p className="mt-1 text-sm text-slate-400">{t("modConfigValidationHint")}</p>
+              </div>
+              <button className="flex size-9 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50" onClick={() => setEditing(null)} aria-label={t("cancel")} type="button"><X aria-hidden="true" className="size-4" /></button>
+            </div>
+            <div className="p-5">
+              <label className="text-sm font-medium text-slate-300" htmlFor="mod-config-content">{t("modConfigContent")}</label>
+              <textarea autoFocus id="mod-config-content" className="mt-2 min-h-[360px] w-full resize-y rounded-md border border-panel-line bg-slate-950/70 p-3 font-mono text-sm leading-6 text-slate-100 outline-none transition focus:border-panel-green focus:ring-2 focus:ring-panel-green/20" spellCheck={false} value={content} onChange={(event) => setContent(event.target.value)} />
+              {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setEditing(null)} disabled={save.isPending}>{t("cancel")}</Button>
+                <Button onClick={() => save.mutate()} disabled={save.isPending}><Save aria-hidden="true" />{save.isPending ? t("actionWorking") : t("saveModConfig")}</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        eyebrow={t("destructiveAction")}
+        title={t("deleteModConfigConfirm", { name: pendingDelete?.name ?? "" })}
+        description={t("modConfigRestartRequired")}
+        cancelLabel={t("cancel")}
+        confirmLabel={remove.isPending ? t("actionWorking") : t("delete")}
+        busy={remove.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.name)}
+      />
+    </section>
+  );
+}
+
+function formatModConfigSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 function ResourcePanel({

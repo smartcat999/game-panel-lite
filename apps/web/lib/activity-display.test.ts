@@ -31,6 +31,13 @@ describe("formatActivityEvent", () => {
     });
   });
 
+  it("localizes mod config activity", () => {
+    expect(formatActivityEvent({ ...baseEvent, type: "mod_config.saved", message: "Saved mod config Example.json" }, "zh")).toEqual({
+      message: "已保存模组配置 Example.json",
+      typeLabel: "模组配置保存"
+    });
+  });
+
   it("keeps the backend message in English locale while presenting a friendly type label", () => {
     expect(formatActivityEvent(baseEvent, "en")).toEqual({
       message: "Started server Friends",

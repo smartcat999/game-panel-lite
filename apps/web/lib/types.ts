@@ -333,6 +333,13 @@ export type ModFile = {
   created: string;
 };
 
+export type ModConfigFile = {
+  name: string;
+  sizeBytes: number;
+  updatedAt: string;
+  content?: string;
+};
+
 export type RecommendedMod = {
   rank: number;
   source?: string;
