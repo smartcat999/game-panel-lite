@@ -34,8 +34,10 @@ Run this on a server with Docker installed:
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
 
 # Or specify a custom install path:
-curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- /opt/gamepanel-lite
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- "$HOME/apps/gamepanel-lite"
 ```
+
+The target directory must be writable by the current user. Use elevated permissions only when installing into a system directory such as `/opt`.
 
 Then open:
 
