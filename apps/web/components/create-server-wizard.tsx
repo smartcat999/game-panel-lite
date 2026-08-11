@@ -385,10 +385,20 @@ function createReviewConfigModel({
   if (gameKey === "terraria") {
     const secretSeed = secretSeedKeyFor(config.seed);
     const secretSeedDefinition = terrariaSecretSeeds.find((seed) => seed.key === secretSeed);
-    const selectedSeedModeCount = terrariaSeedModeCodes(config).length;
-    const seedLabel = secretSeed
+    const selectedSeedModeNames = terrariaSeedModeCodes(config).map((key) => {
+      const definition = terrariaSpecialWorldSeeds.find((seed) => seed.key === key)
+        ?? terrariaSecretWorldSeeds145.find((seed) => seed.key === key);
+      return definition ? terrariaSeedDisplayName(definition, locale) : key;
+    });
+    const baseSeedLabel = secretSeed
       ? `${secretSeedDefinition ? terrariaSeedDisplayName(secretSeedDefinition, locale) : secretSeed} · ${secretSeed}`
       : config.seed?.trim() || t("tagRandom");
+    const seedModeList = selectedSeedModeNames.join(locale.startsWith("zh") ? "、" : ", ");
+    const seedLabel = selectedSeedModeNames.length > 0
+      ? config.seed?.trim()
+        ? t("worldSeedWithModes", { seed: config.seed.trim(), modes: seedModeList })
+        : t("combinedWorldSeed", { modes: seedModeList })
+      : baseSeedLabel;
     const worldSizeLabel = config.worldSize === "small" ? t("tagSmallWorld") : config.worldSize === "medium" ? t("tagMediumWorld") : t("tagLargeWorld");
     const worldEvilLabel = config.worldEvil === "corruption" ? t("tagCorruption") : config.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
     const difficultyLabel = config.difficulty === "journey" ? t("tagJourney") : config.difficulty === "classic" ? t("tagClassic") : config.difficulty === "expert" ? t("tagExpert") : t("tagMaster");
@@ -402,7 +412,6 @@ function createReviewConfigModel({
         { label: t("worldEvil"), value: worldEvilLabel },
         { label: t("difficulty"), value: difficultyLabel },
         { label: t("worldSeed"), value: seedLabel },
-        ...(selectedSeedModeCount > 0 ? [{ label: t("seedModes"), value: t("seedModesSummary", { special: config.specialSeeds?.length ?? 0, secret: config.secretSeeds?.length ?? 0 }) }] : []),
         { label: t("maxPlayersInput"), value: String(config.maxPlayers) },
         { label: t("password"), value: config.password ? t("enabled") : t("none") },
         { label: t("secureMode"), value: config.secure ? t("enabled") : t("disabled") },
@@ -455,8 +464,9 @@ export function CreateServerWizard() {
   const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 0, memoryLimitMb: 0 });
   const [version, setVersion] = useState("");
   const [configValidationErrors, setConfigValidationErrors] = useState<ConfigValidationErrors>({});
+  const [saveAsPreset, setSaveAsPreset] = useState(false);
   const [presetName, setPresetName] = useState("");
-  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+  const [presetSavedForCurrentSubmit, setPresetSavedForCurrentSubmit] = useState(false);
   const [selectedWorldId, setSelectedWorldId] = useState("");
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
   const [appliedConfigPresetId, setAppliedConfigPresetId] = useState("");
@@ -565,23 +575,33 @@ export function CreateServerWizard() {
       await queryClient.invalidateQueries({ queryKey: ["config-presets"] });
     }
   });
-  const openPresetDialog = () => {
-    saveConfigPreset.reset();
+  const defaultPresetName = () => {
     const defaultPresetSource = selectedGameKey === "terraria"
       ? config.serverName
       : providerServerName(providerConfigPayload, "");
-    setPresetName(`${defaultPresetSource || gameDisplayName(selectedGame?.key ?? selectedGameKey, selectedGame?.name ?? selectedGameKey, t)} ${t("configurationPreset")}`);
-    setPresetDialogOpen(true);
+    return `${defaultPresetSource || gameDisplayName(selectedGame?.key ?? selectedGameKey, selectedGame?.name ?? selectedGameKey, t)} ${t("configurationPreset")}`;
   };
-  const closePresetDialog = () => {
-    if (saveConfigPreset.isPending) return;
+  const toggleSaveAsPreset = () => {
     saveConfigPreset.reset();
-    setPresetDialogOpen(false);
+    setPresetSavedForCurrentSubmit(false);
+    const next = !saveAsPreset;
+    if (next && !presetName.trim()) setPresetName(defaultPresetName());
+    setSaveAsPreset(next);
   };
-  const submitPreset = () => {
+  const submitCreate = () => {
+    if (!validateCurrentConfig()) return;
+    if (!saveAsPreset || presetSavedForCurrentSubmit) {
+      create.mutate();
+      return;
+    }
     const name = presetName.trim();
     if (!name) return;
-    saveConfigPreset.mutate(name);
+    saveConfigPreset.mutate(name, {
+      onSuccess: () => {
+        setPresetSavedForCurrentSubmit(true);
+        create.mutate();
+      }
+    });
   };
   const chooseMode = (nextMode: "vanilla" | "tmodloader") => {
     const basePreset = nextMode === "tmodloader" ? tmodLoaderBasePreset : "friends-casual";
@@ -879,35 +899,43 @@ export function CreateServerWizard() {
                 resourceLimits={resourceLimits}
                 selectedWorldName={showWorldAndBackupFeatures ? selectedWorld?.name : undefined}
                 selectedModNames={selectedModNames}
-                presetDialogOpen={presetDialogOpen}
+                saveAsPreset={saveAsPreset}
                 presetName={presetName}
                 presetSaveError={saveConfigPreset.error instanceof Error ? saveConfigPreset.error.message : ""}
                 presetSavePending={saveConfigPreset.isPending}
-                presetSaveSuccess={saveConfigPreset.isSuccess}
-                onChangePresetName={setPresetName}
-                onClosePreset={closePresetDialog}
-                onOpenPreset={openPresetDialog}
-                onSavePreset={submitPreset}
+                onChangePresetName={(name) => {
+                  saveConfigPreset.reset();
+                  setPresetSavedForCurrentSubmit(false);
+                  setPresetName(name);
+                }}
+                onToggleSaveAsPreset={toggleSaveAsPreset}
               />
             )}
           </motion.div>
           <div className="mt-8 flex justify-between">
-            <Button variant="secondary" disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
+            <Button
+              variant="secondary"
+              disabled={step === 0}
+              onClick={() => {
+                setPresetSavedForCurrentSubmit(false);
+                setStep((value) => Math.max(0, value - 1));
+              }}
+            >
               <ChevronLeft aria-hidden="true" />
               {t("back")}
             </Button>
             <Button
               onClick={() => {
-                if ((currentStepId === "config" || currentStepId === "review") && !validateCurrentConfig()) return;
+                if (currentStepId === "config" && !validateCurrentConfig()) return;
                 if (step === stepIds.length - 1) {
-                  create.mutate();
+                  submitCreate();
                   return;
                 }
                 setStep((value) => Math.min(stepIds.length - 1, value + 1));
               }}
-              disabled={create.isPending || !canContinueCurrentStep || (step === stepIds.length - 1 && !canCreateSelectedProvider)}
+              disabled={create.isPending || saveConfigPreset.isPending || !canContinueCurrentStep || (step === stepIds.length - 1 && (!canCreateSelectedProvider || (saveAsPreset && presetName.trim().length === 0)))}
             >
-              {step === stepIds.length - 1 ? create.isPending ? t("creating") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
+              {step === stepIds.length - 1 ? create.isPending ? t("creating") : saveConfigPreset.isPending ? t("saving") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
@@ -1771,98 +1799,6 @@ function RuntimeResourceSection({
   );
 }
 
-function PresetSaveDialog({
-  error,
-  name,
-  onChangeName,
-  onClose,
-  onSave,
-  open,
-  pending,
-  success
-}: {
-  error: string;
-  name: string;
-  onChangeName: (name: string) => void;
-  onClose: () => void;
-  onSave: () => void;
-  open: boolean;
-  pending: boolean;
-  success: boolean;
-}) {
-  const { t } = useI18n();
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !pending) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open, pending]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-8 backdrop-blur-sm"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pending) onClose();
-      }}
-    >
-      <div
-        aria-describedby="preset-save-dialog-description"
-        aria-labelledby="preset-save-dialog-title"
-        aria-modal="true"
-        className="w-full max-w-lg rounded-lg border border-panel-line bg-panel-card shadow-[0_16px_48px_rgba(0,0,0,0.4)]"
-        role="dialog"
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-panel-line p-5">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-white" id="preset-save-dialog-title">{t("saveConfigurationPreset")}</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500" id="preset-save-dialog-description">{t("configurationPresetSaveHint")}</p>
-          </div>
-          <button
-            aria-label={t("cancel")}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={pending}
-            onClick={onClose}
-            type="button"
-          >
-            <X aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-        <div className="p-5">
-          <WizardField label={t("configurationPresetName")}>
-            <Input
-              autoFocus
-              value={name}
-              placeholder={t("configurationPresetNamePlaceholder")}
-              onChange={(event) => onChangeName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !pending && name.trim().length > 0) {
-                  onSave();
-                }
-              }}
-            />
-          </WizardField>
-          {success && <p className="mt-3 text-xs text-panel-green">{t("configurationPresetSaved")}</p>}
-          {error && <p className="mt-3 text-xs text-panel-gold">{error}</p>}
-          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="secondary" onClick={onClose} disabled={pending}>{t("cancel")}</Button>
-            <Button variant="primary" onClick={onSave} disabled={pending || name.trim().length === 0}>
-              <Bookmark aria-hidden="true" />
-              {pending ? t("saving") : t("saveConfigurationPreset")}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function WizardField({
   children,
   error,
@@ -2183,15 +2119,12 @@ function ReviewStep({
   resourceLimits,
   selectedWorldName,
   selectedModNames,
-  presetDialogOpen,
+  saveAsPreset,
   presetName,
   presetSaveError,
   presetSavePending,
-  presetSaveSuccess,
   onChangePresetName,
-  onClosePreset,
-  onOpenPreset,
-  onSavePreset
+  onToggleSaveAsPreset
 }: {
   address?: string;
   configModel: ReviewConfigModel;
@@ -2201,15 +2134,12 @@ function ReviewStep({
   resourceLimits: ResourceLimits;
   selectedWorldName?: string;
   selectedModNames: string[];
-  presetDialogOpen: boolean;
+  saveAsPreset: boolean;
   presetName: string;
   presetSaveError: string;
   presetSavePending: boolean;
-  presetSaveSuccess: boolean;
   onChangePresetName: (name: string) => void;
-  onClosePreset: () => void;
-  onOpenPreset: () => void;
-  onSavePreset: () => void;
+  onToggleSaveAsPreset: () => void;
 }) {
   const { t } = useI18n();
   const invitePreview = createReviewInvitePreview({
@@ -2223,32 +2153,8 @@ function ReviewStep({
   const joinInstruction = t(reviewJoinInstructionKey(gameKey));
   return (
     <div>
-      <PresetSaveDialog
-        error={presetSaveError}
-        name={presetName}
-        open={presetDialogOpen}
-        pending={presetSavePending}
-        success={presetSaveSuccess}
-        onChangeName={onChangePresetName}
-        onClose={onClosePreset}
-        onSave={onSavePreset}
-      />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">{t("review")}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t("configurationPresetSaveHint")}</p>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          aria-expanded={presetDialogOpen}
-          aria-haspopup="dialog"
-          onClick={onOpenPreset}
-        >
-          <Bookmark aria-hidden="true" />
-          {t("saveConfigurationPreset")}
-        </Button>
-      </div>
+      <h2 className="text-lg font-semibold">{t("review")}</h2>
+      <p className="mt-1 text-sm text-slate-500">{t("reviewHint")}</p>
       <Card className="mt-4 p-4">
         <div className="rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
           <div className="flex items-center gap-2 font-medium text-slate-100">
@@ -2291,6 +2197,56 @@ function ReviewStep({
           </div>
         )}
       </Card>
+      <div className="mt-4 overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={saveAsPreset}
+          className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-slate-900/55 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50"
+          disabled={presetSavePending}
+          onClick={onToggleSaveAsPreset}
+        >
+          <span className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-md border",
+            saveAsPreset ? "border-panel-green/50 bg-panel-green/10 text-panel-green" : "border-panel-line bg-slate-950/60 text-slate-500"
+          )}>
+            <Bookmark aria-hidden="true" className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-slate-100">{t("savePresetWithServer")}</span>
+            <span className="mt-0.5 block text-xs text-slate-500">{t("savePresetWithServerHint")}</span>
+          </span>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition",
+              saveAsPreset ? "justify-end bg-panel-green" : "justify-start bg-slate-700"
+            )}
+          >
+            <span className="size-5 rounded-full bg-white shadow-sm" />
+          </span>
+        </button>
+        {saveAsPreset && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.15 }}
+            className="border-t border-panel-line p-4"
+          >
+            <WizardField label={t("configurationPresetName")}>
+              <Input
+                aria-label={t("configurationPresetName")}
+                value={presetName}
+                disabled={presetSavePending}
+                placeholder={t("configurationPresetNamePlaceholder")}
+                onChange={(event) => onChangePresetName(event.target.value)}
+              />
+            </WizardField>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{t("configurationPresetSaveHint")}</p>
+            {presetSaveError && <p className="mt-2 text-xs text-panel-gold">{presetSaveError}</p>}
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2299,7 +2255,7 @@ function ReviewConfigItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-panel-line bg-slate-950/55 px-3 py-2">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-slate-200">{value}</p>
+      <p className="mt-1 break-words text-sm font-medium leading-5 text-slate-200">{value}</p>
     </div>
   );
 }
