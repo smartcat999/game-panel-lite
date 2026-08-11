@@ -55,6 +55,11 @@ const labels: Record<string, Record<Locale, string>> = {
   "server.game-update.queued": { zh: "游戏更新排队", en: "Game Update Queued" },
   "server.game-update.failed": { zh: "游戏更新失败", en: "Game Update Failed" },
   "server.game-update.succeeded": { zh: "游戏更新完成", en: "Game Update Completed" },
+  "provider.game-update.auto-check": { zh: "自动检查设置", en: "Auto-check Settings" },
+  "provider.game-update.auto-check.queued": { zh: "版本检查排队", en: "Version Check Queued" },
+  "provider.game-update.queued": { zh: "版本检查排队", en: "Version Check Queued" },
+  "provider.game-update.failed": { zh: "版本检查失败", en: "Version Check Failed" },
+  "provider.game-update.succeeded": { zh: "版本检查完成", en: "Version Check Completed" },
   "settings.locale": { zh: "语言设置", en: "Language Settings" },
   "settings.publicHost": { zh: "设置更新", en: "Settings Updated" },
   "world.imported": { zh: "世界导入", en: "World Imported" },
@@ -103,6 +108,14 @@ const zhTemplates: Record<string, (message: string) => string | undefined> = {
   "server.game-update.auto-check.queued": (message) => withMatch(message, /^Queued automatic game update check for (.+)$/, ([name]) => `已提交 ${name} 的自动更新检查`),
   "server.game-update.queued": (message) => withMatch(message, /^Queued game update task for (.+)$/, ([name]) => `已提交 ${name} 的游戏更新任务`),
   "server.game-update.succeeded": () => "游戏更新任务已完成",
+  "provider.game-update.auto-check": (message) =>
+    withMatch(message, /^Updated automatic game version checks for (.+)$/, ([providerKey = ""]) => `已更新 ${providerActivityName(providerKey, "zh")} 的自动检查设置`),
+  "provider.game-update.auto-check.queued": (message) =>
+    withMatch(message, /^Queued automatic game version check for (.+)$/, ([providerKey = ""]) => `已提交 ${providerActivityName(providerKey, "zh")} 的自动版本检查`),
+  "provider.game-update.queued": (message) =>
+    withMatch(message, /^Queued game version check for (.+)$/, ([providerKey = ""]) => `已提交 ${providerActivityName(providerKey, "zh")} 的版本检查`),
+  "provider.game-update.succeeded": () => "游戏版本检查已完成",
+  "provider.game-update.failed": (message) => `游戏版本检查失败：${formatServerDetailError(new Error(message))}`,
   "settings.locale": (message) => withMatch(message, /^Updated locale to "(.+)"$/, ([locale]) => `已将界面语言切换为${locale === "zh" ? "中文" : "英文"}`),
   "world.imported": (message) => withMatch(message, /^Imported world (.+)$/, ([name]) => `已导入世界 ${name}`),
   "world.snapshot.created": (message) => withMatch(message, /^Saved world snapshot (.+) from (.+)$/, ([world, server]) => `已从 ${server} 保存世界快照 ${world}`),
@@ -153,6 +166,11 @@ export function formatActivityEvent(event: ActivityEvent, locale: Locale): Activ
 }
 
 function formatActivityPayloadMessage(event: ActivityEvent, locale: Locale): string | undefined {
+  const providerKey = payloadString(event, "providerKey");
+  if (providerKey) {
+    const providerMessage = formatProviderGameUpdateMessage(event, locale, providerKey);
+    if (providerMessage) return providerMessage;
+  }
   const serverName = payloadString(event, "serverName");
   if (serverName) {
     const lifecycleMessage = formatLifecyclePayloadMessage(event, locale, serverName);
@@ -274,6 +292,46 @@ function formatActivityPayloadMessage(event: ActivityEvent, locale: Locale): str
     }
   }
   return undefined;
+}
+
+function formatProviderGameUpdateMessage(event: ActivityEvent, locale: Locale, providerKey: string): string | undefined {
+  const providerName = providerActivityName(providerKey, locale);
+  const buildId = payloadString(event, "buildId");
+  const error = payloadString(event, "error") ?? (event.type === "provider.game-update.failed" ? event.message : undefined);
+  const messages: Record<string, Record<Locale, string>> = {
+    "provider.game-update.auto-check": {
+      zh: `已更新 ${providerName} 的自动检查设置`,
+      en: `Updated automatic version checks for ${providerName}`
+    },
+    "provider.game-update.auto-check.queued": {
+      zh: `已提交 ${providerName} 的自动版本检查`,
+      en: `Queued an automatic version check for ${providerName}`
+    },
+    "provider.game-update.queued": {
+      zh: `已提交 ${providerName} 的版本检查`,
+      en: `Queued a version check for ${providerName}`
+    },
+    "provider.game-update.failed": {
+      zh: `${providerName} 版本检查失败：${formatServerDetailError(new Error(error ?? "未知错误"))}`,
+      en: `${providerName} version check failed: ${error ?? "Unknown error"}`
+    },
+    "provider.game-update.succeeded": {
+      zh: buildId ? `${providerName} 已完成版本检查，最新 Build 为 ${buildId}` : `${providerName} 已完成版本检查`,
+      en: buildId ? `${providerName} version check completed; latest Build is ${buildId}` : `${providerName} version check completed`
+    }
+  };
+  return messages[event.type]?.[locale];
+}
+
+function providerActivityName(providerKey: string, locale: Locale): string {
+  const names: Record<string, Record<Locale, string>> = {
+    "terraria-vanilla": { zh: "Terraria 原版", en: "Terraria Vanilla" },
+    "terraria-tmodloader": { zh: "Terraria tModLoader", en: "Terraria tModLoader" },
+    palworld: { zh: "幻兽帕鲁", en: "Palworld" },
+    "dont-starve-together": { zh: "饥荒联机版", en: "Don't Starve Together" },
+    minecraft: { zh: "我的世界 Java 版", en: "Minecraft Java Edition" }
+  };
+  return names[providerKey]?.[locale] ?? providerKey;
 }
 
 function formatLifecyclePayloadMessage(event: ActivityEvent, locale: Locale, serverName: string): string | undefined {

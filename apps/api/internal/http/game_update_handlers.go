@@ -30,7 +30,7 @@ const (
 	gameUpdateRecoveryRetry      = 10 * time.Second
 	gameUpdatePersistenceRetry   = 100 * time.Millisecond
 	gameUpdateHealthStableWindow = 30 * time.Second
-	gameUpdateAutoCheckInterval  = 6 * time.Hour
+	gameUpdateAutoCheckInterval  = 12 * time.Hour
 	gameUpdateAutoCheckScanEvery = 15 * time.Minute
 	gameUpdateAutoCheckStartWait = 30 * time.Second
 	minGameUpdateFreeDiskBytes   = int64(8 * 1024 * 1024 * 1024)

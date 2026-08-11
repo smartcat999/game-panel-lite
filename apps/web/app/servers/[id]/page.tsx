@@ -896,7 +896,6 @@ export default function ServerDetailPage() {
             <div className={activeTab === "version" ? "" : "hidden"}>
               <GameUpdateCard
                 playersOnline={playersOnline}
-                runtimeImage={serverResource.spec.runtime?.image}
                 runtimeVersion={gameServerVersion(serverResource)}
                 serverId={serverResource.id}
                 serverStatus={status}
