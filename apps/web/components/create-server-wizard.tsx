@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Settings2, X } from "lucide-react";
+import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Search, Settings2, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
@@ -1403,12 +1403,16 @@ function ConfigStep({
                 onCustomize();
                 setConfig({ ...config, specialSeeds, secretSeeds });
               }}
+              onSelectLegacySeed={(seed) => {
+                onCustomize();
+                setConfig({ ...config, seed, specialSeeds: [], secretSeeds: [] });
+              }}
             />
           </WizardField>
         </div>
-        <div className="grid gap-3 md:col-span-2 sm:grid-cols-2">
-          <WizardCheckbox label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
-          <WizardCheckbox label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
+        <div className="overflow-hidden rounded-md border border-panel-line bg-slate-950/35 md:col-span-2 sm:grid sm:grid-cols-2 sm:divide-x sm:divide-panel-line">
+          <WizardSwitch label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
+          <WizardSwitch label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
         </div>
       </div>
     </div>
@@ -1419,6 +1423,7 @@ function SeedInput({
   config,
   onChange,
   onChangeSeedModes,
+  onSelectLegacySeed,
   placeholder,
   supportsLegacySecretSeedPicker,
   supportsModernSeedModes,
@@ -1427,6 +1432,7 @@ function SeedInput({
   config: TerrariaConfig;
   onChange: (value: string) => void;
   onChangeSeedModes: (specialSeeds: string[], secretSeeds: string[]) => void;
+  onSelectLegacySeed: (seed: string) => void;
   placeholder: string;
   supportsLegacySecretSeedPicker: boolean;
   supportsModernSeedModes: boolean;
@@ -1463,9 +1469,7 @@ function SeedInput({
     onChangeSeedModes([], []);
   };
   const selectLegacySeed = (key: string) => {
-    onChange(key);
-    onChangeSeedModes([], []);
-    setOpen(false);
+    onSelectLegacySeed(key);
   };
   const pickerLabel = supportsModernSeedModes
     ? selectedModeCount > 0 ? t("seedModesSelected", { count: selectedModeCount }) : t("seedModes")
@@ -1897,33 +1901,34 @@ function WizardSelect({
   );
 }
 
-function WizardCheckbox({ checked, invalid, label, onChange }: { checked: boolean; invalid?: boolean; label: string; onChange: (checked: boolean) => void }) {
+function WizardSwitch({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
     <label
-      className={cn(
-        "grid min-h-11 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-3 py-2 text-sm transition",
-        checked
-          ? "border-panel-green/45 bg-panel-green/10 text-slate-100"
-          : "border-panel-line bg-slate-950/40 text-slate-400 hover:border-slate-600 hover:text-slate-200",
-        invalid && "border-red-400/70 bg-red-950/20 text-red-100"
-      )}
+      className="group flex min-h-12 cursor-pointer items-center justify-between gap-4 px-3.5 py-2.5 text-sm text-slate-300 transition hover:bg-slate-900/60 hover:text-slate-100 focus-within:bg-slate-900/60 focus-within:outline-none focus-within:ring-2 focus-within:ring-inset focus-within:ring-panel-green/40 max-sm:border-b max-sm:border-panel-line last:max-sm:border-b-0"
     >
-      <span className="min-w-0 break-words font-medium leading-5">{label}</span>
+      <span className="min-w-0 font-medium leading-5">{label}</span>
       <input
         className="sr-only"
         checked={checked}
+        role="switch"
         type="checkbox"
         onChange={(event) => onChange(event.target.checked)}
       />
       <span
         aria-hidden="true"
         className={cn(
-          "flex size-5 shrink-0 items-center justify-center rounded border",
-          checked ? "border-panel-green bg-panel-green text-slate-950" : "border-panel-line bg-slate-950 text-transparent",
-          invalid && !checked ? "border-red-300/70 bg-red-950/20" : null
+          "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200",
+          checked
+            ? "border-panel-green bg-panel-green"
+            : "border-slate-600 bg-slate-700 group-hover:border-slate-500"
         )}
       >
-        <Check className="size-3.5" />
+        <span
+          className={cn(
+            "absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white transition-transform duration-200",
+            checked && "translate-x-4"
+          )}
+        />
       </span>
     </label>
   );
@@ -1951,6 +1956,12 @@ function ModsStep({
   onToggleMod: (modId: string) => void;
 }) {
   const { t } = useI18n();
+  const [search, setSearch] = useState("");
+  const searchTerm = search.trim().toLocaleLowerCase(locale);
+  const visibleMods = searchTerm
+    ? mods.filter((mod) => [modDisplayName(mod, locale), mod.fileName, mod.workshopId, ...(mod.tags ?? [])]
+      .some((value) => value?.toLocaleLowerCase(locale).includes(searchTerm)))
+    : mods;
   return (
     <div>
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
@@ -1982,73 +1993,144 @@ function ModsStep({
         </div>
       ) : (
         <div className="mt-6">
-          <h2 className="text-lg font-semibold">{t("selectMods")}</h2>
-          <p className="mt-1 text-sm text-slate-400">{t("selectModsHint")}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">{t("selectMods")}</h2>
+              <p className="mt-1 text-sm text-slate-400">{t("selectModsHint")}</p>
+            </div>
+            <div className="flex min-h-8 items-center gap-3">
+              <span className={cn("text-sm", selectedModIds.length > 0 ? "text-slate-200" : "text-slate-500")}>
+                {t("selectedModsCount", { count: selectedModIds.length })}
+              </span>
+              {selectedModIds.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-slate-400 transition hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40"
+                  onClick={() => onSelectModPack("")}
+                >
+                  {t("clearSelection")}
+                </button>
+              ) : null}
+            </div>
+          </div>
           {modPacks.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-medium text-slate-500">{t("modPacks")}</p>
-              <div className="mt-2 grid gap-2">
-                {modPacks.map((pack) => (
-                  <button
-                    key={pack.id}
-                    type="button"
-                    onClick={() => onSelectModPack(selectedModPackId === pack.id ? "" : pack.id)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-                      selectedModPackId === pack.id
-                        ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-                        : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
-                    )}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{pack.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-slate-500">{pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ")}</p>
-                    </div>
-                    <span className="shrink-0 rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{pack.mods.length}</span>
-                  </button>
-                ))}
+            <div className="mt-5">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">{t("modPacks")}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{t("chooseModPackHint")}</p>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2" role="radiogroup" aria-label={t("modPacks")}>
+                {modPacks.map((pack) => {
+                  const active = selectedModPackId === pack.id;
+                  const previewNames = pack.mods.slice(0, 3).map((mod) => modDisplayName(mod, locale));
+                  const preview = pack.description.trim() || [previewNames.join(" · "), pack.modIds.length > 3 ? `+${pack.modIds.length - 3}` : ""].filter(Boolean).join("  ");
+                  return (
+                    <button
+                      key={pack.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => {
+                        if (!active) onSelectModPack(pack.id);
+                      }}
+                      className={cn(
+                        "flex min-h-16 w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50",
+                        active
+                          ? "border-panel-green/60 bg-panel-green/10"
+                          : "border-panel-line bg-slate-950/35 hover:border-slate-600 hover:bg-slate-900/55"
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded-full border",
+                          active ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600 bg-slate-950"
+                        )}
+                      >
+                        {active ? <Check className="size-3" /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium text-slate-100">{pack.name}</span>
+                          {active ? <span className="shrink-0 text-xs font-medium text-panel-green">{t("selected")}</span> : null}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-500">{preview || t("modPacksHint")}</span>
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-slate-500">{pack.modIds.length}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
-          <div className="mt-4 space-y-2">
-            {mods.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-8 text-center">
-                <Package aria-hidden="true" className="size-8 text-slate-600" />
-                <p className="mt-3 text-sm text-slate-400">{t("noModsInLibrary")}</p>
-                <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
-                  <Package aria-hidden="true" className="size-4" />
-                  {t("goToModsPage")}
-                </Link>
+          <div className="mt-5 border-t border-panel-line pt-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">{t("modLibrary")}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{t("customizeModSelectionHint")}</p>
               </div>
-            ) : (
-              <>
-                {mods.map((mod) => (
-                  <button
-                    key={mod.id}
-                    type="button"
-                    onClick={() => onToggleMod(mod.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-                      selectedModIds.includes(mod.id)
-                        ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-                        : "border-panel-line bg-slate-950/40 hover:bg-slate-900/55"
-                    )}
-                  >
-                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", selectedModIds.includes(mod.id) ? "border-panel-green bg-panel-green text-white" : "border-slate-600")}>
-                      {selectedModIds.includes(mod.id) && <Check aria-hidden="true" className="size-3" />}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{modDisplayName(mod, locale)}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{mod.size}</p>
-                    </div>
-                  </button>
-                ))}
-                <Link href="/mods" className="inline-flex items-center gap-2 pt-1 text-sm text-panel-green hover:underline">
-                  <Package aria-hidden="true" className="size-4" />
-                  {t("goToModsPage")}
-                </Link>
-              </>
-            )}
+              {mods.length > 0 ? (
+                <div className="relative w-full sm:w-72">
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+                  <Input
+                    value={search}
+                    placeholder={t("searchMods")}
+                    className="pl-9"
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-3">
+              {mods.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-8 text-center">
+                  <Package aria-hidden="true" className="size-8 text-slate-600" />
+                  <p className="mt-3 text-sm text-slate-400">{t("noModsInLibrary")}</p>
+                  <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
+                    <Package aria-hidden="true" className="size-4" />
+                    {t("goToModsPage")}
+                  </Link>
+                </div>
+              ) : visibleMods.length === 0 ? (
+                <div className="rounded-md border border-dashed border-panel-line px-4 py-8 text-center text-sm text-slate-500">
+                  {t("noMatchingMods")}
+                </div>
+              ) : (
+                <>
+                  <div className="grid max-h-[26rem] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                    {visibleMods.map((mod) => {
+                      const active = selectedModIds.includes(mod.id);
+                      return (
+                        <button
+                          key={mod.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => onToggleMod(mod.id)}
+                          className={cn(
+                            "flex min-h-14 w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50",
+                            active
+                              ? "border-panel-green/55 bg-panel-green/10"
+                              : "border-panel-line bg-slate-950/35 hover:border-slate-600 hover:bg-slate-900/55"
+                          )}
+                        >
+                          <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", active ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600 bg-slate-950")}>
+                            {active ? <Check aria-hidden="true" className="size-3" /> : null}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-slate-100">{modDisplayName(mod, locale)}</span>
+                            <span className="mt-0.5 block truncate text-xs text-slate-500">{[mod.modVersion, mod.size].filter(Boolean).join(" · ")}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
+                    <Package aria-hidden="true" className="size-4" />
+                    {t("goToModsPage")}
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
