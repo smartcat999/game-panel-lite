@@ -130,6 +130,16 @@ func TestTModLoaderRuntimeOptionsUseNonInteractiveConfig(t *testing.T) {
 			t.Fatalf("expected tModLoader env to contain %q, got:\n%s", expected, env)
 		}
 	}
+	foundModConfigsMount := false
+	for _, mount := range options.DataMounts {
+		if mount == "ModConfigs:/home/container/ModConfigs" {
+			foundModConfigsMount = true
+			break
+		}
+	}
+	if !foundModConfigsMount {
+		t.Fatalf("expected tModLoader runtime to persist ModConfigs, got: %v", options.DataMounts)
+	}
 	rendered := options.Files["serverconfig.txt"]
 	for _, expected := range []string{
 		"world=/home/container/Worlds/Modded Smoke.wld",

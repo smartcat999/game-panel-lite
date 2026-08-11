@@ -465,6 +465,7 @@ func tModLoaderRuntimeOptions(config Config) runtime.ContainerOptions {
 		DataMounts: []string{
 			"Worlds:/home/container/Worlds",
 			"Mods:/home/container/Mods",
+			"ModConfigs:/home/container/ModConfigs",
 			"logs:/home/container/logs",
 			"steamapps:/home/container/steamapps",
 			"serverconfig.txt:/home/container/serverconfig.txt",
