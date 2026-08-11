@@ -5,7 +5,7 @@ import { AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button, Card } from "@/components/ui";
-import { applyGameUpdate, checkGameUpdate, getGameUpdate, updateGameUpdateAutoCheck } from "@/lib/api";
+import { applyGameUpdate, checkGameUpdate, getGameUpdate } from "@/lib/api";
 import { isGameUpdateStateActive, normalizeGameUpdateProgress } from "@/lib/game-update";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -43,11 +43,15 @@ function shouldResumeServer(status: ServerStatus) {
 
 export function GameUpdateCard({
   playersOnline,
+  runtimeImage,
+  runtimeVersion,
   serverId,
   serverStatus,
   onActiveChange
 }: {
   playersOnline: number;
+  runtimeImage?: string;
+  runtimeVersion?: string;
   serverId: string;
   serverStatus: ServerStatus;
   onActiveChange?: (active: boolean, status?: string) => void;
@@ -63,34 +67,6 @@ export function GameUpdateCard({
     queryFn: () => getGameUpdate(serverId),
     retry: false,
     refetchInterval: (query) => isGameUpdateStateActive(query.state.data) ? 2000 : 30000
-  });
-
-  const checkMutation = useMutation({
-    mutationFn: () => checkGameUpdate(serverId),
-    onSuccess: async (job) => {
-      queryClient.setQueryData<GameUpdateState>(queryKey, (current) => ({
-        supported: current?.supported ?? true,
-        status: "checking",
-        autoCheckEnabled: current?.autoCheckEnabled ?? true,
-        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 6,
-        installedBuildId: current?.installedBuildId,
-        latestBuildId: current?.latestBuildId,
-        checkedAt: current?.checkedAt,
-        job
-      }));
-      await queryClient.invalidateQueries({ queryKey });
-    }
-  });
-
-  const autoCheckMutation = useMutation({
-    mutationFn: (enabled: boolean) => updateGameUpdateAutoCheck(serverId, enabled),
-    onSuccess: ({ enabled, intervalHours }) => {
-      queryClient.setQueryData<GameUpdateState>(queryKey, (current) => current ? {
-        ...current,
-        autoCheckEnabled: enabled,
-        autoCheckIntervalHours: intervalHours
-      } : current);
-    }
   });
 
   const applyMutation = useMutation({
@@ -111,24 +87,41 @@ export function GameUpdateCard({
     }
   });
 
+  const checkMutation = useMutation({
+    mutationFn: () => checkGameUpdate(serverId),
+    onSuccess: async (job) => {
+      queryClient.setQueryData<GameUpdateState>(queryKey, (current) => ({
+        supported: current?.supported ?? true,
+        status: "checking",
+        autoCheckEnabled: current?.autoCheckEnabled ?? true,
+        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 6,
+        installedBuildId: current?.installedBuildId,
+        latestBuildId: current?.latestBuildId,
+        checkedAt: current?.checkedAt,
+        job
+      }));
+      await queryClient.invalidateQueries({ queryKey });
+    }
+  });
+
   const state = updateQuery.data;
   const active = isGameUpdateStateActive(state);
-  const progress = normalizeGameUpdateProgress(state?.job?.progress);
   const status = state?.status ?? "unknown";
+  const updateActive = active && state?.job?.operation === "apply";
+  const displayedStatus = status;
+  const progress = normalizeGameUpdateProgress(state?.job?.progress);
   const stageKey = updateStageLabelKeys[state?.job?.stage ?? ""];
-  const statusLabel = t(updateStatusLabelKeys[status] ?? "gameUpdateStatusUnknown");
+  const statusLabel = t(updateStatusLabelKeys[displayedStatus] ?? "gameUpdateStatusUnknown");
   const stageLabel = stageKey ? t(stageKey) : status === "checking" ? t("gameUpdateStatusChecking") : t("gameUpdateStatusUpdating");
   const blockedByPlayers = playersOnline > 0;
   const loadError = updateQuery.isError ? t("gameUpdateUnavailable") : "";
   const actionError = checkMutation.isError
     ? t("gameUpdateCheckFailed")
-    : autoCheckMutation.isError
-      ? t("gameUpdateAutoCheckFailed")
     : applyMutation.isError
       ? t("gameUpdateApplyFailed")
-      : state?.job?.status === "failed"
-        ? state.job.operation === "check" ? t("gameUpdateCheckFailed") : gameUpdateFailureMessage(state.job.error, locale, t)
-        : "";
+    : state?.job?.status === "failed" && state.job.operation === "apply"
+      ? gameUpdateFailureMessage(state.job.error, locale, t)
+      : "";
   const openUpdate = () => {
     applyMutation.reset();
     setStartAfterUpdate(shouldResumeServer(serverStatus));
@@ -136,12 +129,28 @@ export function GameUpdateCard({
   };
 
   useEffect(() => {
-    onActiveChange?.(active, active ? status : undefined);
+    onActiveChange?.(updateActive, updateActive ? status : undefined);
     return () => onActiveChange?.(false);
-  }, [active, onActiveChange, status]);
+  }, [onActiveChange, status, updateActive]);
 
   return (
     <>
+      <Card className="mb-4 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-slate-300">
+            <span aria-hidden="true" className="font-mono text-xs font-semibold">IMG</span>
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold text-white">{t("runtimeImageVersionTitle")}</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-400">{t("runtimeImageVersionDescription")}</p>
+          </div>
+        </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          <VersionRow label={t("runtimeImageVersionLabel")} value={runtimeVersion || "—"} />
+          <VersionRow label={t("runtimeImageReferenceLabel")} value={runtimeImage || "—"} />
+        </dl>
+      </Card>
+
       <Card className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
@@ -154,7 +163,7 @@ export function GameUpdateCard({
             </div>
           </div>
           {!updateQuery.isLoading && !updateQuery.isError && state?.supported !== false ? (
-            <StatusPill status={status} label={statusLabel} />
+            <StatusPill status={displayedStatus} label={statusLabel} />
           ) : null}
         </div>
 
@@ -181,36 +190,7 @@ export function GameUpdateCard({
               <VersionRow label={t("gameUpdateLastChecked")} value={formatCheckedAt(state?.checkedAt, locale, t("gameUpdateNeverChecked"))} />
             </dl>
 
-            <div className="mt-4 flex items-center justify-between gap-4 border-t border-panel-line pt-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-200">{t("gameUpdateAutoCheck")}</p>
-                <p className="mt-0.5 text-xs leading-5 text-slate-400">
-                  {t("gameUpdateAutoCheckHint", { hours: state?.autoCheckIntervalHours || 6 })}
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={state?.autoCheckEnabled ?? true}
-                aria-label={t("gameUpdateAutoCheck")}
-                disabled={autoCheckMutation.isPending}
-                className={cn(
-                  "relative h-6 w-11 shrink-0 rounded-full outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-panel-green/40 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
-                  state?.autoCheckEnabled ?? true ? "bg-panel-green" : "bg-slate-700"
-                )}
-                onClick={() => autoCheckMutation.mutate(!(state?.autoCheckEnabled ?? true))}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    "absolute left-0.5 top-0.5 size-5 rounded-full bg-white transition-transform duration-200 motion-reduce:transition-none",
-                    (state?.autoCheckEnabled ?? true) && "translate-x-5"
-                  )}
-                />
-              </button>
-            </div>
-
-            {active ? (
+            {updateActive ? (
               <div className="mt-4 rounded-md border border-panel-green/25 bg-panel-green/10 p-3">
                 <div className="flex items-center justify-between gap-3 text-xs">
                   <span className="font-medium text-slate-200" aria-live="polite">{stageLabel}</span>
@@ -236,28 +216,19 @@ export function GameUpdateCard({
               </div>
             ) : null}
 
-            <div className="mt-4 flex justify-end">
-              {status === "available" && !active ? (
-                <Button className="w-full sm:w-auto" variant="gold" onClick={openUpdate}>
-                  {t("gameUpdateView")}
+            {!active ? (
+              <div className="mt-4 flex flex-col justify-end gap-2 border-t border-panel-line pt-4 sm:flex-row">
+                <Button className="w-full sm:w-auto" variant="secondary" disabled={checkMutation.isPending} onClick={() => checkMutation.mutate()}>
+                  {checkMutation.isPending ? <RefreshCw aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw aria-hidden="true" className="size-4" />}
+                  {state?.checkedAt ? t("gameUpdateCheckAgain") : t("gameUpdateCheck")}
                 </Button>
-              ) : (
-                <Button
-                  className="w-full sm:w-auto"
-                  variant="secondary"
-                  disabled={active || checkMutation.isPending}
-                  onClick={() => {
-                    checkMutation.reset();
-                    checkMutation.mutate();
-                  }}
-                >
-                  <RefreshCw aria-hidden="true" className={cn("size-4", (active || checkMutation.isPending) && "animate-spin motion-reduce:animate-none")} />
-                  {active || checkMutation.isPending
-                    ? status === "updating" ? t("gameUpdateStatusUpdating") : t("gameUpdateStatusChecking")
-                    : status === "up_to_date" || status === "failed" ? t("gameUpdateCheckAgain") : t("gameUpdateCheck")}
-                </Button>
-              )}
-            </div>
+                {displayedStatus === "available" ? (
+                  <Button className="w-full sm:w-auto" variant="gold" onClick={openUpdate}>
+                    {t("gameUpdateView")}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </>
         )}
       </Card>
