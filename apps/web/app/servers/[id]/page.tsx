@@ -644,6 +644,11 @@ export default function ServerDetailPage() {
   const shareUrl = sharePath ? `${typeof window === "undefined" ? "" : window.location.origin}${sharePath}` : "";
   const logStatusLabel = logStatus === "connected" ? t("logsConnected") : logStatus === "error" ? t("logsDisconnected") : logStatus === "paused" ? t("logsPaused") : logStatus === "idle" ? t("logsIdle") : t("logsConnecting");
   const runtimeErrorMessage = status === "errored" && serverResource.status.lastError ? formatActionError(new Error(serverResource.status.lastError), serverResource.status.lastError) : "";
+  const modLifecycleMessage = activeTab === "mods" && capabilities.mods && isServerLifecyclePending(status)
+    ? t("modChangesLifecycleBusy")
+    : "";
+  const noticeMessage = errorMessage || successMessage || modLifecycleMessage;
+  const noticeTone = errorMessage ? "error" : successMessage ? "success" : "warning";
   const copy = async (label: string, value: string) => {
     try {
       await copyText(value);
@@ -709,17 +714,17 @@ export default function ServerDetailPage() {
       ) : null}
       <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
       {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
-      {(errorMessage || successMessage) && (
+      {noticeMessage && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
           <ToastNotice
             closeLabel={t("cancel")}
-            message={errorMessage || successMessage}
-            tone={errorMessage ? "error" : "success"}
-            onClose={() => {
+            message={noticeMessage}
+            tone={noticeTone}
+            onClose={errorMessage || successMessage ? () => {
               if (noticeTimerRef.current) window.clearTimeout(noticeTimerRef.current);
               setErrorMessage("");
               setSuccessMessage("");
-            }}
+            } : undefined}
           />
         </div>
       )}
@@ -2513,7 +2518,6 @@ function ModsTab({
         <p className="mt-1 text-sm text-slate-400">{t("serverModsCombinedHint")}</p>
       </div>
       <div className="space-y-4">
-        {modAction.reasonKey ? <p className="text-sm text-panel-gold">{t(modAction.reasonKey)}</p> : null}
         {libraryError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
         {pendingRestart ? (
           <div className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">
@@ -2806,6 +2810,11 @@ function ModConfigsPanel({ serverId, serverStatus, tabs }: { serverId: string; s
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editing, save.isPending]);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   return (
     <section aria-labelledby="mod-configs-tab" id="mod-configs-panel" role="tabpanel">
@@ -2820,6 +2829,19 @@ function ModConfigsPanel({ serverId, serverStatus, tabs }: { serverId: string; s
           event.target.value = "";
         }}
       />
+      {(error || notice) && !editing ? (
+        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
+          <ToastNotice
+            closeLabel={t("cancel")}
+            message={error || notice}
+            tone={error ? "error" : "success"}
+            onClose={() => {
+              setError("");
+              setNotice("");
+            }}
+          />
+        </div>
+      ) : null}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         {tabs}
         <Button onClick={() => uploadRef.current?.click()} disabled={upload.isPending || action.disabled} title={action.reasonKey ? t(action.reasonKey) : undefined}>
@@ -2829,8 +2851,6 @@ function ModConfigsPanel({ serverId, serverStatus, tabs }: { serverId: string; s
       </div>
       <div className="rounded-lg border border-panel-line bg-slate-950/35">
         {restartRequired ? <p className="border-b border-panel-gold/20 bg-panel-gold/10 px-4 py-2.5 text-sm text-panel-gold">{t("modConfigRestartRequired")}</p> : null}
-        {error ? <p className="border-b border-red-400/20 bg-red-400/10 px-4 py-2.5 text-sm text-red-200">{error}</p> : null}
-        {notice ? <p className="border-b border-panel-green/20 bg-panel-green/10 px-4 py-2.5 text-sm text-panel-green">{notice}</p> : null}
         {configs.isLoading ? <p className="px-4 py-4 text-sm text-slate-400">{t("loading")}</p> : null}
         {configs.isError ? <p className="px-4 py-4 text-sm text-panel-gold">{t("modConfigLoadFailed")}</p> : null}
         {!configs.isLoading && !configs.isError ? (
@@ -2988,7 +3008,11 @@ function ServerModRow({
               {modDisplayName(mod, locale)}
             </Link>
             {status ? (
-              <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", modRuntimeStatusClassName(status))}>
+              <span
+                className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", modRuntimeStatusClassName(status))}
+                title={status === "runtimeFileMissing" ? t("runtimeFileMissingHint") : undefined}
+                aria-label={status === "runtimeFileMissing" ? `${t(status)}：${t("runtimeFileMissingHint")}` : t(status)}
+              >
                 {t(status)}
               </span>
             ) : null}
@@ -3106,7 +3130,7 @@ function isArmArchitecture(architecture: string | undefined) {
 function modRuntimeStatusClassName(status: ModRuntimeState): string {
   if (status === "enabled") return "bg-panel-green/15 text-panel-green";
   if (status === "notApplied") return "bg-panel-gold/15 text-panel-gold";
-  if (status === "notSynced") return "bg-sky-500/10 text-sky-300";
+  if (status === "runtimeFileMissing") return "bg-panel-gold/15 text-panel-gold";
   return "bg-slate-800 text-slate-300";
 }
 
