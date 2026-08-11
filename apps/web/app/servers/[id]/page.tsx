@@ -1884,9 +1884,9 @@ function ConfigTab({
                 </Field>
               </div>
             </div>
-            <div className="mt-3 grid gap-2 rounded-md border border-panel-line bg-slate-950/50 p-3">
-              <Checkbox label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
-              <Checkbox label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
+            <div className="mt-4 grid overflow-hidden rounded-md border border-panel-line bg-slate-950/40 sm:grid-cols-2 sm:divide-x sm:divide-panel-line max-sm:divide-y max-sm:divide-panel-line">
+              <ConfigSwitch label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
+              <ConfigSwitch label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
             </div>
           </>
         ) : (
@@ -2192,26 +2192,36 @@ function Field({ children, label, required }: { children: ReactNode; label: stri
   );
 }
 
-function Checkbox({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
+function ConfigSwitch({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
   return (
     <label className={cn(
-      "grid cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-md border px-3 py-2.5 text-sm font-medium transition",
-      checked ? "border-panel-green/45 bg-panel-green/10 text-slate-100" : "border-panel-line bg-slate-950/50 text-slate-300 hover:bg-slate-900/70",
+      "group flex min-h-12 cursor-pointer items-center justify-between gap-4 px-3.5 py-2.5 text-sm text-slate-300 outline-none transition hover:bg-slate-900/60 hover:text-slate-100 focus-within:bg-slate-900/60 focus-within:ring-2 focus-within:ring-inset focus-within:ring-panel-green/40",
       disabled && "cursor-not-allowed opacity-60"
     )}>
-      <span className="min-w-0 leading-5">{label}</span>
+      <span className="min-w-0 font-medium leading-5">{label}</span>
       <input
         className="sr-only"
         checked={checked}
         disabled={disabled}
+        role="switch"
         type="checkbox"
         onChange={(event) => onChange(event.target.checked)}
       />
-      <span className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded border",
-        checked ? "border-panel-green bg-panel-green text-slate-950" : "border-panel-line bg-slate-950 text-transparent"
-      )}>
-        <Check aria-hidden="true" className="size-3.5" />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200",
+          checked
+            ? "border-panel-green bg-panel-green"
+            : "border-slate-600 bg-slate-700 group-hover:border-slate-500"
+        )}
+      >
+        <span
+          className={cn(
+            "absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white transition-transform duration-200",
+            checked && "translate-x-4"
+          )}
+        />
       </span>
     </label>
   );

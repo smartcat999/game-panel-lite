@@ -1495,41 +1495,52 @@ function SeedInput({
   const pickerLabel = supportsModernSeedModes
     ? selectedModeCount > 0 ? t("seedModesSelected", { count: selectedModeCount }) : t("seedModes")
     : legacySpecialSeed ? terrariaSeedDisplayName(legacySpecialSeed, locale) : t("secretSeed");
+  const selectedSeedItems = supportsModernSeedModes
+    ? [
+        ...selectedSpecialSeeds.map((key) => ({ key, type: "special" as const, seed: terrariaSpecialWorldSeeds.find((item) => item.key === key) })),
+        ...selectedSecretSeeds.map((key) => ({ key, type: "secret" as const, seed: terrariaSecretWorldSeeds145.find((item) => item.key === key) }))
+      ]
+    : legacySpecialSeed ? [{ key: legacySpecialSeed.key, type: "legacy" as const, seed: legacySpecialSeed }] : [];
   return (
     <div className="relative space-y-1.5">
-      <div className="relative">
-        <Input
-          value={value}
-          placeholder={placeholder}
-          className={showsSeedPicker ? "pr-36" : undefined}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        {showsSeedPicker ? (
+      <Input className="w-full" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      {showsSeedPicker ? (
+        <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-panel-line bg-slate-950/60 px-2 py-1.5 focus-within:border-panel-green">
+          {selectedSeedItems.map(({ key, seed, type }) => {
+            const name = seed ? terrariaSeedDisplayName(seed, locale) : key;
+            return (
+              <button
+                key={`${type}:${key}`}
+                type="button"
+                aria-label={`${t("delete")} ${name}`}
+                className="inline-flex h-7 max-w-full items-center gap-1 rounded border border-panel-green/35 bg-panel-green/12 px-2 text-xs font-medium text-panel-green transition hover:border-panel-green/60 hover:bg-panel-green/18 focus:outline-none focus:ring-2 focus:ring-panel-green/40"
+                onClick={() => type === "legacy" ? clearLegacySeed() : toggleSeed(type, key)}
+              >
+                <span className="max-w-52 truncate">{name}</span>
+                <X aria-hidden="true" className="size-3 shrink-0" />
+              </button>
+            );
+          })}
           <button
             type="button"
             aria-expanded={open}
             className={cn(
-              "absolute right-1.5 top-1/2 inline-flex h-7 -translate-y-1/2 items-center gap-1 rounded-md border px-2 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
-              selectedModeCount > 0 || Boolean(legacySpecialSeed)
-                ? "border-panel-green/50 bg-panel-green/15 text-panel-green"
-                : "border-panel-line bg-slate-950/70 text-slate-400 hover:border-slate-600 hover:bg-slate-900 hover:text-slate-200"
+              "inline-flex h-7 min-w-0 items-center gap-1 rounded px-2 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
+              selectedSeedItems.length > 0
+                ? "ml-auto text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+                : "flex-1 justify-between text-slate-500 hover:bg-slate-900 hover:text-slate-200"
             )}
             onClick={() => setOpen(true)}
           >
-            {pickerLabel}
+            {selectedSeedItems.length > 0 ? t("edit") : pickerLabel}
             <ChevronDown aria-hidden="true" className="size-3.5" />
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {supportsLegacySecretSeedPicker && legacySpecialSeed ? (
         <p className="text-xs leading-5 text-panel-green">
           {t("secretSeedDetected", { name: terrariaSeedDisplayName(legacySpecialSeed, locale) })}
           <span className="text-slate-500"> · {legacySpecialSeed.description}</span>
-        </p>
-      ) : null}
-      {supportsModernSeedModes && selectedModeCount > 0 ? (
-        <p className="text-xs leading-5 text-panel-green">
-          {t("seedModesSummary", { special: selectedSpecialSeeds.length, secret: selectedSecretSeeds.length })}
         </p>
       ) : null}
       {open ? (
