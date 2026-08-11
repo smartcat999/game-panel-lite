@@ -1,5 +1,10 @@
 # V1 Progress
 
+## 2026-08-11
+
+- Completed the remaining Issue #61 tModLoader `ModConfigs` management flow in the server Mods tab with list, JSON editor, upload, delete, and explicit restart-required feedback.
+- Added provider-scoped backend endpoints restricted to top-level `.json` files in the current server data directory, including traversal and symlink rejection, a 1 MiB limit, JSON-object validation, atomic writes, lifecycle/update locking, activity localization, tests, and OpenAPI coverage.
+
 ## 2026-08-10
 
 - Changed every Steam-backed mod-library import path to preview current Workshop metadata before writing data, including direct IDs, recommended Workshop cards, collections, and collection-based mod packs.

@@ -596,6 +596,54 @@ paths:
           description: Deleted mod
         "409":
           description: A game update is active for this server
+  /api/servers/{id}/mod-configs:
+    get:
+      summary: List safe tModLoader ModConfigs JSON files
+      responses:
+        "200":
+          description: Mod config file list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModConfigFile"
+  /api/servers/{id}/mod-configs/upload:
+    post:
+      summary: Upload and validate a tModLoader ModConfigs JSON file
+      responses:
+        "201":
+          description: Uploaded mod config
+  /api/servers/{id}/mod-configs/{name}:
+    get:
+      summary: Read a tModLoader mod config
+      responses:
+        "200":
+          description: Mod config content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModConfigFile"
+    put:
+      summary: Validate and save a tModLoader mod config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        "200":
+          description: Saved mod config
+    delete:
+      summary: Delete a tModLoader mod config
+      responses:
+        "204":
+          description: Deleted mod config
   /api/mods:
     get:
       summary: List unassigned global mod library files
@@ -1493,6 +1541,23 @@ components:
         createdAt:
           type: string
           format: date-time
+    ModConfigFile:
+      type: object
+      required: [name, sizeBytes, updatedAt]
+      properties:
+        name:
+          type: string
+          pattern: '^[^/\\]+\.json$'
+        sizeBytes:
+          type: integer
+          format: int64
+          maximum: 1048576
+        updatedAt:
+          type: string
+          format: date-time
+        content:
+          type: string
+          description: Present only when reading or mutating one file.
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, autoCreateWorld]
