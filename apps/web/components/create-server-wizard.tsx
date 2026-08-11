@@ -59,6 +59,22 @@ const presets = [
 const customPreset = { key: "custom", labelKey: "presetCustom", descriptionKey: "presetCustomDescription", tags: ["tagCustom"] } as const;
 const tmodLoaderBasePreset = "modded-starter" as const;
 
+const terrariaSeedChineseNames: Record<string, string> = {
+  "05162020": "Drunk（醉酒世界）",
+  "for the worthy": "For the Worthy",
+  "not the bees": "Not the Bees",
+  celebrationmk10: "Celebration Mk 10",
+  "the constant": "The Constant",
+  "no traps": "No Traps",
+  dontdigup: "Don't dig up",
+  getfixedboi: "Zenith",
+  skyblock: "Skyblock"
+};
+
+function terrariaSeedDisplayName(seed: { key: string; label: string }, locale: string) {
+  return locale.startsWith("zh") ? terrariaSeedChineseNames[seed.key] ?? seed.label : seed.label;
+}
+
 type BuiltInPresetKey = (typeof presets)[number]["key"];
 type PresetKey = BuiltInPresetKey | typeof customPreset.key;
 type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset)["tags"][number];
@@ -350,6 +366,7 @@ function createReviewConfigModel({
   gameKey,
   gameName,
   hostPortLabel,
+  locale,
   provider,
   providerConfigPayload,
   t,
@@ -359,6 +376,7 @@ function createReviewConfigModel({
   gameKey: string;
   gameName: string;
   hostPortLabel: string;
+  locale: string;
   provider?: ProviderCatalog;
   providerConfigPayload: ProviderConfigPayload;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -366,9 +384,10 @@ function createReviewConfigModel({
 }): ReviewConfigModel {
   if (gameKey === "terraria") {
     const secretSeed = secretSeedKeyFor(config.seed);
+    const secretSeedDefinition = terrariaSecretSeeds.find((seed) => seed.key === secretSeed);
     const selectedSeedModeCount = terrariaSeedModeCodes(config).length;
     const seedLabel = secretSeed
-      ? `${terrariaSecretSeeds.find((seed) => seed.key === secretSeed)?.label ?? secretSeed} · ${secretSeed}`
+      ? `${secretSeedDefinition ? terrariaSeedDisplayName(secretSeedDefinition, locale) : secretSeed} · ${secretSeed}`
       : config.seed?.trim() || t("tagRandom");
     const worldSizeLabel = config.worldSize === "small" ? t("tagSmallWorld") : config.worldSize === "medium" ? t("tagMediumWorld") : t("tagLargeWorld");
     const worldEvilLabel = config.worldEvil === "corruption" ? t("tagCorruption") : config.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
@@ -464,9 +483,9 @@ export function CreateServerWizard() {
     ...(selectedGameKey === "terraria" ? ["preset" as const] : []),
     "config",
     "resources",
-    ...(selectedProvider?.capabilities.mods ? ["mods" as const] : []),
+    "mods",
     "review"
-  ], [selectedGameKey, selectedProvider?.capabilities.mods]);
+  ], [selectedGameKey]);
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = showWorldAndBackupFeatures ? worldsQuery.data ?? [] : [];
@@ -754,7 +773,7 @@ export function CreateServerWizard() {
                 <span className="sr-only">{t("cancelCreateServer")}</span>
             </Link>
           </div>
-          <div className="mt-7 grid grid-cols-3 gap-3 md:grid-cols-6">
+          <div className="mt-7 grid grid-cols-4 gap-3 sm:grid-cols-7">
             {stepIds.map((stepId, index) => {
               const labelKey = stepLabelKeys[stepId];
               return (
@@ -848,6 +867,7 @@ export function CreateServerWizard() {
                   gameKey: selectedGameKey,
                   gameName: selectedGame ? gameDisplayName(selectedGame.key, selectedGame.name, t) : t("gameNameTerraria"),
                   hostPortLabel: hostPortMode === "manual" ? String(hostPort) : t("automaticPort"),
+                  locale,
                   provider: selectedProvider,
                   providerConfigPayload,
                   t,
@@ -1438,7 +1458,7 @@ function SeedInput({
   supportsModernSeedModes: boolean;
   value: string;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const showsSeedPicker = supportsModernSeedModes || supportsLegacySecretSeedPicker;
   const selectedSpecialSeeds = config.specialSeeds ?? [];
@@ -1464,16 +1484,17 @@ function SeedInput({
     );
   };
   const clearModes = () => onChangeSeedModes([], []);
-  const clearLegacySeed = () => {
-    onChange("");
-    onChangeSeedModes([], []);
-  };
+  const clearLegacySeed = () => onChange("");
   const selectLegacySeed = (key: string) => {
+    if (legacySpecialSeed?.key === key) {
+      clearLegacySeed();
+      return;
+    }
     onSelectLegacySeed(key);
   };
   const pickerLabel = supportsModernSeedModes
     ? selectedModeCount > 0 ? t("seedModesSelected", { count: selectedModeCount }) : t("seedModes")
-    : legacySpecialSeed ? legacySpecialSeed.label : t("secretSeed");
+    : legacySpecialSeed ? terrariaSeedDisplayName(legacySpecialSeed, locale) : t("secretSeed");
   return (
     <div className="relative space-y-1.5">
       <div className="relative">
@@ -1502,7 +1523,7 @@ function SeedInput({
       </div>
       {supportsLegacySecretSeedPicker && legacySpecialSeed ? (
         <p className="text-xs leading-5 text-panel-green">
-          {t("secretSeedDetected", { name: legacySpecialSeed.label })}
+          {t("secretSeedDetected", { name: terrariaSeedDisplayName(legacySpecialSeed, locale) })}
           <span className="text-slate-500"> · {legacySpecialSeed.description}</span>
         </p>
       ) : null}
@@ -1616,6 +1637,7 @@ function SeedModeSection({
   selected: string[];
   title: string;
 }) {
+  const { locale } = useI18n();
   return (
     <section className={className}>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -1628,10 +1650,13 @@ function SeedModeSection({
       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {seeds.map((seed) => {
           const active = selected.includes(seed.key);
+          const displayName = terrariaSeedDisplayName(seed, locale);
+          const seedReference = displayName === seed.label ? seed.key : `${seed.label} · ${seed.key}`;
           return (
             <button
               key={seed.key}
               type="button"
+              aria-pressed={active}
               className={cn(
                 "group flex min-h-20 items-start justify-between gap-3 rounded-md border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/40",
                 active
@@ -1641,8 +1666,8 @@ function SeedModeSection({
               onClick={() => onToggle(seed.key)}
             >
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-slate-100">{seed.label}</span>
-                <span className="mt-0.5 block truncate text-xs text-slate-500">{seed.key}</span>
+                <span className="block truncate text-sm font-semibold text-slate-100">{displayName}</span>
+                <span className="mt-0.5 block truncate text-xs text-slate-500">{seedReference}</span>
                 <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500 group-hover:text-slate-400">{seed.description}</span>
               </span>
               <span
