@@ -53,18 +53,16 @@ func (h *Handler) attachProviderVersionStatuses(ctx context.Context, games []dom
 			if enabled, err := h.gameUpdateAutoCheckEnabled(ctx, item.Key); err == nil {
 				item.GameVersion.AutoCheckEnabled = enabled
 			}
-			job, err := h.store.GetLatestGameUpdateCheckByProvider(ctx, item.Key)
-			if err != nil {
-				continue
-			}
-			item.GameVersion.Job, item.GameVersion.LatestBuildID, item.GameVersion.CheckedAt = &job, job.LatestBuildID, job.CheckedAt
-			switch job.Status {
-			case domain.GameUpdateJobQueued, domain.GameUpdateJobRunning:
-				item.GameVersion.Status = "checking"
-			case domain.GameUpdateJobFailed:
-				item.GameVersion.Status = "failed"
-			default:
-				item.GameVersion.Status = "ready"
+			if job, err := h.store.GetLatestGameUpdateCheckByProvider(ctx, item.Key); err == nil {
+				item.GameVersion.Job, item.GameVersion.LatestBuildID, item.GameVersion.CheckedAt = &job, job.LatestBuildID, job.CheckedAt
+				switch job.Status {
+				case domain.GameUpdateJobQueued, domain.GameUpdateJobRunning:
+					item.GameVersion.Status = "checking"
+				case domain.GameUpdateJobFailed:
+					item.GameVersion.Status = "failed"
+				default:
+					item.GameVersion.Status = "ready"
+				}
 			}
 		}
 	}

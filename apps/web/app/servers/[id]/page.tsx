@@ -602,6 +602,11 @@ export default function ServerDetailPage() {
     }
   }, [activeTab, serverResource, tabs]);
   useEffect(() => {
+    if (serverResource?.providerKey === "palworld" && new URLSearchParams(window.location.search).get("tab") === "version") {
+      setActiveTab("version");
+    }
+  }, [serverResource?.providerKey]);
+  useEffect(() => {
     if (shareQuery.data) {
       setShareIncludePassword(shareQuery.data.includePassword);
     }
@@ -891,6 +896,8 @@ export default function ServerDetailPage() {
             <div className={activeTab === "version" ? "" : "hidden"}>
               <GameUpdateCard
                 playersOnline={playersOnline}
+                runtimeImage={serverResource.spec.runtime?.image}
+                runtimeVersion={gameServerVersion(serverResource)}
                 serverId={serverResource.id}
                 serverStatus={status}
                 onActiveChange={handleGameUpdateActiveChange}

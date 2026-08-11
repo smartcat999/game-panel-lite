@@ -126,6 +126,15 @@ export async function checkProviderGameUpdate(providerKey: ProviderKey): Promise
   return readPayload<GameUpdateJob>(response, "Unable to check the provider game version");
 }
 
+export async function updateProviderGameUpdateAutoCheck(providerKey: ProviderKey, enabled: boolean): Promise<{ enabled: boolean; intervalHours: number }> {
+  const response = await apiFetch(`${API_BASE}/api/providers/${providerKey}/game-update/auto-check`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  return readPayload<{ enabled: boolean; intervalHours: number }>(response, "Unable to update automatic provider version checks");
+}
+
 export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
   const response = await apiFetch(`${API_BASE}/api/terraria/config/preview`, {
     method: "POST",
