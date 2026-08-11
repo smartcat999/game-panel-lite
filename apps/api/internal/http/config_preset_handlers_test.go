@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
@@ -11,11 +12,19 @@ import (
 )
 
 func TestConfigPresetStripsSecretsAndListsSavedPreset(t *testing.T) {
-	router, _, _ := newTestRouter(t)
+	router, db, _ := newTestRouter(t)
+	mod := domain.ModFile{
+		ID: "pal-mod-1", InstanceID: "unassigned", GameKey: domain.GamePalworld,
+		ProviderKey: domain.ProviderPalworld, FileName: "quality.pak", Enabled: true,
+	}
+	if err := db.CreateMod(context.Background(), &mod); err != nil {
+		t.Fatal(err)
+	}
 	payload := `{
 		"name":"Palworld Friends",
 		"providerKey":"palworld",
 		"version":"v2.4.1",
+		"modIds":["pal-mod-1","pal-mod-1"],
 		"resources":{"cpuLimitCores":1,"memoryLimitMb":2048},
 		"config":{
 			"serverName":"Pal Friends",
@@ -52,6 +61,9 @@ func TestConfigPresetStripsSecretsAndListsSavedPreset(t *testing.T) {
 	if preset.ConfigPayload["saveName"] != "Starter Save" || preset.CPULimitCores != 1 || preset.MemoryLimitMB != 2048 {
 		t.Fatalf("expected non-secret preset values to be saved, got %+v payload=%+v", preset, preset.ConfigPayload)
 	}
+	if len(preset.ModIDs) != 1 || preset.ModIDs[0] != mod.ID {
+		t.Fatalf("expected preset mod snapshot to be saved, got %+v", preset.ModIDs)
+	}
 	list := httptest.NewRecorder()
 	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/config-presets", nil))
 	if list.Code != stdhttp.StatusOK {
@@ -63,5 +75,8 @@ func TestConfigPresetStripsSecretsAndListsSavedPreset(t *testing.T) {
 	}
 	if len(presets) != 1 || presets[0].ID != preset.ID {
 		t.Fatalf("expected saved preset in list, got %+v", presets)
+	}
+	if len(presets[0].ModIDs) != 1 || presets[0].ModIDs[0] != mod.ID {
+		t.Fatalf("expected preset mod snapshot to persist, got %+v", presets[0].ModIDs)
 	}
 }

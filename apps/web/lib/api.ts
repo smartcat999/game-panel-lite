@@ -600,6 +600,7 @@ export async function createConfigPreset(input: {
   version?: string;
   resources?: ResourceLimits;
   modPackId?: string;
+  modIds: string[];
 }): Promise<ConfigPreset> {
   const response = await apiFetch(`${API_BASE}/api/config-presets`, {
     method: "POST",

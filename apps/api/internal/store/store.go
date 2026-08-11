@@ -235,13 +235,19 @@ func (s *Store) ListActiveWorldRegenerationJobs(ctx context.Context) ([]domain.W
 }
 
 func hydratePresetConfigPayload(preset *domain.ConfigPreset) {
-	if preset == nil || preset.ConfigPayloadJSON == "" {
+	if preset == nil {
 		return
 	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(preset.ConfigPayloadJSON), &payload); err == nil {
-		preset.Config = payload
-		preset.ConfigPayload = payload
+	if preset.ConfigPayloadJSON != "" {
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(preset.ConfigPayloadJSON), &payload); err == nil {
+			preset.Config = payload
+			preset.ConfigPayload = payload
+		}
+	}
+	preset.ModIDs = []string{}
+	if preset.ModIDsJSON != "" {
+		_ = json.Unmarshal([]byte(preset.ModIDsJSON), &preset.ModIDs)
 	}
 }
 

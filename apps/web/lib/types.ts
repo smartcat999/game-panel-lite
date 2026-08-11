@@ -259,6 +259,7 @@ export type ConfigPreset = {
   cpuLimitCores: number;
   memoryLimitMb: number;
   modPackId?: string;
+  modIds: string[];
   createdAt: string;
   updatedAt: string;
 };

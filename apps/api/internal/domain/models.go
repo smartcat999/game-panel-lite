@@ -201,6 +201,8 @@ type ConfigPreset struct {
 	CPULimitCores     float64        `json:"cpuLimitCores,omitempty"`
 	MemoryLimitMB     int            `json:"memoryLimitMb,omitempty"`
 	ModPackID         string         `json:"modPackId,omitempty" gorm:"index"`
+	ModIDsJSON        string         `json:"-" gorm:"column:mod_ids_json"`
+	ModIDs            []string       `json:"modIds" gorm:"-"`
 	CreatedAt         time.Time      `json:"createdAt"`
 	UpdatedAt         time.Time      `json:"updatedAt"`
 }

@@ -19,6 +19,7 @@ type configPresetPayload struct {
 	Version     string               `json:"version"`
 	Resources   resourceLimitPayload `json:"resources,omitempty"`
 	ModPackID   string               `json:"modPackId,omitempty"`
+	ModIDs      []string             `json:"modIds"`
 }
 
 func (h *Handler) listConfigPresets(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +125,23 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 			return domain.ConfigPreset{}, fmt.Errorf("mod pack not found")
 		}
 	}
+	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
+	if len(modIDs) > 0 && !providerSupportsMods(payload.ProviderKey) {
+		return domain.ConfigPreset{}, fmt.Errorf("mods are not supported for this provider")
+	}
+	for _, modID := range modIDs {
+		item, err := h.store.GetMod(r.Context(), modID)
+		if err != nil || item.InstanceID != "unassigned" {
+			return domain.ConfigPreset{}, fmt.Errorf("mod not found")
+		}
+		if item.ProviderKey != "" && item.ProviderKey != payload.ProviderKey {
+			return domain.ConfigPreset{}, fmt.Errorf("mod is not compatible with this provider")
+		}
+	}
+	modIDsJSON, err := json.Marshal(modIDs)
+	if err != nil {
+		return domain.ConfigPreset{}, err
+	}
 	configPayloadJSON, err = sanitizePresetConfigPayload(gameProvider, configPayloadJSON)
 	if err != nil {
 		return domain.ConfigPreset{}, err
@@ -136,5 +154,6 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 		ID: id, Name: payload.Name, GameKey: gameProvider.GameKey(), ProviderKey: payload.ProviderKey,
 		Version: payload.Version, Config: configPayload, ConfigPayloadJSON: configPayloadJSON, ConfigPayload: configPayload,
 		CPULimitCores: resources.CPULimitCores, MemoryLimitMB: resources.MemoryLimitMB, ModPackID: payload.ModPackID,
+		ModIDsJSON: string(modIDsJSON), ModIDs: modIDs,
 	}, nil
 }

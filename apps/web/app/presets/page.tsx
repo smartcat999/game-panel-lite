@@ -127,7 +127,12 @@ export default function PresetsPage() {
                   <DetailTile label={t("game")} value={meta.gameName} />
                   <DetailTile label={t("serverType")} value={meta.providerName} />
                   <DetailTile label={t("gameVersion")} value={preset.version || t("recommended")} />
-                  <DetailTile label={t("modPack")} value={meta.modPackName || t("none")} />
+                  <DetailTile
+                    label={t("modsTitle")}
+                    value={preset.modIds.length > 0
+                      ? [meta.modPackName, t("selectedModsCount", { count: preset.modIds.length })].filter(Boolean).join(" · ")
+                      : t("none")}
+                  />
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
