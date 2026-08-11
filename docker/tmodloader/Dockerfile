@@ -40,6 +40,7 @@ RUN apt-get update \
     && /opt/steamcmd/steamcmd.sh +quit || true \
     && rm -f /tmp/steamcmd_linux.tar.gz \
     && mkdir -p /home/container \
+    && chown -R container:container /opt/steamcmd \
     && chown -R container:container /home/container
 
 USER container

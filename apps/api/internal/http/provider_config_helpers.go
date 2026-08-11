@@ -163,11 +163,17 @@ func isEmptyRawJSON(raw json.RawMessage) bool {
 }
 
 func hydratePresetConfigPayload(preset *domain.ConfigPreset) {
-	if preset == nil || strings.TrimSpace(preset.ConfigPayloadJSON) == "" {
+	if preset == nil {
 		return
 	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(preset.ConfigPayloadJSON), &payload); err == nil {
-		preset.ConfigPayload = payload
+	if strings.TrimSpace(preset.ConfigPayloadJSON) != "" {
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(preset.ConfigPayloadJSON), &payload); err == nil {
+			preset.ConfigPayload = payload
+		}
+	}
+	preset.ModIDs = []string{}
+	if strings.TrimSpace(preset.ModIDsJSON) != "" {
+		_ = json.Unmarshal([]byte(preset.ModIDsJSON), &preset.ModIDs)
 	}
 }

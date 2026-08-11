@@ -71,7 +71,7 @@ install_cached_workshop_mods() {
     workshop_id="${workshop_id//[$'\t\r\n ']}"
     [[ -n "${workshop_id}" ]] || continue
 
-    source_file="$(latest_workshop_mod_file "${workshop_id}")"
+    source_file="$(latest_workshop_mod_file "${workshop_id}" || true)"
     if [[ -z "${source_file}" || ! -f "${source_file}" ]]; then
       echo "Workshop mod ${workshop_id} is not cached yet."
       continue
@@ -101,7 +101,11 @@ if [[ -s "${MODS_DIR}/install.txt" ]]; then
     echo "Workshop sync skipped: cached Workshop mods are already present."
   elif command -v steamcmd >/dev/null 2>&1 || command -v steamcmd.sh >/dev/null 2>&1; then
     echo "Syncing missing Workshop mods from install.txt..."
-    bash "${MANAGE_SCRIPT}" install-mods -f "${ROOT_DIR}"
+    bash "${MANAGE_SCRIPT}" install-mods -f "${ROOT_DIR}" || true
+    if workshop_sync_needed; then
+      echo "Workshop mods are still missing after SteamCMD startup; retrying once after its self-update..."
+      bash "${MANAGE_SCRIPT}" install-mods -f "${ROOT_DIR}" || true
+    fi
   else
     echo "Workshop sync skipped: steamcmd is not available in the container"
   fi

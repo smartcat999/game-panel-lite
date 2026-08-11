@@ -569,7 +569,8 @@ export function CreateServerWizard() {
       config: selectedGameKey === "terraria" ? config : providerConfigPayload,
       resources: resourceLimits,
       version: selectedVersion,
-      modPackId: selectedModPackId || undefined
+      modPackId: selectedModPackId || undefined,
+      modIds: selectedModIds
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["config-presets"] });
@@ -685,8 +686,7 @@ export function CreateServerWizard() {
     setSelectedWorldId("");
     setAppliedWorldConfigId("");
     setSelectedModPackId(preset.modPackId ?? "");
-    const pack = allModPacks.find((item) => item.id === preset.modPackId);
-    setSelectedModIds(pack?.modIds ?? []);
+    setSelectedModIds(preset.modIds);
     setStep(preset.gameKey === "terraria" ? 3 : 2);
   };
 
