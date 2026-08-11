@@ -43,14 +43,12 @@ function shouldResumeServer(status: ServerStatus) {
 
 export function GameUpdateCard({
   playersOnline,
-  runtimeImage,
   runtimeVersion,
   serverId,
   serverStatus,
   onActiveChange
 }: {
   playersOnline: number;
-  runtimeImage?: string;
   runtimeVersion?: string;
   serverId: string;
   serverStatus: ServerStatus;
@@ -77,7 +75,7 @@ export function GameUpdateCard({
         supported: current?.supported ?? true,
         status: "updating",
         autoCheckEnabled: current?.autoCheckEnabled ?? true,
-        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 6,
+        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 12,
         installedBuildId: current?.installedBuildId,
         latestBuildId: current?.latestBuildId,
         checkedAt: current?.checkedAt,
@@ -94,7 +92,7 @@ export function GameUpdateCard({
         supported: current?.supported ?? true,
         status: "checking",
         autoCheckEnabled: current?.autoCheckEnabled ?? true,
-        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 6,
+        autoCheckIntervalHours: current?.autoCheckIntervalHours ?? 12,
         installedBuildId: current?.installedBuildId,
         latestBuildId: current?.latestBuildId,
         checkedAt: current?.checkedAt,
@@ -109,6 +107,9 @@ export function GameUpdateCard({
   const status = state?.status ?? "unknown";
   const updateActive = active && state?.job?.operation === "apply";
   const displayedStatus = status;
+  const installedBuild = state?.installedBuildId || "—";
+  const latestBuild = state?.latestBuildId || "—";
+  const showUpdateTarget = Boolean(state?.installedBuildId && state?.latestBuildId && state.installedBuildId !== state.latestBuildId);
   const progress = normalizeGameUpdateProgress(state?.job?.progress);
   const stageKey = updateStageLabelKeys[state?.job?.stage ?? ""];
   const statusLabel = t(updateStatusLabelKeys[displayedStatus] ?? "gameUpdateStatusUnknown");
@@ -135,22 +136,6 @@ export function GameUpdateCard({
 
   return (
     <>
-      <Card className="mb-4 p-4 sm:p-5">
-        <div className="flex items-start gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-slate-300">
-            <span aria-hidden="true" className="font-mono text-xs font-semibold">IMG</span>
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-semibold text-white">{t("runtimeImageVersionTitle")}</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-400">{t("runtimeImageVersionDescription")}</p>
-          </div>
-        </div>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-          <VersionRow label={t("runtimeImageVersionLabel")} value={runtimeVersion || "—"} />
-          <VersionRow label={t("runtimeImageReferenceLabel")} value={runtimeImage || "—"} />
-        </dl>
-      </Card>
-
       <Card className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
@@ -159,7 +144,6 @@ export function GameUpdateCard({
             </span>
             <div className="min-w-0">
               <h2 className="font-semibold text-white">{t("gameVersionTitle")}</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-400">{t("gameVersionDescription")}</p>
             </div>
           </div>
           {!updateQuery.isLoading && !updateQuery.isError && state?.supported !== false ? (
@@ -184,11 +168,23 @@ export function GameUpdateCard({
           <p className="mt-4 rounded-md border border-panel-line bg-slate-950/35 p-3 text-xs leading-5 text-slate-400">{t("gameUpdateUnsupported")}</p>
         ) : (
           <>
-            <dl className="mt-5 grid gap-3 sm:grid-cols-3">
-              <VersionRow label={t("gameUpdateCurrentBuild")} value={state?.installedBuildId || "—"} />
-              <VersionRow label={t("gameUpdateLatestBuild")} value={state?.latestBuildId || "—"} />
-              <VersionRow label={t("gameUpdateLastChecked")} value={formatCheckedAt(state?.checkedAt, locale, t("gameUpdateNeverChecked"))} />
-            </dl>
+            <div className="mt-5">
+              <p className="text-xs text-slate-400">{t("gameVersionBuild")}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-xl font-semibold text-slate-100">
+                <span>{installedBuild}</span>
+                {showUpdateTarget ? (
+                  <>
+                    <span aria-hidden="true" className="text-sm font-normal text-slate-600">→</span>
+                    <span className="text-panel-gold">{latestBuild}</span>
+                  </>
+                ) : null}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                {runtimeVersion ? <span>{t("gameVersionRuntime", { version: runtimeVersion })}</span> : null}
+                {runtimeVersion ? <span aria-hidden="true">·</span> : null}
+                <span>{t("gameVersionCheckedAt", { time: formatCheckedAt(state?.checkedAt, locale, t("gameUpdateNeverChecked")) })}</span>
+              </div>
+            </div>
 
             {updateActive ? (
               <div className="mt-4 rounded-md border border-panel-green/25 bg-panel-green/10 p-3">
@@ -291,15 +287,6 @@ export function GameUpdateCard({
         onConfirm={() => applyMutation.mutate()}
       />
     </>
-  );
-}
-
-function VersionRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-md border border-panel-line bg-slate-950/35 p-3">
-      <dt className="text-xs text-slate-400">{label}</dt>
-      <dd className="mt-1 truncate font-mono text-sm font-semibold text-slate-100" title={value}>{value}</dd>
-    </div>
   );
 }
 

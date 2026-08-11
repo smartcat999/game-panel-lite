@@ -12,6 +12,8 @@ import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from 
 import { cn } from "@/lib/utils";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
+const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)_9rem]";
+
 export default function VersionsPage() {
   const { locale, t } = useI18n();
   const queryClient = useQueryClient();
@@ -43,7 +45,7 @@ export default function VersionsPage() {
         <div className="space-y-4">
           {supportedProviders.length > 0 ? (
             <Card className="overflow-hidden p-0">
-              <div className="hidden grid-cols-[minmax(220px,1.35fr)_minmax(120px,0.65fr)_minmax(120px,0.65fr)_minmax(140px,0.7fr)_minmax(150px,0.8fr)_auto] gap-4 border-b border-panel-line bg-slate-950/30 px-5 py-3 text-xs font-medium text-slate-500 md:grid">
+              <div className={cn("hidden gap-4 border-b border-panel-line bg-slate-950/30 px-5 py-3 text-xs font-medium text-slate-500 md:grid", imageVersionGridColumns)}>
                 <span>{t("versionManagementProvider")}</span>
                 <span>{t("versionManagementInstalledImageVersion")}</span>
                 <span>{t("versionManagementTargetImageVersion")}</span>
@@ -110,7 +112,7 @@ function ImageVersionRow({
 
   return (
     <div className="px-5 py-4">
-      <div className="grid gap-4 md:grid-cols-[minmax(220px,1.35fr)_minmax(120px,0.65fr)_minmax(120px,0.65fr)_minmax(140px,0.7fr)_minmax(150px,0.8fr)_auto] md:items-center">
+      <div className={cn("grid gap-4 md:items-center", imageVersionGridColumns)}>
         <div className="min-w-0">
           <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p>
           <p className="mt-1 truncate font-mono text-xs text-slate-500" title={status?.image}>{status?.image || "—"}</p>

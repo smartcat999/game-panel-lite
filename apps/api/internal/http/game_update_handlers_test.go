@@ -152,8 +152,8 @@ func TestGameUpdateAutoCheckDefaultsOnAndCanBeDisabled(t *testing.T) {
 	if err := json.Unmarshal(readDefault.Body.Bytes(), &defaultView); err != nil {
 		t.Fatal(err)
 	}
-	if !defaultView.AutoCheckEnabled || defaultView.AutoCheckHours != 6 {
-		t.Fatalf("expected six-hour automatic checks by default, got %+v", defaultView)
+	if !defaultView.AutoCheckEnabled || defaultView.AutoCheckHours != 12 {
+		t.Fatalf("expected twelve-hour automatic checks by default, got %+v", defaultView)
 	}
 
 	update := httptest.NewRecorder()

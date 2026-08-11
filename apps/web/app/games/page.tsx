@@ -154,13 +154,13 @@ function ProviderRuntimeRow({
     : status;
   const statusHint = preparing
     ? t(runtimeInstallPhaseMessageKey(displayStatus))
-    : ready
-      ? t("gameLibraryReadyHint")
-      : updateAvailable
-        ? t("gameLibraryUpdateHint", {
-          installed: status?.installedVersion ?? "",
-          target: status?.targetVersion ?? provider.recommendedVersion ?? ""
-        })
+    : updateAvailable
+      ? t("gameLibraryUpdateHint", {
+        installed: status?.installedVersion ?? "",
+        target: status?.targetVersion ?? provider.recommendedVersion ?? ""
+      })
+      : ready
+        ? ""
         : t("gameLibraryInstallHint");
   return (
     <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
@@ -168,10 +168,10 @@ function ProviderRuntimeRow({
         <div className="flex flex-wrap items-center gap-2">
           {showProviderTitle ? <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p> : null}
           <RuntimeStatusBadge status={displayStatus} />
-          {provider.recommended && <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs text-panel-green">{t("recommended")}</span>}
+          {showProviderTitle && provider.recommended && <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs text-panel-green">{t("recommended")}</span>}
         </div>
-        <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p>
-        <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
+        {showProviderTitle ? <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p> : null}
+        {statusHint ? <p className="mt-2 text-xs text-slate-500">{statusHint}</p> : null}
         {preparing ? <RuntimeInstallProgress /> : null}
         {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}

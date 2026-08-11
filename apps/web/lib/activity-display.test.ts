@@ -217,6 +217,50 @@ describe("formatActivityEvent", () => {
     });
   });
 
+  it("localizes queued provider version checks from structured payload", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      instanceId: "",
+      type: "provider.game-update.auto-check.queued",
+      message: "Queued automatic game version check for palworld",
+      payload: { providerKey: "palworld", jobId: "job-1" }
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "已提交 幻兽帕鲁 的自动版本检查",
+      typeLabel: "版本检查排队"
+    });
+  });
+
+  it("localizes completed provider version checks with the latest build", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      instanceId: "",
+      type: "provider.game-update.succeeded",
+      message: "Game version check completed",
+      payload: { providerKey: "palworld", buildId: "24466863", jobId: "job-1" }
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "幻兽帕鲁 已完成版本检查，最新 Build 为 24466863",
+      typeLabel: "版本检查完成"
+    });
+  });
+
+  it("localizes historic provider version checks without structured payload", () => {
+    const event: ActivityEvent = {
+      ...baseEvent,
+      instanceId: "",
+      type: "provider.game-update.auto-check.queued",
+      message: "Queued automatic game version check for dont-starve-together"
+    };
+
+    expect(formatActivityEvent(event, "zh")).toEqual({
+      message: "已提交 饥荒联机版 的自动版本检查",
+      typeLabel: "版本检查排队"
+    });
+  });
+
   it("formats container lifecycle failure details from structured payload", () => {
     const event: ActivityEvent = {
       ...baseEvent,
