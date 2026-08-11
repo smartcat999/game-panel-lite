@@ -1199,6 +1199,34 @@ func TestAssignWorkshopModRejectsArmRuntime(t *testing.T) {
 	}
 }
 
+func TestRuntimeModPresentUsesWorkshopInternalModName(t *testing.T) {
+	dataDir := t.TempDir()
+	modsDir := filepath.Join(dataDir, "Mods")
+	if err := os.MkdirAll(modsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modsDir, "miningcracks_take_on_luiafk.tmod"), []byte("mod"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := domain.GameServer{
+		ProviderKey: domain.ProviderTerrariaTModLoader,
+		Spec:        domain.ServerSpec{Runtime: domain.ServerRuntimeSpec{DataDir: dataDir}},
+	}
+	item := domain.ModFile{
+		ProviderKey: domain.ProviderTerrariaTModLoader,
+		Source:      "workshop",
+		WorkshopID:  "2831752947",
+		FileName:    "workshop-2831752947",
+		Title:       "LuiAFK Reborn",
+	}
+	if identity := modIdentity(item); identity != "miningcracks_take_on_luiafk" {
+		t.Fatalf("expected workshop internal mod name, got %q", identity)
+	}
+	if !runtimeModPresent(server, item) {
+		t.Fatal("expected runtime mod file to be detected by its internal mod name")
+	}
+}
+
 func TestAssignGlobalWorkshopModWritesServerInstallFile(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

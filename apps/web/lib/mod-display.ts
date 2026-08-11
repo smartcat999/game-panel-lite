@@ -41,11 +41,11 @@ export function isServerAssignableMod(mod: ModFile): boolean {
   return scope === "server" || scope === "required";
 }
 
-export type ModRuntimeState = "configured" | "disabled" | "enabled" | "notApplied" | "notSynced" | "pendingRestart";
+export type ModRuntimeState = "configured" | "disabled" | "enabled" | "notApplied" | "runtimeFileMissing" | "pendingRestart";
 
 export function modRuntimeState(mod: ModFile): ModRuntimeState | null {
   if (!mod.enabled) return "disabled";
-  if (mod.runtimePresent === false) return "notSynced";
+  if (mod.runtimePresent === false) return "runtimeFileMissing";
   if (mod.runtimeEnabled === false) return "notApplied";
   if (mod.runtimeEnabled === true) return "enabled";
 

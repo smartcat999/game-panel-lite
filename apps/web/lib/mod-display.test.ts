@@ -51,4 +51,8 @@ describe("modRuntimeState", () => {
   it("keeps the pending state for providers that support runtime synchronization", () => {
     expect(modRuntimeState({ ...mod([]), providerKey: "terraria-tmodloader" })).toBe("pendingRestart");
   });
+
+  it("describes a missing runtime package without implying cloud synchronization", () => {
+    expect(modRuntimeState({ ...mod([]), providerKey: "terraria-tmodloader", runtimePresent: false })).toBe("runtimeFileMissing");
+  });
 });
