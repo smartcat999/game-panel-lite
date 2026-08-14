@@ -15,7 +15,7 @@
     },
     "dont-starve-together": {
       "imageTemplate": "{registry}/dst-server:{version}",
-      "versions": ["v2026.07.17", "v2026.06.21"]
+      "versions": ["v2026.08.14", "v2026.07.17", "v2026.06.21"]
     },
     "palworld": {
       "imageTemplate": "{registry}/palworld-server:{version}",

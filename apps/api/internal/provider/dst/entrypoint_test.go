@@ -26,6 +26,9 @@ func TestDSTEntrypointReusesCompleteWorkshopCacheOnStart(t *testing.T) {
 	if strings.Contains(log, "-only_update_server_mods") {
 		t.Fatalf("expected start to skip mod download, got %q", log)
 	}
+	if _, err := os.Stat(filepath.Join(dataDir, "fake-steamcmd.log")); !os.IsNotExist(err) {
+		t.Fatalf("expected ordinary start to reuse game files without SteamCMD, stat err=%v", err)
+	}
 	if strings.Contains(log, "-console") {
 		t.Fatalf("expected shard startup to omit deprecated -console, got %q", log)
 	}
@@ -44,6 +47,16 @@ func TestDSTEntrypointRefreshesAllWorkshopModsOnRestart(t *testing.T) {
 	}
 	if !strings.Contains(output, "Refreshed and verified all GamePanel DST server mods.") {
 		t.Fatalf("expected refresh success message, got:\n%s", output)
+	}
+	steamLog := readTestFile(t, filepath.Join(dataDir, "fake-steamcmd.log"))
+	if !strings.Contains(steamLog, "+app_update 343050") {
+		t.Fatalf("expected restart to update DST game files, got %q", steamLog)
+	}
+	if strings.Contains(steamLog, "validate") {
+		t.Fatalf("expected restart update to avoid an expensive full validation, got %q", steamLog)
+	}
+	if got := strings.TrimSpace(readTestFile(t, filepath.Join(dataDir, ".gamepanel", "dst-build-id"))); got != "24700372" {
+		t.Fatalf("expected installed build marker, got %q", got)
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "ugc_mods", "old-cache")); !os.IsNotExist(err) {
 		t.Fatalf("expected old cache to be atomically replaced, stat err=%v", err)
@@ -188,6 +201,23 @@ fi
 	if err := os.Chmod(filepath.Join(root, "server", "bin64", "dontstarve_dedicated_server_nullrenderer_x64"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	fakeSteamCMD := `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${DST_PERSISTENT_ROOT}/fake-steamcmd.log"
+mkdir -p "${DST_ROOT_DIR}/server/steamapps"
+cat > "${DST_ROOT_DIR}/server/steamapps/appmanifest_343050.acf" <<'EOF'
+"AppState"
+{
+  "appid" "343050"
+  "StateFlags" "4"
+  "buildid" "24700372"
+}
+EOF
+`
+	writeTestFile(t, filepath.Join(root, "fake-steamcmd"), fakeSteamCMD)
+	if err := os.Chmod(filepath.Join(root, "fake-steamcmd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	script, err := filepath.Abs(filepath.Join("..", "..", "..", "..", "..", "docker", "dst", "gamepanel-dst-entrypoint.sh"))
 	if err != nil {
@@ -214,6 +244,8 @@ func runDSTEntrypoint(t *testing.T, root, dataDir, script, mode string) (string,
 		"DST_CONF_DIR=dst",
 		"DST_CLUSTER_NAME=GamePanelLite",
 		"DST_MOD_SYNC_MODE="+mode,
+		"DST_GAME_UPDATE_MODE="+mode,
+		"DST_STEAMCMD_BIN="+filepath.Join(root, "fake-steamcmd"),
 	)
 	output, err := cmd.CombinedOutput()
 	return string(output), err

@@ -9,8 +9,49 @@ CLUSTER_NAME="${DST_CLUSTER_NAME:-GamePanelLite}"
 CLUSTER_DIR="${PERSISTENT_ROOT}/${CONF_DIR}/${CLUSTER_NAME}"
 UGC_DIR="${DST_UGC_DIRECTORY:-${PERSISTENT_ROOT}/ugc_mods}"
 MOD_SYNC_MODE="${DST_MOD_SYNC_MODE:-reuse}"
+GAME_UPDATE_MODE="${DST_GAME_UPDATE_MODE:-${MOD_SYNC_MODE}}"
+DST_STEAM_APP_ID="${DST_STEAM_APP_ID:-343050}"
+STEAMCMD_BIN="${DST_STEAMCMD_BIN:-/usr/games/steamcmd}"
 LEGACY_WORKSHOP_FALLBACK="${DST_LEGACY_WORKSHOP_FALLBACK:-1}"
 WORKSHOP_DETAILS_ENDPOINT="${DST_WORKSHOP_DETAILS_ENDPOINT:-https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/}"
+
+record_installed_build() {
+  local manifest="${SERVER_DIR}/steamapps/appmanifest_${DST_STEAM_APP_ID}.acf"
+  local build_id=""
+  [[ -f "${manifest}" ]] || return 0
+  build_id="$(sed -n 's/^[[:space:]]*"buildid"[[:space:]]*"\([0-9][0-9]*\)".*/\1/p' "${manifest}" | head -n 1)"
+  [[ -n "${build_id}" ]] || return 0
+  mkdir -p "${PERSISTENT_ROOT}/.gamepanel"
+  printf '%s\n' "${build_id}" >"${PERSISTENT_ROOT}/.gamepanel/dst-build-id"
+}
+
+update_server_game() {
+  if [[ "${GAME_UPDATE_MODE}" != "refresh" ]]; then
+    record_installed_build
+    return 0
+  fi
+  if [[ ! -x "${STEAMCMD_BIN}" ]]; then
+    echo "DST restart update requires SteamCMD at ${STEAMCMD_BIN}." >&2
+    exit 1
+  fi
+
+  local attempt
+  echo "Checking for DST game updates before restart..."
+  for attempt in 1 2 3; do
+    if "${STEAMCMD_BIN}" \
+      +force_install_dir "${SERVER_DIR}" \
+      +login anonymous \
+      +app_update "${DST_STEAM_APP_ID}" \
+      +quit; then
+      record_installed_build
+      echo "DST game files are up to date."
+      return 0
+    fi
+    echo "DST game update attempt ${attempt} failed." >&2
+  done
+  echo "DST game update failed after 3 attempts; the server will not start with stale files." >&2
+  exit 1
+}
 
 server_bin() {
   if [[ -x "${SERVER_DIR}/bin64/dontstarve_dedicated_server_nullrenderer_x64" ]]; then
@@ -307,6 +348,7 @@ terminate_children() {
   fi
 }
 
+update_server_game
 ensure_cluster_layout
 sync_server_mods
 install_native_workshop_manifest "${UGC_DIR}" >/dev/null

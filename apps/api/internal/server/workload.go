@@ -97,6 +97,7 @@ func runtimeEnvironment(providerEnv []string, server domain.GameServer) []string
 	env = append(env, server.Spec.Runtime.Env...)
 	if server.ProviderKey == domain.ProviderDST && server.Spec.Runtime.ModSyncMode != "" {
 		env = append(env, "DST_MOD_SYNC_MODE="+server.Spec.Runtime.ModSyncMode)
+		env = append(env, "DST_GAME_UPDATE_MODE="+server.Spec.Runtime.ModSyncMode)
 	}
 	return env
 }
