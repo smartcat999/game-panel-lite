@@ -150,6 +150,7 @@ build_dst() {
   echo "==> Building ${image}"
   docker "${dst_buildx_args[@]}" \
     -f docker/dst/Dockerfile \
+    --build-arg "DST_IMAGE_VERSION=${version}" \
     -t "${image}" \
     "${root_dir}"
 }
@@ -179,7 +180,7 @@ if [[ "$target" == "all" || "$target" == "tmodloader" ]]; then
 fi
 
 if [[ "$target" == "dst" ]]; then
-  build_dst "v2026.07.17"
+  build_dst "v2026.08.14"
 fi
 
 if [[ "$target" == "palworld" ]]; then

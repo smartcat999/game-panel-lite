@@ -97,6 +97,9 @@ func TestProviderWorkloadBuilderPassesDSTModSyncMode(t *testing.T) {
 	if !containsEnv(spec.Options.Env, "DST_MOD_SYNC_MODE=refresh") {
 		t.Fatalf("expected DST refresh mode in workload env, got %+v", spec.Options.Env)
 	}
+	if !containsEnv(spec.Options.Env, "DST_GAME_UPDATE_MODE=refresh") {
+		t.Fatalf("expected DST game update mode in workload env, got %+v", spec.Options.Env)
+	}
 }
 
 func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
