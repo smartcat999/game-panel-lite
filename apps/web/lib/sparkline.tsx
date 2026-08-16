@@ -13,10 +13,15 @@ export function useTimeSeries(value: number | undefined, maxPoints = MAX_POINTS)
 
   useEffect(() => {
     if (value === undefined) return;
-    const now = Date.now();
-    if (now - lastTsRef.current < 500) return;
-    lastTsRef.current = now;
-    setSeries((prev) => [...prev.slice(-(maxPoints - 1)), { value, ts: now }]);
+    const sample = () => {
+      const now = Date.now();
+      if (now - lastTsRef.current < 500) return;
+      lastTsRef.current = now;
+      setSeries((prev) => [...prev.slice(-(maxPoints - 1)), { value, ts: now }]);
+    };
+    sample();
+    const timer = window.setInterval(sample, 5000);
+    return () => window.clearInterval(timer);
   }, [value, maxPoints]);
 
   return series;
@@ -28,7 +33,8 @@ export function Sparkline({
   height = 36,
   color = "#7bd978",
   max = 100,
-  fill = true
+  fill = true,
+  className = ""
 }: {
   data: SeriesPoint[];
   width?: number;
@@ -36,10 +42,11 @@ export function Sparkline({
   color?: string;
   max?: number;
   fill?: boolean;
+  className?: string;
 }) {
   if (data.length < 2) {
     return (
-      <svg width={width} height={height} className="opacity-30">
+      <svg width={width} height={height} className={`opacity-30 ${className}`} preserveAspectRatio="none" viewBox={`0 0 ${width} ${height}`}>
         <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke={color} strokeWidth={1} strokeDasharray="3 3" />
       </svg>
     );
@@ -58,7 +65,7 @@ export function Sparkline({
   const gradId = `spark-${color.replace(/[^a-z0-9]/gi, "")}`;
 
   return (
-    <svg width={width} height={height} className="overflow-visible">
+    <svg width={width} height={height} className={`overflow-visible ${className}`} preserveAspectRatio="none" viewBox={`0 0 ${width} ${height}`}>
       {fill && (
         <>
           <defs>

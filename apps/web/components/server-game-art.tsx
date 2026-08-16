@@ -7,7 +7,7 @@ import { serverProviderDisplay } from "@/lib/server-display";
 import { cn } from "@/lib/utils";
 import type { GameKey, ProviderKey, ServerMode } from "@/lib/types";
 
-export function ServerGameArt({ server, className }: { server: { mode?: ServerMode; providerKey?: ProviderKey; gameKey?: GameKey }; className?: string }) {
+export function ServerGameArt({ server, className, compact = false }: { server: { mode?: ServerMode; providerKey?: ProviderKey; gameKey?: GameKey }; className?: string; compact?: boolean }) {
   const art = getGameArt(server.gameKey ?? server.providerKey);
   const provider = serverProviderDisplay(server);
   const showProviderMark = provider.label !== "Terraria";
@@ -40,7 +40,8 @@ export function ServerGameArt({ server, className }: { server: { mode?: ServerMo
         <span
           aria-label={provider.label}
           className={cn(
-            "absolute bottom-1 right-1 flex size-5 items-center justify-center rounded text-slate-950 shadow-[0_0_0_1px_rgba(255,255,255,0.18)]",
+            "absolute flex items-center justify-center text-slate-950 shadow-[0_0_0_1px_rgba(255,255,255,0.18)]",
+            compact ? "bottom-0.5 right-0.5 size-3.5 rounded-sm" : "bottom-1 right-1 size-5 rounded",
             provider.tone === "purple" ? "bg-purple-400/95" : "",
             provider.tone === "sky" ? "bg-sky-300/95" : "",
             provider.tone === "amber" ? "bg-panel-gold/95" : "",
@@ -49,7 +50,7 @@ export function ServerGameArt({ server, className }: { server: { mode?: ServerMo
           )}
           title={provider.label}
         >
-          {provider.tone === "purple" ? <Hammer aria-hidden="true" className="size-3" /> : <Box aria-hidden="true" className="size-3" />}
+          {provider.tone === "purple" ? <Hammer aria-hidden="true" className={compact ? "size-2" : "size-3"} /> : <Box aria-hidden="true" className={compact ? "size-2" : "size-3"} />}
         </span>
       )}
     </div>
