@@ -3,7 +3,7 @@
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import Link from "next/link";
-import { Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Info, RadioTower, Server } from "lucide-react";
+import { Activity, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Info, RadioTower, Server } from "lucide-react";
 import { useState } from "react";
 import { Card } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
@@ -254,7 +254,7 @@ export function ServerLoadTable({ rows }: { rows: ServerLoadRow[] }) {
                 <th className="w-[15%] px-3 py-2 font-medium">{t("monitoringTableMemory")}</th>
                 <th className="w-[10%] px-3 py-2 font-medium">{t("monitoringTablePlayers")}</th>
                 <th className="w-[14%] px-3 py-2 font-medium">{t("monitoringTableLastActive")}</th>
-                <th className="w-[9%] px-4 py-2 text-right font-medium">{t("monitoringTableAction")}</th>
+                <th className="w-28 px-4 py-2 text-right font-medium">{t("monitoringTableAction")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-panel-line">
@@ -282,9 +282,9 @@ function ServerLoadItem({ row }: { row: ServerLoadRow }) {
       <td className="px-3 py-3">{isRunning ? <LoadBar percent={memoryPercent} value={formatMemory(row.memoryMb)} tone="purple" /> : <UnavailableValue />}</td>
       <td className="px-3 py-3 font-mono text-sm text-slate-300">{isRunning && row.maxPlayers > 0 ? `${row.playersOnline}/${row.maxPlayers}` : t("unavailable")}</td>
       <td className="px-3 py-3 text-sm text-slate-500">{formatShortTime(row.lastActive)}</td>
-      <td className="px-4 py-3 text-right">
-        <Link className="inline-flex items-center gap-1 rounded border border-panel-line px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-900 hover:text-panel-green" href={`/servers/${row.serverId}`}>
-          {t("view")} <ExternalLink aria-hidden="true" className="size-3" />
+      <td className="whitespace-nowrap px-4 py-3 text-right">
+        <Link className="inline-flex h-8 items-center gap-1 px-1 text-xs font-medium text-slate-400 transition-colors hover:text-panel-green focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50" href={`/servers/${row.serverId}`}>
+          {t("viewDetails")} <ChevronRight aria-hidden="true" className="size-3.5" />
         </Link>
       </td>
     </tr>

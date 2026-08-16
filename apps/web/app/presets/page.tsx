@@ -274,7 +274,7 @@ function PresetResourceTable({
   return (
     <div className="overflow-hidden rounded-b-lg border border-panel-line bg-panel-card">
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[1020px] border-collapse text-left text-sm">
           <thead className="bg-slate-950/45 text-xs font-medium text-slate-500">
             <tr>
               <th className="w-11 px-4 py-3"><SelectionBox checked={allSelected} indeterminate={selectedVisibleCount > 0 && !allSelected} label={t("selectAll")} onChange={toggleAll} /></th>
@@ -284,7 +284,7 @@ function PresetResourceTable({
               <th className="px-3 py-3">{t("runtimeResources")}</th>
               <th className="px-3 py-3">{t("configurationPresetContents")}</th>
               <th className="px-3 py-3">{t("modified")}</th>
-              <th className="px-4 py-3 text-right">{t("actions")}</th>
+              <th className="w-44 px-4 py-3 text-right">{t("actions")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-panel-line">
@@ -315,11 +315,12 @@ function PresetResourceTable({
                     </p>
                   </td>
                   <td className="px-3 py-3 text-slate-400">{localizeRelativeTime(preset.updatedAt, locale)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <Button className="h-8 px-2.5 text-xs" variant="secondary" onClick={() => onEdit(preset)}><Pencil aria-hidden="true" className="size-3.5" />{t("edit")}</Button>
-                      <Link className="inline-flex h-8 items-center gap-1.5 rounded-md border border-panel-green/35 bg-panel-green/10 px-2.5 text-xs font-medium text-panel-green hover:bg-panel-green/15" href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}>
-                        <Plus aria-hidden="true" className="size-3.5" />{t("createServer")}
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <div className="flex items-center justify-end gap-2 text-xs font-medium">
+                      <button className="h-8 px-1 text-slate-300 transition-colors hover:text-panel-green focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50" onClick={() => onEdit(preset)} type="button">{t("edit")}</button>
+                      <span aria-hidden="true" className="h-3.5 w-px bg-panel-line" />
+                      <Link className="inline-flex h-8 items-center px-1 text-panel-green transition-colors hover:text-panel-green/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50" href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}>
+                        {t("createServer")}
                       </Link>
                     </div>
                   </td>
@@ -351,8 +352,8 @@ function PresetResourceTable({
                 <span>{localizeRelativeTime(preset.updatedAt, locale)}</span>
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <Button className="h-8 px-2.5 text-xs" variant="secondary" onClick={() => onEdit(preset)}><Pencil aria-hidden="true" className="size-3.5" />{t("edit")}</Button>
-                <Link className="inline-flex h-8 items-center gap-1.5 rounded-md border border-panel-green/35 bg-panel-green/10 px-2.5 text-xs font-medium text-panel-green" href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}><Plus className="size-3.5" />{t("createServer")}</Link>
+                <Button className="h-8 whitespace-nowrap px-2.5 text-xs" variant="secondary" onClick={() => onEdit(preset)}><Pencil aria-hidden="true" className="size-3.5" />{t("edit")}</Button>
+                <Link className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-panel-green/35 bg-panel-green/10 px-2.5 text-xs font-medium text-panel-green" href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}><Plus className="size-3.5" />{t("createServer")}</Link>
               </div>
             </div>
           );
