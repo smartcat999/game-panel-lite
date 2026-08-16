@@ -243,7 +243,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         </LabeledControl>
       ) : field.type === "password" ? (
         <LabeledControl field={field} label={label}>
-          <SecretInput disabled={disabled} hideLabel={t("hideSensitiveValue", { label })} showLabel={t("showSensitiveValue", { label })} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)} />
+          <SecretInput id={`provider-field-${field.name}`} disabled={disabled} hideLabel={t("hideSensitiveValue", { label })} showLabel={t("showSensitiveValue", { label })} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)} />
         </LabeledControl>
       ) : (
         <LabeledControl field={field} label={label}>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Archive, ArrowRight, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, Eye, EyeOff, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -634,6 +634,9 @@ export default function ServerDetailPage() {
   const status = gameServerStatus(serverResource);
   const playersOnline = serverResource.status.playersOnline ?? 0;
   const maxPlayers = gameServerMaxPlayers(serverResource);
+  const playerCountLabel = typeof serverResource.status.playersOnline === "number"
+    ? `${serverResource.status.playersOnline} / ${maxPlayers}`
+    : t("unavailable");
   const joinPort = joinInfoQuery.data?.port ?? gameServerJoinPort(serverResource);
   const invite = joinInfoQuery.data?.inviteText ?? serverInviteText(serverResource);
   const joinAddress = joinInfoQuery.data?.address ?? serverJoinAddress(serverResource);
@@ -736,7 +739,7 @@ export default function ServerDetailPage() {
             <ServerStatusBadge status={status} />
             <PlayerCountBadge
               label={t("players")}
-              value={`${playersOnline} / ${maxPlayers}`}
+              value={playerCountLabel}
             />
           </div>
         </div>
@@ -1239,10 +1242,12 @@ function OverviewTab({
           {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
         </div>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        <MonitoringChartCard compact color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.cpu} />
-        <MonitoringChartCard compact color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.memory} />
-      </div>
+      {gameServerStatus(resource) === "running" ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:hidden">
+          <MonitoringChartCard compact color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.cpu} />
+          <MonitoringChartCard compact color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.memory} />
+        </div>
+      ) : null}
       <ActivityLatestOperation events={events} loading={eventsLoading} runtimeError={runtimeError} />
     </div>
   );
@@ -3321,7 +3326,7 @@ function JoinServerPanel({
     <Card className="p-4">
       <h2 className="font-semibold">{t("joinServer")}</h2>
       <CopyRow className="mt-3" label={t("serverAddress")} value={endpoint} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
-      <CopyRow className="mt-2" label={t("password")} value={joinPassword || t("none")} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
+      <CopyRow className="mt-2" label={t("password")} value={joinPassword || t("none")} secret={Boolean(joinPassword)} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
       <div className="mt-3">
         <Button className="w-full px-2 text-xs" variant="secondary" onClick={() => void onCopy("Invite", invite)}>
           <Copy aria-hidden="true" />
@@ -3398,7 +3403,7 @@ function JoinServerBar({
       </div>
       <div className="min-w-32">
         <p className="text-xs text-slate-400">{t("password")}</p>
-        <p className="truncate text-sm text-slate-200">{joinPassword || t("none")}</p>
+        <p className="truncate text-sm text-slate-200">{joinPassword ? "••••••••" : t("none")}</p>
       </div>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <Button className="h-9 px-2.5 text-xs" variant="secondary" onClick={() => void onCopy(t("serverAddress"), endpoint)}>
@@ -3614,6 +3619,7 @@ function MobileServerControls({
         copiedLabel={t("copied")}
         copyLabel={t("copy")}
         label={t("password")}
+        secret={Boolean(joinPassword)}
         value={joinPassword || t("none")}
         onCopy={onCopy}
       />
@@ -3637,6 +3643,7 @@ function CopyRow({
   copyLabel,
   label,
   onCopy,
+  secret = false,
   value
 }: {
   className?: string;
@@ -3645,17 +3652,27 @@ function CopyRow({
   copyLabel: string;
   label: string;
   onCopy: (label: string, value: string) => void;
+  secret?: boolean;
   value: string;
 }) {
+  const { t } = useI18n();
+  const [revealed, setRevealed] = useState(false);
   return (
     <div className={cn("flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2", className)}>
       <div className="min-w-0">
         <p className="text-xs text-slate-400">{label}</p>
-        <p className="truncate text-sm">{value}</p>
+        <p className="truncate text-sm">{secret && !revealed ? "••••••••" : value}</p>
       </div>
-      <Button className="h-8 px-2 text-xs" variant="secondary" onClick={() => onCopy(label, value)}>
-        {copied === label ? copiedLabel : copyLabel}
-      </Button>
+      <div className="flex shrink-0 gap-1">
+        {secret ? (
+          <Button aria-label={revealed ? t("hideSensitiveValue", { label }) : t("showSensitiveValue", { label })} className="size-8 p-0" variant="ghost" onClick={() => setRevealed((value) => !value)}>
+            {revealed ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
+          </Button>
+        ) : null}
+        <Button className="h-8 px-2 text-xs" variant="secondary" onClick={() => onCopy(label, value)}>
+          {copied === label ? copiedLabel : copyLabel}
+        </Button>
+      </div>
     </div>
   );
 }

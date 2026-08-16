@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 
@@ -41,6 +42,7 @@ export function ResourceFilterBar({
   searchPlaceholder
 }: ResourceFilterBarProps) {
   const { t } = useI18n();
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const hasActiveFilters = search.trim().length > 0 || activeChips.length > 0 || filters.some((filter) => filter.value !== "all");
   const searchControlClass = density === "compact"
     ? "grid w-full min-w-0 gap-1.5 sm:w-72 lg:w-80"
@@ -51,7 +53,20 @@ export function ResourceFilterBar({
 
   return (
     <Card className="mb-4 p-3">
-      <div className="flex flex-wrap items-end gap-3">
+      <button
+        type="button"
+        aria-expanded={mobileExpanded}
+        className="flex w-full items-center justify-between gap-3 rounded-md px-1 py-1.5 text-sm font-medium text-slate-200 md:hidden"
+        onClick={() => setMobileExpanded((value) => !value)}
+      >
+        <span className="flex items-center gap-2">
+          <SlidersHorizontal aria-hidden="true" className="size-4 text-panel-green" />
+          {t("filters")}
+          {activeChips.length > 0 ? <span className="rounded bg-panel-green/15 px-1.5 py-0.5 text-xs text-panel-green">{activeChips.length}</span> : null}
+        </span>
+        <ChevronDown aria-hidden="true" className={`size-4 text-slate-500 transition-transform ${mobileExpanded ? "rotate-180" : ""}`} />
+      </button>
+      <div className={`${mobileExpanded ? "flex" : "hidden"} mt-3 flex-wrap items-end gap-3 md:mt-0 md:flex`}>
         <label className={searchControlClass}>
           <span className="text-xs font-medium text-slate-500">{t("search")}</span>
           <span className="relative block">
@@ -81,7 +96,7 @@ export function ResourceFilterBar({
           </label>
         ))}
       </div>
-      <div className="mt-3 flex min-h-7 flex-wrap items-center justify-between gap-2 border-t border-panel-line pt-3">
+      <div className={`${mobileExpanded || resultLabel ? "flex" : "hidden"} mt-3 min-h-7 flex-wrap items-center justify-between gap-2 border-t border-panel-line pt-3 md:flex`}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {resultLabel ? <span className="text-xs text-slate-500">{resultLabel}</span> : null}
           {activeChips.map((chip) => (
