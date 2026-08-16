@@ -23,6 +23,26 @@ import (
 )
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("page") || r.URL.Query().Has("pageSize") {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+		servers, err := h.store.ListGameServersPage(r.Context(), store.GameServerListOptions{
+			Page:        page,
+			PageSize:    pageSize,
+			Search:      r.URL.Query().Get("search"),
+			GameKey:     r.URL.Query().Get("game"),
+			ProviderKey: r.URL.Query().Get("provider"),
+			Status:      r.URL.Query().Get("status"),
+			Sort:        r.URL.Query().Get("sort"),
+			Direction:   r.URL.Query().Get("direction"),
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, servers)
+		return
+	}
 	servers, err := h.store.ListGameServers(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -381,6 +401,10 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 	}
 	server, err := serverctrl.NewService(h.store).RequestDelete(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, serverctrl.ErrServerMustBeStoppedToDelete) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}

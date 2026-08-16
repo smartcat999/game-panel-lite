@@ -54,6 +54,7 @@ export function ServerActions({
   const status = gameServerStatus(server);
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy;
+  const canDelete = status === "stopped" || status === "errored";
   const showRowRestart = rowMode && status === "running";
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
@@ -162,6 +163,10 @@ export function ServerActions({
   };
 
   const runAction = (action: "start" | "stop" | "restart" | "delete") => {
+    if (action === "delete" && !canDelete) {
+      showNotice("error", t("deleteRequiresStopped"));
+      return;
+    }
     if (action === "stop" || action === "restart" || action === "delete") {
       setErrorMessage("");
       setSuccessMessage("");
@@ -257,12 +262,13 @@ export function ServerActions({
               {showRowRestart ? (
                 <button
                   className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-slate-200 transition hover:bg-slate-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={controlsDisabled}
+                  disabled={controlsDisabled || !canDelete}
                   onClick={() => {
                     setMoreOpen(false);
                     runAction("restart");
                   }}
                   role="menuitem"
+                  title={!canDelete ? t("deleteRequiresStopped") : undefined}
                   type="button"
                 >
                   <RotateCcw aria-hidden="true" className="size-3.5 text-slate-400" />

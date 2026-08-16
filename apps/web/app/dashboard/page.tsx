@@ -18,7 +18,7 @@ import { getApiHealth, getDockerStatus, getObservabilityMetrics, getSettings, li
 import { cn } from "@/lib/utils";
 
 type DashboardRange = "1h" | "6h" | "24h" | "168h";
-type DashboardMetric = "nodeCpu" | "nodeMemory" | "nodeNetwork";
+type DashboardMetric = "nodeCpu" | "nodeMemory" | "nodeNetwork" | "nodeDisk";
 
 const rangeOptions: { label: string; value: DashboardRange; step: string }[] = [
   { label: "1h", value: "1h", step: "1m" },
@@ -96,6 +96,7 @@ export default function DashboardPage() {
               <MetricButton active={metricKey === "nodeCpu"} onClick={() => setMetricKey("nodeCpu")}>CPU</MetricButton>
               <MetricButton active={metricKey === "nodeMemory"} onClick={() => setMetricKey("nodeMemory")}>{t("memory")}</MetricButton>
               <MetricButton active={metricKey === "nodeNetwork"} onClick={() => setMetricKey("nodeNetwork")}>{t("dashboardNetwork")}</MetricButton>
+              <MetricButton active={metricKey === "nodeDisk"} onClick={() => setMetricKey("nodeDisk")}>{t("dashboardDisk")}</MetricButton>
             </div>
             <div className="inline-flex items-center" aria-label={t("monitoringRange")}>
               {rangeOptions.map((item) => (
@@ -209,6 +210,7 @@ function SystemStatusRow({ healthy, icon, label, loading }: { healthy: boolean; 
 function metricTitle(key: DashboardMetric, t: ReturnType<typeof useI18n>["t"]) {
   if (key === "nodeMemory") return t("metricTitleNodeMemory");
   if (key === "nodeNetwork") return t("metricTitleNodeNetwork");
+  if (key === "nodeDisk") return t("metricTitleNodeDisk");
   return t("metricTitleNodeCpu");
 }
 

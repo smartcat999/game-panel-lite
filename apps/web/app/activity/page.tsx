@@ -32,6 +32,10 @@ type MonitoringSection = "overview" | "instances" | "host" | "events";
 
 const severityOptions = ["all", "error", "warning", "success", "info"] as const;
 const eventTypeOptions = ["all", "server", "mod", "player", "settings", "system"] as const;
+const monitoringRange = "15m";
+const monitoringStep = "30s";
+const monitoringRefreshMs = 15_000;
+const monitoringRefreshLabel = "15s";
 
 export default function ActivityPage() {
   const { t } = useI18n();
@@ -41,11 +45,11 @@ export default function ActivityPage() {
   const [game, setGame] = useState<FilterValue>("all");
   const [section, setSection] = useState<MonitoringSection>("overview");
 
-  const overviewQuery = useQuery({ queryKey: ["monitoring-overview"], queryFn: getMonitoringOverview, retry: false, refetchInterval: 15000 });
-  const metricsQuery = useQuery({ queryKey: ["monitoring-metrics", "15m"], queryFn: () => getMonitoringMetrics("15m", "30s"), retry: false, enabled: section === "instances", refetchInterval: section === "instances" ? 15000 : false });
-  const loadQuery = useQuery({ queryKey: ["monitoring-server-load"], queryFn: getServerLoad, retry: false, enabled: section === "overview" || section === "instances" || section === "events", refetchInterval: section === "overview" || section === "instances" ? 15000 : false });
+  const overviewQuery = useQuery({ queryKey: ["monitoring-overview"], queryFn: getMonitoringOverview, retry: false, refetchInterval: monitoringRefreshMs });
+  const metricsQuery = useQuery({ queryKey: ["monitoring-metrics", monitoringRange], queryFn: () => getMonitoringMetrics(monitoringRange, monitoringStep), retry: false, enabled: section === "instances", refetchInterval: section === "instances" ? monitoringRefreshMs : false });
+  const loadQuery = useQuery({ queryKey: ["monitoring-server-load"], queryFn: getServerLoad, retry: false, enabled: section === "overview" || section === "instances" || section === "events", refetchInterval: section === "overview" || section === "instances" ? monitoringRefreshMs : false });
   const eventsQuery = useQuery({ queryKey: ["monitoring-events", severity, eventType, game], queryFn: () => getMonitoringEvents({ severity, type: eventType, game, limit: 100 }), retry: false, enabled: section === "events", refetchInterval: section === "events" ? 30000 : false });
-  const platformQuery = useQuery({ queryKey: ["monitoring-platform", "15m"], queryFn: () => getPlatformMonitoring("15m", "30s"), retry: false, enabled: section === "overview" || section === "host", refetchInterval: section === "overview" || section === "host" ? 15000 : false });
+  const platformQuery = useQuery({ queryKey: ["monitoring-platform", monitoringRange], queryFn: () => getPlatformMonitoring(monitoringRange, monitoringStep), retry: false, enabled: section === "overview" || section === "host", refetchInterval: section === "overview" || section === "host" ? monitoringRefreshMs : false });
 
   const visibleEvents = useMemo(() => (eventsQuery.data?.events ?? []).filter((event) => !isWorldOrBackupEventType(event.type)), [eventsQuery.data?.events]);
   const events = useMemo(() => filterEvents(visibleEvents, search), [visibleEvents, search]);
@@ -92,12 +96,7 @@ export default function ActivityPage() {
             <MetricGroupHeader
               title={t("serverResourceTitle")}
               description={t("serverResourceDescription")}
-              meta={
-                <>
-                  <TechBadge label={t("monitoringRange")} value="15m" />
-                  <TechBadge label={t("monitoringRefresh")} value="15s" />
-                </>
-              }
+              meta={<MonitoringCadence />}
             />
             <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsQuery.data?.range} series={metricsQuery.data?.series.cpu} />
             <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsQuery.data?.range} series={metricsQuery.data?.series.memory} />
@@ -112,12 +111,7 @@ export default function ActivityPage() {
               <MetricGroupHeader
                 title={t("nodeResourceTitle")}
                 description={t("nodeResourceDescription")}
-                meta={
-                  <>
-                    <TechBadge label={t("monitoringRange")} value="15m" />
-                    <TechBadge label={t("monitoringRefresh")} value="15s" />
-                  </>
-                }
+                meta={<MonitoringCadence />}
               />
               <MonitoringChartCard color="#7dd3fc" icon={<Server aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeCpu} />
               <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeMemory} />
@@ -160,7 +154,6 @@ export default function ActivityPage() {
                 setSearch("");
               }}
               onSearchChange={setSearch}
-              resultLabel={t("filteredResultsCount", { count: events.length })}
               search={search}
               searchPlaceholder={t("searchMonitoringEvents")}
             />
@@ -275,21 +268,19 @@ function OverviewStatusStrip({ overview }: { overview?: MonitoringOverviewRespon
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <OverviewMetaPill label={t("monitoringRange")} value="15m" />
-          <OverviewMetaPill label={t("monitoringRefresh")} value="15s" />
-        </div>
+        <MonitoringCadence />
       </div>
     </div>
   );
 }
 
-function OverviewMetaPill({ label, value }: { label: string; value: string }) {
+function MonitoringCadence() {
+  const { t } = useI18n();
   return (
-    <span className="inline-flex h-8 items-center gap-2 rounded-md border border-panel-line bg-slate-950/35 px-2.5 text-xs">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-mono font-medium text-slate-200">{value}</span>
-    </span>
+    <div className="flex flex-wrap gap-2">
+      <TechBadge label={t("monitoringRange")} value={monitoringRange} />
+      <TechBadge label={t("monitoringRefresh")} value={monitoringRefreshLabel} />
+    </div>
   );
 }
 

@@ -64,10 +64,21 @@ func (catalog Catalog) Registry() string {
 	if active == "" {
 		active = "global"
 	}
-	if catalog.Registries == nil {
-		return ""
+	registry, _ := catalog.RegistryFor(active)
+	return registry
+}
+
+func (catalog Catalog) RegistryFor(region string) (string, bool) {
+	region = strings.TrimSpace(region)
+	if region == "" {
+		region = "global"
 	}
-	return strings.TrimSuffix(strings.TrimSpace(catalog.Registries[active]), "/")
+	if catalog.Registries == nil {
+		return "", false
+	}
+	registry, ok := catalog.Registries[region]
+	registry = strings.TrimSuffix(strings.TrimSpace(registry), "/")
+	return registry, ok && registry != ""
 }
 
 func (config RuntimeConfig) WithFallback(fallback RuntimeConfig) RuntimeConfig {

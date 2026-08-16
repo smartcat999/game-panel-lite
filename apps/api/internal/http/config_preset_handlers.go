@@ -22,6 +22,15 @@ type configPresetPayload struct {
 	ModIDs      []string             `json:"modIds"`
 }
 
+type configPresetBatchDeletePayload struct {
+	IDs []string `json:"ids"`
+}
+
+type configPresetBatchDeleteResult struct {
+	Succeeded []map[string]string `json:"succeeded"`
+	Failed    []map[string]string `json:"failed"`
+}
+
 func (h *Handler) listConfigPresets(w http.ResponseWriter, r *http.Request) {
 	presets, err := h.store.ListConfigPresets(r.Context())
 	if err != nil {
@@ -88,6 +97,36 @@ func (h *Handler) deleteConfigPreset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) batchDeleteConfigPresets(w http.ResponseWriter, r *http.Request) {
+	var payload configPresetBatchDeletePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	ids := uniqueNonEmptyStrings(payload.IDs)
+	if len(ids) == 0 {
+		writeError(w, http.StatusBadRequest, "at least one config preset id is required")
+		return
+	}
+	if len(ids) > 100 {
+		writeError(w, http.StatusBadRequest, "cannot delete more than 100 config presets at once")
+		return
+	}
+	result := configPresetBatchDeleteResult{Succeeded: []map[string]string{}, Failed: []map[string]string{}}
+	for _, id := range ids {
+		if _, err := h.store.GetConfigPreset(r.Context(), id); err != nil {
+			result.Failed = append(result.Failed, map[string]string{"id": id, "error": "config preset not found"})
+			continue
+		}
+		if err := h.store.DeleteConfigPreset(r.Context(), id); err != nil {
+			result.Failed = append(result.Failed, map[string]string{"id": id, "error": err.Error()})
+			continue
+		}
+		result.Succeeded = append(result.Succeeded, map[string]string{"id": id})
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPreset, error) {

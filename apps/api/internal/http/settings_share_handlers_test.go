@@ -99,6 +99,39 @@ func TestSettingsLocaleCanBeStoredInBackend(t *testing.T) {
 	}
 }
 
+func TestSettingsImageRegionCanBeStored(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/settings/image-region", bytes.NewBufferString(`{"imageRegion":"cn"}`)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected image region update 200, got %d: %s", update.Code, update.Body.String())
+	}
+	var updateResp map[string]any
+	if err := json.Unmarshal(update.Body.Bytes(), &updateResp); err != nil {
+		t.Fatal(err)
+	}
+	if updateResp["gameImageRegistry"] != "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite" || updateResp["restartRequired"] != true {
+		t.Fatalf("expected resolved registry and restart flag, got %+v", updateResp)
+	}
+
+	read := httptest.NewRecorder()
+	router.ServeHTTP(read, httptest.NewRequest(stdhttp.MethodGet, "/api/settings", nil))
+	var settings map[string]string
+	if err := json.Unmarshal(read.Body.Bytes(), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings["imageRegion"] != "cn" || settings["gameImageRegistry"] != "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite" {
+		t.Fatalf("expected persisted image region, got %+v", settings)
+	}
+
+	invalid := httptest.NewRecorder()
+	router.ServeHTTP(invalid, httptest.NewRequest(stdhttp.MethodPut, "/api/settings/image-region", bytes.NewBufferString(`{"imageRegion":"unknown"}`)))
+	if invalid.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected invalid image region 400, got %d: %s", invalid.Code, invalid.Body.String())
+	}
+}
+
 func TestShareableServerPageFlow(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("share-server", cfg.DataDir)

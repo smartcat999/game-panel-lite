@@ -6,17 +6,19 @@ import { Check, Clock3, Compass, Download, ExternalLink, Library, Package, Trash
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
+import { SelectionBox } from "@/components/selection-box";
+import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { Badge, Button, Card, Input } from "@/components/ui";
-import { createModPack, createModPackFromWorkshopCollection, deleteGlobalMod, deleteModPack, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, previewWorkshopCollection, previewWorkshopItems, uploadGlobalMod } from "@/lib/api";
+import { createModPack, createModPackFromWorkshopCollection, deleteGlobalMod, deleteGlobalMods, deleteModPack, deleteModPacks, getDockerStatus, importGlobalWorkshopMods, importRecommendedMod, listGames, listGlobalMods, listModPacks, listRecommendedMods, previewWorkshopCollection, previewWorkshopItems, uploadGlobalMod } from "@/lib/api";
 import { gameFilterOptionsForKeys } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScopeFromTags, modDisplayName, modSourceLabel } from "@/lib/mod-display";
 import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
+import { providerDisplayName } from "@/lib/provider-display";
 import { cn } from "@/lib/utils";
 import { parseWorkshopIds } from "@/lib/workshop-input";
-import type { ModFile, ModPack, ProviderKey, RecommendedMod, WorkshopPreview } from "@/lib/types";
+import type { GameCatalogEntry, ModFile, ModPack, ProviderKey, RecommendedMod, WorkshopPreview } from "@/lib/types";
 
 type ModsView = "discover" | "library" | "packs";
 type ModGameFilter = "all" | string;
@@ -34,6 +36,9 @@ export default function ModsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingDelete, setPendingDelete] = useState<ModFile | null>(null);
   const [pendingPackDelete, setPendingPackDelete] = useState<ModPack | null>(null);
+  const [pendingBulkDelete, setPendingBulkDelete] = useState<"library" | "packs" | null>(null);
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState<Set<string>>(new Set());
+  const [selectedModPackIds, setSelectedModPackIds] = useState<Set<string>>(new Set());
   const [activeView, setActiveView] = useState<ModsView>("discover");
   const [gameFilter, setGameFilter] = useState<ModGameFilter>("all");
   const [search, setSearch] = useState("");
@@ -110,6 +115,7 @@ export default function ModsPage() {
       setPackName("");
       setPackDescription("");
       setSelectedPackModIds([]);
+      setSelectedLibraryIds(new Set());
       setPackDialogOpen(false);
       await client.invalidateQueries({ queryKey: ["mod-packs"] });
     },
@@ -129,6 +135,30 @@ export default function ModsPage() {
     onError: (error) => {
       setSuccessMessage("");
       setErrorMessage(error instanceof Error ? error.message : t("unableDeleteModPack"));
+    }
+  });
+  const bulkRemove = useMutation({
+    mutationFn: ({ kind, ids }: { kind: "library" | "packs"; ids: string[] }) => (
+      kind === "library" ? deleteGlobalMods(ids) : deleteModPacks(ids)
+    ),
+    onSuccess: async (result, variables) => {
+      setPendingBulkDelete(null);
+      if (variables.kind === "library") {
+        setSelectedLibraryIds(new Set());
+        await client.invalidateQueries({ queryKey: ["global-mods"] });
+      } else {
+        setSelectedModPackIds(new Set());
+        await client.invalidateQueries({ queryKey: ["mod-packs"] });
+      }
+      setErrorMessage(result.failed.length > 0 ? t("bulkModDeletePartial", { succeeded: result.succeeded.length, failed: result.failed.length }) : "");
+      setSuccessMessage(result.succeeded.length > 0
+        ? t(variables.kind === "library" ? "bulkModsRemoved" : "bulkModPacksDeleted", { count: result.succeeded.length })
+        : "");
+    },
+    onError: (error) => {
+      setPendingBulkDelete(null);
+      setSuccessMessage("");
+      setErrorMessage(error instanceof Error ? error.message : t("batchActionFailed"));
     }
   });
   const packCollectionPreviewMutation = useMutation({
@@ -257,11 +287,6 @@ export default function ModsPage() {
     () => filteredRecommendedMods.filter((mod) => modMatchesSearch(mod, searchTerm)),
     [filteredRecommendedMods, searchTerm]
   );
-  const activeViewCount = activeView === "discover" ? searchedRecommendedMods.length : activeView === "library" ? searchedGlobalMods.length : searchedModPacks.length;
-  const activeFilterChips = [
-    search.trim(),
-    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : ""
-  ].filter(Boolean);
   const selectedPackModCount = selectedPackModIds.length;
   const selectedPackDependencies = dependencyNamesForSelectedMods(globalMods, selectedPackModIds);
   const workshopIds = parseWorkshopIds(workshopIdsText);
@@ -277,10 +302,20 @@ export default function ModsPage() {
   const togglePackMod = (modId: string) => {
     setSelectedPackModIds((current) => current.includes(modId) ? current.filter((id) => id !== modId) : [...current, modId]);
   };
+  const clearTableSelection = () => {
+    setSelectedLibraryIds(new Set());
+    setSelectedModPackIds(new Set());
+  };
+  const changeView = (view: ModsView) => {
+    clearTableSelection();
+    setActiveView(view);
+  };
+  const selectedLibraryMods = globalMods.filter((item) => selectedLibraryIds.has(item.id));
+  const selectedModPacks = modPacks.filter((item) => selectedModPackIds.has(item.id));
 
   return (
     <>
-      <PageHeader title={t("modsTitle")} />
+      <PageHeader title={t("modsTitle")} description={t("modsDescription")} />
       <input
         ref={globalInputRef}
         className="hidden"
@@ -298,61 +333,124 @@ export default function ModsPage() {
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
 
-      <ResourceFilterBar
-        activeChips={activeFilterChips}
-        clearLabel={t("clearFilters")}
-        density="compact"
-        filters={[
-          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) }
-        ]}
-        onClear={() => {
-          setGameFilter("all");
-          setSearch("");
-        }}
-        onSearchChange={setSearch}
-        resultLabel={t("filteredResultsCount", { count: activeViewCount })}
-        search={search}
-        searchPlaceholder={t("searchMods")}
-      />
+      <div className="flex min-h-16 flex-col gap-3 border-b border-panel-line pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex flex-wrap gap-1">
+            <ViewTab
+              active={activeView === "discover"}
+              count={searchedRecommendedMods.length}
+              icon={<Compass aria-hidden="true" />}
+              label={t("discoverMods")}
+              onClick={() => changeView("discover")}
+            />
+            <ViewTab
+              active={activeView === "library"}
+              count={searchedGlobalMods.length}
+              icon={<Library aria-hidden="true" />}
+              label={t("modLibrary")}
+              onClick={() => changeView("library")}
+            />
+            <ViewTab
+              active={activeView === "packs"}
+              count={searchedModPacks.length}
+              icon={<Package aria-hidden="true" />}
+              label={t("modPacks")}
+              onClick={() => changeView("packs")}
+            />
+          </div>
+          <p className="truncate text-xs text-slate-500">
+            {activeView === "discover" ? t("discoverModsHint") : activeView === "library" ? t("modLibraryHint") : t("modPacksHint")}
+          </p>
+        </div>
+        <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-end gap-2">
+          {activeView === "discover" ? (
+            <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
+              <Download aria-hidden="true" />
+              {t("importFromSteam")}
+            </Button>
+          ) : activeView === "library" ? (
+            selectedLibraryIds.size > 0 ? (
+              <>
+                <span className="text-sm text-slate-400">{t("selectedModsCount", { count: selectedLibraryIds.size })}</span>
+                <Button variant="secondary" onClick={() => {
+                  setSelectedPackModIds(Array.from(selectedLibraryIds));
+                  setPackDialogOpen(true);
+                }}>
+                  <Package aria-hidden="true" />
+                  {t("createModPack")}
+                </Button>
+                <Button variant="danger" onClick={() => setPendingBulkDelete("library")} disabled={bulkRemove.isPending}>
+                  <Trash2 aria-hidden="true" />
+                  {t("removeSelectedMods")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
+                  <Upload aria-hidden="true" />
+                  {globalUpload.isPending ? t("uploading") : t("uploadMod")}
+                </Button>
+                <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
+                  <Download aria-hidden="true" />
+                  {t("importFromSteam")}
+                </Button>
+              </>
+            )
+          ) : (
+            selectedModPackIds.size > 0 ? (
+              <>
+                <span className="text-sm text-slate-400">{t("selectedModPacksCount", { count: selectedModPackIds.size })}</span>
+                <Button variant="danger" onClick={() => setPendingBulkDelete("packs")} disabled={bulkRemove.isPending}>
+                  <Trash2 aria-hidden="true" />
+                  {t("deleteSelectedModPacks")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
+                  <Package aria-hidden="true" />
+                  {t("createModPack")}
+                </Button>
+                <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
+                  <Download aria-hidden="true" />
+                  {t("importFromSteam")}
+                </Button>
+              </>
+            )
+          )}
+        </div>
+      </div>
 
-      <div className="mt-6 flex flex-wrap gap-2 border-b border-panel-line pb-3">
-        <ViewTab
-          active={activeView === "discover"}
-          count={searchedRecommendedMods.length}
-          icon={<Compass aria-hidden="true" />}
-          label={t("discoverMods")}
-          onClick={() => setActiveView("discover")}
-        />
-        <ViewTab
-          active={activeView === "library"}
-          count={searchedGlobalMods.length}
-          icon={<Library aria-hidden="true" />}
-          label={t("modLibrary")}
-          onClick={() => setActiveView("library")}
-        />
-        <ViewTab
-          active={activeView === "packs"}
-          count={searchedModPacks.length}
-          icon={<Package aria-hidden="true" />}
-          label={t("modPacks")}
-          onClick={() => setActiveView("packs")}
+      <div className="mt-3">
+        <ResourceFilterBar
+          clearLabel={t("clearFilters")}
+          density="compact"
+          filters={[{
+            label: t("filterGame"),
+            options: gameFilters,
+            value: gameFilter,
+            onChange: (value) => {
+              clearTableSelection();
+              setGameFilter(value);
+            }
+          }]}
+          onClear={() => {
+            clearTableSelection();
+            setGameFilter("all");
+            setSearch("");
+          }}
+          onSearchChange={(value) => {
+            clearTableSelection();
+            setSearch(value);
+          }}
+          search={search}
+          searchPlaceholder={t("searchMods")}
         />
       </div>
 
       {activeView === "discover" ? (
-        <section className="mt-5">
-          <SectionToolbar
-            title={t("discoverMods")}
-            hint={t("discoverModsHint")}
-            count={searchedRecommendedMods.length}
-            actions={(
-              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
-                <Download aria-hidden="true" />
-                {t("importFromSteam")}
-              </Button>
-            )}
-          />
-          <div className="mt-4 grid gap-3 2xl:grid-cols-2">
+        <section className="mt-4">
+          <div className="grid gap-3 2xl:grid-cols-2">
             {searchedRecommendedMods.map((item) => (
               <RecommendedModCard
                 key={recommendedModKey(item)}
@@ -377,36 +475,21 @@ export default function ModsPage() {
           </div>
         </section>
       ) : activeView === "library" ? (
-        <section className="mt-5">
-          <SectionToolbar
-            title={t("modLibrary")}
-            hint={t("modLibraryHint")}
-            count={searchedGlobalMods.length}
-            actions={(
-              <>
-                <Button variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
-                  <Upload aria-hidden="true" />
-                  {globalUpload.isPending ? t("uploading") : t("uploadMod")}
-                </Button>
-              <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
-                <Download aria-hidden="true" />
-                {t("importFromSteam")}
-              </Button>
-              </>
-            )}
-          />
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {searchedGlobalMods.map((item) => (
-              <LibraryModCard
-                key={item.id}
-                item={item}
+        <section className="mt-4">
+          <div>
+            {searchedGlobalMods.length > 0 ? (
+              <LibraryModTable
+                games={gamesQuery.data ?? []}
+                items={searchedGlobalMods}
                 locale={locale}
-                deleting={removeGlobal.isPending}
-                onDelete={() => setPendingDelete(item)}
+                deleting={removeGlobal.isPending || bulkRemove.isPending}
+                onDelete={setPendingDelete}
+                onSelectionChange={setSelectedLibraryIds}
+                selectedIds={selectedLibraryIds}
               />
-            ))}
+            ) : null}
             {!globalModsQuery.isLoading && searchedGlobalMods.length === 0 && (
-              <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
+              <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
                   <p className="mt-2 text-sm">{t("noGlobalMods")}</p>
@@ -416,51 +499,21 @@ export default function ModsPage() {
           </div>
         </section>
       ) : (
-        <section className="mt-5">
-          <SectionToolbar
-            title={t("modPacks")}
-            hint={t("modPacksHint")}
-            count={searchedModPacks.length}
-            actions={(
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
-                  <Package aria-hidden="true" />
-                  {t("createModPack")}
-                </Button>
-                <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
-                  <Download aria-hidden="true" />
-                  {t("importFromSteam")}
-                </Button>
-              </div>
-            )}
-          />
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {searchedModPacks.map((pack) => (
-              <Card key={pack.id} className="p-4 transition hover:border-panel-green/25">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <Link href={`/mods/packs/${pack.id}`} className="block min-w-0 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50 focus-visible:ring-offset-2 focus-visible:ring-offset-panel-card">
-                      <h3 className="truncate font-semibold text-white transition hover:text-panel-green">{pack.name}</h3>
-                    </Link>
-                    <p className="mt-1 truncate text-sm text-slate-500">{pack.description || pack.mods.map((mod) => modDisplayName(mod, locale)).join(", ")}</p>
-                  </div>
-                  <Badge className="shrink-0 bg-slate-800 text-slate-300">{pack.mods.length}</Badge>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {pack.mods.slice(0, 6).map((mod) => (
-                    <span key={mod.id} className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-300">{modDisplayName(mod, locale)}</span>
-                  ))}
-                  {pack.mods.length > 6 && <span className="rounded bg-slate-900 px-2 py-1 text-xs text-slate-500">+{pack.mods.length - 6}</span>}
-                </div>
-                <div className="mt-4 flex justify-end border-t border-panel-line pt-3">
-                  <Button variant="danger" onClick={() => setPendingPackDelete(pack)} disabled={removePack.isPending}>
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              </Card>
-            ))}
+        <section className="mt-4">
+          <div>
+            {searchedModPacks.length > 0 ? (
+              <ModPackTable
+                games={gamesQuery.data ?? []}
+                packs={searchedModPacks}
+                locale={locale}
+                deleting={removePack.isPending || bulkRemove.isPending}
+                onDelete={setPendingPackDelete}
+                onSelectionChange={setSelectedModPackIds}
+                selectedIds={selectedModPackIds}
+              />
+            ) : null}
             {!modPacksQuery.isLoading && searchedModPacks.length === 0 && (
-              <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400 xl:col-span-2">
+              <Card className="flex min-h-44 items-center justify-center border-dashed p-6 text-center text-slate-400">
                 <div>
                   <Package aria-hidden="true" className="mx-auto" />
                   <p className="mt-2 text-sm">{t("noModPacks")}</p>
@@ -877,6 +930,27 @@ export default function ModsPage() {
         onCancel={() => setPendingPackDelete(null)}
         onConfirm={() => pendingPackDelete && removePack.mutate(pendingPackDelete.id)}
       />
+      <ConfirmDialog
+        open={Boolean(pendingBulkDelete)}
+        eyebrow={t("destructiveAction")}
+        title={pendingBulkDelete === "library"
+          ? t("bulkRemoveModsConfirm", { count: selectedLibraryIds.size })
+          : t("bulkDeleteModPacksConfirm", { count: selectedModPackIds.size })}
+        description={pendingBulkDelete === "library" ? t("bulkRemoveModsDescription") : t("confirmDeleteModPackDescription")}
+        detail={pendingBulkDelete === "library" ? (
+          <span>{selectedLibraryMods.slice(0, 6).map((item) => modDisplayName(item, locale)).join("、")}{selectedLibraryMods.length > 6 ? ` +${selectedLibraryMods.length - 6}` : ""}</span>
+        ) : pendingBulkDelete === "packs" ? (
+          <span>{selectedModPacks.slice(0, 6).map((item) => item.name).join("、")}{selectedModPacks.length > 6 ? ` +${selectedModPacks.length - 6}` : ""}</span>
+        ) : undefined}
+        cancelLabel={t("cancel")}
+        confirmLabel={bulkRemove.isPending ? t("actionWorking") : t("delete")}
+        busy={bulkRemove.isPending}
+        onCancel={() => setPendingBulkDelete(null)}
+        onConfirm={() => {
+          if (pendingBulkDelete === "library") bulkRemove.mutate({ kind: "library", ids: Array.from(selectedLibraryIds) });
+          if (pendingBulkDelete === "packs") bulkRemove.mutate({ kind: "packs", ids: Array.from(selectedModPackIds) });
+        }}
+      />
     </>
   );
 }
@@ -886,8 +960,8 @@ function ViewTab({ active, count, icon, label, onClick }: { active: boolean; cou
     <button
       type="button"
       className={cn(
-        "inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-        active ? "border-panel-green/50 bg-panel-green/15 text-panel-green" : "border-panel-line bg-slate-950/40 text-slate-300 hover:bg-slate-900"
+        "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
+        active ? "bg-panel-green/15 text-panel-green" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
       )}
       onClick={onClick}
     >
@@ -895,21 +969,6 @@ function ViewTab({ active, count, icon, label, onClick }: { active: boolean; cou
       {label}
       <Badge className={cn(active ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>{count}</Badge>
     </button>
-  );
-}
-
-function SectionToolbar({ actions, count, hint, title }: { actions: ReactNode; count: number; hint: string; title: string }) {
-  return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <h2 className="truncate text-base font-semibold text-white">{title}</h2>
-          <Badge className="bg-slate-800 text-slate-300">{count}</Badge>
-        </div>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">{hint}</p>
-      </div>
-      <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>
-    </div>
   );
 }
 
@@ -1026,6 +1085,195 @@ function steamWorkshopURL(providerKey: ProviderKey, section: "collections" | "it
     return `https://steamcommunity.com/workshop/browse/?appid=${appID}&section=collections`;
   }
   return `https://steamcommunity.com/app/${appID}/workshop/`;
+}
+
+function LibraryModTable({
+  deleting,
+  games,
+  items,
+  locale,
+  onDelete,
+  onSelectionChange,
+  selectedIds
+}: {
+  deleting: boolean;
+  games: GameCatalogEntry[];
+  items: ModFile[];
+  locale: string;
+  onDelete: (item: ModFile) => void;
+  onSelectionChange: (ids: Set<string>) => void;
+  selectedIds: Set<string>;
+}) {
+  const { t } = useI18n();
+  const selectedVisibleCount = items.filter((item) => selectedIds.has(item.id)).length;
+  const allSelected = items.length > 0 && selectedVisibleCount === items.length;
+  const toggleAll = () => {
+    const next = new Set(selectedIds);
+    if (allSelected) items.forEach((item) => next.delete(item.id));
+    else items.forEach((item) => next.add(item.id));
+    onSelectionChange(next);
+  };
+  const toggleItem = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onSelectionChange(next);
+  };
+  return (
+    <div className="overflow-hidden rounded-lg border border-panel-line bg-panel-card">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+          <thead className="bg-slate-950/45 text-xs font-medium text-slate-500">
+            <tr>
+              <th className="w-11 px-4 py-3"><SelectionBox checked={allSelected} indeterminate={selectedVisibleCount > 0 && !allSelected} label={t("selectAll")} onChange={toggleAll} /></th>
+              <th className="px-4 py-3">{t("modsTitle")}</th>
+              <th className="px-3 py-3">{t("modSource")}</th>
+              <th className="px-3 py-3">{t("modVersion")}</th>
+              <th className="px-3 py-3">{t("dependencies")}</th>
+              <th className="px-3 py-3">{t("size")}</th>
+              <th className="px-3 py-3">{t("modified")}</th>
+              <th className="px-4 py-3 text-right">{t("actions")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-panel-line">
+            {items.map((item) => {
+              const sourceURL = item.workshopId ? `https://steamcommunity.com/sharedfiles/filedetails/?id=${item.workshopId}` : "";
+              const catalog = modCatalogLabel(item.gameKey, item.providerKey, games, t);
+              return (
+                <tr className={cn("group hover:bg-slate-800/35", selectedIds.has(item.id) && "bg-panel-green/[0.06]")} key={item.id}>
+                  <td className="w-11 px-4 py-3"><SelectionBox checked={selectedIds.has(item.id)} label={t("selectMod", { name: modDisplayName(item, locale) })} onChange={() => toggleItem(item.id)} /></td>
+                  <td className="px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-panel-line bg-slate-950/55">
+                        {item.previewUrl ? <Image src={item.previewUrl} alt="" className="size-full object-cover" width={40} height={40} unoptimized /> : <Package aria-hidden="true" className="size-4 text-slate-500" />}
+                      </span>
+                      <div className="min-w-0">
+                        <Link href={`/mods/${item.id}`} className="block max-w-72 truncate font-medium text-slate-100 group-hover:text-panel-green">{modDisplayName(item, locale)}</Link>
+                        <p className="mt-0.5 max-w-72 truncate text-xs text-slate-500">{catalog || item.fileName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-slate-300">
+                    {sourceURL ? <a className="inline-flex items-center gap-1 hover:text-panel-green" href={sourceURL} target="_blank" rel="noreferrer">{modSourceLabel(item, locale)}<ExternalLink aria-hidden="true" className="size-3" /></a> : modSourceLabel(item, locale)}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-300">{item.modVersion || item.tmodVersion || "—"}</td>
+                  <td className="px-3 py-3 text-slate-400">{item.dependencies?.length ? t("itemsCount", { count: item.dependencies.length }) : t("none")}</td>
+                  <td className="px-3 py-3 text-slate-300">{item.size}</td>
+                  <td className="px-3 py-3 text-slate-400">{item.updatedAtSteam ? formatWorkshopUpdated(item.updatedAtSteam, locale) : localizeRelativeTime(item.created, locale === "zh" ? "zh" : "en")}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Button variant="danger" className="h-8 px-2.5" aria-label={t("removeFromModLibrary")} onClick={() => onDelete(item)} disabled={deleting}><Trash2 aria-hidden="true" className="size-3.5" /></Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="grid gap-3 p-3 md:hidden">
+        {items.map((item) => (
+          <div className={cn("relative rounded-lg", selectedIds.has(item.id) && "ring-1 ring-panel-green/60")} key={item.id}>
+            <div className="absolute left-3 top-3 z-10"><SelectionBox checked={selectedIds.has(item.id)} label={t("selectMod", { name: modDisplayName(item, locale) })} onChange={() => toggleItem(item.id)} /></div>
+            <div className="pl-7"><LibraryModCard item={item} locale={locale} deleting={deleting} onDelete={() => onDelete(item)} /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ModPackTable({
+  deleting,
+  games,
+  locale,
+  onDelete,
+  onSelectionChange,
+  selectedIds,
+  packs
+}: {
+  deleting: boolean;
+  games: GameCatalogEntry[];
+  locale: string;
+  onDelete: (pack: ModPack) => void;
+  onSelectionChange: (ids: Set<string>) => void;
+  selectedIds: Set<string>;
+  packs: ModPack[];
+}) {
+  const { t } = useI18n();
+  const selectedVisibleCount = packs.filter((pack) => selectedIds.has(pack.id)).length;
+  const allSelected = packs.length > 0 && selectedVisibleCount === packs.length;
+  const toggleAll = () => {
+    const next = new Set(selectedIds);
+    if (allSelected) packs.forEach((pack) => next.delete(pack.id));
+    else packs.forEach((pack) => next.add(pack.id));
+    onSelectionChange(next);
+  };
+  const toggleItem = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onSelectionChange(next);
+  };
+  return (
+    <div className="overflow-hidden rounded-lg border border-panel-line bg-panel-card">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+          <thead className="bg-slate-950/45 text-xs font-medium text-slate-500">
+            <tr>
+              <th className="w-11 px-4 py-3"><SelectionBox checked={allSelected} indeterminate={selectedVisibleCount > 0 && !allSelected} label={t("selectAll")} onChange={toggleAll} /></th>
+              <th className="px-4 py-3">{t("modPackName")}</th>
+              <th className="px-3 py-3">{t("gameAndMode")}</th>
+              <th className="px-3 py-3">{t("modsTitle")}</th>
+              <th className="px-3 py-3">{t("created")}</th>
+              <th className="px-4 py-3 text-right">{t("actions")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-panel-line">
+            {packs.map((pack) => {
+              const catalog = modCatalogLabel(pack.gameKey, pack.providerKey, games, t);
+              return <tr className={cn("group hover:bg-slate-800/35", selectedIds.has(pack.id) && "bg-panel-green/[0.06]")} key={pack.id}>
+                <td className="w-11 px-4 py-3"><SelectionBox checked={selectedIds.has(pack.id)} label={t("selectModPack", { name: pack.name })} onChange={() => toggleItem(pack.id)} /></td>
+                <td className="px-4 py-3">
+                  <Link href={`/mods/packs/${pack.id}`} className="block max-w-80 truncate font-medium text-slate-100 group-hover:text-panel-green">{pack.name}</Link>
+                  <p className="mt-0.5 max-w-80 truncate text-xs text-slate-500">{pack.description || pack.mods.slice(0, 3).map((mod) => modDisplayName(mod, locale)).join("、")}</p>
+                </td>
+                <td className="px-3 py-3 text-slate-300">
+                  <p>{catalog || "—"}</p>
+                </td>
+                <td className="px-3 py-3">
+                  <p className="text-slate-200">{t("itemsCount", { count: pack.mods.length })}</p>
+                  <p className="mt-0.5 max-w-96 truncate text-xs text-slate-500">{pack.mods.slice(0, 4).map((mod) => modDisplayName(mod, locale)).join("、")}{pack.mods.length > 4 ? ` +${pack.mods.length - 4}` : ""}</p>
+                </td>
+                <td className="px-3 py-3 text-slate-400">{localizeRelativeTime(pack.created, locale === "zh" ? "zh" : "en")}</td>
+                <td className="px-4 py-3 text-right"><Button variant="danger" className="h-8 px-2.5" aria-label={t("delete")} onClick={() => onDelete(pack)} disabled={deleting}><Trash2 aria-hidden="true" className="size-3.5" /></Button></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="divide-y divide-panel-line md:hidden">
+        {packs.map((pack) => (
+          <div className={cn("p-4", selectedIds.has(pack.id) && "bg-panel-green/[0.06]")} key={pack.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3"><SelectionBox checked={selectedIds.has(pack.id)} label={t("selectModPack", { name: pack.name })} onChange={() => toggleItem(pack.id)} /><div className="min-w-0"><Link href={`/mods/packs/${pack.id}`} className="truncate font-medium text-slate-100">{pack.name}</Link><p className="mt-1 truncate text-xs text-slate-500">{pack.description || t("itemsCount", { count: pack.mods.length })}</p></div></div>
+              <Button variant="danger" className="h-8 px-2.5" aria-label={t("delete")} onClick={() => onDelete(pack)} disabled={deleting}><Trash2 aria-hidden="true" className="size-3.5" /></Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function modCatalogLabel(
+  gameKey: string | undefined,
+  providerKey: ProviderKey | undefined,
+  games: GameCatalogEntry[],
+  t: (key: MessageKey) => string
+) {
+  const game = games.find((entry) => entry.key === gameKey || entry.providers.some((provider) => provider.key === providerKey));
+  const provider = game?.providers.find((entry) => entry.key === providerKey);
+  const gameName = game?.name || gameKey || "";
+  const providerName = providerDisplayName(providerKey, provider?.name || providerKey || "", t);
+  if (gameName && providerName && gameName !== providerName) return `${gameName} · ${providerName}`;
+  return providerName || gameName;
 }
 
 function ModMetadataStrip({ item }: { item: ModFile }) {
@@ -1371,13 +1619,4 @@ function modMatchesSearch(
     ...(item.tags ?? []),
     ...(item.dependencies ?? [])
   ].some((value) => value && value.toLowerCase().includes(term));
-}
-
-function filterOptionLabel<T extends string>(
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
-  value: T,
-  t: (key: MessageKey) => string
-) {
-  const option = options.find((item) => item.key === value);
-  return option?.labelKey ? t(option.labelKey) : option?.label ?? value;
 }

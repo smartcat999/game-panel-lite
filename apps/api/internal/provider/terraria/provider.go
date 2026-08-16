@@ -315,8 +315,8 @@ func joinPort(server domain.GameServer) int {
 
 func configSchema() []domain.ProviderConfigField {
 	return []domain.ProviderConfigField{
-		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Friends Server"},
-		{Name: "worldName", Label: "世界名称", Type: "text", Required: true, Default: "Friends World"},
+		{Name: "serverName", Label: "服务器名称", Type: "text", Required: true, Default: "Friends Server", Help: "显示在服务器列表中的名称。"},
+		{Name: "worldName", Label: "世界名称", Type: "text", Required: true, Default: "Friends World", Help: "新建世界和世界文件使用的名称。"},
 		{
 			Name: "worldSize", Label: "世界大小", Type: "select", Required: true, Default: "medium",
 			Options: []domain.ProviderConfigFieldOption{
@@ -342,12 +342,18 @@ func configSchema() []domain.ProviderConfigField {
 				{Value: "crimson", Label: "猩红之地"},
 			},
 		},
-		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 8},
-		{Name: "password", Label: "服务器密码", Type: "password", Required: false},
-		{Name: "motd", Label: "服务器公告", Type: "text", Required: false, Default: "Welcome to GamePanel Lite"},
-		{Name: "seed", Label: "世界种子", Type: "text", Required: false},
+		{Name: "maxPlayers", Label: "最大玩家数", Type: "number", Required: true, Default: 8, Help: "允许同时进入服务器的玩家数量上限。"},
+		{Name: "port", Label: "游戏端口", Type: "number", Required: true, Default: 7777, Min: floatPtr(1024), Max: floatPtr(65535), Help: "容器内 Terraria 服务使用的端口，外部端口在创建服务器时分配。"},
+		{Name: "password", Label: "服务器密码", Type: "password", Required: false, Help: "加入服务器时需要输入的密码；预设不会保存密码。"},
+		{Name: "motd", Label: "服务器公告", Type: "text", Required: false, Default: "Welcome to GamePanel Lite", Help: "玩家进入服务器时看到的欢迎信息。"},
+		{Name: "seed", Label: "世界种子", Type: "text", Required: false, Help: "留空时随机生成；仅在创建新世界时生效。"},
+		{Name: "secure", Label: "安全模式", Type: "boolean", Required: false, Default: true, Help: "启用 Terraria 的安全校验，通常建议保持开启。"},
+		{Name: "language", Label: "服务器语言", Type: "text", Required: true, Default: "en-US", Help: "服务器控制台与系统消息使用的语言代码，例如 zh-Hans。"},
+		{Name: "autoCreateWorld", Label: "自动创建世界", Type: "boolean", Required: false, Default: true, Help: "找不到指定世界文件时自动创建新世界。"},
 	}
 }
+
+func floatPtr(value float64) *float64 { return &value }
 
 func RuntimeWorldFiles(providerKey domain.ProviderKey, config Config) []string {
 	switch providerKey {

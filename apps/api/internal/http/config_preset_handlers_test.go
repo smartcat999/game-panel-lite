@@ -80,3 +80,45 @@ func TestConfigPresetStripsSecretsAndListsSavedPreset(t *testing.T) {
 		t.Fatalf("expected preset mod snapshot to persist, got %+v", presets[0].ModIDs)
 	}
 }
+
+func TestConfigPresetUpdateAndBatchDelete(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+	createPayload := `{"name":"Friends","providerKey":"terraria-vanilla","version":"1.4.5.6","modIds":[],"config":{"serverName":"Friends","worldName":"World","worldSize":"medium","difficulty":"classic","worldEvil":"random","maxPlayers":8,"port":7777,"secure":true,"language":"en-US","autoCreateWorld":true}}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/config-presets", strings.NewReader(createPayload)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected config preset 201, got %d: %s", create.Code, create.Body.String())
+	}
+	var preset domain.ConfigPreset
+	if err := json.Unmarshal(create.Body.Bytes(), &preset); err != nil {
+		t.Fatal(err)
+	}
+
+	updatePayload := strings.Replace(createPayload, `"name":"Friends"`, `"name":"Friends Updated"`, 1)
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/config-presets/"+preset.ID, strings.NewReader(updatePayload)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("expected config preset update 200, got %d: %s", update.Code, update.Body.String())
+	}
+	var updated domain.ConfigPreset
+	if err := json.Unmarshal(update.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != "Friends Updated" {
+		t.Fatalf("expected updated preset name, got %q", updated.Name)
+	}
+
+	batch := httptest.NewRecorder()
+	batchPayload := `{"ids":["` + preset.ID + `","missing","` + preset.ID + `"]}`
+	router.ServeHTTP(batch, httptest.NewRequest(stdhttp.MethodPost, "/api/config-presets/batch-delete", strings.NewReader(batchPayload)))
+	if batch.Code != stdhttp.StatusOK {
+		t.Fatalf("expected batch delete 200, got %d: %s", batch.Code, batch.Body.String())
+	}
+	var result configPresetBatchDeleteResult
+	if err := json.Unmarshal(batch.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Succeeded) != 1 || len(result.Failed) != 1 {
+		t.Fatalf("expected one successful and one failed delete, got %+v", result)
+	}
+}
