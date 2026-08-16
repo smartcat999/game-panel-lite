@@ -41,9 +41,7 @@ import {
 import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderConfigField, ProviderKey, ResourceLimits, RuntimeImageStatus } from "@/lib/types";
 
 const stepLabelKeys = {
-  game: "stepGame",
-  mode: "stepMode",
-  preset: "stepPreset",
+  setup: "stepGameMode",
   config: "stepConfig",
   resources: "stepResources",
   mods: "stepMods",
@@ -487,15 +485,7 @@ export function CreateServerWizard() {
   const SelectedGameIcon = selectedGameArt.icon;
   const selectedProvider = selectedGame?.providers.find((provider) => provider.key === selectedProviderKey) ?? selectedGame?.providers.find((provider) => provider.recommended) ?? selectedGame?.providers[0];
   const providerKey = selectedProvider?.key ?? selectedProviderKey;
-  const stepIds: StepId[] = useMemo(() => [
-    "game",
-    "mode",
-    ...(selectedGameKey === "terraria" ? ["preset" as const] : []),
-    "config",
-    "resources",
-    "mods",
-    "review"
-  ], [selectedGameKey]);
+  const stepIds: StepId[] = ["setup", "config", "resources", "mods", "review"];
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = showWorldAndBackupFeatures ? worldsQuery.data ?? [] : [];
@@ -515,11 +505,9 @@ export function CreateServerWizard() {
   const selectedTitle = useMemo(() => t(currentStepKey), [currentStepKey, t]);
   const selectedProviderReady = isRuntimeImageReady(selectedProvider?.runtimeImage);
   const selectedGameHasReadyProvider = Boolean(selectedGame?.providers.some((provider) => isRuntimeImageReady(provider.runtimeImage)));
-  const canContinueCurrentStep = currentStepId === "game"
-    ? selectedGame?.status === "available" && selectedGameHasReadyProvider
-    : currentStepId === "mode"
-      ? selectedProviderReady
-      : true;
+  const canContinueCurrentStep = currentStepId === "setup"
+    ? selectedGame?.status === "available" && selectedGameHasReadyProvider && selectedProviderReady
+    : true;
   const canCreateSelectedProvider = selectedGame?.status === "available" && Boolean(selectedProvider) && selectedProviderReady;
   const validateCurrentConfig = () => {
     const errors = validateCreateConfig({
@@ -687,7 +675,7 @@ export function CreateServerWizard() {
     setAppliedWorldConfigId("");
     setSelectedModPackId(preset.modPackId ?? "");
     setSelectedModIds(preset.modIds);
-    setStep(preset.gameKey === "terraria" ? 3 : 2);
+    setStep(1);
   };
 
   useEffect(() => {
@@ -722,7 +710,7 @@ export function CreateServerWizard() {
     if (!game || game.status !== "available") return;
     chooseGame(game, providerKey);
     setVersion(requestedVersion);
-    setStep(1);
+    setStep(0);
     setAppliedGameQueryKey(queryKey);
   }, [appliedConfigPresetId, appliedGameQueryKey, games, selectedWorldId]);
 
@@ -751,7 +739,7 @@ export function CreateServerWizard() {
       setProviderConfigPayload(selectedWorld.config);
     }
     setAppliedWorldConfigId(selectedWorld.id);
-    setStep(3);
+    setStep(1);
   }, [appliedWorldConfigId, selectedWorld]);
   useEffect(() => {
     if (step > stepIds.length - 1) {
@@ -793,7 +781,7 @@ export function CreateServerWizard() {
                 <span className="sr-only">{t("cancelCreateServer")}</span>
             </Link>
           </div>
-          <div className="mt-7 grid grid-cols-4 gap-3 sm:grid-cols-7">
+          <div className="mt-7 grid grid-cols-5 gap-2 sm:gap-3">
             {stepIds.map((stepId, index) => {
               const labelKey = stepLabelKeys[stepId];
               return (
@@ -807,50 +795,53 @@ export function CreateServerWizard() {
             })}
           </div>
           <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
-            {currentStepId === "game" && (
-              <GameStep
-                games={games}
-                isLoading={gamesQuery.isLoading}
-                selectedGameKey={selectedGameKey}
-                onSelectGame={chooseGame}
-              />
+            {currentStepId === "setup" && (
+              <div className="space-y-7">
+                <GameStep
+                  games={games}
+                  isLoading={gamesQuery.isLoading}
+                  selectedGameKey={selectedGameKey}
+                  onSelectGame={chooseGame}
+                />
+                {selectedGameKey ? (
+                  <ModeStep
+                    mode={mode}
+                    providers={selectedGame?.providers ?? []}
+                    selectedProviderKey={providerKey}
+                    setMode={chooseMode}
+                    onSelectProvider={chooseProvider}
+                  />
+                ) : null}
+              </div>
             )}
-            {currentStepId === "mode" && (
-              <ModeStep
-                configPresets={gameConfigPresets}
-                mode={mode}
-                providers={selectedGame?.providers ?? []}
-                selectedProviderKey={providerKey}
-                setMode={chooseMode}
-                onSelectConfigPreset={applyConfigPreset}
-                onSelectProvider={chooseProvider}
-              />
-            )}
-            {currentStepId === "preset" && <PresetStep selectedPreset={selectedPreset} setPreset={choosePreset} />}
             {currentStepId === "config" && (
-              <ConfigStep
-                config={config}
-                gameKey={selectedGameKey}
-                hostPort={hostPort}
-                hostPortMode={hostPortMode}
-                provider={selectedProvider}
-                providerConfigPayload={providerConfigPayload}
-                validationErrors={configValidationErrors}
-                setConfig={setConfig}
-                setProviderConfigPayload={setProviderConfigPayload}
-                onClearValidationError={(field) => setConfigValidationErrors((current) => {
-                  if (!current[field]) return current;
-                  const next = { ...current };
-                  delete next[field];
-                  return next;
-                })}
-                onCustomize={() => setSelectedPreset("custom")}
-                setHostPort={setHostPort}
-                setHostPortMode={setHostPortMode}
-                versions={availableVersions}
-                version={selectedVersion}
-                setVersion={setVersion}
-              />
+              <div className="space-y-6">
+                <ConfigPresetPicker presets={gameConfigPresets} onSelect={applyConfigPreset} />
+                {selectedGameKey === "terraria" ? <PresetStep selectedPreset={selectedPreset} setPreset={choosePreset} compact /> : null}
+                <ConfigStep
+                  config={config}
+                  gameKey={selectedGameKey}
+                  hostPort={hostPort}
+                  hostPortMode={hostPortMode}
+                  provider={selectedProvider}
+                  providerConfigPayload={providerConfigPayload}
+                  validationErrors={configValidationErrors}
+                  setConfig={setConfig}
+                  setProviderConfigPayload={setProviderConfigPayload}
+                  onClearValidationError={(field) => setConfigValidationErrors((current) => {
+                    if (!current[field]) return current;
+                    const next = { ...current };
+                    delete next[field];
+                    return next;
+                  })}
+                  onCustomize={() => setSelectedPreset("custom")}
+                  setHostPort={setHostPort}
+                  setHostPortMode={setHostPortMode}
+                  versions={availableVersions}
+                  version={selectedVersion}
+                  setVersion={setVersion}
+                />
+              </div>
             )}
             {currentStepId === "resources" && (
               <ResourcesStep
@@ -975,7 +966,7 @@ function GameStep({
     <div>
       <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
       <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
-      <div className="mt-4 grid gap-3">
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
         {orderedGames.map((game) => {
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
@@ -1029,59 +1020,23 @@ function GameStep({
 }
 
 function ModeStep({
-  configPresets,
   mode,
   providers,
   selectedProviderKey,
   setMode,
-  onSelectConfigPreset,
   onSelectProvider
 }: {
-  configPresets: ConfigPreset[];
   mode: "vanilla" | "tmodloader";
   providers: ProviderCatalog[];
   selectedProviderKey: ProviderKey;
   setMode: (mode: "vanilla" | "tmodloader") => void;
-  onSelectConfigPreset: (preset: ConfigPreset) => void;
   onSelectProvider: (provider: ProviderCatalog) => void;
 }) {
   const { t } = useI18n();
-  const visibleConfigPresets = configPresets.slice(0, 4);
   const modeProviders = orderModeProviders(providers);
-  const configPresetSection = visibleConfigPresets.length > 0 && (
-    <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
-          <Bookmark aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <h2 className="text-lg font-semibold">{t("configurationPresets")}</h2>
-          <p className="mt-1 text-sm text-slate-400">{t("gameConfigurationPresetsDescription")}</p>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {visibleConfigPresets.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            className="rounded-md border border-panel-line bg-slate-950/50 p-3 text-left transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-            onClick={() => onSelectConfigPreset(preset)}
-          >
-            <p className="font-medium text-slate-100">{preset.name}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              {providerDisplayName(preset.providerKey, preset.providerKey, t)}
-              {preset.version ? ` · ${preset.version}` : ""}
-            </p>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
   if (providers.length > 0) {
     return (
-      <div className="space-y-6">
-        {configPresetSection}
-        <div>
+      <div>
           <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {modeProviders.map((provider) => {
@@ -1118,14 +1073,11 @@ function ModeStep({
               );
             })}
           </div>
-        </div>
       </div>
     );
   }
   return (
-    <div className="space-y-6">
-      {configPresetSection}
-      <div>
+    <div>
         <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <button
@@ -1169,8 +1121,39 @@ function ModeStep({
             <p className="mt-1 text-sm text-slate-400">{t("tmodLoaderDescription")}</p>
           </button>
         </div>
-      </div>
     </div>
+  );
+}
+
+function ConfigPresetPicker({ presets, onSelect }: { presets: ConfigPreset[]; onSelect: (preset: ConfigPreset) => void }) {
+  const { t } = useI18n();
+  const visiblePresets = presets.slice(0, 4);
+  if (visiblePresets.length === 0) return null;
+  return (
+    <section className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
+          <Bookmark aria-hidden="true" className="size-4" />
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-100">{t("configurationPresets")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("gameConfigurationPresetsDescription")}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        {visiblePresets.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            className="min-w-52 rounded-md border border-panel-line bg-slate-950/50 p-3 text-left transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+            onClick={() => onSelect(preset)}
+          >
+            <p className="truncate text-sm font-medium text-slate-100">{preset.name}</p>
+            <p className="mt-1 truncate text-xs text-slate-500">{providerDisplayName(preset.providerKey, preset.providerKey, t)}</p>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1194,10 +1177,12 @@ function RuntimeImagePill({ status }: { status?: RuntimeImageStatus }) {
 
 function PresetStep({
   selectedPreset,
-  setPreset
+  setPreset,
+  compact = false
 }: {
   selectedPreset: PresetKey;
   setPreset: (preset: PresetKey) => void;
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const presetOptions = [...presets, customPreset];
@@ -1206,10 +1191,10 @@ function PresetStep({
     return t(tag as MessageKey);
   };
   return (
-    <div>
-      <h2 className="text-lg font-semibold">{t("choosePreset")}</h2>
-      <p className="mt-1 text-sm text-slate-400">{t("presetDescription")}</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <section className={cn(compact && "rounded-lg border border-panel-line bg-slate-950/25 p-4")}>
+      <h2 className={cn("font-semibold", compact ? "text-sm text-slate-100" : "text-lg")}>{t("choosePreset")}</h2>
+      <p className={cn("mt-1 text-slate-400", compact ? "text-xs" : "text-sm")}>{t("presetDescription")}</p>
+      <div className={cn("mt-4 grid gap-3", compact ? "sm:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2")}>
         {presetOptions.map((preset) => {
           const presetKey = preset.key as PresetKey;
           const isSelected = selectedPreset === presetKey;
@@ -1221,7 +1206,8 @@ function PresetStep({
               aria-pressed={isSelected}
               onClick={() => setPreset(presetKey)}
               className={cn(
-                "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2",
+                "relative rounded-lg border text-left transition focus:outline-none focus:ring-2",
+                compact ? "p-3" : "p-4",
                 isSelected && !isCustom && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
                 isSelected && isCustom && "border-slate-400 bg-slate-800/60 ring-1 ring-slate-500/50 focus:ring-slate-400/50",
                 !isSelected && "border-panel-line bg-slate-950/40 hover:bg-slate-900/55 focus:ring-panel-green/40"
@@ -1233,8 +1219,8 @@ function PresetStep({
                 </span>
               )}
               <p className="pr-8 font-medium">{t(preset.labelKey)}</p>
-              <p className="mt-1 text-sm text-slate-400">{t(preset.descriptionKey)}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              {!compact ? <p className="mt-1 text-sm text-slate-400">{t(preset.descriptionKey)}</p> : null}
+              <div className={cn("flex flex-wrap gap-2", compact ? "mt-2" : "mt-4")}>
                 {preset.tags.map((tag) => (
                   <span key={tag} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
                     {renderTag(tag)}
@@ -1245,7 +1231,7 @@ function PresetStep({
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -1338,21 +1324,21 @@ function ConfigStep({
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <WizardField label={t("gameVersion")}>
-                <WizardSelect value={version} onChange={(value) => setVersion(value)}>
+                <WizardSelect label={t("gameVersion")} value={version} onChange={(value) => setVersion(value)}>
                   {versions.map((v) => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </WizardSelect>
               </WizardField>
               <WizardField label={t("externalPort")}>
-                <WizardSelect value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
+                <WizardSelect label={t("externalPort")} value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
                   <option value="auto">{t("automaticPort")}</option>
                   <option value="manual">{t("manualPort")}</option>
                 </WizardSelect>
               </WizardField>
               {hostPortMode === "manual" && (
                 <WizardField label={t("externalPortValue")}>
-                  <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
+                  <Input aria-label={t("externalPortValue")} type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
                 </WizardField>
               )}
             </div>
@@ -1367,6 +1353,7 @@ function ConfigStep({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <WizardField label={t("serverName")} required error={validationErrors.serverName}>
           <Input
+            aria-label={t("serverName")}
             value={config.serverName ?? ""}
             aria-invalid={Boolean(validationErrors.serverName)}
             className={validationErrors.serverName ? "border-red-400/70 focus:border-red-300" : undefined}
@@ -1375,6 +1362,7 @@ function ConfigStep({
         </WizardField>
         <WizardField label={t("worldName")} required error={validationErrors.worldName}>
           <Input
+            aria-label={t("worldName")}
             value={config.worldName}
             aria-invalid={Boolean(validationErrors.worldName)}
             className={validationErrors.worldName ? "border-red-400/70 focus:border-red-300" : undefined}
@@ -1382,21 +1370,21 @@ function ConfigStep({
           />
         </WizardField>
         <WizardField label={t("worldSize")}>
-          <WizardSelect value={config.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])}>
+          <WizardSelect label={t("worldSize")} value={config.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])}>
             <option value="small">{t("tagSmallWorld")}</option>
             <option value="medium">{t("tagMediumWorld")}</option>
             <option value="large">{t("tagLargeWorld")}</option>
           </WizardSelect>
         </WizardField>
         <WizardField label={t("worldEvil")}>
-          <WizardSelect value={config.worldEvil} onChange={(value) => update("worldEvil", value as TerrariaConfig["worldEvil"])}>
+          <WizardSelect label={t("worldEvil")} value={config.worldEvil} onChange={(value) => update("worldEvil", value as TerrariaConfig["worldEvil"])}>
             <option value="random">{t("tagRandom")}</option>
             <option value="corruption">{t("tagCorruption")}</option>
             <option value="crimson">{t("tagCrimson")}</option>
           </WizardSelect>
         </WizardField>
         <WizardField label={t("difficulty")}>
-          <WizardSelect value={config.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])}>
+          <WizardSelect label={t("difficulty")} value={config.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])}>
             <option value="journey">{t("tagJourney")}</option>
             <option value="classic">{t("tagClassic")}</option>
             <option value="expert">{t("tagExpert")}</option>
@@ -1404,25 +1392,26 @@ function ConfigStep({
           </WizardSelect>
         </WizardField>
         <WizardField label={t("gameVersion")}>
-          <WizardSelect value={version} onChange={(value) => setVersion(value)}>
+          <WizardSelect label={t("gameVersion")} value={version} onChange={(value) => setVersion(value)}>
             {versions.map((v) => (
               <option key={v} value={v}>{v}</option>
             ))}
           </WizardSelect>
         </WizardField>
         <WizardField label={t("externalPort")}>
-          <WizardSelect value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
+          <WizardSelect label={t("externalPort")} value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
             <option value="auto">{t("automaticPort")}</option>
             <option value="manual">{t("manualPort")}</option>
           </WizardSelect>
         </WizardField>
         {hostPortMode === "manual" && (
           <WizardField label={t("externalPortValue")}>
-            <Input type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
+            <Input aria-label={t("externalPortValue")} type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
           </WizardField>
         )}
         <WizardField label={t("maxPlayersInput")} required error={validationErrors.maxPlayers}>
           <Input
+            aria-label={t("maxPlayersInput")}
             type="number"
             min={1}
             max={255}
@@ -1433,10 +1422,10 @@ function ConfigStep({
           />
         </WizardField>
         <WizardField label={t("password")}>
-          <Input value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
+          <Input aria-label={t("password")} type="password" value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
         </WizardField>
         <WizardField label={t("motd")}>
-          <Input value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
+          <Input aria-label={t("motd")} value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
         </WizardField>
         <div className="md:col-span-2">
           <WizardField label={t("worldSeed")} help={t("worldSeedHint")}>
@@ -1850,16 +1839,19 @@ function FieldHelp({ text }: { text: string }) {
 function WizardSelect({
   children,
   invalid,
+  label,
   onChange,
   value
 }: {
   children: React.ReactNode;
   invalid?: boolean;
+  label: string;
   onChange: (value: string) => void;
   value: string;
 }) {
   return (
     <select
+      aria-label={label}
       aria-invalid={invalid}
       className={cn(
         "h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green",

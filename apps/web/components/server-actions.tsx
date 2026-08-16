@@ -188,13 +188,7 @@ export function ServerActions({
             {copiedInvite ? t("copied") : t("actionCopyInvite")}
           </Button>
         )}
-        {showDelete && !onRegenerateWorld && (
-          <Button className={buttonClassName} variant="danger" onClick={() => runAction("delete")} disabled={controlsDisabled}>
-            <Trash2 aria-hidden="true" />
-            {deleteLabel}
-          </Button>
-        )}
-        {onRegenerateWorld ? (
+        {onRegenerateWorld || showDelete ? (
           <details
             ref={moreRef}
             className={cn("relative", compact && "col-span-2 md:col-span-1")}
@@ -216,7 +210,7 @@ export function ServerActions({
               <Ellipsis aria-hidden="true" className="size-4" />
             </summary>
             <div className="absolute right-0 top-12 z-30 min-w-52 rounded-md border border-panel-line bg-slate-950 p-1.5 shadow-[0_8px_16px_rgba(0,0,0,0.35)]">
-              <button
+              {onRegenerateWorld ? <button
                 className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-panel-gold transition hover:bg-panel-gold/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-gold/40 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={controlsDisabled || regenerationBusy}
                 onClick={() => {
@@ -227,8 +221,8 @@ export function ServerActions({
               >
                 <Globe2 aria-hidden="true" className="size-4" />
                 {regenerationBusy ? t("worldRegenerationProgress") : t("worldRegenerateAction")}
-              </button>
-              {showDelete ? <div className="my-1 border-t border-panel-line" /> : null}
+              </button> : null}
+              {showDelete && onRegenerateWorld ? <div className="my-1 border-t border-panel-line" /> : null}
               {showDelete ? (
                 <button
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-400/40 disabled:cursor-not-allowed disabled:opacity-50"

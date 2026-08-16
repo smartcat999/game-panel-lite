@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Bookmark, Box, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, Plus, Search, Settings, ShieldCheck, UserCog, X } from "lucide-react";
+import { Activity, Archive, Bookmark, Box, Ellipsis, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, Plus, Search, Settings, ShieldCheck, UserCog, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n, type Locale } from "@/lib/i18n";
@@ -47,6 +47,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountTab, setAccountTab] = useState<"language" | "password">("language");
   const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
@@ -105,6 +106,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCreatePending(false);
     setProfileOpen(false);
+    setMobileMoreOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -371,9 +373,25 @@ function AppChrome({ children }: { children: ReactNode }) {
             }}
           />
         ) : null}
+        {mobileMoreOpen ? (
+          <div className="fixed inset-x-3 bottom-20 z-40 rounded-lg border border-panel-line bg-slate-950 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] lg:hidden">
+            <div className="grid grid-cols-2 gap-1">
+              {visibleNav.slice(4).map((item) => {
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href} className={cn("flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-300 transition hover:bg-slate-800", active && "bg-panel-green/15 text-panel-green")}>
+                    <Icon aria-hidden="true" className="size-5" />
+                    {t(item.labelKey)}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-line bg-panel-bg/95 px-2 py-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
           <div className="grid grid-cols-5 gap-1">
-            {visibleNav.slice(0, 5).map((item) => {
+            {visibleNav.slice(0, 4).map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
               return (
@@ -390,6 +408,15 @@ function AppChrome({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+            <button
+              type="button"
+              aria-expanded={mobileMoreOpen}
+              className={cn("flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium text-slate-500 transition hover:bg-slate-800 hover:text-white", mobileMoreOpen && "bg-panel-green/15 text-panel-green")}
+              onClick={() => setMobileMoreOpen((value) => !value)}
+            >
+              <Ellipsis aria-hidden="true" className="size-5" />
+              <span className="max-w-full truncate">{t("moreActions")}</span>
+            </button>
           </div>
         </nav>
       </div>

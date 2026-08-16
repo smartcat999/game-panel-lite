@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ArrowRight, Cpu, HardDrive, MemoryStick, Plus, Server as ServerIcon, Users } from "lucide-react";
+import { Activity, Cpu, HardDrive, MemoryStick, Server as ServerIcon, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { GameLibrary } from "@/components/game-library";
 import { ServerCard } from "@/components/server-card";
@@ -12,7 +11,6 @@ import { isWorldOrBackupEventType } from "@/lib/feature-flags";
 import { gameServerMaxPlayers, gameServerStatus } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { formatBytes, getRuntimeStats, listActivity, listGameServers } from "@/lib/api";
-import { dashboardQuickActionHrefs } from "@/lib/dashboard-quick-actions";
 import { Sparkline, useTimeSeries } from "@/lib/sparkline";
 
 export default function DashboardPage() {
@@ -25,8 +23,10 @@ export default function DashboardPage() {
   const servers = serversQuery.data ?? [];
   const activity = (activityQuery.data ?? []).filter((event) => !isWorldOrBackupEventType(event.type));
   const running = servers.filter((server) => gameServerStatus(server) === "running");
-  const players = running.reduce((sum, server) => sum + (server.status.playersOnline ?? 0), 0);
-  const playerCapacity = servers.reduce((sum, server) => sum + gameServerMaxPlayers(server), 0);
+  const serversWithPlayerData = running.filter((server) => typeof server.status.playersOnline === "number");
+  const players = serversWithPlayerData.reduce((sum, server) => sum + (server.status.playersOnline ?? 0), 0);
+  const playerCapacity = serversWithPlayerData.reduce((sum, server) => sum + gameServerMaxPlayers(server), 0);
+  const playerSummaryAvailable = running.length === 0 || serversWithPlayerData.length === running.length;
   const storageUsedBytes = runtimeStatsQuery.data?.storageUsedBytes ?? 0;
   const memMax = Math.max(1024, runtimeStatsQuery.data?.memoryLimitMb ?? 1024);
   const runtimeCpu = runtimeStatsQuery.data?.totalCpuPercent ?? 0;
@@ -40,7 +40,7 @@ export default function DashboardPage() {
       {(serversQuery.isError || activityQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiDataUnavailable")}</p>}
       <div className="grid gap-4 md:grid-cols-3">
         <Stat icon={<HardDrive />} label={t("runningServers")} value={`${running.length} / ${servers.length}`} hint={t("runningHint", { count: running.length })} />
-        <Stat icon={<Users />} label={t("onlinePlayers")} value={`${players} / ${playerCapacity}`} hint={t("playersOnlineHint", { count: players, capacity: playerCapacity })} />
+        <Stat icon={<Users />} label={t("onlinePlayers")} value={playerSummaryAvailable ? `${players} / ${playerCapacity}` : t("unavailable")} hint={t("playersOnlineHint", { count: players, capacity: playerCapacity })} />
         <Stat icon={<ServerIcon />} label={t("storageUsed")} value={runtimeStatsQuery.data ? formatBytes(storageUsedBytes) : "—"} hint={t("storageHint", { count: servers.length })} />
       </div>
 
@@ -91,20 +91,7 @@ export default function DashboardPage() {
         </div>
 
         <Card className="overflow-hidden">
-          <div className="border-b border-panel-line px-4 py-4">
-            <h2 className="font-semibold">{t("quickActions")}</h2>
-            <p className="mt-1 text-xs text-slate-500">{t("quickActionsHint")}</p>
-          </div>
-          <div className="space-y-2 p-3">
-            <ActionLink
-              href={dashboardQuickActionHrefs.createServer}
-              icon={<Plus aria-hidden="true" className="size-4" />}
-              label={t("createServer")}
-              hint={t("createServerQuickHint")}
-              tone="primary"
-            />
-          </div>
-          <div className="border-t border-panel-line px-4 py-4">
+          <div className="px-4 py-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-slate-100">{t("runtimeOverview")}</h3>
@@ -152,48 +139,6 @@ function Stat({ icon, label, value, hint }: { icon: React.ReactNode; label: stri
         </div>
       </div>
     </Card>
-  );
-}
-
-function ActionLink({
-  href,
-  icon,
-  label,
-  hint,
-  tone = "neutral"
-}: {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-  hint: string;
-  tone?: "primary" | "neutral" | "gold";
-}) {
-  return (
-    <Link
-      href={href}
-      className={[
-        "group flex items-center gap-3 rounded-md border px-3 py-3 transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-        tone === "primary" ? "border-panel-green/30 bg-panel-green/10 hover:bg-panel-green/15" : "",
-        tone === "gold" ? "border-panel-gold/25 bg-panel-gold/10 hover:bg-panel-gold/15" : "",
-        tone === "neutral" ? "border-panel-line bg-slate-950/35 hover:bg-slate-900/80" : ""
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "flex size-9 shrink-0 items-center justify-center rounded-md border",
-          tone === "primary" ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "",
-          tone === "gold" ? "border-panel-gold/30 bg-panel-gold/10 text-panel-gold" : "",
-          tone === "neutral" ? "border-panel-line bg-slate-900 text-slate-300" : ""
-        ].join(" ")}
-      >
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-slate-100">{label}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">{hint}</span>
-      </span>
-      <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-slate-200" />
-    </Link>
   );
 }
 

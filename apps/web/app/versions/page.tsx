@@ -12,7 +12,7 @@ import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from 
 import { cn } from "@/lib/utils";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
-const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)_9rem]";
+const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_9rem]";
 
 export default function VersionsPage() {
   const { locale, t } = useI18n();
@@ -48,7 +48,6 @@ export default function VersionsPage() {
               <div className={cn("hidden gap-4 border-b border-panel-line bg-slate-950/30 px-5 py-3 text-xs font-medium text-slate-500 md:grid", imageVersionGridColumns)}>
                 <span>{t("versionManagementProvider")}</span>
                 <span>{t("versionManagementInstalledImageVersion")}</span>
-                <span>{t("versionManagementTargetImageVersion")}</span>
                 <span>{t("versionManagementImageStatus")}</span>
                 <span>{t("versionManagementImageUpdatedAt")}</span>
                 <span className="sr-only">{t("actions")}</span>
@@ -118,10 +117,12 @@ function ImageVersionRow({
           <p className="mt-1 truncate font-mono text-xs text-slate-500" title={status?.image}>{status?.image || "—"}</p>
         </div>
         <ImageVersionValue label={t("versionManagementInstalledImageVersion")} value={status?.installedVersion || "—"} />
-        <ImageVersionValue label={t("versionManagementTargetImageVersion")} value={status?.targetVersion || provider.recommendedVersion || "—"} />
         <div>
           <span className="mb-1 block text-xs text-slate-500 md:hidden">{t("versionManagementImageStatus")}</span>
           <RuntimeImageBadge status={displayStatus} />
+          {status?.targetVersion && status.targetVersion !== status.installedVersion ? (
+            <p className="mt-1 text-xs text-panel-gold">{t("versionManagementTargetImageVersion")}: {status.targetVersion}</p>
+          ) : null}
         </div>
         <ImageVersionValue label={t("versionManagementImageUpdatedAt")} value={formatImageTime(status?.updatedAt, locale, t("none"))} />
         <div className="flex justify-end">
@@ -130,9 +131,7 @@ function ImageVersionRow({
               {preparing ? <Loader2 aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /> : <Download aria-hidden="true" className="size-4" />}
               {preparing ? t("gameLibraryInstalling") : actionLabel}
             </Button>
-          ) : (
-            <span className="text-xs text-slate-500">{t("versionManagementNoImageAction")}</span>
-          )}
+          ) : null}
         </div>
       </div>
       {preparing && typeof displayStatus?.progress === "number" ? (

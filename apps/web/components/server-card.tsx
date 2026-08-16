@@ -14,7 +14,7 @@ import type { GameServerResource } from "@/lib/types";
 export function ServerCard({ server, compact = false }: { server: GameServerResource; compact?: boolean }) {
   const { t } = useI18n();
   const status = gameServerStatus(server);
-  const players = server.status.playersOnline ?? 0;
+  const players = server.status.playersOnline;
   const maxPlayers = gameServerMaxPlayers(server);
   const version = gameServerVersion(server);
   const joinPort = gameServerJoinPort(server);
@@ -40,7 +40,7 @@ export function ServerCard({ server, compact = false }: { server: GameServerReso
                 <ServerStatusBadge status={status} />
               </div>
             </div>
-            <PlayerPill label={t("players")} players={players} maxPlayers={maxPlayers} running={status === "running"} />
+            <PlayerPill label={t("players")} players={players} maxPlayers={maxPlayers} running={status === "running"} unavailableLabel={t("unavailable")} />
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <InfoTile label={t("version")} value={version} />
@@ -50,14 +50,14 @@ export function ServerCard({ server, compact = false }: { server: GameServerReso
       </div>
       {!compact && (
         <div className="border-t border-panel-line bg-slate-950/25 px-4 py-3">
-          <ServerActions server={server} compact className="sm:justify-end" />
+          <ServerActions server={server} compact showInvite={false} showDelete={false} className="sm:justify-end" />
         </div>
       )}
     </Card>
   );
 }
 
-function PlayerPill({ label, maxPlayers, players, running }: { label: string; maxPlayers: number; players: number; running: boolean }) {
+function PlayerPill({ label, maxPlayers, players, running, unavailableLabel }: { label: string; maxPlayers: number; players?: number; running: boolean; unavailableLabel: string }) {
   return (
     <div
       className={cn(
@@ -69,7 +69,9 @@ function PlayerPill({ label, maxPlayers, players, running }: { label: string; ma
         <Users aria-hidden="true" className={cn("size-4", running ? "text-panel-green" : "text-slate-500")} />
         {label}
       </div>
-      <p className="whitespace-nowrap text-sm font-semibold text-white">{players} / {maxPlayers}</p>
+      <p className="whitespace-nowrap text-sm font-semibold text-white">
+        {typeof players === "number" ? `${players} / ${maxPlayers}` : unavailableLabel}
+      </p>
     </div>
   );
 }
