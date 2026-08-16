@@ -251,13 +251,22 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
             <button
               aria-checked={Boolean(data?.autoCheckEnabled)}
               aria-label={t("panelUpdateAutoCheck")}
-              className={cn("relative h-6 w-11 shrink-0 rounded-full transition focus:outline-none focus:ring-2 focus:ring-panel-green/50", data?.autoCheckEnabled ? "bg-panel-green" : "bg-slate-700")}
+              className={cn(
+                "relative h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-panel-green/50 disabled:cursor-not-allowed disabled:opacity-50",
+                data?.autoCheckEnabled ? "bg-panel-green" : "bg-slate-700"
+              )}
               disabled={!data || preference.isPending}
               role="switch"
               type="button"
               onClick={() => data && preference.mutate(!data.autoCheckEnabled)}
             >
-              <span className={cn("absolute top-1 size-4 rounded-full bg-white transition-transform", data?.autoCheckEnabled ? "translate-x-6" : "translate-x-1")} />
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "absolute left-1 top-1 size-4 rounded-full bg-white transition-transform",
+                  data?.autoCheckEnabled && "translate-x-5"
+                )}
+              />
             </button>
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-200">{t("panelUpdateAutoCheck")}</p>
