@@ -40,7 +40,13 @@ export function ServerCard({ server, compact = false }: { server: GameServerReso
                 <ServerStatusBadge status={status} />
               </div>
             </div>
-            <PlayerPill label={t("players")} players={players} maxPlayers={maxPlayers} running={status === "running"} unavailableLabel={t("unavailable")} />
+            <PlayerPill
+              label={t("players")}
+              players={players}
+              maxPlayers={maxPlayers}
+              running={status === "running"}
+              unavailableHint={t("playerStatsUnavailableHint")}
+            />
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <InfoTile label={t("version")} value={version} />
@@ -57,20 +63,25 @@ export function ServerCard({ server, compact = false }: { server: GameServerReso
   );
 }
 
-function PlayerPill({ label, maxPlayers, players, running, unavailableLabel }: { label: string; maxPlayers: number; players?: number; running: boolean; unavailableLabel: string }) {
+function PlayerPill({ label, maxPlayers, players, running, unavailableHint }: { label: string; maxPlayers: number; players?: number; running: boolean; unavailableHint: string }) {
+  const hasPlayerData = typeof players === "number";
   return (
     <div
       className={cn(
         "flex w-full items-center justify-between gap-3 rounded-md border bg-slate-950/35 px-3 py-2 lg:w-auto lg:min-w-32",
-        running ? "border-panel-green/30 text-panel-green" : "border-panel-line text-slate-300"
+        running && hasPlayerData ? "border-panel-green/30 text-panel-green" : "border-panel-line text-slate-300"
       )}
     >
       <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-        <Users aria-hidden="true" className={cn("size-4", running ? "text-panel-green" : "text-slate-500")} />
+        <Users aria-hidden="true" className={cn("size-4", running && hasPlayerData ? "text-panel-green" : "text-slate-500")} />
         {label}
       </div>
-      <p className="whitespace-nowrap text-sm font-semibold text-white">
-        {typeof players === "number" ? `${players} / ${maxPlayers}` : unavailableLabel}
+      <p
+        aria-label={hasPlayerData ? undefined : unavailableHint}
+        className={cn("whitespace-nowrap text-sm font-semibold", hasPlayerData ? "text-white" : "text-slate-500")}
+        title={hasPlayerData ? undefined : unavailableHint}
+      >
+        {hasPlayerData ? `${players} / ${maxPlayers}` : "—"}
       </p>
     </div>
   );

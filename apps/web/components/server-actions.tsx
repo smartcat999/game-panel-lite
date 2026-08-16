@@ -3,6 +3,7 @@
 import { Copy, Ellipsis, Globe2, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { Button, ToastNotice } from "@/components/ui";
 import { serverActionRedirectPath } from "@/lib/server-action-flow";
@@ -20,6 +21,7 @@ export function ServerActions({
   showInvite = true,
   showDelete = true,
   compact = false,
+  rowMode = false,
   disabled = false,
   regenerationBusy = false,
   onRegenerateWorld,
@@ -29,6 +31,7 @@ export function ServerActions({
   showInvite?: boolean;
   showDelete?: boolean;
   compact?: boolean;
+  rowMode?: boolean;
   disabled?: boolean;
   regenerationBusy?: boolean;
   onRegenerateWorld?: () => void;
@@ -44,11 +47,14 @@ export function ServerActions({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
+  const [morePosition, setMorePosition] = useState({ left: 0, top: 0 });
   const noticeTimerRef = useRef<number | null>(null);
-  const moreRef = useRef<HTMLDetailsElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const status = gameServerStatus(server);
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy;
+  const showRowRestart = rowMode && status === "running";
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
   const successLabel = (action: "start" | "stop" | "restart" | "delete") =>
@@ -72,18 +78,43 @@ export function ServerActions({
   useEffect(() => {
     if (!moreOpen) return;
     const closeMenu = (event: PointerEvent) => {
-      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+      const target = event.target as Node;
+      if (!moreButtonRef.current?.contains(target) && !moreMenuRef.current?.contains(target)) setMoreOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMoreOpen(false);
     };
+    const closeOnViewportChange = () => setMoreOpen(false);
     document.addEventListener("pointerdown", closeMenu);
     window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", closeOnViewportChange);
+    window.addEventListener("scroll", closeOnViewportChange, true);
     return () => {
       document.removeEventListener("pointerdown", closeMenu);
       window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", closeOnViewportChange);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
     };
   }, [moreOpen]);
+
+  const toggleMoreMenu = () => {
+    if (controlsDisabled) return;
+    if (moreOpen) {
+      setMoreOpen(false);
+      return;
+    }
+    const rect = moreButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const menuWidth = 144;
+    const visibleActionCount = Number(showRowRestart) + Number(Boolean(onRegenerateWorld)) + Number(showDelete);
+    const hasSeparatedDelete = showDelete && (showRowRestart || Boolean(onRegenerateWorld));
+    const estimatedHeight = visibleActionCount * 32 + 8 + (hasSeparatedDelete ? 9 : 0);
+    setMorePosition({
+      left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
+      top: rect.bottom + estimatedHeight + 6 <= window.innerHeight ? rect.bottom + 6 : Math.max(8, rect.top - estimatedHeight - 6)
+    });
+    setMoreOpen(true);
+  };
 
   useEffect(() => {
     return () => {
@@ -154,11 +185,15 @@ export function ServerActions({
   };
 
   const pendingLabel = pendingAction ? actionLabel(pendingAction) : "";
-  const buttonClassName = compact ? "h-10 w-full min-w-0 whitespace-nowrap px-2 text-sm" : undefined;
+  const buttonClassName = rowMode
+    ? "h-8 min-w-0 whitespace-nowrap px-2.5 text-xs"
+    : compact
+      ? "h-10 w-full min-w-0 whitespace-nowrap px-2 text-sm"
+      : undefined;
 
   return (
     <>
-      <div className={cn(compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
+      <div className={cn(rowMode ? "flex flex-nowrap justify-end gap-1.5" : compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
         {status === "running" || status === "stopping" ? (
           <Button className={buttonClassName} variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
             <Square aria-hidden="true" />
@@ -178,69 +213,94 @@ export function ServerActions({
             {startLabel}
           </Button>
         )}
-        <Button className={buttonClassName} variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
-          <RotateCcw aria-hidden="true" />
-          {restartLabel}
-        </Button>
+        {!rowMode ? (
+          <Button className={buttonClassName} variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
+            <RotateCcw aria-hidden="true" />
+            {restartLabel}
+          </Button>
+        ) : null}
         {showInvite && (
           <Button className={buttonClassName} variant="secondary" onClick={() => void copyInvite()} disabled={status === "deleting"}>
             <Copy aria-hidden="true" />
             {copiedInvite ? t("copied") : t("actionCopyInvite")}
           </Button>
         )}
-        {onRegenerateWorld || showDelete ? (
-          <details
-            ref={moreRef}
-            className={cn("relative", compact && "col-span-2 md:col-span-1")}
-            open={moreOpen}
-            onToggle={(event) => setMoreOpen(event.currentTarget.open)}
+        {rowMode || onRegenerateWorld || showDelete ? (
+          <button
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            aria-label={t("serverMoreActions")}
+            className={cn(
+              "flex items-center justify-center rounded-md border border-panel-line bg-transparent text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-500",
+              moreOpen && "border-slate-600 bg-slate-800 text-white",
+              rowMode ? "size-8 px-0" : "h-10 px-3",
+              compact && !rowMode && "col-span-2 w-full md:col-span-1",
+              controlsDisabled && "cursor-not-allowed opacity-50"
+            )}
+            disabled={controlsDisabled}
+            onClick={toggleMoreMenu}
+            ref={moreButtonRef}
+            title={t("serverMoreActions")}
+            type="button"
           >
-            <summary
-              aria-label={t("serverMoreActions")}
-              className={cn(
-                "flex h-10 cursor-pointer list-none items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 text-slate-100 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50 [&::-webkit-details-marker]:hidden",
-                compact && "w-full",
-                controlsDisabled && "cursor-not-allowed opacity-50"
-              )}
-              onClick={(event) => {
-                if (controlsDisabled) event.preventDefault();
-              }}
-              title={t("serverMoreActions")}
-            >
-              <Ellipsis aria-hidden="true" className="size-4" />
-            </summary>
-            <div className="absolute right-0 top-12 z-30 min-w-52 rounded-md border border-panel-line bg-slate-950 p-1.5 shadow-[0_8px_16px_rgba(0,0,0,0.35)]">
+            <Ellipsis aria-hidden="true" className="size-4" />
+          </button>
+        ) : null}
+      </div>
+      {moreOpen && typeof document !== "undefined" ? createPortal(
+        <div
+          className="fixed z-[70] w-36 rounded-md border border-slate-700/80 bg-slate-900 p-1 shadow-[0_4px_8px_rgba(0,0,0,0.38)]"
+          ref={moreMenuRef}
+          role="menu"
+          style={{ left: morePosition.left, top: morePosition.top }}
+        >
+              {showRowRestart ? (
+                <button
+                  className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-slate-200 transition hover:bg-slate-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={controlsDisabled}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    runAction("restart");
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <RotateCcw aria-hidden="true" className="size-3.5 text-slate-400" />
+                  {restartLabel}
+                </button>
+              ) : null}
               {onRegenerateWorld ? <button
-                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-panel-gold transition hover:bg-panel-gold/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-gold/40 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-panel-gold transition hover:bg-panel-gold/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-panel-gold/60 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={controlsDisabled || regenerationBusy}
                 onClick={() => {
                   setMoreOpen(false);
                   onRegenerateWorld();
                 }}
+                role="menuitem"
                 type="button"
               >
-                <Globe2 aria-hidden="true" className="size-4" />
+                <Globe2 aria-hidden="true" className="size-3.5" />
                 {regenerationBusy ? t("worldRegenerationProgress") : t("worldRegenerateAction")}
               </button> : null}
-              {showDelete && onRegenerateWorld ? <div className="my-1 border-t border-panel-line" /> : null}
+              {showDelete && (onRegenerateWorld || showRowRestart) ? <div className="mx-2 my-1 border-t border-white/10" /> : null}
               {showDelete ? (
                 <button
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-200 transition hover:bg-red-400/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-red-400/40 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-red-400/60 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={controlsDisabled}
                   onClick={() => {
                     setMoreOpen(false);
                     runAction("delete");
                   }}
+                  role="menuitem"
                   type="button"
                 >
-                  <Trash2 aria-hidden="true" className="size-4" />
+                  <Trash2 aria-hidden="true" className="size-3.5" />
                   {deleteLabel}
                 </button>
               ) : null}
-            </div>
-          </details>
-        ) : null}
-      </div>
+        </div>,
+        document.body
+      ) : null}
       {(errorMessage || successMessage) && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
           <ToastNotice

@@ -30,6 +30,10 @@ const messages = {
     navActivity: "监控",
     navVersions: "版本",
     navSettings: "设置",
+    navOverviewGroup: "概览",
+    navResourcesGroup: "资源",
+    navOperationsGroup: "运维",
+    navSystemGroup: "系统",
     userProfile: "用户资料",
     userAvatarAlt: "像素玩家头像",
     localUser: "本地玩家",
@@ -163,10 +167,26 @@ const messages = {
     english: "EN",
     dashboardTitle: "仪表盘",
     dashboardDescription: "集中管理你的游戏服务器。",
+    dashboardInfrastructureDescription: "基础设施与游戏服务器运行概览。",
+    dashboardSummary: "运行摘要",
+    dashboardAlerts: "告警",
+    dashboardResourceTrend: "资源使用趋势",
+    dashboardResourceTrendDescription: "宿主机资源历史指标，每 30 秒刷新。",
+    dashboardResourceMetric: "资源指标",
+    dashboardNetwork: "网络",
+    dashboardServerInstances: "服务器实例",
+    dashboardViewAll: "查看全部",
+    dashboardRecentEvents: "最近事件",
+    dashboardSystemStatus: "系统状态",
+    dashboardPanelService: "面板服务",
+    dashboardMetricsService: "监控数据",
+    dashboardStatusNormal: "正常",
+    dashboardOpenMonitoring: "打开监控中心",
     runningServers: "运行中的服务器",
     runningHint: "{count} 台运行中",
     onlinePlayers: "在线玩家",
     playersOnlineHint: "全部服务器容量",
+    playerStatsUnavailableHint: "当前游戏未提供玩家统计",
     latestBackup: "最新备份",
     storageUsed: "已用存储",
     storageHint: "GamePanel 数据目录总计",
@@ -180,6 +200,8 @@ const messages = {
     createBackupQuickHint: "进入服务器详情页创建",
     runtimeOverview: "运行监控",
     runtimeOverviewHint: "当前服务器资源占用概况",
+    serverStatusDistribution: "服务器状态构成",
+    statusTransitioning: "处理中",
     chooseWorldFileToImport: "请选择 `.wld` 世界文件导入。",
     createBackup: "创建备份",
     serversTitle: "服务器",
@@ -217,6 +239,7 @@ const messages = {
     resourceLimits: "资源限制",
     resourceLimitsHint: "设置服务器容器的 CPU 和内存上限，留空表示不限制。",
     runtimeResources: "运行资源",
+    viewDetails: "查看详情",
     runtimeResourcesHint: "容器 CPU / 内存上限与当前用量。",
     adjustResources: "调整资源",
     advancedRuntimeResources: "高级：运行资源",
@@ -1214,13 +1237,13 @@ const messages = {
     healthDegraded: "降级",
     healthDown: "不可用",
     connected: "已连接",
-    trendCpuTitle: "CPU Usage",
+    trendCpuTitle: "CPU 使用率",
     trendCpuNote: "CPU 使用趋势",
-    trendMemoryTitle: "Memory Usage",
+    trendMemoryTitle: "内存使用量",
     trendMemoryNote: "内存占用趋势",
-    trendPlayersTitle: "Player Count",
+    trendPlayersTitle: "在线玩家",
     trendPlayersNote: "在线玩家趋势",
-    trendEventsTitle: "Events",
+    trendEventsTitle: "事件数量",
     trendEventsNote: "最近事件量",
     monitoringNoCpuData: "等待 CPU 指标数据",
     monitoringNoMemoryData: "等待内存指标数据",
@@ -1392,6 +1415,10 @@ const messages = {
     navActivity: "Monitoring",
     navVersions: "Versions",
     navSettings: "Settings",
+    navOverviewGroup: "Overview",
+    navResourcesGroup: "Resources",
+    navOperationsGroup: "Operations",
+    navSystemGroup: "System",
     userProfile: "User profile",
     userAvatarAlt: "Pixel player avatar",
     localUser: "Local Player",
@@ -1526,10 +1553,26 @@ const messages = {
     english: "EN",
     dashboardTitle: "Dashboard",
     dashboardDescription: "Manage your game servers in one place.",
+    dashboardInfrastructureDescription: "Infrastructure and game server runtime overview.",
+    dashboardSummary: "Runtime summary",
+    dashboardAlerts: "Alerts",
+    dashboardResourceTrend: "Resource Trends",
+    dashboardResourceTrendDescription: "Historical host metrics refreshed every 30 seconds.",
+    dashboardResourceMetric: "Resource metric",
+    dashboardNetwork: "Network",
+    dashboardServerInstances: "Server Instances",
+    dashboardViewAll: "View all",
+    dashboardRecentEvents: "Recent Events",
+    dashboardSystemStatus: "System Status",
+    dashboardPanelService: "Panel Service",
+    dashboardMetricsService: "Monitoring Data",
+    dashboardStatusNormal: "Normal",
+    dashboardOpenMonitoring: "Open monitoring center",
     runningServers: "Running Servers",
     runningHint: "{count} running",
     onlinePlayers: "Online Players",
     playersOnlineHint: "All server capacity",
+    playerStatsUnavailableHint: "Player statistics are not provided by this game",
     latestBackup: "Latest Backup",
     storageUsed: "Storage Used",
     storageHint: "GamePanel data directory",
@@ -1543,6 +1586,8 @@ const messages = {
     createBackupQuickHint: "Open a server detail page",
     runtimeOverview: "Runtime Monitor",
     runtimeOverviewHint: "Current server resource usage",
+    serverStatusDistribution: "Server status distribution",
+    statusTransitioning: "In progress",
     chooseWorldFileToImport: "Choose a `.wld` world file to import.",
     createBackup: "Create Backup",
     serversTitle: "Servers",
@@ -1580,6 +1625,7 @@ const messages = {
     resourceLimits: "Resource Limits",
     resourceLimitsHint: "Set CPU and memory limits for the server container. Leave unlimited when no cap is needed.",
     runtimeResources: "Runtime Resources",
+    viewDetails: "View details",
     runtimeResourcesHint: "Container CPU / memory limits and current usage.",
     adjustResources: "Adjust Resources",
     advancedRuntimeResources: "Advanced: Runtime Resources",
@@ -2770,13 +2816,26 @@ function formatMessage(message: string, params?: Record<string, string | number>
 }
 
 export function localizeRelativeTime(value: string, locale: Locale) {
+  const normalizedTimestamp = value.replace(/\.(\d{3})\d*(Z|[+-]\d{2}:\d{2})$/, ".$1$2");
+  const timestamp = new Date(normalizedTimestamp).getTime();
+  if (Number.isFinite(timestamp) && /[T ]\d{2}:\d{2}/.test(value)) {
+    const deltaSeconds = Math.round((timestamp - Date.now()) / 1000);
+    const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+      ["year", 31_536_000],
+      ["month", 2_592_000],
+      ["day", 86_400],
+      ["hour", 3_600],
+      ["minute", 60]
+    ];
+    const formatter = new Intl.RelativeTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { numeric: "auto" });
+    for (const [unit, seconds] of units) {
+      if (Math.abs(deltaSeconds) >= seconds) return formatter.format(Math.round(deltaSeconds / seconds), unit);
+    }
+    return formatter.format(deltaSeconds, "second");
+  }
   if (locale === "en") return value;
   if (value === "Not yet" || value === "Unknown") return value === "Not yet" ? "暂无" : "未知";
-  return value
-    .replace("Just now", "刚刚")
-    .replace("min ago", "分钟前")
-    .replace("h ago", "小时前")
-    .replace("d ago", "天前");
+  return value.replace("Just now", "刚刚").replace("min ago", "分钟前").replace("h ago", "小时前").replace("d ago", "天前");
 }
 
 export function localizeWorldSize(value: string, locale: Locale) {

@@ -3,13 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Bookmark, Box, Ellipsis, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, Plus, Search, Settings, ShieldCheck, UserCog, X } from "lucide-react";
+import { Activity, Archive, Bookmark, Box, Ellipsis, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, Search, Settings, UserCog, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { changeAdminPassword, getApiHealth, getAuthBootstrap, getSettings, listGameServers, logoutAdmin, updateLocale } from "@/lib/api";
+import { changeAdminPassword, getAuthBootstrap, getSettings, listGameServers, logoutAdmin, updateLocale } from "@/lib/api";
 import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerJoinPort, gameServerMode, gameServerSearchText, gameServerWorldName } from "@/lib/game-server-resource";
 import { serverProviderDisplay, serverResourceLabelKey } from "@/lib/server-display";
@@ -17,8 +17,8 @@ import type { GameServerResource } from "@/lib/types";
 
 const nav = [
   { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
-  { href: "/games", labelKey: "navGames", icon: Gamepad2 },
   { href: "/servers", labelKey: "navServers", icon: HardDrive },
+  { href: "/games", labelKey: "navGames", icon: Gamepad2 },
   { href: "/worlds", labelKey: "navWorlds", icon: Globe2 },
   { href: "/mods", labelKey: "navMods", icon: Box },
   { href: "/presets", labelKey: "navPresets", icon: Bookmark },
@@ -29,6 +29,13 @@ const nav = [
 ] as const;
 
 const visibleNav = nav.filter((item) => showWorldAndBackupFeatures || (item.href !== "/worlds" && item.href !== "/backups"));
+
+const navGroups = [
+  { labelKey: "navOverviewGroup", hrefs: ["/dashboard"] },
+  { labelKey: "navResourcesGroup", hrefs: ["/servers", "/games", "/worlds", "/mods", "/presets", "/backups"] },
+  { labelKey: "navOperationsGroup", hrefs: ["/activity", "/versions"] },
+  { labelKey: "navSystemGroup", hrefs: ["/settings"] }
+] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -43,7 +50,6 @@ function AppChrome({ children }: { children: ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { locale, setLocale, t } = useI18n();
-  const [createPending, setCreatePending] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -56,7 +62,6 @@ function AppChrome({ children }: { children: ReactNode }) {
   const [accountMessage, setAccountMessage] = useState("");
   const searchRef = useRef<HTMLFormElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
-  const apiHealth = useQuery({ queryKey: ["api-health"], queryFn: getApiHealth, retry: false, refetchInterval: 10000 });
   const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 30000 });
   const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
@@ -88,8 +93,6 @@ function AppChrome({ children }: { children: ReactNode }) {
     },
     onError: (err) => setAccountMessage(err instanceof Error ? err.message : t("passwordChangeFailed"))
   });
-  const serviceAvailable = apiHealth.data?.status === "ok";
-  const serviceLabel = serviceAvailable ? t("online") : apiHealth.isLoading ? t("dockerCheckingShort") : t("unavailable");
   const searchTerm = search.trim().toLowerCase();
   const searchResults = useMemo(() => {
     if (!searchTerm) return [];
@@ -104,16 +107,9 @@ function AppChrome({ children }: { children: ReactNode }) {
   }, [searchTerm, serversQuery.data, t]);
 
   useEffect(() => {
-    setCreatePending(false);
     setProfileOpen(false);
     setMobileMoreOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    if (!createPending) return;
-    const timeout = window.setTimeout(() => setCreatePending(false), 2000);
-    return () => window.clearTimeout(timeout);
-  }, [createPending]);
 
   useEffect(() => {
     visibleNav.forEach((item) => router.prefetch(item.href));
@@ -201,23 +197,34 @@ function AppChrome({ children }: { children: ReactNode }) {
           </span>
           <span className="font-semibold">GamePanel Lite</span>
         </Link>
-        <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
-          {visibleNav.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-            const Icon = item.icon;
+        <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+          {navGroups.map((group) => {
+            const items = visibleNav.filter((item) => group.hrefs.some((href) => href === item.href));
+            if (items.length === 0) return null;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onMouseEnter={() => router.prefetch(item.href)}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white",
-                  active && "bg-slate-800/80 text-white"
-                )}
-              >
-                <Icon aria-hidden="true" />
-                {t(item.labelKey)}
-              </Link>
+              <div key={group.labelKey}>
+                <p className="mb-1 px-3 text-[11px] font-medium text-slate-600">{t(group.labelKey)}</p>
+                <div className="space-y-0.5">
+                  {items.map((item) => {
+                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onMouseEnter={() => router.prefetch(item.href)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white",
+                          active && "bg-slate-800/80 text-white"
+                        )}
+                      >
+                        <Icon aria-hidden="true" className="size-5" />
+                        {t(item.labelKey)}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </nav>
@@ -270,29 +277,6 @@ function AppChrome({ children }: { children: ReactNode }) {
               )}
             </form>
             <div className="ml-auto flex shrink-0 items-center gap-3">
-              <div className="hidden shrink-0 items-center gap-2 text-xs text-slate-300 sm:flex">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 whitespace-nowrap rounded border border-panel-line bg-slate-950/45 px-2 py-1",
-                    serviceAvailable ? "text-panel-green" : "text-panel-gold"
-                  )}
-                >
-                  <ShieldCheck aria-hidden="true" className="size-4" />
-                  <span>{serviceLabel}</span>
-                </span>
-              </div>
-              <Link
-                href="/servers/new"
-                aria-label={t("createServer")}
-                className="shrink-0"
-                onClick={() => setCreatePending(true)}
-                onMouseEnter={() => router.prefetch("/servers/new")}
-              >
-                <Button className="h-11 w-11 shrink-0 whitespace-nowrap sm:h-12 sm:w-44">
-                  <Plus aria-hidden="true" />
-                  <span className="hidden sm:inline">{createPending ? t("openingCreateServer") : t("createServer")}</span>
-                </Button>
-              </Link>
               <div ref={profileRef} className="relative hidden md:block">
                 <button
                   type="button"

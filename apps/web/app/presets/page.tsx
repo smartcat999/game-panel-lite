@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Cpu, MemoryStick, Plus, Trash2 } from "lucide-react";
+import { Eye, Plus, Trash2, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import { PageHeader } from "@/components/page-header";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, ToastNotice } from "@/components/ui";
 import { deleteConfigPreset, listConfigPresets, listGames, listModPacks } from "@/lib/api";
 import { gameFilterOptions } from "@/lib/game-filters";
-import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
+import { localizeRelativeTime, useI18n, type Locale, type MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
 import type { ConfigPreset, GameCatalogEntry, ModPack, ProviderCatalog } from "@/lib/types";
 
@@ -27,6 +27,7 @@ export default function PresetsPage() {
   const [gameFilter, setGameFilter] = useState<PresetGameFilter>("all");
   const [providerFilter, setProviderFilter] = useState<PresetProviderFilter>("all");
   const [pendingDelete, setPendingDelete] = useState<ConfigPreset | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<ConfigPreset | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const presets = presetsQuery.data ?? [];
@@ -82,8 +83,19 @@ export default function PresetsPage() {
     <>
       <PageHeader title={t("configurationPresets")} />
       {(presetsQuery.isError || gamesQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiConfigurationPresetsUnavailable")}</p>}
-      {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
-      {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
+      {(errorMessage || successMessage) && (
+        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
+          <ToastNotice
+            closeLabel={t("cancel")}
+            message={errorMessage || successMessage}
+            tone={errorMessage ? "error" : "success"}
+            onClose={() => {
+              setErrorMessage("");
+              setSuccessMessage("");
+            }}
+          />
+        </div>
+      )}
 
       <ResourceFilterBar
         activeChips={activeFilterChips}
@@ -105,72 +117,13 @@ export default function PresetsPage() {
       />
 
       {filteredPresets.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {filteredPresets.map((preset) => {
-            const meta = presetMeta(preset, context);
-            return (
-              <Card key={preset.id} className="group p-4 transition hover:border-panel-green/40">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/70 text-panel-green">
-                      <Bookmark aria-hidden="true" className="size-5" />
-                    </span>
-                    <div className="min-w-0">
-                      <h2 className="truncate font-semibold text-white">{preset.name}</h2>
-                      <p className="mt-1 truncate text-sm text-slate-400">{meta.gameName} · {meta.providerName}</p>
-                    </div>
-                  </div>
-                  <Badge className="shrink-0 bg-slate-800 text-slate-300">{preset.version || t("recommended")}</Badge>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <DetailTile label={t("game")} value={meta.gameName} />
-                  <DetailTile label={t("serverType")} value={meta.providerName} />
-                  <DetailTile label={t("gameVersion")} value={preset.version || t("recommended")} />
-                  <DetailTile
-                    label={t("modsTitle")}
-                    value={preset.modIds.length > 0
-                      ? [meta.modPackName, t("selectedModsCount", { count: preset.modIds.length })].filter(Boolean).join(" · ")
-                      : t("none")}
-                  />
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
-                  <span className="inline-flex items-center gap-1 rounded border border-panel-line bg-slate-950/45 px-2 py-1">
-                    <Cpu aria-hidden="true" className="size-3.5 text-panel-green" />
-                    {t("cpuLimit")}: {formatCpuLimit(preset.cpuLimitCores, t)}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded border border-panel-line bg-slate-950/45 px-2 py-1">
-                    <MemoryStick aria-hidden="true" className="size-3.5 text-panel-green" />
-                    {t("memoryLimit")}: {formatMemoryLimit(preset.memoryLimitMb, t)}
-                  </span>
-                  <span className="inline-flex items-center rounded border border-panel-line bg-slate-950/45 px-2 py-1">
-                    {t("modified")}: {localizeRelativeTime(preset.updatedAt, locale)}
-                  </span>
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-panel-line pt-3">
-                  <Link
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-panel-green/40 bg-panel-green/10 px-3 text-sm font-medium text-panel-green transition hover:bg-panel-green/15 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-                    href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}
-                  >
-                    <Plus aria-hidden="true" className="size-4" />
-                    {t("createServerFromPreset")}
-                  </Link>
-                  <Button
-                    className="h-9 text-red-200 hover:bg-red-500/15"
-                    variant="ghost"
-                    onClick={() => setPendingDelete(preset)}
-                    disabled={remove.isPending || presetsQuery.isError}
-                    aria-label={t("delete")}
-                  >
-                    <Trash2 aria-hidden="true" className="size-4" />
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <PresetResourceTable
+          context={context}
+          locale={locale}
+          presets={filteredPresets}
+          onInspect={setSelectedPreset}
+          t={t}
+        />
       ) : null}
 
       {!presetsQuery.isLoading && filteredPresets.length === 0 && (
@@ -194,17 +147,168 @@ export default function PresetsPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
       />
+      {selectedPreset ? (
+        <PresetDetailsDrawer
+          context={context}
+          locale={locale}
+          preset={selectedPreset}
+          t={t}
+          onClose={() => setSelectedPreset(null)}
+          onDelete={() => {
+            setSelectedPreset(null);
+            setPendingDelete(selectedPreset);
+          }}
+        />
+      ) : null}
     </>
   );
 }
 
-function DetailTile({ label, value }: { label: string; value: string }) {
+function PresetResourceTable({
+  context,
+  locale,
+  presets,
+  onInspect,
+  t
+}: {
+  context: ReturnType<typeof buildPresetContext>;
+  locale: Locale;
+  presets: ConfigPreset[];
+  onInspect: (preset: ConfigPreset) => void;
+  t: (key: MessageKey, values?: Record<string, string | number>) => string;
+}) {
   return (
-    <div className="min-w-0 rounded-md border border-panel-line bg-slate-950/45 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-slate-100">{value}</p>
+    <div className="overflow-hidden rounded-lg border border-panel-line bg-panel-card">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+          <thead className="bg-slate-950/45 text-xs font-medium text-slate-500">
+            <tr>
+              <th className="px-4 py-3">{t("configurationPreset")}</th>
+              <th className="px-3 py-3">{t("serverType")}</th>
+              <th className="px-3 py-3">{t("gameVersion")}</th>
+              <th className="px-3 py-3">{t("runtimeResources")}</th>
+              <th className="px-3 py-3">{t("modsTitle")}</th>
+              <th className="px-3 py-3">{t("modified")}</th>
+              <th className="px-4 py-3 text-right">{t("actions")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-panel-line">
+            {presets.map((preset) => {
+              const meta = presetMeta(preset, context);
+              const modIds = preset.modIds ?? [];
+              return (
+                <tr className="group transition-colors hover:bg-slate-800/35" key={preset.id}>
+                  <td className="px-4 py-3">
+                    <button className="max-w-72 truncate text-left font-medium text-slate-100 group-hover:text-panel-green" onClick={() => onInspect(preset)} type="button">
+                      {preset.name}
+                    </button>
+                  </td>
+                  <td className="px-3 py-3">
+                    <p className="text-slate-200">{meta.gameName}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{meta.providerName}</p>
+                  </td>
+                  <td className="px-3 py-3"><Badge className="bg-slate-800 text-slate-300">{preset.version || t("recommended")}</Badge></td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-300">
+                    {formatCpuLimit(preset.cpuLimitCores, t)} · {formatMemoryLimit(preset.memoryLimitMb, t)}
+                  </td>
+                  <td className="px-3 py-3 text-slate-300">
+                    {modIds.length > 0 ? [meta.modPackName, t("selectedModsCount", { count: modIds.length })].filter(Boolean).join(" · ") : t("none")}
+                  </td>
+                  <td className="px-3 py-3 text-slate-400">{localizeRelativeTime(preset.updatedAt, locale)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <Button className="h-8 px-2.5 text-xs" variant="ghost" onClick={() => onInspect(preset)}>
+                        <Eye aria-hidden="true" className="size-3.5" />{t("viewDetails")}
+                      </Button>
+                      <Link className="inline-flex h-8 items-center gap-1.5 rounded-md border border-panel-green/35 bg-panel-green/10 px-2.5 text-xs font-medium text-panel-green hover:bg-panel-green/15" href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}>
+                        <Plus aria-hidden="true" className="size-3.5" />{t("createServer")}
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="divide-y divide-panel-line md:hidden">
+        {presets.map((preset) => {
+          const meta = presetMeta(preset, context);
+          const modIds = preset.modIds ?? [];
+          return (
+            <button className="block w-full px-4 py-4 text-left hover:bg-slate-800/35" key={preset.id} onClick={() => onInspect(preset)} type="button">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-slate-100">{preset.name}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">{meta.gameName} · {meta.providerName}</p>
+                </div>
+                <Badge className="shrink-0 bg-slate-800 text-slate-300">{preset.version || t("recommended")}</Badge>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                <span>{formatCpuLimit(preset.cpuLimitCores, t)} · {formatMemoryLimit(preset.memoryLimitMb, t)}</span>
+                <span>{modIds.length > 0 ? t("selectedModsCount", { count: modIds.length }) : t("none")}</span>
+                <span>{localizeRelativeTime(preset.updatedAt, locale)}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+function PresetDetailsDrawer({
+  context,
+  locale,
+  preset,
+  t,
+  onClose,
+  onDelete
+}: {
+  context: ReturnType<typeof buildPresetContext>;
+  locale: Locale;
+  preset: ConfigPreset;
+  t: (key: MessageKey, values?: Record<string, string | number>) => string;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const meta = presetMeta(preset, context);
+  const modIds = preset.modIds ?? [];
+  const mods = modIds.length > 0 ? [meta.modPackName, t("selectedModsCount", { count: modIds.length })].filter(Boolean).join(" · ") : t("none");
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/60" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
+      <aside aria-label={t("configurationPreset")} className="ml-auto flex h-full w-full max-w-lg flex-col border-l border-panel-line bg-panel-card shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-xs text-slate-500">{t("configurationPreset")}</p>
+            <h2 className="mt-1 truncate text-lg font-semibold text-white">{preset.name}</h2>
+          </div>
+          <button aria-label={t("cancel")} className="rounded-md p-2 text-slate-400 hover:bg-slate-800 hover:text-white" onClick={onClose} type="button"><X aria-hidden="true" className="size-5" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <dl className="divide-y divide-panel-line border-y border-panel-line">
+            <DrawerRow label={t("game")} value={meta.gameName} />
+            <DrawerRow label={t("serverType")} value={meta.providerName} />
+            <DrawerRow label={t("gameVersion")} value={preset.version || t("recommended")} />
+            <DrawerRow label={t("cpuLimit")} value={formatCpuLimit(preset.cpuLimitCores, t)} />
+            <DrawerRow label={t("memoryLimit")} value={formatMemoryLimit(preset.memoryLimitMb, t)} />
+            <DrawerRow label={t("modsTitle")} value={mods} />
+            <DrawerRow label={t("modified")} value={localizeRelativeTime(preset.updatedAt, locale)} />
+          </dl>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-panel-line px-5 py-4">
+          <Button className="text-red-200 hover:bg-red-500/15" variant="ghost" onClick={onDelete}><Trash2 aria-hidden="true" />{t("delete")}</Button>
+          <Link className="inline-flex h-10 items-center gap-2 rounded-md bg-panel-green px-4 text-sm font-semibold text-slate-950 hover:bg-panel-green/90" href={`/servers/new?presetId=${encodeURIComponent(preset.id)}`}>
+            <Plus aria-hidden="true" className="size-4" />{t("createServerFromPreset")}
+          </Link>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DrawerRow({ label, value }: { label: string; value: string }) {
+  return <div className="grid grid-cols-[9rem_minmax(0,1fr)] gap-4 py-3 text-sm"><dt className="text-slate-500">{label}</dt><dd className="text-right text-slate-100">{value}</dd></div>;
 }
 
 function filterOptionLabel<T extends string>(
