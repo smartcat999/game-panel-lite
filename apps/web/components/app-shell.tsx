@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Bookmark, Box, Ellipsis, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, Search, Settings, UserCog, X } from "lucide-react";
+import { Activity, Archive, Bookmark, Box, Ellipsis, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, PanelLeftClose, PanelLeftOpen, Search, Settings, UserCog, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n, type Locale } from "@/lib/i18n";
@@ -54,6 +54,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountTab, setAccountTab] = useState<"language" | "password">("language");
   const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
@@ -110,6 +111,10 @@ function AppChrome({ children }: { children: ReactNode }) {
     setProfileOpen(false);
     setMobileMoreOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("gamepanel-sidebar-collapsed") === "true");
+  }, []);
 
   useEffect(() => {
     visibleNav.forEach((item) => router.prefetch(item.href));
@@ -188,22 +193,39 @@ function AppChrome({ children }: { children: ReactNode }) {
     passwordMutation.mutate();
   };
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      window.localStorage.setItem("gamepanel-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
+
   return (
     <div className="min-h-screen bg-panel-bg text-slate-100">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-panel-line bg-panel-sidebar lg:flex lg:flex-col">
-        <Link href="/dashboard" className="flex h-20 items-center gap-3 px-6 pt-2">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden border-r border-panel-line bg-panel-sidebar transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex lg:flex-col",
+          sidebarCollapsed ? "w-16" : "w-56"
+        )}
+      >
+        <Link
+          href="/dashboard"
+          aria-label={sidebarCollapsed ? "GamePanel Lite" : undefined}
+          className={cn("flex h-20 items-center gap-3 pt-2", sidebarCollapsed ? "justify-center px-3" : "px-5")}
+        >
           <span className="flex size-9 items-center justify-center rounded-md bg-panel-green text-slate-950">
             <Gamepad2 aria-hidden="true" />
           </span>
-          <span className="font-semibold">GamePanel Lite</span>
+          {!sidebarCollapsed ? <span className="whitespace-nowrap font-semibold">GamePanel Lite</span> : null}
         </Link>
-        <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+        <nav className={cn("flex flex-1 flex-col overflow-y-auto py-4", sidebarCollapsed ? "gap-3 px-2" : "gap-5 px-3")}>
           {navGroups.map((group) => {
             const items = visibleNav.filter((item) => group.hrefs.some((href) => href === item.href));
             if (items.length === 0) return null;
             return (
               <div key={group.labelKey}>
-                <p className="mb-1 px-3 text-[11px] font-medium text-slate-600">{t(group.labelKey)}</p>
+                {!sidebarCollapsed ? <p className="mb-1 px-3 text-[11px] font-medium text-slate-600">{t(group.labelKey)}</p> : null}
                 <div className="space-y-0.5">
                   {items.map((item) => {
                     const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -212,14 +234,17 @@ function AppChrome({ children }: { children: ReactNode }) {
                       <Link
                         key={item.href}
                         href={item.href}
+                        aria-label={sidebarCollapsed ? t(item.labelKey) : undefined}
+                        title={sidebarCollapsed ? t(item.labelKey) : undefined}
                         onMouseEnter={() => router.prefetch(item.href)}
                         className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white",
+                          "flex items-center rounded-md py-2.5 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/45",
+                          sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3",
                           active && "bg-slate-800/80 text-white"
                         )}
                       >
-                        <Icon aria-hidden="true" className="size-5" />
-                        {t(item.labelKey)}
+                        <Icon aria-hidden="true" className="size-5 shrink-0" />
+                        {!sidebarCollapsed ? <span className="truncate">{t(item.labelKey)}</span> : null}
                       </Link>
                     );
                   })}
@@ -228,20 +253,23 @@ function AppChrome({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="m-4 overflow-hidden rounded-lg border border-panel-line bg-slate-950/40 p-3">
-          <div className="h-20 overflow-hidden rounded-md border border-panel-line bg-slate-950">
-            <Image
-              src="/images/terraria-official-cover.jpg"
-              alt=""
-              width={1200}
-              height={1800}
-              className="h-full w-full object-cover object-[50%_42%]"
-              priority
-            />
-          </div>
+        <div className="border-t border-panel-line p-3">
+          <button
+            type="button"
+            aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
+            title={sidebarCollapsed ? t("expandSidebar") : undefined}
+            className={cn(
+              "flex w-full items-center rounded-md py-2 text-sm text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/45",
+              sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3"
+            )}
+            onClick={toggleSidebar}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" className="size-5" /> : <PanelLeftClose aria-hidden="true" className="size-5" />}
+            {!sidebarCollapsed ? <span>{t("collapseSidebar")}</span> : null}
+          </button>
         </div>
       </aside>
-      <div className="lg:pl-64">
+      <div className={cn("transition-[padding-left] duration-200 ease-out motion-reduce:transition-none", sidebarCollapsed ? "lg:pl-16" : "lg:pl-56")}>
         <header className="sticky top-0 z-20 border-b border-panel-line bg-panel-bg/95 px-4 py-3 backdrop-blur md:px-8">
           <div className="flex items-center gap-4">
             <form ref={searchRef} className="relative max-w-md flex-1" onSubmit={submitSearch}>

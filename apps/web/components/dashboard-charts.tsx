@@ -4,6 +4,31 @@ import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import type { MetricSeries } from "@/features/monitoring/types";
 
+export type ServerStatusDatum = {
+  color: string;
+  label: string;
+  value: number;
+};
+
+export function ServerStatusKpis({ data, hint }: { data: ServerStatusDatum[]; hint: string }) {
+  return (
+    <div className="min-w-0">
+      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {data.map((item) => (
+          <div className="min-w-0 rounded-md border border-panel-line bg-slate-950/25 px-4 py-3" key={item.label}>
+            <dt className="flex min-w-0 items-center gap-2 text-xs text-slate-500">
+              <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+              <span className="truncate">{item.label}</span>
+            </dt>
+            <dd className="mt-2 font-mono text-2xl font-semibold tabular-nums tracking-tight text-slate-100">{item.value.toLocaleString()}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-xs leading-5 text-slate-500">{hint}</p>
+    </div>
+  );
+}
+
 export function ResourceTrendChart({ emptyLabel, series }: { emptyLabel: string; series?: MetricSeries }) {
   const points = series?.points ?? [];
 

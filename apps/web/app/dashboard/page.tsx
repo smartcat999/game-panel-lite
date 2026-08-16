@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, CheckCircle2, CircleAlert, Container, Plus, Server } from "lucide-react";
 import { useState } from "react";
-import { ResourceTrendChart } from "@/components/dashboard-charts";
+import { ResourceTrendChart, ServerStatusKpis } from "@/components/dashboard-charts";
 import { PageHeader } from "@/components/page-header";
 import { ServerResourceTable } from "@/components/server-resource-table";
 import { Button } from "@/components/ui";
@@ -49,7 +49,13 @@ export default function DashboardPage() {
   const activity = (activityQuery.data ?? []).filter((event) => !isWorldOrBackupEventType(event.type));
   const running = servers.filter((server) => gameServerStatus(server) === "running");
   const unhealthy = servers.filter((server) => gameServerStatus(server) === "errored");
-  const onlinePlayers = (metricsQuery.data?.servers ?? []).reduce((total, server) => total + (server.playersOnline ?? 0), 0);
+  const stopped = servers.filter((server) => gameServerStatus(server) === "stopped").length;
+  const statusData = [
+    { color: "#94a3b8", label: t("dashboardTotalInstances"), value: servers.length },
+    { color: "#59d46f", label: t("statusRunning"), value: running.length },
+    { color: "#64748b", label: t("statusStopped"), value: stopped },
+    { color: "#f87171", label: t("statusErrored"), value: unhealthy.length }
+  ];
   const series = platformQuery.data?.series[metricKey];
   const featuredServers = [...servers].sort(serverPriority).slice(0, 5);
   const hasDataError = serversQuery.isError || activityQuery.isError || metricsQuery.isError;
@@ -68,13 +74,15 @@ export default function DashboardPage() {
 
       {hasDataError ? <p className="mb-4 text-sm text-panel-gold" role="alert">{t("apiDataUnavailable")}</p> : null}
 
-      <section className="border-y border-panel-line" aria-label={t("dashboardSummary")}>
-        <dl className="grid grid-cols-2 divide-x divide-panel-line lg:grid-cols-4">
-          <SummaryItem label={t("kpiTotalServers")} value={serversQuery.isLoading ? "—" : String(servers.length)} />
-          <SummaryItem label={t("kpiRunning")} value={serversQuery.isLoading ? "—" : String(running.length)} />
-          <SummaryItem label={t("kpiOnlinePlayers")} value={metricsQuery.isLoading ? "—" : String(onlinePlayers)} />
-          <SummaryItem label={t("dashboardAlerts")} value={serversQuery.isLoading ? "—" : String(unhealthy.length)} warning={unhealthy.length > 0} />
-        </dl>
+      <section className="border-y border-panel-line py-5" aria-labelledby="dashboard-summary-title">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-slate-100" id="dashboard-summary-title">{t("dashboardOperationsOverview")}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t("dashboardOperationsOverviewDescription")}</p>
+        </div>
+        <div className="min-w-0">
+          <h3 className="mb-3 text-sm font-medium text-slate-300">{t("dashboardServerStatus")}</h3>
+          <ServerStatusKpis data={statusData} hint={t("dashboardInstanceStatusHint")} />
+        </div>
       </section>
 
       <section className="border-b border-panel-line py-6" aria-labelledby="resource-trend-title">
@@ -169,15 +177,6 @@ export default function DashboardPage() {
         </section>
       </div>
     </>
-  );
-}
-
-function SummaryItem({ label, value, warning = false }: { label: string; value: string; warning?: boolean }) {
-  return (
-    <div className="min-w-0 px-4 py-4 first:pl-0 lg:px-6 lg:first:pl-0">
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className={cn("mt-1 font-mono text-xl font-semibold text-slate-100", warning && "text-panel-gold")}>{value}</dd>
-    </div>
   );
 }
 

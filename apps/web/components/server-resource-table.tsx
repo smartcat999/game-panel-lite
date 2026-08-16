@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Plug, Users } from "lucide-react";
 import { ServerActions } from "@/components/server-actions";
 import { ServerGameArt } from "@/components/server-game-art";
-import { ServerProviderBadge, ServerStatusBadge } from "@/components/server-badges";
+import { ServerProviderLabel, ServerStatusIndicator } from "@/components/server-badges";
 import {
   gameServerJoinPort,
   gameServerMaxPlayers,
@@ -72,8 +72,8 @@ export function ServerResourceTable({
                       </span>
                     </Link>
                   </td>
-                  <td className="px-3 py-3"><ServerProviderBadge server={displayServer} /></td>
-                  <td className="px-3 py-3"><ServerStatusBadge status={status} /></td>
+                  <td className="max-w-52 px-3 py-3"><ServerProviderLabel server={displayServer} /></td>
+                  <td className="px-3 py-3"><ServerStatusIndicator status={status} /></td>
                   <td className="px-3 py-3 font-mono text-slate-300">
                     {typeof players === "number" ? `${players}/${maxPlayers}` : <DataMissing />}
                   </td>
@@ -107,8 +107,9 @@ export function ServerResourceTable({
                 <div className="min-w-0 flex-1">
                   <Link className="block truncate font-medium text-slate-100" href={`/servers/${server.id}`}>{server.name}</Link>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <ServerProviderBadge server={displayServer} />
-                    <ServerStatusBadge status={status} />
+                    <ServerProviderLabel server={displayServer} />
+                    <span aria-hidden="true" className="h-3 w-px bg-panel-line" />
+                    <ServerStatusIndicator status={status} />
                   </div>
                 </div>
               </div>
