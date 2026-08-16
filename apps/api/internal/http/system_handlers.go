@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
@@ -16,7 +17,7 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"name": "GamePanel Lite", "version": "0.1.0"})
+	writeJSON(w, http.StatusOK, buildinfo.Current())
 }
 
 func (h *Handler) dockerStatus(w http.ResponseWriter, r *http.Request) {

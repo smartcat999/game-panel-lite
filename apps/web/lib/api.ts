@@ -427,6 +427,44 @@ export type AppSettings = {
   providerCatalogPath: string;
 };
 
+export type PanelBuildInfo = {
+  name: string;
+  version: string;
+  commit: string;
+  buildTime: string;
+  goVersion: string;
+};
+
+export type SystemUpdateManifest = {
+  schemaVersion: number;
+  channel: string;
+  version: string;
+  publishedAt?: string;
+  releaseNotesUrl?: string;
+};
+
+export type SystemUpdateJob = {
+  id?: string;
+  version?: string;
+  status?: "running" | "completed" | "failed" | string;
+  stage?: string;
+  message?: string;
+  startedAt?: string;
+  updatedAt?: string;
+};
+
+export type SystemUpdateStatus = {
+  current: PanelBuildInfo;
+  latest?: SystemUpdateManifest;
+  updateAvailable: boolean;
+  checkedAt?: string;
+  checkError?: string;
+  autoCheckEnabled: boolean;
+  intervalHours: number;
+  updaterAvailable: boolean;
+  job?: SystemUpdateJob;
+};
+
 export type ServerStats = {
   cpuPercent: number;
   memoryMb: number;
@@ -593,6 +631,36 @@ export async function getSettings(): Promise<AppSettings> {
     throw new Error("Unable to load settings");
   }
   return (await response.json()) as AppSettings;
+}
+
+export async function getSystemUpdateStatus(): Promise<SystemUpdateStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/update`, { cache: "no-store" });
+  return readPayload<SystemUpdateStatus>(response, "Unable to load panel update status");
+}
+
+export async function checkSystemUpdate(): Promise<SystemUpdateStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/update/check`, { method: "POST" });
+  const payload = (await response.json().catch(() => ({}))) as SystemUpdateStatus;
+  if (!response.ok) throw new Error(payload.checkError || "Unable to check for panel updates");
+  return payload;
+}
+
+export async function updateSystemAutoCheck(enabled: boolean): Promise<SystemUpdateStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/update/auto-check`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  return readPayload<SystemUpdateStatus>(response, "Unable to save automatic update checks");
+}
+
+export async function applySystemUpdate(version: string): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/update/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version })
+  });
+  return readPayload<SystemUpdateJob>(response, "Unable to start panel update");
 }
 
 export async function getTerrariaVersions(): Promise<Record<string, string[]>> {

@@ -18,6 +18,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/systemupdate"
 	workshopsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/workshop"
 )
 
@@ -32,6 +33,7 @@ type Handler struct {
 	runtimeFactory func(string) (runtime.Adapter, error)
 	apiMetrics     *metrics.Registry
 	observability  *observability.CachedService
+	systemUpdate   *systemupdate.Service
 
 	runtimeImageJobsMu  sync.Mutex
 	runtimeImageJobs    map[string]domain.RuntimeImageStatus
@@ -80,6 +82,7 @@ func NewHandler(
 		workshopPreviews: map[string]cachedWorkshopPreview{},
 	}
 	handler.observability = observability.NewCachedService(observability.NewService(store, adapter), handler.runtimeStatusAvailable, 5*time.Second)
+	handler.systemUpdate = systemupdate.New(cfg.ReleaseManifestURL, cfg.UpdaterURL, cfg.UpdaterToken, 8*time.Second)
 	return handler
 }
 
@@ -93,6 +96,7 @@ func (h *Handler) Start(ctx context.Context) {
 	h.startGameUpdateWorker(func() { h.recoverInterruptedGameUpdates(ctx, startedAt) })
 	h.startGameUpdateWorker(func() { h.recoverInterruptedWorldRegenerations(ctx, startedAt) })
 	h.startGameUpdateWorker(func() { h.runAutomaticGameUpdateChecks(ctx) })
+	go h.runAutomaticSystemUpdateChecks(ctx)
 }
 
 func (h *Handler) WaitForGameUpdates(ctx context.Context) error {
@@ -128,6 +132,10 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/auth/me", h.currentAccount)
 		r.Post("/api/auth/password", h.changePassword)
 		r.Get("/api/version", h.version)
+		r.Get("/api/system/update", h.getSystemUpdate)
+		r.Post("/api/system/update/check", h.checkSystemUpdate)
+		r.Put("/api/system/update/auto-check", h.updateSystemUpdateAutoCheck)
+		r.Post("/api/system/update/apply", h.applySystemUpdate)
 		r.Get("/api/runtime/docker", h.dockerStatus)
 		r.Get("/api/runtime/stats", h.runtimeStats)
 		r.Get("/api/observability/metrics", h.observabilityMetrics)

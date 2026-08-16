@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+- Added authenticated asynchronous GamePanel Lite release checks and self-update orchestration with a fixed-operation updater service, persistent job state, explicit confirmation UI, daily notification-only checks, build metadata, release manifests, and buildx-based control-plane image publishing.
 - Reworked the dashboard, monitoring, server, mod, preset, version, and settings surfaces around denser resource-management patterns, consistent filters, stable feedback, and responsive bulk actions.
 - Added backend-supported server pagination and batch operations for server, mod-library, mod-pack, and configuration-preset management, including stopped-server deletion safeguards and per-item failure reporting.
 - Added editable configuration presets with localized schema details, resource and mod summaries, batch deletion, and consistent game / mode terminology; verified the full Go and frontend test, vet, lint, typecheck, and production-build suites.

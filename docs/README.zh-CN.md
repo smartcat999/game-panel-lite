@@ -89,6 +89,14 @@ sudo sh scripts/manage.sh status
 
 `manage.sh` 会自动检测当前是 HTTP 还是 HTTPS 部署。它只管理面板、API、Nginx 和监控服务；帕鲁、饥荒等游戏容器仍由 GamePanel Lite 管理，不会在更新控制平面时被重建。
 
+设置页也支持检查 GamePanel Lite 新版本。启用独立 updater 服务后，管理员确认即可异步安装；更新只拉取并重建 API、Web 和 exporter 控制平面服务，不会停止游戏容器或修改存档。自动检查只提醒，不会自动安装。
+
+发布面板镜像时统一使用 buildx builder（默认 `my-builder`）构建 `linux/amd64` 镜像：
+
+```bash
+scripts/build-panel-images.sh --version v0.2.0 --push
+```
+
 不要在生产服务器叠加使用 `compose.yaml`。该文件用于本地开发，可能额外暴露 Web 端口。
 
 ## 数据保存

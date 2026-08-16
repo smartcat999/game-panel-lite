@@ -7,7 +7,12 @@ RUN go mod download
 
 COPY apps/api ./apps/api
 
-RUN CGO_ENABLED=1 GOOS=linux go build -o /out/gamepanel-api ./apps/api/cmd/server
+ARG GAMEPANEL_VERSION=v0.2.0
+ARG GAMEPANEL_COMMIT=unknown
+ARG GAMEPANEL_BUILD_TIME=unknown
+RUN CGO_ENABLED=1 GOOS=linux go build \
+  -ldflags "-X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.Version=${GAMEPANEL_VERSION} -X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.Commit=${GAMEPANEL_COMMIT} -X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.BuildTime=${GAMEPANEL_BUILD_TIME}" \
+  -o /out/gamepanel-api ./apps/api/cmd/server
 
 FROM debian:bookworm-slim AS runner
 
@@ -25,4 +30,3 @@ ENV GAMEPANEL_HOST=0.0.0.0 \
 EXPOSE 4000
 
 CMD ["gamepanel-api"]
-
