@@ -40,6 +40,13 @@ export type MonitoringOverviewResponse = {
     dockerRuntime: "healthy" | "degraded" | "unknown" | string;
     lastSync: string | null;
     failedTargets: number;
+    resourceAlerts: Array<{
+      key: "node_cpu" | "node_memory" | "node_disk" | string;
+      severity: "warning" | "critical";
+      current: number;
+      threshold: number;
+      unit: string;
+    }>;
   };
   kpis: {
     totalServers: number;

@@ -243,19 +243,26 @@ export function ServerLoadTable({ rows }: { rows: ServerLoadRow[] }) {
   return (
     <section className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
       <SectionHeader title={t("serverLoadTitle")} description={t("serverLoadDescription")} />
-      <div className="hidden grid-cols-[minmax(220px,1fr)_96px_96px_140px_140px_88px_104px_96px] gap-3 border-b border-panel-line px-4 py-2 text-xs font-medium text-slate-500 2xl:grid">
-        <span>{t("monitoringTableServer")}</span>
-        <span>{t("monitoringTableGame")}</span>
-        <span>{t("monitoringTableStatus")}</span>
-        <span>{t("monitoringTableCpu")}</span>
-        <span>{t("monitoringTableMemory")}</span>
-        <span>{t("monitoringTablePlayers")}</span>
-        <span>{t("monitoringTableLastActive")}</span>
-        <span className="text-right">{t("monitoringTableAction")}</span>
-      </div>
-      <div className="divide-y divide-panel-line">
-        {rows.length > 0 ? rows.map((row) => <ServerLoadItem key={row.serverId} row={row} />) : <EmptyRows label={t("monitoringNoServerLoad")} />}
-      </div>
+      {rows.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] table-fixed text-left">
+            <thead className="border-b border-panel-line text-xs font-medium text-slate-500">
+              <tr>
+                <th className="w-[28%] px-4 py-2 font-medium">{t("monitoringTableServer")}</th>
+                <th className="w-[12%] px-3 py-2 font-medium">{t("monitoringTableStatus")}</th>
+                <th className="w-[12%] px-3 py-2 font-medium">{t("monitoringTableCpu")}</th>
+                <th className="w-[15%] px-3 py-2 font-medium">{t("monitoringTableMemory")}</th>
+                <th className="w-[10%] px-3 py-2 font-medium">{t("monitoringTablePlayers")}</th>
+                <th className="w-[14%] px-3 py-2 font-medium">{t("monitoringTableLastActive")}</th>
+                <th className="w-[9%] px-4 py-2 text-right font-medium">{t("monitoringTableAction")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-panel-line">
+              {rows.map((row) => <ServerLoadItem key={row.serverId} row={row} />)}
+            </tbody>
+          </table>
+        </div>
+      ) : <EmptyRows label={t("monitoringNoServerLoad")} />}
     </section>
   );
 }
@@ -263,23 +270,44 @@ export function ServerLoadTable({ rows }: { rows: ServerLoadRow[] }) {
 function ServerLoadItem({ row }: { row: ServerLoadRow }) {
   const { t } = useI18n();
   const memoryPercent = row.memoryLimitMb > 0 ? (row.memoryMb / row.memoryLimitMb) * 100 : 0;
+  const isRunning = row.status === "running";
   return (
-    <div className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] 2xl:grid-cols-[minmax(220px,1fr)_96px_96px_140px_140px_88px_104px_96px] 2xl:items-center", row.severity !== "normal" && "bg-panel-gold/5")}>
-      <div className="min-w-0">
+    <tr className={cn("transition hover:bg-slate-900/35", row.severity !== "normal" && "bg-panel-gold/5")}>
+      <td className="px-4 py-3">
         <p className="truncate font-medium text-slate-100">{row.serverName}</p>
-        <p className="mt-1 truncate text-xs text-slate-500">{row.providerKey} · {row.version || "default"}</p>
-      </div>
-      <span className="text-sm text-slate-300 sm:col-start-1 2xl:col-auto">{row.gameKey}</span>
-      <StatusBadge status={row.status} severity={row.severity} />
-      <LoadBar className="sm:col-span-2 2xl:col-span-1" percent={row.cpuPercent} value={`${row.cpuPercent.toFixed(1)}%`} />
-      <LoadBar className="sm:col-span-2 2xl:col-span-1" percent={memoryPercent} value={`${Math.round(row.memoryMb)} MB`} tone="purple" />
-      <span className="font-mono text-sm text-slate-300">{row.playersOnline}/{row.maxPlayers}</span>
-      <span className="text-sm text-slate-500">{formatTime(row.lastActive)}</span>
-      <Link className="inline-flex w-fit items-center gap-1 justify-self-start rounded border border-panel-line px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-900 sm:col-start-2 sm:row-start-1 sm:justify-self-end 2xl:col-auto 2xl:row-auto" href={`/servers/${row.serverId}`}>
-        {t("view")} <ExternalLink aria-hidden="true" className="size-3" />
-      </Link>
-    </div>
+        <p className="mt-0.5 truncate text-xs text-slate-500">{gameLabel(row.gameKey)} · {row.version || t("unknown")}</p>
+      </td>
+      <td className="px-3 py-3"><StatusBadge status={row.status} severity={row.severity} /></td>
+      <td className="px-3 py-3">{isRunning ? <LoadBar percent={row.cpuPercent} value={`${row.cpuPercent.toFixed(1)}%`} /> : <UnavailableValue />}</td>
+      <td className="px-3 py-3">{isRunning ? <LoadBar percent={memoryPercent} value={formatMemory(row.memoryMb)} tone="purple" /> : <UnavailableValue />}</td>
+      <td className="px-3 py-3 font-mono text-sm text-slate-300">{isRunning && row.maxPlayers > 0 ? `${row.playersOnline}/${row.maxPlayers}` : t("unavailable")}</td>
+      <td className="px-3 py-3 text-sm text-slate-500">{formatShortTime(row.lastActive)}</td>
+      <td className="px-4 py-3 text-right">
+        <Link className="inline-flex items-center gap-1 rounded border border-panel-line px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-900 hover:text-panel-green" href={`/servers/${row.serverId}`}>
+          {t("view")} <ExternalLink aria-hidden="true" className="size-3" />
+        </Link>
+      </td>
+    </tr>
   );
+}
+
+function UnavailableValue() {
+  return <span className="font-mono text-sm text-slate-600">—</span>;
+}
+
+function gameLabel(value: string) {
+  const labels: Record<string, string> = { dst: "饥荒联机版", "dont-starve-together": "饥荒联机版", palworld: "幻兽帕鲁", terraria: "Terraria", tmodloader: "tModLoader", minecraft: "我的世界" };
+  return labels[value.toLowerCase()] ?? value;
+}
+
+function formatMemory(value: number) {
+  return value >= 1024 ? `${(value / 1024).toFixed(1)} GB` : `${Math.round(value)} MB`;
+}
+
+function formatShortTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export function ActivityTimeline({ events }: { events: MonitoringEvent[] }) {
@@ -535,6 +563,10 @@ const eventTitleKeys: Record<string, MessageKey> = {
   "server.game-update.queued": "eventTitleServerGameUpdateQueued",
   "server.game-update.failed": "eventTitleServerGameUpdateFailed",
   "server.game-update.succeeded": "eventTitleServerGameUpdateSucceeded",
+  "provider.game-update.auto-check.queued": "eventTitleServerGameUpdateAutoCheckQueued",
+  "provider.game-update.queued": "eventTitleServerGameUpdateQueued",
+  "provider.game-update.failed": "eventTitleServerGameUpdateFailed",
+  "provider.game-update.succeeded": "eventTitleServerGameUpdateSucceeded",
   "server.container.create.failed": "eventTitleServerContainerCreateFailed",
   "server.container.create.started": "eventTitleServerContainerCreateStarted",
   "server.container.create.succeeded": "eventTitleServerContainerCreateSucceeded",
@@ -599,6 +631,8 @@ function localizedEventGroup(type: string, t: ReturnType<typeof useI18n>["t"]) {
 }
 
 function SeverityPill({ severity }: { severity: MonitoringEvent["severity"] }) {
+  const { t } = useI18n();
+  const label = severity === "error" ? t("severityError") : severity === "warning" ? t("severityWarning") : severity === "success" ? t("severitySuccess") : t("severityInfo");
   return (
     <span className={cn(
       "rounded px-1.5 py-0.5 text-[11px] font-medium",
@@ -606,7 +640,7 @@ function SeverityPill({ severity }: { severity: MonitoringEvent["severity"] }) {
         severity === "warning" ? "bg-panel-gold/10 text-panel-gold" :
           severity === "success" ? "bg-panel-green/10 text-panel-green" : "bg-slate-800 text-slate-400"
     )}>
-      {severity}
+      {label}
     </span>
   );
 }
@@ -618,7 +652,7 @@ export function PlatformHealth({ services, topRoutes }: { services: PlatformServ
       <Card className="p-4">
         <SectionTitle title={t("platformStatusTitle")} description={t("platformStatusDescription")} />
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {services.map((service, index) => <HealthMetric key={`${service.name}-${service.instance ?? index}`} label={service.name} value={service.status} ok={service.status === "healthy"} />)}
+          {services.map((service, index) => <HealthMetric key={`${service.name}-${service.instance ?? index}`} label={service.name} value={healthStatusLabel(service.status, t)} ok={service.status === "healthy"} />)}
         </div>
       </Card>
       <Card className="p-4">
@@ -658,7 +692,10 @@ function EmptyRows({ label }: { label: string }) {
 }
 
 function StatusBadge({ severity, status }: { severity: "normal" | "warning" | "critical"; status: string }) {
-  return <span className={cn("w-fit rounded px-2 py-0.5 text-xs font-medium", severity === "critical" ? "bg-panel-gold/15 text-panel-gold" : severity === "warning" ? "bg-panel-gold/10 text-panel-gold" : "bg-slate-800 text-slate-400")}>{status}</span>;
+  const { t } = useI18n();
+  const normalized = status.toLowerCase();
+  const label = normalized === "running" ? t("statusRunning") : normalized === "stopped" ? t("statusStopped") : normalized === "starting" || normalized === "creating" ? t("statusStarting") : normalized === "stopping" ? t("statusStopping") : normalized === "restarting" ? t("statusRestarting") : normalized === "error" || normalized === "errored" || normalized === "failed" ? t("statusErrored") : status;
+  return <span className={cn("w-fit rounded px-2 py-0.5 text-xs font-medium", severity === "critical" ? "bg-red-500/15 text-red-300" : severity === "warning" ? "bg-panel-gold/10 text-panel-gold" : normalized === "running" ? "bg-panel-green/10 text-panel-green" : "bg-slate-800 text-slate-400")}>{label}</span>;
 }
 
 function LoadBar({ className, percent, tone = "green", value }: { className?: string; percent: number; tone?: "green" | "purple"; value: string }) {
