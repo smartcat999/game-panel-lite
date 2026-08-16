@@ -814,6 +814,66 @@ func TestModPackCreateListAndDelete(t *testing.T) {
 	}
 }
 
+func TestBatchDeleteGlobalModsAndModPacks(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	ctx := context.Background()
+	for _, id := range []string{"library-one", "library-two"} {
+		item := domain.ModFile{
+			ID:         id,
+			InstanceID: "unassigned",
+			FileName:   "workshop-" + id,
+			Source:     "workshop",
+			Enabled:    true,
+			CreatedAt:  time.Now(),
+		}
+		if err := db.CreateMod(ctx, &item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{"pack-one", "pack-two"} {
+		pack := domain.ModPack{ID: id, Name: id, ModIDsJSON: "[]", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+		if err := db.CreateModPack(ctx, &pack); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mods := httptest.NewRecorder()
+	router.ServeHTTP(mods, httptest.NewRequest(stdhttp.MethodPost, "/api/mods/batch-delete", bytes.NewBufferString(`{"ids":["library-one","library-two","missing"]}`)))
+	if mods.Code != stdhttp.StatusOK {
+		t.Fatalf("expected batch mod delete 200, got %d: %s", mods.Code, mods.Body.String())
+	}
+	var modResult modBatchResponse
+	if err := json.Unmarshal(mods.Body.Bytes(), &modResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(modResult.Succeeded) != 2 || len(modResult.Failed) != 1 {
+		t.Fatalf("expected two successful and one failed mod deletion, got %+v", modResult)
+	}
+
+	packs := httptest.NewRecorder()
+	router.ServeHTTP(packs, httptest.NewRequest(stdhttp.MethodPost, "/api/mod-packs/batch-delete", bytes.NewBufferString(`{"ids":["pack-one","pack-two"]}`)))
+	if packs.Code != stdhttp.StatusOK {
+		t.Fatalf("expected batch mod pack delete 200, got %d: %s", packs.Code, packs.Body.String())
+	}
+	var packResult modBatchResponse
+	if err := json.Unmarshal(packs.Body.Bytes(), &packResult); err != nil {
+		t.Fatal(err)
+	}
+	if len(packResult.Succeeded) != 2 || len(packResult.Failed) != 0 {
+		t.Fatalf("expected both mod packs deleted, got %+v", packResult)
+	}
+	for _, id := range []string{"library-one", "library-two"} {
+		if _, err := db.GetMod(ctx, id); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("expected mod %s deleted, got %v", id, err)
+		}
+	}
+	for _, id := range []string{"pack-one", "pack-two"} {
+		if _, err := db.GetModPack(ctx, id); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("expected mod pack %s deleted, got %v", id, err)
+		}
+	}
+}
+
 func TestModPackCreateDoesNotAutoIncludeKnownDependencies(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	magic := domain.ModFile{

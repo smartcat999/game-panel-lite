@@ -1,172 +1,212 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Database, Network, Package, RotateCcw, Save } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Check, Globe2, RotateCcw, Save } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
-import { Button, Card, Input } from "@/components/ui";
-import { getSettings, updatePublicHost } from "@/lib/api";
+import { Badge, Button, Card, Input, ToastNotice } from "@/components/ui";
+import { getSettings, updateImageRegion, updatePublicHost } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+
+type ImageRegion = "global" | "cn";
 
 export default function SettingsPage() {
   const { t } = useI18n();
-  const [publicHost, setPublicHost] = useState<string | null>(null);
-  const [publicHostMessage, setPublicHostMessage] = useState("");
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false });
-  const configuredHost = settings.data?.dockerHost ?? "GAMEPANEL_DOCKER_HOST";
-  const publicHostValue = publicHost ?? settings.data?.publicHost ?? "";
-  const imageRegion = settings.data?.imageRegion ?? "global";
-  const imageRegistry = settings.data?.imageRegistry ?? "smartcat99999";
-  const imageTag = settings.data?.imageTag ?? "v0.1.0";
-  const providerCatalogPath = settings.data?.providerCatalogPath ?? "GAMEPANEL_PROVIDER_CATALOG_PATH";
+  const [publicHost, setPublicHost] = useState<string | null>(null);
+  const [imageRegion, setImageRegion] = useState<ImageRegion | null>(null);
+  const [notice, setNotice] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+
   const savedPublicHost = settings.data?.publicHost ?? "";
+  const savedImageRegion: ImageRegion = settings.data?.imageRegion === "cn" ? "cn" : "global";
+  const publicHostValue = publicHost ?? savedPublicHost;
+  const imageRegionValue = imageRegion ?? savedImageRegion;
   const normalizedPublicHost = publicHostValue.trim();
   const publicHostDirty = publicHost !== null && normalizedPublicHost !== savedPublicHost.trim();
-  const publicHostMutation = useMutation({
-    mutationFn: () => updatePublicHost(normalizedPublicHost),
+  const imageRegionDirty = imageRegion !== null && imageRegion !== savedImageRegion;
+  const dirty = publicHostDirty || imageRegionDirty;
+  const publicHostError = validatePublicHost(normalizedPublicHost, t("publicHostInvalid"));
+  const configuredRegistry = imageRegionValue === savedImageRegion
+    ? settings.data?.gameImageRegistry
+    : undefined;
+  const resolvedRegistry = formatRegistrySource(
+    configuredRegistry ?? (imageRegionValue === "cn"
+      ? "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite"
+      : "smartcat99999"),
+    imageRegionValue
+  );
+
+  const saveSettings = useMutation({
+    mutationFn: async () => {
+      if (publicHostDirty) await updatePublicHost(normalizedPublicHost);
+      if (imageRegionDirty) await updateImageRegion(imageRegionValue);
+    },
     onSuccess: async () => {
+      const restartRequired = imageRegionDirty;
       await settings.refetch();
       setPublicHost(null);
-      setPublicHostMessage(t("publicHostSaved"));
+      setImageRegion(null);
+      setNotice({ message: restartRequired ? t("settingsSavedRestartRequired") : t("settingsSaved"), tone: "success" });
     },
-    onError: (err) => setPublicHostMessage(err instanceof Error ? err.message : t("publicHostSaveFailed"))
+    onError: (error) => setNotice({
+      message: error instanceof Error ? error.message : t("settingsSaveFailed"),
+      tone: "error"
+    })
   });
 
-  const submitPublicHost = (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    publicHostMutation.mutate();
+    if (!dirty || publicHostError) return;
+    setNotice(null);
+    saveSettings.mutate();
+  };
+
+  const discard = () => {
+    setPublicHost(null);
+    setImageRegion(null);
+    setNotice(null);
   };
 
   return (
     <>
       <PageHeader title={t("settingsTitle")} description={t("settingsDescription")} />
 
-      <div className="grid gap-5">
-        <SettingsSection
-          id="connection"
-          icon={<Network aria-hidden="true" className="size-5 text-panel-green" />}
-          title={t("connectionSettings")}
-          description={t("connectionSettingsDescription")}
-        >
-          <div className="grid gap-4">
-            <SettingValue label={t("configuredDockerHost")} value={configuredHost} />
-            <form className="max-w-3xl" onSubmit={submitPublicHost}>
-              <label className="block max-w-xl">
-                <span className="text-sm font-medium text-slate-300">{t("publicHostTitle")}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{t("publicHostDescription")}</span>
-                <Input
-                  className="mt-2 w-full font-mono"
-                  placeholder={t("publicHostPlaceholder")}
-                  value={publicHostValue}
-                  onChange={(event) => {
-                    setPublicHost(event.target.value);
-                    setPublicHostMessage("");
-                  }}
-                />
-              </label>
-              {publicHostDirty ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Button className="h-9 w-auto px-3" type="submit" disabled={publicHostMutation.isPending}>
-                    <Save aria-hidden="true" className="size-4" />
-                    {publicHostMutation.isPending ? t("saving") : t("savePublicHost")}
-                  </Button>
-                  <Button
-                    className="h-9 w-auto px-3"
-                    type="button"
-                    variant="ghost"
-                    disabled={publicHostMutation.isPending}
-                    onClick={() => {
-                      setPublicHost(null);
-                      setPublicHostMessage("");
-                    }}
-                  >
-                    <RotateCcw aria-hidden="true" className="size-4" />
-                    {t("discardChanges")}
-                  </Button>
-                </div>
-              ) : null}
-              {publicHostMessage ? (
-                <p className={`mt-3 flex items-center gap-2 text-sm ${publicHostMutation.isError ? "text-red-300" : "text-panel-green"}`} role="status" aria-live="polite">
-                  {publicHostMutation.isError ? <CircleAlert aria-hidden="true" className="size-4" /> : <CheckCircle2 aria-hidden="true" className="size-4" />}
-                  {publicHostMessage}
-                </p>
-              ) : null}
-            </form>
-          </div>
-        </SettingsSection>
+      {notice ? (
+        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
+          <ToastNotice closeLabel={t("close")} message={notice.message} tone={notice.tone} onClose={() => setNotice(null)} />
+        </div>
+      ) : null}
 
-        <SettingsSection
-          id="images"
-          icon={<Package aria-hidden="true" className="size-5 text-panel-green" />}
-          title={t("imageSourceTitle")}
-          description={t("imageSourceDescription")}
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            <SettingValue label={t("imageRegion")} value={imageRegion} />
-            <SettingValue label={t("panelImageTag")} value={imageTag} />
-            <SettingValue label={t("imageRegistry")} value={imageRegistry} />
-            <SettingValue label={t("providerCatalogPath")} value={providerCatalogPath} />
+      <form onSubmit={submit}>
+        <Card className="overflow-hidden">
+          <div className="border-b border-panel-line px-5 py-4 md:px-6">
+            <h2 className="font-semibold text-white">{t("basicSettings")}</h2>
+            <p className="mt-1 text-sm text-slate-400">{t("basicSettingsDescription")}</p>
           </div>
-          <p className="mt-3 text-sm text-slate-500">{t("imageSourceHint")}</p>
-        </SettingsSection>
 
-        <SettingsSection
-          id="storage"
-          icon={<Database aria-hidden="true" className="size-5 text-slate-400" />}
-          title={t("dataDirectories")}
-          description={t("dataDirectoriesDescription")}
-        >
-          {settings.data ? (
-            <div className="grid gap-3">
-              <SettingValue label={t("dataDir")} value={settings.data.dataDir} />
-              <SettingValue label={t("dbPath")} value={settings.data.dbPath} />
+          <SettingRow label={t("publicHostTitle")} description={t("publicHostDescription")}>
+            <div className="w-full max-w-xl">
+              <Input
+                aria-describedby="public-host-hint"
+                aria-invalid={Boolean(publicHostError)}
+                className={cn("w-full font-mono", publicHostError && "border-red-400 focus:border-red-400")}
+                disabled={settings.isLoading || saveSettings.isPending}
+                placeholder={t("publicHostPlaceholder")}
+                value={publicHostValue}
+                onChange={(event) => {
+                  setPublicHost(event.target.value);
+                  setNotice(null);
+                }}
+              />
+              <p id="public-host-hint" className={cn("mt-2 text-xs", publicHostError ? "text-red-300" : "text-slate-500")}>
+                {publicHostError || t("publicHostInputHint")}
+              </p>
             </div>
-          ) : (
-            <p className="text-sm text-slate-400">{t("loading")}</p>
-          )}
-        </SettingsSection>
-      </div>
+          </SettingRow>
+
+          <SettingRow label={t("imageRegion")} description={t("imageRegionDescription")} badge={t("restartPanelRequired")}>
+            <div className="w-full max-w-xl">
+              <fieldset disabled={settings.isLoading || saveSettings.isPending}>
+                <legend className="sr-only">{t("imageRegion")}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <RegionOption
+                    checked={imageRegionValue === "global"}
+                    description="Docker Hub"
+                    label={t("imageRegionGlobal")}
+                    name="image-region"
+                    onChange={() => {
+                      setImageRegion("global");
+                      setNotice(null);
+                    }}
+                    value="global"
+                  />
+                  <RegionOption
+                    checked={imageRegionValue === "cn"}
+                    description={t("aliyunContainerRegistry")}
+                    label={t("imageRegionChina")}
+                    name="image-region"
+                    onChange={() => {
+                      setImageRegion("cn");
+                      setNotice(null);
+                    }}
+                    value="cn"
+                  />
+                </div>
+              </fieldset>
+              <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-slate-500">
+                <Globe2 aria-hidden="true" className="size-4 shrink-0" />
+                <span>{t("resolvedGameImageSource")}</span>
+                <code className="min-w-0 truncate text-slate-300" title={resolvedRegistry}>{resolvedRegistry}</code>
+              </div>
+            </div>
+          </SettingRow>
+
+          {dirty ? (
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-panel-line bg-slate-950/25 px-5 py-4 md:px-6">
+              <Button type="button" variant="ghost" disabled={saveSettings.isPending} onClick={discard}>
+                <RotateCcw aria-hidden="true" className="size-4" />
+                {t("discardChanges")}
+              </Button>
+              <Button type="submit" disabled={saveSettings.isPending || Boolean(publicHostError)}>
+                <Save aria-hidden="true" className="size-4" />
+                {saveSettings.isPending ? t("saving") : t("saveSettings")}
+              </Button>
+            </div>
+          ) : null}
+        </Card>
+      </form>
     </>
   );
 }
 
-function SettingsSection({
-  children,
-  description,
-  icon,
-  id,
-  title
-}: {
-  children: ReactNode;
-  description: string;
-  icon: ReactNode;
-  id: string;
-  title: string;
-}) {
+function SettingRow({ badge, children, description, label }: { badge?: string; children: ReactNode; description: string; label: string }) {
   return (
-    <section id={id}>
-      <Card className="p-5 md:p-6">
-        <div className="mb-5 flex items-start gap-3">
-          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45">
-            {icon}
-          </span>
-          <div className="min-w-0">
-            <h2 className="font-semibold text-white">{title}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-400">{description}</p>
-          </div>
+    <div className="grid gap-4 border-b border-panel-line px-5 py-5 last:border-b-0 md:grid-cols-[minmax(220px,0.75fr)_minmax(360px,1.25fr)] md:gap-8 md:px-6">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-medium text-slate-200">{label}</h3>
+          {badge ? <Badge className="bg-panel-gold/12 text-panel-gold">{badge}</Badge> : null}
         </div>
-        {children}
-      </Card>
-    </section>
+        <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">{description}</p>
+      </div>
+      <div className="flex min-w-0 md:justify-end">{children}</div>
+    </div>
   );
 }
 
-function SettingValue({ label, value }: { label: string; value: string }) {
+function RegionOption({ checked, description, label, name, onChange, value }: { checked: boolean; description: string; label: string; name: string; onChange: () => void; value: string }) {
   return (
-    <div className="min-w-0 rounded-md border border-panel-line bg-slate-950/35 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-all font-mono text-sm text-slate-200">{value}</p>
-    </div>
+    <label className={cn(
+      "relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition",
+      "hover:border-slate-600 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-panel-green/50",
+      checked ? "border-panel-green/65 bg-panel-green/8" : "border-panel-line bg-slate-950/35"
+    )}>
+      <input className="sr-only" type="radio" checked={checked} name={name} value={value} onChange={onChange} />
+      <span className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded-full border",
+        checked ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600"
+      )}>
+        {checked ? <Check aria-hidden="true" className="size-3.5" strokeWidth={3} /> : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-100">{label}</span>
+        <span className="mt-0.5 block truncate text-xs text-slate-500">{description}</span>
+      </span>
+    </label>
   );
+}
+
+function validatePublicHost(value: string, message: string) {
+  if (!value) return "";
+  if (value.length > 253 || /[\s/]/.test(value) || value.includes("://")) return message;
+  return "";
+}
+
+function formatRegistrySource(registry: string, region: ImageRegion) {
+  const normalized = registry.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (region === "global" && normalized && !normalized.includes(".")) {
+    return `docker.io/${normalized}`;
+  }
+  return normalized;
 }

@@ -128,6 +128,9 @@ func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
 	}
 	server := testRunningGameServer("existing-delete", cfg.DataDir)
 	server.Name = "Existing Delete"
+	server.Spec.DesiredState = domain.DesiredStopped
+	server.Status.Phase = domain.PhaseStopped
+	server.Status.ActualState = domain.ActualStopped
 	if err := db.CreateGameServer(t.Context(), &server); err != nil {
 		t.Fatal(err)
 	}

@@ -150,7 +150,6 @@ function EnabledWorldsPage() {
           setSearch("");
         }}
         onSearchChange={setSearch}
-        resultLabel={t("filteredResultsCount", { count: filteredWorlds.length })}
         search={search}
         searchPlaceholder={t("searchWorlds")}
       />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Download, Loader2, RefreshCw } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/page-header";
 import { listGames, prepareRuntimeImage } from "@/lib/api";
@@ -12,7 +12,7 @@ import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from 
 import { cn } from "@/lib/utils";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
-const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_9rem]";
+const imageVersionGridColumns = "md:grid-cols-[minmax(0,1.8fr)_minmax(0,.9fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_6.5rem]";
 
 export default function VersionsPage() {
   const { locale, t } = useI18n();
@@ -33,7 +33,16 @@ export default function VersionsPage() {
 
   return (
     <>
-      <PageHeader title={t("versionManagementTitle")} description={t("versionManagementDescription")} />
+      <PageHeader
+        title={t("versionManagementTitle")}
+        description={t("versionManagementDescription")}
+        action={(
+          <Button variant="secondary" onClick={() => gamesQuery.refetch()} disabled={gamesQuery.isFetching}>
+            <RefreshCw aria-hidden="true" className={cn("size-4", gamesQuery.isFetching && "animate-spin motion-reduce:animate-none")} />
+            {t("refresh")}
+          </Button>
+        )}
+      />
       {gamesQuery.isError ? (
         <Card className="flex items-start gap-3 p-4 text-sm text-panel-gold">
           <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
@@ -48,6 +57,7 @@ export default function VersionsPage() {
               <div className={cn("hidden gap-4 border-b border-panel-line bg-slate-950/30 px-5 py-3 text-xs font-medium text-slate-500 md:grid", imageVersionGridColumns)}>
                 <span>{t("versionManagementProvider")}</span>
                 <span>{t("versionManagementInstalledImageVersion")}</span>
+                <span>{t("versionManagementTargetImageVersion")}</span>
                 <span>{t("versionManagementImageStatus")}</span>
                 <span>{t("versionManagementImageUpdatedAt")}</span>
                 <span className="sr-only">{t("actions")}</span>
@@ -104,10 +114,10 @@ function ImageVersionRow({
     : status;
   const actionable = !preparing && status?.status !== "ready" && status?.status !== "unsupported";
   const actionLabel = status?.status === "update_available"
-    ? t("gameLibraryUpdate")
+    ? t("versionManagementUpdateAction")
     : status?.status === "failed"
-      ? t("versionManagementRetryImage")
-      : t("gameLibraryInstall");
+      ? t("versionManagementRetryAction")
+      : t("versionManagementInstallAction");
 
   return (
     <div className="px-5 py-4">
@@ -117,19 +127,23 @@ function ImageVersionRow({
           <p className="mt-1 truncate font-mono text-xs text-slate-500" title={status?.image}>{status?.image || "—"}</p>
         </div>
         <ImageVersionValue label={t("versionManagementInstalledImageVersion")} value={status?.installedVersion || "—"} />
+        <ImageVersionValue label={t("versionManagementTargetImageVersion")} value={status?.targetVersion || provider.recommendedVersion || "—"} />
         <div>
           <span className="mb-1 block text-xs text-slate-500 md:hidden">{t("versionManagementImageStatus")}</span>
           <RuntimeImageBadge status={displayStatus} />
-          {status?.targetVersion && status.targetVersion !== status.installedVersion ? (
-            <p className="mt-1 text-xs text-panel-gold">{t("versionManagementTargetImageVersion")}: {status.targetVersion}</p>
-          ) : null}
         </div>
         <ImageVersionValue label={t("versionManagementImageUpdatedAt")} value={formatImageTime(status?.updatedAt, locale, t("none"))} />
         <div className="flex justify-end">
           {actionable || preparing ? (
-            <Button type="button" variant={status?.status === "failed" ? "secondary" : "primary"} className="w-full md:w-auto" disabled={preparing} onClick={onPrepare}>
-              {preparing ? <Loader2 aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /> : <Download aria-hidden="true" className="size-4" />}
-              {preparing ? t("gameLibraryInstalling") : actionLabel}
+            <Button
+              type="button"
+              variant={status?.status === "update_available" ? "primary" : "secondary"}
+              className="h-8 w-full whitespace-nowrap px-2.5 text-xs md:w-auto md:min-w-20"
+              disabled={preparing}
+              onClick={onPrepare}
+            >
+              {preparing ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" /> : <Download aria-hidden="true" className="size-3.5" />}
+              {preparing ? t("versionManagementInstallingAction") : actionLabel}
             </Button>
           ) : null}
         </div>

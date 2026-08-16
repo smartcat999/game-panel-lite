@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,10 +13,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
 func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
+	imageRegion := h.resolveImageRegion(r.Context())
+	gameImageRegistry := ""
+	if catalog, err := runtimecatalog.Load(h.cfg.ProviderCatalogPath); err == nil {
+		gameImageRegistry, _ = catalog.RegistryFor(imageRegion)
+	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"host":                h.cfg.Host,
 		"port":                h.cfg.Port,
@@ -24,10 +31,53 @@ func (h *Handler) getSettings(w http.ResponseWriter, r *http.Request) {
 		"dockerHost":          h.cfg.DockerHost,
 		"publicHost":          h.resolvePublicHost(),
 		"locale":              h.resolveLocale(r.Context()),
-		"imageRegion":         h.cfg.ImageRegion,
+		"imageRegion":         imageRegion,
+		"gameImageRegistry":   gameImageRegistry,
 		"imageRegistry":       h.cfg.ImageRegistry,
 		"imageTag":            h.cfg.ImageTag,
 		"providerCatalogPath": h.cfg.ProviderCatalogPath,
+	})
+}
+
+func (h *Handler) resolveImageRegion(ctx context.Context) string {
+	if saved, err := h.store.GetSetting(ctx, "imageRegion"); err == nil && strings.TrimSpace(saved) != "" {
+		return strings.TrimSpace(saved)
+	}
+	region := strings.TrimSpace(h.cfg.ImageRegion)
+	if region == "" {
+		return "global"
+	}
+	return region
+}
+
+func (h *Handler) updateImageRegion(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		ImageRegion string `json:"imageRegion"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	region := strings.TrimSpace(payload.ImageRegion)
+	catalog, err := runtimecatalog.Load(h.cfg.ProviderCatalogPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	registry, ok := catalog.RegistryFor(region)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "image region is not configured")
+		return
+	}
+	if err := h.store.SetSetting(r.Context(), "imageRegion", region); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "settings.imageRegion", fmt.Sprintf("Updated image region to %q", region), map[string]any{"imageRegion": region, "gameImageRegistry": registry})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"imageRegion":       region,
+		"gameImageRegistry": registry,
+		"restartRequired":   true,
 	})
 }
 

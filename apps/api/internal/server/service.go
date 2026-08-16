@@ -10,7 +10,10 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
 
-var ErrMissingServerName = errors.New("server name is required")
+var (
+	ErrMissingServerName           = errors.New("server name is required")
+	ErrServerMustBeStoppedToDelete = errors.New("server must be stopped before deletion")
+)
 
 type Store interface {
 	CreateGameServer(context.Context, *domain.GameServer) error
@@ -70,6 +73,13 @@ func (s *Service) RequestRestart(ctx context.Context, id string) (domain.GameSer
 }
 
 func (s *Service) RequestDelete(ctx context.Context, id string) (domain.GameServer, error) {
+	server, err := s.store.GetGameServer(ctx, id)
+	if err != nil {
+		return domain.GameServer{}, err
+	}
+	if server.Status.Phase != domain.PhaseStopped && server.Status.Phase != domain.PhaseFailed {
+		return domain.GameServer{}, ErrServerMustBeStoppedToDelete
+	}
 	return s.updateIntent(ctx, id, domain.DesiredDeleted, "", markDeleting)
 }
 

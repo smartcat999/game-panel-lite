@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,6 +117,87 @@ func (s *Store) ListGameServers(ctx context.Context) ([]domain.GameServer, error
 		return nil, err
 	}
 	return servers, nil
+}
+
+type GameServerListOptions struct {
+	Page        int
+	PageSize    int
+	Search      string
+	GameKey     string
+	ProviderKey string
+	Status      string
+	Sort        string
+	Direction   string
+}
+
+type GameServerPage struct {
+	Items      []domain.GameServer `json:"items"`
+	Total      int64               `json:"total"`
+	Page       int                 `json:"page"`
+	PageSize   int                 `json:"pageSize"`
+	TotalPages int                 `json:"totalPages"`
+}
+
+func (s *Store) ListGameServersPage(ctx context.Context, options GameServerListOptions) (GameServerPage, error) {
+	page := options.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := options.PageSize
+	if pageSize != 20 && pageSize != 50 && pageSize != 100 {
+		pageSize = 20
+	}
+
+	query := s.db.WithContext(ctx).Model(&domain.GameServer{})
+	if search := strings.TrimSpace(options.Search); search != "" {
+		like := "%" + strings.ToLower(search) + "%"
+		query = query.Where("lower(name) LIKE ? OR lower(id) LIKE ?", like, like)
+	}
+	if gameKey := strings.TrimSpace(options.GameKey); gameKey != "" && gameKey != "all" {
+		query = query.Where("game_key = ?", gameKey)
+	}
+	if providerKey := strings.TrimSpace(options.ProviderKey); providerKey != "" && providerKey != "all" {
+		query = query.Where("provider_key = ?", providerKey)
+	}
+	switch strings.TrimSpace(options.Status) {
+	case "running":
+		query = query.Where("json_extract(status, '$.phase') = ?", domain.PhaseRunning)
+	case "stopped":
+		query = query.Where("json_extract(status, '$.phase') = ?", domain.PhaseStopped)
+	case "errored":
+		query = query.Where("json_extract(status, '$.phase') = ?", domain.PhaseFailed)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return GameServerPage{}, err
+	}
+
+	direction := "desc"
+	if strings.EqualFold(options.Direction, "asc") {
+		direction = "asc"
+	}
+	order := "updated_at " + direction
+	switch options.Sort {
+	case "name":
+		order = "lower(name) " + direction
+	case "status":
+		order = "json_extract(status, '$.phase') " + direction
+	case "createdAt":
+		order = "created_at " + direction
+	case "updatedAt", "":
+		order = "updated_at " + direction
+	}
+
+	var servers []domain.GameServer
+	if err := query.Order(order).Offset((page - 1) * pageSize).Limit(pageSize).Find(&servers).Error; err != nil {
+		return GameServerPage{}, err
+	}
+	totalPages := 0
+	if total > 0 {
+		totalPages = int((total + int64(pageSize) - 1) / int64(pageSize))
+	}
+	return GameServerPage{Items: servers, Total: total, Page: page, PageSize: pageSize, TotalPages: totalPages}, nil
 }
 
 func (s *Store) GetGameServer(ctx context.Context, id string) (domain.GameServer, error) {

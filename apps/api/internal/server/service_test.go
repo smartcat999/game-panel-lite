@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -80,6 +81,8 @@ func TestServiceRequestsBumpGeneration(t *testing.T) {
 	if started.Spec.Generation != 2 {
 		t.Fatalf("expected generation 2, got %d", started.Spec.Generation)
 	}
+	started.Status.Phase = domain.PhaseStopped
+	store.items[server.ID] = started
 
 	deleting, err := service.RequestDelete(context.Background(), server.ID)
 	if err != nil {
@@ -93,6 +96,25 @@ func TestServiceRequestsBumpGeneration(t *testing.T) {
 	}
 	if deleting.Spec.Generation != 3 {
 		t.Fatalf("expected generation 3, got %d", deleting.Spec.Generation)
+	}
+}
+
+func TestServiceRejectsDeletingRunningServer(t *testing.T) {
+	store := newMemoryStore()
+	service := NewService(store)
+	server, err := service.Create(context.Background(), CreateCommand{Name: "Friends"})
+	if err != nil {
+		t.Fatalf("create server: %v", err)
+	}
+	server.Status.Phase = domain.PhaseRunning
+	store.items[server.ID] = server
+
+	_, err = service.RequestDelete(context.Background(), server.ID)
+	if !errors.Is(err, ErrServerMustBeStoppedToDelete) {
+		t.Fatalf("expected stopped-server requirement, got %v", err)
+	}
+	if stored := store.items[server.ID]; stored.Spec.DesiredState == domain.DesiredDeleted {
+		t.Fatal("running server must not be marked for deletion")
 	}
 }
 

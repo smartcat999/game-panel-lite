@@ -93,6 +93,7 @@ export function ResourceTrendChart({ emptyLabel, series }: { emptyLabel: string;
 function chartColor(key?: string) {
   if (key === "nodeMemory") return "#a78bfa";
   if (key === "nodeNetwork") return "#60a5fa";
+  if (key === "nodeDisk") return "#eabf55";
   return "#59d46f";
 }
 

@@ -335,6 +335,42 @@ export async function listGameServers(): Promise<GameServerResource[]> {
   return payload.map(gameServerResourceFromApi);
 }
 
+export type GameServerListParams = {
+  page?: number;
+  pageSize?: 20 | 50 | 100;
+  search?: string;
+  game?: string;
+  provider?: string;
+  status?: string;
+  sort?: "name" | "status" | "createdAt" | "updatedAt";
+  direction?: "asc" | "desc";
+};
+
+export type GameServerPage = {
+  items: GameServerResource[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listGameServersPage(params: GameServerListParams = {}): Promise<GameServerPage> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    pageSize: String(params.pageSize ?? 20),
+    sort: params.sort ?? "updatedAt",
+    direction: params.direction ?? "desc"
+  });
+  if (params.search?.trim()) query.set("search", params.search.trim());
+  if (params.game && params.game !== "all") query.set("game", params.game);
+  if (params.provider && params.provider !== "all") query.set("provider", params.provider);
+  if (params.status && params.status !== "all") query.set("status", params.status);
+  const response = await apiFetch(`${API_BASE}/api/servers?${query.toString()}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Unable to load servers");
+  const payload = (await response.json()) as Omit<GameServerPage, "items"> & { items: ApiServer[] };
+  return { ...payload, items: payload.items.map(gameServerResourceFromApi) };
+}
+
 export async function getGameServer(id: string): Promise<GameServerResource> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
   if (!response.ok) {
@@ -385,6 +421,7 @@ export type AppSettings = {
   publicHost: string;
   locale: Locale;
   imageRegion: string;
+  gameImageRegistry: string;
   imageRegistry: string;
   imageTag: string;
   providerCatalogPath: string;
@@ -596,7 +633,7 @@ export async function listConfigPresets(): Promise<ConfigPreset[]> {
   return (await response.json()) as ConfigPreset[];
 }
 
-export async function createConfigPreset(input: {
+export type ConfigPresetInput = {
   name: string;
   providerKey: ProviderKey;
   config: TerrariaConfig | Record<string, unknown>;
@@ -604,7 +641,9 @@ export async function createConfigPreset(input: {
   resources?: ResourceLimits;
   modPackId?: string;
   modIds: string[];
-}): Promise<ConfigPreset> {
+};
+
+export async function createConfigPreset(input: ConfigPresetInput): Promise<ConfigPreset> {
   const response = await apiFetch(`${API_BASE}/api/config-presets`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -617,12 +656,38 @@ export async function createConfigPreset(input: {
   return payload;
 }
 
+export async function updateConfigPreset(id: string, input: ConfigPresetInput): Promise<ConfigPreset> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  const payload = (await response.json().catch(() => ({}))) as ConfigPreset & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to update configuration preset");
+  }
+  return payload;
+}
+
 export async function deleteConfigPreset(id: string): Promise<void> {
   const response = await apiFetch(`${API_BASE}/api/config-presets/${id}`, { method: "DELETE" });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete configuration preset");
   }
+}
+
+export async function deleteConfigPresets(ids: string[]): Promise<BatchDeleteResult> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets/batch-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  const payload = (await response.json().catch(() => ({}))) as BatchDeleteResult & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to delete configuration presets");
+  }
+  return payload;
 }
 
 export async function gameServerAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<GameServerResource | null> {
@@ -1081,6 +1146,24 @@ export async function deleteGlobalMod(modId: string) {
   }
 }
 
+export type BatchDeleteResult = {
+  succeeded: Array<{ id: string }>;
+  failed: Array<{ id: string; error: string }>;
+};
+
+export async function deleteGlobalMods(ids: string[]): Promise<BatchDeleteResult> {
+  const response = await apiFetch(`${API_BASE}/api/mods/batch-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mods");
+  }
+  return response.json() as Promise<BatchDeleteResult>;
+}
+
 export async function listModPacks(): Promise<ModPack[]> {
   const response = await apiFetch(`${API_BASE}/api/mod-packs`, { cache: "no-store" });
   if (!response.ok) {
@@ -1147,6 +1230,19 @@ export async function deleteModPack(id: string) {
   }
 }
 
+export async function deleteModPacks(ids: string[]): Promise<BatchDeleteResult> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/batch-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod packs");
+  }
+  return response.json() as Promise<BatchDeleteResult>;
+}
+
 export async function listActivity(): Promise<ActivityEvent[]> {
   const response = await apiFetch(`${API_BASE}/api/activity`, { cache: "no-store" });
   if (!response.ok) {
@@ -1170,6 +1266,19 @@ export async function updatePublicHost(publicHost: string): Promise<{ publicHost
     body: JSON.stringify({ publicHost })
   });
   return readPayload<{ publicHost: string }>(response, "Unable to update public host");
+}
+
+export async function updateImageRegion(imageRegion: "global" | "cn"): Promise<{
+  imageRegion: string;
+  gameImageRegistry: string;
+  restartRequired: boolean;
+}> {
+  const response = await apiFetch(`${API_BASE}/api/settings/image-region`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageRegion })
+  });
+  return readPayload(response, "Unable to update image region");
 }
 
 export async function updateLocale(locale: Locale): Promise<{ locale: Locale }> {

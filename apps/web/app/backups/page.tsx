@@ -134,7 +134,6 @@ function EnabledBackupsPage() {
           setSearch("");
         }}
         onSearchChange={setSearch}
-        resultLabel={t("backupFilterSummary", { shown: filteredBackups.length, total: backups.length })}
         search={search}
         searchPlaceholder={t("searchBackups")}
       />

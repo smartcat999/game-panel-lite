@@ -83,11 +83,15 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 	t.Helper()
 	root := t.TempDir()
 	cfg := config.Config{
-		Host:       "127.0.0.1",
-		Port:       "4000",
-		DataDir:    filepath.Join(root, "data"),
-		DBPath:     filepath.Join(root, "gamepanel.db"),
-		DockerHost: "unix:///initial.sock",
+		Host:                "127.0.0.1",
+		Port:                "4000",
+		DataDir:             filepath.Join(root, "data"),
+		DBPath:              filepath.Join(root, "gamepanel.db"),
+		DockerHost:          "unix:///initial.sock",
+		ProviderCatalogPath: filepath.Join(root, "providers.json"),
+	}
+	if err := os.WriteFile(cfg.ProviderCatalogPath, []byte(`{"registries":{"global":"smartcat99999","cn":"registry.cn-hangzhou.aliyuncs.com/gamepanel-lite"},"providers":{}}`), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	db, err := store.Open(cfg.DBPath)
 	if err != nil {

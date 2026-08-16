@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"os"
@@ -1065,6 +1066,36 @@ func TestListServersSkipsRuntimeInspectWhenDockerUnavailable(t *testing.T) {
 	}
 	if len(got) != 1 || domain.ServerStatusFromRuntime(got[0].Spec.DesiredState, got[0].Status) != domain.StatusRunning {
 		t.Fatalf("expected stored status without runtime refresh, got %+v", got)
+	}
+}
+
+func TestListServersSupportsPaginationFilteringAndSorting(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	for index := 0; index < 25; index++ {
+		server := testServer(fmt.Sprintf("paged-%02d", index), cfg.DataDir)
+		server.Name = fmt.Sprintf("Server %02d", index)
+		server.UpdatedAt = time.Now().Add(time.Duration(index) * time.Minute)
+		if index%2 == 0 {
+			server.Status = domain.StatusRunning
+		}
+		createTestServer(t, db, server)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodGet, "/api/servers?page=1&pageSize=20&status=running&search=Server&sort=name&direction=asc", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected paged server list 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var response store.GameServerPage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Total != 13 || response.Page != 1 || response.PageSize != 20 || response.TotalPages != 1 {
+		t.Fatalf("unexpected pagination response: %+v", response)
+	}
+	if len(response.Items) != 13 || response.Items[0].Name != "Server 00" || response.Items[len(response.Items)-1].Name != "Server 24" {
+		t.Fatalf("unexpected filtered or sorted items: %+v", response.Items)
 	}
 }
 

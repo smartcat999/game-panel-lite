@@ -2,7 +2,7 @@
 
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
-import { Button, Card, Input } from "@/components/ui";
+import { Input } from "@/components/ui";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 
 export type ResourceFilterOption<T extends string = string> = {
@@ -25,7 +25,6 @@ type ResourceFilterBarProps = {
   filters: readonly ResourceFilter[];
   onClear: () => void;
   onSearchChange: (value: string) => void;
-  resultLabel?: string;
   search: string;
   searchPlaceholder: string;
 };
@@ -37,22 +36,27 @@ export function ResourceFilterBar({
   filters,
   onClear,
   onSearchChange,
-  resultLabel,
   search,
   searchPlaceholder
 }: ResourceFilterBarProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const hasActiveFilters = search.trim().length > 0 || activeChips.length > 0 || filters.some((filter) => filter.value !== "all");
   const searchControlClass = density === "compact"
-    ? "grid w-full min-w-0 gap-1.5 sm:w-72 lg:w-80"
-    : "grid w-full min-w-0 gap-1.5 sm:w-80 2xl:w-[22rem]";
+    ? "w-full min-w-0 sm:w-56 lg:w-64"
+    : "w-full min-w-0 sm:w-64 lg:w-72";
   const filterControlClass = density === "compact"
-    ? "grid w-full min-w-0 gap-1.5 sm:w-44 lg:w-48"
-    : searchControlClass;
+    ? "relative h-9 w-full min-w-0 sm:w-36"
+    : "relative h-9 w-full min-w-0 sm:w-40";
+
+  const optionLabel = (filter: ResourceFilter, option: ResourceFilterOption) => {
+    const label = option.labelKey ? t(option.labelKey) : option.label ?? option.key;
+    if (option.key !== "all") return label;
+    return locale === "zh" ? `${label}${filter.label}` : `${label} ${filter.label}`;
+  };
 
   return (
-    <Card className="mb-4 p-3">
+    <section className="mb-4">
       <button
         type="button"
         aria-expanded={mobileExpanded}
@@ -66,57 +70,59 @@ export function ResourceFilterBar({
         </span>
         <ChevronDown aria-hidden="true" className={`size-4 text-slate-500 transition-transform ${mobileExpanded ? "rotate-180" : ""}`} />
       </button>
-      <div className={`${mobileExpanded ? "flex" : "hidden"} mt-3 flex-wrap items-end gap-3 md:mt-0 md:flex`}>
+      <div className={`${mobileExpanded ? "flex" : "hidden"} mt-2.5 flex-col gap-2 md:mt-0 md:flex md:flex-row md:items-center`}>
         <label className={searchControlClass}>
-          <span className="text-xs font-medium text-slate-500">{t("search")}</span>
-          <span className="relative block">
+          <span className="sr-only">{t("search")}</span>
+          <span className="relative block h-9">
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
             <Input
-              className="w-full pl-9"
+              className="h-9 w-full bg-slate-950/55 pl-9 pr-8"
               placeholder={searchPlaceholder}
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
             />
+            {search ? (
+              <button
+                type="button"
+                aria-label={clearLabel}
+                className="absolute right-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-800 hover:text-white"
+                onClick={() => onSearchChange("")}
+              >
+                <X aria-hidden="true" className="size-3.5" />
+              </button>
+            ) : null}
           </span>
         </label>
         {filters.map((filter) => (
           <label key={filter.label} className={filterControlClass}>
-            <span className="text-xs font-medium text-slate-500">{filter.label}</span>
+            <span className="sr-only">{filter.label}</span>
             <select
-              className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm font-medium text-slate-100 outline-none transition focus:border-panel-green focus:ring-2 focus:ring-panel-green/20"
+              aria-label={filter.label}
+              className="h-full w-full appearance-none rounded-md border border-panel-line bg-slate-950/55 px-3 pr-8 text-left text-sm font-medium text-slate-200 outline-none transition hover:border-slate-600 focus:border-panel-green focus:ring-1 focus:ring-panel-green/30"
               value={filter.value}
               onChange={(event) => filter.onChange(event.target.value)}
             >
               {filter.options.map((option) => (
                 <option key={option.key} value={option.key}>
-                  {option.labelKey ? t(option.labelKey) : option.label ?? option.key}
+                  {optionLabel(filter, option)}
                 </option>
               ))}
             </select>
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
           </label>
         ))}
-      </div>
-      <div className={`${mobileExpanded || resultLabel ? "flex" : "hidden"} mt-3 min-h-7 flex-wrap items-center justify-between gap-2 border-t border-panel-line pt-3 md:flex`}>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {resultLabel ? <span className="text-xs text-slate-500">{resultLabel}</span> : null}
-          {activeChips.map((chip) => (
-            <span key={chip} className="max-w-[14rem] truncate rounded border border-panel-line bg-slate-950/50 px-2 py-1 text-xs text-slate-300">
-              {chip}
-            </span>
-          ))}
-        </div>
-        {hasActiveFilters ? (
-          <Button
+        <span className="hidden min-w-0 flex-1 md:block" />
+        <button
             type="button"
-            variant="ghost"
-            className="h-7 px-2 text-xs"
+            aria-label={clearLabel}
+            title={clearLabel}
+            className={`flex size-9 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-panel-green ${hasActiveFilters ? "visible" : "invisible"}`}
             onClick={onClear}
           >
-            <X aria-hidden="true" className="size-3.5" />
-            {clearLabel}
-          </Button>
-        ) : null}
+            <X aria-hidden="true" className="size-4" />
+            <span className="sr-only">{clearLabel}</span>
+          </button>
       </div>
-    </Card>
+    </section>
   );
 }

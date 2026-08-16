@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +44,11 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err != nil {
 		logger.Warn("using built-in provider runtime catalog", "error", err)
 	}
-	providerCatalog = providerCatalog.WithActiveRegistry(cfg.ImageRegion)
+	imageRegion := cfg.ImageRegion
+	if savedImageRegion, getErr := db.GetSetting(context.Background(), "imageRegion"); getErr == nil && strings.TrimSpace(savedImageRegion) != "" {
+		imageRegion = savedImageRegion
+	}
+	providerCatalog = providerCatalog.WithActiveRegistry(imageRegion)
 	registry := provider.NewRegistry(
 		terraria.NewVanillaProvider(providerCatalog),
 		terraria.NewTModLoaderProvider(providerCatalog),
