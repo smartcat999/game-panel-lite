@@ -22,7 +22,7 @@ if [ -f "$ROOT_DIR/data/nginx/gamepanel-https.conf" ]; then
   MODE="HTTPS"
 fi
 
-SERVICES="api web nginx gamepanel-exporter prometheus cadvisor node-exporter"
+SERVICES="updater api web nginx gamepanel-exporter prometheus cadvisor node-exporter"
 
 case "$ACTION" in
   start)

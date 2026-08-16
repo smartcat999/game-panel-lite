@@ -1,11 +1,20 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, Globe2, RotateCcw, Save } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Download, ExternalLink, Globe2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input, ToastNotice } from "@/components/ui";
-import { getSettings, updateImageRegion, updatePublicHost } from "@/lib/api";
+import {
+  applySystemUpdate,
+  checkSystemUpdate,
+  getSettings,
+  getSystemUpdateStatus,
+  updateImageRegion,
+  updatePublicHost,
+  updateSystemAutoCheck
+} from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +165,139 @@ export default function SettingsPage() {
           ) : null}
         </Card>
       </form>
+
+      <PanelUpdateCard onNotice={setNotice} />
     </>
+  );
+}
+
+function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; tone: "success" | "error" } | null) => void }) {
+  const { locale, t } = useI18n();
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const update = useQuery({
+    queryKey: ["system-update"],
+    queryFn: getSystemUpdateStatus,
+    retry: false,
+    refetchInterval: (query) => query.state.data?.job?.status === "running" ? 3_000 : 60_000
+  });
+  const check = useMutation({
+    mutationFn: checkSystemUpdate,
+    onSuccess: (data) => queryClient.setQueryData(["system-update"], data),
+    onError: (error) => onNotice({ message: error instanceof Error ? error.message : t("panelUpdateCheckFailed"), tone: "error" })
+  });
+  const preference = useMutation({
+    mutationFn: updateSystemAutoCheck,
+    onSuccess: (data) => queryClient.setQueryData(["system-update"], data),
+    onError: () => onNotice({ message: t("panelUpdatePreferenceFailed"), tone: "error" })
+  });
+  const install = useMutation({
+    mutationFn: (version: string) => applySystemUpdate(version),
+    onSuccess: (job) => {
+      queryClient.setQueryData(["system-update"], (current: typeof data) => current ? { ...current, job } : current);
+      setConfirmOpen(false);
+      onNotice({ message: t("panelUpdateQueued"), tone: "success" });
+    },
+    onError: (error) => onNotice({ message: error instanceof Error ? error.message : t("panelUpdateCheckFailed"), tone: "error" })
+  });
+
+  const data = update.data;
+  const latestVersion = data?.latest?.version ?? "—";
+  const jobRunning = data?.job?.status === "running";
+  const status = data?.checkError
+    ? { label: t("panelUpdateCheckFailed"), className: "bg-red-500/12 text-red-300" }
+    : data?.updateAvailable
+      ? { label: t("panelUpdateAvailable"), className: "bg-panel-gold/12 text-panel-gold" }
+      : data?.checkedAt
+        ? { label: t("panelUpdateUpToDate"), className: "bg-panel-green/12 text-panel-green" }
+        : null;
+  const checkedAt = data?.checkedAt
+    ? new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.checkedAt))
+    : t("panelUpdateNeverChecked");
+
+  return (
+    <>
+      <Card className="mt-5 overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-panel-line px-5 py-4 sm:flex-row sm:items-start sm:justify-between md:px-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-semibold text-white">{t("panelUpdateTitle")}</h2>
+              {status ? <Badge className={status.className}>{status.label}</Badge> : null}
+            </div>
+            <p className="mt-1 max-w-3xl text-sm text-slate-400">{t("panelUpdateDescription")}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" variant="secondary" disabled={check.isPending || jobRunning} onClick={() => check.mutate()}>
+              <RefreshCw aria-hidden="true" className={cn("size-4", check.isPending && "animate-spin")} />
+              {check.isPending ? t("panelUpdateChecking") : t("panelUpdateCheck")}
+            </Button>
+            {data?.updateAvailable ? (
+              <Button type="button" disabled={!data.updaterAvailable || jobRunning} onClick={() => setConfirmOpen(true)}>
+                <Download aria-hidden="true" className="size-4" />
+                {jobRunning ? t("panelUpdateInstalling") : t("panelUpdateInstall")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid border-b border-panel-line sm:grid-cols-3">
+          <UpdateValue label={t("panelUpdateCurrentVersion")} value={data?.current.version ?? "—"} />
+          <UpdateValue label={t("panelUpdateLatestVersion")} value={latestVersion} />
+          <UpdateValue label={t("panelUpdateLastChecked")} value={checkedAt} />
+        </div>
+
+        <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              aria-checked={Boolean(data?.autoCheckEnabled)}
+              aria-label={t("panelUpdateAutoCheck")}
+              className={cn("relative h-6 w-11 shrink-0 rounded-full transition focus:outline-none focus:ring-2 focus:ring-panel-green/50", data?.autoCheckEnabled ? "bg-panel-green" : "bg-slate-700")}
+              disabled={!data || preference.isPending}
+              role="switch"
+              type="button"
+              onClick={() => data && preference.mutate(!data.autoCheckEnabled)}
+            >
+              <span className={cn("absolute top-1 size-4 rounded-full bg-white transition-transform", data?.autoCheckEnabled ? "translate-x-6" : "translate-x-1")} />
+            </button>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-200">{t("panelUpdateAutoCheck")}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{t("panelUpdateAutoCheckHint", { hours: data?.intervalHours ?? 24 })}</p>
+            </div>
+          </div>
+          {data?.latest?.releaseNotesUrl ? (
+            <a className="inline-flex shrink-0 items-center gap-1.5 text-sm text-panel-green hover:underline" href={data.latest.releaseNotesUrl} rel="noreferrer" target="_blank">
+              {t("panelUpdateReleaseNotes")}<ExternalLink aria-hidden="true" className="size-3.5" />
+            </a>
+          ) : null}
+        </div>
+        {data?.updateAvailable && !data.updaterAvailable ? (
+          <div className="border-t border-panel-line px-5 py-3 text-sm text-panel-gold md:px-6">{t("panelUpdateUpdaterUnavailable")}</div>
+        ) : null}
+      </Card>
+
+      <ConfirmDialog
+        busy={install.isPending}
+        cancelLabel={t("cancel")}
+        confirmLabel={install.isPending ? t("panelUpdateInstalling") : t("panelUpdateConfirm")}
+        confirmVariant="primary"
+        description={t("panelUpdateDialogDescription")}
+        eyebrow={t("panelUpdateDialogEyebrow")}
+        eyebrowTone="green"
+        open={confirmOpen}
+        title={t("panelUpdateDialogTitle", { version: latestVersion })}
+        onCancel={() => !install.isPending && setConfirmOpen(false)}
+        onConfirm={() => data?.latest?.version && install.mutate(data.latest.version)}
+      />
+    </>
+  );
+}
+
+function UpdateValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 border-b border-panel-line px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 md:px-6">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 truncate font-mono text-sm font-medium text-slate-200" title={value}>{value}</p>
+    </div>
   );
 }
 

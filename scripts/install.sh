@@ -15,6 +15,7 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 if [ ! -f "$ENV_FILE" ]; then
+  UPDATER_TOKEN=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
   cat > "$ENV_FILE" <<EOF
 GAMEPANEL_WORKSPACE_PATH="$ROOT_DIR"
 GAMEPANEL_DOCKER_SOCKET_PATH="/var/run/docker.sock"
@@ -23,7 +24,9 @@ GAMEPANEL_API_PORT="4000"
 NEXT_PUBLIC_API_BASE_URL=""
 GAMEPANEL_IMAGE_REGION="global"
 GAMEPANEL_IMAGE_REGISTRY="smartcat99999"
-GAMEPANEL_IMAGE_TAG="v0.1.0"
+GAMEPANEL_IMAGE_TAG="v0.2.0"
+GAMEPANEL_PALWORLD_MOD_PACK_TAG="v0.1.0"
+GAMEPANEL_UPDATER_TOKEN="$UPDATER_TOKEN"
 EOF
 fi
 
@@ -40,7 +43,7 @@ fi
 
 cd "$ROOT_DIR"
 docker compose -f compose.prod.yaml pull
-docker compose -f compose.prod.yaml up -d api web nginx gamepanel-exporter prometheus cadvisor node-exporter
+docker compose -f compose.prod.yaml up -d updater api web nginx gamepanel-exporter prometheus cadvisor node-exporter
 
 echo
 echo "GamePanel Lite is starting."

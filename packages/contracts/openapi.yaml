@@ -17,6 +17,76 @@ paths:
       responses:
         "200":
           description: Product version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PanelBuildInfo"
+  /api/system/update:
+    get:
+      summary: Read GamePanel Lite update status
+      responses:
+        "200":
+          description: Current build, latest checked release, preferences, and active update job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateStatus"
+  /api/system/update/check:
+    post:
+      summary: Check the configured release manifest now
+      responses:
+        "200":
+          description: Completed update check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateStatus"
+        "502":
+          description: Release manifest could not be checked or validated
+  /api/system/update/auto-check:
+    put:
+      summary: Enable or disable notification-only automatic release checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Saved automatic check preference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateStatus"
+  /api/system/update/apply:
+    post:
+      summary: Queue an authenticated asynchronous control-plane update
+      description: Pulls and recreates only GamePanel Lite control-plane services. Managed game server containers and save data are not modified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: string
+                  pattern: '^v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$'
+      responses:
+        "202":
+          description: Update job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateJob"
+        "409":
+          description: Updater unavailable, release mismatch, already current, or another update is running
   /api/runtime/docker:
     get:
       summary: Read cached Docker runtime availability
@@ -905,6 +975,81 @@ paths:
           description: Invalid config
 components:
   schemas:
+    PanelBuildInfo:
+      type: object
+      required: [name, version, commit, buildTime, goVersion]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        commit:
+          type: string
+        buildTime:
+          type: string
+        goVersion:
+          type: string
+    SystemUpdateManifest:
+      type: object
+      required: [schemaVersion, channel, version]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+        channel:
+          type: string
+        version:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        releaseNotesUrl:
+          type: string
+          format: uri
+    SystemUpdateJob:
+      type: object
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        status:
+          type: string
+          enum: [running, completed, failed]
+        stage:
+          type: string
+        message:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SystemUpdateStatus:
+      type: object
+      required: [current, updateAvailable, autoCheckEnabled, intervalHours, updaterAvailable]
+      properties:
+        current:
+          $ref: "#/components/schemas/PanelBuildInfo"
+        latest:
+          $ref: "#/components/schemas/SystemUpdateManifest"
+        updateAvailable:
+          type: boolean
+        checkedAt:
+          type: string
+          format: date-time
+        checkError:
+          type: string
+        autoCheckEnabled:
+          type: boolean
+        intervalHours:
+          type: integer
+          minimum: 1
+        updaterAvailable:
+          type: boolean
+        job:
+          $ref: "#/components/schemas/SystemUpdateJob"
     DockerStatus:
       type: object
       required: [available, message, host, lastCheckedAt]

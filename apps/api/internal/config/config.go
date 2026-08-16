@@ -19,6 +19,10 @@ type Config struct {
 	ImageTag               string
 	PrometheusURL          string
 	PrometheusQueryTimeout time.Duration
+	ReleaseManifestURL     string
+	SystemUpdateInterval   time.Duration
+	UpdaterURL             string
+	UpdaterToken           string
 }
 
 func Load() Config {
@@ -32,6 +36,12 @@ func Load() Config {
 			queryTimeout = parsed
 		}
 	}
+	updateInterval := 24 * time.Hour
+	if raw := value("GAMEPANEL_SYSTEM_UPDATE_INTERVAL", ""); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed >= time.Hour {
+			updateInterval = parsed
+		}
+	}
 	return Config{
 		Host:                   value("GAMEPANEL_HOST", "0.0.0.0"),
 		Port:                   value("GAMEPANEL_PORT", "4000"),
@@ -42,9 +52,13 @@ func Load() Config {
 		ProviderCatalogPath:    value("GAMEPANEL_PROVIDER_CATALOG_PATH", "./config/providers.json"),
 		ImageRegion:            value("GAMEPANEL_IMAGE_REGION", "global"),
 		ImageRegistry:          value("GAMEPANEL_IMAGE_REGISTRY", "smartcat99999"),
-		ImageTag:               value("GAMEPANEL_IMAGE_TAG", "v0.1.0"),
+		ImageTag:               value("GAMEPANEL_IMAGE_TAG", "v0.2.0"),
 		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
 		PrometheusQueryTimeout: queryTimeout,
+		ReleaseManifestURL:     value("GAMEPANEL_RELEASE_MANIFEST_URL", "https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/release/manifest.json"),
+		SystemUpdateInterval:   updateInterval,
+		UpdaterURL:             value("GAMEPANEL_UPDATER_URL", ""),
+		UpdaterToken:           value("GAMEPANEL_UPDATER_TOKEN", ""),
 	}
 }
 

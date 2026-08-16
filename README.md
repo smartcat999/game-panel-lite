@@ -79,6 +79,14 @@ sudo sh scripts/manage.sh update
 
 Use `start`, `stop`, or `status` in place of `update` for routine operations. The script automatically selects HTTP or HTTPS mode. It manages the panel control plane only; game containers remain under GamePanel Lite and are not recreated by these commands.
 
+The Settings page can also check for a newer GamePanel Lite release and, when the updater service is enabled, install it asynchronously. Panel updates pull and recreate only the API, Web, and exporter control-plane services; running game containers and save data are left untouched. Automatic checks only notify and never install an update without confirmation.
+
+Release images are built with the configured buildx builder (default `my-builder`) for `linux/amd64`:
+
+```bash
+scripts/build-panel-images.sh --version v0.2.0 --push
+```
+
 Production uses `compose.prod.yaml`. The HTTPS override replaces the same `nginx` service, so only one reverse proxy owns ports 80 and 443. Do not add the development `compose.yaml` to production commands.
 
 ## Data Location
