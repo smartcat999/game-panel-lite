@@ -38,22 +38,70 @@ func (s *Service) Overview(ctx context.Context) (OverviewResponse, error) {
 	if samples, err := s.queryVector(ctx, `up == 0`); err == nil {
 		failedTargets = len(samples)
 	}
-	overall := "healthy"
-	if !ds.Connected || failedTargets > 0 || kpis.Issues > 0 {
-		overall = "warning"
-	}
+	dockerRuntime := s.dockerRuntimeStatus(ctx, ds)
+	resourceAlerts := s.resourceAlerts(ctx, ds)
+	overall := healthOverall(ds, dockerRuntime, failedTargets, kpis.Issues, resourceAlerts)
 	return OverviewResponse{
 		CollectedAt: now,
 		DataSource:  ds,
 		Health: Health{
 			Overall:             overall,
 			PrometheusConnected: ds.Connected,
-			DockerRuntime:       s.dockerRuntimeStatus(ctx, ds),
+			DockerRuntime:       dockerRuntime,
 			LastSync:            ds.LastQueryAt,
 			FailedTargets:       failedTargets,
+			ResourceAlerts:      resourceAlerts,
 		},
 		KPIs: kpis,
 	}, nil
+}
+
+func (s *Service) resourceAlerts(ctx context.Context, ds DataSource) []ResourceAlert {
+	if !ds.Connected {
+		return nil
+	}
+	checks := []struct {
+		key   string
+		query string
+		warn  float64
+		crit  float64
+	}{
+		{key: "node_cpu", query: nodeCPUQuery(), warn: 80, crit: 90},
+		{key: "node_memory", query: nodeMemoryPercentQuery(), warn: 85, crit: 95},
+		{key: "node_disk", query: nodeDiskQuery(), warn: 85, crit: 95},
+	}
+	alerts := make([]ResourceAlert, 0, len(checks))
+	for _, check := range checks {
+		value, err := s.latest(ctx, check.query)
+		if err != nil || value == nil || *value < check.warn {
+			continue
+		}
+		severity := "warning"
+		threshold := check.warn
+		if *value >= check.crit {
+			severity = "critical"
+			threshold = check.crit
+		}
+		alerts = append(alerts, ResourceAlert{Key: check.key, Severity: severity, Current: *value, Threshold: threshold, Unit: "%"})
+	}
+	return alerts
+}
+
+func healthOverall(ds DataSource, dockerRuntime string, failedTargets, serverIssues int, alerts []ResourceAlert) string {
+	if !ds.Connected || dockerRuntime == "unknown" || failedTargets > 0 || serverIssues > 0 {
+		return "warning"
+	}
+	if dockerRuntime == "down" {
+		return "critical"
+	}
+	overall := "healthy"
+	for _, alert := range alerts {
+		if alert.Severity == "critical" {
+			return "critical"
+		}
+		overall = "warning"
+	}
+	return overall
 }
 
 func (s *Service) kpisFromStore(servers []domain.GameServer) KPIs {
@@ -587,6 +635,10 @@ func nodeMemoryQuery() string {
 
 func nodeMemoryTotalQuery() string {
 	return `sum(node_memory_MemTotal_bytes) / 1024 / 1024`
+}
+
+func nodeMemoryPercentQuery() string {
+	return `100 * (1 - (sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)))`
 }
 
 func nodeDiskQuery() string {

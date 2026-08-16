@@ -43,11 +43,20 @@ type OverviewResponse struct {
 }
 
 type Health struct {
-	Overall             string     `json:"overall"`
-	PrometheusConnected bool       `json:"prometheusConnected"`
-	DockerRuntime       string     `json:"dockerRuntime"`
-	LastSync            *time.Time `json:"lastSync"`
-	FailedTargets       int        `json:"failedTargets"`
+	Overall             string          `json:"overall"`
+	PrometheusConnected bool            `json:"prometheusConnected"`
+	DockerRuntime       string          `json:"dockerRuntime"`
+	LastSync            *time.Time      `json:"lastSync"`
+	FailedTargets       int             `json:"failedTargets"`
+	ResourceAlerts      []ResourceAlert `json:"resourceAlerts"`
+}
+
+type ResourceAlert struct {
+	Key       string  `json:"key"`
+	Severity  string  `json:"severity"`
+	Current   float64 `json:"current"`
+	Threshold float64 `json:"threshold"`
+	Unit      string  `json:"unit"`
 }
 
 type KPIs struct {
