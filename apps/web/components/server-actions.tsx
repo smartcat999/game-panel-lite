@@ -55,7 +55,9 @@ export function ServerActions({
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy;
   const canDelete = status === "stopped" || status === "errored";
-  const showRowRestart = rowMode && status === "running";
+  // Restart is a refresh-style launch operation: a running server is recreated,
+  // while a stopped or failed server is started through the same refresh path.
+  const showRowRestart = rowMode;
   const actionLabel = (action: "start" | "stop" | "restart" | "delete") =>
     action === "start" ? t("actionStart") : action === "stop" ? t("actionStop") : action === "restart" ? t("actionRestart") : t("delete");
   const successLabel = (action: "start" | "stop" | "restart" | "delete") =>
@@ -262,13 +264,12 @@ export function ServerActions({
               {showRowRestart ? (
                 <button
                   className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-slate-200 transition hover:bg-slate-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={controlsDisabled || !canDelete}
+                  disabled={controlsDisabled}
                   onClick={() => {
                     setMoreOpen(false);
                     runAction("restart");
                   }}
                   role="menuitem"
-                  title={!canDelete ? t("deleteRequiresStopped") : undefined}
                   type="button"
                 >
                   <RotateCcw aria-hidden="true" className="size-3.5 text-slate-400" />
@@ -292,12 +293,13 @@ export function ServerActions({
               {showDelete ? (
                 <button
                   className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-red-400/60 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={controlsDisabled}
+                  disabled={controlsDisabled || !canDelete}
                   onClick={() => {
                     setMoreOpen(false);
                     runAction("delete");
                   }}
                   role="menuitem"
+                  title={!canDelete ? t("deleteRequiresStopped") : undefined}
                   type="button"
                 >
                   <Trash2 aria-hidden="true" className="size-3.5" />
