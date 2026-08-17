@@ -445,12 +445,42 @@ export type SystemUpdateManifest = {
 
 export type SystemUpdateJob = {
   id?: string;
+  kind?: string;
   version?: string;
   status?: "running" | "completed" | "failed" | string;
   stage?: string;
   message?: string;
   startedAt?: string;
   updatedAt?: string;
+};
+
+export type DeploymentService = {
+  name: string;
+  state: string;
+  health?: string;
+  image?: string;
+};
+
+export type DeploymentStatus = {
+  mode: "http" | "https" | string;
+  checkedAt: string;
+  healthy: boolean;
+  services: DeploymentService[];
+  https: {
+    configured: boolean;
+    domain?: string;
+    certificate: "valid" | "expired" | "missing" | string;
+    expiresAt?: string;
+    daysRemaining?: number;
+    autoRenewal: {
+      enabled: boolean;
+      method?: string;
+      installedAt?: string;
+      lastCheckedAt?: string;
+      lastStatus?: "pending" | "running" | "success" | "failed" | "unknown" | string;
+    };
+  };
+  job?: SystemUpdateJob;
 };
 
 export type SystemUpdateStatus = {
@@ -661,6 +691,35 @@ export async function applySystemUpdate(version: string): Promise<SystemUpdateJo
     body: JSON.stringify({ version })
   });
   return readPayload<SystemUpdateJob>(response, "Unable to start panel update");
+}
+
+export async function getDeploymentStatus(): Promise<DeploymentStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment`, { cache: "no-store" });
+  return readPayload<DeploymentStatus>(response, "Unable to load deployment status");
+}
+
+export async function reconcileDeployment(): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/reconcile`, { method: "POST" });
+  return readPayload<SystemUpdateJob>(response, "Unable to restore control-plane services");
+}
+
+export async function restartDeployment(): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/restart`, { method: "POST" });
+  return readPayload<SystemUpdateJob>(response, "Unable to restart control-plane services");
+}
+
+export async function setupDeploymentHTTPS(domain: string, email: string): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/https/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain, email })
+  });
+  return readPayload<SystemUpdateJob>(response, "Unable to configure HTTPS");
+}
+
+export async function renewDeploymentHTTPS(): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/https/renew`, { method: "POST" });
+  return readPayload<SystemUpdateJob>(response, "Unable to check certificate renewal");
 }
 
 export async function getTerrariaVersions(): Promise<Record<string, string[]>> {

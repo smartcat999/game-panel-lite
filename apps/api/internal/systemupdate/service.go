@@ -38,12 +38,46 @@ type Images struct {
 
 type Job struct {
 	ID        string `json:"id,omitempty"`
+	Kind      string `json:"kind,omitempty"`
 	Version   string `json:"version,omitempty"`
 	Status    string `json:"status,omitempty"`
 	Stage     string `json:"stage,omitempty"`
 	Message   string `json:"message,omitempty"`
 	StartedAt string `json:"startedAt,omitempty"`
 	UpdatedAt string `json:"updatedAt,omitempty"`
+}
+
+type DeploymentService struct {
+	Name   string `json:"name"`
+	State  string `json:"state"`
+	Health string `json:"health,omitempty"`
+	Image  string `json:"image,omitempty"`
+}
+
+type HTTPSStatus struct {
+	Configured    bool              `json:"configured"`
+	Domain        string            `json:"domain,omitempty"`
+	Certificate   string            `json:"certificate"`
+	ExpiresAt     string            `json:"expiresAt,omitempty"`
+	DaysRemaining int               `json:"daysRemaining,omitempty"`
+	AutoRenewal   AutoRenewalStatus `json:"autoRenewal"`
+}
+
+type AutoRenewalStatus struct {
+	Enabled       bool   `json:"enabled"`
+	Method        string `json:"method,omitempty"`
+	InstalledAt   string `json:"installedAt,omitempty"`
+	LastCheckedAt string `json:"lastCheckedAt,omitempty"`
+	LastStatus    string `json:"lastStatus,omitempty"`
+}
+
+type DeploymentStatus struct {
+	Mode      string              `json:"mode"`
+	CheckedAt string              `json:"checkedAt"`
+	Healthy   bool                `json:"healthy"`
+	Services  []DeploymentService `json:"services"`
+	HTTPS     HTTPSStatus         `json:"https"`
+	Job       Job                 `json:"job,omitempty"`
 }
 
 type Status struct {
@@ -157,6 +191,38 @@ func (s *Service) Apply(ctx context.Context, version string) (*Job, error) {
 	return s.updaterRequest(ctx, http.MethodPost, "/apply", map[string]string{"version": version})
 }
 
+func (s *Service) DeploymentStatus(ctx context.Context) (*DeploymentStatus, error) {
+	var status DeploymentStatus
+	if err := s.updaterJSON(ctx, http.MethodGet, "/deployment", nil, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
+func (s *Service) ReconcileDeployment(ctx context.Context) (*Job, error) {
+	return s.deploymentAction(ctx, "/deployment/reconcile", nil)
+}
+
+func (s *Service) RestartDeployment(ctx context.Context) (*Job, error) {
+	return s.deploymentAction(ctx, "/deployment/restart", nil)
+}
+
+func (s *Service) SetupHTTPS(ctx context.Context, domain, email string) (*Job, error) {
+	return s.deploymentAction(ctx, "/deployment/https/setup", map[string]string{"domain": domain, "email": email})
+}
+
+func (s *Service) RenewHTTPS(ctx context.Context) (*Job, error) {
+	return s.deploymentAction(ctx, "/deployment/https/renew", nil)
+}
+
+func (s *Service) deploymentAction(ctx context.Context, path string, payload any) (*Job, error) {
+	var result Job
+	if err := s.updaterJSON(ctx, http.MethodPost, path, payload, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (s *Service) snapshot(autoCheck bool, intervalHours int, job *Job) Status {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -187,17 +253,28 @@ func (s *Service) setCheckError(err error) {
 }
 
 func (s *Service) updaterRequest(ctx context.Context, method, path string, payload any) (*Job, error) {
+	var result Job
+	if err := s.updaterJSON(ctx, method, path, payload, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (s *Service) updaterJSON(ctx context.Context, method, path string, payload, result any) error {
+	if s.updaterURL == "" || s.updaterToken == "" {
+		return errors.New("panel updater is not configured")
+	}
 	var body io.Reader
 	if payload != nil {
 		data, err := json.Marshal(payload)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		body = bytes.NewReader(data)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, s.updaterURL+path, body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("Accept", "application/json")
 	if payload != nil {
@@ -208,20 +285,32 @@ func (s *Service) updaterRequest(ctx context.Context, method, path string, paylo
 	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("panel updater is unavailable: %w", err)
+		return fmt.Errorf("panel updater is unavailable: %w", err)
 	}
 	defer resp.Body.Close()
-	var job Job
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&job); err != nil {
-		return nil, fmt.Errorf("invalid panel updater response: %w", err)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return fmt.Errorf("invalid panel updater response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if job.Message == "" {
-			job.Message = fmt.Sprintf("panel updater returned HTTP %d", resp.StatusCode)
+		var failure struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
 		}
-		return nil, errors.New(job.Message)
+		_ = json.Unmarshal(data, &failure)
+		message := failure.Message
+		if message == "" {
+			message = failure.Error
+		}
+		if message == "" {
+			message = fmt.Sprintf("panel updater returned HTTP %d", resp.StatusCode)
+		}
+		return errors.New(message)
 	}
-	return &job, nil
+	if err := json.Unmarshal(data, result); err != nil {
+		return fmt.Errorf("invalid panel updater response: %w", err)
+	}
+	return nil
 }
 
 func validVersion(value string) bool {

@@ -6,6 +6,27 @@ set -eu
 : "${GAMEPANEL_CERTBOT_WWW:?Missing Certbot webroot path}"
 : "${GAMEPANEL_CERTBOT_CONF:?Missing Certbot configuration path}"
 : "${GAMEPANEL_COMPOSE_PROJECT:?Missing Compose project name}"
+: "${GAMEPANEL_RENEWAL_STATUS_FILE:?Missing renewal status file path}"
+
+STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+write_status() {
+  status=$1
+  checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  printf '{"enabled":true,"method":"systemd","lastCheckedAt":"%s","lastStatus":"%s"}\n' "$checked_at" "$status" > "$GAMEPANEL_RENEWAL_STATUS_FILE"
+  chmod 0644 "$GAMEPANEL_RENEWAL_STATUS_FILE"
+}
+on_exit() {
+  code=$?
+  if [ "$code" -eq 0 ]; then
+    write_status success
+  else
+    write_status failed
+  fi
+}
+trap on_exit EXIT
+
+printf '{"enabled":true,"method":"systemd","lastCheckedAt":"%s","lastStatus":"running"}\n' "$STARTED_AT" > "$GAMEPANEL_RENEWAL_STATUS_FILE"
+chmod 0644 "$GAMEPANEL_RENEWAL_STATUS_FILE"
 
 if [ ! -x "$GAMEPANEL_DOCKER_BIN" ]; then
   echo "Docker executable is unavailable: $GAMEPANEL_DOCKER_BIN"

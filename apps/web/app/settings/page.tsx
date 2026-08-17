@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, ExternalLink, Globe2, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { Check, Download, ExternalLink, Globe2, LockKeyhole, RefreshCw, RotateCcw, Save, ServerCog, ShieldCheck, Wrench } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
@@ -9,8 +9,13 @@ import { Badge, Button, Card, Input, ToastNotice } from "@/components/ui";
 import {
   applySystemUpdate,
   checkSystemUpdate,
+  getDeploymentStatus,
   getSettings,
   getSystemUpdateStatus,
+  reconcileDeployment,
+  renewDeploymentHTTPS,
+  restartDeployment,
+  setupDeploymentHTTPS,
   updateImageRegion,
   updatePublicHost,
   updateSystemAutoCheck
@@ -19,6 +24,7 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type ImageRegion = "global" | "cn";
+type SettingsTab = "basic" | "access" | "maintenance";
 
 export default function SettingsPage() {
   const { t } = useI18n();
@@ -26,6 +32,7 @@ export default function SettingsPage() {
   const [publicHost, setPublicHost] = useState<string | null>(null);
   const [imageRegion, setImageRegion] = useState<ImageRegion | null>(null);
   const [notice, setNotice] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("basic");
 
   const savedPublicHost = settings.data?.publicHost ?? "";
   const savedImageRegion: ImageRegion = settings.data?.imageRegion === "cn" ? "cn" : "global";
@@ -87,7 +94,13 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <form onSubmit={submit}>
+      <nav aria-label={t("settingsSections")} className="mb-5 flex overflow-x-auto border-b border-panel-line">
+        <SettingsTabButton active={activeTab === "basic"} icon={<ServerCog className="size-4" />} label={t("settingsTabBasic")} onClick={() => setActiveTab("basic")} />
+        <SettingsTabButton active={activeTab === "access"} icon={<LockKeyhole className="size-4" />} label={t("settingsTabAccess")} onClick={() => setActiveTab("access")} />
+        <SettingsTabButton active={activeTab === "maintenance"} icon={<Wrench className="size-4" />} label={t("settingsTabMaintenance")} onClick={() => setActiveTab("maintenance")} />
+      </nav>
+
+      {activeTab === "basic" ? <form onSubmit={submit}>
         <Card className="overflow-hidden">
           <div className="border-b border-panel-line px-5 py-4 md:px-6">
             <h2 className="font-semibold text-white">{t("basicSettings")}</h2>
@@ -164,11 +177,244 @@ export default function SettingsPage() {
             </div>
           ) : null}
         </Card>
-      </form>
+      </form> : null}
 
-      <PanelUpdateCard onNotice={setNotice} />
+      {activeTab === "access" ? <HTTPSSettings onNotice={setNotice} /> : null}
+      {activeTab === "maintenance" ? <><DeploymentMaintenance onNotice={setNotice} /><PanelUpdateCard onNotice={setNotice} /></> : null}
     </>
   );
+}
+
+function SettingsTabButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40",
+        active ? "border-panel-green text-white" : "border-transparent text-slate-500 hover:text-slate-200"
+      )}
+      type="button"
+      onClick={onClick}
+    >
+      {icon}{label}
+    </button>
+  );
+}
+
+function DeploymentMaintenance({ onNotice }: { onNotice: (notice: { message: string; tone: "success" | "error" } | null) => void }) {
+  const { locale, t } = useI18n();
+  const queryClient = useQueryClient();
+  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
+  const deployment = useQuery({
+    queryKey: ["system-deployment"],
+    queryFn: getDeploymentStatus,
+    retry: false,
+    refetchInterval: (query) => query.state.data?.job?.status === "running" ? 3_000 : 15_000
+  });
+  const reconcile = useMutation({
+    mutationFn: reconcileDeployment,
+    onSuccess: async () => {
+      onNotice({ message: t("deploymentReconcileQueued"), tone: "success" });
+      await queryClient.invalidateQueries({ queryKey: ["system-deployment"] });
+    },
+    onError: (error) => onNotice({ message: error instanceof Error ? error.message : t("deploymentActionFailed"), tone: "error" })
+  });
+  const restart = useMutation({
+    mutationFn: restartDeployment,
+    onSuccess: async () => {
+      setRestartConfirmOpen(false);
+      onNotice({ message: t("deploymentRestartQueued"), tone: "success" });
+      await queryClient.invalidateQueries({ queryKey: ["system-deployment"] });
+    },
+    onError: (error) => onNotice({ message: error instanceof Error ? error.message : t("deploymentActionFailed"), tone: "error" })
+  });
+  const data = deployment.data;
+  const jobRunning = data?.job?.status === "running";
+  const checkedAt = data?.checkedAt ? formatDateTime(data.checkedAt, locale) : "—";
+
+  return (
+    <>
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-panel-line px-5 py-4 sm:flex-row sm:items-start sm:justify-between md:px-6">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-semibold text-white">{t("deploymentTitle")}</h2>
+              {data ? <Badge className={data.healthy ? "bg-panel-green/12 text-panel-green" : "bg-panel-gold/12 text-panel-gold"}>{data.healthy ? t("deploymentHealthy") : t("deploymentNeedsAttention")}</Badge> : null}
+            </div>
+            <p className="mt-1 text-sm text-slate-400">{t("deploymentDescription")}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" variant="secondary" disabled={deployment.isFetching || jobRunning} onClick={() => void deployment.refetch()}>
+              <RefreshCw className={cn("size-4", deployment.isFetching && "animate-spin")} />{t("refreshStatus")}
+            </Button>
+            {!data?.healthy ? <Button type="button" disabled={reconcile.isPending || jobRunning} onClick={() => reconcile.mutate()}><Wrench className="size-4" />{t("restoreServices")}</Button> : null}
+            <Button type="button" variant="secondary" disabled={restart.isPending || jobRunning} onClick={() => setRestartConfirmOpen(true)}><RotateCcw className="size-4" />{t("restartControlPlane")}</Button>
+          </div>
+        </div>
+
+        {deployment.isLoading ? (
+          <div className="space-y-px bg-panel-line"><div className="h-12 animate-pulse bg-panel-card" /><div className="h-12 animate-pulse bg-panel-card" /><div className="h-12 animate-pulse bg-panel-card" /></div>
+        ) : deployment.isError ? (
+          <div className="px-5 py-5 text-sm text-panel-gold md:px-6">{t("deploymentUnavailable")}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] table-fixed border-collapse text-left text-sm">
+              <thead className="bg-slate-950/45 text-xs text-slate-500">
+                <tr><th className="w-48 px-5 py-2.5 md:px-6">{t("deploymentService")}</th><th className="w-32 px-3 py-2.5">{t("status")}</th><th className="px-3 py-2.5">{t("deploymentImage")}</th><th className="w-44 px-5 py-2.5 text-right md:px-6">{t("lastChecked")}</th></tr>
+              </thead>
+              <tbody className="divide-y divide-panel-line">
+                {(data?.services ?? []).map((service) => {
+                  const running = service.state === "running" && service.health !== "unhealthy";
+                  return <tr key={service.name}><td className="px-5 py-3 font-medium text-slate-200 md:px-6">{deploymentServiceLabel(service.name, t)}</td><td className="px-3 py-3"><span className={cn("inline-flex items-center gap-1.5", running ? "text-panel-green" : "text-panel-gold")}><span className={cn("size-1.5 rounded-full", running ? "bg-panel-green" : "bg-panel-gold")} />{running ? t("statusRunning") : deploymentStateLabel(service.state, t)}</span></td><td className="truncate px-3 py-3 font-mono text-xs text-slate-500" title={service.image}>{service.image || "—"}</td><td className="px-5 py-3 text-right text-xs text-slate-500 md:px-6">{checkedAt}</td></tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {data?.job?.status && (data.job.kind === "reconcile" || data.job.kind === "restart") ? <OperationStatus job={data.job} /> : null}
+        <details className="border-t border-panel-line px-5 py-4 md:px-6">
+          <summary className="cursor-pointer text-sm font-medium text-slate-300">{t("advancedCommandMaintenance")}</summary>
+          <p className="mt-2 text-xs leading-5 text-slate-500">{t("advancedCommandMaintenanceHint")}</p>
+          <pre className="mt-3 overflow-x-auto rounded-md bg-slate-950/70 p-3 text-xs leading-6 text-slate-300">sudo sh scripts/manage.sh status{"\n"}sudo sh scripts/manage.sh stop</pre>
+        </details>
+      </Card>
+
+      <ConfirmDialog
+        busy={restart.isPending}
+        cancelLabel={t("cancel")}
+        confirmLabel={t("confirmRestartControlPlane")}
+        confirmVariant="primary"
+        description={t("restartControlPlaneDescription")}
+        eyebrow={t("panelMaintenance")}
+        eyebrowTone="gold"
+        open={restartConfirmOpen}
+        title={t("restartControlPlane")}
+        onCancel={() => !restart.isPending && setRestartConfirmOpen(false)}
+        onConfirm={() => restart.mutate()}
+      />
+    </>
+  );
+}
+
+function HTTPSSettings({ onNotice }: { onNotice: (notice: { message: string; tone: "success" | "error" } | null) => void }) {
+  const { locale, t } = useI18n();
+  const queryClient = useQueryClient();
+  const [domain, setDomain] = useState("");
+  const [email, setEmail] = useState("");
+  const [setupConfirmOpen, setSetupConfirmOpen] = useState(false);
+  const deployment = useQuery({
+    queryKey: ["system-deployment"],
+    queryFn: getDeploymentStatus,
+    retry: false,
+    refetchInterval: (query) => query.state.data?.job?.status === "running" ? 3_000 : 30_000
+  });
+  const setup = useMutation({
+    mutationFn: () => setupDeploymentHTTPS(domain.trim(), email.trim()),
+    onSuccess: async () => {
+      setSetupConfirmOpen(false);
+      onNotice({ message: t("httpsSetupQueued"), tone: "success" });
+      await queryClient.invalidateQueries({ queryKey: ["system-deployment"] });
+    },
+    onError: (error) => onNotice({ message: error instanceof Error ? error.message : t("httpsActionFailed"), tone: "error" })
+  });
+  const renew = useMutation({
+    mutationFn: renewDeploymentHTTPS,
+    onSuccess: async () => {
+      onNotice({ message: t("httpsRenewQueued"), tone: "success" });
+      await queryClient.invalidateQueries({ queryKey: ["system-deployment"] });
+    },
+    onError: (error) => onNotice({ message: error instanceof Error ? error.message : t("httpsActionFailed"), tone: "error" })
+  });
+  const data = deployment.data;
+  const jobRunning = data?.job?.status === "running";
+  const https = data?.https;
+  const configured = Boolean(https?.configured);
+  const domainValid = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(domain.trim());
+
+  return (
+    <>
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-panel-line px-5 py-4 sm:flex-row sm:items-start sm:justify-between md:px-6">
+        <div>
+          <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-white">{t("httpsTitle")}</h2>{data ? <Badge className={configured ? "bg-panel-green/12 text-panel-green" : "bg-slate-800 text-slate-400"}>{configured ? "HTTPS" : "HTTP"}</Badge> : null}</div>
+          <p className="mt-1 text-sm text-slate-400">{t("httpsDescription")}</p>
+        </div>
+        {configured ? <Button type="button" variant="secondary" disabled={renew.isPending || jobRunning} onClick={() => renew.mutate()}><RefreshCw className={cn("size-4", renew.isPending && "animate-spin")} />{t("renewCertificate")}</Button> : null}
+      </div>
+
+      {deployment.isLoading ? <div className="h-28 animate-pulse bg-slate-950/20" /> : deployment.isError ? <div className="px-5 py-5 text-sm text-panel-gold md:px-6">{t("deploymentUnavailable")}</div> : configured ? (
+        <div className="grid border-b border-panel-line sm:grid-cols-2 xl:grid-cols-4">
+          <UpdateValue label={t("accessMode")} value="HTTPS" />
+          <UpdateValue label={t("httpsDomain")} value={https?.domain ?? "—"} />
+          <UpdateValue label={t("certificateExpiry")} value={https?.expiresAt ? formatDateTime(https.expiresAt, locale) : t("certificateMissing")} />
+          <UpdateValue
+            label={t("automaticRenewal")}
+            value={https?.autoRenewal.enabled ? t("autoRenewalEnabled") : t("autoRenewalNotDetected")}
+            hint={https?.autoRenewal.lastCheckedAt
+              ? t("autoRenewalLastCheck", { time: formatDateTime(https.autoRenewal.lastCheckedAt, locale), status: renewalStatusLabel(https.autoRenewal.lastStatus, t) })
+              : https?.autoRenewal.enabled ? (https.autoRenewal.method === "systemd" ? t("autoRenewalSystemd") : t("autoRenewalUpdater")) : t("autoRenewalNotDetectedHint")}
+          />
+        </div>
+      ) : (
+        <form className="px-5 py-5 md:px-6" onSubmit={(event) => { event.preventDefault(); if (domainValid && !jobRunning) setSetupConfirmOpen(true); }}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm text-slate-300"><span className="mb-1.5 block">{t("httpsDomain")}</span><Input className="w-full font-mono" placeholder="panel.example.com" value={domain} onChange={(event) => setDomain(event.target.value)} /></label>
+            <label className="text-sm text-slate-300"><span className="mb-1.5 block">{t("httpsEmail")}</span><Input className="w-full" placeholder="admin@example.com" type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 border-t border-panel-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-2xl text-xs leading-5 text-slate-500">{t("httpsSetupHint")}</p>
+            <Button type="submit" disabled={!domainValid || setup.isPending || jobRunning}><ShieldCheck className="size-4" />{setup.isPending ? t("httpsConfiguring") : t("configureHTTPS")}</Button>
+          </div>
+        </form>
+      )}
+      {data?.job?.status && (data.job.kind === "https-setup" || data.job.kind === "https-renew") ? <OperationStatus job={data.job} /> : null}
+    </Card>
+    <ConfirmDialog
+      busy={setup.isPending}
+      cancelLabel={t("cancel")}
+      confirmLabel={t("confirmConfigureHTTPS")}
+      confirmVariant="primary"
+      description={t("httpsSetupConfirmDescription", { domain: domain.trim() })}
+      eyebrow={t("httpsTitle")}
+      eyebrowTone="gold"
+      open={setupConfirmOpen}
+      title={t("configureHTTPS")}
+      onCancel={() => !setup.isPending && setSetupConfirmOpen(false)}
+      onConfirm={() => setup.mutate()}
+    />
+    </>
+  );
+}
+
+function OperationStatus({ job }: { job: { status?: string; kind?: string } }) {
+  const { t } = useI18n();
+  const running = job.status === "running";
+  const failed = job.status === "failed";
+  return (
+    <div className={cn("flex items-center gap-2 border-t border-panel-line px-5 py-3 text-xs md:px-6", failed ? "text-red-300" : running ? "text-panel-gold" : "text-slate-500")}>
+      <span className={cn("size-1.5 rounded-full", failed ? "bg-red-400" : running ? "animate-pulse bg-panel-gold" : "bg-panel-green")} />
+      <span>{running ? t("operationRunning") : failed ? t("operationFailed") : t("operationCompleted")}</span>
+    </div>
+  );
+}
+
+function deploymentServiceLabel(name: string, t: ReturnType<typeof useI18n>["t"]) {
+  const labels: Record<string, string> = { updater: t("serviceUpdater"), api: "API", web: "Web", nginx: "Nginx", "gamepanel-exporter": "GamePanel Exporter", prometheus: "Prometheus", cadvisor: "cAdvisor", "node-exporter": "Node Exporter" };
+  return labels[name] ?? name;
+}
+
+function deploymentStateLabel(state: string, t: ReturnType<typeof useI18n>["t"]) {
+  return state === "missing" ? t("statusMissing") : state === "exited" || state === "stopped" ? t("statusStopped") : state;
+}
+
+function formatDateTime(value: string, locale: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function renewalStatusLabel(status: string | undefined, t: ReturnType<typeof useI18n>["t"]) {
+  return status === "success" ? t("renewalStatusSuccess") : status === "failed" ? t("renewalStatusFailed") : status === "running" ? t("renewalStatusRunning") : t("renewalStatusPending");
 }
 
 function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; tone: "success" | "error" } | null) => void }) {
@@ -204,6 +450,7 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
   const data = update.data;
   const latestVersion = data?.latest?.version ?? "—";
   const jobRunning = data?.job?.status === "running";
+  const updateJobRunning = jobRunning && data?.job?.kind === "update";
   const status = data?.checkError
     ? { label: t("panelUpdateCheckFailed"), className: "bg-red-500/12 text-red-300" }
     : data?.updateAvailable
@@ -234,7 +481,7 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
             {data?.updateAvailable ? (
               <Button type="button" disabled={!data.updaterAvailable || jobRunning} onClick={() => setConfirmOpen(true)}>
                 <Download aria-hidden="true" className="size-4" />
-                {jobRunning ? t("panelUpdateInstalling") : t("panelUpdateInstall")}
+                {updateJobRunning ? t("panelUpdateInstalling") : t("panelUpdateInstall")}
               </Button>
             ) : null}
           </div>
@@ -301,11 +548,12 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
   );
 }
 
-function UpdateValue({ label, value }: { label: string; value: string }) {
+function UpdateValue({ hint, label, value }: { hint?: string; label: string; value: string }) {
   return (
     <div className="min-w-0 border-b border-panel-line px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 md:px-6">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 truncate font-mono text-sm font-medium text-slate-200" title={value}>{value}</p>
+      {hint ? <p className="mt-1 truncate text-xs text-slate-500" title={hint}>{hint}</p> : null}
     </div>
   );
 }
