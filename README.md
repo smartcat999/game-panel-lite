@@ -1,6 +1,6 @@
 <h1 align="center">GamePanel Lite</h1>
 
-<p align="center">A lightweight, self-hosted panel for running game servers with Docker.</p>
+<p align="center">Run Terraria, DST, Palworld, and Minecraft servers from one self-hosted Docker panel.</p>
 
 <p align="center">
   <a href="https://dev.gamepanel.site">Live demo</a> ·
@@ -16,17 +16,19 @@
 </p>
 
 <p align="center">
-  <img alt="GamePanel Lite dashboard" src="apps/web/public/official/interface-dashboard.png">
+  <img alt="GamePanel Lite product preview" src="apps/web/public/official/gamepanel-demo.gif">
+  <br>
+  <sub>Dashboard · Guided setup · Mods · Presets · Monitoring · HTTPS</sub>
 </p>
+
+> GamePanel Lite is under active development. Keep an external copy of important saves and backups.
 
 ## What you can do
 
-- Create and manage multiple isolated game servers.
-- Start, stop, restart, inspect logs, and use the server console.
-- Configure game settings, CPU, memory, ports, worlds, and backups.
+- Create, start, stop, restart, inspect logs, and use the console for isolated servers.
+- Configure game settings, resources, ports, worlds, and backups.
 - Discover Workshop mods, build mod packs, and manage tModLoader ModConfig files.
-- Monitor host and container resources.
-- Update the panel, runtime images, and supported game files from the UI.
+- Monitor resources and update the panel or supported game files from the UI.
 
 | Game | Modes |
 | --- | --- |
@@ -37,7 +39,7 @@
 
 ## Install
 
-Requirements: Linux `amd64`, Docker Engine, and the Docker Compose plugin.
+Requirements: Linux `amd64`, Docker Engine, and the Docker Compose plugin. The installer downloads the latest stable Tag, not the development branch.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
@@ -60,13 +62,14 @@ curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/sc
 1. Open `http://YOUR_SERVER_IP:3001` and create the local administrator.
 2. Install a runtime image from **Game Library**.
 3. Select **Create server** and follow the guided setup.
-4. For HTTPS, point a domain to the server, allow TCP ports `80` and `443`, then open **Settings → Access & HTTPS**.
-5. Use **Settings → Updates & Maintenance** for panel updates and recovery.
+4. Open the game port shown on the server details page in the cloud and host firewalls.
+5. For HTTPS, point a domain to the server, allow TCP ports `80` and `443`, then open **Settings → Access & HTTPS**.
+6. Use **Settings → Updates & Maintenance** for panel updates and recovery.
 
 <table>
   <tr>
-    <td><img alt="Server creation wizard" src="apps/web/public/official/interface-servers.png"></td>
-    <td><img alt="Workshop discovery and mod library" src="apps/web/public/official/interface-mods.png"></td>
+    <td align="center"><strong>Guided server creation</strong><br><img alt="Server creation wizard" src="apps/web/public/official/interface-servers.png"></td>
+    <td align="center"><strong>Workshop mods and mod packs</strong><br><img alt="Workshop discovery and mod library" src="apps/web/public/official/interface-mods.png"></td>
   </tr>
 </table>
 
@@ -74,7 +77,7 @@ curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/sc
 <summary>Command-line recovery</summary>
 
 ```bash
-cd ~/gamepanel-lite
+cd <installation-directory>
 sudo sh scripts/manage.sh status
 sudo sh scripts/manage.sh update
 sudo sh scripts/manage.sh start
