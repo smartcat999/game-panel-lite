@@ -61,20 +61,20 @@ export function ServerManagementTable({
   return (
     <div className="overflow-hidden rounded-lg border border-panel-line bg-panel-card">
       <div className="hidden max-h-[calc(100vh-19rem)] overflow-auto md:block">
-        <table className="w-full min-w-[1000px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[1120px] table-fixed border-collapse text-left text-sm">
           <thead className="sticky top-0 z-10 bg-slate-950 text-xs font-medium text-slate-500 shadow-[0_1px_0_rgba(51,65,85,0.65)]">
             <tr>
               <th className="w-11 px-3 py-2.5">
                 <SelectionBox checked={allSelected} indeterminate={partiallySelected} label={t("selectCurrentPage")} onChange={togglePage} />
               </th>
-              <SortableHeader active={sort === "name"} direction={direction} label={t("server")} onClick={() => onSort("name")} className="min-w-60" />
-              <SortableHeader active={sort === "status"} direction={direction} label={t("status")} onClick={() => onSort("status")} />
-              <th className="px-3 py-2.5">{t("gameAndMode")}</th>
-              {visibleColumns.has("players") ? <th className="px-3 py-2.5">{t("players")}</th> : null}
-              {visibleColumns.has("resources") ? <th className="w-44 px-3 py-2.5">{t("resources")}</th> : null}
-              {visibleColumns.has("address") ? <th className="px-3 py-2.5">{t("serverAddress")}</th> : null}
-              {visibleColumns.has("activity") ? <SortableHeader active={sort === "updatedAt"} direction={direction} label={t("recentActivity")} onClick={() => onSort("updatedAt")} /> : null}
-              {visibleColumns.has("version") ? <th className="px-3 py-2.5">{t("version")}</th> : null}
+              <SortableHeader active={sort === "name"} direction={direction} label={t("server")} onClick={() => onSort("name")} className="w-72" />
+              <SortableHeader active={sort === "status"} direction={direction} label={t("status")} onClick={() => onSort("status")} className="w-28" />
+              <th className="w-44 px-3 py-2.5">{t("gameAndMode")}</th>
+              {visibleColumns.has("players") ? <th className="w-20 px-3 py-2.5">{t("players")}</th> : null}
+              {visibleColumns.has("resources") ? <th className="w-48 px-3 py-2.5">{t("resources")}</th> : null}
+              {visibleColumns.has("address") ? <th className="w-56 px-3 py-2.5">{t("serverAddress")}</th> : null}
+              {visibleColumns.has("activity") ? <SortableHeader active={sort === "updatedAt"} direction={direction} label={t("recentActivity")} onClick={() => onSort("updatedAt")} className="w-32" /> : null}
+              {visibleColumns.has("version") ? <th className="w-28 px-3 py-2.5">{t("version")}</th> : null}
               <th className="w-36 px-3 py-2.5 text-right">{t("actions")}</th>
             </tr>
           </thead>
@@ -114,10 +114,10 @@ export function ServerManagementTable({
                     </td>
                   ) : null}
                   {visibleColumns.has("address") ? (
-                    <td className="px-3 py-2.5">
-                      <span className="inline-flex items-center gap-1.5 font-mono text-slate-300">
-                        {address}
-                        <button className="flex size-7 items-center justify-center rounded text-slate-600 opacity-0 transition hover:bg-slate-800 hover:text-slate-200 focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-panel-green group-hover:opacity-100" aria-label={t("copyServerAddress")} onClick={() => void copyText(address).then(onAddressCopied)} type="button"><Copy aria-hidden="true" className="size-3.5" /></button>
+                    <td className="overflow-hidden px-3 py-2.5">
+                      <span className="flex min-w-0 items-center gap-1.5 font-mono text-slate-300">
+                        <span className="truncate" title={address}>{address}</span>
+                        <button className="flex size-7 shrink-0 items-center justify-center rounded text-slate-600 opacity-0 transition hover:bg-slate-800 hover:text-slate-200 focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-panel-green group-hover:opacity-100" aria-label={t("copyServerAddress")} onClick={() => void copyText(address).then(onAddressCopied)} type="button"><Copy aria-hidden="true" className="size-3.5" /></button>
                       </span>
                     </td>
                   ) : null}
@@ -190,11 +190,11 @@ function ResourceUsage({ metric }: { metric?: ObservabilityServerMetric }) {
   const { t } = useI18n();
   if (!metric?.statsAvailable) return <DataMissing />;
   return (
-    <div className="grid min-w-36 grid-cols-[2.5rem_auto] items-baseline gap-x-2 gap-y-0.5 text-xs">
+    <div className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 text-xs">
       <span className="text-slate-500">{t("cpu")}</span>
-      <span className="font-mono tabular-nums text-slate-200">{metric.cpuPercent.toFixed(1)}%</span>
+      <span className="text-right font-mono tabular-nums text-slate-200">{metric.cpuPercent.toFixed(1)}%</span>
       <span className="text-slate-500">{t("memory")}</span>
-      <span className="whitespace-nowrap font-mono tabular-nums text-slate-200">{formatMemoryUsage(metric)}</span>
+      <span className="truncate text-right font-mono tabular-nums text-slate-200" title={formatMemoryUsage(metric)}>{formatMemoryUsage(metric)}</span>
     </div>
   );
 }
