@@ -60,12 +60,21 @@ type autoRenewalStatus struct {
 }
 
 type deploymentStatus struct {
-	Mode      string              `json:"mode"`
-	CheckedAt string              `json:"checkedAt"`
-	Healthy   bool                `json:"healthy"`
-	Services  []deploymentService `json:"services"`
-	HTTPS     httpsStatus         `json:"https"`
-	Job       job                 `json:"job,omitempty"`
+	Mode         string                 `json:"mode"`
+	Manager      string                 `json:"manager"`
+	CheckedAt    string                 `json:"checkedAt"`
+	Capabilities deploymentCapabilities `json:"capabilities"`
+	Healthy      bool                   `json:"healthy"`
+	Services     []deploymentService    `json:"services"`
+	HTTPS        httpsStatus            `json:"https"`
+	Job          job                    `json:"job,omitempty"`
+}
+
+type deploymentCapabilities struct {
+	Reconcile  bool `json:"reconcile"`
+	Restart    bool `json:"restart"`
+	HTTPSSetup bool `json:"httpsSetup"`
+	HTTPSRenew bool `json:"httpsRenew"`
 }
 
 type updater struct {
@@ -129,7 +138,11 @@ func (u *updater) deployment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, status)
 }
 
-func (u *updater) reconcile(w http.ResponseWriter, _ *http.Request) {
+func (u *updater) reconcile(w http.ResponseWriter, r *http.Request) {
+	if !u.composeManaged(r.Context()) {
+		writeJSON(w, http.StatusConflict, job{Status: "failed", Message: "the current deployment manager does not support service recovery"})
+		return
+	}
 	u.queueMaintenance(w, "reconcile", "Restoring control-plane services", func() error {
 		args := append(u.composePrefix(), "up", "-d", "--remove-orphans", "--pull", "never")
 		args = append(args, controlPlaneServices...)
@@ -137,7 +150,11 @@ func (u *updater) reconcile(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (u *updater) restart(w http.ResponseWriter, _ *http.Request) {
+func (u *updater) restart(w http.ResponseWriter, r *http.Request) {
+	if !u.composeManaged(r.Context()) {
+		writeJSON(w, http.StatusConflict, job{Status: "failed", Message: "the current deployment manager does not support control-plane restart"})
+		return
+	}
 	u.queueMaintenance(w, "restart", "Restarting control-plane services", func() error {
 		services := []string{"api", "web", "nginx", "gamepanel-exporter", "prometheus", "cadvisor", "node-exporter"}
 		args := append(u.composePrefix(), "restart")
@@ -168,6 +185,10 @@ func (u *updater) setupHTTPS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if !u.composeManaged(r.Context()) {
+		writeJSON(w, http.StatusConflict, job{Status: "failed", Message: "the current deployment manager does not support HTTPS setup"})
+		return
+	}
 	u.queueMaintenance(w, "https-setup", "Configuring HTTPS", func() error {
 		args := []string{filepath.Join(u.workspace, "scripts", "setup-https.sh"), payload.Domain}
 		if payload.Email != "" {
@@ -181,7 +202,11 @@ func (u *updater) setupHTTPS(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (u *updater) renewHTTPS(w http.ResponseWriter, _ *http.Request) {
+func (u *updater) renewHTTPS(w http.ResponseWriter, r *http.Request) {
+	if !u.composeManaged(r.Context()) {
+		writeJSON(w, http.StatusConflict, job{Status: "failed", Message: "the current deployment manager does not support HTTPS renewal"})
+		return
+	}
 	if _, err := os.Stat(filepath.Join(u.workspace, "data", "nginx", "gamepanel-https.conf")); err != nil {
 		writeJSON(w, http.StatusConflict, job{Status: "failed", Message: "HTTPS is not configured"})
 		return
@@ -330,20 +355,15 @@ func (u *updater) composePrefix() []string {
 }
 
 func (u *updater) readDeploymentStatus(ctx context.Context) (deploymentStatus, error) {
-	args := append(u.composePrefix(), "ps", "--format", "json")
-	args = append(args, controlPlaneServices...)
-	output, err := u.commandOutput(ctx, nil, args...)
-	if err != nil {
-		return deploymentStatus{}, err
-	}
-	services, err := parseComposeServices(output)
-	if err != nil {
-		return deploymentStatus{}, err
-	}
+	services, _ := u.readComposeServices(ctx)
 	byName := make(map[string]deploymentService, len(services))
 	for _, service := range services {
 		byName[service.Name] = service
 	}
+	if byName["updater"].State != "running" {
+		return u.readStandaloneStatus(ctx), nil
+	}
+
 	ordered := make([]deploymentService, 0, len(controlPlaneServices))
 	healthy := true
 	for _, name := range controlPlaneServices {
@@ -356,6 +376,77 @@ func (u *updater) readDeploymentStatus(ctx context.Context) (deploymentStatus, e
 		}
 		ordered = append(ordered, service)
 	}
+	return u.deploymentSnapshot("docker-compose", deploymentCapabilities{Reconcile: true, Restart: true, HTTPSSetup: true, HTTPSRenew: true}, healthy, ordered), nil
+}
+
+func (u *updater) readComposeServices(ctx context.Context) ([]deploymentService, error) {
+	args := append(u.composePrefix(), "ps", "--format", "json")
+	args = append(args, controlPlaneServices...)
+	output, err := u.commandOutput(ctx, nil, args...)
+	if err != nil {
+		return nil, err
+	}
+	services, err := parseComposeServices(output)
+	if err != nil {
+		return nil, err
+	}
+	return services, nil
+}
+
+func (u *updater) composeManaged(ctx context.Context) bool {
+	services, err := u.readComposeServices(ctx)
+	if err != nil {
+		return false
+	}
+	for _, service := range services {
+		if service.Name == "updater" && service.State == "running" {
+			return true
+		}
+	}
+	return false
+}
+
+func (u *updater) readStandaloneStatus(ctx context.Context) deploymentStatus {
+	services := []deploymentService{{Name: "updater", State: "running"}}
+	healthy := true
+	probes := []struct {
+		name string
+		url  string
+	}{
+		{name: "api", url: env("GAMEPANEL_API_HEALTH_URL", "http://127.0.0.1:4000/healthz")},
+		{name: "web", url: env("GAMEPANEL_WEB_HEALTH_URL", "")},
+	}
+	for _, probe := range probes {
+		if probe.url == "" {
+			continue
+		}
+		service := probeHTTPService(ctx, probe.name, probe.url)
+		if service.State != "running" {
+			healthy = false
+		}
+		services = append(services, service)
+	}
+	return u.deploymentSnapshot("standalone", deploymentCapabilities{}, healthy, services)
+}
+
+func probeHTTPService(ctx context.Context, name, target string) deploymentService {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return deploymentService{Name: name, State: "unavailable"}
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return deploymentService{Name: name, State: "unavailable"}
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 500 {
+		return deploymentService{Name: name, State: "unavailable"}
+	}
+	return deploymentService{Name: name, State: "running"}
+}
+
+func (u *updater) deploymentSnapshot(manager string, capabilities deploymentCapabilities, healthy bool, services []deploymentService) deploymentStatus {
 	u.mu.RLock()
 	currentJob := u.job
 	u.mu.RUnlock()
@@ -364,7 +455,7 @@ func (u *updater) readDeploymentStatus(ctx context.Context) (deploymentStatus, e
 	if https.Configured {
 		mode = "https"
 	}
-	return deploymentStatus{Mode: mode, CheckedAt: time.Now().UTC().Format(time.RFC3339), Healthy: healthy, Services: ordered, HTTPS: https, Job: currentJob}, nil
+	return deploymentStatus{Mode: mode, Manager: manager, CheckedAt: time.Now().UTC().Format(time.RFC3339), Capabilities: capabilities, Healthy: healthy, Services: services, HTTPS: https, Job: currentJob}
 }
 
 func (u *updater) readHTTPSStatus() httpsStatus {

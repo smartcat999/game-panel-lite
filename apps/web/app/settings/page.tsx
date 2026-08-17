@@ -239,16 +239,17 @@ function DeploymentMaintenance({ onNotice }: { onNotice: (notice: { message: str
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold text-white">{t("deploymentTitle")}</h2>
-              {data ? <Badge className={data.healthy ? "bg-panel-green/12 text-panel-green" : "bg-panel-gold/12 text-panel-gold"}>{data.healthy ? t("deploymentHealthy") : t("deploymentNeedsAttention")}</Badge> : null}
+              {data ? <Badge className={data.manager === "standalone" ? "bg-slate-800 text-slate-300" : data.healthy ? "bg-panel-green/12 text-panel-green" : "bg-panel-gold/12 text-panel-gold"}>{data.manager === "standalone" ? t("deploymentStandalone") : data.healthy ? t("deploymentHealthy") : t("deploymentNeedsAttention")}</Badge> : null}
             </div>
             <p className="mt-1 text-sm text-slate-400">{t("deploymentDescription")}</p>
+            {data?.manager === "standalone" ? <p className="mt-1 text-xs text-slate-500">{t("deploymentStandaloneHint")}</p> : null}
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button type="button" variant="secondary" disabled={deployment.isFetching || jobRunning} onClick={() => void deployment.refetch()}>
               <RefreshCw className={cn("size-4", deployment.isFetching && "animate-spin")} />{t("refreshStatus")}
             </Button>
-            {!data?.healthy ? <Button type="button" disabled={reconcile.isPending || jobRunning} onClick={() => reconcile.mutate()}><Wrench className="size-4" />{t("restoreServices")}</Button> : null}
-            <Button type="button" variant="secondary" disabled={restart.isPending || jobRunning} onClick={() => setRestartConfirmOpen(true)}><RotateCcw className="size-4" />{t("restartControlPlane")}</Button>
+            {data?.capabilities.reconcile && !data.healthy ? <Button type="button" disabled={reconcile.isPending || jobRunning} onClick={() => reconcile.mutate()}><Wrench className="size-4" />{t("restoreServices")}</Button> : null}
+            <Button type="button" variant="secondary" disabled={!data?.capabilities.restart || restart.isPending || jobRunning} onClick={() => setRestartConfirmOpen(true)}><RotateCcw className="size-4" />{t("restartControlPlane")}</Button>
           </div>
         </div>
 
@@ -340,7 +341,7 @@ function HTTPSSettings({ onNotice }: { onNotice: (notice: { message: string; ton
           <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-white">{t("httpsTitle")}</h2>{data ? <Badge className={configured ? "bg-panel-green/12 text-panel-green" : "bg-slate-800 text-slate-400"}>{configured ? "HTTPS" : "HTTP"}</Badge> : null}</div>
           <p className="mt-1 text-sm text-slate-400">{t("httpsDescription")}</p>
         </div>
-        {configured ? <Button type="button" variant="secondary" disabled={renew.isPending || jobRunning} onClick={() => renew.mutate()}><RefreshCw className={cn("size-4", renew.isPending && "animate-spin")} />{t("renewCertificate")}</Button> : null}
+        {configured ? <Button type="button" variant="secondary" disabled={!data?.capabilities.httpsRenew || renew.isPending || jobRunning} onClick={() => renew.mutate()}><RefreshCw className={cn("size-4", renew.isPending && "animate-spin")} />{t("renewCertificate")}</Button> : null}
       </div>
 
       {deployment.isLoading ? <div className="h-28 animate-pulse bg-slate-950/20" /> : deployment.isError ? <div className="px-5 py-5 text-sm text-panel-gold md:px-6">{t("deploymentUnavailable")}</div> : configured ? (
@@ -363,8 +364,8 @@ function HTTPSSettings({ onNotice }: { onNotice: (notice: { message: string; ton
             <label className="text-sm text-slate-300"><span className="mb-1.5 block">{t("httpsEmail")}</span><Input className="w-full" placeholder="admin@example.com" type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
           </div>
           <div className="mt-4 flex flex-col gap-3 border-t border-panel-line pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-2xl text-xs leading-5 text-slate-500">{t("httpsSetupHint")}</p>
-            <Button type="submit" disabled={!domainValid || setup.isPending || jobRunning}><ShieldCheck className="size-4" />{setup.isPending ? t("httpsConfiguring") : t("configureHTTPS")}</Button>
+            <p className={cn("max-w-2xl text-xs leading-5", data?.capabilities.httpsSetup ? "text-slate-500" : "text-panel-gold")}>{data?.capabilities.httpsSetup ? t("httpsSetupHint") : t("httpsDriverUnsupported")}</p>
+            <Button type="submit" disabled={!data?.capabilities.httpsSetup || !domainValid || setup.isPending || jobRunning}><ShieldCheck className="size-4" />{setup.isPending ? t("httpsConfiguring") : t("configureHTTPS")}</Button>
           </div>
         </form>
       )}
@@ -387,14 +388,22 @@ function HTTPSSettings({ onNotice }: { onNotice: (notice: { message: string; ton
   );
 }
 
-function OperationStatus({ job }: { job: { status?: string; kind?: string } }) {
+function OperationStatus({ job }: { job: { status?: string; kind?: string; message?: string } }) {
   const { t } = useI18n();
   const running = job.status === "running";
   const failed = job.status === "failed";
   return (
-    <div className={cn("flex items-center gap-2 border-t border-panel-line px-5 py-3 text-xs md:px-6", failed ? "text-red-300" : running ? "text-panel-gold" : "text-slate-500")}>
-      <span className={cn("size-1.5 rounded-full", failed ? "bg-red-400" : running ? "animate-pulse bg-panel-gold" : "bg-panel-green")} />
-      <span>{running ? t("operationRunning") : failed ? t("operationFailed") : t("operationCompleted")}</span>
+    <div className={cn("border-t border-panel-line px-5 py-3 text-xs md:px-6", failed ? "text-red-300" : running ? "text-panel-gold" : "text-slate-500")}>
+      <div className="flex items-center gap-2">
+        <span className={cn("size-1.5 rounded-full", failed ? "bg-red-400" : running ? "animate-pulse bg-panel-gold" : "bg-panel-green")} />
+        <span>{running ? t("operationRunning") : failed ? t("operationFailed") : t("operationCompleted")}</span>
+      </div>
+      {failed && job.message ? (
+        <details className="mt-2 pl-3.5 text-slate-400">
+          <summary className="cursor-pointer select-none font-medium hover:text-slate-200">{t("viewErrorDetails")}</summary>
+          <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950/70 p-3 font-mono text-[11px] leading-5 text-red-200">{job.message}</pre>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -405,7 +414,7 @@ function deploymentServiceLabel(name: string, t: ReturnType<typeof useI18n>["t"]
 }
 
 function deploymentStateLabel(state: string, t: ReturnType<typeof useI18n>["t"]) {
-  return state === "missing" ? t("statusMissing") : state === "exited" || state === "stopped" ? t("statusStopped") : state;
+  return state === "missing" ? t("statusMissing") : state === "unavailable" ? t("unavailable") : state === "exited" || state === "stopped" ? t("statusStopped") : state;
 }
 
 function formatDateTime(value: string, locale: string) {
