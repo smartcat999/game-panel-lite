@@ -85,4 +85,7 @@ func TestReadAutoRenewalStatus(t *testing.T) {
 	if !status.Enabled || status.Method != "systemd" || status.LastStatus != "success" {
 		t.Fatalf("unexpected auto renewal status: %#v", status)
 	}
+	if got := u.renewalMethod(); got != "systemd" {
+		t.Fatalf("renewalMethod = %q", got)
+	}
 }

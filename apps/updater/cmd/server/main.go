@@ -269,12 +269,21 @@ func (u *updater) runRenewalScheduler(ctx context.Context) {
 }
 
 func (u *updater) runHTTPSRenewal() error {
+	method := u.renewalMethod()
 	if err := u.execCommand("sh", filepath.Join(u.workspace, "scripts", "renew-https.sh")); err != nil {
-		u.writeAutoRenewalStatus("updater", "failed", true)
+		u.writeAutoRenewalStatus(method, "failed", true)
 		return err
 	}
-	u.writeAutoRenewalStatus("updater", "success", true)
+	u.writeAutoRenewalStatus(method, "success", true)
 	return nil
+}
+
+func (u *updater) renewalMethod() string {
+	status := u.readAutoRenewalStatus()
+	if status.Enabled && status.Method == "systemd" {
+		return "systemd"
+	}
+	return "updater"
 }
 
 func (u *updater) writeAutoRenewalStatus(method, status string, enabled bool) {
