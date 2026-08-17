@@ -71,7 +71,7 @@ export function ServerManagementTable({
               <SortableHeader active={sort === "status"} direction={direction} label={t("status")} onClick={() => onSort("status")} />
               <th className="px-3 py-2.5">{t("gameAndMode")}</th>
               {visibleColumns.has("players") ? <th className="px-3 py-2.5">{t("players")}</th> : null}
-              {visibleColumns.has("resources") ? <th className="px-3 py-2.5">{t("resources")}</th> : null}
+              {visibleColumns.has("resources") ? <th className="w-44 px-3 py-2.5">{t("resources")}</th> : null}
               {visibleColumns.has("address") ? <th className="px-3 py-2.5">{t("serverAddress")}</th> : null}
               {visibleColumns.has("activity") ? <SortableHeader active={sort === "updatedAt"} direction={direction} label={t("recentActivity")} onClick={() => onSort("updatedAt")} /> : null}
               {visibleColumns.has("version") ? <th className="px-3 py-2.5">{t("version")}</th> : null}
@@ -109,8 +109,8 @@ export function ServerManagementTable({
                   </td>
                   {visibleColumns.has("players") ? <td className="px-3 py-2.5 font-mono text-slate-300">{typeof server.status.playersOnline === "number" ? `${server.status.playersOnline}/${gameServerMaxPlayers(server)}` : <DataMissing />}</td> : null}
                   {visibleColumns.has("resources") ? (
-                    <td className="px-3 py-2.5 font-mono text-xs">
-                      {metric?.statsAvailable ? <><span className="block text-slate-200">CPU {metric.cpuPercent.toFixed(1)}%</span><span className="mt-0.5 block text-slate-500">{formatMemory(metric.memoryMb)}</span></> : <DataMissing />}
+                    <td className="px-3 py-2.5">
+                      <ResourceUsage metric={metric} />
                     </td>
                   ) : null}
                   {visibleColumns.has("address") ? (
@@ -152,7 +152,7 @@ export function ServerManagementTable({
               </div>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-y border-panel-line py-2.5 text-xs">
                 <MobileMetric icon={<Users className="size-3.5" />} label={t("players")} value={typeof server.status.playersOnline === "number" ? `${server.status.playersOnline}/${gameServerMaxPlayers(server)}` : "—"} />
-                <MobileMetric label={t("resources")} value={metric?.statsAvailable ? `${metric.cpuPercent.toFixed(1)}% · ${formatMemory(metric.memoryMb)}` : "—"} />
+                <MobileResourceUsage metric={metric} />
                 <MobileMetric icon={<Plug className="size-3.5" />} label={t("serverAddress")} value={address} />
                 <MobileMetric label={t("recentActivity")} value={formatRelativeTime(server.updatedAt, locale)} />
               </div>
@@ -176,8 +176,35 @@ function MobileMetric({ icon, label, value }: { icon?: React.ReactNode; label: s
   return <div className="min-w-0"><span className="flex items-center gap-1 text-slate-500">{icon}{label}</span><span className="mt-0.5 block truncate font-mono text-slate-200">{value}</span></div>;
 }
 
+function MobileResourceUsage({ metric }: { metric?: ObservabilityServerMetric }) {
+  const { t } = useI18n();
+  return (
+    <div className="min-w-0">
+      <span className="text-slate-500">{t("resources")}</span>
+      <div className="mt-0.5"><ResourceUsage metric={metric} /></div>
+    </div>
+  );
+}
+
+function ResourceUsage({ metric }: { metric?: ObservabilityServerMetric }) {
+  const { t } = useI18n();
+  if (!metric?.statsAvailable) return <DataMissing />;
+  return (
+    <div className="grid min-w-36 grid-cols-[2.5rem_auto] items-baseline gap-x-2 gap-y-0.5 text-xs">
+      <span className="text-slate-500">{t("cpu")}</span>
+      <span className="font-mono tabular-nums text-slate-200">{metric.cpuPercent.toFixed(1)}%</span>
+      <span className="text-slate-500">{t("memory")}</span>
+      <span className="whitespace-nowrap font-mono tabular-nums text-slate-200">{formatMemoryUsage(metric)}</span>
+    </div>
+  );
+}
+
 function DataMissing() { return <span className="text-slate-600">—</span>; }
 function formatMemory(value: number) { return value >= 1024 ? `${(value / 1024).toFixed(1)} GB` : `${Math.round(value)} MB`; }
+function formatMemoryUsage(metric: ObservabilityServerMetric) {
+  const usage = formatMemory(metric.memoryMb);
+  return metric.memoryLimitMb > 0 ? `${usage} / ${formatMemory(metric.memoryLimitMb)}` : usage;
+}
 function formatAddress(host: string | undefined, port: number) { const normalized = host?.trim(); if (!normalized) return `:${port}`; return normalized.includes(":") && !normalized.startsWith("[") ? `[${normalized}]:${port}` : `${normalized}:${port}`; }
 function formatTimestamp(value: string, locale: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date); }
 function formatRelativeTime(value: string, locale: string) { const date = new Date(value); if (Number.isNaN(date.getTime())) return "—"; const seconds = Math.round((date.getTime() - Date.now()) / 1000); const abs = Math.abs(seconds); const formatter = new Intl.RelativeTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { numeric: "auto" }); if (abs < 60) return formatter.format(seconds, "second"); if (abs < 3600) return formatter.format(Math.round(seconds / 60), "minute"); if (abs < 86400) return formatter.format(Math.round(seconds / 3600), "hour"); return formatter.format(Math.round(seconds / 86400), "day"); }
