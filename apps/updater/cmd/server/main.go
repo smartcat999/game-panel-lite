@@ -348,11 +348,15 @@ func (u *updater) runUpdate(version string) {
 		u.fail(err)
 		return
 	}
-	if err := u.command(args, "up", "-d", "--remove-orphans", "--pull", "never", "api", "web", "gamepanel-exporter"); err != nil {
+	if err := u.command(args, panelUpdateApplyArgs()...); err != nil {
 		u.fail(err)
 		return
 	}
 	u.complete()
+}
+
+func panelUpdateApplyArgs() []string {
+	return []string{"up", "-d", "--remove-orphans", "--pull", "never", "--force-recreate", "api", "web", "gamepanel-exporter", "nginx"}
 }
 
 func (u *updater) composePrefix() []string {
