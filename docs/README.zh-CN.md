@@ -163,6 +163,15 @@ pnpm build
 scripts/build-panel-images.sh --version v0.2.3 --push
 ```
 
+控制平面依赖镜像会同步到 GamePanel Lite 的 Docker Hub 与阿里云仓库，避免不同区域部署时混用上游仓库：
+
+```bash
+# 运行前需要登录 Docker Hub 与阿里云容器镜像服务。
+scripts/mirror-control-plane-images.sh --push
+```
+
+同步任务固定使用 `linux/amd64`，并将 Nginx、Certbot、Prometheus、cAdvisor 和 Node Exporter 发布到与面板镜像相同的仓库命名空间。
+
 ## 项目状态
 
 GamePanel Lite 正在持续开发，适合早期自托管使用。更新前请阅读[版本说明](https://github.com/smartcat999/game-panel-lite/releases)，并为重要世界和备份保留一份外部副本。

@@ -163,6 +163,15 @@ Production panel images are built with the configured buildx builder (`my-builde
 scripts/build-panel-images.sh --version v0.2.3 --push
 ```
 
+Runtime dependencies are mirrored into both GamePanel Lite registries so regional deployments never need to mix upstream registries:
+
+```bash
+# Requires authentication for Docker Hub and Alibaba Cloud Container Registry.
+scripts/mirror-control-plane-images.sh --push
+```
+
+The mirror job is pinned to `linux/amd64` and publishes Nginx, Certbot, Prometheus, cAdvisor, and Node Exporter under the same registry namespace used by the panel images.
+
 ## Project Status
 
 GamePanel Lite is under active development and intended for early self-hosted use. Review the [release notes](https://github.com/smartcat999/game-panel-lite/releases) before updating, and keep an external copy of important worlds and backups.

@@ -1,6 +1,6 @@
 services:
   certbot:
-    image: certbot/certbot:v2.11.0
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/certbot:${GAMEPANEL_CERTBOT_TAG:-v2.11.0}
     profiles:
       - certificate
     volumes:
@@ -8,7 +8,7 @@ services:
       - ./data/certbot/conf:/etc/letsencrypt
 
   nginx:
-    image: nginx:1.27-alpine
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/nginx:${GAMEPANEL_NGINX_TAG:-1.27-alpine}
     pull_policy: missing
     restart: unless-stopped
     depends_on:

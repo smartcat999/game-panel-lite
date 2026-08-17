@@ -340,7 +340,7 @@ func (u *updater) runUpdate(version string) {
 		u.fail(err)
 		return
 	}
-	if err := u.command(args, "pull", "api", "web", "gamepanel-exporter", "updater"); err != nil {
+	if err := u.command(args, panelUpdatePullArgs()...); err != nil {
 		u.fail(err)
 		return
 	}
@@ -356,7 +356,12 @@ func (u *updater) runUpdate(version string) {
 }
 
 func panelUpdateApplyArgs() []string {
-	return []string{"up", "-d", "--remove-orphans", "--pull", "never", "--force-recreate", "api", "web", "gamepanel-exporter", "nginx"}
+	args := []string{"up", "-d", "--remove-orphans", "--pull", "never", "--force-recreate"}
+	return append(args, controlPlaneServices[1:]...)
+}
+
+func panelUpdatePullArgs() []string {
+	return append([]string{"pull"}, controlPlaneServices...)
 }
 
 func (u *updater) composePrefix() []string {

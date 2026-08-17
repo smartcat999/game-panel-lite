@@ -70,7 +70,7 @@ services:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
 
   prometheus:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:v2.55.1
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:${GAMEPANEL_PROMETHEUS_TAG:-v2.55.1}
     pull_policy: missing
     restart: unless-stopped
     command:
@@ -90,7 +90,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   cadvisor:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:v0.52.1
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:${GAMEPANEL_CADVISOR_TAG:-v0.52.1}
     pull_policy: missing
     restart: unless-stopped
     privileged: true
@@ -104,7 +104,7 @@ services:
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
 
   node-exporter:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:v1.10.2
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:${GAMEPANEL_NODE_EXPORTER_TAG:-v1.10.2}
     pull_policy: missing
     restart: unless-stopped
     command:
@@ -126,7 +126,7 @@ services:
       - "3000"
 
   nginx:
-    image: nginx:1.27-alpine
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/nginx:${GAMEPANEL_NGINX_TAG:-1.27-alpine}
     pull_policy: missing
     depends_on:
       - api

@@ -61,6 +61,7 @@ sed "s/__GAMEPANEL_DOMAIN__/$DOMAIN/g" \
 cd "$ROOT_DIR"
 
 docker compose -f compose.prod.yaml pull api web nginx
+docker compose -f compose.prod.yaml -f compose.https.yaml pull certbot
 docker compose -f compose.prod.yaml up -d api web nginx
 
 CERTBOT_ARGS="certonly --webroot --webroot-path /var/www/certbot --agree-tos -d $DOMAIN"
