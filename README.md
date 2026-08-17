@@ -171,4 +171,4 @@ Bug reports and focused feature requests are welcome in [GitHub Issues](https://
 
 ## License
 
-GamePanel Lite is released under the [MIT License](LICENSE).
+GamePanel Lite is released under the [Apache License 2.0](LICENSE).
