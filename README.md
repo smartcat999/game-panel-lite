@@ -1,211 +1,94 @@
 <h1 align="center">GamePanel Lite</h1>
 
-<p align="center">
-  A lightweight, self-hosted control panel for running game servers with Docker.
-</p>
+<p align="center">A lightweight, self-hosted panel for running game servers with Docker.</p>
 
 <p align="center">
   <a href="https://dev.gamepanel.site">Live demo</a> ·
-  <a href="#quick-start">Quick start</a> ·
+  <a href="#install">Install</a> ·
   <a href="docs/README.zh-CN.md">简体中文</a> ·
   <a href="https://github.com/smartcat999/game-panel-lite/releases">Releases</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/smartcat999/game-panel-lite/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/smartcat999/game-panel-lite?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/smartcat999/game-panel-lite/releases"><img alt="Latest release" src="https://img.shields.io/github/v/tag/smartcat999/game-panel-lite?sort=semver&label=release"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/smartcat999/game-panel-lite"></a>
   <img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white">
-  <img alt="Go API" src="https://img.shields.io/badge/API-Go-00ADD8?logo=go&logoColor=white">
-  <img alt="Next.js web" src="https://img.shields.io/badge/Web-Next.js-111111?logo=next.js&logoColor=white">
 </p>
 
-![GamePanel Lite dashboard](apps/web/public/official/interface-dashboard.png)
+<p align="center">
+  <img alt="GamePanel Lite dashboard" src="apps/web/public/official/interface-dashboard.png">
+</p>
 
-GamePanel Lite gives players and small server operators one place to create instances, inspect health, manage configuration and mods, view logs, and protect world data. Each game server runs in an isolated container with its own data directory. The panel stays self-hosted and does not require a cloud account or hosted control plane.
+## What you can do
 
-## Capabilities
+- Create and manage multiple isolated game servers.
+- Start, stop, restart, inspect logs, and use the server console.
+- Configure game settings, CPU, memory, ports, worlds, and backups.
+- Discover Workshop mods, build mod packs, and manage tModLoader ModConfig files.
+- Monitor host and container resources.
+- Update the panel, runtime images, and supported game files from the UI.
 
-| Area | What is included |
-| --- | --- |
-| Instances | Create, start, stop, restart, filter, and manage multiple isolated servers |
-| Configuration | Provider-aware fields, reusable presets, resource limits, and port allocation |
-| Operations | Live status, logs, console access, player information, and join details |
-| Data | World import, backup, restore, migration, and isolated instance directories |
-| Mods | Workshop discovery, mod library, mod packs, server assignment, and tModLoader ModConfig files |
-| Monitoring | Host and container metrics backed by Prometheus, cAdvisor, and node-exporter |
-| Updates | Runtime-image management, SteamCMD game-file updates, and asynchronous panel updates |
-
-### Included game providers
-
-| Game | Runtime mode |
+| Game | Modes |
 | --- | --- |
 | Terraria | Vanilla, tModLoader |
-| Don't Starve Together | Master and optional Caves shards |
+| Don't Starve Together | Master, optional Caves shard |
 | Palworld | Dedicated server |
 | Minecraft | Java Edition |
 
-Provider capabilities differ by game. The interface only exposes configuration, world, mod, and update operations supported by the selected provider.
+## Install
 
-## Quick Start
-
-### Requirements
-
-- Linux host with Docker Engine and the Docker Compose plugin
-- `curl` and `tar`
-- An `amd64` host for the published control-plane images
-- Writable installation directory and enough disk space for game files, worlds, backups, and mods
-
-Install the current stable release:
+Requirements: Linux `amd64`, Docker Engine, and the Docker Compose plugin.
 
 ```bash
-# Interactive installation; choose the directory and image region when prompted.
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
-
-# Non-interactive China Mainland installation
-curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | GAMEPANEL_IMAGE_REGION=cn sh
-
-# Optional custom installation directory
-curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- "$HOME/apps/gamepanel-lite"
 ```
 
-The installer defaults to the last successful installation directory, or `~/gamepanel-lite` on first use. The control-plane registry is selected during installation and remains independent from the game-image region configured later in the panel. Re-running the installer detects the existing directory and region, while still allowing either value to be changed.
+The installer asks for:
 
-After the containers start:
+1. Installation directory, defaulting to the last successful location or `~/gamepanel-lite`.
+2. Control-plane image region: Docker Hub or Alibaba Cloud.
 
-1. Open `http://YOUR_SERVER_IP:3001`.
-2. Create the local administrator account.
-3. Install a runtime image from **Game Library**.
-4. Select **Create server** and follow the guided setup.
-
-### Enable HTTPS
-
-HTTPS is configured from the panel:
-
-1. Point the panel domain to the server and allow TCP ports `80` and `443`.
-2. Open **Settings → Access & HTTPS**.
-3. Enter the domain and an optional certificate email.
-4. Select **Configure HTTPS** and confirm the short control-plane restart.
-
-GamePanel Lite configures Nginx, requests the certificate, switches the panel entry point, and enables renewal checks. Running game servers are not restarted.
-
-<details>
-<summary>Command-line fallback</summary>
-
-Use this only when the panel is unavailable or the current deployment driver cannot manage HTTPS:
+For unattended China Mainland installation:
 
 ```bash
-cd ~/gamepanel-lite
-sudo sh scripts/setup-https.sh panel.example.com admin@example.com
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh \
+  | GAMEPANEL_IMAGE_REGION=cn sh
 ```
 
-</details>
+## Use
 
-## Operations
+1. Open `http://YOUR_SERVER_IP:3001` and create the local administrator.
+2. Install a runtime image from **Game Library**.
+3. Select **Create server** and follow the guided setup.
+4. For HTTPS, point a domain to the server, allow TCP ports `80` and `443`, then open **Settings → Access & HTTPS**.
+5. Use **Settings → Updates & Maintenance** for panel updates and recovery.
 
-Routine control-plane work is available in the panel:
-
-- **Settings → Updates & Maintenance:** service status, recovery, restart, and panel updates.
-- **Settings → Access & HTTPS:** certificate status, HTTPS setup, and renewal checks.
-- **Monitoring:** host, container, and game-server health.
-
-Control-plane maintenance does not recreate managed game containers or modify save data.
+<table>
+  <tr>
+    <td><img alt="Server creation wizard" src="apps/web/public/official/interface-servers.png"></td>
+    <td><img alt="Workshop discovery and mod library" src="apps/web/public/official/interface-mods.png"></td>
+  </tr>
+</table>
 
 <details>
-<summary>Command-line recovery and diagnostics</summary>
+<summary>Command-line recovery</summary>
 
 ```bash
 cd ~/gamepanel-lite
 sudo sh scripts/manage.sh status
-sudo sh scripts/manage.sh start
 sudo sh scripts/manage.sh update
+sudo sh scripts/manage.sh start
 sudo sh scripts/manage.sh stop
-
-docker compose -f compose.prod.yaml ps
-curl http://127.0.0.1:3001/healthz
-sudo journalctl -u gamepanel-lite-https-renewal.service
 ```
 
 </details>
 
-### Update boundaries
+## Feedback
 
-GamePanel Lite separates three kinds of updates:
-
-1. **Panel release:** API, Web, exporter, updater, and deployment files.
-2. **Runtime image:** the provider image used when an instance is created or its image is changed.
-3. **Game files:** files inside an existing server data directory, updated by SteamCMD where supported.
-
-Updating the panel does not stop game servers. Updating a runtime image does not silently replace an existing server's game files. Server-level game-file updates remain available even when a newer runtime image has not been published yet.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    Browser["Browser"] --> Proxy["Nginx"]
-    Proxy --> Web["Next.js Web"]
-    Proxy --> API["Go API"]
-    API --> DB["SQLite + data directory"]
-    API --> Docker["Docker RuntimeAdapter"]
-    Docker --> Games["Isolated game containers"]
-    Exporter["GamePanel exporter"] --> Prometheus["Prometheus"]
-    Docker --> Exporter
-    Prometheus --> API
-```
-
-The API keeps provider-specific behavior outside the Docker runtime adapter. One server instance maps to one container and one isolated data directory.
-
-## Data and Backups
-
-Persistent state is stored under `data/` in the installation directory:
-
-- SQLite database and panel settings
-- Per-instance game files and saves
-- Imported worlds and generated configuration
-- Backups, mods, and mod configuration
-- Prometheus time-series data
-
-Back up the entire `data/` directory before moving the installation or performing host-level maintenance. Do not expose arbitrary host paths to game containers.
-
-## Development
-
-The backend is Go with chi, SQLite, and the Docker SDK. The frontend is Next.js, React, TypeScript, Tailwind CSS, and TanStack Query.
-
-```bash
-pnpm install
-
-# Run the API and Web development servers
-pnpm dev:api
-pnpm dev:web
-
-# Required checks
-go test ./...
-go vet ./...
-pnpm lint
-pnpm typecheck
-pnpm build
-```
-
-Production panel images are built with the configured buildx builder (`my-builder` by default) for `linux/amd64`:
-
-```bash
-scripts/build-panel-images.sh --version v0.2.4 --push
-```
-
-Runtime dependencies are mirrored into both GamePanel Lite registries so regional deployments never need to mix upstream registries:
-
-```bash
-# Requires authentication for Docker Hub and Alibaba Cloud Container Registry.
-scripts/mirror-control-plane-images.sh --push
-```
-
-The mirror job is pinned to `linux/amd64` and publishes Nginx, Certbot, Prometheus, cAdvisor, and Node Exporter under the same registry namespace used by the panel images.
-
-## Project Status
-
-GamePanel Lite is under active development and intended for early self-hosted use. Review the [release notes](https://github.com/smartcat999/game-panel-lite/releases) before updating, and keep an external copy of important worlds and backups.
-
-Bug reports and focused feature requests are welcome in [GitHub Issues](https://github.com/smartcat999/game-panel-lite/issues).
+- [Report a bug](https://github.com/smartcat999/game-panel-lite/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/smartcat999/game-panel-lite/issues/new?template=feature_request.yml)
+- Check [existing issues](https://github.com/smartcat999/game-panel-lite/issues) before submitting a duplicate.
 
 ## License
 
-GamePanel Lite is released under the [Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE)
