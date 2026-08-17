@@ -176,6 +176,8 @@ scripts/mirror-control-plane-images.sh --push
 
 GamePanel Lite 正在持续开发，适合早期自托管使用。更新前请阅读[版本说明](https://github.com/smartcat999/game-panel-lite/releases)，并为重要世界和备份保留一份外部副本。
 
+版本检查会从最新 GitHub Release 资产下载 `manifest.json`，不再访问容易触发源码抓取限流的 Raw GitHub。发布稳定版本前必须先上传与版本匹配的 Manifest 资产。
+
 欢迎通过 [GitHub Issues](https://github.com/smartcat999/game-panel-lite/issues) 提交可复现的问题和范围明确的功能建议。
 
 ## 开源许可证

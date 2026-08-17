@@ -15,7 +15,7 @@ services:
       GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.2.4}
       GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
       GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
-      GAMEPANEL_RELEASE_MANIFEST_URL: ${GAMEPANEL_RELEASE_MANIFEST_URL:-https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/release/manifest.json}
+      GAMEPANEL_RELEASE_MANIFEST_URL: ${GAMEPANEL_RELEASE_MANIFEST_URL:-https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json}
       GAMEPANEL_SYSTEM_UPDATE_INTERVAL: ${GAMEPANEL_SYSTEM_UPDATE_INTERVAL:-24h}
       GAMEPANEL_UPDATER_URL: http://updater:4020
       GAMEPANEL_UPDATER_TOKEN: ${GAMEPANEL_UPDATER_TOKEN:?GAMEPANEL_UPDATER_TOKEN is required}

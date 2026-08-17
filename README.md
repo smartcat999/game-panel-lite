@@ -176,6 +176,8 @@ The mirror job is pinned to `linux/amd64` and publishes Nginx, Certbot, Promethe
 
 GamePanel Lite is under active development and intended for early self-hosted use. Review the [release notes](https://github.com/smartcat999/game-panel-lite/releases) before updating, and keep an external copy of important worlds and backups.
 
+The update checker downloads `manifest.json` from the latest GitHub Release asset rather than Raw GitHub, avoiding source-file scraping limits. Each release must publish the matching manifest asset before it is announced as stable.
+
 Bug reports and focused feature requests are welcome in [GitHub Issues](https://github.com/smartcat999/game-panel-lite/issues).
 
 ## License
