@@ -1,0 +1,57 @@
+name: Feature request / 功能建议
+description: Suggest a focused improvement / 提交范围明确的改进建议
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before proposing a solution. Focused requests are easier to evaluate and implement.
+
+        请先描述问题，再提出方案。范围明确的建议更容易评估和实现。
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area / 功能范围
+      options:
+        - Installation and updates / 安装与更新
+        - Server management / 服务器管理
+        - Game configuration / 游戏配置
+        - Worlds and backups / 世界与备份
+        - Mods / 模组
+        - Monitoring / 监控
+        - HTTPS and access / HTTPS 与访问
+        - Other / 其他
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 需要解决的问题
+      description: What is difficult or impossible today? / 当前什么操作困难或无法完成？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior / 建议方案
+      description: Describe the user-visible result, not only the implementation / 请描述用户看到的结果，而不只是技术实现
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered / 已考虑的替代方案
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context / 补充信息
+      description: Screenshots, examples, or related projects / 截图、示例或相关项目
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist / 检查项
+      options:
+        - label: I searched existing issues and roadmap items / 我已搜索已有 Issue 和路线图
+          required: true
+        - label: This request describes one focused outcome / 本建议只描述一个明确目标
+          required: true

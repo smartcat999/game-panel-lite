@@ -1,0 +1,85 @@
+name: Bug report / 缺陷反馈
+description: Report a reproducible problem / 提交可复现的问题
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve GamePanel Lite. Remove passwords, tokens, private IPs, and personal data from screenshots and logs.
+
+        感谢帮助改进 GamePanel Lite。截图和日志中请移除密码、令牌、私有地址和个人信息。
+  - type: input
+    id: version
+    attributes:
+      label: GamePanel Lite version / 面板版本
+      placeholder: v0.2.4
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method / 安装方式
+      options:
+        - Online installer / 在线安装器
+        - Docker Compose or source / Docker Compose 或源码
+        - Panel updater / 面板更新器
+        - Other / 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: game
+    attributes:
+      label: Affected game / 相关游戏
+      options:
+        - Control plane / 控制平面
+        - Terraria Vanilla
+        - Terraria tModLoader
+        - Don't Starve Together / 饥荒联机版
+        - Palworld / 幻兽帕鲁
+        - Minecraft Java / 我的世界 Java 版
+        - Other / 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 运行环境
+      placeholder: OS, CPU architecture, Docker and Compose versions / 系统、CPU 架构、Docker 与 Compose 版本
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots / 日志与截图
+      description: Drag files here and redact secrets first / 可拖入文件，提交前请先脱敏
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist / 检查项
+      options:
+        - label: I searched existing issues / 我已搜索已有 Issue
+          required: true
+        - label: I removed secrets and personal data / 我已移除敏感信息和个人数据
+          required: true
