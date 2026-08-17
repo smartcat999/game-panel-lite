@@ -10,6 +10,7 @@ RUNNER_DIR="/usr/local/libexec/gamepanel-lite"
 RUNNER_FILE="$RUNNER_DIR/https-renewal"
 SERVICE_FILE="/etc/systemd/system/$UNIT_NAME.service"
 TIMER_FILE="/etc/systemd/system/$UNIT_NAME.timer"
+STATUS_FILE="$ROOT_DIR/data/certbot/renewal-status.json"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Root privileges are required. Run: sudo sh scripts/install-https-renewal-timer.sh"
@@ -97,6 +98,7 @@ GAMEPANEL_CERTBOT_IMAGE=certbot/certbot:v2.11.0
 GAMEPANEL_CERTBOT_WWW=$CERTBOT_WWW
 GAMEPANEL_CERTBOT_CONF=$CERTBOT_CONF
 GAMEPANEL_COMPOSE_PROJECT=$COMPOSE_PROJECT
+GAMEPANEL_RENEWAL_STATUS_FILE=$STATUS_FILE
 EOF
 
 cat > "$TMP_DIR/$UNIT_NAME.service" <<EOF
@@ -138,6 +140,10 @@ if command -v systemd-analyze >/dev/null 2>&1; then
   systemd-analyze verify "$SERVICE_FILE" "$TIMER_FILE"
 fi
 systemctl enable --now "$UNIT_NAME.timer"
+
+INSTALLED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+printf '{"enabled":true,"method":"systemd","installedAt":"%s","lastStatus":"pending"}\n' "$INSTALLED_AT" > "$STATUS_FILE"
+chmod 0644 "$STATUS_FILE"
 
 echo "Automatic HTTPS renewal is enabled."
 systemctl show "$UNIT_NAME.timer" \

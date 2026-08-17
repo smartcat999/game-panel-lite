@@ -82,6 +82,39 @@ func TestApplyUsesAuthenticatedUpdater(t *testing.T) {
 	}
 }
 
+func TestDeploymentStatusAndReconcileUseUpdater(t *testing.T) {
+	var paths []string
+	service := New("", "http://updater.internal", "secret", time.Second)
+	service.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Header.Get("Authorization") != "Bearer secret" {
+			t.Fatalf("missing updater authorization: %q", r.Header.Get("Authorization"))
+		}
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case "/deployment":
+			return jsonResponse(http.StatusOK, `{"mode":"https","healthy":true,"checkedAt":"2026-08-17T00:00:00Z","services":[{"name":"api","state":"running"}],"https":{"configured":true,"domain":"panel.example.com","certificate":"valid"}}`), nil
+		case "/deployment/reconcile":
+			return jsonResponse(http.StatusAccepted, `{"id":"job-2","kind":"reconcile","status":"running"}`), nil
+		default:
+			return jsonResponse(http.StatusNotFound, `{}`), nil
+		}
+	})
+	status, err := service.DeploymentStatus(context.Background())
+	if err != nil {
+		t.Fatalf("deployment status: %v", err)
+	}
+	if !status.Healthy || status.Mode != "https" || status.HTTPS.Domain != "panel.example.com" {
+		t.Fatalf("unexpected deployment status: %#v", status)
+	}
+	job, err := service.ReconcileDeployment(context.Background())
+	if err != nil {
+		t.Fatalf("reconcile deployment: %v", err)
+	}
+	if job.Kind != "reconcile" || len(paths) != 2 {
+		t.Fatalf("unexpected reconcile response: job=%#v paths=%v", job, paths)
+	}
+}
+
 func TestCompareVersions(t *testing.T) {
 	tests := []struct {
 		left, right string

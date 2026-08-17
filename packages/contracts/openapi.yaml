@@ -87,6 +87,80 @@ paths:
                 $ref: "#/components/schemas/SystemUpdateJob"
         "409":
           description: Updater unavailable, release mismatch, already current, or another update is running
+  /api/system/deployment:
+    get:
+      summary: Read control-plane service and HTTPS status
+      responses:
+        "200":
+          description: Control-plane deployment status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentStatus"
+        "502":
+          description: Updater or Docker Compose status is unavailable
+  /api/system/deployment/reconcile:
+    post:
+      summary: Restore missing or stopped control-plane services
+      responses:
+        "202":
+          description: Recovery job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateJob"
+        "409":
+          description: Another maintenance operation is running
+  /api/system/deployment/restart:
+    post:
+      summary: Restart control-plane services without stopping game containers
+      responses:
+        "202":
+          description: Restart job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateJob"
+        "409":
+          description: Another maintenance operation is running
+  /api/system/deployment/https/setup:
+    post:
+      summary: Configure HTTPS with a validated domain and optional certificate email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain:
+                  type: string
+                  format: hostname
+                email:
+                  type: string
+                  format: email
+      responses:
+        "202":
+          description: HTTPS configuration job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateJob"
+        "409":
+          description: Invalid deployment state or another maintenance operation is running
+  /api/system/deployment/https/renew:
+    post:
+      summary: Check certificate renewal and reload Nginx
+      responses:
+        "202":
+          description: Certificate renewal job accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemUpdateJob"
+        "409":
+          description: HTTPS is not configured or another maintenance operation is running
   /api/runtime/docker:
     get:
       summary: Read cached Docker runtime availability
@@ -1011,6 +1085,8 @@ components:
       properties:
         id:
           type: string
+        kind:
+          type: string
         version:
           type: string
         status:
@@ -1048,6 +1124,73 @@ components:
           minimum: 1
         updaterAvailable:
           type: boolean
+        job:
+          $ref: "#/components/schemas/SystemUpdateJob"
+    DeploymentService:
+      type: object
+      required: [name, state]
+      properties:
+        name:
+          type: string
+        state:
+          type: string
+        health:
+          type: string
+        image:
+          type: string
+    DeploymentHTTPSStatus:
+      type: object
+      required: [configured, certificate, autoRenewal]
+      properties:
+        configured:
+          type: boolean
+        domain:
+          type: string
+        certificate:
+          type: string
+          enum: [valid, expired, missing]
+        expiresAt:
+          type: string
+          format: date-time
+        daysRemaining:
+          type: integer
+        autoRenewal:
+          $ref: "#/components/schemas/HTTPSAutoRenewalStatus"
+    HTTPSAutoRenewalStatus:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        method:
+          type: string
+        installedAt:
+          type: string
+          format: date-time
+        lastCheckedAt:
+          type: string
+          format: date-time
+        lastStatus:
+          type: string
+          enum: [pending, running, success, failed, unknown]
+    DeploymentStatus:
+      type: object
+      required: [mode, checkedAt, healthy, services, https]
+      properties:
+        mode:
+          type: string
+          enum: [http, https]
+        checkedAt:
+          type: string
+          format: date-time
+        healthy:
+          type: boolean
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeploymentService"
+        https:
+          $ref: "#/components/schemas/DeploymentHTTPSStatus"
         job:
           $ref: "#/components/schemas/SystemUpdateJob"
     DockerStatus:

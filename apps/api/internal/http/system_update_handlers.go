@@ -73,6 +73,63 @@ func (h *Handler) applySystemUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, job)
 }
 
+func (h *Handler) getSystemDeployment(w http.ResponseWriter, r *http.Request) {
+	status, err := h.systemUpdate.DeploymentStatus(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (h *Handler) reconcileSystemDeployment(w http.ResponseWriter, r *http.Request) {
+	job, err := h.systemUpdate.ReconcileDeployment(r.Context())
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "system.deployment.reconcile.queued", "Queued control-plane recovery", map[string]any{"jobId": job.ID})
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (h *Handler) restartSystemDeployment(w http.ResponseWriter, r *http.Request) {
+	job, err := h.systemUpdate.RestartDeployment(r.Context())
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "system.deployment.restart.queued", "Queued control-plane restart", map[string]any{"jobId": job.ID})
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (h *Handler) setupSystemHTTPS(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Domain string `json:"domain"`
+		Email  string `json:"email"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	job, err := h.systemUpdate.SetupHTTPS(r.Context(), payload.Domain, payload.Email)
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "system.https.setup.queued", "Queued HTTPS configuration", map[string]any{"jobId": job.ID, "domain": payload.Domain})
+	writeJSON(w, http.StatusAccepted, job)
+}
+
+func (h *Handler) renewSystemHTTPS(w http.ResponseWriter, r *http.Request) {
+	job, err := h.systemUpdate.RenewHTTPS(r.Context())
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	h.recordActivity(r.Context(), "", "system.https.renew.queued", "Queued HTTPS certificate renewal check", map[string]any{"jobId": job.ID})
+	writeJSON(w, http.StatusAccepted, job)
+}
+
 func (h *Handler) runAutomaticSystemUpdateChecks(ctx context.Context) {
 	interval := h.cfg.SystemUpdateInterval
 	if interval < time.Hour {
