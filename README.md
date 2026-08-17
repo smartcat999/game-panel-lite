@@ -160,7 +160,7 @@ pnpm build
 Production panel images are built with the configured buildx builder (`my-builder` by default) for `linux/amd64`:
 
 ```bash
-scripts/build-panel-images.sh --version v0.2.3 --push
+scripts/build-panel-images.sh --version v0.2.4 --push
 ```
 
 Runtime dependencies are mirrored into both GamePanel Lite registries so regional deployments never need to mix upstream registries:

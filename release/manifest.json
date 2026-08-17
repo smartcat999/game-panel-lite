@@ -1,25 +1,50 @@
 {
   "schemaVersion": 1,
   "channel": "stable",
-  "version": "v0.2.3",
-  "publishedAt": "2026-08-17T00:00:00Z",
-  "releaseNotesUrl": "https://github.com/smartcat999/game-panel-lite/releases/tag/v0.2.3",
+  "version": "v0.2.4",
+  "publishedAt": "2026-08-17T14:03:03Z",
+  "releaseNotesUrl": "https://github.com/smartcat999/game-panel-lite/releases/tag/v0.2.4",
   "images": {
     "api": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-api:v0.2.3",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-api:v0.2.3"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-api:v0.2.4",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-api:v0.2.4"
     },
     "web": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-web:v0.2.3",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-web:v0.2.3"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-web:v0.2.4",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-web:v0.2.4"
     },
     "exporter": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-exporter:v0.2.3",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-exporter:v0.2.3"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-exporter:v0.2.4",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-exporter:v0.2.4"
     },
     "updater": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-updater:v0.2.3",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-updater:v0.2.3"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-updater:v0.2.4",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-updater:v0.2.4"
+    },
+    "nginx": {
+      "dockerHub": "docker.io/smartcat99999/nginx:1.27-alpine",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/nginx:1.27-alpine",
+      "digest": "sha256:9dd7246d4b04d012426cd49a2c25b506db9d374dd100a45ff907743940c4e9e8"
+    },
+    "certbot": {
+      "dockerHub": "docker.io/smartcat99999/certbot:v2.11.0",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/certbot:v2.11.0",
+      "digest": "sha256:24448d77c269856d968f1bb7f27c7fcc76101f10fcf8d329c4b8106b872dfc91"
+    },
+    "prometheus": {
+      "dockerHub": "docker.io/smartcat99999/prometheus:v2.55.1",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/prometheus:v2.55.1",
+      "digest": "sha256:5367e022e8933dcc0192bafea720dd26c17f816026ff87f4c511e3e78edd0e9e"
+    },
+    "cadvisor": {
+      "dockerHub": "docker.io/smartcat99999/cadvisor:v0.52.1",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/cadvisor:v0.52.1",
+      "digest": "sha256:2981fb05889903af160f67c3b26066ca063229a50f956fc62c9952b0299fc9c7"
+    },
+    "nodeExporter": {
+      "dockerHub": "docker.io/smartcat99999/node-exporter:v1.10.2",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/node-exporter:v1.10.2",
+      "digest": "sha256:51b82758f3f079045a6ec264b1e9adaa1b517b58c4c0e63cd8438b2aae6a1356"
     }
   }
 }
