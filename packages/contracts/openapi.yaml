@@ -1175,14 +1175,19 @@ components:
           enum: [pending, running, success, failed, unknown]
     DeploymentStatus:
       type: object
-      required: [mode, checkedAt, healthy, services, https]
+      required: [mode, manager, checkedAt, capabilities, healthy, services, https]
       properties:
         mode:
           type: string
           enum: [http, https]
+        manager:
+          type: string
+          enum: [docker-compose, standalone]
         checkedAt:
           type: string
           format: date-time
+        capabilities:
+          $ref: "#/components/schemas/DeploymentCapabilities"
         healthy:
           type: boolean
         services:
@@ -1193,6 +1198,18 @@ components:
           $ref: "#/components/schemas/DeploymentHTTPSStatus"
         job:
           $ref: "#/components/schemas/SystemUpdateJob"
+    DeploymentCapabilities:
+      type: object
+      required: [reconcile, restart, httpsSetup, httpsRenew]
+      properties:
+        reconcile:
+          type: boolean
+        restart:
+          type: boolean
+        httpsSetup:
+          type: boolean
+        httpsRenew:
+          type: boolean
     DockerStatus:
       type: object
       required: [available, message, host, lastCheckedAt]

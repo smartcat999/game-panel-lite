@@ -72,12 +72,21 @@ type AutoRenewalStatus struct {
 }
 
 type DeploymentStatus struct {
-	Mode      string              `json:"mode"`
-	CheckedAt string              `json:"checkedAt"`
-	Healthy   bool                `json:"healthy"`
-	Services  []DeploymentService `json:"services"`
-	HTTPS     HTTPSStatus         `json:"https"`
-	Job       Job                 `json:"job,omitempty"`
+	Mode         string                 `json:"mode"`
+	Manager      string                 `json:"manager"`
+	CheckedAt    string                 `json:"checkedAt"`
+	Capabilities DeploymentCapabilities `json:"capabilities"`
+	Healthy      bool                   `json:"healthy"`
+	Services     []DeploymentService    `json:"services"`
+	HTTPS        HTTPSStatus            `json:"https"`
+	Job          Job                    `json:"job,omitempty"`
+}
+
+type DeploymentCapabilities struct {
+	Reconcile  bool `json:"reconcile"`
+	Restart    bool `json:"restart"`
+	HTTPSSetup bool `json:"httpsSetup"`
+	HTTPSRenew bool `json:"httpsRenew"`
 }
 
 type Status struct {

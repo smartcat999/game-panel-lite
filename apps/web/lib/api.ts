@@ -463,7 +463,14 @@ export type DeploymentService = {
 
 export type DeploymentStatus = {
   mode: "http" | "https" | string;
+  manager: "docker-compose" | "standalone" | string;
   checkedAt: string;
+  capabilities: {
+    reconcile: boolean;
+    restart: boolean;
+    httpsSetup: boolean;
+    httpsRenew: boolean;
+  };
   healthy: boolean;
   services: DeploymentService[];
   https: {

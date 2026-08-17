@@ -92,7 +92,7 @@ func TestDeploymentStatusAndReconcileUseUpdater(t *testing.T) {
 		paths = append(paths, r.URL.Path)
 		switch r.URL.Path {
 		case "/deployment":
-			return jsonResponse(http.StatusOK, `{"mode":"https","healthy":true,"checkedAt":"2026-08-17T00:00:00Z","services":[{"name":"api","state":"running"}],"https":{"configured":true,"domain":"panel.example.com","certificate":"valid"}}`), nil
+			return jsonResponse(http.StatusOK, `{"mode":"https","manager":"docker-compose","capabilities":{"reconcile":true,"restart":true,"httpsSetup":true,"httpsRenew":true},"healthy":true,"checkedAt":"2026-08-17T00:00:00Z","services":[{"name":"api","state":"running"}],"https":{"configured":true,"domain":"panel.example.com","certificate":"valid"}}`), nil
 		case "/deployment/reconcile":
 			return jsonResponse(http.StatusAccepted, `{"id":"job-2","kind":"reconcile","status":"running"}`), nil
 		default:
@@ -103,7 +103,7 @@ func TestDeploymentStatusAndReconcileUseUpdater(t *testing.T) {
 	if err != nil {
 		t.Fatalf("deployment status: %v", err)
 	}
-	if !status.Healthy || status.Mode != "https" || status.HTTPS.Domain != "panel.example.com" {
+	if status.Manager != "docker-compose" || !status.Capabilities.Reconcile || !status.Healthy || status.Mode != "https" || status.HTTPS.Domain != "panel.example.com" {
 		t.Fatalf("unexpected deployment status: %#v", status)
 	}
 	job, err := service.ReconcileDeployment(context.Background())
