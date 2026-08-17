@@ -3,7 +3,7 @@
   "channel": "stable",
   "version": "v0.2.0",
   "publishedAt": "2026-08-17T00:00:00Z",
-  "releaseNotesUrl": "https://github.com/smartcat999/game-panel-lite/releases",
+  "releaseNotesUrl": "https://github.com/smartcat999/game-panel-lite/releases/tag/v0.2.0",
   "images": {
     "api": {
       "dockerHub": "docker.io/smartcat99999/game-panel-lite-api:v0.2.0",

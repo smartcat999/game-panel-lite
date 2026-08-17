@@ -1,98 +1,174 @@
-# GamePanel Lite
+<h1 align="center">GamePanel Lite</h1>
 
-GamePanel Lite is a lightweight, self-hosted game server panel for players, friend groups, and community server owners. It gives you a clean web interface for creating servers, starting and stopping instances, checking logs, managing worlds, backing up data, and discovering mods.
+<p align="center">
+  A lightweight, self-hosted control panel for running game servers with Docker.
+</p>
 
-[Live demo](https://dev.gamepanel.site) · [中文文档](docs/README.zh-CN.md)
+<p align="center">
+  <a href="https://dev.gamepanel.site">Live demo</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/README.zh-CN.md">简体中文</a> ·
+  <a href="https://github.com/smartcat999/game-panel-lite/releases">Releases</a>
+</p>
 
-![GamePanel Lite dashboard](docs/assets/dashboard.png)
+<p align="center">
+  <a href="https://github.com/smartcat999/game-panel-lite/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/smartcat999/game-panel-lite?display_name=tag&sort=semver"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/smartcat999/game-panel-lite"></a>
+  <img alt="Docker" src="https://img.shields.io/badge/runtime-Docker-2496ED?logo=docker&logoColor=white">
+  <img alt="Go API" src="https://img.shields.io/badge/API-Go-00ADD8?logo=go&logoColor=white">
+  <img alt="Next.js web" src="https://img.shields.io/badge/Web-Next.js-111111?logo=next.js&logoColor=white">
+</p>
 
-## Why GamePanel Lite
+![GamePanel Lite dashboard](apps/web/public/official/interface-dashboard.png)
 
-Running a game server should not mean juggling shell commands, scattered config files, and manual folders. GamePanel Lite brings the everyday server workflow into one focused dashboard.
+GamePanel Lite gives players and small server operators one place to create instances, inspect health, manage configuration and mods, view logs, and protect world data. Each game server runs in an isolated container with its own data directory. The panel stays self-hosted and does not require a cloud account or hosted control plane.
 
-- Self-hosted: run it on your own machine or VPS.
-- Player-friendly: built around servers, worlds, backups, logs, join info, and mods.
-- Lightweight: no cloud account, no billing system, no SaaS lock-in.
-- Multi-instance: keep each server isolated with its own data directory.
-- Extensible: starts with Terraria-focused workflows and expands toward more game providers.
+## Capabilities
 
-## What You Can Do
+| Area | What is included |
+| --- | --- |
+| Instances | Create, start, stop, restart, filter, and manage multiple isolated servers |
+| Configuration | Provider-aware fields, reusable presets, resource limits, and port allocation |
+| Operations | Live status, logs, console access, player information, and join details |
+| Data | World import, backup, restore, migration, and isolated instance directories |
+| Mods | Workshop discovery, mod library, mod packs, server assignment, and tModLoader ModConfig files |
+| Monitoring | Host and container metrics backed by Prometheus, cAdvisor, and node-exporter |
+| Updates | Runtime-image management, SteamCMD game-file updates, and asynchronous panel updates |
 
-- Create and manage multiple game servers
-- Start, stop, and restart server instances
-- View server status, logs, and console output
-- Import, back up, restore, and manage worlds
-- Discover recommended mods and add them to servers
-- Keep server files, worlds, backups, and mods organized in one place
+### Included game providers
+
+| Game | Runtime mode |
+| --- | --- |
+| Terraria | Vanilla, tModLoader |
+| Don't Starve Together | Master and optional Caves shards |
+| Palworld | Dedicated server |
+| Minecraft | Java Edition |
+
+Provider capabilities differ by game. The interface only exposes configuration, world, mod, and update operations supported by the selected provider.
 
 ## Quick Start
 
-Run this on a server with Docker installed:
+### Requirements
+
+- Linux host with Docker Engine and the Docker Compose plugin
+- `curl` and `tar`
+- An `amd64` host for the published control-plane images
+- Writable installation directory and enough disk space for game files, worlds, backups, and mods
+
+Install the current stable release:
 
 ```bash
-# Default: installs to ~/gamepanel-lite
+# Installs to ~/gamepanel-lite
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
 
-# Or specify a custom install path:
+# Or choose an installation directory
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- "$HOME/apps/gamepanel-lite"
 ```
 
-The target directory must be writable by the current user. Use elevated permissions only when installing into a system directory such as `/opt`.
+Open `http://YOUR_SERVER_IP:3001` after the containers start.
 
-Then open:
+### Enable HTTPS
 
-```text
-http://YOUR_SERVER_IP:3001
-```
-
-If you have a domain pointed at the server, enable HTTPS:
-
-```bash
-cd ~/gamepanel-lite && sudo sh scripts/setup-https.sh your-domain.com your-email@example.com
-```
-
-On a systemd host, HTTPS setup installs a persistent daily certificate-renewal timer. Certbot only replaces a certificate after it enters the renewal window; the check itself is safe to run every day. Existing HTTPS installs can enable the timer with:
+Point a domain at the host, then run:
 
 ```bash
 cd ~/gamepanel-lite
-sudo sh scripts/install-https-renewal-timer.sh
-sudo systemctl status gamepanel-lite-https-renewal.timer
+sudo sh scripts/setup-https.sh panel.example.com admin@example.com
 ```
 
-Run a renewal check immediately or inspect its logs with:
+HTTPS uses `compose.prod.yaml` together with `compose.https.yaml`. The override replaces the same Nginx service, so one reverse proxy owns the public ports. On systemd hosts, setup also installs a daily certificate-renewal check.
+
+## Operations
+
+Run control-plane operations from the installation directory:
 
 ```bash
-sudo systemctl start gamepanel-lite-https-renewal.service
+sudo sh scripts/manage.sh status
+sudo sh scripts/manage.sh start
+sudo sh scripts/manage.sh update
+sudo sh scripts/manage.sh stop
+```
+
+`manage.sh update` pulls and recreates changed panel services. It does not recreate game containers or modify saves. The Settings page offers the same panel-update workflow when the updater service is available.
+
+Useful checks:
+
+```bash
+docker compose -f compose.prod.yaml ps
+curl http://127.0.0.1:3001/healthz
 sudo journalctl -u gamepanel-lite-https-renewal.service
 ```
 
-The Certbot Compose service is isolated behind the `certificate` profile, so ordinary control-plane starts no longer create a stopped Certbot container.
+### Update boundaries
 
-## Remote Server Operations
+GamePanel Lite separates three kinds of updates:
 
-Update the control-plane images and recreate only changed services:
+1. **Panel release:** API, Web, exporter, updater, and deployment files.
+2. **Runtime image:** the provider image used when an instance is created or its image is changed.
+3. **Game files:** files inside an existing server data directory, updated by SteamCMD where supported.
 
-```bash
-cd ~/gamepanel-lite
-sudo sh scripts/manage.sh update
+Updating the panel does not stop game servers. Updating a runtime image does not silently replace an existing server's game files. Server-level game-file updates remain available even when a newer runtime image has not been published yet.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser["Browser"] --> Proxy["Nginx"]
+    Proxy --> Web["Next.js Web"]
+    Proxy --> API["Go API"]
+    API --> DB["SQLite + data directory"]
+    API --> Docker["Docker RuntimeAdapter"]
+    Docker --> Games["Isolated game containers"]
+    Exporter["GamePanel exporter"] --> Prometheus["Prometheus"]
+    Docker --> Exporter
+    Prometheus --> API
 ```
 
-Use `start`, `stop`, or `status` in place of `update` for routine operations. The script automatically selects HTTP or HTTPS mode. It manages the panel control plane only; game containers remain under GamePanel Lite and are not recreated by these commands.
+The API keeps provider-specific behavior outside the Docker runtime adapter. One server instance maps to one container and one isolated data directory.
 
-The Settings page can also check for a newer GamePanel Lite release and, when the updater service is enabled, install it asynchronously. Panel updates pull and recreate only the API, Web, and exporter control-plane services; running game containers and save data are left untouched. Automatic checks only notify and never install an update without confirmation.
+## Data and Backups
 
-Release images are built with the configured buildx builder (default `my-builder`) for `linux/amd64`:
+Persistent state is stored under `data/` in the installation directory:
+
+- SQLite database and panel settings
+- Per-instance game files and saves
+- Imported worlds and generated configuration
+- Backups, mods, and mod configuration
+- Prometheus time-series data
+
+Back up the entire `data/` directory before moving the installation or performing host-level maintenance. Do not expose arbitrary host paths to game containers.
+
+## Development
+
+The backend is Go with chi, SQLite, and the Docker SDK. The frontend is Next.js, React, TypeScript, Tailwind CSS, and TanStack Query.
+
+```bash
+pnpm install
+
+# Run the API and Web development servers
+pnpm dev:api
+pnpm dev:web
+
+# Required checks
+go test ./...
+go vet ./...
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+Production panel images are built with the configured buildx builder (`my-builder` by default) for `linux/amd64`:
 
 ```bash
 scripts/build-panel-images.sh --version v0.2.0 --push
 ```
 
-Production uses `compose.prod.yaml`. The HTTPS override replaces the same `nginx` service, so only one reverse proxy owns ports 80 and 443. Do not add the development `compose.yaml` to production commands.
+## Project Status
 
-## Data Location
+GamePanel Lite is under active development and intended for early self-hosted use. Review the [release notes](https://github.com/smartcat999/game-panel-lite/releases) before updating, and keep an external copy of important worlds and backups.
 
-GamePanel Lite stores its data in the `data/` directory inside the install folder. This includes the local database, server instances, worlds, backups, and mod files.
+Bug reports and focused feature requests are welcome in [GitHub Issues](https://github.com/smartcat999/game-panel-lite/issues).
 
-## Current Status
+## License
 
-GamePanel Lite is in active development and ready for early self-hosted use. The current focus is Terraria / tModLoader server management, with ongoing work for Don't Starve Together and Palworld mod workflows.
+GamePanel Lite is released under the [MIT License](LICENSE).
