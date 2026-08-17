@@ -83,7 +83,7 @@ services:
       - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
 
   prometheus:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:v2.55.1
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:${GAMEPANEL_PROMETHEUS_TAG:-v2.55.1}
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -99,7 +99,7 @@ services:
       - node-exporter
 
   cadvisor:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:v0.52.1
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:${GAMEPANEL_CADVISOR_TAG:-v0.52.1}
     privileged: true
     ports:
       - "8081:8080"
@@ -111,7 +111,7 @@ services:
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
 
   node-exporter:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:v1.10.2
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:${GAMEPANEL_NODE_EXPORTER_TAG:-v1.10.2}
     command:
       - --path.rootfs=/host
     pid: host

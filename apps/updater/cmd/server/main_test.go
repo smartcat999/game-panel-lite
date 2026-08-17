@@ -36,12 +36,21 @@ func TestNormalizeVersion(t *testing.T) {
 	}
 }
 
-func TestPanelUpdateRecreatesNginxWithChangedUpstreams(t *testing.T) {
+func TestPanelUpdateRefreshesEveryManagedImage(t *testing.T) {
+	pullArgs := strings.Join(panelUpdatePullArgs(), " ")
 	args := strings.Join(panelUpdateApplyArgs(), " ")
-	for _, required := range []string{"--force-recreate", "api", "web", "gamepanel-exporter", "nginx"} {
+	for _, required := range controlPlaneServices {
+		if !strings.Contains(pullArgs, required) {
+			t.Fatalf("panel update pull args %q do not contain %q", pullArgs, required)
+		}
+	}
+	for _, required := range []string{"--force-recreate", "api", "web", "gamepanel-exporter", "nginx", "prometheus", "cadvisor", "node-exporter"} {
 		if !strings.Contains(args, required) {
 			t.Fatalf("panel update args %q do not contain %q", args, required)
 		}
+	}
+	if strings.Contains(args, "updater") {
+		t.Fatalf("running updater must not recreate itself: %q", args)
 	}
 }
 
