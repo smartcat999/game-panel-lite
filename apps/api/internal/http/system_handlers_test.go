@@ -3,14 +3,50 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/systemupdate"
 )
+
+func TestAutomaticSystemUpdateCheckDoesNotRunAtStartup(t *testing.T) {
+	var requests atomic.Int32
+	manifest := httptest.NewServer(stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, _ *stdhttp.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"schemaVersion":1,"channel":"stable","version":"v9.9.9"}`))
+	}))
+	defer manifest.Close()
+
+	_, db, cfg := newTestRouter(t)
+	cfg.SystemUpdateInterval = time.Hour
+	handler := &Handler{
+		cfg:          cfg,
+		logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		store:        db,
+		systemUpdate: systemupdate.New(manifest.URL, "", "", time.Second),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		handler.runAutomaticSystemUpdateChecks(ctx)
+		close(done)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("automatic update check sent %d request(s) during startup", got)
+	}
+}
 
 func TestMonitoringRoutesAreRegistered(t *testing.T) {
 	router, _, _ := newTestRouter(t)
