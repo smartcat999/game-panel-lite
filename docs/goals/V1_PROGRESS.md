@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+- Prepared v0.2.4 to publish every control-plane dependency through GamePanel Lite's Docker Hub and Alibaba Cloud registries, pin upstream digests, and refresh monitoring containers during panel updates so regional deployments never mix registries.
 - Prepared v0.2.3 to force-recreate Nginx during panel updates, preventing stale upstream container addresses from taking the public site offline after API/Web replacement.
 - Prepared v0.2.2 with scalable mobile Settings navigation that switches from desktop tabs to a full-width section selector on narrow viewports.
 - Published the v0.2.1 maintenance release metadata for control-plane operations, deployment-driver capabilities, HTTPS renewal observability, stable resource tables, corrected license labels, and revised operations documentation.

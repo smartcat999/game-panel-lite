@@ -160,7 +160,7 @@ pnpm build
 发布面板镜像时使用配置好的 buildx builder（默认为 `my-builder`），并构建 `linux/amd64` 镜像：
 
 ```bash
-scripts/build-panel-images.sh --version v0.2.3 --push
+scripts/build-panel-images.sh --version v0.2.4 --push
 ```
 
 控制平面依赖镜像会同步到 GamePanel Lite 的 Docker Hub 与阿里云仓库，避免不同区域部署时混用上游仓库：

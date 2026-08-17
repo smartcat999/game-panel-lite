@@ -7,7 +7,7 @@ RUN go mod download
 
 COPY apps/api ./apps/api
 
-ARG GAMEPANEL_VERSION=v0.2.3
+ARG GAMEPANEL_VERSION=v0.2.4
 ARG GAMEPANEL_COMMIT=unknown
 ARG GAMEPANEL_BUILD_TIME=unknown
 RUN CGO_ENABLED=1 GOOS=linux go build \

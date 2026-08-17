@@ -5,10 +5,10 @@ services:
       dockerfile: docker/api/Dockerfile
       network: host
       args:
-        GAMEPANEL_VERSION: ${GAMEPANEL_IMAGE_TAG:-v0.2.3}
+        GAMEPANEL_VERSION: ${GAMEPANEL_IMAGE_TAG:-v0.2.4}
         GAMEPANEL_COMMIT: ${GAMEPANEL_COMMIT:-local}
         GAMEPANEL_BUILD_TIME: ${GAMEPANEL_BUILD_TIME:-local}
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.2.3}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.2.4}
     environment:
       GAMEPANEL_HOST: 0.0.0.0
       GAMEPANEL_PORT: 4000
@@ -18,7 +18,7 @@ services:
       GAMEPANEL_PROVIDER_CATALOG_PATH: ${GAMEPANEL_PROVIDER_CATALOG_PATH:-/etc/gamepanel/providers.json}
       GAMEPANEL_IMAGE_REGION: ${GAMEPANEL_IMAGE_REGION:-global}
       GAMEPANEL_IMAGE_REGISTRY: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}
-      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.2.3}
+      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.2.4}
       GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
       GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
       GAMEPANEL_RELEASE_MANIFEST_URL: ${GAMEPANEL_RELEASE_MANIFEST_URL:-https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/release/manifest.json}
@@ -38,7 +38,7 @@ services:
       context: .
       dockerfile: docker/updater/Dockerfile
       network: host
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-updater:${GAMEPANEL_IMAGE_TAG:-v0.2.3}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-updater:${GAMEPANEL_IMAGE_TAG:-v0.2.4}
     environment:
       GAMEPANEL_UPDATER_HOST: 0.0.0.0
       GAMEPANEL_UPDATER_PORT: 4020
@@ -55,7 +55,7 @@ services:
       context: .
       dockerfile: docker/exporter/Dockerfile
       network: host
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.2.3}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.2.4}
     environment:
       GAMEPANEL_HOST: 0.0.0.0
       GAMEPANEL_PORT: 4010
@@ -125,7 +125,7 @@ services:
       network: host
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.2.3}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.2.4}
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
     depends_on:
