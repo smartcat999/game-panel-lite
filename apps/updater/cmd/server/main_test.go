@@ -36,6 +36,15 @@ func TestNormalizeVersion(t *testing.T) {
 	}
 }
 
+func TestPanelUpdateRecreatesNginxWithChangedUpstreams(t *testing.T) {
+	args := strings.Join(panelUpdateApplyArgs(), " ")
+	for _, required := range []string{"--force-recreate", "api", "web", "gamepanel-exporter", "nginx"} {
+		if !strings.Contains(args, required) {
+			t.Fatalf("panel update args %q do not contain %q", args, required)
+		}
+	}
+}
+
 func TestParseComposeServicesSupportsArrayAndLineJSON(t *testing.T) {
 	for _, input := range []string{
 		`[{"Service":"api","State":"running","Health":"healthy","Image":"api:v1"}]`,

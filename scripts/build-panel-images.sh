@@ -5,7 +5,7 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 builder="${GAMEPANEL_BUILDX_BUILDER:-my-builder}"
 platform="${GAMEPANEL_BUILD_PLATFORM:-linux/amd64}"
 registry="${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}"
-version="${GAMEPANEL_IMAGE_TAG:-v0.2.2}"
+version="${GAMEPANEL_IMAGE_TAG:-v0.2.3}"
 output="--load"
 
 usage() {

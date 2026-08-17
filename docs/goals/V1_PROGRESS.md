@@ -2,6 +2,7 @@
 
 ## 2026-08-17
 
+- Prepared v0.2.3 to force-recreate Nginx during panel updates, preventing stale upstream container addresses from taking the public site offline after API/Web replacement.
 - Prepared v0.2.2 with scalable mobile Settings navigation that switches from desktop tabs to a full-width section selector on narrow viewports.
 - Published the v0.2.1 maintenance release metadata for control-plane operations, deployment-driver capabilities, HTTPS renewal observability, stable resource tables, corrected license labels, and revised operations documentation.
 - Integrated fixed-operation control-plane maintenance into Settings with authenticated deployment status, service recovery, confirmed restarts, HTTPS setup and renewal jobs, certificate and automatic-renewal inspection, a daily Updater renewal scheduler that defers to existing systemd timers, persistent job state, bilingual UI, and OpenAPI coverage; deliberately kept full control-plane shutdown command-line only so the panel cannot lock users out of its own recovery action.
