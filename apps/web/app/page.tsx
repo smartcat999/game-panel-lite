@@ -405,7 +405,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 text-sm text-[#bccabb] sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <div>
             <p className="font-semibold text-white">GamePanel Lite</p>
-            <p className="mt-1 text-xs">Released under MIT License.</p>
+            <p className="mt-1 text-xs">Released under Apache License 2.0.</p>
           </div>
           <nav className="flex flex-wrap gap-4">
             <Link href="/dashboard" className="hover:text-[#6bfb9a]">Dashboard</Link>

@@ -171,4 +171,4 @@ GamePanel Lite 正在持续开发，适合早期自托管使用。更新前请�
 
 ## 开源许可证
 
-GamePanel Lite 使用 [MIT License](../LICENSE)。
+GamePanel Lite 使用 [Apache License 2.0](../LICENSE)。
