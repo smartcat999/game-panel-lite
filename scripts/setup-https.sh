@@ -5,6 +5,13 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ENV_FILE="$ROOT_DIR/.env"
 DOMAIN="${1:-}"
 EMAIL="${2:-}"
+IMAGE_REGION="${GAMEPANEL_IMAGE_REGION:-global}"
+case "$IMAGE_REGION" in
+  global) DEFAULT_IMAGE_REGISTRY="smartcat99999" ;;
+  cn) DEFAULT_IMAGE_REGISTRY="registry.cn-hangzhou.aliyuncs.com/gamepanel-lite" ;;
+  *) echo "GAMEPANEL_IMAGE_REGION must be global or cn" >&2; exit 2 ;;
+esac
+IMAGE_REGISTRY="${GAMEPANEL_IMAGE_REGISTRY:-$DEFAULT_IMAGE_REGISTRY}"
 
 if [ -z "$DOMAIN" ]; then
   echo "Usage: sh scripts/setup-https.sh <domain> [email]"
@@ -31,8 +38,8 @@ GAMEPANEL_DOCKER_SOCKET_PATH="/var/run/docker.sock"
 GAMEPANEL_WEB_PORT="80"
 GAMEPANEL_HTTPS_PORT="443"
 NEXT_PUBLIC_API_BASE_URL=""
-GAMEPANEL_IMAGE_REGION="global"
-GAMEPANEL_IMAGE_REGISTRY="smartcat99999"
+GAMEPANEL_IMAGE_REGION="$IMAGE_REGION"
+GAMEPANEL_IMAGE_REGISTRY="$IMAGE_REGISTRY"
 GAMEPANEL_IMAGE_TAG="v0.2.4"
 GAMEPANEL_PALWORLD_MOD_PACK_TAG="v0.1.0"
 GAMEPANEL_DOMAIN="$DOMAIN"

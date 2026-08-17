@@ -58,46 +58,74 @@ GamePanel Lite 为个人玩家、朋友小队和小型社区服主提供统一�
 安装当前稳定版本：
 
 ```bash
-# 默认安装到 ~/gamepanel-lite
+# 交互式安装；根据提示选择安装目录和镜像区域。
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
 
-# 或指定安装目录
+# 中国大陆非交互式安装
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | GAMEPANEL_IMAGE_REGION=cn sh
+
+# 可选：指定安装目录
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- "$HOME/apps/gamepanel-lite"
 ```
 
-容器启动后访问 `http://服务器IP:3001`。
+首次安装默认使用 `~/gamepanel-lite`，之后会默认显示上次成功安装的目录。控制平面仓库在安装时选择，后续与面板中的游戏镜像区域保持独立。重复运行安装器时会识别已有目录和区域，也允许重新选择；切换区域前会自动备份 `.env`。
+
+容器启动后：
+
+1. 访问 `http://服务器IP:3001`。
+2. 创建本地管理员账号。
+3. 在**游戏库**安装运行镜像。
+4. 点击**创建服务器**并按向导完成配置。
 
 ### 启用 HTTPS
 
-先把域名解析到服务器，然后执行：
+HTTPS 直接在面板中配置：
+
+1. 将面板域名解析到服务器，并开放 TCP `80`、`443` 端口。
+2. 打开**设置 → 访问与 HTTPS**。
+3. 填写域名和可选的证书邮箱。
+4. 点击**配置 HTTPS**，确认控制平面的短暂重启。
+
+GamePanel Lite 会自动配置 Nginx、申请证书、切换面板入口并启用续签检查，不会重启正在运行的游戏服务器。
+
+<details>
+<summary>命令行备用方式</summary>
+
+仅在面板无法访问，或当前部署驱动不支持管理 HTTPS 时使用：
 
 ```bash
 cd ~/gamepanel-lite
 sudo sh scripts/setup-https.sh panel.example.com admin@example.com
 ```
 
-HTTPS 部署会组合使用 `compose.prod.yaml` 和 `compose.https.yaml`。覆盖文件替换的是同一个 Nginx 服务，不会创建第二个反向代理。使用 systemd 的主机会同时安装每日证书续期检查。
+</details>
 
 ## 日常运维
 
-在安装目录中执行控制平面操作：
+常用控制平面操作已经集成到面板：
+
+- **设置 → 更新与维护：** 服务状态、恢复、重启和面板更新。
+- **设置 → 访问与 HTTPS：** 证书状态、HTTPS 配置和续签检查。
+- **监控：** 宿主机、容器和游戏服务器健康状态。
+
+控制平面维护不会重建游戏容器，也不会修改存档。
+
+<details>
+<summary>命令行恢复与诊断</summary>
 
 ```bash
+cd ~/gamepanel-lite
 sudo sh scripts/manage.sh status
 sudo sh scripts/manage.sh start
 sudo sh scripts/manage.sh update
 sudo sh scripts/manage.sh stop
-```
 
-`manage.sh update` 只拉取并重建发生变化的面板服务，不会重建游戏容器或修改存档。启用 updater 服务后，也可以在设置页完成同样的异步面板更新流程。
-
-常用检查命令：
-
-```bash
 docker compose -f compose.prod.yaml ps
 curl http://127.0.0.1:3001/healthz
 sudo journalctl -u gamepanel-lite-https-renewal.service
 ```
+
+</details>
 
 ### 三种更新的边界
 

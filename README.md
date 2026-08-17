@@ -58,46 +58,74 @@ Provider capabilities differ by game. The interface only exposes configuration, 
 Install the current stable release:
 
 ```bash
-# Installs to ~/gamepanel-lite
+# Interactive installation; choose the directory and image region when prompted.
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh
 
-# Or choose an installation directory
+# Non-interactive China Mainland installation
+curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | GAMEPANEL_IMAGE_REGION=cn sh
+
+# Optional custom installation directory
 curl -fsSL https://raw.githubusercontent.com/smartcat999/game-panel-lite/main/scripts/install-online.sh | sh -s -- "$HOME/apps/gamepanel-lite"
 ```
 
-Open `http://YOUR_SERVER_IP:3001` after the containers start.
+The installer defaults to the last successful installation directory, or `~/gamepanel-lite` on first use. The control-plane registry is selected during installation and remains independent from the game-image region configured later in the panel. Re-running the installer detects the existing directory and region, while still allowing either value to be changed.
+
+After the containers start:
+
+1. Open `http://YOUR_SERVER_IP:3001`.
+2. Create the local administrator account.
+3. Install a runtime image from **Game Library**.
+4. Select **Create server** and follow the guided setup.
 
 ### Enable HTTPS
 
-Point a domain at the host, then run:
+HTTPS is configured from the panel:
+
+1. Point the panel domain to the server and allow TCP ports `80` and `443`.
+2. Open **Settings → Access & HTTPS**.
+3. Enter the domain and an optional certificate email.
+4. Select **Configure HTTPS** and confirm the short control-plane restart.
+
+GamePanel Lite configures Nginx, requests the certificate, switches the panel entry point, and enables renewal checks. Running game servers are not restarted.
+
+<details>
+<summary>Command-line fallback</summary>
+
+Use this only when the panel is unavailable or the current deployment driver cannot manage HTTPS:
 
 ```bash
 cd ~/gamepanel-lite
 sudo sh scripts/setup-https.sh panel.example.com admin@example.com
 ```
 
-HTTPS uses `compose.prod.yaml` together with `compose.https.yaml`. The override replaces the same Nginx service, so one reverse proxy owns the public ports. On systemd hosts, setup also installs a daily certificate-renewal check.
+</details>
 
 ## Operations
 
-Run control-plane operations from the installation directory:
+Routine control-plane work is available in the panel:
+
+- **Settings → Updates & Maintenance:** service status, recovery, restart, and panel updates.
+- **Settings → Access & HTTPS:** certificate status, HTTPS setup, and renewal checks.
+- **Monitoring:** host, container, and game-server health.
+
+Control-plane maintenance does not recreate managed game containers or modify save data.
+
+<details>
+<summary>Command-line recovery and diagnostics</summary>
 
 ```bash
+cd ~/gamepanel-lite
 sudo sh scripts/manage.sh status
 sudo sh scripts/manage.sh start
 sudo sh scripts/manage.sh update
 sudo sh scripts/manage.sh stop
-```
 
-`manage.sh update` pulls and recreates changed panel services. It does not recreate game containers or modify saves. The Settings page offers the same panel-update workflow when the updater service is available.
-
-Useful checks:
-
-```bash
 docker compose -f compose.prod.yaml ps
 curl http://127.0.0.1:3001/healthz
 sudo journalctl -u gamepanel-lite-https-renewal.service
 ```
+
+</details>
 
 ### Update boundaries
 
