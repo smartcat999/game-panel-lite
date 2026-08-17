@@ -33,6 +33,11 @@ export default function SettingsPage() {
   const [imageRegion, setImageRegion] = useState<ImageRegion | null>(null);
   const [notice, setNotice] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("basic");
+  const settingsTabs: { icon: ReactNode; key: SettingsTab; label: string }[] = [
+    { key: "basic", label: t("settingsTabBasic"), icon: <ServerCog className="size-4" /> },
+    { key: "access", label: t("settingsTabAccess"), icon: <LockKeyhole className="size-4" /> },
+    { key: "maintenance", label: t("settingsTabMaintenance"), icon: <Wrench className="size-4" /> }
+  ];
 
   const savedPublicHost = settings.data?.publicHost ?? "";
   const savedImageRegion: ImageRegion = settings.data?.imageRegion === "cn" ? "cn" : "global";
@@ -94,10 +99,19 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <nav aria-label={t("settingsSections")} className="mb-5 flex overflow-x-auto border-b border-panel-line">
-        <SettingsTabButton active={activeTab === "basic"} icon={<ServerCog className="size-4" />} label={t("settingsTabBasic")} onClick={() => setActiveTab("basic")} />
-        <SettingsTabButton active={activeTab === "access"} icon={<LockKeyhole className="size-4" />} label={t("settingsTabAccess")} onClick={() => setActiveTab("access")} />
-        <SettingsTabButton active={activeTab === "maintenance"} icon={<Wrench className="size-4" />} label={t("settingsTabMaintenance")} onClick={() => setActiveTab("maintenance")} />
+      <label className="mb-5 block sm:hidden">
+        <span className="sr-only">{t("settingsSections")}</span>
+        <select
+          aria-label={t("settingsSections")}
+          className="h-11 w-full rounded-md border border-panel-line bg-panel-card px-3 text-sm font-medium text-slate-100 outline-none focus:border-panel-green focus:ring-2 focus:ring-panel-green/20"
+          value={activeTab}
+          onChange={(event) => setActiveTab(event.target.value as SettingsTab)}
+        >
+          {settingsTabs.map((tab) => <option key={tab.key} value={tab.key}>{tab.label}</option>)}
+        </select>
+      </label>
+      <nav aria-label={t("settingsSections")} className="mb-5 hidden overflow-x-auto border-b border-panel-line sm:flex">
+        {settingsTabs.map((tab) => <SettingsTabButton key={tab.key} active={activeTab === tab.key} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.key)} />)}
       </nav>
 
       {activeTab === "basic" ? <form onSubmit={submit}>
@@ -190,13 +204,13 @@ function SettingsTabButton({ active, icon, label, onClick }: { active: boolean; 
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex h-11 shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40",
+        "inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40",
         active ? "border-panel-green text-white" : "border-transparent text-slate-500 hover:text-slate-200"
       )}
       type="button"
       onClick={onClick}
     >
-      {icon}{label}
+      {icon}<span>{label}</span>
     </button>
   );
 }

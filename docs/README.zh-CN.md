@@ -160,7 +160,7 @@ pnpm build
 发布面板镜像时使用配置好的 buildx builder（默认为 `my-builder`），并构建 `linux/amd64` 镜像：
 
 ```bash
-scripts/build-panel-images.sh --version v0.2.1 --push
+scripts/build-panel-images.sh --version v0.2.2 --push
 ```
 
 ## 项目状态
