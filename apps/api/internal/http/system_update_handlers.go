@@ -149,7 +149,6 @@ func (h *Handler) runAutomaticSystemUpdateChecks(ctx context.Context) {
 			h.recordActivity(context.Background(), "", "system.update.available", fmt.Sprintf("GamePanel Lite %s is available", status.Latest.Version), map[string]any{"version": status.Latest.Version})
 		}
 	}
-	check()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
