@@ -2,9 +2,9 @@ FROM golang:1.25-bookworm AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor ./vendor
 COPY apps/updater ./apps/updater
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/gamepanel-updater ./apps/updater/cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /out/gamepanel-updater ./apps/updater/cmd/server
 
 FROM docker:28-cli
 RUN docker compose version
