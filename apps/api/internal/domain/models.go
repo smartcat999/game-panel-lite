@@ -441,18 +441,19 @@ type WorkloadAssignment struct {
 // WorkloadObservation is the worker's latest observation of real runtime state.
 // AssignmentUID fences stale reports from earlier placements of the same server.
 type WorkloadObservation struct {
-	ID                 string            `json:"id" gorm:"primaryKey"`
-	AssignmentUID      string            `json:"assignmentUid" gorm:"uniqueIndex"`
-	ServerID           string            `json:"serverId" gorm:"index"`
-	NodeID             string            `json:"nodeId" gorm:"index"`
-	ObservedGeneration int               `json:"observedGeneration"`
-	RuntimeID          string            `json:"runtimeId,omitempty"`
-	ActualState        ServerActualState `json:"actualState"`
-	Conditions         []ServerCondition `json:"conditions,omitempty" gorm:"serializer:json"`
-	LastError          string            `json:"lastError,omitempty"`
-	ObservedAt         time.Time         `json:"observedAt"`
-	CreatedAt          time.Time         `json:"createdAt"`
-	UpdatedAt          time.Time         `json:"updatedAt"`
+	ID                       string            `json:"id" gorm:"primaryKey"`
+	AssignmentUID            string            `json:"assignmentUid" gorm:"uniqueIndex"`
+	ServerID                 string            `json:"serverId" gorm:"index"`
+	NodeID                   string            `json:"nodeId" gorm:"index"`
+	ObservedGeneration       int               `json:"observedGeneration"`
+	RuntimeID                string            `json:"runtimeId,omitempty"`
+	ActualState              ServerActualState `json:"actualState"`
+	Conditions               []ServerCondition `json:"conditions,omitempty" gorm:"serializer:json"`
+	LastError                string            `json:"lastError,omitempty"`
+	ReconcileDurationSeconds float64           `json:"reconcileDurationSeconds" gorm:"-"`
+	ObservedAt               time.Time         `json:"observedAt"`
+	CreatedAt                time.Time         `json:"createdAt"`
+	UpdatedAt                time.Time         `json:"updatedAt"`
 }
 
 type AdminAccount struct {

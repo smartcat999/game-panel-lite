@@ -41,11 +41,12 @@ type agentWorkloadSpec struct {
 }
 
 type workloadObservation struct {
-	ObservedGeneration int       `json:"observedGeneration"`
-	RuntimeID          string    `json:"runtimeId,omitempty"`
-	ActualState        string    `json:"actualState"`
-	LastError          string    `json:"lastError,omitempty"`
-	ObservedAt         time.Time `json:"observedAt"`
+	ObservedGeneration       int       `json:"observedGeneration"`
+	RuntimeID                string    `json:"runtimeId,omitempty"`
+	ActualState              string    `json:"actualState"`
+	LastError                string    `json:"lastError,omitempty"`
+	ReconcileDurationSeconds float64   `json:"reconcileDurationSeconds"`
+	ObservedAt               time.Time `json:"observedAt"`
 }
 
 type dockerContainerState struct {
@@ -89,8 +90,12 @@ func reconcileWorkload(assignment workloadAssignment, logger *slog.Logger) workl
 	return reconcileWorkloadWithClient(assignment, logger, newDockerSocketClient(90*time.Second))
 }
 
-func reconcileWorkloadWithClient(assignment workloadAssignment, logger *slog.Logger, dockerClient *http.Client) workloadObservation {
-	observation := workloadObservation{
+func reconcileWorkloadWithClient(assignment workloadAssignment, logger *slog.Logger, dockerClient *http.Client) (observation workloadObservation) {
+	startedAt := time.Now()
+	defer func() {
+		observation.ReconcileDurationSeconds = time.Since(startedAt).Seconds()
+	}()
+	observation = workloadObservation{
 		ObservedGeneration: assignment.Generation,
 		ActualState:        "unknown",
 		ObservedAt:         time.Now().UTC(),
@@ -117,9 +122,13 @@ func reconcileWorkloadWithClient(assignment workloadAssignment, logger *slog.Log
 				observation.LastError = err.Error()
 				return observation
 			}
+			state, err = inspectAgentContainer(dockerClient, containerName)
+			if err != nil {
+				observation.LastError = err.Error()
+				return observation
+			}
 		}
-		state, err = inspectAgentContainer(dockerClient, containerName)
-		if err == nil && !state.Running {
+		if !state.Running {
 			err = startAgentContainer(dockerClient, containerName)
 		}
 	case "stopped":

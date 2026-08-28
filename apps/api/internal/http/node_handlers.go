@@ -272,6 +272,7 @@ func (h *Handler) agentRegister(w http.ResponseWriter, r *http.Request) {
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
 	node.UpdatedAt = time.Now().UTC()
+	h.apiMetrics.ObserveAgentHeartbeat(node.ID, node.LastHeartbeat)
 
 	if err := h.store.UpdateComputeNode(r.Context(), &node); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update node status: "+err.Error())
@@ -324,6 +325,7 @@ func (h *Handler) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
 	node.UpdatedAt = time.Now().UTC()
+	h.apiMetrics.ObserveAgentHeartbeat(node.ID, node.LastHeartbeat)
 
 	_ = h.store.UpdateComputeNode(r.Context(), &node)
 
@@ -492,6 +494,14 @@ func (h *Handler) listAgentAssignments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list workload assignments")
 		return
 	}
+	pending := 0
+	for _, assignment := range assignments {
+		observation, observationErr := h.store.GetWorkloadObservation(r.Context(), assignment.UID)
+		if observationErr != nil || observation.ObservedGeneration < assignment.Generation {
+			pending++
+		}
+	}
+	h.apiMetrics.SetWorkloadBacklog(node.ID, pending)
 	writeJSON(w, http.StatusOK, assignments)
 }
 
@@ -518,6 +528,10 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusConflict, "observation generation is newer than assignment")
 		return
 	}
+	if observation.ReconcileDurationSeconds < 0 || observation.ReconcileDurationSeconds > 600 {
+		writeError(w, http.StatusBadRequest, "invalid reconcile duration")
+		return
+	}
 	now := time.Now().UTC()
 	observation.ID = uuid.NewString()
 	observation.AssignmentUID = assignment.UID
@@ -532,6 +546,13 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "failed to persist workload observation")
 		return
 	}
+	h.apiMetrics.ObserveWorkloadReconcile(
+		node.ID,
+		assignment.ServerID,
+		time.Duration(observation.ReconcileDurationSeconds*float64(time.Second)),
+		assignment.Generation-observation.ObservedGeneration,
+		observation.LastError != "",
+	)
 	writeJSON(w, http.StatusOK, map[string]int{"acceptedGeneration": observation.ObservedGeneration})
 }
 

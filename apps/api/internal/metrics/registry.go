@@ -31,6 +31,12 @@ type Registry struct {
 
 	prometheusDuration map[string]*histogram
 	prometheusErrors   map[string]float64
+
+	workerHeartbeat     map[string]float64
+	workerBacklog       map[string]float64
+	workerDuration      map[string]*histogram
+	workerFailures      map[string]float64
+	workerGenerationLag map[string]float64
 }
 
 type histogram struct {
@@ -41,15 +47,20 @@ type histogram struct {
 
 func NewRegistry() *Registry {
 	return &Registry{
-		httpRequests:       map[string]float64{},
-		httpDuration:       map[string]*histogram{},
-		httpInFlight:       map[string]float64{},
-		sseConnections:     map[string]float64{},
-		sseEvents:          map[string]float64{},
-		dbDuration:         map[string]*histogram{},
-		dbErrors:           map[string]float64{},
-		prometheusDuration: map[string]*histogram{},
-		prometheusErrors:   map[string]float64{},
+		httpRequests:        map[string]float64{},
+		httpDuration:        map[string]*histogram{},
+		httpInFlight:        map[string]float64{},
+		sseConnections:      map[string]float64{},
+		sseEvents:           map[string]float64{},
+		dbDuration:          map[string]*histogram{},
+		dbErrors:            map[string]float64{},
+		prometheusDuration:  map[string]*histogram{},
+		prometheusErrors:    map[string]float64{},
+		workerHeartbeat:     map[string]float64{},
+		workerBacklog:       map[string]float64{},
+		workerDuration:      map[string]*histogram{},
+		workerFailures:      map[string]float64{},
+		workerGenerationLag: map[string]float64{},
 	}
 }
 
@@ -97,6 +108,28 @@ func (r *Registry) ObserveDBQuery(operation string, elapsed time.Duration, err e
 	}
 }
 
+func (r *Registry) ObserveAgentHeartbeat(nodeID string, at time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.workerHeartbeat[labelKey(nodeID)] = float64(at.Unix())
+}
+
+func (r *Registry) SetWorkloadBacklog(nodeID string, pending int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.workerBacklog[labelKey(nodeID)] = float64(pending)
+}
+
+func (r *Registry) ObserveWorkloadReconcile(nodeID, serverID string, elapsed time.Duration, generationLag int, failed bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.histogramLocked(r.workerDuration, labelKey(nodeID)).observe(elapsed.Seconds())
+	r.workerGenerationLag[labelKey(nodeID, serverID)] = float64(max(generationLag, 0))
+	if failed {
+		r.workerFailures[labelKey(nodeID)]++
+	}
+}
+
 func (r *Registry) AddSSEConnection(stream string, delta float64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -125,6 +158,11 @@ func (r *Registry) PrometheusText() string {
 	writeCounterVec(&b, "gamepanel_api_db_errors_total", "Database errors by operation.", []string{"operation"}, r.dbErrors)
 	writeHistogramVec(&b, "gamepanel_api_prometheus_query_duration_seconds", "Prometheus query duration in seconds.", []string{"query_type"}, r.prometheusDuration)
 	writeCounterVec(&b, "gamepanel_api_prometheus_query_errors_total", "Prometheus query errors by query type.", []string{"query_type"}, r.prometheusErrors)
+	writeGaugeVec(&b, "gamepanel_worker_last_heartbeat_timestamp_seconds", "Unix timestamp of the last accepted worker heartbeat.", []string{"node_id"}, r.workerHeartbeat)
+	writeGaugeVec(&b, "gamepanel_worker_reconcile_backlog", "Assignments whose generation has not yet been observed by the worker.", []string{"node_id"}, r.workerBacklog)
+	writeHistogramVec(&b, "gamepanel_worker_reconcile_duration_seconds", "Worker workload reconcile duration in seconds.", []string{"node_id"}, r.workerDuration)
+	writeCounterVec(&b, "gamepanel_worker_reconcile_failures_total", "Failed worker workload reconcile attempts.", []string{"node_id"}, r.workerFailures)
+	writeGaugeVec(&b, "gamepanel_worker_generation_lag", "Difference between desired and observed workload generations.", []string{"node_id", "server_id"}, r.workerGenerationLag)
 	return b.String()
 }
 
