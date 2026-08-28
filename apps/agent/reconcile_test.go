@@ -4,6 +4,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -56,5 +58,36 @@ func TestAgentDataBindPathsSupportsWholeDataDirectoryMount(t *testing.T) {
 	}
 	if host != "/var/lib/gamepanel/instances/server-1" || container != "/data" {
 		t.Fatalf("unexpected bind paths: %s:%s", host, container)
+	}
+}
+
+func TestNormalizeAgentInstancePermissions(t *testing.T) {
+	root := t.TempDir()
+	worlds := filepath.Join(root, "Worlds")
+	if err := os.Mkdir(worlds, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	world := filepath.Join(worlds, "world.wld")
+	if err := os.WriteFile(world, []byte("world"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := normalizeAgentInstancePermissions(root); err != nil {
+		t.Fatal(err)
+	}
+
+	worldsInfo, err := os.Stat(worlds)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := worldsInfo.Mode().Perm(); got != 0o777 {
+		t.Fatalf("expected Worlds mode 0777, got %04o", got)
+	}
+	worldInfo, err := os.Stat(world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := worldInfo.Mode().Perm(); got != 0o666 {
+		t.Fatalf("expected world mode 0666, got %04o", got)
 	}
 }
