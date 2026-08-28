@@ -76,6 +76,7 @@ func main() {
 		fmt.Println("    -e MASTER_URL=\"https://your-panel.com\" \\")
 		fmt.Println("    -e AGENT_TOKEN=\"gpl_agent_xxxx\" \\")
 		fmt.Println("    -v /var/run/docker.sock:/var/run/docker.sock \\")
+		fmt.Println("    -v /var/lib/gamepanel:/var/lib/gamepanel \\")
 		fmt.Println("    smartcat99999/game-panel-lite-agent:v0.4.48")
 		os.Exit(1)
 	}
