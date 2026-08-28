@@ -15,4 +15,3 @@ data
 *.db-journal
 generated
 tmp
-/vendor/

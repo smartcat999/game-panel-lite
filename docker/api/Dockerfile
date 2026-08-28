@@ -3,13 +3,14 @@ FROM golang:1.25-bookworm AS builder
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor ./vendor
 COPY apps/api ./apps/api
 
 ARG GAMEPANEL_VERSION=v0.4.22
 ARG GAMEPANEL_COMMIT=unknown
 ARG GAMEPANEL_BUILD_TIME=unknown
 RUN CGO_ENABLED=1 GOOS=linux go build \
+  -mod=vendor \
   -ldflags "-X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.Version=${GAMEPANEL_VERSION} -X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.Commit=${GAMEPANEL_COMMIT} -X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.BuildTime=${GAMEPANEL_BUILD_TIME}" \
   -o /out/gamepanel-api ./apps/api/cmd/server
 
