@@ -87,3 +87,10 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentDockerCommandMountsWorkerDataDirectory(t *testing.T) {
+	command := agentDockerCommand("https://panel.example.com", "node-token")
+	if !strings.Contains(command, "-v /var/lib/gamepanel:/var/lib/gamepanel") {
+		t.Fatalf("expected worker data mount in agent command, got %q", command)
+	}
+}

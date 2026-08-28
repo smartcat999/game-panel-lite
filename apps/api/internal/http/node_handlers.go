@@ -208,10 +208,7 @@ func (h *Handler) getNodeJoinCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	masterURL := fmt.Sprintf("%s://%s", scheme, host)
 
-	dockerCmd := fmt.Sprintf(
-		"docker run -d --name gamepanel-agent --restart always --net=host -v /var/run/docker.sock:/var/run/docker.sock -e MASTER_URL=%s -e AGENT_TOKEN=%s smartcat99999/game-panel-lite-agent:latest",
-		masterURL, node.Token,
-	)
+	dockerCmd := agentDockerCommand(masterURL, node.Token)
 	shellCmd := fmt.Sprintf(
 		"curl -fsSL %s/install-agent.sh | sudo bash -s -- --master=%s --token=%s",
 		masterURL, masterURL, node.Token,
@@ -224,6 +221,13 @@ func (h *Handler) getNodeJoinCommand(w http.ResponseWriter, r *http.Request) {
 		DockerCommand: dockerCmd,
 		ShellCommand:  shellCmd,
 	})
+}
+
+func agentDockerCommand(masterURL, token string) string {
+	return fmt.Sprintf(
+		"docker run -d --name gamepanel-agent --restart always --net=host -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/gamepanel:/var/lib/gamepanel -e MASTER_URL=%s -e AGENT_TOKEN=%s smartcat99999/game-panel-lite-agent:latest",
+		masterURL, token,
+	)
 }
 
 func (h *Handler) agentRegister(w http.ResponseWriter, r *http.Request) {
