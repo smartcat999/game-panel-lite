@@ -49,7 +49,7 @@ type HeartbeatPayload struct {
 	PingLatencyMS   int     `json:"pingLatencyMs"`
 }
 
-const AgentVersion = "v0.4.45"
+const AgentVersion = "v0.4.47"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -74,7 +74,7 @@ func main() {
 		fmt.Println("    -e MASTER_URL=\"https://your-panel.com\" \\")
 		fmt.Println("    -e AGENT_TOKEN=\"gpl_agent_xxxx\" \\")
 		fmt.Println("    -v /var/run/docker.sock:/var/run/docker.sock \\")
-		fmt.Println("    smartcat99999/game-panel-lite-agent:v0.4.35")
+		fmt.Println("    smartcat99999/game-panel-lite-agent:v0.4.47")
 		os.Exit(1)
 	}
 
