@@ -247,6 +247,9 @@ func createAgentContainer(client *http.Client, assignment workloadAssignment, lo
 			return err
 		}
 	}
+	if err := normalizeAgentInstancePermissions(instanceDir); err != nil {
+		return err
+	}
 	pullURL := "http://localhost/images/create?fromImage=" + url.QueryEscape(assignment.Spec.Image)
 	pullReq, _ := http.NewRequest(http.MethodPost, pullURL, nil)
 	pullResp, err := client.Do(pullReq)
@@ -316,6 +319,21 @@ func createAgentContainer(client *http.Client, assignment workloadAssignment, lo
 	}
 	logger.Info("created reconciled workload container", "server_id", assignment.ServerID, "generation", assignment.Generation)
 	return nil
+}
+
+func normalizeAgentInstancePermissions(root string) error {
+	return filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if entry.IsDir() {
+			return os.Chmod(path, 0o777)
+		}
+		return os.Chmod(path, 0o666)
+	})
 }
 
 func startAgentContainer(client *http.Client, name string) error {
