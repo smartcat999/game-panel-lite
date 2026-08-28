@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 		t.Fatalf("unexpected assignments: %v %+v", err, assignments)
 	}
 
-	statusBody := []byte(`{"observedGeneration":1,"actualState":"running"}`)
+	statusBody := []byte(`{"observedGeneration":1,"actualState":"running","reconcileDurationSeconds":0.25}`)
 	forbiddenRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/agent/assignments/uid-1/status", bytes.NewReader(statusBody))
 	forbiddenRequest.Header.Set("X-Node-Token", "token-b")
 	forbiddenResponse := httptest.NewRecorder()
@@ -71,5 +72,18 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 	observation, err := db.GetWorkloadObservation(context.Background(), assignment.UID)
 	if err != nil || observation.NodeID != "node-a" || observation.ActualState != domain.ActualRunning {
 		t.Fatalf("unexpected stored observation: %v %+v", err, observation)
+	}
+
+	metricsResponse := httptest.NewRecorder()
+	router.ServeHTTP(metricsResponse, httptest.NewRequest(stdhttp.MethodGet, "/metrics", nil))
+	metricsBody := metricsResponse.Body.String()
+	for _, expected := range []string{
+		`gamepanel_worker_reconcile_backlog{node_id="node-a"} 1`,
+		`gamepanel_worker_reconcile_duration_seconds_count{node_id="node-a"} 1`,
+		`gamepanel_worker_generation_lag{node_id="node-a",server_id="server-1"} 0`,
+	} {
+		if !strings.Contains(metricsBody, expected) {
+			t.Fatalf("expected agent metric %q, got:\n%s", expected, metricsBody)
+		}
 	}
 }

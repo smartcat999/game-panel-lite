@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -89,5 +90,61 @@ func TestNormalizeAgentInstancePermissions(t *testing.T) {
 	}
 	if got := worldInfo.Mode().Perm(); got != 0o666 {
 		t.Fatalf("expected world mode 0666, got %04o", got)
+	}
+}
+
+func TestServerIDFromContainerNamesIgnoresAgentContainers(t *testing.T) {
+	for _, names := range [][]string{
+		{"/gamepanel-agent"},
+		{"/gamepanel-agent-backup-20260828"},
+	} {
+		if got := serverIDFromContainerNames(names); got != "" {
+			t.Fatalf("expected agent container %v to be ignored, got %q", names, got)
+		}
+	}
+	const serverID = "f2b4c3b6-86bb-448a-b6b1-0745cf1c12c7"
+	if got := serverIDFromContainerNames([]string{"/gamepanel-" + serverID}); got != serverID {
+		t.Fatalf("expected game server id %q, got %q", serverID, got)
+	}
+}
+
+func TestReportWorkloadObservationRecoversOnNextAttempt(t *testing.T) {
+	attempts := 0
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		attempts++
+		if attempts == 1 {
+			return nil, errors.New("master unavailable")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"acceptedGeneration":2}`)), Header: make(http.Header)}, nil
+	})}
+	assignment := workloadAssignment{UID: "uid-1", ServerID: "server-1", NodeID: "node-1", Generation: 2}
+	observation := workloadObservation{ObservedGeneration: 2, ActualState: "running"}
+	if err := reportWorkloadObservation(client, AgentConfig{MasterURL: "http://master", Token: "token"}, assignment, observation); err == nil {
+		t.Fatal("expected first report to fail while master is unavailable")
+	}
+	if err := reportWorkloadObservation(client, AgentConfig{MasterURL: "http://master", Token: "token"}, assignment, observation); err != nil {
+		t.Fatalf("expected next reconcile report to recover: %v", err)
+	}
+}
+
+func TestReconcileRunningAssignmentIsIdempotentAfterAgentRestart(t *testing.T) {
+	requests := 0
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
+		if req.Method != http.MethodGet || !strings.HasSuffix(req.URL.Path, "/json") {
+			t.Fatalf("unexpected mutation during steady-state reconcile: %s %s", req.Method, req.URL.Path)
+		}
+		body := `{"Id":"container-1","State":{"Running":true},"Config":{"Labels":{"io.gamepanel.assignment-uid":"uid-1","io.gamepanel.generation":"2"}}}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}
+	assignment := workloadAssignment{UID: "uid-1", ServerID: "server-1", NodeID: "node-1", Generation: 2, DesiredState: "running"}
+	for i := 0; i < 2; i++ {
+		observation := reconcileWorkloadWithClient(assignment, slog.Default(), client)
+		if observation.LastError != "" || observation.ActualState != "running" {
+			t.Fatalf("unexpected observation after restart pass %d: %+v", i+1, observation)
+		}
+	}
+	if requests != 4 {
+		t.Fatalf("expected two read-only inspections per pass, got %d requests", requests)
 	}
 }

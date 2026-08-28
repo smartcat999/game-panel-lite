@@ -19,6 +19,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type AgentConfig struct {
@@ -49,7 +51,7 @@ type HeartbeatPayload struct {
 	PingLatencyMS   int     `json:"pingLatencyMs"`
 }
 
-const AgentVersion = "v0.4.47"
+const AgentVersion = "v0.4.48"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -74,7 +76,7 @@ func main() {
 		fmt.Println("    -e MASTER_URL=\"https://your-panel.com\" \\")
 		fmt.Println("    -e AGENT_TOKEN=\"gpl_agent_xxxx\" \\")
 		fmt.Println("    -v /var/run/docker.sock:/var/run/docker.sock \\")
-		fmt.Println("    smartcat99999/game-panel-lite-agent:v0.4.47")
+		fmt.Println("    smartcat99999/game-panel-lite-agent:v0.4.48")
 		os.Exit(1)
 	}
 
@@ -345,18 +347,7 @@ func startLogStreamerLoop(client *http.Client, cfg AgentConfig, logger *slog.Log
 		resp.Body.Close()
 
 		for _, c := range containers {
-			var serverID string
-			for _, name := range c.Names {
-				clean := strings.TrimPrefix(name, "/")
-				if strings.HasPrefix(clean, "gamepanel-") {
-					serverID = strings.TrimPrefix(clean, "gamepanel-")
-					break
-				}
-				if len(clean) == 36 && strings.Count(clean, "-") == 4 {
-					serverID = clean
-					break
-				}
-			}
+			serverID := serverIDFromContainerNames(c.Names)
 			if serverID == "" {
 				continue
 			}
@@ -401,6 +392,20 @@ func startLogStreamerLoop(client *http.Client, cfg AgentConfig, logger *slog.Log
 			}
 		}
 	}
+}
+
+func serverIDFromContainerNames(names []string) string {
+	for _, name := range names {
+		clean := strings.TrimPrefix(name, "/")
+		candidate := clean
+		if strings.HasPrefix(clean, "gamepanel-") {
+			candidate = strings.TrimPrefix(clean, "gamepanel-")
+		}
+		if uuid.Validate(candidate) == nil {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func cleanDockerLogLines(data []byte) []string {
