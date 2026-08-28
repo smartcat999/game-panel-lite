@@ -110,6 +110,7 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 		monitor,
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
 		nil,
+		nil,
 	)
 	if seedInstallMarkers {
 		seedRuntimeInstallMarkers(t, handler)

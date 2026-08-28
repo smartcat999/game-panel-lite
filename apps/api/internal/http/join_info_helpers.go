@@ -31,15 +31,31 @@ func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string
 }
 
 func (h *Handler) serverJoinInfo(server domain.GameServer) domain.ServerJoinInfo {
+	var info domain.ServerJoinInfo
 	gameProvider, ok := h.provider.Get(server.ProviderKey)
 	if ok {
 		if joinProvider, ok := gameProvider.(provider.JoinInfoProvider); ok {
-			info := joinProvider.JoinInfo(server)
-			h.applyPublicHostToJoinInfo(&info)
-			return info
+			info = joinProvider.JoinInfo(server)
+		} else {
+			info = defaultJoinInfo(server)
+		}
+	} else {
+		info = defaultJoinInfo(server)
+	}
+
+	if server.NodeID != "" && server.NodeID != "node-local" {
+		node, err := h.store.GetComputeNode(context.Background(), server.NodeID)
+		if err == nil {
+			if strings.TrimSpace(node.PublicIP) != "" {
+				info.Address = strings.TrimSpace(node.PublicIP)
+				return info
+			} else if strings.TrimSpace(node.Host) != "" && node.Host != "0.0.0.0" {
+				info.Address = strings.TrimSpace(node.Host)
+				return info
+			}
 		}
 	}
-	info := defaultJoinInfo(server)
+
 	h.applyPublicHostToJoinInfo(&info)
 	return info
 }

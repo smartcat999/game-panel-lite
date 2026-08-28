@@ -120,51 +120,51 @@ export function ProviderConfigEditor({
             ) : null}
           </div>
 
-          <div className="border-t border-panel-line lg:grid lg:grid-cols-[190px_minmax(0,1fr)]">
-            <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line py-2 lg:block lg:border-b-0 lg:border-r lg:pr-3">
+          <div className="border-t border-panel-line lg:grid lg:grid-cols-[160px_minmax(0,1fr)]">
+            <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line py-1.5 lg:block lg:border-b-0 lg:border-r lg:pr-2.5">
               {groups.map((group) => {
                 const count = advancedFields.filter((field) => field.group === group && isProviderFieldModified(payload, field)).length;
                 return (
-                  <button key={group} type="button" className={cn("flex shrink-0 items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-xs transition lg:mb-1 lg:w-full", activeGroup === group && !normalizedQuery ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:bg-slate-900 hover:text-slate-300")} onClick={() => { setQuery(""); setActiveGroup(group); }}>
-                    <span>{groupLabel(group, locale, t)}</span>
-                    {count > 0 ? <span className="text-panel-green">{count}</span> : null}
+                  <button key={group} type="button" className={cn("flex shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition lg:mb-1 lg:w-full font-medium", activeGroup === group && !normalizedQuery ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200")} onClick={() => { setQuery(""); setActiveGroup(group); }}>
+                    <span className="truncate">{groupLabel(group, locale, t)}</span>
+                    {count > 0 ? <span className="text-[10px] font-bold text-panel-green bg-panel-green/15 px-1.5 py-0.2 rounded">{count}</span> : null}
                   </button>
                 );
               })}
             </nav>
-            <div className="min-w-0 py-3 lg:pl-4">
+            <div className="min-w-0 py-2.5 lg:pl-3.5">
               {visibleGroups.map((group) => {
                 const groupFields = matchedFields.filter((field) => field.group === group);
                 const effect = dstConfigGroupEffect(providerKey, group);
                 if (groupFields.length === 0) return null;
                 return (
-                  <section key={group} className="mb-6 last:mb-0">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <section key={group} className="mb-4 last:mb-0">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h5 className="text-sm font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                        <h5 className="text-xs font-bold text-slate-200">{groupLabel(group, locale, t)}</h5>
                         {surface === "server" && effect ? (
                           <span className={cn(
-                            "rounded px-2 py-0.5 text-[11px] font-medium",
+                            "rounded px-1.5 py-0.2 text-[10px] font-medium",
                             effect === "worldgen" ? "bg-panel-gold/15 text-panel-gold" : "bg-slate-800 text-slate-400"
                           )}>
                             {t(effect === "worldgen" ? "worldGenerationAppliesOnRegenerate" : "worldSettingsApplyAfterRestart")}
                           </span>
                         ) : null}
                       </div>
-                      <span className="text-xs text-slate-500">{t("settingsCount", { count: groupFields.length })}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">{t("settingsCount", { count: groupFields.length })}</span>
                     </div>
                     {surface === "server" && effect === "worldgen" && onRegenerateWorld && !normalizedQuery ? (
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-panel-gold/25 bg-panel-gold/5 px-3 py-2">
-                        <p className="text-xs text-slate-400">
+                      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-panel-gold/25 bg-panel-gold/5 px-3 py-1.5">
+                        <p className="text-[11px] text-slate-400">
                           {hasUnsavedWorldGenerationChanges ? t("saveWorldGenerationBeforeRegenerate") : t("worldGenerationConfigHint")}
                         </p>
-                        <Button type="button" variant="gold" className="h-8 shrink-0 px-2.5 text-xs" disabled={disabled || hasUnsavedWorldGenerationChanges} onClick={onRegenerateWorld}>
-                          <RotateCcw aria-hidden="true" className="size-3.5" />
+                        <Button type="button" variant="gold" className="h-7 shrink-0 px-2 text-[11px]" disabled={disabled || hasUnsavedWorldGenerationChanges} onClick={onRegenerateWorld}>
+                          <RotateCcw aria-hidden="true" className="size-3" />
                           {t("regenerateWithCurrentSettings")}
                         </Button>
                       </div>
                     ) : null}
-                    <div className="grid gap-3 xl:grid-cols-2">
+                    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                       {groupFields.map((field) => (
                         <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
                       ))}
@@ -172,15 +172,32 @@ export function ProviderConfigEditor({
                   </section>
                 );
               })}
-              {matchedFields.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">{t("noGameSettingsMatch")}</p> : null}
+              {matchedFields.length === 0 ? <p className="py-8 text-center text-xs text-slate-500">{t("noGameSettingsMatch")}</p> : null}
             </div>
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {baseFields.map((field) => (
-            <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
-          ))}
+        <div className="space-y-3">
+          {/* Text and Select Controls (2-column compact grid) */}
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            {baseFields.filter((f) => f.type !== "boolean").map((field) => (
+              <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+            ))}
+          </div>
+
+          {/* Boolean Feature Toggles (Compact 2-3 column switch pills) */}
+          {baseFields.filter((f) => f.type === "boolean").length > 0 && (
+            <div className="pt-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                {locale.startsWith("zh") ? "功能特性开关" : "Feature Toggles"}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {baseFields.filter((f) => f.type === "boolean").map((field) => (
+                  <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -207,25 +224,25 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     : 0;
   const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
   return (
-    <div className={cn("min-w-0 rounded-md border bg-slate-950/35 p-3", error ? "border-red-400/60" : "border-panel-line")}>
+    <div className={cn("min-w-0 rounded-lg border bg-slate-950/50 px-2.5 py-2 transition hover:border-slate-700", error ? "border-red-400/60" : "border-slate-800")}>
       {field.type === "boolean" ? (
-        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-0.5 text-left outline-none transition focus-visible:ring-2 focus-visible:ring-panel-green/30 disabled:opacity-50" onClick={() => onChange(field, !checked)}>
-          <span className="text-sm font-medium text-slate-300">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
-          <span aria-hidden="true" className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", checked ? "bg-panel-green" : "bg-slate-700")}>
-            <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white transition-transform", checked ? "translate-x-4" : "translate-x-0")} />
+        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-7 w-full items-center justify-between gap-2.5 text-left outline-none transition disabled:opacity-50" onClick={() => onChange(field, !checked)}>
+          <span className="text-xs font-semibold text-slate-200">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
+          <span aria-hidden="true" className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", checked ? "bg-panel-green" : "bg-slate-700")}>
+            <span className={cn("absolute left-0.5 top-0.5 size-3 rounded-full bg-white transition-transform", checked ? "translate-x-3" : "translate-x-0")} />
           </span>
         </button>
       ) : isRangeSlider ? (
         <>
-          <div className="mb-2 flex min-h-5 items-center">
-            <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
+          <div className="mb-1 flex min-h-4 items-center">
+            <label className="text-[11px] font-semibold text-slate-300" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
           </div>
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-3 text-[11px] tabular-nums text-slate-600">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2.5 text-[10px] tabular-nums text-slate-500">
           <span className="pb-0.5">{field.min}</span>
-          <div className="relative min-w-0 pt-7" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
+          <div className="relative min-w-0 pt-5" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
             <output
               aria-hidden="true"
-              className="pointer-events-none absolute top-0 min-w-8 -translate-x-1/2 rounded bg-slate-800 px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
+              className="pointer-events-none absolute top-0 min-w-6 -translate-x-1/2 rounded bg-slate-800 px-1 py-0.2 text-center text-[10px] font-bold tabular-nums text-slate-100"
               style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
             >
               {numericValue}
@@ -237,7 +254,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         </>
       ) : field.type === "select" ? (
         <LabeledControl field={field} label={label}>
-          <select id={`provider-field-${field.name}`} className="h-10 w-full rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none focus:border-panel-green" disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)}>
+          <select id={`provider-field-${field.name}`} className="h-8.5 w-full rounded-lg border border-slate-800 bg-slate-900 px-2.5 text-xs text-slate-100 outline-none focus:border-panel-green cursor-pointer" disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)}>
             {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>)}
           </select>
         </LabeledControl>
@@ -247,11 +264,11 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         </LabeledControl>
       ) : (
         <LabeledControl field={field} label={label}>
-          <Input id={`provider-field-${field.name}`} className="w-full" type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.step ?? 1} value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+          <Input id={`provider-field-${field.name}`} className="h-8.5 w-full bg-slate-900 border-slate-800 text-xs px-2.5 focus:border-panel-green" type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.step ?? 1} value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
         </LabeledControl>
       )}
-      {help ? <p className="mt-2 text-xs leading-5 text-slate-500">{help}</p> : null}
-      {error ? <p className="mt-2 text-xs font-medium text-red-200">{error}</p> : null}
+      {help ? <p className="mt-1 text-[10px] leading-tight text-slate-500">{help}</p> : null}
+      {error ? <p className="mt-1 text-[10px] font-medium text-red-300">{error}</p> : null}
     </div>
   );
 }
@@ -261,17 +278,17 @@ function LabeledControl({ children, field, label }: { children: ReactNode; field
   const isKleiServerToken = field.name === "clusterToken" || field.name === "identity.clusterToken";
   return (
     <>
-      <div className="mb-2 flex min-h-5 items-center justify-between gap-3">
-        <label className="text-xs font-medium text-slate-400" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
+      <div className="mb-1.5 flex min-h-4 items-center justify-between gap-2">
+        <label className="text-[11px] font-semibold text-slate-300" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
         {isKleiServerToken ? (
           <a
-            className="inline-flex shrink-0 items-center gap-1 text-xs text-slate-400 transition hover:text-panel-green focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40"
+            className="inline-flex shrink-0 items-center gap-1 text-[10px] text-sky-400 hover:underline"
             href={kleiServerTokenURL}
             rel="noreferrer"
             target="_blank"
           >
             {t("getKleiServerToken")}
-            <ExternalLink aria-hidden="true" className="size-3" />
+            <ExternalLink aria-hidden="true" className="size-2.5" />
           </a>
         ) : null}
       </div>

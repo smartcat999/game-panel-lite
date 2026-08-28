@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Columns3, Ellipsis, Filter, Play, Plus, RefreshCw, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
+import { Server as ServerIcon, ChevronLeft, ChevronRight, Columns3, Ellipsis, Filter, Play, Plus, RefreshCw, RotateCcw, Search, Square, Trash2, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -10,12 +10,14 @@ import { PageHeader } from "@/components/page-header";
 import { ServerManagementTable, type ServerTableColumn, type ServerTableSort } from "@/components/server-management-table";
 import { Button, ToastNotice } from "@/components/ui";
 import { gameServerStatus } from "@/lib/game-server-resource";
-import { getObservabilityMetrics, getSettings, gameServerAction, listGameServersPage, listGames } from "@/lib/api";
+import { getObservabilityMetrics, getSettings, gameServerAction, listComputeNodes, listGameServersPage, listGames } from "@/lib/api";
 import { gameFilterOptions } from "@/lib/game-filters";
 import { useI18n } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
 import type { GameServerResource } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+import { usePermissions } from "@/lib/permissions";
 
 const pageSizes = [20, 50, 100] as const;
 const optionalColumns: ServerTableColumn[] = ["players", "resources", "address", "activity", "version"];
@@ -27,6 +29,7 @@ export default function ServersPage() {
 
 function ServersPageContent() {
   const { t } = useI18n();
+  const { canCreateServer, isViewer } = usePermissions();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -37,6 +40,7 @@ function ServersPageContent() {
   const game = searchParams.get("game") ?? "all";
   const provider = searchParams.get("provider") ?? "all";
   const status = searchParams.get("status") ?? "all";
+  const node = searchParams.get("node") ?? "all";
   const sort = sortValue(searchParams.get("sort"));
   const direction = searchParams.get("direction") === "asc" ? "asc" : "desc";
   const [draftSearch, setDraftSearch] = useState(search);
@@ -57,10 +61,16 @@ function ServersPageContent() {
     refetchInterval: 5000,
     placeholderData: (previous) => previous
   });
+  const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 10000 });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
   const metricsQuery = useQuery({ queryKey: ["observability-metrics"], queryFn: getObservabilityMetrics, retry: false, refetchInterval: 5000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 5 * 60 * 1000 });
-  const servers = serversQuery.data?.items ?? [];
+  const rawServers = serversQuery.data?.items ?? [];
+  const nodes = nodesQuery.data ?? [];
+  const servers = useMemo(() => {
+    if (node === "all") return rawServers;
+    return rawServers.filter((s) => (node === "node-local" && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === node);
+  }, [rawServers, node]);
   const gameFilters = useMemo(() => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), [], t), [gamesQuery.data, t]);
   const providerFilters = useMemo(() => providerFilterOptions(gamesQuery.data ?? [], t("filterAll"), [], game), [game, gamesQuery.data, t]);
   const selectedServers = servers.filter((server) => selectedIds.has(server.id));
@@ -124,21 +134,79 @@ function ServersPageContent() {
   return (
     <>
       <PageHeader title={t("serversTitle")} />
+
+      {/* 节点快速切换筛选条 (支持水平平滑滑动与多节点自适应) */}
+      {nodes.length > 1 && (
+        <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-panel-line bg-panel-card px-3 py-2 text-xs overflow-x-auto scrollbar-none">
+          <span className="text-slate-400 font-medium shrink-0 flex items-center gap-1">
+            <ServerIcon className="size-3.5 text-panel-green" />
+            节点:
+          </span>
+          <button
+            type="button"
+            onClick={() => updateParams({ node: null, page: "1" })}
+            className={cn(
+              "rounded px-2.5 py-1 transition font-medium shrink-0",
+              node === "all"
+                ? "bg-panel-green text-slate-950 font-bold shadow-xs"
+                : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
+            )}
+          >
+            全部节点 ({rawServers.length})
+          </button>
+          {nodes.map((n) => {
+            const isSelected = (node === n.id) || (node === "node-local" && n.isLocal);
+            const count = rawServers.filter(s => (n.isLocal && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === n.id).length;
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => updateParams({ node: n.id, page: "1" })}
+                className={cn(
+                  "flex items-center gap-1.5 rounded px-2.5 py-1 transition font-medium shrink-0 whitespace-nowrap",
+                  isSelected
+                    ? "bg-panel-green text-slate-950 font-bold shadow-xs"
+                    : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
+                )}
+              >
+                <span className={cn("size-1.5 rounded-full", n.status === "online" ? "bg-emerald-400" : "bg-slate-500")} />
+                <span>{n.name}</span>
+                {n.region ? <span className="opacity-75 text-[10px]">({n.region})</span> : null}
+                <span className={cn("rounded-full px-1.5 py-0.2 text-[10px]", isSelected ? "bg-slate-900/40 text-slate-950 font-bold" : "bg-slate-800 text-slate-400")}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <section className="mb-3 rounded-lg border border-panel-line bg-panel-card px-3 py-2.5" aria-label={t("serverManagementToolbar")}>
         <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-1.5">
-            <Link href="/servers/new"><Button className="h-9 px-3"><Plus className="size-4" />{t("createServer")}</Button></Link>
-            <Button className="h-9 px-3" variant="secondary" disabled={!eligibleServers(selectedServers, "start").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("start")}><Play className="size-4" />{t("actionStart")}</Button>
-            <Button className="h-9 px-3" variant="secondary" disabled={!eligibleServers(selectedServers, "stop").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("stop")}><Square className="size-4" />{t("actionStop")}</Button>
-            <details className="group relative">
-              <summary className={cn(toolbarIconClass, selectedIds.size === 0 && "pointer-events-none opacity-45")}><Ellipsis className="size-4" /><span className="hidden sm:inline">{t("moreActions")}</span></summary>
-              <div className="absolute left-0 top-11 z-30 w-44 rounded-md border border-panel-line bg-slate-950 p-1 shadow-[0_6px_12px_rgba(0,0,0,0.35)]">
-                <MenuButton disabled={!eligibleServers(selectedServers, "restart").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("restart")} icon={<RotateCcw className="size-4" />} label={t("actionRestart")} />
-                <div className="my-1 border-t border-panel-line" />
-                <MenuButton danger disabled={!canDeleteSelection || bulkMutation.isPending} title={!canDeleteSelection && selectedIds.size ? t("deleteRequiresStopped") : undefined} onClick={() => setDeleteConfirmOpen(true)} icon={<Trash2 className="size-4" />} label={t("deleteSelectedServers")} />
-              </div>
-            </details>
-            {selectedIds.size ? <span className="ml-1 text-xs text-slate-400">{t("selectedCount", { count: selectedIds.size })}</span> : null}
+            {canCreateServer && (
+              <Link href="/servers/new"><Button className="h-9 px-3"><Plus className="size-4" />{t("createServer")}</Button></Link>
+            )}
+            {!isViewer && (
+              <>
+                <Button className="h-9 px-3" variant="secondary" disabled={!eligibleServers(selectedServers, "start").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("start")}><Play className="size-4" />{t("actionStart")}</Button>
+                <Button className="h-9 px-3" variant="secondary" disabled={!eligibleServers(selectedServers, "stop").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("stop")}><Square className="size-4" />{t("actionStop")}</Button>
+                <details className="group relative">
+                  <summary className={cn(toolbarIconClass, selectedIds.size === 0 && "pointer-events-none opacity-45")}><Ellipsis className="size-4" /><span className="hidden sm:inline">{t("moreActions")}</span></summary>
+                  <div className="absolute left-0 top-11 z-30 w-44 rounded-md border border-panel-line bg-slate-950 p-1 shadow-[0_6px_12px_rgba(0,0,0,0.35)]">
+                    <MenuButton disabled={!eligibleServers(selectedServers, "restart").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("restart")} icon={<RotateCcw className="size-4" />} label={t("actionRestart")} />
+                    <div className="my-1 border-t border-panel-line" />
+                    <MenuButton danger disabled={!canDeleteSelection || bulkMutation.isPending} title={!canDeleteSelection && selectedIds.size ? t("deleteRequiresStopped") : undefined} onClick={() => setDeleteConfirmOpen(true)} icon={<Trash2 className="size-4" />} label={t("deleteSelectedServers")} />
+                  </div>
+                </details>
+                {selectedIds.size ? <span className="ml-1 text-xs text-slate-400">{t("selectedCount", { count: selectedIds.size })}</span> : null}
+              </>
+            )}
+            {isViewer && (
+              <span className="rounded-md border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-400 font-mono">
+                只读访客模式 (Viewer Mode)
+              </span>
+            )}
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-1.5 xl:max-w-2xl xl:justify-end">
             <label className="relative min-w-0 flex-1 xl:max-w-xs">
@@ -167,7 +235,7 @@ function ServersPageContent() {
       </section>
 
       {serversQuery.isError ? <p className="mb-4 text-sm text-panel-gold">{t("apiServersUnavailable")}</p> : null}
-      {servers.length ? <ServerManagementTable servers={servers} metrics={metricsQuery.data?.servers} publicHost={settingsQuery.data?.publicHost} selectedIds={selectedIds} visibleColumns={visibleColumns} sort={sort} direction={direction} onSelectionChange={setSelectedIds} onSort={handleSort} onAddressCopied={() => setNotice({ tone: "success", message: t("serverAddressCopied") })} /> : null}
+      {servers.length ? <ServerManagementTable servers={servers} nodes={nodes} metrics={metricsQuery.data?.servers} publicHost={settingsQuery.data?.publicHost} selectedIds={selectedIds} visibleColumns={visibleColumns} sort={sort} direction={direction} onSelectionChange={setSelectedIds} onSort={handleSort} onAddressCopied={() => setNotice({ tone: "success", message: t("serverAddressCopied") })} /> : null}
       {!servers.length ? <div className="rounded-lg border border-panel-line bg-panel-card px-5 py-12 text-center text-sm text-slate-400">{serversQuery.isLoading ? t("loading") : t("noServersMatch")}</div> : null}
       <Pagination page={page} pageSize={pageSize} total={serversQuery.data?.total ?? 0} totalPages={serversQuery.data?.totalPages ?? 0} onChange={(updates) => updateParams(updates)} t={t} />
 

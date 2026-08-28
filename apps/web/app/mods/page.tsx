@@ -18,6 +18,7 @@ import { filterModResources, modGameFilterKeys } from "@/lib/mod-filters";
 import { providerDisplayName } from "@/lib/provider-display";
 import { cn } from "@/lib/utils";
 import { parseWorkshopIds } from "@/lib/workshop-input";
+import { GameAssetsSubNav } from "@/components/sub-nav";
 import type { GameCatalogEntry, ModFile, ModPack, ProviderKey, RecommendedMod, WorkshopPreview } from "@/lib/types";
 
 type ModsView = "discover" | "library" | "packs";
@@ -315,7 +316,8 @@ export default function ModsPage() {
 
   return (
     <>
-      <PageHeader title={t("modsTitle")} description={t("modsDescription")} />
+      <PageHeader title={t("modsTitle")} />
+      <GameAssetsSubNav />
       <input
         ref={globalInputRef}
         className="hidden"

@@ -93,6 +93,7 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image:        spec.Image,
+		User:         "0:0",
 		Env:          spec.Options.Env,
 		Cmd:          spec.Options.Cmd,
 		ExposedPorts: natPortSets(spec),

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
@@ -34,6 +35,11 @@ type Handler struct {
 	apiMetrics     *metrics.Registry
 	observability  *observability.CachedService
 	systemUpdate   *systemupdate.Service
+	gateway        *gateway.StreamGateway
+
+	agentLogsMu   sync.RWMutex
+	agentLogs     map[string][]string
+	agentLogChans map[string]map[chan string]struct{}
 
 	runtimeImageJobsMu  sync.Mutex
 	runtimeImageJobs    map[string]domain.RuntimeImageStatus
@@ -64,6 +70,7 @@ func NewHandler(
 	dockerMonitor *runtime.DockerMonitor,
 	runtimeFactory func(string) (runtime.Adapter, error),
 	apiMetrics *metrics.Registry,
+	streamGateway *gateway.StreamGateway,
 ) *Handler {
 	if apiMetrics == nil {
 		apiMetrics = metrics.NewRegistry()
@@ -77,6 +84,9 @@ func NewHandler(
 		dockerMonitor:    dockerMonitor,
 		runtimeFactory:   runtimeFactory,
 		apiMetrics:       apiMetrics,
+		gateway:          streamGateway,
+		agentLogs:        make(map[string][]string),
+		agentLogChans:    make(map[string]map[chan string]struct{}),
 		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
 		workshopResolver: workshopsvc.NewSteamResolver(),
 		workshopPreviews: map[string]cachedWorkshopPreview{},
@@ -122,15 +132,52 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/healthz", h.health)
 	r.With(h.optionalAuth).Get("/api/auth/bootstrap", h.authBootstrap)
 	r.Post("/api/auth/setup", h.setupAdmin)
+	r.Post("/api/auth/register", h.register)
 	r.Post("/api/auth/login", h.login)
 	r.Post("/api/auth/logout", h.logout)
 	r.Get("/metrics", h.prometheusMetrics)
 	r.Get("/api/observability/prometheus", h.observabilityPrometheus)
 	r.Get("/api/public/servers/{token}", h.getPublicServerShare)
+	r.Post("/api/agent/register", h.agentRegister)
+	r.Post("/api/agent/heartbeat", h.agentHeartbeat)
+	r.Get("/api/agent/tasks", h.listAgentTasks)
+	r.Post("/api/agent/tasks/{taskId}/ack", h.ackAgentTask)
+	r.Get("/api/agent/assignments", h.listAgentAssignments)
+	r.Post("/api/agent/assignments/{uid}/status", h.reportAgentAssignmentStatus)
+	r.Get("/api/agent/tunnel/poll", h.pollAgentTunnel)
+	r.Get("/api/agent/tunnel/connect", h.connectAgentTunnel)
+	r.Post("/api/agent/servers/{id}/logs", h.agentUploadLogs)
+
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireAuth)
 		r.Get("/api/auth/me", h.currentAccount)
 		r.Post("/api/auth/password", h.changePassword)
+		r.Group(func(r chi.Router) {
+			r.Use(h.requireAdmin)
+			r.Get("/api/users", h.listUsers)
+			r.Post("/api/users", h.createUser)
+			r.Put("/api/users/{id}/role", h.updateUserRole)
+			r.Put("/api/users/{id}/password", h.resetUserPassword)
+			r.Delete("/api/users/{id}", h.deleteUser)
+			r.Put("/api/settings/registration", h.updateRegistrationSetting)
+		})
+		r.Get("/api/organizations", h.listOrganizations)
+		r.Post("/api/organizations", h.createOrganization)
+		r.Get("/api/organizations/{id}", h.getOrganization)
+		r.Get("/api/organizations/{id}/members", h.listOrganizationMembers)
+		r.Post("/api/organizations/{id}/members", h.addOrganizationMember)
+		r.Delete("/api/organizations/{id}/members/{userId}", h.removeOrganizationMember)
+		r.Get("/api/organizations/{id}/usage", h.getOrganizationUsage)
+		r.Put("/api/organizations/{id}/quota", h.updateOrganizationQuota)
+		r.Get("/api/nodes", h.listNodes)
+		r.Post("/api/nodes", h.createNode)
+		r.Get("/api/nodes/{id}", h.getNode)
+		r.Get("/api/nodes/{id}/servers", h.listNodeServers)
+		r.Patch("/api/nodes/{id}", h.updateNode)
+		r.Put("/api/nodes/{id}", h.updateNode)
+		r.Get("/api/nodes/{id}/join-command", h.getNodeJoinCommand)
+		r.Post("/api/nodes/{id}/ping", h.pingNode)
+		r.Delete("/api/nodes/{id}", h.deleteNode)
 		r.Get("/api/version", h.version)
 		r.Get("/api/system/update", h.getSystemUpdate)
 		r.Post("/api/system/update/check", h.checkSystemUpdate)
@@ -182,6 +229,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Delete("/api/servers/{id}", h.deleteServer)
 		r.Get("/api/servers/{id}/logs", h.serverLogs)
 		r.Get("/api/servers/{id}/logs/snapshot", h.serverLogSnapshot)
+		r.Get("/api/servers/{id}/gateway-status", h.serverGatewayStatus)
 		r.Get("/api/servers/{id}/stats", h.serverStats)
 		r.Get("/api/servers/{id}/watch", h.serverWatch)
 		r.Get("/api/worlds", h.listWorlds)

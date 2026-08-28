@@ -3,39 +3,31 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Archive, Bookmark, Box, Ellipsis, Gauge, Gamepad2, Globe2, HardDrive, KeyRound, Languages, LogOut, PackageCheck, PanelLeftClose, PanelLeftOpen, Search, Settings, UserCog, X } from "lucide-react";
+import {
+  Gamepad2,
+  KeyRound,
+  Languages,
+  LayoutGrid,
+  LogOut,
+  UserCog,
+  X
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
-import { changeAdminPassword, getAuthBootstrap, getSettings, listGameServers, logoutAdmin, updateLocale } from "@/lib/api";
-import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
-import { gameServerJoinPort, gameServerMode, gameServerSearchText, gameServerWorldName } from "@/lib/game-server-resource";
-import { serverProviderDisplay, serverResourceLabelKey } from "@/lib/server-display";
-import type { GameServerResource } from "@/lib/types";
-
-const nav = [
-  { href: "/dashboard", labelKey: "navDashboard", icon: Gauge },
-  { href: "/servers", labelKey: "navServers", icon: HardDrive },
-  { href: "/games", labelKey: "navGames", icon: Gamepad2 },
-  { href: "/worlds", labelKey: "navWorlds", icon: Globe2 },
-  { href: "/mods", labelKey: "navMods", icon: Box },
-  { href: "/presets", labelKey: "navPresets", icon: Bookmark },
-  { href: "/backups", labelKey: "navBackups", icon: Archive },
-  { href: "/activity", labelKey: "navActivity", icon: Activity },
-  { href: "/versions", labelKey: "navVersions", icon: PackageCheck },
-  { href: "/settings", labelKey: "navSettings", icon: Settings }
-] as const;
-
-const visibleNav = nav.filter((item) => showWorldAndBackupFeatures || (item.href !== "/worlds" && item.href !== "/backups"));
-
-const navGroups = [
-  { labelKey: "navOverviewGroup", hrefs: ["/dashboard"] },
-  { labelKey: "navResourcesGroup", hrefs: ["/servers", "/games", "/worlds", "/mods", "/presets", "/backups"] },
-  { labelKey: "navOperationsGroup", hrefs: ["/activity", "/versions"] },
-  { labelKey: "navSystemGroup", hrefs: ["/settings"] }
-] as const;
+import { TopNav } from "@/components/top-nav";
+import { AppsDrawer } from "@/components/apps-drawer";
+import { ClusterStatusPill } from "@/components/cluster-status-pill";
+import {
+  changeAdminPassword,
+  getAuthBootstrap,
+  getSettings,
+  listComputeNodes,
+  logoutAdmin,
+  updateLocale
+} from "@/lib/api";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -50,22 +42,24 @@ function AppChrome({ children }: { children: ReactNode }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { locale, setLocale, t } = useI18n();
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const isZh = locale.startsWith("zh");
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountTab, setAccountTab] = useState<"language" | "password">("language");
   const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [accountMessage, setAccountMessage] = useState("");
-  const searchRef = useRef<HTMLFormElement>(null);
+
   const profileRef = useRef<HTMLDivElement>(null);
+
   const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 30000 });
-  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false, enabled: searchOpen || search.trim().length > 0 });
+  const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, refetchInterval: 15000 });
+  const nodes = nodesQuery.data ?? [];
+  const onlineNodes = nodes.filter((n) => n.status === "online");
 
   const logoutMutation = useMutation({
     mutationFn: logoutAdmin,
@@ -75,6 +69,7 @@ function AppChrome({ children }: { children: ReactNode }) {
       router.push("/dashboard");
     }
   });
+
   const localeMutation = useMutation({
     mutationFn: (nextLocale: Locale) => updateLocale(nextLocale),
     onSuccess: async (result) => {
@@ -85,6 +80,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     },
     onError: (err) => setAccountMessage(err instanceof Error ? err.message : t("languageSaveFailed"))
   });
+
   const passwordMutation = useMutation({
     mutationFn: () => changeAdminPassword(currentPassword, newPassword),
     onSuccess: () => {
@@ -94,32 +90,11 @@ function AppChrome({ children }: { children: ReactNode }) {
     },
     onError: (err) => setAccountMessage(err instanceof Error ? err.message : t("passwordChangeFailed"))
   });
-  const searchTerm = search.trim().toLowerCase();
-  const searchResults = useMemo(() => {
-    if (!searchTerm) return [];
-    return (serversQuery.data ?? [])
-      .filter((server) => {
-        const provider = serverProviderDisplay({ providerKey: server.providerKey, mode: gameServerMode(server) });
-        const resourceLabel = t(serverResourceLabelKey(server));
-        return [...gameServerSearchText(server, provider.label), resourceLabel]
-          .some((value) => value.toLowerCase().includes(searchTerm));
-      })
-      .slice(0, 5);
-  }, [searchTerm, serversQuery.data, t]);
 
   useEffect(() => {
     setProfileOpen(false);
-    setMobileMoreOpen(false);
+    setDrawerOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    setSidebarCollapsed(window.localStorage.getItem("gamepanel-sidebar-collapsed") === "true");
-  }, []);
-
-  useEffect(() => {
-    visibleNav.forEach((item) => router.prefetch(item.href));
-    router.prefetch("/servers/new");
-  }, [router]);
 
   useEffect(() => {
     if (settingsQuery.data?.locale) {
@@ -130,9 +105,6 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
-      if (!searchRef.current?.contains(event.target as Node)) {
-        setSearchOpen(false);
-      }
       if (!profileRef.current?.contains(event.target as Node)) {
         setProfileOpen(false);
       }
@@ -140,39 +112,6 @@ function AppChrome({ children }: { children: ReactNode }) {
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, []);
-
-  useEffect(() => {
-    if (!accountOpen) return;
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
-    };
-  }, [accountOpen]);
-
-  const openServer = (id: string) => {
-    setSearchOpen(false);
-    setSearch("");
-    router.push(`/servers/${id}`);
-  };
-
-  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (searchResults[0]) {
-      openServer(searchResults[0].id);
-      return;
-    }
-    if (searchTerm) {
-      router.push(`/servers?search=${encodeURIComponent(search.trim())}`);
-      setSearchOpen(false);
-    }
-  };
 
   const openAccountSettings = (tab: "language" | "password" = "language") => {
     setAccountTab(tab);
@@ -193,419 +132,274 @@ function AppChrome({ children }: { children: ReactNode }) {
     passwordMutation.mutate();
   };
 
-  const toggleSidebar = () => {
-    setSidebarCollapsed((collapsed) => {
-      const next = !collapsed;
-      window.localStorage.setItem("gamepanel-sidebar-collapsed", String(next));
-      return next;
-    });
-  };
-
   return (
-    <div className="min-h-screen bg-panel-bg text-slate-100">
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden border-r border-panel-line bg-panel-sidebar transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex lg:flex-col",
-          sidebarCollapsed ? "w-16" : "w-56"
-        )}
-      >
-        <Link
-          href="/dashboard"
-          aria-label={sidebarCollapsed ? "GamePanel Lite" : undefined}
-          className={cn("flex h-20 items-center gap-3 pt-2", sidebarCollapsed ? "justify-center px-3" : "px-5")}
-        >
-          <span className="flex size-9 items-center justify-center rounded-md bg-panel-green text-slate-950">
-            <Gamepad2 aria-hidden="true" />
-          </span>
-          {!sidebarCollapsed ? <span className="whitespace-nowrap font-semibold">GamePanel Lite</span> : null}
-        </Link>
-        <nav className={cn("flex flex-1 flex-col overflow-y-auto py-4", sidebarCollapsed ? "gap-3 px-2" : "gap-5 px-3")}>
-          {navGroups.map((group) => {
-            const items = visibleNav.filter((item) => group.hrefs.some((href) => href === item.href));
-            if (items.length === 0) return null;
-            return (
-              <div key={group.labelKey}>
-                {!sidebarCollapsed ? <p className="mb-1 px-3 text-[11px] font-medium text-slate-600">{t(group.labelKey)}</p> : null}
-                <div className="space-y-0.5">
-                  {items.map((item) => {
-                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        aria-label={sidebarCollapsed ? t(item.labelKey) : undefined}
-                        title={sidebarCollapsed ? t(item.labelKey) : undefined}
-                        onMouseEnter={() => router.prefetch(item.href)}
-                        className={cn(
-                          "flex items-center rounded-md py-2.5 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/45",
-                          sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3",
-                          active && "bg-slate-800/80 text-white"
-                        )}
-                      >
-                        <Icon aria-hidden="true" className="size-5 shrink-0" />
-                        {!sidebarCollapsed ? <span className="truncate">{t(item.labelKey)}</span> : null}
-                      </Link>
-                    );
-                  })}
-                </div>
+    <div className="min-h-screen bg-[#070b12] text-slate-100 selection:bg-panel-green/30">
+      {/* Top Global Command Header */}
+      <header className="sticky top-0 z-50 h-14 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-full items-center justify-between gap-4">
+          {/* Left: Brand + Standalone Host Badge */}
+          <div className="flex items-center gap-3 shrink-0">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 text-sm font-bold tracking-tight text-white hover:opacity-90 transition"
+            >
+              <div className="flex size-7 items-center justify-center rounded-lg bg-panel-green/15 text-panel-green border border-panel-green/30 shadow-xs">
+                <Gamepad2 className="size-4" />
               </div>
-            );
-          })}
-        </nav>
-        <div className="border-t border-panel-line p-3">
-          <button
-            type="button"
-            aria-label={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}
-            title={sidebarCollapsed ? t("expandSidebar") : undefined}
-            className={cn(
-              "flex w-full items-center rounded-md py-2 text-sm text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/45",
-              sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3"
+              <span className="font-bold tracking-tight">GamePanel <span className="text-panel-green font-mono text-xs">Lite</span></span>
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-panel-green opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-panel-green" />
+              </span>
+            </Link>
+
+            {nodes.length > 1 ? (
+              <Link
+                href="/settings"
+                title={`集群分布式管理：${onlineNodes.length}/${nodes.length} 节点在线`}
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-sky-800/80 bg-sky-950/40 hover:bg-sky-900/50 hover:border-sky-700 px-2.5 py-0.5 text-[11px] font-mono text-sky-300 transition"
+              >
+                <span className="size-1.5 rounded-full bg-sky-400 animate-pulse" />
+                <span>Cluster Fleet · {nodes.length} 节点</span>
+              </Link>
+            ) : (
+              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-950/80 px-2.5 py-0.5 text-[11px] font-mono text-slate-400">
+                <span className="size-1.5 rounded-full bg-panel-green" />
+                Standalone Host
+              </span>
             )}
-            onClick={toggleSidebar}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" className="size-5" /> : <PanelLeftClose aria-hidden="true" className="size-5" />}
-            {!sidebarCollapsed ? <span>{t("collapseSidebar")}</span> : null}
-          </button>
-        </div>
-      </aside>
-      <div className={cn("transition-[padding-left] duration-200 ease-out motion-reduce:transition-none", sidebarCollapsed ? "lg:pl-16" : "lg:pl-56")}>
-        <header className="sticky top-0 z-20 border-b border-panel-line bg-panel-bg/95 px-4 py-3 backdrop-blur md:px-8">
-          <div className="flex items-center gap-4">
-            <form ref={searchRef} className="relative max-w-md flex-1" onSubmit={submitSearch}>
-              <Search className="pointer-events-none absolute left-3 top-2.5 text-slate-500" aria-hidden="true" />
-              <Input
-                aria-label={t("searchServers")}
-                autoComplete="off"
-                className="w-full pl-10"
-                placeholder={t("searchServers")}
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setSearchOpen(true);
-                }}
-                onFocus={() => setSearchOpen(true)}
-              />
-              {searchOpen && search.trim().length > 0 && (
-                <div className="absolute left-0 right-0 top-12 z-30 overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_12px_32px_rgba(0,0,0,0.32)]">
-                  {serversQuery.isLoading ? (
-                    <p className="px-3 py-3 text-sm text-slate-400">{t("loading")}</p>
-                  ) : serversQuery.isError ? (
-                    <p className="px-3 py-3 text-sm text-panel-gold">{t("apiServersUnavailable")}</p>
-                  ) : searchResults.length === 0 ? (
-                    <p className="px-3 py-3 text-sm text-slate-400">{t("noSearchResults")}</p>
-                  ) : (
-                    <div className="py-1">
-                      {searchResults.map((server) => (
-                        <SearchServerResult key={server.id} server={server} onOpen={openServer} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </form>
-            <div className="ml-auto flex shrink-0 items-center gap-3">
-              <div ref={profileRef} className="relative hidden md:block">
-                <button
-                  type="button"
-                  aria-expanded={profileOpen}
-                  aria-label={t("userProfile")}
-                  className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-panel-line bg-slate-950/70 p-0.5 shadow-[0_0_0_1px_rgba(123,217,120,0.08)] transition hover:border-panel-green focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-                  onClick={() => setProfileOpen((value) => !value)}
-                >
-                  <Image
-                    src="/images/user-avatar.svg"
-                    alt={t("userAvatarAlt")}
-                    width={80}
-                    height={80}
-                    className="size-full rounded-full object-cover"
-                  />
-                </button>
-                {profileOpen && (
-                  <div className="absolute right-0 top-12 z-30 w-56 rounded-lg border border-panel-line bg-panel-card p-3 shadow-[0_12px_32px_rgba(0,0,0,0.32)]">
-                    <div className="flex items-center gap-3">
-                      <Image
-                        src="/images/user-avatar.svg"
-                        alt={t("userAvatarAlt")}
-                        width={80}
-                        height={80}
-                        className="size-10 rounded-full border border-panel-line bg-slate-950"
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{authQuery.data?.account?.username ?? t("localUser")}</p>
-                        <p className="text-xs text-slate-500">{t("localProfileDescription")}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
-                      GamePanel Lite v1.0.0
-                    </div>
-                    <button
-                      type="button"
-                      className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                      onClick={() => openAccountSettings("language")}
-                    >
-                      <UserCog aria-hidden="true" className="size-4" />
-                      {t("accountSettings")}
-                    </button>
-                    <button
-                      type="button"
-                      className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => logoutMutation.mutate()}
-                      disabled={logoutMutation.isPending}
-                    >
-                      <LogOut aria-hidden="true" className="size-4" />
-                      {logoutMutation.isPending ? t("loggingOut") : t("logout")}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
-        </header>
-        <main className="px-4 py-6 pb-24 md:px-8 lg:pb-6">{children}</main>
-        {accountOpen ? (
-          <AccountSettingsDialog
-            activeTab={accountTab}
-            currentPassword={currentPassword}
-            locale={locale}
-            selectedLocale={selectedLocale}
-            message={accountMessage}
-            newPassword={newPassword}
-            passwordPending={passwordMutation.isPending}
-            localePending={localeMutation.isPending}
-            onChangeLocale={setSelectedLocale}
-            onChangeCurrentPassword={setCurrentPassword}
-            onChangeNewPassword={setNewPassword}
-            onClose={() => setAccountOpen(false)}
-            onSaveLocale={saveLocale}
-            onSubmitPassword={submitPasswordChange}
-            onTabChange={(tab) => {
-              setAccountTab(tab);
-              setAccountMessage("");
-            }}
-          />
-        ) : null}
-        {mobileMoreOpen ? (
-          <div className="fixed inset-x-3 bottom-20 z-40 rounded-lg border border-panel-line bg-slate-950 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] lg:hidden">
-            <div className="grid grid-cols-2 gap-1">
-              {visibleNav.slice(4).map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                const Icon = item.icon;
-                return (
-                  <Link key={item.href} href={item.href} className={cn("flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-300 transition hover:bg-slate-800", active && "bg-panel-green/15 text-panel-green")}>
-                    <Icon aria-hidden="true" className="size-5" />
-                    {t(item.labelKey)}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-panel-line bg-panel-bg/95 px-2 py-2 backdrop-blur lg:hidden" aria-label="Mobile navigation">
-          <div className="grid grid-cols-5 gap-1">
-            {visibleNav.slice(0, 4).map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium text-slate-500 transition hover:bg-slate-800 hover:text-white",
-                    active && "bg-panel-green/15 text-panel-green"
-                  )}
-                >
-                  <Icon aria-hidden="true" className="size-5" />
-                  <span className="max-w-full truncate">{t(item.labelKey)}</span>
-                </Link>
-              );
-            })}
+
+          {/* Right: Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Main Icon Navigation (Positioned on the right) */}
+            <TopNav />
+
+            <div className="h-4 w-px bg-slate-800/80 hidden sm:block" />
+
+            {/* Cluster Real-Time Metrics Mini-Pill */}
+            <ClusterStatusPill />
+
+            {/* Apps & Tools Drawer Button */}
             <button
               type="button"
-              aria-expanded={mobileMoreOpen}
-              className={cn("flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-medium text-slate-500 transition hover:bg-slate-800 hover:text-white", mobileMoreOpen && "bg-panel-green/15 text-panel-green")}
-              onClick={() => setMobileMoreOpen((value) => !value)}
+              onClick={() => setDrawerOpen(true)}
+              aria-label="All Apps and Navigation"
+              title="All Apps (⌘B / [)"
+              className="flex size-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-950/80 text-slate-400 hover:border-slate-600 hover:text-slate-100 transition focus:outline-none focus:ring-1 focus:ring-panel-green/50"
             >
-              <Ellipsis aria-hidden="true" className="size-5" />
-              <span className="max-w-full truncate">{t("moreActions")}</span>
+              <LayoutGrid className="size-4" />
             </button>
-          </div>
-        </nav>
-      </div>
-    </div>
-  );
-}
 
-function AccountSettingsDialog({
-  activeTab,
-  currentPassword,
-  locale,
-  localePending,
-  message,
-  newPassword,
-  passwordPending,
-  selectedLocale,
-  onChangeLocale,
-  onChangeCurrentPassword,
-  onChangeNewPassword,
-  onClose,
-  onSaveLocale,
-  onSubmitPassword,
-  onTabChange
-}: {
-  activeTab: "language" | "password";
-  currentPassword: string;
-  locale: Locale;
-  localePending: boolean;
-  message: string;
-  newPassword: string;
-  passwordPending: boolean;
-  selectedLocale: Locale;
-  onChangeLocale: (locale: Locale) => void;
-  onChangeCurrentPassword: (value: string) => void;
-  onChangeNewPassword: (value: string) => void;
-  onClose: () => void;
-  onSaveLocale: () => void;
-  onSubmitPassword: (event: FormEvent<HTMLFormElement>) => void;
-  onTabChange: (tab: "language" | "password") => void;
-}) {
-  const { t } = useI18n();
-  const localeChanged = selectedLocale !== locale;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/72 px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="account-settings-title">
-      <div className="w-[min(720px,calc(100vw-32px))] overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_24px_72px_rgba(0,0,0,0.55)]">
-        <div className="flex min-h-[81px] items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
-          <div className="min-w-0">
-            <h2 id="account-settings-title" className="font-semibold text-white">{t("accountSettings")}</h2>
-            <p className="mt-1 line-clamp-2 text-sm text-slate-400">{t("accountSettingsDescription")}</p>
-          </div>
-          <button
-            aria-label={t("close")}
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-            type="button"
-            onClick={onClose}
-          >
-            <X aria-hidden="true" className="size-5" />
-          </button>
-        </div>
-        <div className="grid min-h-[360px] md:grid-cols-[192px_minmax(0,1fr)]">
-          <nav className="border-b border-panel-line bg-slate-950/25 p-3 md:border-b-0 md:border-r" aria-label={t("accountSettings")}>
-            <AccountTabButton active={activeTab === "language"} icon={<Languages aria-hidden="true" className="size-4" />} label={t("appearanceTitle")} onClick={() => onTabChange("language")} />
-            <AccountTabButton active={activeTab === "password"} icon={<KeyRound aria-hidden="true" className="size-4" />} label={t("changePassword")} onClick={() => onTabChange("password")} />
-          </nav>
-          <div className="min-w-0 p-5">
-            {activeTab === "language" ? (
-              <div>
-                <h3 className="font-semibold text-white">{t("appearanceTitle")}</h3>
-                <p className="mt-1 min-h-10 max-w-xl text-sm text-slate-400">{t("appearanceDescription")}</p>
-                <div className="mt-5 inline-flex rounded-md border border-panel-line bg-slate-950/60 p-1 text-sm" aria-label={t("language")}>
-                  <button
-                    className={cn("min-w-24 rounded px-3 py-2 text-center text-slate-300 transition-colors", selectedLocale === "zh" && "bg-panel-green text-slate-950")}
-                    type="button"
-                    disabled={localePending}
-                    onClick={() => onChangeLocale("zh")}
-                  >
-                    {t("chinese")}
-                  </button>
-                  <button
-                    className={cn("min-w-24 rounded px-3 py-2 text-center text-slate-300 transition-colors", selectedLocale === "en" && "bg-panel-green text-slate-950")}
-                    type="button"
-                    disabled={localePending}
-                    onClick={() => onChangeLocale("en")}
-                  >
-                    {t("languageEnglish")}
-                  </button>
+            {/* Profile Menu */}
+            <div ref={profileRef} className="relative">
+              <button
+                type="button"
+                aria-expanded={profileOpen}
+                aria-label={t("userProfile")}
+                className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-800 bg-slate-950 p-0.5 transition hover:border-panel-green focus:outline-none focus:ring-1 focus:ring-panel-green/50"
+                onClick={() => setProfileOpen((value) => !value)}
+              >
+                <Image
+                  src="/images/user-avatar.svg"
+                  alt={t("userAvatarAlt")}
+                  width={40}
+                  height={40}
+                  className="size-full rounded-full object-cover"
+                />
+              </button>
+
+              {profileOpen && (
+                <div className="absolute right-0 top-10 z-40 w-60 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
+                  <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+                    <Image
+                      src="/images/user-avatar.svg"
+                      alt={t("userAvatarAlt")}
+                      width={40}
+                      height={40}
+                      className="size-9 rounded-full border border-slate-700 bg-slate-950"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-white">
+                        {authQuery.data?.account?.username ?? t("localUser")}
+                      </p>
+                      <p className="text-[10px] text-panel-green font-mono mt-0.5 font-bold uppercase">
+                        {authQuery.data?.account?.role === "admin"
+                          ? (isZh ? "超级管理员 (Admin)" : "Administrator")
+                          : authQuery.data?.account?.role === "viewer"
+                          ? (isZh ? "只读访客 (Viewer)" : "Viewer")
+                          : (isZh ? "开黑成员 (Member)" : "Member")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 space-y-1">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      onClick={() => openAccountSettings("language")}
+                    >
+                      <Languages className="size-3.5 text-sky-400" />
+                      <span>{isZh ? "语言偏好" : "Language Preference"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      onClick={() => openAccountSettings("password")}
+                    >
+                      <KeyRound className="size-3.5 text-panel-gold" />
+                      <span>{isZh ? "账号安全" : "Account Security"}</span>
+                    </button>
+                  </div>
+
+                  <div className="mt-2 border-t border-slate-800 pt-2">
+                    <button
+                      type="button"
+                      disabled={logoutMutation.isPending}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 transition hover:bg-rose-950/40 hover:text-rose-300"
+                      onClick={() => logoutMutation.mutate()}
+                    >
+                      <LogOut className="size-3.5" />
+                      <span>{logoutMutation.isPending ? (isZh ? "正在退出..." : "Logging out...") : (isZh ? "退出登录" : "Log out")}</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-5 flex min-h-10 flex-wrap items-center gap-3">
-                  {localeChanged ? (
-                    <>
-                      <Button className="px-4" type="button" disabled={localePending} onClick={onSaveLocale}>
-                        {localePending ? t("saving") : t("saveButton")}
-                      </Button>
-                      <button
-                        className="rounded-md px-3 py-2 text-sm text-slate-400 transition hover:bg-slate-800 hover:text-white"
-                        type="button"
-                        disabled={localePending}
-                        onClick={() => onChangeLocale(locale)}
-                      >
-                        {t("cancel")}
-                      </button>
-                    </>
-                  ) : null}
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+
+      {/* Apps and Quick Navigation Drawer */}
+      <AppsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      {/* Account Settings Dialog */}
+      {accountOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserCog className="size-5 text-panel-green" />
+                <h3 className="text-sm font-bold text-white">{isZh ? "账号设置" : "Account Settings"}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountOpen(false)}
+                className="text-slate-400 hover:text-white transition"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {/* Tab switch */}
+            <div className="flex border-b border-slate-800">
+              <button
+                type="button"
+                className={cn(
+                  "flex-1 pb-2.5 text-xs font-semibold transition border-b-2",
+                  accountTab === "language"
+                    ? "border-panel-green text-panel-green"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                )}
+                onClick={() => setAccountTab("language")}
+              >
+                {isZh ? "语言偏好" : "Language Preference"}
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "flex-1 pb-2.5 text-xs font-semibold transition border-b-2",
+                  accountTab === "password"
+                    ? "border-panel-green text-panel-green"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                )}
+                onClick={() => setAccountTab("password")}
+              >
+                {isZh ? "账号安全" : "Account Security"}
+              </button>
+            </div>
+
+            {accountMessage && (
+              <p className="text-xs text-panel-green bg-panel-green/10 border border-panel-green/30 px-3 py-2 rounded-lg">
+                {accountMessage}
+              </p>
+            )}
+
+            {accountTab === "language" ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-300">{isZh ? "语言选择" : "Select Language"}</label>
+                  <select
+                    value={selectedLocale}
+                    onChange={(e) => setSelectedLocale(e.target.value as Locale)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-panel-green focus:outline-none"
+                  >
+                    <option value="zh">简体中文 (Chinese Simplified)</option>
+                    <option value="en">English (US)</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setAccountOpen(false)}
+                  >
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={localeMutation.isPending}
+                    onClick={saveLocale}
+                  >
+                    {localeMutation.isPending ? t("saving") : t("save")}
+                  </Button>
                 </div>
               </div>
             ) : (
-              <form className="max-w-md space-y-3" onSubmit={onSubmitPassword}>
-                <div>
-                  <h3 className="font-semibold text-white">{t("changePassword")}</h3>
-                  <p className="mt-1 text-sm text-slate-400">{t("localAdminDescription")}</p>
-                </div>
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-500">{t("currentPassword")}</span>
+              <form onSubmit={submitPasswordChange} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-300">{t("currentPassword")}</label>
                   <Input
-                    className="mt-2 w-full"
                     type="password"
+                    required
                     value={currentPassword}
-                    onChange={(event) => onChangeCurrentPassword(event.target.value)}
-                    autoComplete="current-password"
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="h-8 text-xs bg-slate-950 border-slate-700"
                   />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium text-slate-500">{t("newPassword")}</span>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-300">{t("newPassword")}</label>
                   <Input
-                    className="mt-2 w-full"
                     type="password"
+                    required
                     value={newPassword}
-                    onChange={(event) => onChangeNewPassword(event.target.value)}
-                    autoComplete="new-password"
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="h-8 text-xs bg-slate-950 border-slate-700"
                   />
-                </label>
-                <Button className="px-4" type="submit" disabled={passwordPending}>
-                  {passwordPending ? t("saving") : t("changePassword")}
-                </Button>
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setAccountOpen(false)}
+                  >
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={passwordMutation.isPending}
+                  >
+                    {passwordMutation.isPending ? t("saving") : t("save")}
+                  </Button>
+                </div>
               </form>
             )}
-            {message ? <p className="mt-5 rounded-md border border-panel-line bg-slate-950/40 px-3 py-2 text-sm text-slate-300">{message}</p> : null}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function AccountTabButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      className={cn(
-        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-400 transition hover:bg-slate-800 hover:text-white",
-        active && "bg-panel-green/15 text-panel-green"
       )}
-      type="button"
-      onClick={onClick}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="truncate">{label}</span>
-    </button>
-  );
-}
-
-function SearchServerResult({ server, onOpen }: { server: GameServerResource; onOpen: (id: string) => void }) {
-  const { t } = useI18n();
-  const provider = serverProviderDisplay({ providerKey: server.providerKey, mode: gameServerMode(server) });
-  const resourceLabel = t(serverResourceLabelKey(server));
-  const joinPort = gameServerJoinPort(server);
-  const meta = showWorldAndBackupFeatures ? `${resourceLabel}: ${gameServerWorldName(server)} · ${joinPort}` : `${provider.label} · ${joinPort}`;
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-slate-800/80"
-      onClick={() => onOpen(server.id)}
-    >
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-medium text-white">{server.name}</span>
-        <span className="block truncate text-xs text-slate-500">{meta}</span>
-      </span>
-      <span className="shrink-0 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">{provider.label}</span>
-    </button>
+    </div>
   );
 }

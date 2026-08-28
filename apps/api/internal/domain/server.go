@@ -91,14 +91,16 @@ type ServerCondition struct {
 }
 
 type GameServer struct {
-	ID          string              `json:"id" gorm:"primaryKey"`
-	Name        string              `json:"name"`
-	GameKey     GameKey             `json:"gameKey" gorm:"index"`
-	ProviderKey ProviderKey         `json:"providerKey" gorm:"index"`
-	Spec        ServerSpec          `json:"spec" gorm:"serializer:json"`
-	Status      ServerRuntimeStatus `json:"status" gorm:"serializer:json"`
-	CreatedAt   time.Time           `json:"createdAt"`
-	UpdatedAt   time.Time           `json:"updatedAt"`
+	ID             string              `json:"id" gorm:"primaryKey"`
+	OrganizationID string              `json:"organizationId,omitempty" gorm:"index"`
+	NodeID         string              `json:"nodeId" gorm:"column:node_id;index"`
+	Name           string              `json:"name"`
+	GameKey        GameKey             `json:"gameKey" gorm:"index"`
+	ProviderKey    ProviderKey         `json:"providerKey" gorm:"index"`
+	Spec           ServerSpec          `json:"spec" gorm:"serializer:json"`
+	Status         ServerRuntimeStatus `json:"status" gorm:"serializer:json"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	UpdatedAt      time.Time           `json:"updatedAt"`
 }
 
 func ServerMaxPlayers(server GameServer) int {

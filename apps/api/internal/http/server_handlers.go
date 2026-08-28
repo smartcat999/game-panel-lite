@@ -158,10 +158,15 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		ModIDs      []string             `json:"modIds,omitempty"`
 		Version     string               `json:"version"`
 		Resources   resourceLimitPayload `json:"resources,omitempty"`
+		NodeID      string               `json:"nodeId,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
+	}
+	nodeID := payload.NodeID
+	if strings.TrimSpace(nodeID) == "" {
+		nodeID = "node-local"
 	}
 	gameProvider, ok := h.provider.Get(payload.ProviderKey)
 	if !ok {
@@ -228,6 +233,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	server := domain.GameServer{
 		ID:          id,
+		NodeID:      nodeID,
 		Name:        payload.Name,
 		GameKey:     gameProvider.GameKey(),
 		ProviderKey: payload.ProviderKey,
@@ -379,6 +385,24 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server must be running to send commands")
 		return
 	}
+	if server.NodeID != "" && server.NodeID != "node-local" {
+		task := domain.NodeTask{
+			ID:        uuid.NewString(),
+			NodeID:    server.NodeID,
+			ServerID:  server.ID,
+			Action:    domain.NodeTaskAction("exec_command"),
+			Payload:   command,
+			Status:    domain.TaskPending,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		}
+		if err := h.store.CreateNodeTask(r.Context(), &task); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to dispatch command task: "+err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+		return
+	}
 	server, err = h.requireResourceRuntimeAttached(r.Context(), server)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
@@ -419,6 +443,59 @@ func (h *Handler) serverStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, h.serverRuntimeStats(r.Context(), server))
+}
+
+type ServerGatewayDiagnostic struct {
+	IsRemote         bool   `json:"isRemote"`
+	NodeID           string `json:"nodeId"`
+	NodeName         string `json:"nodeName"`
+	Region           string `json:"region"`
+	NodeOnline       bool   `json:"nodeOnline"`
+	LatencyMS        int64  `json:"latencyMs"`
+	ListenPort       int    `json:"listenPort"`
+	GatewayListening bool   `json:"gatewayListening"`
+	CachedLogLines   int    `json:"cachedLogLines"`
+}
+
+func (h *Handler) serverGatewayStatus(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+
+	listenPort := server.Spec.Network.HostPort
+	if listenPort <= 0 {
+		listenPort = server.Spec.Network.Port
+	}
+
+	diag := ServerGatewayDiagnostic{
+		IsRemote:   server.NodeID != "" && server.NodeID != "node-local",
+		NodeID:     server.NodeID,
+		NodeName:   "Local Host Daemon",
+		ListenPort: listenPort,
+	}
+
+	h.agentLogsMu.RLock()
+	diag.CachedLogLines = len(h.agentLogs[server.ID])
+	h.agentLogsMu.RUnlock()
+
+	if h.gateway != nil && listenPort > 0 {
+		diag.GatewayListening = h.gateway.IsListening(listenPort)
+	}
+
+	if diag.IsRemote {
+		if node, nErr := h.store.GetComputeNode(r.Context(), server.NodeID); nErr == nil {
+			diag.NodeName = node.Name
+			diag.Region = node.Region
+			diag.NodeOnline = node.Status == "online" || time.Since(node.LastHeartbeat) < 45*time.Second
+			diag.LatencyMS = node.PingLatencyMS
+		}
+	} else {
+		diag.NodeOnline = true
+	}
+
+	writeJSON(w, http.StatusOK, diag)
 }
 
 type serverWatchSnapshot struct {
@@ -597,18 +674,75 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	if h.apiMetrics != nil {
+		h.apiMetrics.AddSSEConnection("server_logs", 1)
+		defer h.apiMetrics.AddSSEConnection("server_logs", -1)
+	}
+
+	flusher, _ := w.(http.Flusher)
+
+	// Remote Worker node log streaming
+	if server.NodeID != "" && server.NodeID != "node-local" {
+		h.agentLogsMu.RLock()
+		cached := make([]string, len(h.agentLogs[server.ID]))
+		copy(cached, h.agentLogs[server.ID])
+		h.agentLogsMu.RUnlock()
+
+		for _, line := range cached {
+			_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+
+		logChan := make(chan string, 100)
+		h.agentLogsMu.Lock()
+		if h.agentLogChans[server.ID] == nil {
+			h.agentLogChans[server.ID] = make(map[chan string]struct{})
+		}
+		h.agentLogChans[server.ID][logChan] = struct{}{}
+		h.agentLogsMu.Unlock()
+
+		defer func() {
+			h.agentLogsMu.Lock()
+			if subs, ok := h.agentLogChans[server.ID]; ok {
+				delete(subs, logChan)
+				if len(subs) == 0 {
+					delete(h.agentLogChans, server.ID)
+				}
+			}
+			h.agentLogsMu.Unlock()
+		}()
+
+		for {
+			select {
+			case line, ok := <-logChan:
+				if !ok {
+					return
+				}
+				_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
+				if h.apiMetrics != nil {
+					h.apiMetrics.AddSSEEvent("server_logs", "log")
+				}
+				if flusher != nil {
+					flusher.Flush()
+				}
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}
+
 	if server.Status.Phase == domain.PhaseRunning {
 		server, err = h.requireResourceRuntimeAttached(r.Context(), server)
 		if err != nil {
 			writeError(w, statusCodeForRuntimeError(err), err.Error())
 			return
 		}
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	if h.apiMetrics != nil {
-		h.apiMetrics.AddSSEConnection("server_logs", 1)
-		defer h.apiMetrics.AddSSEConnection("server_logs", -1)
 	}
 	stream, err := h.runtime.LogsWorkload(r.Context(), server.Status.RuntimeID, true)
 	if err != nil {
@@ -753,6 +887,16 @@ func (h *Handler) serverLogSnapshot(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+
+	if server.NodeID != "" && server.NodeID != "node-local" {
+		h.agentLogsMu.RLock()
+		cached := make([]string, len(h.agentLogs[server.ID]))
+		copy(cached, h.agentLogs[server.ID])
+		h.agentLogsMu.RUnlock()
+		writeJSON(w, http.StatusOK, map[string][]string{"lines": cached})
+		return
+	}
+
 	if server.Status.Phase != domain.PhaseRunning && !h.runtimeStatusAvailable() {
 		writeJSON(w, http.StatusOK, map[string][]string{"lines": []string{}})
 		return

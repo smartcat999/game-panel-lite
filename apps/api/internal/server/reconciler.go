@@ -51,6 +51,13 @@ func (r *Reconciler) WithImageLoader(loader ImageLoader) *Reconciler {
 	return r
 }
 
+func (r *Reconciler) Builder() WorkloadBuilder {
+	if r == nil {
+		return nil
+	}
+	return r.builder
+}
+
 func (r *Reconciler) NeedsReconcile(server domain.GameServer) bool {
 	switch server.Status.Phase {
 	case domain.PhasePending, domain.PhaseReconciling, domain.PhaseDeleting:

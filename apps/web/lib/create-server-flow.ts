@@ -19,6 +19,7 @@ export type CreateGameServerInput = {
   worldId?: string;
   modIds?: string[];
   version?: string;
+  nodeId?: string;
 };
 
 export type CreatedGameServer = {
@@ -41,7 +42,8 @@ export async function createGameServerWithResources({
   resources,
   worldId,
   modIds = [],
-  version
+  version,
+  nodeId
 }: CreateGameServerInput): Promise<CreatedGameServer> {
   const nextProviderKey = providerKey ?? (mode === "tmodloader" ? "terraria-tmodloader" : "terraria-vanilla");
   let server = await deps.createServer({
@@ -51,7 +53,8 @@ export async function createGameServerWithResources({
     hostPort,
     modIds: modIds.length > 0 ? modIds : undefined,
     resources,
-    version
+    version,
+    nodeId
   });
 
   let assignedWorld: World | undefined;

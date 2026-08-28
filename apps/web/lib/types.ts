@@ -223,6 +223,7 @@ export type ServerRuntimeStatus = {
 export type GameServerResource = {
   id: string;
   name: string;
+  nodeId?: string;
   gameKey: GameKey;
   providerKey: ProviderKey;
   spec: ServerResourceSpec;
@@ -420,4 +421,53 @@ export type ActivityEvent = {
   message: string;
   payload?: Record<string, unknown>;
   created: string;
+};
+
+export type UserRole = "admin" | "member" | "viewer";
+
+export type UserAccount = {
+  id: string;
+  username: string;
+  role: UserRole;
+  createdAt?: string;
+};
+
+export type AuthBootstrap = {
+  initialized: boolean;
+  allowRegistration: boolean;
+  account?: UserAccount;
+};
+
+export type ComputeNode = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  token?: string;
+  publicIp?: string;
+  region?: string;
+  status: "online" | "offline" | "degraded";
+  isLocal: boolean;
+  cpuCores: number;
+  cpuUsagePercent?: number;
+  memoryTotalMb: number;
+  memoryUsedMb: number;
+  diskTotalGb?: number;
+  diskUsedGb?: number;
+  dockerVersion?: string;
+  agentVersion?: string;
+  osInfo?: string;
+  pingLatencyMs?: number;
+  runningCount: number;
+  lastHeartbeat?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type NodeJoinCommand = {
+  nodeId: string;
+  token: string;
+  masterUrl: string;
+  dockerCommand: string;
+  shellCommand: string;
 };

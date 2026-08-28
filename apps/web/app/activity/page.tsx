@@ -61,7 +61,6 @@ export default function ActivityPage() {
     <>
       <PageHeader
         title={t("monitoringTitle")}
-        description={t("monitoringDescription")}
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <SourceBadge connected={overviewQuery.data?.dataSource.connected} />
@@ -251,25 +250,23 @@ function OverviewStatusStrip({ overview }: { overview?: MonitoringOverviewRespon
   const isHealthy = issues === 0 && overall === "healthy";
 
   return (
-    <div className="rounded-lg border border-panel-line bg-panel-card px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md border", isHealthy ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold")}>
-            {isHealthy ? <CheckCircle2 aria-hidden="true" className="size-4" /> : <AlertTriangle aria-hidden="true" className="size-4" />}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-100">
-              {!connected ? t("monitoringOverviewDataUnavailable") : isHealthy ? t("monitoringOverviewHealthySummary") : issues > 0 ? t("monitoringOverviewWarningSummary", { count: issues }) : t("monitoringOverviewHealthWarningSummary")}
-            </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {connected ? t("monitoringOverviewDataConnected") : t("monitoringOverviewDataUnavailable")}
-              {" · "}
-              {t("monitoringOverviewLastSync", { time: overview?.health.lastSync ? formatOverviewTime(overview.health.lastSync) : t("none") })}
-            </p>
-          </div>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-2.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg border", isHealthy ? "border-panel-green/30 bg-panel-green/10 text-panel-green" : "border-panel-gold/30 bg-panel-gold/10 text-panel-gold")}>
+          {isHealthy ? <CheckCircle2 aria-hidden="true" className="size-3.5" /> : <AlertTriangle aria-hidden="true" className="size-3.5" />}
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-white">
+            {!connected ? t("monitoringOverviewDataUnavailable") : isHealthy ? t("monitoringOverviewHealthySummary") : issues > 0 ? t("monitoringOverviewWarningSummary", { count: issues }) : t("monitoringOverviewHealthWarningSummary")}
+          </p>
+          <p className="text-[11px] text-slate-400">
+            {connected ? t("monitoringOverviewDataConnected") : t("monitoringOverviewDataUnavailable")}
+            {" · "}
+            {t("monitoringOverviewLastSync", { time: overview?.health.lastSync ? formatOverviewTime(overview.health.lastSync) : t("none") })}
+          </p>
         </div>
-        <MonitoringCadence />
       </div>
+      <MonitoringCadence />
     </div>
   );
 }
@@ -293,7 +290,7 @@ function OverviewKpis({ nodeCpu, nodeMemory, overview }: { nodeCpu?: MetricSerie
   const cpuAvailable = cpu != null && Number.isFinite(cpu);
   const memoryAvailable = memory != null && Number.isFinite(memory);
   return (
-    <div className="grid gap-3 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <CommandKpi
         label={t("monitoringKpiServers")}
         note={t("monitoringKpiServersNote", { running: kpis?.runningServers ?? 0, total: kpis?.totalServers ?? 0 })}
@@ -323,14 +320,25 @@ function OverviewKpis({ nodeCpu, nodeMemory, overview }: { nodeCpu?: MetricSerie
 }
 
 function CommandKpi({ label, note, tone, value }: { label: string; note: string; tone: "neutral" | "success" | "warning"; value: number | string }) {
+  const isGreen = tone === "success";
+  const isGold = tone === "warning";
+  const glowColor = isGreen ? "#59d46f" : isGold ? "#f59e0b" : "#64748b";
+
   return (
-    <div className="rounded-lg border border-panel-line bg-panel-card p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-xs font-medium text-slate-500">{label}</p>
-        <span className={cn("size-2 rounded-full", tone === "success" ? "bg-panel-green" : tone === "warning" ? "bg-panel-gold" : "bg-slate-600")} />
+    <div className="group relative overflow-hidden rounded-xl border border-slate-800/80 bg-gradient-to-b from-slate-900/80 via-slate-900/40 to-slate-950/80 p-4 transition-all duration-200 hover:border-slate-700 hover:bg-slate-900 hover:shadow-xl hover:shadow-black/60">
+      <div
+        className="absolute inset-x-0 top-0 h-[1.5px] opacity-40 transition-opacity group-hover:opacity-100"
+        style={{ background: `linear-gradient(90deg, transparent, ${glowColor}, transparent)` }}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-xs font-semibold text-slate-400">{label}</p>
+        <span
+          className="size-2 rounded-full"
+          style={{ backgroundColor: glowColor, boxShadow: `0 0 8px ${glowColor}` }}
+        />
       </div>
-      <p className="mt-3 font-mono text-3xl font-semibold leading-none text-slate-100">{value}</p>
-      <p className="mt-3 truncate text-xs text-slate-500">{note}</p>
+      <p className="mt-3 font-mono text-2xl sm:text-3xl font-black leading-none text-white tracking-tight">{value}</p>
+      <p className="mt-2.5 truncate text-[11px] font-medium text-slate-400">{note}</p>
     </div>
   );
 }

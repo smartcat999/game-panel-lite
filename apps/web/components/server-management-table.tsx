@@ -24,8 +24,11 @@ import { cn } from "@/lib/utils";
 export type ServerTableColumn = "players" | "resources" | "address" | "activity" | "version";
 export type ServerTableSort = "name" | "status" | "updatedAt";
 
+import { usePermissions } from "@/lib/permissions";
+
 export function ServerManagementTable({
   servers,
+  nodes = [],
   metrics = [],
   publicHost,
   selectedIds,
@@ -37,6 +40,7 @@ export function ServerManagementTable({
   onAddressCopied
 }: {
   servers: GameServerResource[];
+  nodes?: Array<{ id: string; name: string; region?: string; isLocal?: boolean }>;
   metrics?: ObservabilityServerMetric[];
   publicHost?: string;
   selectedIds: Set<string>;
@@ -48,7 +52,9 @@ export function ServerManagementTable({
   onAddressCopied: () => void;
 }) {
   const { t, locale } = useI18n();
+  const { isViewer } = usePermissions();
   const metricMap = new Map(metrics.map((metric) => [metric.id, metric]));
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id));
   const partiallySelected = !allSelected && servers.some((server) => selectedIds.has(server.id));
   const togglePage = () => {
@@ -64,9 +70,11 @@ export function ServerManagementTable({
         <table className="w-full min-w-[1120px] table-fixed border-collapse text-left text-sm">
           <thead className="sticky top-0 z-10 bg-slate-950 text-xs font-medium text-slate-500 shadow-[0_1px_0_rgba(51,65,85,0.65)]">
             <tr>
-              <th className="w-11 px-3 py-2.5">
-                <SelectionBox checked={allSelected} indeterminate={partiallySelected} label={t("selectCurrentPage")} onChange={togglePage} />
-              </th>
+              {!isViewer && (
+                <th className="w-11 px-3 py-2.5">
+                  <SelectionBox checked={allSelected} indeterminate={partiallySelected} label={t("selectCurrentPage")} onChange={togglePage} />
+                </th>
+              )}
               <SortableHeader active={sort === "name"} direction={direction} label={t("server")} onClick={() => onSort("name")} className="w-72" />
               <SortableHeader active={sort === "status"} direction={direction} label={t("status")} onClick={() => onSort("status")} className="w-28" />
               <th className="w-44 px-3 py-2.5">{t("gameAndMode")}</th>
@@ -86,19 +94,42 @@ export function ServerManagementTable({
               const provider = serverProviderDisplay(server);
               return (
                 <tr key={server.id} className={cn("group transition-colors hover:bg-slate-800/35", selectedIds.has(server.id) && "bg-panel-green/[0.045]") }>
-                  <td className="px-3 py-2.5">
-                    <SelectionBox checked={selectedIds.has(server.id)} label={t("selectServer", { name: server.name })} onChange={() => {
-                      const next = new Set(selectedIds);
-                      if (next.has(server.id)) next.delete(server.id); else next.add(server.id);
-                      onSelectionChange(next);
-                    }} />
-                  </td>
+                  {!isViewer && (
+                    <td className="px-3 py-2.5">
+                      <SelectionBox checked={selectedIds.has(server.id)} label={t("selectServer", { name: server.name })} onChange={() => {
+                        const next = new Set(selectedIds);
+                        if (next.has(server.id)) next.delete(server.id); else next.add(server.id);
+                        onSelectionChange(next);
+                      }} />
+                    </td>
+                  )}
                   <td className="px-3 py-2.5">
                     <Link className="flex min-w-0 items-center gap-2.5" href={`/servers/${server.id}`}>
                       <ServerGameArt server={{ gameKey: server.gameKey, providerKey: server.providerKey, mode: gameServerMode(server) }} className="size-8 rounded" compact />
                       <span className="min-w-0">
                         <span className="block max-w-64 truncate font-medium text-slate-100 group-hover:text-panel-green">{server.name}</span>
-                        <span className="mt-0.5 block font-mono text-[11px] text-slate-500">{server.id.slice(0, 8)}</span>
+                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
+                          <span>{server.id.slice(0, 8)}</span>
+                          <span>·</span>
+                          {(() => {
+                            const nodeInfo = server.nodeId ? nodeMap.get(server.nodeId) : undefined;
+                            const isWorker = server.nodeId && server.nodeId !== "node-local";
+                            const displayName = nodeInfo?.name || server.nodeId || "主控节点";
+                            if (isWorker) {
+                              return (
+                                <span className="inline-flex items-center gap-1 rounded bg-sky-950/70 px-1.5 py-0.2 text-[10px] text-sky-300 border border-sky-800/60 font-medium">
+                                  <span className="size-1 rounded-full bg-sky-400 animate-pulse" />
+                                  {displayName}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-900 px-1.5 py-0.2 text-[10px] text-slate-400 border border-slate-800">
+                                主控节点
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </span>
                     </Link>
                   </td>

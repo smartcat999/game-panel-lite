@@ -105,3 +105,77 @@ func authCookieFromRecorder(t *testing.T, recorder *httptest.ResponseRecorder) *
 	t.Fatalf("expected %s cookie in response headers", sessionCookieName)
 	return nil
 }
+
+func TestUserManagementAndRegistrationPolicy(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	// 1. Setup Admin
+	setup := httptest.NewRecorder()
+	setupReq := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/setup", strings.NewReader(`{"username":"superadmin","password":"password123"}`))
+	setupReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(setup, setupReq)
+	if setup.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected setup 201, got %d: %s", setup.Code, setup.Body.String())
+	}
+	adminCookie := authCookieFromRecorder(t, setup)
+
+	// 2. Try register when registration is disabled by default -> should be 403
+	regDisabled := httptest.NewRecorder()
+	regDisabledReq := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/register", strings.NewReader(`{"username":"player1","password":"password123"}`))
+	regDisabledReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(regDisabled, regDisabledReq)
+	if regDisabled.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected register 403 when disabled, got %d: %s", regDisabled.Code, regDisabled.Body.String())
+	}
+
+	// 3. Admin creates a member user
+	createUser := httptest.NewRecorder()
+	createUserReq := httptest.NewRequest(stdhttp.MethodPost, "/api/users", strings.NewReader(`{"username":"gamer1","password":"password123","role":"member"}`))
+	createUserReq.Header.Set("Content-Type", "application/json")
+	createUserReq.AddCookie(adminCookie)
+	router.ServeHTTP(createUser, createUserReq)
+	if createUser.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected create user 201, got %d: %s", createUser.Code, createUser.Body.String())
+	}
+
+	// 4. List users
+	listUsers := httptest.NewRecorder()
+	listUsersReq := httptest.NewRequest(stdhttp.MethodGet, "/api/users", nil)
+	listUsersReq.AddCookie(adminCookie)
+	router.ServeHTTP(listUsers, listUsersReq)
+	if listUsers.Code != stdhttp.StatusOK {
+		t.Fatalf("expected list users 200, got %d: %s", listUsers.Code, listUsers.Body.String())
+	}
+	if !strings.Contains(listUsers.Body.String(), `"username":"gamer1"`) {
+		t.Fatalf("expected gamer1 in list, got %s", listUsers.Body.String())
+	}
+
+	// 5. Admin enables public registration
+	enableReg := httptest.NewRecorder()
+	enableRegReq := httptest.NewRequest(stdhttp.MethodPut, "/api/settings/registration", strings.NewReader(`{"allowRegistration":true}`))
+	enableRegReq.Header.Set("Content-Type", "application/json")
+	enableRegReq.AddCookie(adminCookie)
+	router.ServeHTTP(enableReg, enableRegReq)
+	if enableReg.Code != stdhttp.StatusOK {
+		t.Fatalf("expected enable reg 200, got %d: %s", enableReg.Code, enableReg.Body.String())
+	}
+
+	// 6. Now register player1 -> should succeed
+	regEnabled := httptest.NewRecorder()
+	regEnabledReq := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/register", strings.NewReader(`{"username":"player1","password":"password123"}`))
+	regEnabledReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(regEnabled, regEnabledReq)
+	if regEnabled.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected register 201 when enabled, got %d: %s", regEnabled.Code, regEnabled.Body.String())
+	}
+	memberCookie := authCookieFromRecorder(t, regEnabled)
+
+	// 7. Member tries to access admin-only /api/users -> should be 403 Forbidden
+	memberAccess := httptest.NewRecorder()
+	memberAccessReq := httptest.NewRequest(stdhttp.MethodGet, "/api/users", nil)
+	memberAccessReq.AddCookie(memberCookie)
+	router.ServeHTTP(memberAccess, memberAccessReq)
+	if memberAccess.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected member access 403, got %d: %s", memberAccess.Code, memberAccess.Body.String())
+	}
+}

@@ -38,6 +38,16 @@ export function ServerCard({ server, compact = false }: { server: GameServerReso
                 </Link>
                 <ServerProviderBadge server={displayServer} />
                 <ServerStatusBadge status={status} />
+                {server.nodeId && server.nodeId !== "node-local" ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-sky-950/60 px-1.5 py-0.5 text-[10px] font-medium text-sky-400 border border-sky-800/60">
+                    <span className="size-1.5 rounded-full bg-sky-400 animate-pulse" />
+                    {server.nodeId}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-400 border border-slate-800">
+                    主控节点
+                  </span>
+                )}
               </div>
             </div>
             <PlayerPill

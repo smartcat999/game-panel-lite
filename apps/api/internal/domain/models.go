@@ -321,9 +321,144 @@ type WorldRegenerationJob struct {
 	CompletedAt *time.Time                 `json:"completedAt,omitempty"`
 }
 
+type Role string
+
+const (
+	RoleOwner  Role = "owner"
+	RoleAdmin  Role = "admin"
+	RoleMember Role = "member"
+	RoleViewer Role = "viewer"
+)
+
+type Organization struct {
+	ID        string    `json:"id" gorm:"primaryKey"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug" gorm:"uniqueIndex"`
+	Plan      string    `json:"plan"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type OrganizationMember struct {
+	ID             string    `json:"id" gorm:"primaryKey"`
+	OrganizationID string    `json:"organizationId" gorm:"index:idx_org_user,unique"`
+	UserID         string    `json:"userId" gorm:"index:idx_org_user,unique"`
+	Role           Role      `json:"role"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type TenantQuota struct {
+	OrganizationID string  `json:"organizationId" gorm:"primaryKey"`
+	MaxServers     int     `json:"maxServers"`
+	MaxCPUCores    float64 `json:"maxCpuCores"`
+	MaxMemoryMB    int     `json:"maxMemoryMb"`
+	MaxStorageGB   int     `json:"maxStorageGb"`
+}
+
+type TenantUsage struct {
+	TotalServers   int         `json:"totalServers"`
+	RunningServers int         `json:"runningServers"`
+	UsedCPUCores   float64     `json:"usedCpuCores"`
+	UsedMemoryMB   int         `json:"usedMemoryMb"`
+	Quota          TenantQuota `json:"quota"`
+}
+
+type ComputeNode struct {
+	ID              string    `json:"id" gorm:"primaryKey"`
+	Name            string    `json:"name"`
+	Host            string    `json:"host"`
+	Port            int       `json:"port"`
+	Token           string    `json:"token,omitempty"`
+	PublicIP        string    `json:"publicIp"`
+	Region          string    `json:"region"`
+	Status          string    `json:"status"`
+	IsLocal         bool      `json:"isLocal"`
+	CPUCores        int       `json:"cpuCores"`
+	CPUUsagePercent float64   `json:"cpuUsagePercent"`
+	MemoryTotalMB   int64     `json:"memoryTotalMb"`
+	MemoryUsedMB    int64     `json:"memoryUsedMb"`
+	DiskTotalGB     int64     `json:"diskTotalGb"`
+	DiskUsedGB      int64     `json:"diskUsedGb"`
+	DockerVersion   string    `json:"dockerVersion,omitempty"`
+	AgentVersion    string    `json:"agentVersion,omitempty"`
+	OSInfo          string    `json:"osInfo,omitempty"`
+	PingLatencyMS   int64     `json:"pingLatencyMs"`
+	RunningCount    int       `json:"runningCount"`
+	LastHeartbeat   time.Time `json:"lastHeartbeat"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type NodeTaskAction string
+
+const (
+	TaskCreateServer  NodeTaskAction = "create"
+	TaskStartServer   NodeTaskAction = "start"
+	TaskStopServer    NodeTaskAction = "stop"
+	TaskRestartServer NodeTaskAction = "restart"
+	TaskDeleteServer  NodeTaskAction = "delete"
+)
+
+type NodeTaskStatus string
+
+const (
+	TaskPending   NodeTaskStatus = "pending"
+	TaskRunning   NodeTaskStatus = "running"
+	TaskCompleted NodeTaskStatus = "completed"
+	TaskFailed    NodeTaskStatus = "failed"
+)
+
+type NodeTask struct {
+	ID        string         `json:"id" gorm:"primaryKey"`
+	NodeID    string         `json:"nodeId" gorm:"index"`
+	ServerID  string         `json:"serverId" gorm:"index"`
+	Action    NodeTaskAction `json:"action"`
+	Payload   string         `json:"payload,omitempty"`
+	Image     string         `json:"image"`
+	Env       string         `json:"env"`
+	Ports     string         `json:"ports"`
+	Status    NodeTaskStatus `json:"status" gorm:"index"`
+	Error     string         `json:"error,omitempty"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+}
+
+// WorkloadAssignment is the durable desired state assigned to one compute node.
+// Lifecycle changes converge through this resource; they are not imperative node tasks.
+type WorkloadAssignment struct {
+	ID                string             `json:"id" gorm:"primaryKey"`
+	UID               string             `json:"uid" gorm:"uniqueIndex"`
+	ServerID          string             `json:"serverId" gorm:"uniqueIndex"`
+	NodeID            string             `json:"nodeId" gorm:"index"`
+	Generation        int                `json:"generation"`
+	DesiredState      ServerDesiredState `json:"desiredState"`
+	Spec              WorkloadSpec       `json:"spec" gorm:"serializer:json"`
+	DeletionTimestamp *time.Time         `json:"deletionTimestamp,omitempty"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	UpdatedAt         time.Time          `json:"updatedAt"`
+}
+
+// WorkloadObservation is the worker's latest observation of real runtime state.
+// AssignmentUID fences stale reports from earlier placements of the same server.
+type WorkloadObservation struct {
+	ID                 string            `json:"id" gorm:"primaryKey"`
+	AssignmentUID      string            `json:"assignmentUid" gorm:"uniqueIndex"`
+	ServerID           string            `json:"serverId" gorm:"index"`
+	NodeID             string            `json:"nodeId" gorm:"index"`
+	ObservedGeneration int               `json:"observedGeneration"`
+	RuntimeID          string            `json:"runtimeId,omitempty"`
+	ActualState        ServerActualState `json:"actualState"`
+	Conditions         []ServerCondition `json:"conditions,omitempty" gorm:"serializer:json"`
+	LastError          string            `json:"lastError,omitempty"`
+	ObservedAt         time.Time         `json:"observedAt"`
+	CreatedAt          time.Time         `json:"createdAt"`
+	UpdatedAt          time.Time         `json:"updatedAt"`
+}
+
 type AdminAccount struct {
 	ID           string    `json:"id" gorm:"primaryKey"`
 	Username     string    `json:"username" gorm:"uniqueIndex"`
+	Role         Role      `json:"role" gorm:"default:admin"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
@@ -341,3 +476,7 @@ type Setting struct {
 	Key   string `json:"key" gorm:"primaryKey"`
 	Value string `json:"value"`
 }
+
+const (
+	SettingKeyAllowRegistration = "allow_public_registration"
+)

@@ -10,6 +10,7 @@ import { providerDisplayName } from "@/lib/provider-display";
 import { formatRuntimeInstallError } from "@/lib/runtime-errors";
 import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import { cn } from "@/lib/utils";
+import { SettingsSubNav } from "@/components/sub-nav";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
 const imageVersionGridColumns = "md:grid-cols-[minmax(0,1.8fr)_minmax(0,.9fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_6.5rem]";
@@ -35,7 +36,6 @@ export default function VersionsPage() {
     <>
       <PageHeader
         title={t("versionManagementTitle")}
-        description={t("versionManagementDescription")}
         action={(
           <Button variant="secondary" onClick={() => gamesQuery.refetch()} disabled={gamesQuery.isFetching}>
             <RefreshCw aria-hidden="true" className={cn("size-4", gamesQuery.isFetching && "animate-spin motion-reduce:animate-none")} />
@@ -43,6 +43,7 @@ export default function VersionsPage() {
           </Button>
         )}
       />
+      <SettingsSubNav />
       {gamesQuery.isError ? (
         <Card className="flex items-start gap-3 p-4 text-sm text-panel-gold">
           <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />

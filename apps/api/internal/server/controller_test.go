@@ -1,11 +1,95 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
+
+type assignmentControllerFakeStore struct {
+	servers     []domain.GameServer
+	assignment  *domain.WorkloadAssignment
+	observation *domain.WorkloadObservation
+}
+
+func (s *assignmentControllerFakeStore) ListGameServers(context.Context) ([]domain.GameServer, error) {
+	return append([]domain.GameServer{}, s.servers...), nil
+}
+
+func (s *assignmentControllerFakeStore) SaveGameServer(_ context.Context, server *domain.GameServer) error {
+	for i := range s.servers {
+		if s.servers[i].ID == server.ID {
+			s.servers[i] = *server
+			return nil
+		}
+	}
+	return nil
+}
+
+func (s *assignmentControllerFakeStore) UpsertWorkloadAssignment(_ context.Context, assignment *domain.WorkloadAssignment) error {
+	copy := *assignment
+	s.assignment = &copy
+	return nil
+}
+
+func (s *assignmentControllerFakeStore) GetWorkloadAssignmentByServer(context.Context, string) (domain.WorkloadAssignment, error) {
+	if s.assignment == nil {
+		return domain.WorkloadAssignment{}, errors.New("not found")
+	}
+	return *s.assignment, nil
+}
+
+func (s *assignmentControllerFakeStore) DeleteWorkloadAssignment(context.Context, string) error {
+	s.assignment = nil
+	return nil
+}
+
+func (s *assignmentControllerFakeStore) GetWorkloadObservation(context.Context, string) (domain.WorkloadObservation, error) {
+	if s.observation == nil {
+		return domain.WorkloadObservation{}, errors.New("not found")
+	}
+	return *s.observation, nil
+}
+
+func TestRemoteControllerPersistsDesiredAssignmentAndWaitsForObservation(t *testing.T) {
+	store := &assignmentControllerFakeStore{servers: []domain.GameServer{{
+		ID:          "server-1",
+		NodeID:      "node-1",
+		Name:        "Friends",
+		GameKey:     domain.GameTerraria,
+		ProviderKey: domain.ProviderTerrariaVanilla,
+		Spec:        domain.ServerSpec{Generation: 4, DesiredState: domain.DesiredRunning},
+		Status:      domain.ServerRuntimeStatus{Phase: domain.PhasePending, ActualState: domain.ActualMissing},
+	}}}
+	controller := NewController(store, NewRuntimeReconciler(&fakeBuilder{}, nil), nil)
+	controller.RunOnce(context.Background())
+
+	if store.assignment == nil {
+		t.Fatal("expected a durable workload assignment")
+	}
+	if store.assignment.DesiredState != domain.DesiredRunning || store.assignment.Generation != 4 {
+		t.Fatalf("unexpected assignment: %+v", store.assignment)
+	}
+	if store.servers[0].Status.Phase != domain.PhaseReconciling || store.servers[0].Status.ActualState != domain.ActualUnknown {
+		t.Fatalf("expected controller to wait for worker observation, got %+v", store.servers[0].Status)
+	}
+
+	store.observation = &domain.WorkloadObservation{
+		AssignmentUID:      store.assignment.UID,
+		ServerID:           "server-1",
+		NodeID:             "node-1",
+		ObservedGeneration: 4,
+		RuntimeID:          "container-1",
+		ActualState:        domain.ActualRunning,
+	}
+	controller.RunOnce(context.Background())
+	if store.servers[0].Status.Phase != domain.PhaseRunning || store.servers[0].Status.RuntimeID != "container-1" {
+		t.Fatalf("expected running status derived from observation, got %+v", store.servers[0].Status)
+	}
+}
 
 func TestReconciliationActivityEventsForRuntimeStart(t *testing.T) {
 	now := time.Unix(1000, 0)
