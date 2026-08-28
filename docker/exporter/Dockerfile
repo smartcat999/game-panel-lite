@@ -3,11 +3,11 @@ FROM golang:1.25-bookworm AS builder
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor ./vendor
 
 COPY apps/api ./apps/api
 
-RUN CGO_ENABLED=1 GOOS=linux go build -o /out/gamepanel-exporter ./apps/api/cmd/gamepanel-exporter
+RUN CGO_ENABLED=1 GOOS=linux go build -mod=vendor -o /out/gamepanel-exporter ./apps/api/cmd/gamepanel-exporter
 
 FROM debian:bookworm-slim AS runner
 
