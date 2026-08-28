@@ -32,12 +32,27 @@ export function gameServerWorldName(server: GameServerResource): string {
 }
 
 export function gameServerPassword(server: GameServerResource): string {
-  const config = server.spec?.config;
-  return stringConfigValue(config, "password", "") || stringConfigValue(config, "serverPassword", "");
+  const config = (server.spec?.config ?? {}) as Record<string, unknown>;
+  const identity = (config.identity ?? {}) as Record<string, unknown>;
+  return (
+    String(config.password ?? "") ||
+    String(config.serverPassword ?? "") ||
+    String(config.ServerPassword ?? "") ||
+    String(config["identity.password"] ?? "") ||
+    String(identity.password ?? "")
+  );
 }
 
 export function gameServerMaxPlayers(server: GameServerResource): number {
-  return numberConfigValue(server.spec?.config, "maxPlayers", 0);
+  const config = (server.spec?.config ?? {}) as Record<string, unknown>;
+  const gameplay = (config.gameplay ?? {}) as Record<string, unknown>;
+  return (
+    Number(config.maxPlayers ?? 0) ||
+    Number(config["gameplay.maxPlayers"] ?? 0) ||
+    Number(gameplay.maxPlayers ?? 0) ||
+    numberConfigValue(server.spec?.config, "maxPlayers", 0) ||
+    (server.providerKey === "dont-starve-together" ? 6 : server.providerKey === "palworld" ? 8 : 16)
+  );
 }
 
 export function gameServerJoinPort(server: GameServerResource): number {
@@ -45,7 +60,11 @@ export function gameServerJoinPort(server: GameServerResource): number {
 }
 
 export function gameServerVersion(server: GameServerResource): string {
-  return server.spec?.version || defaultVersionForProvider(server.providerKey);
+  const raw = (server.spec?.version || defaultVersionForProvider(server.providerKey) || "1.0").trim();
+  if (raw.startsWith("v") || raw.startsWith("V")) {
+    return `v${raw.replace(/^v+/i, "")}`;
+  }
+  return `v${raw}`;
 }
 
 export function gameServerConfigPendingRestart(server: GameServerResource): boolean {

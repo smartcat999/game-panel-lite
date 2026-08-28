@@ -288,6 +288,10 @@ func TestApplyGameUpdateRejectsOnlinePlayers(t *testing.T) {
 }
 
 func TestApplyGameUpdateBacksUpSaveAndCompletesAsynchronously(t *testing.T) {
+	origAvailableDisk := availableDiskBytesFn
+	availableDiskBytesFn = func(path string) (int64, error) { return 50 * 1024 * 1024 * 1024, nil }
+	t.Cleanup(func() { availableDiskBytesFn = origAvailableDisk })
+
 	adapter := newGameUpdateHTTPAdapter()
 	t.Cleanup(adapter.releaseCheck)
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)

@@ -1,5 +1,13 @@
 # V1 Progress
 
+## 2026-08-28
+
+- Replaced imperative remote lifecycle tasks with durable workload assignments and worker observations: the API now writes desired state, the worker reconciles real Docker state, and the controller derives status only from matching assignment UID and generation.
+- Added worker-side Docker reconciliation with managed workload labels, generation-aware replacement, traversal-safe instance files, authenticated observation reporting, and rejection of legacy lifecycle tasks.
+- Fixed remote Terraria console input to attach to container stdin instead of executing game commands through a shell, and made log snapshots retry by content after failed uploads while suppressing overlapping history.
+- Restricted task polling, task acknowledgements, assignment reads, observation writes, and log uploads to the authenticated node that owns the resource.
+- Added assignment persistence, controller convergence, worker reconciliation, path-safety, and log-delta tests; full `go test ./...` and `go vet ./...` pass.
+
 ## 2026-08-17
 
 - Prepared v0.2.4 to publish every control-plane dependency through GamePanel Lite's Docker Hub and Alibaba Cloud registries, pin upstream digests, and refresh monitoring containers during panel updates so regional deployments never mix registries.

@@ -34,7 +34,7 @@ export function Badge({ className, children }: { className?: string; children: R
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={cn("h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green", className)}
+      className={cn("w-full h-10 rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green", className)}
       {...props}
     />
   );

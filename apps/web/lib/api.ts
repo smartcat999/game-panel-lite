@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, Backup, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, AuthBootstrap, Backup, ComputeNode, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -42,15 +42,7 @@ async function readPayload<T>(response: Response, fallback: string): Promise<T> 
   return payload;
 }
 
-export type AuthAccount = {
-  id: string;
-  username: string;
-};
-
-export type AuthBootstrap = {
-  initialized: boolean;
-  account?: AuthAccount;
-};
+export type AuthAccount = UserAccount;
 
 export async function getApiHealth(): Promise<{ status: string }> {
   const response = await fetchWithTimeout(`${API_BASE}/healthz`, { cache: "no-store" }, 3000, "API health check timed out");
@@ -94,7 +86,62 @@ export async function changeAdminPassword(currentPassword: string, newPassword: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ currentPassword, newPassword })
   });
-  return readPayload<AuthAccount>(response, "Unable to change password");
+  return readPayload<UserAccount>(response, "Unable to change password");
+}
+
+export async function registerUser(username: string, password: string): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  return readPayload<UserAccount>(response, "Unable to register account");
+}
+
+export async function listUsers(): Promise<UserAccount[]> {
+  const response = await apiFetch(`${API_BASE}/api/users`, { cache: "no-store" });
+  return readPayload<UserAccount[]>(response, "Unable to load users");
+}
+
+export async function createUser(username: string, password: string, role: UserRole = "member"): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password, role })
+  });
+  return readPayload<UserAccount>(response, "Unable to create user");
+}
+
+export async function updateUserRole(userId: string, role: UserRole): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/users/${userId}/role`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role })
+  });
+  return readPayload<UserAccount>(response, "Unable to update role");
+}
+
+export async function resetUserPassword(userId: string, newPassword: string): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/users/${userId}/password`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newPassword })
+  });
+  return readPayload<UserAccount>(response, "Unable to reset password");
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/users/${userId}`, { method: "DELETE" });
+  await readPayload<{ status: string }>(response, "Unable to delete user");
+}
+
+export async function updateRegistrationSetting(allowRegistration: boolean): Promise<{ allowRegistration: boolean }> {
+  const response = await apiFetch(`${API_BASE}/api/settings/registration`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ allowRegistration })
+  });
+  return readPayload<{ allowRegistration: boolean }>(response, "Unable to update registration setting");
 }
 
 export async function listGames(): Promise<GameCatalogEntry[]> {
@@ -299,6 +346,7 @@ function gameServerResourceFromApi(server: ApiServer): GameServerResource {
   return {
     id: server.id,
     name: server.name,
+    nodeId: server.nodeId || (server as unknown as { node_id?: string }).node_id || undefined,
     gameKey: server.gameKey,
     providerKey: server.providerKey,
     spec: server.spec,
@@ -745,6 +793,7 @@ export async function createGameServer(input: {
   modIds?: string[];
   version?: string;
   resources?: ResourceLimits;
+  nodeId?: string;
 }): Promise<GameServerResource> {
   const response = await fetchWithTimeout(`${API_BASE}/api/servers`, {
     method: "POST",
@@ -1509,4 +1558,169 @@ export async function addServerWhitelistPlayer(id: string, player: string): Prom
 export async function removeServerWhitelistPlayer(id: string, player: string): Promise<void> {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist/${encodeURIComponent(player)}`, { method: "DELETE" });
   await readPayload<{ status: string }>(response, "Unable to remove player from whitelist");
+}
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationMember = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  createdAt: string;
+};
+
+export type TenantQuota = {
+  organizationId: string;
+  maxServers: number;
+  maxCpuCores: number;
+  maxMemoryMb: number;
+  maxStorageGb: number;
+};
+
+export type TenantUsage = {
+  totalServers: number;
+  runningServers: number;
+  usedCpuCores: number;
+  usedMemoryMb: number;
+  quota: TenantQuota;
+};
+
+export async function listOrganizations(): Promise<Organization[]> {
+  const response = await apiFetch(`${API_BASE}/api/organizations`, { cache: "no-store" });
+  return readPayload<Organization[]>(response, "Unable to load organizations");
+}
+
+export async function getOrganizationUsage(id: string): Promise<TenantUsage> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${id}/usage`, { cache: "no-store" });
+  return readPayload<TenantUsage>(response, "Unable to load tenant usage");
+}
+
+export async function updateOrganizationQuota(
+  id: string,
+  payload: { maxServers: number; maxCpuCores: number; maxMemoryMb: number; maxStorageGb?: number }
+): Promise<TenantQuota> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${id}/quota`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<TenantQuota>(response, "Unable to update organization quota");
+}
+
+export async function createOrganization(payload: { name: string; slug?: string; plan?: string }): Promise<Organization> {
+  const response = await apiFetch(`${API_BASE}/api/organizations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<Organization>(response, "Unable to create organization");
+}
+
+export async function listComputeNodes(): Promise<ComputeNode[]> {
+  const response = await apiFetch(`${API_BASE}/api/nodes`, { cache: "no-store" });
+  return readPayload<ComputeNode[]>(response, "Unable to load compute nodes");
+}
+
+export async function listNodeServers(id: string): Promise<GameServerResource[]> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/servers`, { cache: "no-store" });
+  return readPayload<GameServerResource[]>(response, "Unable to load node servers");
+}
+
+export async function pingComputeNode(id: string): Promise<{ nodeId: string; status: string; latencyMs: number }> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/ping`, { method: "POST" });
+  return readPayload<{ nodeId: string; status: string; latencyMs: number }>(response, "Unable to ping node");
+}
+
+export async function getNodeJoinCommand(id: string): Promise<NodeJoinCommand> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/join-command`, { cache: "no-store" });
+  return readPayload<NodeJoinCommand>(response, "Unable to get node join command");
+}
+
+export async function listOrganizationMembers(orgId: string): Promise<OrganizationMember[]> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${orgId}/members`, { cache: "no-store" });
+  return readPayload<OrganizationMember[]>(response, "Unable to load organization members");
+}
+
+export async function addOrganizationMember(orgId: string, payload: { userId: string; role: string }): Promise<OrganizationMember> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${orgId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<OrganizationMember>(response, "Unable to add member");
+}
+
+export async function removeOrganizationMember(orgId: string, userId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${orgId}/members/${userId}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error("Unable to remove member");
+  }
+}
+
+export async function createComputeNode(payload: {
+  name: string;
+  host: string;
+  port?: number;
+  token?: string;
+  publicIp?: string;
+  region?: string;
+  cpuCores?: number;
+  memoryTotalMb?: number;
+}): Promise<ComputeNode> {
+  const response = await apiFetch(`${API_BASE}/api/nodes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<ComputeNode>(response, "Unable to create compute node");
+}
+
+export async function updateComputeNode(id: string, payload: {
+  name?: string;
+  region?: string;
+  publicIp?: string;
+  host?: string;
+  port?: number;
+}): Promise<ComputeNode> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<ComputeNode>(response, "Unable to update compute node");
+}
+
+export async function deleteComputeNode(id: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error("Unable to delete compute node");
+  }
+}
+
+export type ServerGatewayDiagnostic = {
+  isRemote: boolean;
+  nodeId: string;
+  nodeName: string;
+  region?: string;
+  nodeOnline: boolean;
+  latencyMs: number;
+  listenPort: number;
+  gatewayListening: boolean;
+  cachedLogLines: number;
+};
+
+export async function getServerGatewayStatus(id: string): Promise<ServerGatewayDiagnostic> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/gateway-status`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load gateway status");
+  }
+  return (await response.json()) as ServerGatewayDiagnostic;
 }

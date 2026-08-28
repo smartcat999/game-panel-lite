@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
 )
 
 type ControllerStore interface {
@@ -24,9 +25,21 @@ type activityControllerStore interface {
 	CreateActivity(context.Context, *domain.ActivityEvent) error
 }
 
+type assignmentControllerStore interface {
+	UpsertWorkloadAssignment(context.Context, *domain.WorkloadAssignment) error
+	GetWorkloadAssignmentByServer(context.Context, string) (domain.WorkloadAssignment, error)
+	DeleteWorkloadAssignment(context.Context, string) error
+	GetWorkloadObservation(context.Context, string) (domain.WorkloadObservation, error)
+}
+
+type nodeStatusControllerStore interface {
+	GetComputeNode(context.Context, string) (domain.ComputeNode, error)
+}
+
 type Controller struct {
 	store      ControllerStore
 	reconciler *Reconciler
+	gateway    *gateway.StreamGateway
 	logger     *slog.Logger
 	interval   time.Duration
 	locksMu    sync.Mutex
@@ -47,6 +60,11 @@ func NewController(store ControllerStore, reconciler *Reconciler, logger *slog.L
 		interval:   3 * time.Second,
 		locks:      map[string]*sync.Mutex{},
 	}
+}
+
+func (c *Controller) WithGateway(gw *gateway.StreamGateway) *Controller {
+	c.gateway = gw
+	return c
 }
 
 func (c *Controller) WithInterval(interval time.Duration) *Controller {
@@ -79,7 +97,25 @@ func (c *Controller) RunOnce(ctx context.Context) {
 		return
 	}
 	for _, item := range servers {
-		if !c.reconciler.NeedsReconcile(item) {
+		if c.gateway != nil {
+			listenPort := item.Spec.Network.HostPort
+			if listenPort <= 0 {
+				listenPort = item.Spec.Network.Port
+			}
+			if item.Status.Phase == domain.PhaseRunning && item.NodeID != "" && item.NodeID != "node-local" && listenPort > 0 {
+				_ = c.gateway.RegisterForward(gateway.ForwardRule{
+					ID:         item.ID,
+					NodeID:     item.NodeID,
+					ListenPort: listenPort,
+					TargetPort: listenPort,
+				})
+			} else if item.Status.Phase == domain.PhaseStopped || item.Status.Phase == domain.PhaseFailed || item.Status.Phase == domain.PhaseDeleted {
+				c.gateway.UnregisterForward(item.ID)
+			}
+		}
+
+		isRemote := item.NodeID != "" && item.NodeID != "node-local"
+		if !isRemote && !c.reconciler.NeedsReconcile(item) {
 			continue
 		}
 		c.reconcileOne(ctx, item)
@@ -90,6 +126,13 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 	lock := c.lockFor(item.ID)
 	lock.Lock()
 	defer lock.Unlock()
+
+	// Remote workloads converge through durable desired assignments and worker
+	// observations. Lifecycle is never dispatched as an imperative node task.
+	if item.NodeID != "" && item.NodeID != "node-local" {
+		c.reconcileRemote(ctx, item)
+		return
+	}
 
 	updated, lifecycleEvents, err := c.reconciler.ReconcileWithEvents(ctx, item)
 	if err != nil {
@@ -115,6 +158,133 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 		return
 	}
 	c.recordReconcileEvents(ctx, item, updated, lifecycleEvents)
+}
+
+func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer) {
+	assignments, ok := c.store.(assignmentControllerStore)
+	if !ok || c.reconciler == nil || c.reconciler.Builder() == nil {
+		return
+	}
+	now := time.Now().UTC()
+	current, currentErr := assignments.GetWorkloadAssignmentByServer(ctx, item.ID)
+	assignmentUID := current.UID
+	assignmentID := current.ID
+	createdAt := current.CreatedAt
+	if currentErr != nil || current.NodeID != item.NodeID || assignmentUID == "" {
+		assignmentUID = uuid.NewString()
+		assignmentID = uuid.NewString()
+		createdAt = now
+	}
+
+	workloadSpec := current.Spec
+	if item.Spec.DesiredState != domain.DesiredDeleted || currentErr != nil {
+		built, err := c.reconciler.Builder().BuildWorkloadSpec(ctx, item)
+		if err != nil {
+			item.Status.LastError = err.Error()
+			item.Status.ActualState = domain.ActualUnknown
+			setPhase(&item.Status, domain.PhaseFailed, now)
+			_ = c.store.SaveGameServer(ctx, &item)
+			return
+		}
+		workloadSpec = built
+	}
+	assignment := domain.WorkloadAssignment{
+		ID:           assignmentID,
+		UID:          assignmentUID,
+		ServerID:     item.ID,
+		NodeID:       item.NodeID,
+		Generation:   item.Spec.Generation,
+		DesiredState: item.Spec.DesiredState,
+		Spec:         workloadSpec,
+		CreatedAt:    createdAt,
+		UpdatedAt:    now,
+	}
+	if item.Spec.DesiredState == domain.DesiredDeleted {
+		assignment.DeletionTimestamp = &now
+	}
+	if err := assignments.UpsertWorkloadAssignment(ctx, &assignment); err != nil {
+		c.logger.Warn("failed to persist remote workload assignment", "server", item.ID, "node", item.NodeID, "error", err)
+		return
+	}
+	if nodes, nodeOK := c.store.(nodeStatusControllerStore); nodeOK {
+		node, err := nodes.GetComputeNode(ctx, assignment.NodeID)
+		if err != nil || node.Status == "offline" || node.LastHeartbeat.IsZero() || now.Sub(node.LastHeartbeat) > 45*time.Second {
+			item.Status.ActualState = domain.ActualUnknown
+			item.Status.LastReconcileAt = now
+			item.Status.Conditions = upsertServerCondition(item.Status.Conditions, domain.ServerCondition{
+				Type:               "AgentReachable",
+				Status:             "Unknown",
+				Reason:             "HeartbeatStale",
+				Message:            "worker heartbeat is stale; runtime state cannot be confirmed",
+				ObservedGeneration: item.Spec.Generation,
+				LastTransitionAt:   now,
+			})
+			setPhase(&item.Status, domain.PhaseReconciling, now)
+			_ = c.store.SaveGameServer(ctx, &item)
+			return
+		}
+	}
+
+	observation, err := assignments.GetWorkloadObservation(ctx, assignment.UID)
+	item.Status.LastReconcileAt = now
+	if err != nil || observation.AssignmentUID != assignment.UID || observation.NodeID != assignment.NodeID {
+		item.Status.ActualState = domain.ActualUnknown
+		setPhase(&item.Status, domain.PhaseReconciling, now)
+		_ = c.store.SaveGameServer(ctx, &item)
+		return
+	}
+	item.Status.RuntimeID = observation.RuntimeID
+	item.Status.ActualState = observation.ActualState
+	item.Status.ObservedGeneration = observation.ObservedGeneration
+	item.Status.Conditions = observation.Conditions
+	item.Status.LastError = observation.LastError
+	if observation.LastError != "" {
+		setPhase(&item.Status, domain.PhaseFailed, now)
+		_ = c.store.SaveGameServer(ctx, &item)
+		return
+	}
+	if observation.ObservedGeneration < assignment.Generation {
+		setPhase(&item.Status, domain.PhaseReconciling, now)
+		_ = c.store.SaveGameServer(ctx, &item)
+		return
+	}
+	item.Status.AppliedGeneration = observation.ObservedGeneration
+	switch assignment.DesiredState {
+	case domain.DesiredRunning:
+		if observation.ActualState == domain.ActualRunning {
+			setPhase(&item.Status, domain.PhaseRunning, now)
+		} else {
+			setPhase(&item.Status, domain.PhaseReconciling, now)
+		}
+	case domain.DesiredStopped:
+		if observation.ActualState == domain.ActualStopped || observation.ActualState == domain.ActualMissing {
+			setPhase(&item.Status, domain.PhaseStopped, now)
+		} else {
+			setPhase(&item.Status, domain.PhaseReconciling, now)
+		}
+	case domain.DesiredDeleted:
+		if observation.ActualState == domain.ActualMissing {
+			if deletingStore, deleteOK := c.store.(deletingControllerStore); deleteOK {
+				if err := cleanupOwnedResources(ctx, c.store, item); err == nil {
+					_ = assignments.DeleteWorkloadAssignment(ctx, item.ID)
+					_ = deletingStore.DeleteGameServer(ctx, item.ID)
+				}
+				return
+			}
+		}
+		setPhase(&item.Status, domain.PhaseDeleting, now)
+	}
+	_ = c.store.SaveGameServer(ctx, &item)
+}
+
+func upsertServerCondition(conditions []domain.ServerCondition, condition domain.ServerCondition) []domain.ServerCondition {
+	for i := range conditions {
+		if conditions[i].Type == condition.Type {
+			conditions[i] = condition
+			return conditions
+		}
+	}
+	return append(conditions, condition)
 }
 
 func (c *Controller) lockFor(id string) *sync.Mutex {

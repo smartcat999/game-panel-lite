@@ -16,6 +16,7 @@ import { localizeRelativeTime, useI18n, type Locale, type MessageKey } from "@/l
 import { providerFilterOptions } from "@/lib/provider-filters";
 import { createDefaultProviderConfigPayload, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { providerOptionLabel } from "@/lib/provider-option-label";
+import { GameAssetsSubNav } from "@/components/sub-nav";
 import type { ConfigPreset, GameCatalogEntry, ModPack, ProviderCatalog, ProviderConfigField } from "@/lib/types";
 
 type PresetGameFilter = "all" | string;
@@ -118,7 +119,8 @@ export default function PresetsPage() {
 
   return (
     <>
-      <PageHeader title={t("configurationPresets")} description={t("configurationPresetsPageDescription")} />
+      <PageHeader title={t("configurationPresets")} />
+      <GameAssetsSubNav />
       {(presetsQuery.isError || gamesQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiConfigurationPresetsUnavailable")}</p>}
       {(errorMessage || successMessage) && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">

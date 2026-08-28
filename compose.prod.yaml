@@ -19,8 +19,7 @@ services:
       GAMEPANEL_SYSTEM_UPDATE_INTERVAL: ${GAMEPANEL_SYSTEM_UPDATE_INTERVAL:-24h}
       GAMEPANEL_UPDATER_URL: http://updater:4020
       GAMEPANEL_UPDATER_TOKEN: ${GAMEPANEL_UPDATER_TOKEN:?GAMEPANEL_UPDATER_TOKEN is required}
-    expose:
-      - "4000"
+    network_mode: host
     stop_grace_period: 20s
     volumes:
       - ./config/providers.json:/etc/gamepanel/providers.json:ro

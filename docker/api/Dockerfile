@@ -4,10 +4,9 @@ WORKDIR /src
 
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY apps/api ./apps/api
 
-ARG GAMEPANEL_VERSION=v0.2.5
+ARG GAMEPANEL_VERSION=v0.4.22
 ARG GAMEPANEL_COMMIT=unknown
 ARG GAMEPANEL_BUILD_TIME=unknown
 RUN CGO_ENABLED=1 GOOS=linux go build \

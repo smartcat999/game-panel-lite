@@ -14,6 +14,7 @@ import { formatServerDetailError } from "@/lib/server-detail-actions";
 import { serverInviteText } from "@/lib/server-join";
 import type { GameServerResource } from "@/lib/types";
 import { gameServerAction } from "@/lib/api";
+import { usePermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 export function ServerActions({
@@ -41,6 +42,7 @@ export function ServerActions({
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
+  const { isViewer, canDeleteServer } = usePermissions();
   const [pendingAction, setPendingAction] = useState<"stop" | "restart" | "delete" | null>(null);
   const [busyAction, setBusyAction] = useState<"start" | "stop" | "restart" | "delete" | null>(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
@@ -53,8 +55,8 @@ export function ServerActions({
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const status = gameServerStatus(server);
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
-  const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy;
-  const canDelete = status === "stopped" || status === "errored";
+  const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy || isViewer;
+  const canDelete = (status === "stopped" || status === "errored") && canDeleteServer;
   // Restart is a refresh-style launch operation: a running server is recreated,
   // while a stopped or failed server is started through the same refresh path.
   const showRowRestart = rowMode;
@@ -136,6 +138,10 @@ export function ServerActions({
   };
 
   const executeAction = async (action: "start" | "stop" | "restart" | "delete") => {
+    if (isViewer) {
+      showNotice("error", "当前账号为只读访客，无权执行操作");
+      return;
+    }
     setBusyAction(action);
     setErrorMessage("");
     setSuccessMessage("");

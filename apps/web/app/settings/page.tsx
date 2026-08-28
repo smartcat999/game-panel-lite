@@ -23,11 +23,19 @@ import {
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
+import { NodeSettingsPanel } from "@/components/node-settings-panel";
+import { UserManagement } from "@/components/user-management";
+import { TrafficTopology } from "@/components/traffic-topology";
+import { SettingsSubNav } from "@/components/sub-nav";
+import { Users, Server } from "lucide-react";
+import { usePermissions } from "@/lib/permissions";
+
 type ImageRegion = "global" | "cn";
-type SettingsTab = "basic" | "access" | "maintenance";
+type SettingsTab = "basic" | "team" | "nodes" | "access" | "maintenance";
 
 export default function SettingsPage() {
   const { t } = useI18n();
+  const { canEditSettings } = usePermissions();
   const settings = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false });
   const [publicHost, setPublicHost] = useState<string | null>(null);
   const [imageRegion, setImageRegion] = useState<ImageRegion | null>(null);
@@ -35,6 +43,8 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("basic");
   const settingsTabs: { icon: ReactNode; key: SettingsTab; label: string }[] = [
     { key: "basic", label: t("settingsTabBasic"), icon: <ServerCog className="size-4" /> },
+    { key: "team", label: t("settingsTabTeam"), icon: <Users className="size-4" /> },
+    { key: "nodes", label: t("settingsTabNodes"), icon: <Server className="size-4" /> },
     { key: "access", label: t("settingsTabAccess"), icon: <LockKeyhole className="size-4" /> },
     { key: "maintenance", label: t("settingsTabMaintenance"), icon: <Wrench className="size-4" /> }
   ];
@@ -91,7 +101,8 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title={t("settingsTitle")} description={t("settingsDescription")} />
+      <PageHeader title={t("settingsTitle")} />
+      <SettingsSubNav />
 
       {notice ? (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
@@ -127,7 +138,7 @@ export default function SettingsPage() {
                 aria-describedby="public-host-hint"
                 aria-invalid={Boolean(publicHostError)}
                 className={cn("w-full font-mono", publicHostError && "border-red-400 focus:border-red-400")}
-                disabled={settings.isLoading || saveSettings.isPending}
+                disabled={!canEditSettings || settings.isLoading || saveSettings.isPending}
                 placeholder={t("publicHostPlaceholder")}
                 value={publicHostValue}
                 onChange={(event) => {
@@ -143,7 +154,7 @@ export default function SettingsPage() {
 
           <SettingRow label={t("imageRegion")} description={t("imageRegionDescription")} badge={t("restartPanelRequired")}>
             <div className="w-full max-w-xl">
-              <fieldset disabled={settings.isLoading || saveSettings.isPending}>
+              <fieldset disabled={!canEditSettings || settings.isLoading || saveSettings.isPending}>
                 <legend className="sr-only">{t("imageRegion")}</legend>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <RegionOption
@@ -178,7 +189,7 @@ export default function SettingsPage() {
             </div>
           </SettingRow>
 
-          {dirty ? (
+          {dirty && canEditSettings ? (
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-panel-line bg-slate-950/25 px-5 py-4 md:px-6">
               <Button type="button" variant="ghost" disabled={saveSettings.isPending} onClick={discard}>
                 <RotateCcw aria-hidden="true" className="size-4" />
@@ -193,6 +204,13 @@ export default function SettingsPage() {
         </Card>
       </form> : null}
 
+      {activeTab === "team" ? <UserManagement /> : null}
+      {activeTab === "nodes" ? (
+        <div className="space-y-6">
+          <TrafficTopology />
+          <NodeSettingsPanel />
+        </div>
+      ) : null}
       {activeTab === "access" ? <HTTPSSettings onNotice={setNotice} /> : null}
       {activeTab === "maintenance" ? <><DeploymentMaintenance onNotice={setNotice} /><PanelUpdateCard onNotice={setNotice} /></> : null}
     </>

@@ -15,6 +15,7 @@ import { gameFilterOptions } from "@/lib/game-filters";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { providerFilterOptions } from "@/lib/provider-filters";
 import { cn } from "@/lib/utils";
+import { GameAssetsSubNav } from "@/components/sub-nav";
 import type { Backup } from "@/lib/types";
 
 type BackupTypeFilter = "all" | Backup["type"];
@@ -115,6 +116,7 @@ function EnabledBackupsPage() {
   return (
     <>
       <PageHeader title={t("backupsTitle")} />
+      <GameAssetsSubNav />
       {(serversQuery.isError || backupsQuery.isError) && <p className="mb-4 text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p>}
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}

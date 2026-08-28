@@ -42,7 +42,7 @@ docker "${common[@]}" \
   -t "$registry/game-panel-lite-api:$version" \
   "$root_dir"
 
-for component in web exporter updater; do
+for component in web exporter updater agent; do
   docker "${common[@]}" \
     -f "$root_dir/docker/$component/Dockerfile" \
     -t "$registry/game-panel-lite-$component:$version" \

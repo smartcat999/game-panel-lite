@@ -496,7 +496,7 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameJob(&job, err)
 		return
 	}
-	availableDisk, err := availableDiskBytes(dataDir)
+	availableDisk, err := availableDiskBytesFn(dataDir)
 	if err != nil {
 		h.failGameJob(&job, fmt.Errorf("inspect available disk space: %w", err))
 		return
@@ -546,7 +546,7 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameUpdateApply(ctx, server, &job, err)
 		return
 	}
-	availableDisk, err = availableDiskBytes(dataDir)
+	availableDisk, err = availableDiskBytesFn(dataDir)
 	if err != nil {
 		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("recheck available disk space after backup: %w", err))
 		return
@@ -1014,6 +1014,8 @@ func (h *Handler) waitForGameServerHealthyWithTiming(ctx context.Context, id str
 		}
 	}
 }
+
+var availableDiskBytesFn = availableDiskBytes
 
 func availableDiskBytes(path string) (int64, error) {
 	var stat syscall.Statfs_t

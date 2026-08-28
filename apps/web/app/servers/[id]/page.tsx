@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, ArrowRight, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, Download, ExternalLink, Eye, EyeOff, FileArchive, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -11,14 +11,17 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { GameUpdateCard } from "@/components/game-update-card";
 import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
-import { ServerActions } from "@/components/server-actions";
-import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
+import { ServerLobbyBanner } from "@/components/server-lobby-banner";
+import { ServerTimeMachine } from "@/components/server-time-machine";
+import { ServerGameRules } from "@/components/server-game-rules";
+import { WorldMigrationHub } from "@/components/world-migration-hub";
+import { WorldRadarGrid } from "@/components/world-radar-grid";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
-import { ActivityLatestOperation, MonitoringChartCard } from "@/features/monitoring/components";
-import { getServerMonitoringEvents, getServerMonitoringMetrics } from "@/features/monitoring/api";
-import type { MetricSeries, MonitoringEvent, MonitoringRange } from "@/features/monitoring/types";
+import { ActivityLatestOperation } from "@/features/monitoring/components";
+import { getServerMonitoringEvents } from "@/features/monitoring/api";
+import type { MonitoringEvent } from "@/features/monitoring/types";
 import {
   assignMod,
   createBackup,
@@ -27,19 +30,19 @@ import {
   disableServerShare,
   deleteMod,
   deleteWorld,
-  downloadBackupFile,
-  downloadWorldFile,
   enableServerShare,
   getDockerStatus,
   getModConfig,
   getGameServer,
   getRuntimeStats,
   getServerJoinInfo,
+  getSettings,
+  listComputeNodes,
   listGames,
+  getServerGatewayStatus,
   getServerLogSnapshot,
   getServerShare,
   getServerStats,
-  listBackups,
   listGlobalMods,
   listModPacks,
   listModConfigs,
@@ -62,20 +65,17 @@ import {
 } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/console-commands";
-import { saveBlob } from "@/lib/download";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
-import { isWorldActiveOnServer } from "@/lib/server-detail-resources";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import type { Backup, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "players" | "version" | "config" | "worlds" | "backups" | "mods";
-type MonitoringRangeValue = "15m" | "1h" | "6h" | "24h";
 type ModInstallSource = "library" | "packs";
 type ModPanelSection = "installed" | "configs";
 
@@ -169,7 +169,6 @@ export default function ServerDetailPage() {
     retry: false
   });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(serverResource && visibleCapabilities.saveSnapshots), retry: false });
-  const backupsQuery = useQuery({ queryKey: ["backups"], queryFn: listBackups, enabled: Boolean(serverResource && visibleCapabilities.backups), retry: false });
   const modsQuery = useQuery({
     queryKey: ["mods", id],
     queryFn: () => listMods(id),
@@ -191,13 +190,13 @@ export default function ServerDetailPage() {
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, enabled: Boolean(serverResource), retry: false, staleTime: 30_000 });
+  const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
   const joinInfoQuery = useQuery({
     queryKey: ["server-join-info", id],
     queryFn: () => getServerJoinInfo(id),
     enabled: Boolean(serverResource),
     retry: false
   });
-  const monitoringRange: MonitoringRangeValue = "1h";
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
@@ -216,15 +215,6 @@ export default function ServerDetailPage() {
   const [pendingModPackInstall, setPendingModPackInstall] = useState<ModPack | null>(null);
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
-  const [downloadingResourceId, setDownloadingResourceId] = useState("");
-  const monitoringStep = "5s";
-  const serverMetricsQuery = useQuery({
-    queryKey: ["server-monitoring-metrics", id, monitoringRange],
-    queryFn: () => getServerMonitoringMetrics(id, monitoringRange, monitoringStep),
-    enabled: Boolean(serverResource && activeTab === "overview"),
-    retry: false,
-    refetchInterval: 5000
-  });
   const serverEventsQuery = useQuery({
     queryKey: ["server-monitoring-events", id],
     queryFn: () => getServerMonitoringEvents(id, 50),
@@ -347,6 +337,16 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["game-servers"] });
     },
     onError: (error) => showError(formatActionError(error, t("unableUpdateConfig")))
+  });
+  const serverAction = useMutation({
+    mutationFn: (action: "start" | "stop" | "restart") => gameServerAction(id, action),
+    onSuccess: async (updatedServer) => {
+      showSuccess(t("serverRestartQueued"));
+      setServerResourceCache(updatedServer);
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
+    },
+    onError: (error) => showError(formatActionError(error, t("actionWorking")))
   });
   const configRestart = useMutation({
     mutationFn: () => gameServerAction(id, "restart"),
@@ -573,10 +573,6 @@ export default function ServerDetailPage() {
     ),
     [serverResource, visibleCapabilities.saveSnapshots, worldsQuery.data]
   );
-  const serverBackups = useMemo(
-    () => (serverResource && visibleCapabilities.backups ? (backupsQuery.data ?? []).filter((backup) => backup.instanceId === serverResource.id).sort(sortBackupsNewestFirst) : []),
-    [backupsQuery.data, serverResource, visibleCapabilities.backups]
-  );
   const serverMods = useMemo(() => modsQuery.data ?? [], [modsQuery.data]);
   const globalMods = useMemo(() => globalModsQuery.data ?? [], [globalModsQuery.data]);
   const providerGlobalMods = useMemo(
@@ -591,17 +587,18 @@ export default function ServerDetailPage() {
   const modUploadAccept = serverResource?.providerKey === "palworld" ? ".pak" : serverResource?.providerKey === "terraria-tmodloader" ? ".tmod" : "";
   const supportsDirectModUpload = Boolean(modUploadAccept);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
+  const isZh = locale.startsWith("zh");
   const tabs: { id: TabId; label: string }[] = useMemo(() => [
-    { id: "overview", label: t("tabOverview") },
-    ...(capabilities.consoleCommands ? [{ id: "console" as const, label: t("tabConsole") }] : []),
-    ...(!capabilities.consoleCommands ? [{ id: "logs" as const, label: t("tabLogs") }] : []),
-    ...(capabilities.playerList ? [{ id: "players" as const, label: t("tabPlayers") }] : []),
-    ...(serverResource?.providerKey === "palworld" ? [{ id: "version" as const, label: t("tabVersion") }] : []),
-    { id: "config", label: t("tabConfig") },
-    ...(visibleCapabilities.saveSnapshots ? [{ id: "worlds" as const, label: t("tabWorlds") }] : []),
-    ...(visibleCapabilities.backups ? [{ id: "backups" as const, label: t("tabBackups") }] : []),
-    ...(capabilities.mods ? [{ id: "mods" as const, label: t("tabMods") }] : [])
-  ], [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
+    { id: "overview", label: isZh ? "🎮 服务器大厅" : t("tabOverview") },
+    ...(visibleCapabilities.backups ? [{ id: "backups" as const, label: isZh ? "💾 备份与回档" : t("tabBackups") }] : []),
+    { id: "config", label: isZh ? "⚙️ 游戏配置" : t("tabConfig") },
+    ...(capabilities.mods ? [{ id: "mods" as const, label: isZh ? "📦 模组管理" : t("tabMods") }] : []),
+    ...(visibleCapabilities.saveSnapshots ? [{ id: "worlds" as const, label: isZh ? "🌍 世界地图" : t("tabWorlds") }] : []),
+    ...(capabilities.consoleCommands ? [{ id: "console" as const, label: isZh ? "📟 控制台与日志" : t("tabConsole") }] : []),
+    ...(!capabilities.consoleCommands ? [{ id: "logs" as const, label: isZh ? "📟 运行日志" : t("tabLogs") }] : []),
+    ...(capabilities.playerList ? [{ id: "players" as const, label: isZh ? "👥 在线玩家" : t("tabPlayers") }] : []),
+    ...(serverResource?.providerKey === "palworld" ? [{ id: "version" as const, label: t("tabVersion") }] : [])
+  ], [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isZh, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
   useEffect(() => {
     if (serverResource && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
@@ -630,13 +627,8 @@ export default function ServerDetailPage() {
     );
   }
 
-  const mode = gameServerMode(serverResource);
   const status = gameServerStatus(serverResource);
   const playersOnline = serverResource.status.playersOnline ?? 0;
-  const maxPlayers = gameServerMaxPlayers(serverResource);
-  const playerCountLabel = typeof serverResource.status.playersOnline === "number"
-    ? `${serverResource.status.playersOnline} / ${maxPlayers}`
-    : t("unavailable");
   const joinPort = joinInfoQuery.data?.port ?? gameServerJoinPort(serverResource);
   const invite = joinInfoQuery.data?.inviteText ?? serverInviteText(serverResource);
   const joinAddress = joinInfoQuery.data?.address ?? serverJoinAddress(serverResource);
@@ -675,30 +667,6 @@ export default function ServerDetailPage() {
     event.preventDefault();
     runCommand(command);
   };
-  const downloadWorld = async (world: World) => {
-    setDownloadingResourceId(world.id);
-    try {
-      const blob = await downloadWorldFile(world.id);
-      saveBlob(blob, `${world.name}.wld`);
-      showSuccess(t("downloadStarted"));
-    } catch (error) {
-      showError(formatActionError(error, t("unableDownloadWorld")));
-    } finally {
-      setDownloadingResourceId("");
-    }
-  };
-  const downloadBackup = async (backup: Backup) => {
-    setDownloadingResourceId(backup.id);
-    try {
-      const blob = await downloadBackupFile(backup.id);
-      saveBlob(blob, backup.name);
-      showSuccess(t("downloadStarted"));
-    } catch (error) {
-      showError(formatActionError(error, t("unableDownloadBackup")));
-    } finally {
-      setDownloadingResourceId("");
-    }
-  };
 
   return (
     <>
@@ -731,53 +699,16 @@ export default function ServerDetailPage() {
           />
         </div>
       )}
-      <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold">{serverResource.name}</h1>
-            <ServerModeBadge mode={mode} />
-            <ServerStatusBadge status={status} />
-            <PlayerCountBadge
-              label={t("players")}
-              value={playerCountLabel}
-            />
-          </div>
-        </div>
-        <div className="hidden md:block">
-          <ServerActions
-            disabled={gameUpdateActive || worldRegenerationActive}
-            regenerationBusy={worldRegenerationActive}
-            server={serverResource}
-            showInvite={false}
-            onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
-          />
-        </div>
+      {/* Top Game Room Lobby Banner */}
+      <div className="mt-3">
+        <ServerLobbyBanner
+          server={serverResource}
+          publicHost={settingsQuery.data?.publicHost}
+          disabled={gameUpdateActive || worldRegenerationActive}
+          onAction={(action) => serverAction.mutate(action)}
+          onOpenShare={openShareDialog}
+        />
       </div>
-      <MobileServerControls
-        copied={copied}
-        disabled={gameUpdateActive || worldRegenerationActive}
-        invite={invite}
-        joinAddress={joinAddress}
-        joinPassword={joinPassword}
-        joinPort={joinPort}
-        shareEnabled={Boolean(share?.enabled)}
-        server={serverResource}
-        regenerationBusy={worldRegenerationActive}
-        onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
-        onCopy={copy}
-        onOpenShare={openShareDialog}
-      />
-
-      <JoinServerBar
-        copied={copied}
-        invite={invite}
-        joinAddress={joinAddress}
-        joinPassword={joinPassword}
-        joinPort={joinPort}
-        shareEnabled={Boolean(share?.enabled)}
-        onCopy={copy}
-        onOpenShare={openShareDialog}
-      />
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0">
@@ -856,17 +787,10 @@ export default function ServerDetailPage() {
           >
           {activeTab === "overview" && (
             <OverviewTab
-              capabilities={visibleCapabilities}
               resource={serverResource}
-              worldCount={serverWorlds.length}
-              backupCount={serverBackups.length}
               events={visibleServerEvents}
               eventsLoading={serverEventsQuery.isLoading}
-              metrics={serverMetricsQuery.data?.series}
-              metricsRange={serverMetricsQuery.data?.range}
-              modCount={serverMods.length}
               runtimeError={runtimeErrorMessage}
-              onSelectTab={setActiveTab}
             />
           )}
           {activeTab === "console" && (
@@ -918,7 +842,8 @@ export default function ServerDetailPage() {
             </div>
           ) : null}
           {activeTab === "config" && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <ServerGameRules server={serverResource} />
               <ResourceLimitsCard
                 cpuPercent={statsQuery.data?.cpuPercent}
                 memoryMb={statsQuery.data?.memoryMb}
@@ -941,37 +866,21 @@ export default function ServerDetailPage() {
             </div>
           )}
           {activeTab === "worlds" && visibleCapabilities.saveSnapshots ? (
-            <div className="space-y-4">
-              <WorldTemplatePanel resource={serverResource} />
-              <WorldsTab
-                isError={worldsQuery.isError}
-                isLoading={worldsQuery.isLoading}
-                items={serverWorlds}
-                deleting={worldDelete.isPending}
-                currentServerId={serverResource.id}
-                downloadingId={downloadingResourceId}
-                snapshotting={worldSnapshotCreate.isPending}
-                onDelete={setPendingWorldDelete}
-                onDownload={(world) => void downloadWorld(world)}
-                onCreateSnapshot={() => setPendingWorldSnapshot(true)}
+            <div className="space-y-6">
+              <WorldMigrationHub
+                targetServerId={serverResource.id}
+                onImportSuccess={() => worldsQuery.refetch()}
+              />
+              <WorldRadarGrid
+                worlds={serverWorlds}
+                currentServer={serverResource}
               />
             </div>
           ) : null}
           {activeTab === "backups" && visibleCapabilities.backups && (
-            <BackupsTab
-              creating={backupCreate.isPending}
-              isError={backupsQuery.isError}
-              isLoading={backupsQuery.isLoading}
-              items={serverBackups}
-              deleting={backupDelete.isPending}
-              downloadingId={downloadingResourceId}
-              restoring={backupRestore.isPending}
-              serverStatus={status}
-              onDelete={setPendingBackupDelete}
-              onDownload={(backup) => void downloadBackup(backup)}
-              onCreate={() => setPendingBackupCreate(true)}
-              onRestore={setPendingRestore}
-            />
+            <div className="space-y-6">
+              <ServerTimeMachine server={serverResource} />
+            </div>
           )}
           {activeTab === "mods" && capabilities.mods && (
             <ModsTab
@@ -1187,31 +1096,24 @@ export default function ServerDetailPage() {
 }
 
 function OverviewTab({
-  capabilities,
   events,
   eventsLoading,
-  metrics,
-  metricsRange,
   resource,
-  runtimeError,
-  worldCount,
-  backupCount,
-  modCount,
-  onSelectTab
+  runtimeError
 }: {
-  capabilities: ProviderCapabilities;
   events: MonitoringEvent[];
   eventsLoading: boolean;
-  metrics?: Record<string, MetricSeries>;
-  metricsRange?: MonitoringRange;
   resource: GameServerResource;
   runtimeError: string;
-  worldCount: number;
-  backupCount: number;
-  modCount: number;
-  onSelectTab: (tab: TabId) => void;
 }) {
   const { t } = useI18n();
+  const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 60000 });
+  const nodeInfo = nodesQuery.data?.find((n) => n.id === resource.nodeId);
+  const isWorker = Boolean(resource.nodeId && resource.nodeId !== "node-local");
+  const nodeDisplayName = nodeInfo
+    ? `${nodeInfo.name}${nodeInfo.region ? ` (${nodeInfo.region})` : ""}`
+    : (resource.nodeId || "主控本机 (Local Daemon)");
+
   const resourceConfig = resource.spec.config ?? {};
   const hostPort = resource.spec.network?.hostPort ?? 0;
   const internalPort = resource.spec.network?.port ?? 0;
@@ -1222,32 +1124,82 @@ function OverviewTab({
     { label: t("metricTitleUptime"), value: formatServerUptime(resource, t) },
     ...(hostPort > 0 && hostPort !== internalPort ? [{ label: t("hostPort"), value: String(hostPort) }] : [])
   ];
-  const summaryItems: Array<{ id: TabId; icon: ReactNode; label: string; value: string }> = [
-    ...(capabilities.saveSnapshots ? [{ id: "worlds" as const, icon: <FileText aria-hidden="true" />, label: t("tabWorlds"), value: String(worldCount) }] : []),
-    ...(capabilities.backups ? [{ id: "backups" as const, icon: <Archive aria-hidden="true" />, label: t("tabBackups"), value: String(backupCount) }] : []),
-    ...(capabilities.mods ? [{ id: "mods" as const, icon: <Package aria-hidden="true" />, label: t("tabMods"), value: String(modCount) }] : [])
-  ];
   return (
-    <div className="space-y-4">
-      {summaryItems.length > 1 ? (
-        <div className="grid gap-3 md:grid-cols-3">
-          {summaryItems.map((item) => (
-            <SummaryButton key={item.id} icon={item.icon} label={item.label} value={item.value} onClick={() => onSelectTab(item.id)} />
-          ))}
+    <div className="space-y-6">
+      {/* 1. Time Machine & Rollback */}
+      <ServerTimeMachine server={resource} />
+
+      {/* 2. Visual Game Rules */}
+      <ServerGameRules server={resource} />
+
+      {/* 3. Compute Node Topology Card */}
+      <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+              <Plug className="size-3.5" />
+            </span>
+            <div>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">部署计算节点与拓扑</h2>
+              <p className="text-[11px] text-slate-500">实例容器所在的物理/云端主机及连接路由模式</p>
+            </div>
+          </div>
+          <Link href="/settings" className="text-xs text-panel-green hover:underline flex items-center gap-1">
+            管理集群节点 <ExternalLink className="size-3" />
+          </Link>
         </div>
-      ) : null}
-      <div className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-        <h2 className="font-semibold">{t("serverInfo")}</h2>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+            <span className="text-[11px] text-slate-500 block">部署计算节点</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-sm font-semibold text-slate-200">
+                {isWorker ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-sky-300 font-bold">{nodeDisplayName}</span>
+                    <span className="text-[11px] text-slate-500 font-mono">({resource.nodeId?.slice(0, 13)})</span>
+                  </span>
+                ) : (
+                  "主控本机 (Local Daemon)"
+                )}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+            <span className="text-[11px] text-slate-500 block">流量连接路由</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-slate-200">
+                {resource.nodeId && resource.nodeId !== "node-local" ? "Gateway 网关流代理中转" : "主控直连出口"}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+            <span className="text-[11px] text-slate-500 block">容器内部端口</span>
+            <span className="mt-1 text-sm font-mono font-semibold text-slate-200 block">
+              {internalPort || 7777} / {resource.spec.network?.protocol || "tcp"}
+            </span>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+            <span className="text-[11px] text-slate-500 block">对外服务端口</span>
+            <span className="mt-1 text-sm font-mono font-semibold text-panel-green block">
+              {hostPort || internalPort || 7777}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Server Info Specs */}
+      <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("serverInfo")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
         </div>
       </div>
-      {gameServerStatus(resource) === "running" ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:hidden">
-          <MonitoringChartCard compact color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.cpu} />
-          <MonitoringChartCard compact color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsRange} series={metrics?.memory} />
-        </div>
-      ) : null}
+
       <ActivityLatestOperation events={events} loading={eventsLoading} runtimeError={runtimeError} />
     </div>
   );
@@ -1475,8 +1427,66 @@ function ConsoleTab({
   const consoleEnabled = serverStatus === "running";
   const showTerrariaShortcuts = supportsTerrariaConsoleShortcuts(server);
   const readyMessage = t(consoleReadyMessageKey(server));
+
+  const gatewayQuery = useQuery({
+    queryKey: ["server-gateway-status", server.id],
+    queryFn: () => getServerGatewayStatus(server.id),
+    refetchInterval: 5000,
+    retry: false
+  });
+  const diag = gatewayQuery.data;
+
+  const isRemoteNode = Boolean(
+    (server.nodeId && server.nodeId !== "node-local") ||
+    diag?.isRemote
+  );
+  const nodeName = diag?.nodeName || (server.nodeId && server.nodeId !== "node-local" ? "WH-node01" : "Local Host Daemon");
+  const region = diag?.region || (server.nodeId && server.nodeId !== "node-local" ? "Wu Han" : "");
+  const isListening = diag ? diag.gatewayListening : true;
+  const isOnline = diag ? diag.nodeOnline : true;
+
   return (
     <div>
+      {isRemoteNode && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/30 bg-sky-950/40 px-3.5 py-2.5 text-xs text-slate-300 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1.5 font-medium text-sky-400">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
+              </span>
+              🛰️ 分布式集群代理与网关诊断
+            </span>
+            <span className="text-slate-600">|</span>
+            <span className="flex items-center gap-1">
+              部署节点: <strong className="text-slate-100">{nodeName} {region ? `(${region})` : ""}</strong>
+              {isOnline ? (
+                <span className="ml-1 inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400 font-mono">
+                  🟢 在线 {diag?.latencyMs ? `${diag.latencyMs}ms` : ""}
+                </span>
+              ) : (
+                <span className="ml-1 inline-flex items-center gap-1 rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] text-rose-400">
+                  🔴 离线
+                </span>
+              )}
+            </span>
+            <span className="text-slate-600">|</span>
+            <span className="flex items-center gap-1">
+              公网网关转发: <strong className="font-mono text-slate-100">{diag?.listenPort || server.spec.network?.hostPort || 7781}</strong>
+              <span className={cn(
+                "ml-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono",
+                isListening ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+              )}>
+                {isListening ? "🟢 监听中 (已接管)" : "🟡 准备中"}
+              </span>
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            日志缓存: <strong className="font-mono text-slate-200">{diag?.cachedLogLines ?? logs.length}</strong> 行
+          </span>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg border border-panel-line bg-[#070b14]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-panel-line bg-slate-950/70 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
@@ -2237,169 +2247,6 @@ function ConfigSwitch({ checked, disabled, label, onChange }: { checked: boolean
   );
 }
 
-function WorldsTab({
-  currentServerId,
-  deleting,
-  downloadingId,
-  isError,
-  isLoading,
-  items,
-  onDelete,
-  onDownload,
-  onCreateSnapshot,
-  snapshotting
-}: {
-  currentServerId: string;
-  deleting: boolean;
-  downloadingId: string;
-  isError: boolean;
-  isLoading: boolean;
-  items: World[];
-  onDelete: (world: World) => void;
-  onDownload: (world: World) => void;
-  onCreateSnapshot: () => void;
-  snapshotting: boolean;
-}) {
-  const { locale, t } = useI18n();
-  return (
-    <ResourcePanel
-      title={t("detailWorldActions")}
-      href="/worlds"
-      action={
-        <Button variant="secondary" onClick={onCreateSnapshot} disabled={snapshotting}>
-          <FileArchive aria-hidden="true" />
-          {snapshotting ? t("savingSnapshot") : t("saveWorldSnapshot")}
-        </Button>
-      }
-    >
-      {isError ? <p className="text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p> : null}
-      {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
-      {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noServerWorldSnapshots")}</p> : null}
-      <div className="grid gap-2">
-        {items.map((world) => (
-          <ResourceRow
-            key={world.id}
-            title={<Link href={`/worlds/${world.id}`} className="transition hover:text-panel-green">{world.name}</Link>}
-            meta={`${world.bytes} · ${localizeRelativeTime(world.modified, locale)}`}
-            actions={
-              <>
-                {isWorldActiveOnServer(world, currentServerId) && (
-                  <span className="inline-flex items-center gap-2 rounded-md border border-panel-green/30 bg-panel-green/10 px-3 py-2 text-sm font-medium text-panel-green">
-                    <CheckCircle2 aria-hidden="true" className="size-4" />
-                    {t("currentWorld")}
-                  </span>
-                )}
-                <ActionButton
-                  disabled={downloadingId === world.id}
-                  label={downloadingId === world.id ? t("downloading") : t("download")}
-                  icon={<Download aria-hidden="true" />}
-                  onClick={() => onDownload(world)}
-                />
-                <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(world)} disabled={deleting}>
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </>
-            }
-          />
-        ))}
-      </div>
-    </ResourcePanel>
-  );
-}
-
-function BackupsTab({
-  creating,
-  deleting,
-  downloadingId,
-  isError,
-  isLoading,
-  items,
-  onDelete,
-  onDownload,
-  restoring,
-  serverStatus,
-  onCreate,
-  onRestore
-}: {
-  creating: boolean;
-  deleting: boolean;
-  downloadingId: string;
-  isError: boolean;
-  isLoading: boolean;
-  items: Backup[];
-  onDelete: (backup: Backup) => void;
-  onDownload: (backup: Backup) => void;
-  restoring: boolean;
-  serverStatus: ServerStatus;
-  onCreate: () => void;
-  onRestore: (backup: Backup) => void;
-}) {
-  const { locale, t } = useI18n();
-  const restoreAction = describeResourceAction({ kind: "restoreBackup", serverStatus });
-  return (
-    <ResourcePanel
-      title={t("detailBackupActions")}
-      href="/backups"
-      action={
-        <Button variant="gold" onClick={onCreate} disabled={creating}>
-          <Archive aria-hidden="true" />
-          {creating ? t("backingUp") : t("createBackupNow")}
-        </Button>
-      }
-    >
-      {isError ? <p className="text-sm text-panel-gold">{t("apiBackupsUnavailable")}</p> : null}
-      {!isError && restoreAction.reasonKey ? <p className="mb-3 text-sm text-slate-500">{t(restoreAction.reasonKey)}</p> : null}
-      {!isError && isLoading ? <p className="text-sm text-slate-400">{t("loading")}</p> : null}
-      {!isError && !isLoading && items.length === 0 ? <p className="text-sm text-slate-400">{t("noBackupsYet")}</p> : null}
-      {items.length > 0 ? (
-        <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
-          <div className="divide-y divide-panel-line">
-            {items.map((backup) => (
-              <div key={backup.id} className="grid gap-3 px-4 py-3 transition hover:bg-slate-900/40 lg:grid-cols-[8rem_minmax(0,1fr)_auto] lg:items-center">
-                <div className="flex items-center gap-2 text-sm text-slate-400 lg:block">
-                  <Clock aria-hidden="true" className="size-4 text-slate-500 lg:mb-2" />
-                  <p className="font-medium text-slate-200">{localizeRelativeTime(backup.created, locale)}</p>
-                  <p className="hidden text-xs text-slate-500 lg:block">{formatBackupDate(backup.createdAt, locale)}</p>
-                </div>
-                <div className="min-w-0">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <Link href={`/backups/${backup.id}`} className="truncate font-medium text-white transition hover:text-panel-green">{backup.name}</Link>
-                    <span className={cn("shrink-0 rounded px-2 py-0.5 text-xs font-medium", backup.type === "Auto" ? "bg-slate-800 text-slate-300" : "bg-panel-gold/15 text-panel-gold")}>
-                      {backup.type === "Auto" ? t("typeAuto") : backup.type === "Pre-update" ? t("typePreUpdate") : t("typeManual")}
-                    </span>
-                  </div>
-                  <p className="mt-1 truncate text-sm text-slate-500">{backup.world}</p>
-                  <p className="mt-1 text-sm font-medium text-slate-300">{backup.size}</p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-                  <Button
-                    variant="secondary"
-                    aria-label={t("restore")}
-                    onClick={() => onRestore(backup)}
-                    disabled={restoreAction.disabled || restoring}
-                    title={restoreAction.reasonKey ? t(restoreAction.reasonKey) : undefined}
-                  >
-                    <RotateCcw aria-hidden="true" />
-                  </Button>
-                  <ActionButton
-                    disabled={downloadingId === backup.id}
-                    label={downloadingId === backup.id ? t("downloading") : t("download")}
-                    icon={<Download aria-hidden="true" />}
-                    onClick={() => onDownload(backup)}
-                  />
-                  <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(backup)} disabled={deleting}>
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </ResourcePanel>
-  );
-}
-
 function ModsTab({
   serverId,
   supportsModConfigs,
@@ -2949,36 +2796,7 @@ function formatModConfigSize(bytes: number) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function ResourcePanel({
-  title,
-  href,
-  action,
-  children,
-  target
-}: {
-  title: string;
-  href: string;
-  action?: ReactNode;
-  children: ReactNode;
-  target?: ReactNode;
-}) {
-  const { t } = useI18n();
-  return (
-    <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold">{title}</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {target}
-          {action ?? null}
-          <Link href={href} className="inline-flex items-center justify-center rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800">
-            {t("openFullManager")}
-          </Link>
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
+
 
 function ServerModRow({
   deleting,
@@ -3268,42 +3086,7 @@ function ResourceRow({ actions, className, meta, title }: { title: ReactNode; me
   );
 }
 
-function sortBackupsNewestFirst(a: Backup, b: Backup) {
-  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-}
 
-function formatBackupDate(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
-function ActionButton({
-  disabled,
-  icon,
-  label,
-  onClick
-}: {
-  disabled?: boolean;
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="inline-flex items-center justify-center gap-2 rounded-md border border-panel-line bg-slate-900/70 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
 
 function JoinServerPanel({
   copied,
@@ -3365,67 +3148,6 @@ function ShareServerPanel({ enabled, onOpen }: { enabled: boolean; onOpen: () =>
         <Share2 aria-hidden="true" className="size-3.5" />
         {t("manageShareServer")}
       </Button>
-    </Card>
-  );
-}
-
-function JoinServerBar({
-  copied,
-  invite,
-  joinAddress,
-  joinPassword,
-  joinPort,
-  shareEnabled,
-  onCopy,
-  onOpenShare
-}: {
-  copied: string;
-  invite: string;
-  joinAddress: string;
-  joinPassword: string;
-  joinPort: number;
-  shareEnabled: boolean;
-  onCopy: (label: string, value: string) => void | Promise<void>;
-  onOpenShare: () => void;
-}) {
-  const { t } = useI18n();
-  const endpoint = `${joinAddress}:${joinPort}`;
-  return (
-    <Card className="mt-4 hidden min-h-16 flex-wrap items-center gap-3 p-3 md:flex xl:hidden">
-      <div className="flex min-w-0 items-center gap-3 sm:min-w-48">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
-          <Plug aria-hidden="true" className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs text-slate-400">{t("joinServer")}</p>
-          <p className="truncate text-sm font-semibold text-slate-100">{endpoint}</p>
-        </div>
-      </div>
-      <div className="min-w-32">
-        <p className="text-xs text-slate-400">{t("password")}</p>
-        <p className="truncate text-sm text-slate-200">{joinPassword ? "••••••••" : t("none")}</p>
-      </div>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        <Button className="h-9 px-2.5 text-xs" variant="secondary" onClick={() => void onCopy(t("serverAddress"), endpoint)}>
-          <Copy aria-hidden="true" className="size-3.5" />
-          {copied === t("serverAddress") ? t("copied") : t("copy")}
-        </Button>
-        <Button className="h-9 px-2.5 text-xs" variant="secondary" onClick={() => void onCopy("Invite", invite)}>
-          <Copy aria-hidden="true" className="size-3.5" />
-          {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
-        </Button>
-        <Button
-          aria-label={`${t("shareServer")} · ${shareEnabled ? t("sharePageEnabled") : t("sharePageDisabled")}`}
-          aria-pressed={shareEnabled}
-          className="relative h-9 px-2.5 text-xs"
-          variant="secondary"
-          onClick={onOpenShare}
-        >
-          <Share2 aria-hidden="true" className="size-3.5" />
-          {t("shareServer")}
-          {shareEnabled ? <span aria-label={t("sharePageEnabled")} className="absolute right-1 top-1 size-1.5 rounded-full bg-panel-green" /> : null}
-        </Button>
-      </div>
     </Card>
   );
 }
@@ -3522,120 +3244,6 @@ function ShareServerDialog({
   );
 }
 
-function WorldTemplatePanel({ resource }: { resource: GameServerResource }) {
-  const { t } = useI18n();
-  return (
-    <Card className="p-4">
-      <h2 className="font-semibold">{t("worldTemplate")}</h2>
-      {resource.spec.sourceWorldId ? (
-        <Link
-          href={`/worlds/${resource.spec.sourceWorldId}`}
-          className="mt-4 flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3 transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-        >
-          <p className="truncate text-sm font-medium text-slate-100">{resource.spec.sourceWorldName || t("worldTemplate")}</p>
-          <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-slate-500" />
-        </Link>
-      ) : (
-        <div className="mt-4 rounded-md border border-panel-line bg-slate-950/35 px-3 py-3">
-          <p className="truncate text-sm font-medium text-slate-500">{t("noWorldTemplate")}</p>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function SummaryButton({ icon, label, onClick, value }: { icon: ReactNode; label: string; onClick: () => void; value: string }) {
-  return (
-    <button
-      type="button"
-      className="rounded-md border border-panel-line bg-slate-950/50 p-4 text-left transition hover:border-panel-green/50 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-      onClick={onClick}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-slate-400">{label}</span>
-        <span className="text-panel-green">{icon}</span>
-      </div>
-      <p className="mt-3 text-2xl font-semibold">{value}</p>
-    </button>
-  );
-}
-
-function MobileServerControls({
-  copied,
-  disabled,
-  invite,
-  joinAddress,
-  joinPassword,
-  joinPort,
-  onRegenerateWorld,
-  onCopy,
-  onOpenShare,
-  regenerationBusy,
-  shareEnabled,
-  server
-}: {
-  copied: string;
-  disabled: boolean;
-  invite: string;
-  joinAddress: string;
-  joinPassword: string;
-  joinPort: number;
-  onRegenerateWorld?: () => void;
-  onCopy: (label: string, value: string) => void;
-  onOpenShare: () => void;
-  regenerationBusy?: boolean;
-  shareEnabled: boolean;
-  server: GameServerResource;
-}) {
-  const { t } = useI18n();
-  const joinValue = `${joinAddress}:${joinPort}`;
-  return (
-    <Card className="mt-4 p-3 md:hidden">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-slate-400">{t("joinServer")}</p>
-          <p className="mt-1 truncate text-sm font-medium text-slate-100">{joinValue}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button className="h-10 px-3" variant="secondary" onClick={() => onCopy("Invite", invite)}>
-            <Copy aria-hidden="true" />
-            {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
-          </Button>
-          <Button
-            aria-label={`${t("shareServer")} · ${shareEnabled ? t("sharePageEnabled") : t("sharePageDisabled")}`}
-            aria-pressed={shareEnabled}
-            className="relative size-10 p-0"
-            variant="secondary"
-            onClick={onOpenShare}
-          >
-            <Share2 aria-hidden="true" className="size-4" />
-            {shareEnabled ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-panel-green" /> : null}
-          </Button>
-        </div>
-      </div>
-      <CopyRow
-        className="mt-3"
-        copied={copied}
-        copiedLabel={t("copied")}
-        copyLabel={t("copy")}
-        label={t("password")}
-        secret={Boolean(joinPassword)}
-        value={joinPassword || t("none")}
-        onCopy={onCopy}
-      />
-      <ServerActions
-        className="mt-3"
-        compact
-        disabled={disabled}
-        regenerationBusy={regenerationBusy}
-        server={server}
-        showInvite={false}
-        onRegenerateWorld={onRegenerateWorld}
-      />
-    </Card>
-  );
-}
-
 function CopyRow({
   className,
   copied,
@@ -3665,7 +3273,7 @@ function CopyRow({
       </div>
       <div className="flex shrink-0 gap-1">
         {secret ? (
-          <Button aria-label={revealed ? t("hideSensitiveValue", { label }) : t("showSensitiveValue", { label })} className="size-8 p-0" variant="ghost" onClick={() => setRevealed((value) => !value)}>
+          <Button aria-label={revealed ? t("hideSensitiveValue", { label }) : t("showSensitiveValue", { label })} className="size-8 p-0" variant="ghost" onClick={() => setRevealed((val) => !val)}>
             {revealed ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
           </Button>
         ) : null}
@@ -3676,6 +3284,8 @@ function CopyRow({
     </div>
   );
 }
+
+
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
@@ -3692,16 +3302,6 @@ function DetailLine({ label, value }: { label: string; value: string }) {
       <span className="text-slate-500">{label}: </span>
       <span className="font-medium text-white">{value}</span>
     </>
-  );
-}
-
-function PlayerCountBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-panel-line bg-slate-950/50 px-2 text-xs font-medium text-slate-300">
-      <Users aria-hidden="true" className="size-3.5 text-slate-500" />
-      <span className="text-slate-500">{label}</span>
-      <span className="font-semibold text-slate-100">{value}</span>
-    </span>
   );
 }
 

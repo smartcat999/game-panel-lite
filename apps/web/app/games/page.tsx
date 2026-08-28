@@ -16,6 +16,8 @@ import { isRuntimeImagePreparing, isRuntimeImageReady, runtimeImageLabelKey, run
 import { cn } from "@/lib/utils";
 import type { GameCatalogEntry, ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
+import { GameAssetsSubNav } from "@/components/sub-nav";
+
 export default function GamesPage() {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -34,7 +36,8 @@ export default function GamesPage() {
   const games = gamesQuery.data ?? [];
   return (
     <>
-      <PageHeader title={t("gameLibraryTitle")} description={t("gameLibraryDescription")} />
+      <PageHeader title={t("gameLibraryTitle")} />
+      <GameAssetsSubNav />
       {gamesQuery.isError && <p className="mb-4 text-sm text-panel-gold">{t("dockerStatusUnavailable")}</p>}
       <div className="grid gap-4">
         {games.map((game) => (

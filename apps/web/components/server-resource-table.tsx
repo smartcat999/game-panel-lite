@@ -59,30 +59,55 @@ export function ServerResourceTable({
               const metric = metricMap.get(server.id);
               const status = gameServerStatus(server);
               const players = server.status.playersOnline;
-              const maxPlayers = gameServerMaxPlayers(server);
+              const maxPlayers = gameServerMaxPlayers(server) || 16;
+              const playerPercent = typeof players === "number" ? Math.min(100, Math.round((players / maxPlayers) * 100)) : 0;
               const displayServer = { gameKey: server.gameKey, providerKey: server.providerKey, mode: gameServerMode(server) };
+              const address = formatAddress(publicHost, gameServerJoinPort(server));
               return (
-                <tr key={server.id} className="group bg-panel-card transition-colors hover:bg-slate-800/35">
+                <tr key={server.id} className="group bg-panel-card transition-colors hover:bg-slate-800/40">
                   <td className="px-4 py-3">
                     <Link className="flex min-w-0 items-center gap-3" href={`/servers/${server.id}`}>
-                      <ServerGameArt server={displayServer} className="size-9 rounded" compact />
+                      <ServerGameArt server={displayServer} className="size-9 rounded ring-1 ring-white/10" compact />
                       <span className="min-w-0">
-                        <span className="block max-w-64 truncate font-medium text-slate-100 group-hover:text-panel-green">{server.name}</span>
-                        <span className="mt-0.5 block text-xs text-slate-500">{server.id.slice(0, 8)}</span>
+                        <span className="block max-w-64 truncate font-semibold text-slate-100 group-hover:text-panel-green">{server.name}</span>
+                        <span className="mt-0.5 block font-mono text-[11px] text-slate-500">{server.id.slice(0, 8)}</span>
                       </span>
                     </Link>
                   </td>
                   <td className="max-w-52 px-3 py-3"><ServerProviderLabel server={displayServer} /></td>
                   <td className="px-3 py-3"><ServerStatusIndicator status={status} /></td>
-                  <td className="px-3 py-3 font-mono text-slate-300">
-                    {typeof players === "number" ? `${players}/${maxPlayers}` : <DataMissing />}
+                  <td className="px-3 py-3">
+                    {typeof players === "number" ? (
+                      <div className="flex flex-col gap-1 font-mono text-xs text-slate-300">
+                        <span>{players} / {maxPlayers}</span>
+                        <div className="h-1 w-16 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-full rounded-full bg-panel-green" style={{ width: `${playerPercent}%` }} />
+                        </div>
+                      </div>
+                    ) : (
+                      <DataMissing />
+                    )}
                   </td>
-                  <td className="px-3 py-3 font-mono text-slate-300">{metric?.statsAvailable ? `${metric.cpuPercent.toFixed(1)}%` : <DataMissing />}</td>
-                  <td className="px-3 py-3 font-mono text-slate-300">{metric?.statsAvailable ? formatMemory(metric.memoryMb) : <DataMissing />}</td>
-                  <td className="px-3 py-3 font-mono text-slate-300">{formatAddress(publicHost, gameServerJoinPort(server))}</td>
-                  {showVersion ? <td className="px-3 py-3 text-slate-300">{gameServerVersion(server)}</td> : null}
+                  <td className="px-3 py-3 font-mono text-slate-300">
+                    {metric?.statsAvailable ? (
+                      <span className={metric.cpuPercent > 80 ? "text-panel-red font-semibold" : ""}>
+                        {metric.cpuPercent.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <DataMissing />
+                    )}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-slate-300">
+                    {metric?.statsAvailable ? formatMemory(metric.memoryMb) : <DataMissing />}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-300">
+                    <span className="inline-flex items-center gap-1.5 rounded bg-slate-950/50 px-2 py-1 border border-panel-line/60">
+                      {address}
+                    </span>
+                  </td>
+                  {showVersion ? <td className="px-3 py-3 font-mono text-xs text-slate-400">{gameServerVersion(server)}</td> : null}
                   {showActions ? (
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <ServerActions server={server} rowMode showInvite={false} showDelete />
                     </td>
                   ) : null}

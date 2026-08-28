@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,7 +44,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}, &domain.Organization{}, &domain.OrganizationMember{}, &domain.TenantQuota{}, &domain.ComputeNode{}, &domain.NodeTask{}, &domain.WorkloadAssignment{}, &domain.WorkloadObservation{}); err != nil {
 		return nil, err
 	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
@@ -80,6 +82,22 @@ func (s *Store) GetAdminAccount(ctx context.Context, id string) (domain.AdminAcc
 
 func (s *Store) SaveAdminAccount(ctx context.Context, account *domain.AdminAccount) error {
 	return s.db.WithContext(ctx).Save(account).Error
+}
+
+func (s *Store) ListAdminAccounts(ctx context.Context) ([]domain.AdminAccount, error) {
+	var accounts []domain.AdminAccount
+	err := s.db.WithContext(ctx).Order("created_at asc").Find(&accounts).Error
+	return accounts, err
+}
+
+func (s *Store) DeleteAdminAccount(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.AdminAccount{}, "id = ?", id).Error
+}
+
+func (s *Store) CountAdminRoleAccounts(ctx context.Context) (int64, error) {
+	var count int64
+	err := s.db.WithContext(ctx).Model(&domain.AdminAccount{}).Where("role = ?", domain.RoleAdmin).Count(&count).Error
+	return count, err
 }
 
 func (s *Store) CreateSession(ctx context.Context, session *domain.Session) error {
@@ -693,4 +711,413 @@ func hydrateActivityPayload(event *domain.ActivityEvent) {
 	if err := json.Unmarshal([]byte(event.PayloadJSON), &payload); err == nil {
 		event.Payload = payload
 	}
+}
+
+func (s *Store) EnsureDefaultOrganization(ctx context.Context) (*domain.Organization, error) {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&domain.Organization{}).Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count > 0 {
+		var first domain.Organization
+		if err := s.db.WithContext(ctx).First(&first).Error; err != nil {
+			return nil, err
+		}
+		return &first, nil
+	}
+
+	defaultOrg := domain.Organization{
+		ID:        "default-org",
+		Name:      "Default Workspace",
+		Slug:      "default",
+		Plan:      "pro",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	if err := s.db.WithContext(ctx).Create(&defaultOrg).Error; err != nil {
+		return nil, err
+	}
+
+	defaultQuota := domain.TenantQuota{
+		OrganizationID: defaultOrg.ID,
+		MaxServers:     10,
+		MaxCPUCores:    16.0,
+		MaxMemoryMB:    32768,
+		MaxStorageGB:   100,
+	}
+	_ = s.db.WithContext(ctx).Create(&defaultQuota).Error
+
+	var admin domain.AdminAccount
+	if err := s.db.WithContext(ctx).First(&admin).Error; err == nil {
+		member := domain.OrganizationMember{
+			ID:             "default-member-" + admin.ID,
+			OrganizationID: defaultOrg.ID,
+			UserID:         admin.ID,
+			Role:           domain.RoleOwner,
+			CreatedAt:      time.Now().UTC(),
+		}
+		_ = s.db.WithContext(ctx).Create(&member).Error
+	}
+
+	// Update existing unassigned servers to default organization
+	_ = s.db.WithContext(ctx).Model(&domain.GameServer{}).Where("organization_id = '' OR organization_id IS NULL").Update("organization_id", defaultOrg.ID).Error
+
+	return &defaultOrg, nil
+}
+
+func (s *Store) ListOrganizations(ctx context.Context) ([]domain.Organization, error) {
+	var orgs []domain.Organization
+	if err := s.db.WithContext(ctx).Order("created_at asc").Find(&orgs).Error; err != nil {
+		return nil, err
+	}
+	return orgs, nil
+}
+
+func (s *Store) GetOrganization(ctx context.Context, id string) (domain.Organization, error) {
+	var org domain.Organization
+	err := s.db.WithContext(ctx).First(&org, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return org, ErrNotFound
+	}
+	return org, err
+}
+
+func (s *Store) CreateOrganization(ctx context.Context, org *domain.Organization, ownerUserID string) error {
+	return s.Transaction(ctx, func(tx *Store) error {
+		if err := tx.db.WithContext(ctx).Create(org).Error; err != nil {
+			return err
+		}
+		member := domain.OrganizationMember{
+			ID:             "member-" + org.ID + "-" + ownerUserID,
+			OrganizationID: org.ID,
+			UserID:         ownerUserID,
+			Role:           domain.RoleOwner,
+			CreatedAt:      time.Now().UTC(),
+		}
+		if err := tx.db.WithContext(ctx).Create(&member).Error; err != nil {
+			return err
+		}
+		quota := domain.TenantQuota{
+			OrganizationID: org.ID,
+			MaxServers:     5,
+			MaxCPUCores:    8.0,
+			MaxMemoryMB:    16384,
+			MaxStorageGB:   50,
+		}
+		return tx.db.WithContext(ctx).Create(&quota).Error
+	})
+}
+
+func (s *Store) ListOrganizationMembers(ctx context.Context, orgID string) ([]domain.OrganizationMember, error) {
+	var members []domain.OrganizationMember
+	if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&members).Error; err != nil {
+		return nil, err
+	}
+	return members, nil
+}
+
+func (s *Store) GetOrganizationMember(ctx context.Context, orgID, userID string) (domain.OrganizationMember, error) {
+	var member domain.OrganizationMember
+	err := s.db.WithContext(ctx).First(&member, "organization_id = ? AND user_id = ?", orgID, userID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return member, ErrNotFound
+	}
+	return member, err
+}
+
+func (s *Store) AddOrganizationMember(ctx context.Context, member *domain.OrganizationMember) error {
+	return s.db.WithContext(ctx).Create(member).Error
+}
+
+func (s *Store) RemoveOrganizationMember(ctx context.Context, orgID, userID string) error {
+	return s.db.WithContext(ctx).Delete(&domain.OrganizationMember{}, "organization_id = ? AND user_id = ?", orgID, userID).Error
+}
+
+func (s *Store) GetTenantQuota(ctx context.Context, orgID string) (domain.TenantQuota, error) {
+	var quota domain.TenantQuota
+	err := s.db.WithContext(ctx).First(&quota, "organization_id = ?", orgID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return domain.TenantQuota{
+			OrganizationID: orgID,
+			MaxServers:     10,
+			MaxCPUCores:    16.0,
+			MaxMemoryMB:    32768,
+			MaxStorageGB:   100,
+		}, nil
+	}
+	return quota, err
+}
+
+func (s *Store) UpdateTenantQuota(ctx context.Context, quota domain.TenantQuota) error {
+	return s.db.WithContext(ctx).Save(&quota).Error
+}
+
+func (s *Store) GetTenantUsage(ctx context.Context, orgID string) (domain.TenantUsage, error) {
+	quota, _ := s.GetTenantQuota(ctx, orgID)
+	var servers []domain.GameServer
+	if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&servers).Error; err != nil {
+		return domain.TenantUsage{Quota: quota}, err
+	}
+
+	running := 0
+	var usedCpu float64
+	var usedMemory int
+
+	for _, srv := range servers {
+		if srv.Status.ActualState == domain.ActualRunning {
+			running++
+			usedCpu += srv.Spec.Resources.CPULimitCores
+			usedMemory += srv.Spec.Resources.MemoryLimitMB
+		}
+	}
+
+	return domain.TenantUsage{
+		TotalServers:   len(servers),
+		RunningServers: running,
+		UsedCPUCores:   usedCpu,
+		UsedMemoryMB:   usedMemory,
+		Quota:          quota,
+	}, nil
+}
+
+func detectHostHardware() (int, int64) {
+	cores := runtime.NumCPU()
+	if cores <= 0 {
+		cores = 4
+	}
+
+	memMB := int64(16384)
+	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "MemTotal:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					if kb, parseErr := strconv.ParseInt(fields[1], 10, 64); parseErr == nil && kb > 0 {
+						memMB = kb / 1024
+					}
+				}
+				break
+			}
+		}
+	}
+	return cores, memMB
+}
+
+func (s *Store) EnsureDefaultLocalNode(ctx context.Context) (*domain.ComputeNode, error) {
+	hostCores, hostMemMB := detectHostHardware()
+
+	var first domain.ComputeNode
+	err := s.db.WithContext(ctx).Where("is_local = ?", true).First(&first).Error
+	if err == nil {
+		first.CPUCores = hostCores
+		first.MemoryTotalMB = hostMemMB
+		_ = s.db.WithContext(ctx).Save(&first).Error
+		return &first, nil
+	}
+
+	localNode := domain.ComputeNode{
+		ID:            "node-local",
+		Name:          "Local Host Daemon",
+		Host:          "127.0.0.1",
+		Port:          4000,
+		PublicIP:      "127.0.0.1",
+		Region:        "Local",
+		Status:        "online",
+		IsLocal:       true,
+		CPUCores:      hostCores,
+		MemoryTotalMB: hostMemMB,
+		MemoryUsedMB:  1024,
+		RunningCount:  0,
+		LastHeartbeat: time.Now().UTC(),
+		CreatedAt:     time.Now().UTC(),
+		UpdatedAt:     time.Now().UTC(),
+	}
+	if err := s.db.WithContext(ctx).Create(&localNode).Error; err != nil {
+		return nil, err
+	}
+
+	// Associate existing unassigned servers to local node
+	_ = s.db.WithContext(ctx).Model(&domain.GameServer{}).Where("node_id = '' OR node_id IS NULL").Update("node_id", localNode.ID).Error
+
+	return &localNode, nil
+}
+
+func (s *Store) ListComputeNodes(ctx context.Context) ([]domain.ComputeNode, error) {
+	var nodes []domain.ComputeNode
+	if err := s.db.WithContext(ctx).Order("is_local desc, created_at asc").Find(&nodes).Error; err != nil {
+		return nil, err
+	}
+
+	hostCores, hostMemMB := detectHostHardware()
+
+	// Lightweight projection for node server stats instead of full table deserialize
+	type nodeServerStat struct {
+		NodeID string `gorm:"column:node_id"`
+	}
+	var serverStats []nodeServerStat
+	_ = s.db.WithContext(ctx).Model(&domain.GameServer{}).
+		Select("node_id").
+		Find(&serverStats).Error
+
+	nodeServerCounts := make(map[string]int, len(nodes))
+	for _, stat := range serverStats {
+		nID := stat.NodeID
+		if nID == "" {
+			nID = "node-local"
+		}
+		nodeServerCounts[nID]++
+	}
+
+	for i := range nodes {
+		if nodes[i].IsLocal {
+			nodes[i].CPUCores = hostCores
+			nodes[i].MemoryTotalMB = hostMemMB
+		}
+
+		if !nodes[i].IsLocal {
+			if time.Since(nodes[i].LastHeartbeat) > 45*time.Second {
+				nodes[i].Status = "offline"
+			}
+		}
+		nodes[i].RunningCount = nodeServerCounts[nodes[i].ID]
+	}
+
+	return nodes, nil
+}
+
+func (s *Store) GetComputeNode(ctx context.Context, id string) (domain.ComputeNode, error) {
+	var node domain.ComputeNode
+	err := s.db.WithContext(ctx).First(&node, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return node, ErrNotFound
+	}
+	if node.IsLocal {
+		cores, mem := detectHostHardware()
+		node.CPUCores = cores
+		node.MemoryTotalMB = mem
+	} else if time.Since(node.LastHeartbeat) > 45*time.Second {
+		node.Status = "offline"
+	}
+	return node, err
+}
+
+func (s *Store) GetComputeNodeByToken(ctx context.Context, token string) (domain.ComputeNode, error) {
+	var node domain.ComputeNode
+	err := s.db.WithContext(ctx).First(&node, "token = ?", token).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return node, ErrNotFound
+	}
+	return node, err
+}
+
+func (s *Store) CreateComputeNode(ctx context.Context, node *domain.ComputeNode) error {
+	return s.db.WithContext(ctx).Create(node).Error
+}
+
+func (s *Store) UpdateComputeNode(ctx context.Context, node *domain.ComputeNode) error {
+	return s.db.WithContext(ctx).Save(node).Error
+}
+
+func (s *Store) DeleteComputeNode(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&domain.ComputeNode{}, "id = ? AND is_local = ?", id, false).Error
+}
+
+func (s *Store) CreateNodeTask(ctx context.Context, task *domain.NodeTask) error {
+	return s.db.WithContext(ctx).Create(task).Error
+}
+
+func (s *Store) ListPendingNodeTasks(ctx context.Context, nodeID string) ([]domain.NodeTask, error) {
+	var tasks []domain.NodeTask
+	err := s.db.WithContext(ctx).
+		Where("node_id = ? AND status = ?", nodeID, domain.TaskPending).
+		Order("created_at asc").
+		Find(&tasks).Error
+	return tasks, err
+}
+
+func (s *Store) UpdateNodeTaskStatus(ctx context.Context, taskID string, status domain.NodeTaskStatus, errMsg string) error {
+	updates := map[string]interface{}{
+		"status":     status,
+		"error":      errMsg,
+		"updated_at": time.Now().UTC(),
+	}
+	return s.db.WithContext(ctx).Model(&domain.NodeTask{}).Where("id = ?", taskID).Updates(updates).Error
+}
+
+func (s *Store) GetNodeTask(ctx context.Context, taskID string) (domain.NodeTask, error) {
+	var task domain.NodeTask
+	err := s.db.WithContext(ctx).First(&task, "id = ?", taskID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return task, ErrNotFound
+	}
+	return task, err
+}
+
+func (s *Store) UpsertWorkloadAssignment(ctx context.Context, assignment *domain.WorkloadAssignment) error {
+	var current domain.WorkloadAssignment
+	err := s.db.WithContext(ctx).First(&current, "server_id = ?", assignment.ServerID).Error
+	if err == nil {
+		assignment.ID = current.ID
+		assignment.CreatedAt = current.CreatedAt
+		return s.db.WithContext(ctx).Save(assignment).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return s.db.WithContext(ctx).Create(assignment).Error
+}
+
+func (s *Store) GetWorkloadAssignmentByServer(ctx context.Context, serverID string) (domain.WorkloadAssignment, error) {
+	var assignment domain.WorkloadAssignment
+	err := s.db.WithContext(ctx).First(&assignment, "server_id = ?", serverID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return assignment, ErrNotFound
+	}
+	return assignment, err
+}
+
+func (s *Store) GetWorkloadAssignmentByUID(ctx context.Context, uid string) (domain.WorkloadAssignment, error) {
+	var assignment domain.WorkloadAssignment
+	err := s.db.WithContext(ctx).First(&assignment, "uid = ?", uid).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return assignment, ErrNotFound
+	}
+	return assignment, err
+}
+
+func (s *Store) ListWorkloadAssignmentsByNode(ctx context.Context, nodeID string) ([]domain.WorkloadAssignment, error) {
+	var assignments []domain.WorkloadAssignment
+	err := s.db.WithContext(ctx).Where("node_id = ?", nodeID).Order("created_at asc").Find(&assignments).Error
+	return assignments, err
+}
+
+func (s *Store) DeleteWorkloadAssignment(ctx context.Context, serverID string) error {
+	return s.db.WithContext(ctx).Where("server_id = ?", serverID).Delete(&domain.WorkloadAssignment{}).Error
+}
+
+func (s *Store) UpsertWorkloadObservation(ctx context.Context, observation *domain.WorkloadObservation) error {
+	var current domain.WorkloadObservation
+	err := s.db.WithContext(ctx).First(&current, "assignment_uid = ?", observation.AssignmentUID).Error
+	if err == nil {
+		if current.ObservedGeneration > observation.ObservedGeneration {
+			return nil
+		}
+		observation.ID = current.ID
+		observation.CreatedAt = current.CreatedAt
+		return s.db.WithContext(ctx).Save(observation).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return s.db.WithContext(ctx).Create(observation).Error
+}
+
+func (s *Store) GetWorkloadObservation(ctx context.Context, assignmentUID string) (domain.WorkloadObservation, error) {
+	var observation domain.WorkloadObservation
+	err := s.db.WithContext(ctx).First(&observation, "assignment_uid = ?", assignmentUID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return observation, ErrNotFound
+	}
+	return observation, err
 }

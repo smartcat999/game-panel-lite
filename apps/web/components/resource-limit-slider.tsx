@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { cn } from "../lib/utils";
 
 export function ResourceLimitSlider({
   disabled = false,
@@ -25,16 +26,20 @@ export function ResourceLimitSlider({
 
   return (
     <div className="min-w-0">
-      <p className="mb-2 text-sm font-medium text-slate-300">{label}</p>
-      <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_4.5rem] items-center gap-3">
-        <span className="text-[11px] tabular-nums text-slate-500">{formatValue(0)}</span>
-        <div className="relative min-w-0 pt-7" style={rangeStyle}>
-          <output
-            className="pointer-events-none absolute top-0 min-w-12 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-0.5 text-center text-xs font-semibold tabular-nums text-slate-100"
-            style={{ left: `${valuePercent}%` }}
-          >
-            {formatValue(clampedValue)}
-          </output>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-slate-200">{label}</span>
+        <span className={cn(
+          "rounded-md px-2 py-0.5 text-xs font-mono font-bold",
+          clampedValue === 0
+            ? "bg-slate-800 text-slate-300 border border-slate-700"
+            : "bg-panel-green/15 text-panel-green border border-panel-green/30"
+        )}>
+          {formatValue(clampedValue)}
+        </span>
+      </div>
+      <div className="grid grid-cols-[3rem_minmax(0,1fr)_3.5rem] items-center gap-2.5">
+        <span className="text-[10px] tabular-nums text-slate-500">{formatValue(0)}</span>
+        <div className="relative min-w-0" style={rangeStyle}>
           <input
             aria-label={label}
             className="resource-range block w-full cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
@@ -47,7 +52,7 @@ export function ResourceLimitSlider({
             onChange={(event) => onChange(Number(event.target.value))}
           />
         </div>
-        <span className="text-right text-[11px] tabular-nums text-slate-500">{formatValue(max)}</span>
+        <span className="text-right text-[10px] tabular-nums text-slate-500">{formatValue(max)}</span>
       </div>
     </div>
   );

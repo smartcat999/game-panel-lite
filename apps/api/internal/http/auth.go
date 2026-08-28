@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
@@ -36,13 +37,24 @@ type authContextKey string
 const authAccountContextKey authContextKey = "account"
 
 type authAccountResponse struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
+	ID        string          `json:"id"`
+	Username  string          `json:"username"`
+	Role      domain.Role `json:"role"`
+	CreatedAt string          `json:"createdAt,omitempty"`
 }
 
 type authBootstrapResponse struct {
-	Initialized bool                 `json:"initialized"`
-	Account     *authAccountResponse `json:"account,omitempty"`
+	Initialized       bool                 `json:"initialized"`
+	AllowRegistration bool                 `json:"allowRegistration"`
+	Account           *authAccountResponse `json:"account,omitempty"`
+}
+
+func (h *Handler) isRegistrationAllowed(ctx context.Context) bool {
+	val, err := h.store.GetSetting(ctx, domain.SettingKeyAllowRegistration)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(val), "true")
 }
 
 func (h *Handler) authBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -51,9 +63,22 @@ func (h *Handler) authBootstrap(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	response := authBootstrapResponse{Initialized: initialized}
+	allowReg := h.isRegistrationAllowed(r.Context())
+	response := authBootstrapResponse{
+		Initialized:       initialized,
+		AllowRegistration: allowReg,
+	}
 	if account, ok := accountFromContext(r.Context()); ok {
-		response.Account = &authAccountResponse{ID: account.ID, Username: account.Username}
+		role := account.Role
+		if role == "" {
+			role = domain.RoleAdmin
+		}
+		response.Account = &authAccountResponse{
+			ID:        account.ID,
+			Username:  account.Username,
+			Role:      role,
+			CreatedAt: account.CreatedAt.Format(time.RFC3339),
+		}
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -89,6 +114,7 @@ func (h *Handler) setupAdmin(w http.ResponseWriter, r *http.Request) {
 	account := domain.AdminAccount{
 		ID:           uuid.NewString(),
 		Username:     username,
+		Role:         domain.RoleAdmin,
 		PasswordHash: passwordHash,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -101,7 +127,63 @@ func (h *Handler) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, authAccountResponse{ID: account.ID, Username: account.Username})
+	writeJSON(w, http.StatusCreated, authAccountResponse{
+		ID:        account.ID,
+		Username:  account.Username,
+		Role:      account.Role,
+		CreatedAt: account.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
+	if !h.isRegistrationAllowed(r.Context()) {
+		writeError(w, http.StatusForbidden, "public registration is disabled by administrator")
+		return
+	}
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	username, password, err := validateCredentials(payload.Username, payload.Password)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := h.store.GetAdminAccountByUsername(r.Context(), username); err == nil {
+		writeError(w, http.StatusConflict, "username already taken")
+		return
+	}
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	account := domain.AdminAccount{
+		ID:           uuid.NewString(),
+		Username:     username,
+		Role:         domain.RoleMember,
+		PasswordHash: passwordHash,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := h.store.CreateAdminAccount(r.Context(), &account); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.createSessionCookie(w, r, account); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, authAccountResponse{
+		ID:        account.ID,
+		Username:  account.Username,
+		Role:      account.Role,
+		CreatedAt: account.CreatedAt.Format(time.RFC3339),
+	})
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +208,16 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, authAccountResponse{ID: account.ID, Username: account.Username})
+	role := account.Role
+	if role == "" {
+		role = domain.RoleAdmin
+	}
+	writeJSON(w, http.StatusOK, authAccountResponse{
+		ID:        account.ID,
+		Username:  account.Username,
+		Role:      role,
+		CreatedAt: account.CreatedAt.Format(time.RFC3339),
+	})
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +236,16 @@ func (h *Handler) currentAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	writeJSON(w, http.StatusOK, authAccountResponse{ID: account.ID, Username: account.Username})
+	role := account.Role
+	if role == "" {
+		role = domain.RoleAdmin
+	}
+	writeJSON(w, http.StatusOK, authAccountResponse{
+		ID:        account.ID,
+		Username:  account.Username,
+		Role:      role,
+		CreatedAt: account.CreatedAt.Format(time.RFC3339),
+	})
 }
 
 func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
@@ -186,8 +286,213 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, authAccountResponse{ID: persisted.ID, Username: persisted.Username})
+	writeJSON(w, http.StatusOK, authAccountResponse{
+		ID:        persisted.ID,
+		Username:  persisted.Username,
+		Role:      persisted.Role,
+		CreatedAt: persisted.CreatedAt.Format(time.RFC3339),
+	})
 }
+
+// -----------------------------------------------------------------
+// User Management Handlers (Admin Only)
+// -----------------------------------------------------------------
+
+func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
+	accounts, err := h.store.ListAdminAccounts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]authAccountResponse, 0, len(accounts))
+	for _, acc := range accounts {
+		role := acc.Role
+		if role == "" {
+			role = domain.RoleAdmin
+		}
+		out = append(out, authAccountResponse{
+			ID:        acc.ID,
+			Username:  acc.Username,
+			Role:      role,
+			CreatedAt: acc.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Username string          `json:"username"`
+		Password string          `json:"password"`
+		Role     domain.Role `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	username, password, err := validateCredentials(payload.Username, payload.Password)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if _, err := h.store.GetAdminAccountByUsername(r.Context(), username); err == nil {
+		writeError(w, http.StatusConflict, "username already taken")
+		return
+	}
+	role := payload.Role
+	if role != domain.RoleAdmin && role != domain.RoleMember && role != domain.RoleViewer {
+		role = domain.RoleMember
+	}
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	account := domain.AdminAccount{
+		ID:           uuid.NewString(),
+		Username:     username,
+		Role:         role,
+		PasswordHash: passwordHash,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := h.store.CreateAdminAccount(r.Context(), &account); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, authAccountResponse{
+		ID:        account.ID,
+		Username:  account.Username,
+		Role:      account.Role,
+		CreatedAt: account.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) updateUserRole(w http.ResponseWriter, r *http.Request) {
+	targetID := chi.URLParam(r, "id")
+	var payload struct {
+		Role domain.Role `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if payload.Role != domain.RoleAdmin && payload.Role != domain.RoleMember && payload.Role != domain.RoleViewer {
+		writeError(w, http.StatusBadRequest, "invalid role, allowed: admin, member, viewer")
+		return
+	}
+	target, err := h.store.GetAdminAccount(r.Context(), targetID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	// Prevent demoting the last admin
+	if target.Role == domain.RoleAdmin && payload.Role != domain.RoleAdmin {
+		count, err := h.store.CountAdminRoleAccounts(r.Context())
+		if err == nil && count <= 1 {
+			writeError(w, http.StatusBadRequest, "cannot demote the last remaining admin")
+			return
+		}
+	}
+	target.Role = payload.Role
+	target.UpdatedAt = time.Now()
+	if err := h.store.SaveAdminAccount(r.Context(), &target); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, authAccountResponse{
+		ID:        target.ID,
+		Username:  target.Username,
+		Role:      target.Role,
+		CreatedAt: target.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request) {
+	targetID := chi.URLParam(r, "id")
+	var payload struct {
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := validatePassword(payload.NewPassword); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	target, err := h.store.GetAdminAccount(r.Context(), targetID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	passwordHash, err := hashPassword(payload.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	target.PasswordHash = passwordHash
+	target.UpdatedAt = time.Now()
+	if err := h.store.SaveAdminAccount(r.Context(), &target); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, authAccountResponse{
+		ID:        target.ID,
+		Username:  target.Username,
+		Role:      target.Role,
+		CreatedAt: target.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	targetID := chi.URLParam(r, "id")
+	curr, ok := accountFromContext(r.Context())
+	if ok && curr.ID == targetID {
+		writeError(w, http.StatusBadRequest, "cannot delete yourself")
+		return
+	}
+	target, err := h.store.GetAdminAccount(r.Context(), targetID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.Role == domain.RoleAdmin {
+		count, err := h.store.CountAdminRoleAccounts(r.Context())
+		if err == nil && count <= 1 {
+			writeError(w, http.StatusBadRequest, "cannot delete the last remaining admin")
+			return
+		}
+	}
+	if err := h.store.DeleteAdminAccount(r.Context(), targetID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) updateRegistrationSetting(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		AllowRegistration bool `json:"allowRegistration"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	val := "false"
+	if payload.AllowRegistration {
+		val = "true"
+	}
+	if err := h.store.SetSetting(r.Context(), domain.SettingKeyAllowRegistration, val); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"allowRegistration": payload.AllowRegistration})
+}
+
+// -----------------------------------------------------------------
+// Middleware
+// -----------------------------------------------------------------
 
 func (h *Handler) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +515,25 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authAccountContextKey, account)))
+	})
+}
+
+func (h *Handler) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		account, ok := accountFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		role := account.Role
+		if role == "" {
+			role = domain.RoleAdmin
+		}
+		if role != domain.RoleAdmin {
+			writeError(w, http.StatusForbidden, "administrator role required")
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

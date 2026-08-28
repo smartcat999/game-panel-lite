@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
 	apihttp "github.com/smartcat999/game-panel-lite/apps/api/internal/http"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/player"
@@ -70,6 +71,12 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	appCtx, cancel := context.WithCancel(context.Background())
 	go dockerMonitor.Start(appCtx, 10*time.Second)
 	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(appCtx, 30*time.Second)
+	streamGateway := gateway.NewStreamGateway(logger)
+	go func() {
+		<-appCtx.Done()
+		streamGateway.Close()
+	}()
+
 	go serverctrl.NewController(
 		db,
 		serverctrl.NewRuntimeReconciler(
@@ -77,13 +84,13 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
 		).WithImageLoader(serverctrl.NewRuntimeImageLoader(cfg.DataDir, switchableRuntime)),
 		logger,
-	).Start(appCtx)
+	).WithGateway(streamGateway).Start(appCtx)
 
 	dockerFactory := func(host string) (runtime.Adapter, error) {
 		return dockerruntime.NewAdapter(host)
 	}
 	apiMetrics := metrics.NewRegistry()
-	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics)
+	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway)
 	handler.Start(appCtx)
 
 	router := chi.NewRouter()

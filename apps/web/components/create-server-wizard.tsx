@@ -4,28 +4,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Gamepad2, Globe, Hammer, Package, Search, Settings2, X } from "lucide-react";
+import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Flame, Gamepad2, Globe, Hammer, Package, Search, Settings2, Sparkles, X, Zap } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
+import { useToast } from "@/components/toast-context";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { modDisplayName } from "@/lib/mod-display";
 import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { getGameArt } from "@/lib/game-art";
-import { gameDescription, gameDisplayName } from "@/lib/game-display";
-import { providerDescription, providerDisplayName } from "@/lib/provider-display";
+import { gameDisplayName } from "@/lib/game-display";
+import { providerDisplayName } from "@/lib/provider-display";
 import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
+import { createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { providerOptionLabel } from "@/lib/provider-option-label";
-import { isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
+import { isRuntimeImageReady } from "@/lib/runtime-image";
 import {
   getTerrariaPreset,
   isTerrariaVersionAtLeast,
@@ -38,7 +39,7 @@ import {
   terrariaSpecialWorldSeeds,
   type TerrariaConfig
 } from "@gamepanel-lite/shared";
-import type { ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderConfigField, ProviderKey, ResourceLimits, RuntimeImageStatus } from "@/lib/types";
+import type { ComputeNode, ConfigPreset, GameCatalogEntry, ModFile, ModPack, ProviderCatalog, ProviderConfigField, ProviderKey, ResourceLimits } from "@/lib/types";
 
 const stepLabelKeys = {
   setup: "stepGameMode",
@@ -75,7 +76,6 @@ function terrariaSeedDisplayName(seed: { key: string; label: string }, locale: s
 
 type BuiltInPresetKey = (typeof presets)[number]["key"];
 type PresetKey = BuiltInPresetKey | typeof customPreset.key;
-type PresetTag = (typeof presets)[number]["tags"][number] | (typeof customPreset)["tags"][number];
 
 type ConfigValidationErrors = Record<string, string>;
 type ReviewConfigField = { label: string; value: string };
@@ -450,6 +450,7 @@ export function CreateServerWizard() {
   const { locale, t } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [step, setStep] = useState(0);
   const [selectedGameKey, setSelectedGameKey] = useState("");
   const [selectedProviderKey, setSelectedProviderKey] = useState<ProviderKey>("terraria-vanilla");
@@ -471,6 +472,7 @@ export function CreateServerWizard() {
   const [appliedGameQueryKey, setAppliedGameQueryKey] = useState("");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [selectedModPackId, setSelectedModPackId] = useState("");
+  const [selectedNodeId, setSelectedNodeId] = useState("node-local");
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000 });
   const versionsQuery = useQuery({ queryKey: ["game-versions", selectedGameKey], queryFn: () => getGameVersions(selectedGameKey), enabled: selectedGameKey.length > 0, staleTime: 5 * 60 * 1000 });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: showWorldAndBackupFeatures, retry: false });
@@ -479,6 +481,9 @@ export function CreateServerWizard() {
   const configPresetsQuery = useQuery({ queryKey: ["config-presets"], queryFn: listConfigPresets, retry: false });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, retry: false, staleTime: 30_000 });
+  const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 15_000 });
+  const nodes = nodesQuery.data ?? [];
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? nodes[0];
   const games = gamesQuery.data ?? [];
   const selectedGame = games.find((game) => game.key === selectedGameKey) ?? games[0] ?? games.find((game) => game.key === "terraria");
   const selectedGameArt = getGameArt(selectedGame?.coverImage ?? selectedGame?.key ?? selectedGameKey);
@@ -537,7 +542,8 @@ export function CreateServerWizard() {
       resources: resourceLimits,
       worldId: showWorldAndBackupFeatures ? selectedWorldId || undefined : undefined,
       modIds: selectedModIds,
-      version: selectedVersion
+      version: selectedVersion,
+      nodeId: selectedNodeId
     }),
     onSuccess: async ({ server }) => {
       await queryClient.invalidateQueries({ queryKey: ["game-servers"] });
@@ -652,6 +658,11 @@ export function CreateServerWizard() {
     setConfig(createNamedTerrariaConfig(preset));
   };
   const chooseModPack = (packId: string) => {
+    if (!packId || packId === selectedModPackId) {
+      setSelectedModPackId("");
+      setSelectedModIds([]);
+      return;
+    }
     setSelectedModPackId(packId);
     const pack = modPacks.find((item) => item.id === packId);
     setSelectedModIds(pack?.modIds ?? []);
@@ -676,6 +687,95 @@ export function CreateServerWizard() {
     setSelectedModPackId(preset.modPackId ?? "");
     setSelectedModIds(preset.modIds);
     setStep(1);
+  };
+
+  const applyQuickPlayTemplate = (templateId: string) => {
+    const isZh = locale.startsWith("zh");
+    const game = games.find((g) => g.key === selectedGameKey) ?? games[0];
+    if (!game) return;
+
+    if (game.key === "palworld") {
+      const provider = game.providers[0];
+      if (provider) {
+        chooseGame(game);
+        chooseProvider(provider);
+        if (templateId === "t1") {
+          setProviderConfigPayload({ expRate: 3, captureRate: 2, eggHatchingTime: 0, deathPenalty: "None", maxPlayers: 4, serverName: "Palworld 4人休闲起号车" });
+          setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+          toast.success(isZh ? "已套用【4人休闲起号车】" : "Applied 4-Player Casual Preset", isZh ? "3倍经验 + 2倍抓宠 + 秒孵蛋 + 不掉落" : "3x Exp + 2x Capture + Instant Hatch");
+        } else if (templateId === "t2") {
+          setProviderConfigPayload({ expRate: 1, captureRate: 1, deathPenalty: "All", pvp: true, enableInvaderEnemy: true, maxPlayers: 8, serverName: "Palworld 8人公会硬核车" });
+          setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          toast.success(isZh ? "已套用【8人公会硬核车】" : "Applied 8-Player Hardcore Preset", isZh ? "全掉落 + 开启入侵与PVP" : "Drop All + PvP + Raids");
+        } else {
+          setProviderConfigPayload({ expRate: 2, captureRate: 1.5, deathPenalty: "Item", baseCampWorkerMaxNum: 20, maxPlayers: 16, serverName: "Palworld 16人旗舰公会服" });
+          setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+          toast.success(isZh ? "已套用【16人旗舰公会服】" : "Applied 16-Player Guild Preset", isZh ? "8核 16G + 20帕鲁据点" : "8 Cores 16GB High Capacity");
+        }
+      }
+    } else if (game.key === "minecraft") {
+      const provider = game.providers[0];
+      if (provider) {
+        chooseGame(game);
+        chooseProvider(provider);
+        if (templateId === "t1") {
+          setProviderConfigPayload({ gameMode: "survival", difficulty: "normal", onlineMode: true, maxPlayers: 4, serverName: "Minecraft 4人纯净生存车" });
+          setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+          toast.success(isZh ? "已套用【4人纯净生存车】" : "Applied 4-Player Survival Preset");
+        } else if (templateId === "t2") {
+          setProviderConfigPayload({ gameMode: "creative", difficulty: "peaceful", onlineMode: true, maxPlayers: 8, serverName: "Minecraft 8人建筑创造服" });
+          setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          toast.success(isZh ? "已套用【8人建筑创造服】" : "Applied 8-Player Creative Preset");
+        } else {
+          setProviderConfigPayload({ gameMode: "survival", difficulty: "hard", onlineMode: true, maxPlayers: 16, serverName: "Minecraft 极限挑战服" });
+          setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+          toast.success(isZh ? "已套用【极限挑战服】" : "Applied Hardcore Preset");
+        }
+      }
+    } else if (game.key === "dont-starve-together") {
+      const provider = game.providers[0];
+      if (provider) {
+        chooseGame(game);
+        chooseProvider(provider);
+        if (templateId === "t1") {
+          setProviderConfigPayload({ "gameplay.gameMode": "survival", "caves.enabled": true, "gameplay.pauseWhenEmpty": true, "gameplay.maxPlayers": 4, "identity.serverName": "DST 4人纯净双层洞穴车" });
+          setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+          toast.success(isZh ? "已套用【4人双层洞穴车】" : "Applied 4-Player Caves Preset");
+        } else {
+          setProviderConfigPayload({ "gameplay.gameMode": "endless", "caves.enabled": true, "gameplay.pauseWhenEmpty": true, "gameplay.maxPlayers": 8, "identity.serverName": "DST 8人无尽不散车" });
+          setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          toast.success(isZh ? "已套用【8人无尽不散车】" : "Applied 8-Player Endless Preset");
+        }
+      }
+    } else {
+      // Default: Terraria
+      const terrariaGame = games.find((g) => g.key === "terraria") ?? game;
+      const vanillaProvider = terrariaGame?.providers.find((p) => p.key === "terraria-vanilla") ?? terrariaGame?.providers[0];
+      const tmodProvider = terrariaGame?.providers.find((p) => p.key === "terraria-tmodloader") ?? terrariaGame?.providers[0];
+
+      if (templateId === "t1" && vanillaProvider) {
+        chooseGame(terrariaGame);
+        chooseProvider(vanillaProvider);
+        choosePreset("friends-casual");
+        setConfig((prev) => ({ ...prev, serverName: isZh ? "Terraria 好友联机车" : "Terraria Friends Room" }));
+        setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+        toast.success(isZh ? "已套用【4人好友轻量纯净车】模版" : "Applied 4-Player Friends Preset");
+      } else if (templateId === "t2" && tmodProvider) {
+        chooseGame(terrariaGame);
+        chooseProvider(tmodProvider);
+        choosePreset("expert-adventure");
+        setConfig((prev) => ({ ...prev, serverName: isZh ? "Calamity 灾厄开黑团" : "Calamity Modded Group" }));
+        setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+        toast.success(isZh ? "已套用【8人灾厄模组团】模版" : "Applied 8-Player Modded Preset");
+      } else if (vanillaProvider) {
+        chooseGame(terrariaGame);
+        chooseProvider(vanillaProvider);
+        choosePreset("building-world");
+        setConfig((prev) => ({ ...prev, serverName: isZh ? "Terraria 公会万人迷" : "Terraria Guild Server" }));
+        setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+        toast.success(isZh ? "已套用【16人公会万人迷】模版" : "Applied 16-Player Guild Preset");
+      }
+    }
   };
 
   useEffect(() => {
@@ -748,55 +848,247 @@ export function CreateServerWizard() {
   }, [step, stepIds.length]);
 
   return (
-    <Card className="overflow-hidden">
-      <div className="grid min-h-[640px] lg:grid-cols-[280px_1fr]">
-        <aside className="hidden border-r border-panel-line bg-[linear-gradient(180deg,#111827,#07111b)] p-6 lg:block">
-          <div className="overflow-hidden rounded-lg border border-panel-line bg-slate-950 shadow-[0_0_0_1px_rgba(123,217,120,0.08)]">
+    <Card className="overflow-hidden border-slate-800 bg-slate-950/80 shadow-2xl rounded-2xl">
+      <div className="grid min-h-[580px] lg:grid-cols-[220px_1fr]">
+        <aside className="hidden border-r border-slate-800 bg-slate-950/50 p-4 lg:flex lg:flex-col lg:gap-3.5 shrink-0">
+          <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
             {selectedGameArt.imageSrc ? (
               <Image
                 src={selectedGameArt.imageSrc}
                 alt={selectedGameArt.alt}
-                width={1200}
-                height={1800}
-                className="aspect-[2/3] w-full object-cover"
+                width={400}
+                height={600}
+                className="aspect-[4/3] w-full object-cover"
                 priority
               />
             ) : (
-              <div className={cn("flex aspect-[2/3] w-full items-center justify-center bg-gradient-to-br", selectedGameArt.gradient)}>
-                <SelectedGameIcon aria-hidden="true" className="size-20 text-white/75" />
+              <div className={cn("flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br", selectedGameArt.gradient)}>
+                <SelectedGameIcon aria-hidden="true" className="size-12 text-white/75" />
               </div>
             )}
           </div>
+
+          {/* Live Config Summary Box */}
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3 space-y-2 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {locale.startsWith("zh") ? "实时配置概览" : "Live Summary"}
+              </span>
+              <span className="flex size-2 rounded-full bg-panel-green animate-pulse" />
+            </div>
+
+            <div className="space-y-1.5 font-mono text-[11px]">
+              <div>
+                <span className="text-slate-500">{locale.startsWith("zh") ? "游戏: " : "Game: "}</span>
+                <span className="font-bold text-white font-sans">{selectedGame?.name ?? selectedGameKey}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">{locale.startsWith("zh") ? "节点: " : "Node: "}</span>
+                <span className="text-panel-gold font-sans truncate max-w-[120px] inline-block align-bottom">{selectedNode?.name ?? "Local Host"}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">{locale.startsWith("zh") ? "模式: " : "Mode: "}</span>
+                <span className="text-panel-green font-sans">{selectedProvider?.name ?? providerKey}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">{locale.startsWith("zh") ? "端口: " : "Port: "}</span>
+                <span className="text-sky-400">{hostPortMode === "manual" ? hostPort : (locale.startsWith("zh") ? "自动分配" : "Auto")}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">{locale.startsWith("zh") ? "算力: " : "Alloc: "}</span>
+                <span className="text-slate-300">
+                  {formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} / {formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)}
+                </span>
+              </div>
+              {selectedModIds.length > 0 && (
+                <div>
+                  <span className="text-slate-500">{locale.startsWith("zh") ? "模组: " : "Mods: "}</span>
+                  <span className="text-purple-400 font-bold">{selectedModIds.length} {locale.startsWith("zh") ? "个已选" : "active"}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </aside>
-        <div className="p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <h1 className="text-2xl font-semibold">{t("createWizardTitle")}</h1>
+
+        <div className="p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-xl font-bold text-white tracking-tight">{t("createWizardTitle")}</h1>
             <Link
               href="/servers"
               aria-label={t("cancelCreateServer")}
               title={t("cancelCreateServer")}
-              className="flex size-10 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/40 text-slate-400 transition hover:border-panel-green hover:bg-slate-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 transition hover:border-slate-700 hover:text-white"
             >
-                <X aria-hidden="true" />
-                <span className="sr-only">{t("cancelCreateServer")}</span>
+              <X className="size-4" />
+              <span className="sr-only">{t("cancelCreateServer")}</span>
             </Link>
           </div>
-          <div className="mt-7 grid grid-cols-5 gap-2 sm:gap-3">
-            {stepIds.map((stepId, index) => {
-              const labelKey = stepLabelKeys[stepId];
-              return (
-              <button key={labelKey} className="flex flex-col items-center gap-2 text-xs text-slate-400" onClick={() => setStep(index)}>
-                <span className={cn("flex size-8 items-center justify-center rounded-full border border-panel-line", index <= step && "border-panel-green bg-panel-green text-slate-950")}>
-                  {index < step ? <Check aria-hidden="true" /> : index + 1}
-                </span>
-                {t(labelKey)}
-              </button>
-              );
-            })}
-          </div>
-          <motion.div key={step} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} className="mt-8">
+
+            {/* Compact Stepper */}
+            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1">
+              {stepIds.map((stepId, index) => {
+                const labelKey = stepLabelKeys[stepId];
+                const isCurrent = index === step;
+                const isPassed = index < step;
+                return (
+                  <button
+                    key={labelKey}
+                    type="button"
+                    onClick={() => setStep(index)}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition shrink-0",
+                      isCurrent
+                        ? "bg-panel-green text-slate-950 shadow-sm"
+                        : isPassed
+                        ? "bg-slate-900 text-slate-200 hover:bg-slate-800"
+                        : "text-slate-500 hover:text-slate-400"
+                    )}
+                  >
+                    <span className={cn(
+                      "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
+                      isCurrent ? "bg-slate-950 text-panel-green" : isPassed ? "bg-panel-green/20 text-panel-green" : "bg-slate-800 text-slate-500"
+                    )}>
+                      {isPassed ? <Check className="size-2.5" /> : index + 1}
+                    </span>
+                    <span>{t(labelKey)}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <motion.div key={step} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }} className="mt-4">
             {currentStepId === "setup" && (
-              <div className="space-y-7">
+              <div className="space-y-4">
+                {/* Quick Play Presets (For Beginners) */}
+                <div className="rounded-xl border border-panel-green/30 bg-slate-950/70 p-3.5 shadow-lg relative overflow-hidden">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="size-3.5 text-panel-gold animate-pulse shrink-0" />
+                      <h3 className="text-xs font-bold text-white tracking-tight">
+                        {locale.startsWith("zh") ? "⚡ 10 秒极速开黑推荐模版（小白专用）" : "⚡ 10-Second Quick Play Presets"}
+                      </h3>
+                    </div>
+                    <span className="rounded-full bg-panel-green/15 border border-panel-green/30 px-2 py-0.5 text-[9px] font-bold text-panel-green">
+                      {locale.startsWith("zh") ? "一键配齐" : "1-Click Ready"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {locale.startsWith("zh")
+                      ? "点击下方任意卡片，系统将自动配置好推荐游戏版本、难度、世界大小与硬件资源，小白无需繁琐配置！"
+                      : "Click any card below to automatically configure the recommended game, world, difficulty and resources."}
+                  </p>
+
+                  <div className="mt-2.5 grid gap-2.5 sm:grid-cols-3">
+                    {/* Card 1 */}
+                    <button
+                      type="button"
+                      onClick={() => applyQuickPlayTemplate("t1")}
+                      className="flex flex-col justify-between rounded-lg border border-panel-line bg-slate-900/80 p-3 text-left transition hover:border-panel-green hover:bg-panel-green/10 group focus:outline-none focus:ring-1 focus:ring-panel-green"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-panel-green">
+                            <Sparkles className="size-3" />
+                            {selectedGameKey === "palworld" ? (locale.startsWith("zh") ? "休闲爽玩" : "Casual Play") : (locale.startsWith("zh") ? "好友轻量纯净" : "Friends Casual")}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">2C / 4GB</span>
+                        </div>
+                        <p className="mt-1.5 text-xs font-semibold text-white group-hover:text-panel-green transition">
+                          {selectedGameKey === "palworld"
+                            ? (locale.startsWith("zh") ? "4人休闲起号车" : "4-Player Casual")
+                            : selectedGameKey === "minecraft"
+                            ? (locale.startsWith("zh") ? "4人纯净生存车" : "4-Player Survival")
+                            : selectedGameKey === "dont-starve-together"
+                            ? (locale.startsWith("zh") ? "4人双层洞穴车" : "4-Player Caves")
+                            : (locale.startsWith("zh") ? "4人纯净联机车" : "4-Player Vanilla")}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                          {selectedGameKey === "palworld"
+                            ? (locale.startsWith("zh") ? "3倍经验 · 2倍抓宠 · 秒孵蛋 · 不掉落" : "3x Exp · 2x Catch · Instant Hatch")
+                            : selectedGameKey === "minecraft"
+                            ? (locale.startsWith("zh") ? "普通难度 · 生存模式 · 正版验证" : "Normal · Survival · Online Mode")
+                            : selectedGameKey === "dont-starve-together"
+                            ? (locale.startsWith("zh") ? "生存模式 · 地下洞穴 · 无人暂停" : "Survival · Caves · Auto Pause")
+                            : (locale.startsWith("zh") ? "经典难度 · 中型世界 · 即开即玩" : "Classic Medium World · Instant Play")}
+                        </p>
+                      </div>
+                      <span className="mt-3 inline-flex items-center text-[10px] font-medium text-panel-green group-hover:underline">
+                        {locale.startsWith("zh") ? "套用模版 →" : "Apply →"}
+                      </span>
+                    </button>
+
+                    {/* Card 2 */}
+                    <button
+                      type="button"
+                      onClick={() => applyQuickPlayTemplate("t2")}
+                      className="flex flex-col justify-between rounded-lg border border-purple-500/30 bg-slate-900/80 p-3 text-left transition hover:border-purple-400 hover:bg-purple-950/20 group focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-400">
+                            <Flame className="size-3" />
+                            {selectedGameKey === "palworld" ? (locale.startsWith("zh") ? "公会激战" : "Guild Battle") : selectedGameKey === "minecraft" ? (locale.startsWith("zh") ? "建筑创造" : "Creative") : (locale.startsWith("zh") ? "拓展模组团" : "Modded Adventure")}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">4C / 8GB</span>
+                        </div>
+                        <p className="mt-1.5 text-xs font-semibold text-white group-hover:text-purple-300 transition">
+                          {selectedGameKey === "palworld"
+                            ? (locale.startsWith("zh") ? "8人公会硬核车" : "8-Player Hardcore")
+                            : selectedGameKey === "minecraft"
+                            ? (locale.startsWith("zh") ? "8人建筑创造服" : "8-Player Creative")
+                            : selectedGameKey === "dont-starve-together"
+                            ? (locale.startsWith("zh") ? "8人无尽不散车" : "8-Player Endless")
+                            : (locale.startsWith("zh") ? "8人灾厄模组团" : "8-Player Modded")}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                          {selectedGameKey === "palworld"
+                            ? (locale.startsWith("zh") ? "全掉落 · 开启入侵 · 开启 PVP" : "Drop All · Raids · PvP")
+                            : selectedGameKey === "minecraft"
+                            ? (locale.startsWith("zh") ? "创造模式 · 和平难度 · 自由建筑" : "Creative · Peaceful · Free Build")
+                            : selectedGameKey === "dont-starve-together"
+                            ? (locale.startsWith("zh") ? "无尽模式 · 死亡门前复活" : "Endless · Portal Revive")
+                            : (locale.startsWith("zh") ? "tModLoader · 专家大型世界" : "tModLoader · Expert Large World")}
+                        </p>
+                      </div>
+                      <span className="mt-3 inline-flex items-center text-[10px] font-medium text-purple-400 group-hover:underline">
+                        {locale.startsWith("zh") ? "套用模版 →" : "Apply →"}
+                      </span>
+                    </button>
+
+                    {/* Card 3 */}
+                    <button
+                      type="button"
+                      onClick={() => applyQuickPlayTemplate("t3")}
+                      className="flex flex-col justify-between rounded-lg border border-panel-line bg-slate-900/80 p-3 text-left transition hover:border-panel-gold hover:bg-panel-gold/10 group focus:outline-none focus:ring-1 focus:ring-panel-gold"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-panel-gold">
+                            <Zap className="size-3" />
+                            {locale.startsWith("zh") ? "高配旗舰服" : "High Spec Guild"}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">8C / 16GB</span>
+                        </div>
+                        <p className="mt-1.5 text-xs font-semibold text-white group-hover:text-panel-gold transition">
+                          {selectedGameKey === "palworld"
+                            ? (locale.startsWith("zh") ? "16人旗舰公会服" : "16-Player Guild")
+                            : selectedGameKey === "minecraft"
+                            ? (locale.startsWith("zh") ? "16人极限挑战服" : "16-Player Hardcore")
+                            : (locale.startsWith("zh") ? "16人公会旗舰服" : "16-Player Guild")}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                          {selectedGameKey === "palworld"
+                            ? (locale.startsWith("zh") ? "2倍经验 · 掉落物品 · 20帕鲁据点" : "2x Exp · 20 Pals Per Base")
+                            : (locale.startsWith("zh") ? "高防算力 · 高频快照备份" : "High Spec · Frequent Backups")}
+                        </p>
+                      </div>
+                      <span className="mt-3 inline-flex items-center text-[10px] font-medium text-panel-gold group-hover:underline">
+                        {locale.startsWith("zh") ? "套用模版 →" : "Apply →"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
                 <GameStep
                   games={games}
                   isLoading={gamesQuery.isLoading}
@@ -815,14 +1107,18 @@ export function CreateServerWizard() {
               </div>
             )}
             {currentStepId === "config" && (
-              <div className="space-y-6">
-                <ConfigPresetPicker presets={gameConfigPresets} onSelect={applyConfigPreset} />
-                {selectedGameKey === "terraria" ? <PresetStep selectedPreset={selectedPreset} setPreset={choosePreset} compact /> : null}
+              <div className="space-y-3">
+                {selectedGameKey === "terraria" ? (
+                  <CompactPresetBar
+                    selectedPreset={selectedPreset}
+                    setPreset={choosePreset}
+                    customPresets={gameConfigPresets}
+                    onSelectCustomPreset={applyConfigPreset}
+                  />
+                ) : null}
                 <ConfigStep
                   config={config}
                   gameKey={selectedGameKey}
-                  hostPort={hostPort}
-                  hostPortMode={hostPortMode}
                   provider={selectedProvider}
                   providerConfigPayload={providerConfigPayload}
                   validationErrors={configValidationErrors}
@@ -835,23 +1131,29 @@ export function CreateServerWizard() {
                     return next;
                   })}
                   onCustomize={() => setSelectedPreset("custom")}
-                  setHostPort={setHostPort}
-                  setHostPortMode={setHostPortMode}
-                  versions={availableVersions}
                   version={selectedVersion}
-                  setVersion={setVersion}
                 />
               </div>
             )}
             {currentStepId === "resources" && (
               <ResourcesStep
-                hostCpuCores={runtimeStatsQuery.data?.cpuCores}
-                hostMemoryMb={runtimeStatsQuery.data?.memoryLimitMb}
+                hostCpuCores={selectedNode?.cpuCores ?? runtimeStatsQuery.data?.cpuCores}
+                hostMemoryMb={selectedNode?.memoryTotalMb ?? runtimeStatsQuery.data?.memoryLimitMb}
                 resourceLimits={resourceLimits}
-                onChange={(limits) => {
+                onChangeResourceLimits={(limits) => {
                   setSelectedPreset("custom");
                   setResourceLimits(limits);
                 }}
+                version={selectedVersion}
+                setVersion={setVersion}
+                versions={availableVersions}
+                hostPortMode={hostPortMode}
+                setHostPortMode={setHostPortMode}
+                hostPort={hostPort}
+                setHostPort={setHostPort}
+                nodes={nodes}
+                selectedNodeId={selectedNodeId}
+                onSelectNodeId={setSelectedNodeId}
               />
             )}
             {currentStepId === "mods" && (
@@ -900,6 +1202,7 @@ export function CreateServerWizard() {
                   setPresetName(name);
                 }}
                 onToggleSaveAsPreset={toggleSaveAsPreset}
+                nodeName={selectedNode?.name}
               />
             )}
           </motion.div>
@@ -963,15 +1266,15 @@ function GameStep({
   const { t } = useI18n();
   const orderedGames = games.length > 0 ? games : [{ key: "terraria", name: "Terraria", description: "", status: "available", providers: [] }];
   return (
-    <div>
-      <h2 className="text-lg font-semibold">{t("chooseGame")}</h2>
-      <p className="mt-1 text-sm text-slate-400">{t("chooseGameDescription")}</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-bold text-slate-300">{t("chooseGame")}</h2>
+        <span className="text-[10px] text-slate-500">{t("chooseGameDescription")}</span>
+      </div>
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
         {orderedGames.map((game) => {
           const isSelected = game.key === selectedGameKey;
           const isAvailable = game.status === "available";
-          const isUnsupported = game.status === "unsupported";
-          const hasReadyProvider = game.providers.some((provider) => isRuntimeImageReady(provider.runtimeImage));
           return (
             <button
               key={game.key}
@@ -979,42 +1282,38 @@ function GameStep({
               disabled={!isAvailable}
               onClick={() => onSelectGame(game)}
               className={cn(
-                "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-                isSelected ? "border-panel-green bg-panel-green/10" : "border-panel-line bg-slate-950/40",
-                isAvailable ? "hover:border-panel-green/70 hover:bg-slate-900/55" : "cursor-not-allowed opacity-75"
+                "relative flex h-12 w-full items-center gap-2.5 rounded-xl border px-3 text-left transition focus:outline-none focus:ring-1 focus:ring-panel-green",
+                isSelected
+                  ? "border-panel-green bg-panel-green/10"
+                  : "border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/50",
+                !isAvailable && "cursor-not-allowed opacity-60"
               )}
             >
-              <div className="flex items-start gap-3">
-                <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-md border", isSelected ? "border-panel-green bg-panel-green/15 text-panel-green" : "border-panel-line text-slate-400")}>
-                  <Gamepad2 aria-hidden="true" />
+              <span className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-lg border",
+                isSelected ? "border-panel-green/60 bg-panel-green/20 text-panel-green" : "border-slate-800 bg-slate-900 text-slate-400"
+              )}>
+                <Gamepad2 aria-hidden="true" className="size-3.5" />
+              </span>
+              <div className="min-w-0 flex-1 truncate">
+                <span className="block truncate text-xs font-bold text-white">{gameDisplayName(game.key, game.name, t)}</span>
+                <span className={cn(
+                  "text-[9px] font-semibold",
+                  isAvailable ? "text-panel-green" : "text-slate-500"
+                )}>
+                  {isAvailable ? t("gameAvailable") : t("gamePlanned")}
                 </span>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-white">{gameDisplayName(game.key, game.name, t)}</p>
-                    <span className={cn("rounded px-2 py-0.5 text-xs", isAvailable ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>
-                      {isAvailable ? t("gameAvailable") : isUnsupported ? t("gameUnsupported") : t("gamePlanned")}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm leading-6 text-slate-400">{gameDescription(game.key, game.description || t("terrariaGameDescription"), t)}</p>
-                  {game.providers.length > 0 && (
-                    <p className="mt-3 text-xs text-slate-500">
-                      {t("providerCount", { count: game.providers.length })}
-                      {isAvailable ? ` · ${hasReadyProvider ? t("gameLibraryInstalled") : t("gameLibraryNotInstalled")}` : ""}
-                    </p>
-                  )}
-                  {!isAvailable && <p className="mt-3 text-xs text-slate-500">{isUnsupported ? t("unsupportedGameHint") : t("plannedGameHint")}</p>}
-                </div>
               </div>
               {isSelected && (
-                <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
-                  <Check aria-hidden="true" className="size-4" />
+                <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-panel-green text-slate-950">
+                  <Check aria-hidden="true" className="size-2.5 font-bold" />
                 </span>
               )}
             </button>
           );
         })}
       </div>
-      {isLoading && <p className="mt-3 text-sm text-slate-500">{t("loading")}</p>}
+      {isLoading && <p className="text-[10px] text-slate-500">{t("loading")}</p>}
     </div>
   );
 }
@@ -1036,210 +1335,181 @@ function ModeStep({
   const modeProviders = orderModeProviders(providers);
   if (providers.length > 0) {
     return (
-      <div>
-          <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {modeProviders.map((provider) => {
-              const isSelected = selectedProviderKey === provider.key;
-              const isModded = provider.capabilities.mods;
-              const displayName = providerDisplayName(provider.key, provider.name, t);
-              const displayDescription = providerDescription(provider.key, provider.description, t);
-              return (
-                <button
-                  key={provider.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => onSelectProvider(provider)}
-                  className={cn(
-                    "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-                    isSelected
-                      ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-                      : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
-                  )}
-                >
-                  {isSelected && (
-                    <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
-                      <Check aria-hidden="true" className="size-4" />
-                    </span>
-                  )}
-                  {isModded ? <Package aria-hidden="true" className="text-panel-green" /> : <Hammer aria-hidden="true" className="text-panel-green" />}
-                  <p className="mt-3 pr-8 font-medium">{displayName}</p>
-                  <p className="mt-1 text-sm text-slate-400">{displayDescription}</p>
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <RuntimeImagePill status={provider.runtimeImage} />
-                    {provider.recommended && <span className="inline-flex rounded bg-panel-green/15 px-2 py-1 text-xs text-panel-green">{t("recommended")}</span>}
+      <div className="space-y-1.5">
+        <h2 className="text-xs font-bold text-slate-300">{t("chooseServerMode")}</h2>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {modeProviders.map((provider) => {
+            const isSelected = selectedProviderKey === provider.key;
+            const isModded = provider.capabilities.mods;
+            const displayName = providerDisplayName(provider.key, provider.name, t);
+            return (
+              <button
+                key={provider.key}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSelectProvider(provider)}
+                className={cn(
+                  "relative flex h-11 w-full items-center gap-2.5 rounded-xl border px-3 text-left transition focus:outline-none focus:ring-1 focus:ring-panel-green",
+                  isSelected
+                    ? "border-panel-green bg-panel-green/10"
+                    : "border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/50"
+                )}
+              >
+                <span className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-lg border",
+                  isSelected ? "border-panel-green/60 bg-panel-green/20 text-panel-green" : "border-slate-800 bg-slate-900 text-slate-400"
+                )}>
+                  {isModded ? <Package aria-hidden="true" className="size-3.5 text-panel-green" /> : <Hammer aria-hidden="true" className="size-3.5 text-panel-green" />}
+                </span>
+                <div className="min-w-0 flex-1 truncate">
+                  <span className="block truncate text-xs font-bold text-white">{displayName}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] text-slate-400 font-mono">{t("gameLibraryInstalled")}</span>
+                    {provider.recommended && <span className="rounded bg-panel-green/15 px-1 py-0.2 text-[9px] font-bold text-panel-green">{t("recommended")}</span>}
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+                {isSelected && (
+                  <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-panel-green text-slate-950">
+                    <Check aria-hidden="true" className="size-2.5 font-bold" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
     );
   }
   return (
-    <div>
-        <h2 className="text-lg font-semibold">{t("chooseServerMode")}</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            aria-pressed={mode === "vanilla"}
-            onClick={() => setMode("vanilla")}
-            className={cn(
-              "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-              mode === "vanilla"
-                ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-                : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
-            )}
-          >
-            {mode === "vanilla" && (
-              <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-slate-950">
-                <Check aria-hidden="true" className="size-4" />
-              </span>
-            )}
-            <Hammer aria-hidden="true" className="text-panel-green" />
-            <p className="mt-3 font-medium">{t("vanillaTerraria")}</p>
-            <p className="mt-1 text-sm text-slate-400">{t("vanillaTerrariaDescription")}</p>
-          </button>
-          <button
-            type="button"
-            aria-pressed={mode === "tmodloader"}
-            onClick={() => setMode("tmodloader")}
-            className={cn(
-              "relative rounded-lg border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-              mode === "tmodloader"
-                ? "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40"
-                : "border-panel-line bg-slate-950/40 hover:border-panel-green/70 hover:bg-slate-900/55"
-            )}
-          >
-            {mode === "tmodloader" && (
-              <span className="absolute right-3 top-3 flex size-6 items-center justify-center rounded-full bg-panel-green text-white">
-                <Check aria-hidden="true" className="size-4" />
-              </span>
-            )}
-            <Package aria-hidden="true" className="text-panel-green" />
-            <p className="mt-3 font-medium">tModLoader</p>
-            <p className="mt-1 text-sm text-slate-400">{t("tmodLoaderDescription")}</p>
-          </button>
-        </div>
+    <div className="space-y-1.5">
+      <h2 className="text-xs font-bold text-slate-300">{t("chooseServerMode")}</h2>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          aria-pressed={mode === "vanilla"}
+          onClick={() => setMode("vanilla")}
+          className={cn(
+            "relative flex h-11 w-full items-center gap-2.5 rounded-xl border px-3 text-left transition focus:outline-none focus:ring-1 focus:ring-panel-green",
+            mode === "vanilla"
+              ? "border-panel-green bg-panel-green/10"
+              : "border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/50"
+          )}
+        >
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+            <Hammer aria-hidden="true" className="size-3.5" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">{t("vanillaTerraria")}</span>
+          {mode === "vanilla" && (
+            <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-panel-green text-slate-950">
+              <Check aria-hidden="true" className="size-2.5 font-bold" />
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "tmodloader"}
+          onClick={() => setMode("tmodloader")}
+          className={cn(
+            "relative flex h-11 w-full items-center gap-2.5 rounded-xl border px-3 text-left transition focus:outline-none focus:ring-1 focus:ring-panel-green",
+            mode === "tmodloader"
+              ? "border-panel-green bg-panel-green/10"
+              : "border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/50"
+          )}
+        >
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+            <Package aria-hidden="true" className="size-3.5" />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">tModLoader</span>
+          {mode === "tmodloader" && (
+            <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-panel-green text-slate-950">
+              <Check aria-hidden="true" className="size-2.5 font-bold" />
+            </span>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
 
-function ConfigPresetPicker({ presets, onSelect }: { presets: ConfigPreset[]; onSelect: (preset: ConfigPreset) => void }) {
-  const { t } = useI18n();
-  const visiblePresets = presets.slice(0, 4);
-  if (visiblePresets.length === 0) return null;
-  return (
-    <section className="rounded-lg border border-panel-line bg-slate-950/35 p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
-          <Bookmark aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <h2 className="text-sm font-semibold text-slate-100">{t("configurationPresets")}</h2>
-          <p className="mt-1 text-xs text-slate-500">{t("gameConfigurationPresetsDescription")}</p>
-        </div>
-      </div>
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-        {visiblePresets.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            className="min-w-52 rounded-md border border-panel-line bg-slate-950/50 p-3 text-left transition hover:border-panel-green/50 hover:bg-slate-900/60 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-            onClick={() => onSelect(preset)}
-          >
-            <p className="truncate text-sm font-medium text-slate-100">{preset.name}</p>
-            <p className="mt-1 truncate text-xs text-slate-500">{providerDisplayName(preset.providerKey, preset.providerKey, t)}</p>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function RuntimeImagePill({ status }: { status?: RuntimeImageStatus }) {
-  const { t } = useI18n();
-  const tone = runtimeImageTone(status);
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded px-2 py-1 text-xs",
-        tone === "success" && "bg-panel-green/15 text-panel-green",
-        tone === "info" && "bg-sky-500/15 text-sky-300",
-        tone === "warning" && "bg-panel-gold/15 text-panel-gold",
-        tone === "neutral" && "bg-slate-800 text-slate-400"
-      )}
-    >
-      {t(runtimeImageLabelKey(status))}
-    </span>
-  );
-}
-
-function PresetStep({
+function CompactPresetBar({
   selectedPreset,
   setPreset,
-  compact = false
+  customPresets,
+  onSelectCustomPreset
 }: {
   selectedPreset: PresetKey;
   setPreset: (preset: PresetKey) => void;
-  compact?: boolean;
+  customPresets: ConfigPreset[];
+  onSelectCustomPreset: (preset: ConfigPreset) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const isZh = locale.startsWith("zh");
   const presetOptions = [...presets, customPreset];
-  const renderTag = (tag: PresetTag) => {
-    if (tag === "6" || tag === "8" || tag === "12") return t("tagPlayers", { count: tag });
-    return t(tag as MessageKey);
-  };
+
   return (
-    <section className={cn(compact && "rounded-lg border border-panel-line bg-slate-950/25 p-4")}>
-      <h2 className={cn("font-semibold", compact ? "text-sm text-slate-100" : "text-lg")}>{t("choosePreset")}</h2>
-      <p className={cn("mt-1 text-slate-400", compact ? "text-xs" : "text-sm")}>{t("presetDescription")}</p>
-      <div className={cn("mt-4 grid gap-3", compact ? "sm:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2")}>
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3.5 py-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+          <Bookmark className="size-3 text-panel-green" />
+          {isZh ? "快速预设:" : "Presets:"}
+        </span>
         {presetOptions.map((preset) => {
           const presetKey = preset.key as PresetKey;
           const isSelected = selectedPreset === presetKey;
-          const isCustom = presetKey === "custom";
           return (
             <button
               key={preset.key}
               type="button"
-              aria-pressed={isSelected}
               onClick={() => setPreset(presetKey)}
               className={cn(
-                "relative rounded-lg border text-left transition focus:outline-none focus:ring-2",
-                compact ? "p-3" : "p-4",
-                isSelected && !isCustom && "border-panel-green bg-panel-green/10 ring-1 ring-panel-green/40 focus:ring-panel-green/50",
-                isSelected && isCustom && "border-slate-400 bg-slate-800/60 ring-1 ring-slate-500/50 focus:ring-slate-400/50",
-                !isSelected && "border-panel-line bg-slate-950/40 hover:bg-slate-900/55 focus:ring-panel-green/40"
+                "flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition",
+                isSelected
+                  ? "bg-panel-green text-slate-950 font-bold shadow-sm"
+                  : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white"
               )}
             >
-              {isSelected && (
-                <span className={cn("absolute right-3 top-3 flex size-6 items-center justify-center rounded-full", isCustom ? "bg-slate-300 text-slate-950" : "bg-panel-green text-slate-950")}>
-                  <Check aria-hidden="true" className="size-4" />
-                </span>
-              )}
-              <p className="pr-8 font-medium">{t(preset.labelKey)}</p>
-              {!compact ? <p className="mt-1 text-sm text-slate-400">{t(preset.descriptionKey)}</p> : null}
-              <div className={cn("flex flex-wrap gap-2", compact ? "mt-2" : "mt-4")}>
-                {preset.tags.map((tag) => (
-                  <span key={tag} className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
-                    {renderTag(tag)}
-                  </span>
-                ))}
-              </div>
+              {isSelected && <Check className="size-3" />}
+              <span>{t(preset.labelKey)}</span>
             </button>
           );
         })}
       </div>
-    </section>
+
+      {customPresets.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-slate-500">{isZh ? "已存模板:" : "Saved:"}</span>
+          <select
+            onChange={(e) => {
+              const p = customPresets.find((item) => item.id === e.target.value);
+              if (p) onSelectCustomPreset(p);
+            }}
+            defaultValue=""
+            className="h-7 rounded border border-slate-800 bg-slate-900 px-2 text-[11px] text-slate-300 outline-none hover:border-slate-700"
+          >
+            <option value="" disabled>{isZh ? "选择保存的模板..." : "Load saved..."}</option>
+            {customPresets.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConfigStepHeader() {
+  const { t } = useI18n();
+  return (
+    <div>
+      <h2 className="text-sm font-bold text-white">{t("gameConfiguration")}</h2>
+      <p className="mt-0.5 text-xs text-slate-400">{t("serverConfigDescription")}</p>
+    </div>
   );
 }
 
 function ConfigStep({
   config,
   gameKey,
-  hostPort,
-  hostPortMode,
   provider,
   providerConfigPayload,
   validationErrors,
@@ -1247,16 +1517,10 @@ function ConfigStep({
   setProviderConfigPayload,
   onClearValidationError,
   onCustomize,
-  setHostPort,
-  setHostPortMode,
-  versions,
-  version,
-  setVersion
+  version
 }: {
   config: TerrariaConfig;
   gameKey: string;
-  hostPort: number;
-  hostPortMode: "auto" | "manual";
   provider?: ProviderCatalog;
   providerConfigPayload: ProviderConfigPayload;
   validationErrors: ConfigValidationErrors;
@@ -1264,13 +1528,10 @@ function ConfigStep({
   setProviderConfigPayload: (payload: ProviderConfigPayload) => void;
   onClearValidationError: (field: string) => void;
   onCustomize: () => void;
-  setHostPort: (port: number) => void;
-  setHostPortMode: (mode: "auto" | "manual") => void;
-  versions: string[];
   version: string;
-  setVersion: (version: string) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const isZh = locale.startsWith("zh");
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => {
     onCustomize();
     onClearValidationError(String(key));
@@ -1283,15 +1544,14 @@ function ConfigStep({
     return (
       <div>
         <ConfigStepHeader />
-        <div className="mt-4 grid gap-5">
-          <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
-            <div className="flex items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
-                <Gamepad2 aria-hidden="true" className="size-4" />
+        <div className="mt-3">
+          <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+                <Gamepad2 aria-hidden="true" className="size-3.5" />
               </span>
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">{t("gameConfiguration")}</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{t("gameConfigurationHint")}</p>
+                <h3 className="text-xs font-bold text-slate-200">{t("gameConfiguration")}</h3>
               </div>
             </div>
             <ProviderConfigEditor
@@ -1312,146 +1572,135 @@ function ConfigStep({
               }}
             />
           </section>
-          <section className="rounded-lg border border-panel-line bg-slate-950/25 p-4">
-            <div className="flex items-start gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/50 text-panel-green">
-                <Settings2 aria-hidden="true" className="size-4" />
-              </span>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-100">{t("runtimeConfiguration")}</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{t("runtimeConfigurationHint")}</p>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <WizardField label={t("gameVersion")}>
-                <WizardSelect label={t("gameVersion")} value={version} onChange={(value) => setVersion(value)}>
-                  {versions.map((v) => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
-                </WizardSelect>
-              </WizardField>
-              <WizardField label={t("externalPort")}>
-                <WizardSelect label={t("externalPort")} value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
-                  <option value="auto">{t("automaticPort")}</option>
-                  <option value="manual">{t("manualPort")}</option>
-                </WizardSelect>
-              </WizardField>
-              {hostPortMode === "manual" && (
-                <WizardField label={t("externalPortValue")}>
-                  <Input aria-label={t("externalPortValue")} type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
-                </WizardField>
-              )}
-            </div>
-          </section>
         </div>
       </div>
     );
   }
   return (
-    <div>
+    <div className="space-y-3">
       <ConfigStepHeader />
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <WizardField label={t("serverName")} required error={validationErrors.serverName}>
-          <Input
-            aria-label={t("serverName")}
-            value={config.serverName ?? ""}
-            aria-invalid={Boolean(validationErrors.serverName)}
-            className={validationErrors.serverName ? "border-red-400/70 focus:border-red-300" : undefined}
-            onChange={(event) => update("serverName", event.target.value)}
-          />
-        </WizardField>
-        <WizardField label={t("worldName")} required error={validationErrors.worldName}>
-          <Input
-            aria-label={t("worldName")}
-            value={config.worldName}
-            aria-invalid={Boolean(validationErrors.worldName)}
-            className={validationErrors.worldName ? "border-red-400/70 focus:border-red-300" : undefined}
-            onChange={(event) => update("worldName", event.target.value)}
-          />
-        </WizardField>
-        <WizardField label={t("worldSize")}>
-          <WizardSelect label={t("worldSize")} value={config.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])}>
-            <option value="small">{t("tagSmallWorld")}</option>
-            <option value="medium">{t("tagMediumWorld")}</option>
-            <option value="large">{t("tagLargeWorld")}</option>
-          </WizardSelect>
-        </WizardField>
-        <WizardField label={t("worldEvil")}>
-          <WizardSelect label={t("worldEvil")} value={config.worldEvil} onChange={(value) => update("worldEvil", value as TerrariaConfig["worldEvil"])}>
-            <option value="random">{t("tagRandom")}</option>
-            <option value="corruption">{t("tagCorruption")}</option>
-            <option value="crimson">{t("tagCrimson")}</option>
-          </WizardSelect>
-        </WizardField>
-        <WizardField label={t("difficulty")}>
-          <WizardSelect label={t("difficulty")} value={config.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])}>
-            <option value="journey">{t("tagJourney")}</option>
-            <option value="classic">{t("tagClassic")}</option>
-            <option value="expert">{t("tagExpert")}</option>
-            <option value="master">{t("tagMaster")}</option>
-          </WizardSelect>
-        </WizardField>
-        <WizardField label={t("gameVersion")}>
-          <WizardSelect label={t("gameVersion")} value={version} onChange={(value) => setVersion(value)}>
-            {versions.map((v) => (
-              <option key={v} value={v}>{v}</option>
-            ))}
-          </WizardSelect>
-        </WizardField>
-        <WizardField label={t("externalPort")}>
-          <WizardSelect label={t("externalPort")} value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
-            <option value="auto">{t("automaticPort")}</option>
-            <option value="manual">{t("manualPort")}</option>
-          </WizardSelect>
-        </WizardField>
-        {hostPortMode === "manual" && (
-          <WizardField label={t("externalPortValue")}>
-            <Input aria-label={t("externalPortValue")} type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} />
+      <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 space-y-3">
+        <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+            <Gamepad2 aria-hidden="true" className="size-3.5" />
+          </span>
+          <h3 className="text-xs font-bold text-slate-200">{t("gameConfiguration")}</h3>
+        </div>
+
+        <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-4">
+          <div className="sm:col-span-1 md:col-span-2">
+            <WizardField label={t("serverName")} required error={validationErrors.serverName}>
+              <Input
+                aria-label={t("serverName")}
+                value={config.serverName ?? ""}
+                aria-invalid={Boolean(validationErrors.serverName)}
+                className={cn("h-8.5 text-xs bg-slate-900 border-slate-800", validationErrors.serverName ? "border-red-400/70 focus:border-red-300" : undefined)}
+                onChange={(event) => update("serverName", event.target.value)}
+              />
+            </WizardField>
+          </div>
+          <div className="sm:col-span-1 md:col-span-2">
+            <WizardField label={t("worldName")} required error={validationErrors.worldName}>
+              <Input
+                aria-label={t("worldName")}
+                value={config.worldName}
+                aria-invalid={Boolean(validationErrors.worldName)}
+                className={cn("h-8.5 text-xs bg-slate-900 border-slate-800", validationErrors.worldName ? "border-red-400/70 focus:border-red-300" : undefined)}
+                onChange={(event) => update("worldName", event.target.value)}
+              />
+            </WizardField>
+          </div>
+
+          <WizardField label={t("worldSize")}>
+            <WizardSelect label={t("worldSize")} value={config.worldSize} onChange={(value) => update("worldSize", value as TerrariaConfig["worldSize"])}>
+              <option value="small">{t("tagSmallWorld")}</option>
+              <option value="medium">{t("tagMediumWorld")}</option>
+              <option value="large">{t("tagLargeWorld")}</option>
+            </WizardSelect>
           </WizardField>
-        )}
-        <WizardField label={t("maxPlayersInput")} required error={validationErrors.maxPlayers}>
-          <Input
-            aria-label={t("maxPlayersInput")}
-            type="number"
-            min={1}
-            max={255}
-            value={config.maxPlayers}
-            aria-invalid={Boolean(validationErrors.maxPlayers)}
-            className={validationErrors.maxPlayers ? "border-red-400/70 focus:border-red-300" : undefined}
-            onChange={(event) => update("maxPlayers", Number(event.target.value))}
-          />
-        </WizardField>
-        <WizardField label={t("password")}>
-          <Input aria-label={t("password")} type="password" value={config.password ?? ""} onChange={(event) => update("password", event.target.value)} />
-        </WizardField>
-        <WizardField label={t("motd")}>
-          <Input aria-label={t("motd")} value={config.motd ?? ""} onChange={(event) => update("motd", event.target.value)} />
-        </WizardField>
-        <div className="md:col-span-2">
-          <WizardField label={t("worldSeed")} help={t("worldSeedHint")}>
-            <SeedInput
-              config={config}
-              supportsLegacySecretSeedPicker={supportsLegacySecretSeedPicker}
-              supportsModernSeedModes={supportsModernSeedModes}
-              value={config.seed ?? ""}
-              placeholder={t("worldSeedPlaceholder")}
-              onChange={(value) => update("seed", value)}
-              onChangeSeedModes={(specialSeeds, secretSeeds) => {
-                onCustomize();
-                setConfig({ ...config, specialSeeds, secretSeeds });
-              }}
-              onSelectLegacySeed={(seed) => {
-                onCustomize();
-                setConfig({ ...config, seed, specialSeeds: [], secretSeeds: [] });
-              }}
+
+          <WizardField label={t("worldEvil")}>
+            <WizardSelect label={t("worldEvil")} value={config.worldEvil} onChange={(value) => update("worldEvil", value as TerrariaConfig["worldEvil"])}>
+              <option value="random">{t("tagRandom")}</option>
+              <option value="corruption">{t("tagCorruption")}</option>
+              <option value="crimson">{t("tagCrimson")}</option>
+            </WizardSelect>
+          </WizardField>
+
+          <WizardField label={t("difficulty")}>
+            <WizardSelect label={t("difficulty")} value={config.difficulty} onChange={(value) => update("difficulty", value as TerrariaConfig["difficulty"])}>
+              <option value="journey">{t("tagJourney")}</option>
+              <option value="classic">{t("tagClassic")}</option>
+              <option value="expert">{t("tagExpert")}</option>
+              <option value="master">{t("tagMaster")}</option>
+            </WizardSelect>
+          </WizardField>
+
+          <WizardField label={t("maxPlayersInput")} required error={validationErrors.maxPlayers}>
+            <Input
+              aria-label={t("maxPlayersInput")}
+              type="number"
+              min={1}
+              max={255}
+              value={config.maxPlayers}
+              aria-invalid={Boolean(validationErrors.maxPlayers)}
+              className={cn("h-8.5 text-xs bg-slate-900 border-slate-800", validationErrors.maxPlayers ? "border-red-400/70 focus:border-red-300" : undefined)}
+              onChange={(event) => update("maxPlayers", Number(event.target.value))}
             />
           </WizardField>
+
+          <div className="sm:col-span-1 md:col-span-2">
+            <WizardField label={t("password")}>
+              <Input
+                aria-label={t("password")}
+                type="password"
+                value={config.password ?? ""}
+                placeholder={isZh ? "留空则无需密码" : "Leave blank for no password"}
+                className="h-8.5 text-xs bg-slate-900 border-slate-800"
+                onChange={(event) => update("password", event.target.value)}
+              />
+            </WizardField>
+          </div>
+
+          <div className="sm:col-span-1 md:col-span-2">
+            <WizardField label={t("motd")}>
+              <Input
+                aria-label={t("motd")}
+                value={config.motd ?? ""}
+                placeholder={isZh ? "例如: 欢迎来到泰拉瑞亚服务器！" : "e.g. Welcome to our server!"}
+                className="h-8.5 text-xs bg-slate-900 border-slate-800"
+                onChange={(event) => update("motd", event.target.value)}
+              />
+            </WizardField>
+          </div>
+
+          <div className="col-span-full">
+            <WizardField label={t("worldSeed")} help={t("worldSeedHint")}>
+              <SeedInput
+                config={config}
+                supportsLegacySecretSeedPicker={supportsLegacySecretSeedPicker}
+                supportsModernSeedModes={supportsModernSeedModes}
+                value={config.seed ?? ""}
+                placeholder={t("worldSeedPlaceholder")}
+                onChange={(value) => update("seed", value)}
+                onChangeSeedModes={(specialSeeds, secretSeeds) => {
+                  onCustomize();
+                  setConfig({ ...config, specialSeeds, secretSeeds });
+                }}
+                onSelectLegacySeed={(seed) => {
+                  onCustomize();
+                  setConfig({ ...config, seed, specialSeeds: [], secretSeeds: [] });
+                }}
+              />
+            </WizardField>
+          </div>
+
+          <div className="col-span-full overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50 sm:grid sm:grid-cols-2 sm:divide-x sm:divide-slate-800">
+            <WizardSwitch label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
+            <WizardSwitch label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
+          </div>
         </div>
-        <div className="overflow-hidden rounded-md border border-panel-line bg-slate-950/35 md:col-span-2 sm:grid sm:grid-cols-2 sm:divide-x sm:divide-panel-line">
-          <WizardSwitch label={t("secureMode")} checked={config.secure} onChange={(checked) => update("secure", checked)} />
-          <WizardSwitch label={t("autoCreateWorld")} checked={config.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} />
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
@@ -1717,74 +1966,193 @@ function SeedModeSection({
 function ResourcesStep({
   hostCpuCores,
   hostMemoryMb,
-  onChange,
-  resourceLimits
+  resourceLimits,
+  onChangeResourceLimits,
+  version,
+  setVersion,
+  versions,
+  hostPortMode,
+  setHostPortMode,
+  hostPort,
+  setHostPort,
+  nodes = [],
+  selectedNodeId = "node-local",
+  onSelectNodeId
 }: {
   hostCpuCores?: number;
   hostMemoryMb?: number;
-  onChange: (limits: ResourceLimits) => void;
   resourceLimits: ResourceLimits;
+  onChangeResourceLimits: (limits: ResourceLimits) => void;
+  version: string;
+  setVersion: (version: string) => void;
+  versions: string[];
+  hostPortMode: "auto" | "manual";
+  setHostPortMode: (mode: "auto" | "manual") => void;
+  hostPort: number;
+  setHostPort: (port: number) => void;
+  nodes?: ComputeNode[];
+  selectedNodeId?: string;
+  onSelectNodeId?: (id: string) => void;
 }) {
-  return (
-    <div>
-      <RuntimeResourceSection hostCpuCores={hostCpuCores} hostMemoryMb={hostMemoryMb} resourceLimits={resourceLimits} onChange={onChange} />
-    </div>
-  );
-}
+  const { locale, t } = useI18n();
+  const isZh = locale.startsWith("zh");
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) ?? nodes[0];
+  const effectiveCores = selectedNode?.cpuCores ?? hostCpuCores ?? 8;
+  const effectiveMem = selectedNode?.memoryTotalMb ?? hostMemoryMb ?? 16384;
+  const cpuSliderMax = Math.max(1, effectiveCores, Math.ceil(resourceLimits.cpuLimitCores));
+  const memorySliderMax = Math.max(1024, Math.floor(effectiveMem / 1024) * 1024, Math.ceil(resourceLimits.memoryLimitMb / 1024) * 1024);
 
-function ConfigStepHeader() {
-  const { t } = useI18n();
-  return (
-    <div>
-      <h2 className="text-lg font-semibold">{t("serverConfig")}</h2>
-      <p className="mt-1 text-sm text-slate-500">{t("serverConfigDescription")}</p>
-    </div>
-  );
-}
+  const presets = [
+    { label: isZh ? "经济型 (1核/2G)" : "Eco (1C/2G)", cpu: 1, mem: 2048 },
+    { label: isZh ? "标准推荐 (2核/4G)" : "Standard (2C/4G)", cpu: 2, mem: 4096 },
+    { label: isZh ? "进阶多开 (4核/8G)" : "Performance (4C/8G)", cpu: 4, mem: 8192 },
+    { label: isZh ? "宿主机不限" : "Unlimited", cpu: 0, mem: 0 }
+  ];
 
-function RuntimeResourceSection({
-  hostCpuCores,
-  hostMemoryMb,
-  onChange,
-  resourceLimits
-}: {
-  hostCpuCores?: number;
-  hostMemoryMb?: number;
-  onChange: (limits: ResourceLimits) => void;
-  resourceLimits: ResourceLimits;
-}) {
-  const { t } = useI18n();
-  const cpuSliderMax = Math.max(1, hostCpuCores ?? 8, Math.ceil(resourceLimits.cpuLimitCores));
-  const memorySliderMax = Math.max(1024, Math.floor((hostMemoryMb ?? 16384) / 1024) * 1024, Math.ceil(resourceLimits.memoryLimitMb / 1024) * 1024);
   return (
-    <section className="rounded-lg border border-panel-line bg-slate-950/35 p-4 md:col-span-2">
+    <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-slate-100">{t("runtimeResources")}</h3>
-        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{t("resourceLimitsHint")}</p>
+        <h2 className="text-sm font-bold text-white">{isZh ? "运行配置与资源" : "Runtime & Resources"}</h2>
+        <p className="mt-0.5 text-xs text-slate-400">{isZh ? "配置部署节点、运行版本、网络端口及容器算力配额" : "Configure deployment node, game version, port binding, and container resource limits."}</p>
       </div>
-      <div className="mt-4 grid gap-3">
-        <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-          <ResourceLimitSlider
-            formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
-            label={t("cpuLimit")}
-            max={cpuSliderMax}
-            step={0.25}
-            value={resourceLimits.cpuLimitCores}
-            onChange={(value) => onChange({ ...resourceLimits, cpuLimitCores: value })}
-          />
-        </div>
-        <div className="rounded-md border border-panel-line bg-slate-950/45 p-4">
-          <ResourceLimitSlider
-            formatValue={(value) => formatMemoryResourceLimit(value, t("unlimited"))}
-            label={t("memoryLimit")}
-            max={memorySliderMax}
-            step={1024}
-            value={resourceLimits.memoryLimitMb}
-            onChange={(value) => onChange({ ...resourceLimits, memoryLimitMb: value })}
-          />
-        </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {/* Card 1: Runtime Engine & Network Port */}
+        <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+                <Settings2 aria-hidden="true" className="size-3.5" />
+              </span>
+              <div>
+                <h3 className="text-xs font-bold text-slate-200">{t("runtimeConfiguration")}</h3>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2.5">
+              {nodes.length > 0 && onSelectNodeId && (
+                <WizardField label={isZh ? "部署节点" : "Deployment Node"}>
+                  <WizardSelect
+                    label={isZh ? "部署节点" : "Deployment Node"}
+                    value={selectedNodeId}
+                    onChange={(value) => onSelectNodeId(value)}
+                  >
+                    {nodes.map((n) => {
+                      const isOnline = n.status === "online";
+                      const prefix = n.isLocal ? "🖥️ " : isOnline ? "🟢 " : "🔴 ";
+                      const suffix = n.isLocal
+                        ? (isZh ? " (本机主控)" : " (Master Host)")
+                        : ` · ${n.region || "Global"}${!isOnline ? (isZh ? " [离线]" : " [Offline]") : ""}`;
+                      return (
+                        <option key={n.id} value={n.id}>
+                          {prefix}{n.name}{suffix}
+                        </option>
+                      );
+                    })}
+                  </WizardSelect>
+                </WizardField>
+              )}
+
+              <WizardField label={t("gameVersion")}>
+                <WizardSelect label={t("gameVersion")} value={version} onChange={(value) => setVersion(value)}>
+                  {versions.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </WizardSelect>
+              </WizardField>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <WizardField label={t("externalPort")}>
+                  <WizardSelect label={t("externalPort")} value={hostPortMode} onChange={(value) => setHostPortMode(value as "auto" | "manual")}>
+                    <option value="auto">{t("automaticPort")}</option>
+                    <option value="manual">{t("manualPort")}</option>
+                  </WizardSelect>
+                </WizardField>
+                {hostPortMode === "manual" && (
+                  <WizardField label={t("externalPortValue")}>
+                    <Input aria-label={t("externalPortValue")} type="number" min={1024} max={65535} value={hostPort} onChange={(event) => setHostPort(Number(event.target.value))} className="h-8.5 text-xs bg-slate-900 border-slate-800" />
+                  </WizardField>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/40 px-2.5 py-2 text-[11px] text-slate-400 flex items-center gap-2">
+            <Globe className="size-3.5 text-sky-400 shrink-0" />
+            <span>{isZh ? "自动端口将在目标节点创建时分配可用端口，开服后可随时分享。" : "Auto port binds a free port automatically on the target node."}</span>
+          </div>
+        </section>
+
+        {/* Card 2: Compute & Memory Limits */}
+        <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 space-y-3 flex flex-col justify-between">
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
+                  <Zap aria-hidden="true" className="size-3.5 text-panel-gold" />
+                </span>
+                <h3 className="text-xs font-bold text-slate-200">{t("runtimeResources")}</h3>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {presets.map((preset) => {
+                  const isSelected = resourceLimits.cpuLimitCores === preset.cpu && resourceLimits.memoryLimitMb === preset.mem;
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => onChangeResourceLimits({ cpuLimitCores: preset.cpu, memoryLimitMb: preset.mem })}
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[10px] font-medium transition",
+                        isSelected
+                          ? "bg-panel-green text-slate-950 font-bold"
+                          : "border border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2.5">
+              <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                <ResourceLimitSlider
+                  formatValue={(value) => formatCpuResourceLimit(value, t("unlimited"), t("cpuUnit"))}
+                  label={t("cpuLimit")}
+                  max={cpuSliderMax}
+                  step={0.25}
+                  value={resourceLimits.cpuLimitCores}
+                  onChange={(value) => onChangeResourceLimits({ ...resourceLimits, cpuLimitCores: value })}
+                />
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                <ResourceLimitSlider
+                  formatValue={(value) => formatMemoryResourceLimit(value, t("unlimited"))}
+                  label={t("memoryLimit")}
+                  max={memorySliderMax}
+                  step={1024}
+                  value={resourceLimits.memoryLimitMb}
+                  onChange={(value) => onChangeResourceLimits({ ...resourceLimits, memoryLimitMb: value })}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/40 px-2.5 py-2 text-[11px] text-slate-400 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-panel-green shrink-0" />
+              <span>{isZh ? "配额为弹性软上限，不锁定物理内存。" : "Quotas are soft limits and won't lock physical RAM."}</span>
+            </div>
+            {hostCpuCores && hostMemoryMb && (
+              <span className="shrink-0 font-mono text-[10px] text-slate-500">
+                {hostCpuCores}核/{(hostMemoryMb / 1024).toFixed(0)}G
+              </span>
+            )}
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -1921,29 +2289,37 @@ function ModsStep({
 }) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
+
   const searchTerm = search.trim().toLocaleLowerCase(locale);
   const visibleMods = searchTerm
     ? mods.filter((mod) => [modDisplayName(mod, locale), mod.fileName, mod.workshopId, ...(mod.tags ?? [])]
       .some((value) => value?.toLocaleLowerCase(locale).includes(searchTerm)))
     : mods;
+
+  const totalPages = Math.max(1, Math.ceil(visibleMods.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const paginatedMods = visibleMods.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
-    <div>
-      <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
-        <div className="flex items-center gap-3">
+    <div className="space-y-3">
+      <div className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2">
+        <div className="flex items-center gap-2.5">
           {worldName ? (
             <>
-              <FileArchive aria-hidden="true" className="size-5 shrink-0 text-panel-green" />
-              <div className="min-w-0">
-                <p className="text-sm text-slate-500">{t("world")}</p>
-                <p className="truncate font-medium text-slate-200">{worldName}</p>
+              <FileArchive aria-hidden="true" className="size-4 shrink-0 text-panel-green" />
+              <div className="min-w-0 flex items-center gap-2">
+                <span className="text-xs text-slate-500">{t("world")}:</span>
+                <span className="truncate text-xs font-bold text-slate-200">{worldName}</span>
               </div>
             </>
           ) : (
             <>
-              <Globe aria-hidden="true" className="size-5 shrink-0 text-panel-green" />
-              <div>
-                <p className="font-medium">{t("autoCreateWorld")}</p>
-                <p className="mt-0.5 text-sm text-slate-400">{t("autoCreateWorldHint")}</p>
+              <Globe aria-hidden="true" className="size-4 shrink-0 text-panel-green" />
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-bold text-white">{t("autoCreateWorld")}</span>
+                <span className="text-slate-400">· {t("autoCreateWorldHint")}</span>
               </div>
             </>
           )}
@@ -1951,25 +2327,25 @@ function ModsStep({
       </div>
 
       {!supportsMods ? (
-        <div className="mt-6 flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-12 text-center">
-          <Package aria-hidden="true" className="size-8 text-slate-600" />
-          <p className="mt-3 text-sm text-slate-400">{t("noModsForProvider")}</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/30 py-8 text-center">
+          <Package aria-hidden="true" className="size-6 text-slate-600" />
+          <p className="mt-2 text-xs text-slate-400">{t("noModsForProvider")}</p>
         </div>
       ) : (
-        <div className="mt-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">{t("selectMods")}</h2>
-              <p className="mt-1 text-sm text-slate-400">{t("selectModsHint")}</p>
+              <h2 className="text-sm font-bold text-white">{t("selectMods")}</h2>
+              <p className="text-[11px] text-slate-400">{t("selectModsHint")}</p>
             </div>
-            <div className="flex min-h-8 items-center gap-3">
-              <span className={cn("text-sm", selectedModIds.length > 0 ? "text-slate-200" : "text-slate-500")}>
+            <div className="flex items-center gap-2.5">
+              <span className={cn("text-xs font-mono font-bold", selectedModIds.length > 0 ? "text-panel-green" : "text-slate-500")}>
                 {t("selectedModsCount", { count: selectedModIds.length })}
               </span>
               {selectedModIds.length > 0 ? (
                 <button
                   type="button"
-                  className="text-sm font-medium text-slate-400 transition hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40"
+                  className="text-xs font-medium text-slate-400 transition hover:text-white underline"
                   onClick={() => onSelectModPack("")}
                 >
                   {t("clearSelection")}
@@ -1977,17 +2353,18 @@ function ModsStep({
               ) : null}
             </div>
           </div>
+
           {modPacks.length > 0 && (
-            <div className="mt-5">
-              <div>
-                <p className="text-sm font-semibold text-slate-200">{t("modPacks")}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{t("chooseModPackHint")}</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-slate-300">{t("modPacks")}</p>
+                <span className="text-[10px] text-slate-500">{t("chooseModPackHint")}</span>
               </div>
-              <div className="mt-3 grid gap-2 md:grid-cols-2" role="radiogroup" aria-label={t("modPacks")}>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label={t("modPacks")}>
                 {modPacks.map((pack) => {
                   const active = selectedModPackId === pack.id;
-                  const previewNames = pack.mods.slice(0, 3).map((mod) => modDisplayName(mod, locale));
-                  const preview = pack.description.trim() || [previewNames.join(" · "), pack.modIds.length > 3 ? `+${pack.modIds.length - 3}` : ""].filter(Boolean).join("  ");
+                  const previewNames = pack.mods.slice(0, 2).map((mod) => modDisplayName(mod, locale));
+                  const preview = pack.description.trim() || [previewNames.join(" · "), pack.modIds.length > 2 ? `+${pack.modIds.length - 2}` : ""].filter(Boolean).join("  ");
                   return (
                     <button
                       key={pack.id}
@@ -1995,74 +2372,78 @@ function ModsStep({
                       role="radio"
                       aria-checked={active}
                       onClick={() => {
-                        if (!active) onSelectModPack(pack.id);
+                        onSelectModPack(active ? "" : pack.id);
                       }}
                       className={cn(
-                        "flex min-h-16 w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50",
+                        "flex h-11 w-full items-center gap-2.5 rounded-xl border px-3 text-left transition focus:outline-none focus:ring-1 focus:ring-panel-green",
                         active
                           ? "border-panel-green/60 bg-panel-green/10"
-                          : "border-panel-line bg-slate-950/35 hover:border-slate-600 hover:bg-slate-900/55"
+                          : "border-slate-800 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-900/50"
                       )}
                     >
                       <span
                         aria-hidden="true"
                         className={cn(
-                          "flex size-5 shrink-0 items-center justify-center rounded-full border",
-                          active ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600 bg-slate-950"
+                          "flex size-4 shrink-0 items-center justify-center rounded-full border text-[10px]",
+                          active ? "border-panel-green bg-panel-green text-slate-950 font-bold" : "border-slate-700 bg-slate-950"
                         )}
                       >
-                        {active ? <Check className="size-3" /> : null}
+                        {active ? <Check className="size-2.5" /> : null}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-slate-100">{pack.name}</span>
-                          {active ? <span className="shrink-0 text-xs font-medium text-panel-green">{t("selected")}</span> : null}
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate text-xs font-bold text-white">{pack.name}</span>
+                          {active ? <span className="shrink-0 text-[10px] font-bold text-panel-green">({t("selected")})</span> : null}
                         </span>
-                        <span className="mt-0.5 block truncate text-xs text-slate-500">{preview || t("modPacksHint")}</span>
+                        <span className="block truncate text-[10px] text-slate-500">{preview}</span>
                       </span>
-                      <span className="shrink-0 text-xs tabular-nums text-slate-500">{pack.modIds.length}</span>
+                      <span className="shrink-0 text-[10px] font-mono text-slate-500">{pack.modIds.length}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
           )}
-          <div className="mt-5 border-t border-panel-line pt-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+          <div className="border-t border-slate-800/80 pt-3 space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-slate-200">{t("modLibrary")}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{t("customizeModSelectionHint")}</p>
+                <p className="text-xs font-bold text-slate-300">{t("modLibrary")}</p>
               </div>
               {mods.length > 0 ? (
-                <div className="relative w-full sm:w-72">
-                  <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+                <div className="relative w-full sm:w-60">
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
                   <Input
                     value={search}
                     placeholder={t("searchMods")}
-                    className="pl-9"
-                    onChange={(event) => setSearch(event.target.value)}
+                    className="h-8 pl-8 text-xs bg-slate-900 border-slate-800"
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setPage(1);
+                    }}
                   />
                 </div>
               ) : null}
             </div>
-            <div className="mt-3">
+
+            <div>
               {mods.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-panel-line bg-slate-950/30 py-8 text-center">
-                  <Package aria-hidden="true" className="size-8 text-slate-600" />
-                  <p className="mt-3 text-sm text-slate-400">{t("noModsInLibrary")}</p>
-                  <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
-                    <Package aria-hidden="true" className="size-4" />
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/30 py-6 text-center">
+                  <Package aria-hidden="true" className="size-6 text-slate-600" />
+                  <p className="mt-1.5 text-xs text-slate-400">{t("noModsInLibrary")}</p>
+                  <Link href="/mods" className="mt-2 inline-flex items-center gap-1.5 text-xs text-panel-green hover:underline">
+                    <Package aria-hidden="true" className="size-3.5" />
                     {t("goToModsPage")}
                   </Link>
                 </div>
               ) : visibleMods.length === 0 ? (
-                <div className="rounded-md border border-dashed border-panel-line px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-xl border border-dashed border-slate-800 px-4 py-6 text-center text-xs text-slate-500">
                   {t("noMatchingMods")}
                 </div>
               ) : (
                 <>
-                  <div className="grid max-h-[26rem] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
-                    {visibleMods.map((mod) => {
+                  <div className="grid min-h-[12rem] max-h-[17.5rem] gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {paginatedMods.map((mod) => {
                       const active = selectedModIds.includes(mod.id);
                       return (
                         <button
@@ -2071,27 +2452,83 @@ function ModsStep({
                           aria-pressed={active}
                           onClick={() => onToggleMod(mod.id)}
                           className={cn(
-                            "flex min-h-14 w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50",
+                            "flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-left transition focus:outline-none focus:ring-1 focus:ring-panel-green",
                             active
                               ? "border-panel-green/55 bg-panel-green/10"
-                              : "border-panel-line bg-slate-950/35 hover:border-slate-600 hover:bg-slate-900/55"
+                              : "border-slate-800 bg-slate-950/50 hover:border-slate-700 hover:bg-slate-900/50"
                           )}
                         >
-                          <span className={cn("flex size-5 shrink-0 items-center justify-center rounded border", active ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600 bg-slate-950")}>
-                            {active ? <Check aria-hidden="true" className="size-3" /> : null}
+                          <span className={cn("flex size-3.5 shrink-0 items-center justify-center rounded border", active ? "border-panel-green bg-panel-green text-slate-950 font-bold" : "border-slate-700 bg-slate-950")}>
+                            {active ? <Check aria-hidden="true" className="size-2.5" /> : null}
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-slate-100">{modDisplayName(mod, locale)}</span>
-                            <span className="mt-0.5 block truncate text-xs text-slate-500">{[mod.modVersion, mod.size].filter(Boolean).join(" · ")}</span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-200">
+                            {modDisplayName(mod, locale)}
                           </span>
+                          {mod.modVersion && (
+                            <span className="shrink-0 text-[10px] font-mono text-slate-500">{mod.modVersion}</span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
-                  <Link href="/mods" className="mt-3 inline-flex items-center gap-2 text-sm text-panel-green hover:underline">
-                    <Package aria-hidden="true" className="size-4" />
-                    {t("goToModsPage")}
-                  </Link>
+
+                  {/* Pagination & Footer Link Bar */}
+                  <div className="pt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/60 mt-2">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <span>
+                        {locale.startsWith("zh")
+                          ? `第 ${currentPage} / ${totalPages} 页 · 共 ${visibleMods.length} 个模组`
+                          : `Page ${currentPage} of ${totalPages} · ${visibleMods.length} mods`}
+                      </span>
+                    </div>
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={currentPage <= 1}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
+                          aria-label="Previous Page"
+                        >
+                          <ChevronLeft className="size-3.5" />
+                        </button>
+
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setPage(p)}
+                            className={cn(
+                              "size-7 rounded-lg text-xs font-bold transition",
+                              p === currentPage
+                                ? "bg-panel-green text-slate-950"
+                                : "border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700 hover:text-white"
+                            )}
+                          >
+                            {p}
+                          </button>
+                        ))}
+
+                        <button
+                          type="button"
+                          disabled={currentPage >= totalPages}
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-300 transition hover:border-slate-700 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
+                          aria-label="Next Page"
+                        >
+                          <ChevronRight className="size-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end">
+                      <Link href="/mods" className="inline-flex items-center gap-1.5 text-xs text-panel-green hover:underline">
+                        <Package aria-hidden="true" className="size-3.5" />
+                        <span>{t("goToModsPage")}</span>
+                      </Link>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -2116,7 +2553,8 @@ function ReviewStep({
   presetSaveError,
   presetSavePending,
   onChangePresetName,
-  onToggleSaveAsPreset
+  onToggleSaveAsPreset,
+  nodeName
 }: {
   address?: string;
   configModel: ReviewConfigModel;
@@ -2132,8 +2570,9 @@ function ReviewStep({
   presetSavePending: boolean;
   onChangePresetName: (name: string) => void;
   onToggleSaveAsPreset: () => void;
+  nodeName?: string;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const invitePreview = createReviewInvitePreview({
     address,
     gameKey,
@@ -2145,77 +2584,75 @@ function ReviewStep({
   const joinInstruction = t(reviewJoinInstructionKey(gameKey));
   return (
     <div>
-      <h2 className="text-lg font-semibold">{t("review")}</h2>
-      <p className="mt-1 text-sm text-slate-500">{t("reviewHint")}</p>
-      <Card className="mt-4 p-4">
-        <div className="rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
-          <div className="flex items-center gap-2 font-medium text-slate-100">
-            <Gamepad2 aria-hidden="true" className="size-4 text-panel-green" />
-            {t("gameConfiguration")}
+      <h2 className="text-sm font-bold text-white">{t("review")}</h2>
+      <p className="mt-0.5 text-xs text-slate-400">{t("reviewHint")}</p>
+
+      <div className="mt-3 space-y-3">
+        <div className="rounded-xl border border-panel-line bg-slate-950/60 p-3.5 space-y-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+            <Gamepad2 aria-hidden="true" className="size-3.5 text-panel-green" />
+            <span>{t("gameConfiguration")}</span>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
             {configModel.fields.map((field) => (
               <ReviewConfigItem key={`${field.label}:${field.value}`} label={field.label} value={field.value} />
             ))}
           </div>
         </div>
-        <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
-          <div className="flex items-center gap-2 font-medium text-slate-100">
-            <Settings2 aria-hidden="true" className="size-4 text-panel-green" />
-            {t("runtimeResources")}
+
+        <div className="rounded-xl border border-panel-line bg-slate-950/60 p-3.5 space-y-2.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+            <Settings2 aria-hidden="true" className="size-3.5 text-panel-green" />
+            <span>{t("runtimeResources")}</span>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            <ReviewConfigItem label={locale.startsWith("zh") ? "部署节点" : "Deployment Node"} value={nodeName || (locale.startsWith("zh") ? "本机主控" : "Master Host")} />
             <ReviewConfigItem label={t("cpuLimit")} value={formatCpuLimitLabel(resourceLimits.cpuLimitCores, t)} />
             <ReviewConfigItem label={t("memoryLimit")} value={formatMemoryLimitLabel(resourceLimits.memoryLimitMb, t)} />
+            {selectedWorldName && <ReviewConfigItem label={t("selectedWorldFile")} value={selectedWorldName} />}
+            {selectedModNames.length > 0 && <ReviewConfigItem label={t("selectedModFiles")} value={`${selectedModNames.length} 个模组`} />}
           </div>
         </div>
-        <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm">
-          <div className="flex items-center gap-2 font-medium text-slate-100">
-            <Globe aria-hidden="true" className="size-4 text-panel-green" />
-            {t("reviewJoinTitle")}
+
+        <div className="rounded-xl border border-panel-line bg-slate-950/60 p-3.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+              <Globe aria-hidden="true" className="size-3.5 text-panel-green" />
+              <span>{t("reviewJoinTitle")}</span>
+            </div>
+            <span className="text-[10px] text-slate-500">{joinInstruction}</span>
           </div>
-          <p className="mt-2 text-slate-400">{joinInstruction}</p>
-          <p className="mt-2 text-xs text-slate-500">{t("reviewJoinHint")}</p>
-          <p className="mt-2 overflow-hidden text-ellipsis rounded-md border border-panel-line bg-slate-950 px-3 py-2 font-mono text-xs text-panel-green">{invitePreview}</p>
+          <p className="overflow-hidden text-ellipsis rounded-lg border border-panel-line bg-slate-950 px-3 py-1.5 font-mono text-xs text-panel-green">{invitePreview}</p>
         </div>
-        {selectedWorldName && (
-          <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
-            <p>{t("selectedWorldFile")}: <span className="text-panel-green">{selectedWorldName}</span></p>
-          </div>
-        )}
-        {selectedModNames.length > 0 && (
-          <div className="mt-2 rounded-md border border-panel-line bg-slate-950/60 p-3 text-sm text-slate-300">
-            <p>{t("selectedModFiles")}: <span className="text-panel-green">{selectedModNames.join(", ")}</span></p>
-          </div>
-        )}
-      </Card>
-      <div className="mt-4 overflow-hidden rounded-lg border border-panel-line bg-slate-950/35">
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-xl border border-panel-line bg-slate-950/35">
         <button
           type="button"
           role="switch"
           aria-checked={saveAsPreset}
-          className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-slate-900/55 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50"
+          className="flex w-full items-center gap-3 p-3 text-left transition hover:bg-slate-900/55 focus:outline-none focus:ring-1 focus:ring-panel-green"
           disabled={presetSavePending}
           onClick={onToggleSaveAsPreset}
         >
           <span className={cn(
-            "flex size-9 shrink-0 items-center justify-center rounded-md border",
+            "flex size-7 shrink-0 items-center justify-center rounded-lg border",
             saveAsPreset ? "border-panel-green/50 bg-panel-green/10 text-panel-green" : "border-panel-line bg-slate-950/60 text-slate-500"
           )}>
-            <Bookmark aria-hidden="true" className="size-4" />
+            <Bookmark aria-hidden="true" className="size-3.5" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium text-slate-100">{t("savePresetWithServer")}</span>
-            <span className="mt-0.5 block text-xs text-slate-500">{t("savePresetWithServerHint")}</span>
+            <span className="block text-xs font-bold text-slate-200">{t("savePresetWithServer")}</span>
+            <span className="block text-[11px] text-slate-500">{t("savePresetWithServerHint")}</span>
           </span>
           <span
             aria-hidden="true"
             className={cn(
-              "flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition",
+              "flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition",
               saveAsPreset ? "justify-end bg-panel-green" : "justify-start bg-slate-700"
             )}
           >
-            <span className="size-5 rounded-full bg-white shadow-sm" />
+            <span className="size-4 rounded-full bg-white shadow-sm" />
           </span>
         </button>
         {saveAsPreset && (
@@ -2223,7 +2660,7 @@ function ReviewStep({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.15 }}
-            className="border-t border-panel-line p-4"
+            className="border-t border-panel-line p-3"
           >
             <WizardField label={t("configurationPresetName")}>
               <Input
@@ -2232,10 +2669,11 @@ function ReviewStep({
                 disabled={presetSavePending}
                 placeholder={t("configurationPresetNamePlaceholder")}
                 onChange={(event) => onChangePresetName(event.target.value)}
+                className="h-9 text-xs"
               />
             </WizardField>
-            <p className="mt-2 text-xs leading-5 text-slate-500">{t("configurationPresetSaveHint")}</p>
-            {presetSaveError && <p className="mt-2 text-xs text-panel-gold">{presetSaveError}</p>}
+            <p className="mt-1 text-[11px] text-slate-500">{t("configurationPresetSaveHint")}</p>
+            {presetSaveError && <p className="mt-1 text-[11px] text-panel-gold">{presetSaveError}</p>}
           </motion.div>
         )}
       </div>
@@ -2245,9 +2683,9 @@ function ReviewStep({
 
 function ReviewConfigItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-panel-line bg-slate-950/55 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-sm font-medium leading-5 text-slate-200">{value}</p>
+    <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-2.5 py-1.5">
+      <p className="text-[10px] text-slate-500 font-medium truncate">{label}</p>
+      <p className="mt-0.5 break-words text-xs font-bold text-white truncate">{value}</p>
     </div>
   );
 }
