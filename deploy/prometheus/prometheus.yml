@@ -10,12 +10,12 @@ scrape_configs:
   - job_name: gamepanel-api
     metrics_path: /metrics
     static_configs:
-      - targets: ["api:4000"]
+      - targets: ["host.docker.internal:4000"]
 
   - job_name: gamepanel-observability
     metrics_path: /api/observability/prometheus
     static_configs:
-      - targets: ["api:4000"]
+      - targets: ["host.docker.internal:4000"]
 
   - job_name: gamepanel-exporter
     metrics_path: /metrics

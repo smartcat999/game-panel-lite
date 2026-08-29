@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Cpu, ExternalLink, Gauge, HardDrive, MemoryStick, Network, RadioTower, Server } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Gauge, HardDrive, MemoryStick, Network, RadioTower, Server } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { ResourceFilterBar } from "@/components/resource-filter-bar";
 import {
@@ -11,12 +11,10 @@ import {
   ChartIcon,
   MonitoringChartCard,
   PlatformHealth,
-  ServerLoadTable,
   SourceBadge
 } from "@/features/monitoring/components";
 import {
   getMonitoringEvents,
-  getMonitoringMetrics,
   getMonitoringOverview,
   getPlatformMonitoring,
   getServerLoad
@@ -28,7 +26,7 @@ import { useI18n, type MessageKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type FilterValue = "all" | string;
-type MonitoringSection = "overview" | "instances" | "host" | "events";
+type MonitoringSection = "overview" | "host" | "events";
 
 const severityOptions = ["all", "error", "warning", "success", "info"] as const;
 const eventTypeOptions = ["all", "server", "mod", "player", "settings", "system"] as const;
@@ -46,8 +44,7 @@ export default function ActivityPage() {
   const [section, setSection] = useState<MonitoringSection>("overview");
 
   const overviewQuery = useQuery({ queryKey: ["monitoring-overview"], queryFn: getMonitoringOverview, retry: false, refetchInterval: monitoringRefreshMs });
-  const metricsQuery = useQuery({ queryKey: ["monitoring-metrics", monitoringRange], queryFn: () => getMonitoringMetrics(monitoringRange, monitoringStep), retry: false, enabled: section === "instances", refetchInterval: section === "instances" ? monitoringRefreshMs : false });
-  const loadQuery = useQuery({ queryKey: ["monitoring-server-load"], queryFn: getServerLoad, retry: false, enabled: section === "overview" || section === "instances" || section === "events", refetchInterval: section === "overview" || section === "instances" ? monitoringRefreshMs : false });
+  const loadQuery = useQuery({ queryKey: ["monitoring-server-load"], queryFn: getServerLoad, retry: false, enabled: section === "overview" || section === "events", refetchInterval: section === "overview" ? monitoringRefreshMs : false });
   const eventsQuery = useQuery({ queryKey: ["monitoring-events", severity, eventType, game], queryFn: () => getMonitoringEvents({ severity, type: eventType, game, limit: 100 }), retry: false, enabled: section === "events", refetchInterval: section === "events" ? 30000 : false });
   const platformQuery = useQuery({ queryKey: ["monitoring-platform", monitoringRange], queryFn: () => getPlatformMonitoring(monitoringRange, monitoringStep), retry: false, enabled: section === "overview" || section === "host", refetchInterval: section === "overview" || section === "host" ? monitoringRefreshMs : false });
 
@@ -55,7 +52,7 @@ export default function ActivityPage() {
   const events = useMemo(() => filterEvents(visibleEvents, search), [visibleEvents, search]);
   const games = useMemo(() => gameOptions(loadQuery.data?.rows ?? [], t), [loadQuery.data?.rows, t]);
   const activeChips = [search.trim(), severity !== "all" ? severity : "", eventType !== "all" ? eventType : "", game !== "all" ? game : ""].filter(Boolean);
-  const anyError = overviewQuery.isError || metricsQuery.isError || loadQuery.isError || eventsQuery.isError || platformQuery.isError;
+  const anyError = overviewQuery.isError || loadQuery.isError || eventsQuery.isError || platformQuery.isError;
 
   return (
     <>
@@ -75,8 +72,7 @@ export default function ActivityPage() {
           counts={{
             events: visibleEvents.length,
             overview: overviewQuery.data?.kpis.issues ?? 0,
-            host: platformQuery.data?.services.length ?? 0,
-            instances: loadQuery.data?.rows.length ?? 0
+            host: platformQuery.data?.services.length ?? 0
           }}
           onChange={setSection}
         />
@@ -87,21 +83,6 @@ export default function ActivityPage() {
             overview={overviewQuery.data}
             platform={platformQuery.data}
           />
-        ) : null}
-
-        {section === "instances" ? (
-          <section className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-            <MetricGroupHeader
-              title={t("serverResourceTitle")}
-              description={t("serverResourceDescription")}
-              meta={<MonitoringCadence />}
-            />
-            <MonitoringChartCard color="#59d46f" icon={<Cpu aria-hidden="true" className="size-4" />} range={metricsQuery.data?.range} series={metricsQuery.data?.series.cpu} />
-            <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={metricsQuery.data?.range} series={metricsQuery.data?.series.memory} />
-            </div>
-            <ServerLoadTable rows={loadQuery.data?.rows ?? []} />
-          </section>
         ) : null}
 
         {section === "host" ? (
@@ -176,7 +157,6 @@ function MonitoringSectionNav({
   const { t } = useI18n();
   const tabs: { id: MonitoringSection; label: string; countLabel?: string }[] = [
     { id: "overview", label: t("monitoringNavOverview"), countLabel: counts.overview > 0 ? t("monitoringNavIssues", { count: counts.overview }) : undefined },
-    { id: "instances", label: t("monitoringNavInstances") },
     { id: "host", label: t("monitoringNavHost") },
     { id: "events", label: t("monitoringNavEventsPage") }
   ];

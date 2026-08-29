@@ -1,13 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, ExternalLink, KeyRound, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
+import { Check, Clock3, Copy, ExternalLink, KeyRound, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
 import { ServerGameArt } from "@/components/server-game-art";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { useToast } from "@/components/toast-context";
 import { useI18n } from "@/lib/i18n";
 import { gameServerJoinPort, gameServerMode, gameServerPassword, gameServerStatus, gameServerVersion } from "@/lib/game-server-resource";
 import type { GameServerResource } from "@/lib/types";
+
+function formatServerUptime(server: GameServerResource) {
+  if (gameServerStatus(server) !== "running" || !server.status.lastTransitionAt) {
+    return "";
+  }
+  const startedAt = Date.parse(server.status.lastTransitionAt);
+  if (!Number.isFinite(startedAt)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  if (hours < 24) return restMinutes > 0 ? `${hours}h ${restMinutes}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  return restHours > 0 ? `${days}d ${restHours}h` : `${days}d`;
+}
 
 export function ServerLobbyBanner({
   server,
@@ -69,6 +87,8 @@ export function ServerLobbyBanner({
     setTimeout(() => setCopiedInvite(false), 2500);
   };
 
+  const uptime = formatServerUptime(server);
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-slate-950/90 p-5 sm:p-7 shadow-2xl backdrop-blur-xl">
       {/* Background Subtle Game Art Blur */}
@@ -95,6 +115,15 @@ export function ServerLobbyBanner({
               </span>
               <span>·</span>
               <span>{gameServerVersion(server)}</span>
+              {uptime ? (
+                <>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
+                    <Clock3 className="size-3" />
+                    <span>{isZh ? `已运行 ${uptime}` : `Up ${uptime}`}</span>
+                  </span>
+                </>
+              ) : null}
               <span>·</span>
               <span className="text-slate-400">
                 {isZh ? "创建于" : "Created"}: {new Date(server.createdAt).toLocaleDateString()}

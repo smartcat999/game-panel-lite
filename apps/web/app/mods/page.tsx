@@ -335,119 +335,222 @@ export default function ModsPage() {
       {errorMessage && <p className="mb-4 text-sm text-panel-gold">{errorMessage}</p>}
       {successMessage && <p className="mb-4 text-sm text-panel-green">{successMessage}</p>}
 
-      <div className="flex min-h-16 flex-col gap-3 border-b border-panel-line pb-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className="flex flex-wrap gap-1">
-            <ViewTab
-              active={activeView === "discover"}
-              count={searchedRecommendedMods.length}
-              icon={<Compass aria-hidden="true" />}
-              label={t("discoverMods")}
+      {/* 现代化一体式模组控制台工具栏 (Unified Mods Toolbar) */}
+      <div className="mt-3 mb-4 rounded-xl border border-panel-line bg-panel-card p-3 shadow-xs space-y-3">
+        {/* Track 1: 视图切换 Segmented Pills 与 视图提示 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-panel-line/60">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <button
+              type="button"
               onClick={() => changeView("discover")}
-            />
-            <ViewTab
-              active={activeView === "library"}
-              count={searchedGlobalMods.length}
-              icon={<Library aria-hidden="true" />}
-              label={t("modLibrary")}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition shrink-0",
+                activeView === "discover"
+                  ? "bg-slate-800 text-panel-green border border-panel-green/40 shadow-xs font-bold"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-800/80"
+              )}
+            >
+              <Compass className="size-3.5" />
+              <span>{t("discoverMods")}</span>
+              <span className={cn(
+                "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                activeView === "discover" ? "bg-panel-green/20 text-panel-green" : "bg-slate-800 text-slate-400"
+              )}>
+                {searchedRecommendedMods.length}
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={() => changeView("library")}
-            />
-            <ViewTab
-              active={activeView === "packs"}
-              count={searchedModPacks.length}
-              icon={<Package aria-hidden="true" />}
-              label={t("modPacks")}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition shrink-0",
+                activeView === "library"
+                  ? "bg-slate-800 text-panel-green border border-panel-green/40 shadow-xs font-bold"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-800/80"
+              )}
+            >
+              <Library className="size-3.5" />
+              <span>{t("modLibrary")}</span>
+              <span className={cn(
+                "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                activeView === "library" ? "bg-panel-green/20 text-panel-green" : "bg-slate-800 text-slate-400"
+              )}>
+                {searchedGlobalMods.length}
+              </span>
+            </button>
+            <button
+              type="button"
               onClick={() => changeView("packs")}
-            />
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition shrink-0",
+                activeView === "packs"
+                  ? "bg-slate-800 text-panel-green border border-panel-green/40 shadow-xs font-bold"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-800/80"
+              )}
+            >
+              <Package className="size-3.5" />
+              <span>{t("modPacks")}</span>
+              <span className={cn(
+                "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                activeView === "packs" ? "bg-panel-green/20 text-panel-green" : "bg-slate-800 text-slate-400"
+              )}>
+                {searchedModPacks.length}
+              </span>
+            </button>
           </div>
-          <p className="truncate text-xs text-slate-500">
+
+          <p className="hidden sm:block truncate text-xs text-slate-400 font-medium">
             {activeView === "discover" ? t("discoverModsHint") : activeView === "library" ? t("modLibraryHint") : t("modPacksHint")}
           </p>
         </div>
-        <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-end gap-2">
-          {activeView === "discover" ? (
-            <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
-              <Download aria-hidden="true" />
-              {t("importFromSteam")}
-            </Button>
-          ) : activeView === "library" ? (
-            selectedLibraryIds.size > 0 ? (
-              <>
-                <span className="text-sm text-slate-400">{t("selectedModsCount", { count: selectedLibraryIds.size })}</span>
-                <Button variant="secondary" onClick={() => {
-                  setSelectedPackModIds(Array.from(selectedLibraryIds));
-                  setPackDialogOpen(true);
-                }}>
-                  <Package aria-hidden="true" />
-                  {t("createModPack")}
-                </Button>
-                <Button variant="danger" onClick={() => setPendingBulkDelete("library")} disabled={bulkRemove.isPending}>
-                  <Trash2 aria-hidden="true" />
-                  {t("removeSelectedMods")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="secondary" onClick={() => globalInputRef.current?.click()} disabled={globalUpload.isPending}>
-                  <Upload aria-hidden="true" />
-                  {globalUpload.isPending ? t("uploading") : t("uploadMod")}
-                </Button>
-                <Button variant="secondary" onClick={() => setWorkshopDialogOpen(true)} disabled={workshopImport.isPending || workshopItemsPreview.isPending}>
-                  <Download aria-hidden="true" />
-                  {t("importFromSteam")}
-                </Button>
-              </>
-            )
-          ) : (
-            selectedModPackIds.size > 0 ? (
-              <>
-                <span className="text-sm text-slate-400">{t("selectedModPacksCount", { count: selectedModPackIds.size })}</span>
-                <Button variant="danger" onClick={() => setPendingBulkDelete("packs")} disabled={bulkRemove.isPending}>
-                  <Trash2 aria-hidden="true" />
-                  {t("deleteSelectedModPacks")}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="secondary" onClick={() => setPackDialogOpen(true)}>
-                  <Package aria-hidden="true" />
-                  {t("createModPack")}
-                </Button>
-                <Button variant="secondary" onClick={() => setPackImportDialogOpen(true)} disabled={workshopUnsupported} title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}>
-                  <Download aria-hidden="true" />
-                  {t("importFromSteam")}
-                </Button>
-              </>
-            )
-          )}
-        </div>
-      </div>
 
-      <div className="mt-3">
-        <ResourceFilterBar
-          clearLabel={t("clearFilters")}
-          density="compact"
-          filters={[{
-            label: t("filterGame"),
-            options: gameFilters,
-            value: gameFilter,
-            onChange: (value) => {
-              clearTableSelection();
-              setGameFilter(value);
-            }
-          }]}
-          onClear={() => {
-            clearTableSelection();
-            setGameFilter("all");
-            setSearch("");
-          }}
-          onSearchChange={(value) => {
-            clearTableSelection();
-            setSearch(value);
-          }}
-          search={search}
-          searchPlaceholder={t("searchMods")}
-        />
+        {/* Track 2: 动作按钮与搜索过滤 */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Action Group */}
+          <div className="flex flex-wrap items-center gap-2 min-h-9">
+            {activeView === "discover" && (
+              <Button
+                className="h-9 px-3.5 bg-panel-green text-slate-950 font-bold hover:bg-emerald-400 shadow-md shadow-emerald-950/20 transition flex items-center gap-2 text-xs"
+                onClick={() => setWorkshopDialogOpen(true)}
+                disabled={workshopImport.isPending || workshopItemsPreview.isPending}
+              >
+                <Download className="size-3.5 stroke-[2.5]" />
+                <span>{t("importFromSteam")}</span>
+              </Button>
+            )}
+
+            {activeView === "library" && (
+              selectedLibraryIds.size > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 border border-emerald-500/30 rounded-lg p-1 animate-in fade-in zoom-in-95 duration-150">
+                  <span className="px-2 text-xs font-mono font-bold text-panel-green">
+                    {t("selectedModsCount", { count: selectedLibraryIds.size })}
+                  </span>
+                  <Button
+                    className="h-7 px-2.5 text-xs font-medium"
+                    variant="secondary"
+                    onClick={() => {
+                      setSelectedPackModIds(Array.from(selectedLibraryIds));
+                      setPackDialogOpen(true);
+                    }}
+                  >
+                    <Package className="size-3 text-sky-400" />
+                    {t("createModPack")}
+                  </Button>
+                  <Button
+                    className="h-7 px-2.5 text-xs font-medium"
+                    variant="danger"
+                    onClick={() => setPendingBulkDelete("library")}
+                    disabled={bulkRemove.isPending}
+                  >
+                    <Trash2 className="size-3" />
+                    {t("removeSelectedMods")}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={clearTableSelection}
+                    className="px-2 text-xs text-slate-400 hover:text-slate-200 transition underline underline-offset-2"
+                  >
+                    {locale === "zh" ? "取消勾选" : "Deselect"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    className="h-9 px-3.5 bg-panel-green text-slate-950 font-bold hover:bg-emerald-400 shadow-md shadow-emerald-950/20 transition flex items-center gap-2 text-xs"
+                    onClick={() => setWorkshopDialogOpen(true)}
+                    disabled={workshopImport.isPending || workshopItemsPreview.isPending}
+                  >
+                    <Download className="size-3.5 stroke-[2.5]" />
+                    <span>{t("importFromSteam")}</span>
+                  </Button>
+                  <Button
+                    className="h-9 px-3 text-xs"
+                    variant="secondary"
+                    onClick={() => globalInputRef.current?.click()}
+                    disabled={globalUpload.isPending}
+                  >
+                    <Upload className="size-3.5" />
+                    <span>{globalUpload.isPending ? t("uploading") : t("uploadMod")}</span>
+                  </Button>
+                </div>
+              )
+            )}
+
+            {activeView === "packs" && (
+              selectedModPackIds.size > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 border border-emerald-500/30 rounded-lg p-1 animate-in fade-in zoom-in-95 duration-150">
+                  <span className="px-2 text-xs font-mono font-bold text-panel-green">
+                    {t("selectedModPacksCount", { count: selectedModPackIds.size })}
+                  </span>
+                  <Button
+                    className="h-7 px-2.5 text-xs font-medium"
+                    variant="danger"
+                    onClick={() => setPendingBulkDelete("packs")}
+                    disabled={bulkRemove.isPending}
+                  >
+                    <Trash2 className="size-3" />
+                    {t("deleteSelectedModPacks")}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={clearTableSelection}
+                    className="px-2 text-xs text-slate-400 hover:text-slate-200 transition underline underline-offset-2"
+                  >
+                    {locale === "zh" ? "取消勾选" : "Deselect"}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    className="h-9 px-3.5 bg-panel-green text-slate-950 font-bold hover:bg-emerald-400 shadow-md shadow-emerald-950/20 transition flex items-center gap-2 text-xs"
+                    onClick={() => setPackDialogOpen(true)}
+                  >
+                    <Package className="size-3.5 stroke-[2.5]" />
+                    <span>{t("createModPack")}</span>
+                  </Button>
+                  <Button
+                    className="h-9 px-3 text-xs"
+                    variant="secondary"
+                    onClick={() => setPackImportDialogOpen(true)}
+                    disabled={workshopUnsupported}
+                    title={workshopUnsupported ? t("workshopArmUnsupported") : undefined}
+                  >
+                    <Download className="size-3.5" />
+                    <span>{t("importFromSteam")}</span>
+                  </Button>
+                </div>
+              )
+            )}
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:max-w-md lg:justify-end">
+            <ResourceFilterBar
+              clearLabel={t("clearFilters")}
+              density="compact"
+              filters={[{
+                label: t("filterGame"),
+                options: gameFilters,
+                value: gameFilter,
+                onChange: (value) => {
+                  clearTableSelection();
+                  setGameFilter(value);
+                }
+              }]}
+              onClear={() => {
+                clearTableSelection();
+                setGameFilter("all");
+                setSearch("");
+              }}
+              onSearchChange={(value) => {
+                clearTableSelection();
+                setSearch(value);
+              }}
+              search={search}
+              searchPlaceholder={t("searchMods")}
+            />
+          </div>
+        </div>
       </div>
 
       {activeView === "discover" ? (
@@ -957,22 +1060,6 @@ export default function ModsPage() {
   );
 }
 
-function ViewTab({ active, count, icon, label, onClick }: { active: boolean; count: number; icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-panel-green/50",
-        active ? "bg-panel-green/15 text-panel-green" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
-      )}
-      onClick={onClick}
-    >
-      {icon}
-      {label}
-      <Badge className={cn(active ? "bg-panel-green/15 text-panel-green" : "bg-slate-800 text-slate-400")}>{count}</Badge>
-    </button>
-  );
-}
 
 function WorkshopImportPreview({
   busy,

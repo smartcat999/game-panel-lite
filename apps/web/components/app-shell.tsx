@@ -20,11 +20,11 @@ import { Button, Input } from "@/components/ui";
 import { TopNav } from "@/components/top-nav";
 import { AppsDrawer } from "@/components/apps-drawer";
 import { ClusterStatusPill } from "@/components/cluster-status-pill";
+import { ClusterFleetPopover } from "@/components/cluster-fleet-popover";
 import {
   changeAdminPassword,
   getAuthBootstrap,
   getSettings,
-  listComputeNodes,
   logoutAdmin,
   updateLocale
 } from "@/lib/api";
@@ -57,9 +57,6 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 30000 });
-  const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, refetchInterval: 15000 });
-  const nodes = nodesQuery.data ?? [];
-  const onlineNodes = nodes.filter((n) => n.status === "online");
 
   const logoutMutation = useMutation({
     mutationFn: logoutAdmin,
@@ -153,21 +150,8 @@ function AppChrome({ children }: { children: ReactNode }) {
               </span>
             </Link>
 
-            {nodes.length > 1 ? (
-              <Link
-                href="/settings"
-                title={`集群分布式管理：${onlineNodes.length}/${nodes.length} 节点在线`}
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-sky-800/80 bg-sky-950/40 hover:bg-sky-900/50 hover:border-sky-700 px-2.5 py-0.5 text-[11px] font-mono text-sky-300 transition"
-              >
-                <span className="size-1.5 rounded-full bg-sky-400 animate-pulse" />
-                <span>Cluster Fleet · {nodes.length} 节点</span>
-              </Link>
-            ) : (
-              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-950/80 px-2.5 py-0.5 text-[11px] font-mono text-slate-400">
-                <span className="size-1.5 rounded-full bg-panel-green" />
-                Standalone Host
-              </span>
-            )}
+            {/* Cluster Fleet Interactive Popover Hub */}
+            <ClusterFleetPopover />
           </div>
 
           {/* Right: Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}

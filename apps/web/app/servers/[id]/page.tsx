@@ -66,7 +66,7 @@ import {
 import { copyText } from "@/lib/clipboard";
 import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/console-commands";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
-import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMaxPlayers, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
+import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
@@ -1106,7 +1106,6 @@ function OverviewTab({
   resource: GameServerResource;
   runtimeError: string;
 }) {
-  const { t } = useI18n();
   const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 60000 });
   const nodeInfo = nodesQuery.data?.find((n) => n.id === resource.nodeId);
   const isWorker = Boolean(resource.nodeId && resource.nodeId !== "node-local");
@@ -1114,22 +1113,11 @@ function OverviewTab({
     ? `${nodeInfo.name}${nodeInfo.region ? ` (${nodeInfo.region})` : ""}`
     : (resource.nodeId || "主控本机 (Local Daemon)");
 
-  const resourceConfig = resource.spec.config ?? {};
   const hostPort = resource.spec.network?.hostPort ?? 0;
   const internalPort = resource.spec.network?.port ?? 0;
-  const detailItems = [
-    { label: t("difficulty"), value: difficultyLabel(stringProviderValue(resourceConfig, "difficulty", "classic"), t) },
-    { label: t("maxPlayers"), value: String(gameServerMaxPlayers(resource)) },
-    { label: t("version"), value: gameServerVersion(resource) },
-    { label: t("metricTitleUptime"), value: formatServerUptime(resource, t) },
-    ...(hostPort > 0 && hostPort !== internalPort ? [{ label: t("hostPort"), value: String(hostPort) }] : [])
-  ];
   return (
     <div className="space-y-6">
-      {/* 1. Time Machine & Rollback */}
-      <ServerTimeMachine server={resource} />
-
-      {/* 2. Visual Game Rules */}
+      {/* 1. Visual Game Rules & Environment */}
       <ServerGameRules server={resource} />
 
       {/* 3. Compute Node Topology Card */}
@@ -1192,40 +1180,9 @@ function OverviewTab({
         </div>
       </div>
 
-      {/* 4. Server Info Specs */}
-      <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">{t("serverInfo")}</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {detailItems.map((item) => <Info key={item.label} label={item.label} value={item.value} />)}
-        </div>
-      </div>
-
       <ActivityLatestOperation events={events} loading={eventsLoading} runtimeError={runtimeError} />
     </div>
   );
-}
-
-function stringProviderValue(payload: Record<string, unknown> | undefined, key: string, fallback = "") {
-  const value = payload?.[key];
-  return typeof value === "string" ? value : fallback;
-}
-
-function formatServerUptime(resource: GameServerResource, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
-  if (gameServerStatus(resource) !== "running" || !resource.status.lastTransitionAt) {
-    return t("notRunning");
-  }
-  const startedAt = Date.parse(resource.status.lastTransitionAt);
-  if (!Number.isFinite(startedAt)) return t("unknown");
-  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  const hours = Math.floor(minutes / 60);
-  const restMinutes = minutes % 60;
-  if (hours < 24) return restMinutes > 0 ? `${hours}h ${restMinutes}m` : `${hours}h`;
-  const days = Math.floor(hours / 24);
-  const restHours = hours % 24;
-  return restHours > 0 ? `${days}d ${restHours}h` : `${days}d`;
 }
 
 function ResourceLimitsCard({
@@ -3287,15 +3244,6 @@ function CopyRow({
 
 
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-panel-line bg-slate-950/50 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-sm text-slate-200">{value}</p>
-    </div>
-  );
-}
-
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
     <>
@@ -3303,14 +3251,4 @@ function DetailLine({ label, value }: { label: string; value: string }) {
       <span className="font-medium text-white">{value}</span>
     </>
   );
-}
-
-function difficultyLabel(value: string, t: ReturnType<typeof useI18n>["t"]) {
-  const labels: Record<string, string> = {
-    journey: t("tagJourney"),
-    classic: t("tagClassic"),
-    expert: t("tagExpert"),
-    master: t("tagMaster")
-  };
-  return labels[value] ?? value;
 }

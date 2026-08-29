@@ -28,7 +28,8 @@ export default function ServersPage() {
 }
 
 function ServersPageContent() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const isZh = locale === "zh";
   const { canCreateServer, isViewer } = usePermissions();
   const router = useRouter();
   const pathname = usePathname();
@@ -133,110 +134,257 @@ function ServersPageContent() {
 
   return (
     <>
-      <PageHeader title={t("serversTitle")} />
+      <PageHeader
+        title={t("serversTitle")}
+        description={isZh ? `管理分布式集群游戏服务器实例 · 共 ${rawServers.length} 个实例` : `Manage distributed cluster game server instances · ${rawServers.length} total`}
+        action={
+          canCreateServer ? (
+            <Link href="/servers/new">
+              <Button className="h-10 px-4 bg-panel-green text-slate-950 font-bold hover:bg-emerald-400 shadow-md shadow-emerald-950/20 transition flex items-center gap-2">
+                <Plus className="size-4 stroke-[2.5]" />
+                <span>{t("createServer")}</span>
+              </Button>
+            </Link>
+          ) : null
+        }
+      />
 
-      {/* 节点快速切换筛选条 (支持水平平滑滑动与多节点自适应) */}
-      {nodes.length > 1 && (
-        <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-panel-line bg-panel-card px-3 py-2 text-xs overflow-x-auto scrollbar-none">
-          <span className="text-slate-400 font-medium shrink-0 flex items-center gap-1">
-            <ServerIcon className="size-3.5 text-panel-green" />
-            节点:
-          </span>
-          <button
-            type="button"
-            onClick={() => updateParams({ node: null, page: "1" })}
-            className={cn(
-              "rounded px-2.5 py-1 transition font-medium shrink-0",
-              node === "all"
-                ? "bg-panel-green text-slate-950 font-bold shadow-xs"
-                : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
-            )}
-          >
-            全部节点 ({rawServers.length})
-          </button>
-          {nodes.map((n) => {
-            const isSelected = (node === n.id) || (node === "node-local" && n.isLocal);
-            const count = rawServers.filter(s => (n.isLocal && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === n.id).length;
-            return (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => updateParams({ node: n.id, page: "1" })}
-                className={cn(
-                  "flex items-center gap-1.5 rounded px-2.5 py-1 transition font-medium shrink-0 whitespace-nowrap",
-                  isSelected
-                    ? "bg-panel-green text-slate-950 font-bold shadow-xs"
-                    : "bg-slate-900 text-slate-300 hover:text-white border border-slate-800"
-                )}
-              >
-                <span className={cn("size-1.5 rounded-full", n.status === "online" ? "bg-emerald-400" : "bg-slate-500")} />
-                <span>{n.name}</span>
-                {n.region ? <span className="opacity-75 text-[10px]">({n.region})</span> : null}
-                <span className={cn("rounded-full px-1.5 py-0.2 text-[10px]", isSelected ? "bg-slate-900/40 text-slate-950 font-bold" : "bg-slate-800 text-slate-400")}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+      {/* 现代化一体式控制台工具栏 (Unified Console Toolbar) */}
+      <div className="mb-4 rounded-xl border border-panel-line bg-panel-card p-3 shadow-xs space-y-3">
+        {/* Track 1: 节点切换 Segmented Tabs 与 实例状态速览 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-panel-line/60">
+          {/* Node Selector Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <span className="text-[11px] font-mono text-slate-400 font-semibold uppercase tracking-wider shrink-0 flex items-center gap-1.5 mr-1">
+              <ServerIcon className="size-3.5 text-panel-green" />
+              <span>{isZh ? "节点" : "Node"}:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => updateParams({ node: null, page: "1" })}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition shrink-0",
+                node === "all"
+                  ? "bg-slate-800 text-panel-green border border-panel-green/40 shadow-xs font-bold"
+                  : "bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-800/80"
+              )}
+            >
+              <span>{isZh ? "全部节点" : "All Nodes"}</span>
+              <span className={cn(
+                "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                node === "all" ? "bg-panel-green/20 text-panel-green" : "bg-slate-800 text-slate-400"
+              )}>
+                {rawServers.length}
+              </span>
+            </button>
+            {nodes.map((n) => {
+              const isSelected = (node === n.id) || (node === "node-local" && n.isLocal);
+              const count = rawServers.filter(s => (n.isLocal && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === n.id).length;
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => updateParams({ node: n.id, page: "1" })}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition shrink-0 whitespace-nowrap",
+                    isSelected
+                      ? "bg-slate-800 text-sky-300 border border-sky-500/40 shadow-xs font-bold"
+                      : "bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-slate-800/80"
+                  )}
+                >
+                  <span className={cn("size-1.5 rounded-full", n.status === "online" ? "bg-emerald-400 animate-pulse" : "bg-slate-500")} />
+                  <span>{n.name}</span>
+                  {n.region ? <span className="opacity-70 text-[10px]">({n.region})</span> : null}
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.2 text-[10px] font-mono",
+                    isSelected ? "bg-sky-950 text-sky-300 border border-sky-800/60" : "bg-slate-800 text-slate-400"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Running Stats Pill */}
+          <div className="hidden sm:flex items-center gap-3 text-xs font-mono text-slate-400 shrink-0">
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-400" />
+              <span>{servers.filter(s => gameServerStatus(s) === "running").length} {isZh ? "运行中" : "Running"}</span>
+            </span>
+            <span className="text-slate-700">|</span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-slate-500" />
+              <span>{servers.filter(s => gameServerStatus(s) === "stopped").length} {isZh ? "已停止" : "Stopped"}</span>
+            </span>
+          </div>
         </div>
-      )}
 
-      <section className="mb-3 rounded-lg border border-panel-line bg-panel-card px-3 py-2.5" aria-label={t("serverManagementToolbar")}>
-        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {canCreateServer && (
-              <Link href="/servers/new"><Button className="h-9 px-3"><Plus className="size-4" />{t("createServer")}</Button></Link>
+        {/* Track 2: 动态批量操作栏 & 搜索过滤工具组 */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Left: Dynamic Batch Action Area */}
+          <div className="flex flex-wrap items-center gap-2 min-h-9">
+            {selectedIds.size > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 border border-emerald-500/30 rounded-lg p-1 animate-in fade-in zoom-in-95 duration-150">
+                <span className="px-2 text-xs font-mono font-bold text-panel-green">
+                  {t("selectedCount", { count: selectedIds.size })}
+                </span>
+                {!isViewer && (
+                  <>
+                    <Button
+                      className="h-7 px-2.5 text-xs font-medium"
+                      variant="secondary"
+                      disabled={!eligibleServers(selectedServers, "start").length || bulkMutation.isPending}
+                      onClick={() => bulkMutation.mutate("start")}
+                    >
+                      <Play className="size-3 text-emerald-400" />
+                      {t("actionStart")}
+                    </Button>
+                    <Button
+                      className="h-7 px-2.5 text-xs font-medium"
+                      variant="secondary"
+                      disabled={!eligibleServers(selectedServers, "stop").length || bulkMutation.isPending}
+                      onClick={() => bulkMutation.mutate("stop")}
+                    >
+                      <Square className="size-3 text-amber-400" />
+                      {t("actionStop")}
+                    </Button>
+                    <details className="group relative">
+                      <summary className={cn(toolbarIconClass, "h-7 text-xs px-2")}>
+                        <Ellipsis className="size-3.5" />
+                        <span>{t("moreActions")}</span>
+                      </summary>
+                      <div className="absolute left-0 top-9 z-30 w-44 rounded-lg border border-panel-line bg-slate-950 p-1 shadow-xl">
+                        <MenuButton
+                          disabled={!eligibleServers(selectedServers, "restart").length || bulkMutation.isPending}
+                          onClick={() => bulkMutation.mutate("restart")}
+                          icon={<RotateCcw className="size-3.5 text-sky-400" />}
+                          label={t("actionRestart")}
+                        />
+                        <div className="my-1 border-t border-panel-line" />
+                        <MenuButton
+                          danger
+                          disabled={!canDeleteSelection || bulkMutation.isPending}
+                          title={!canDeleteSelection && selectedIds.size ? t("deleteRequiresStopped") : undefined}
+                          onClick={() => setDeleteConfirmOpen(true)}
+                          icon={<Trash2 className="size-3.5" />}
+                          label={t("deleteSelectedServers")}
+                        />
+                      </div>
+                    </details>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-2 text-xs text-slate-400 hover:text-slate-200 transition underline underline-offset-2"
+                >
+                  {isZh ? "取消勾选" : "Deselect"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="font-mono">{isZh ? "提示: 勾选下方列表复选框可进行批量启停或维护" : "Select servers below for batch operations"}</span>
+              </div>
             )}
-            {!isViewer && (
-              <>
-                <Button className="h-9 px-3" variant="secondary" disabled={!eligibleServers(selectedServers, "start").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("start")}><Play className="size-4" />{t("actionStart")}</Button>
-                <Button className="h-9 px-3" variant="secondary" disabled={!eligibleServers(selectedServers, "stop").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("stop")}><Square className="size-4" />{t("actionStop")}</Button>
-                <details className="group relative">
-                  <summary className={cn(toolbarIconClass, selectedIds.size === 0 && "pointer-events-none opacity-45")}><Ellipsis className="size-4" /><span className="hidden sm:inline">{t("moreActions")}</span></summary>
-                  <div className="absolute left-0 top-11 z-30 w-44 rounded-md border border-panel-line bg-slate-950 p-1 shadow-[0_6px_12px_rgba(0,0,0,0.35)]">
-                    <MenuButton disabled={!eligibleServers(selectedServers, "restart").length || bulkMutation.isPending} onClick={() => bulkMutation.mutate("restart")} icon={<RotateCcw className="size-4" />} label={t("actionRestart")} />
-                    <div className="my-1 border-t border-panel-line" />
-                    <MenuButton danger disabled={!canDeleteSelection || bulkMutation.isPending} title={!canDeleteSelection && selectedIds.size ? t("deleteRequiresStopped") : undefined} onClick={() => setDeleteConfirmOpen(true)} icon={<Trash2 className="size-4" />} label={t("deleteSelectedServers")} />
-                  </div>
-                </details>
-                {selectedIds.size ? <span className="ml-1 text-xs text-slate-400">{t("selectedCount", { count: selectedIds.size })}</span> : null}
-              </>
-            )}
+
             {isViewer && (
               <span className="rounded-md border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-400 font-mono">
                 只读访客模式 (Viewer Mode)
               </span>
             )}
           </div>
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 xl:max-w-2xl xl:justify-end">
-            <label className="relative min-w-0 flex-1 xl:max-w-xs">
+
+          {/* Right: Search, Filter, Refresh & Column Controls */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:max-w-xl lg:justify-end">
+            <label className="relative min-w-0 flex-1 lg:max-w-xs">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
-              <input className="h-9 w-full rounded-md border border-panel-line bg-slate-950/60 pl-9 pr-8 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder={t("searchServers")} />
-              {draftSearch ? <button aria-label={t("clearSearch")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white" onClick={() => setDraftSearch("")} type="button"><X className="size-4" /></button> : null}
+              <input
+                className="h-9 w-full rounded-lg border border-panel-line bg-slate-950/80 pl-9 pr-8 text-xs text-slate-100 outline-none placeholder:text-slate-500 focus:border-panel-green transition"
+                value={draftSearch}
+                onChange={(event) => setDraftSearch(event.target.value)}
+                placeholder={t("searchServers")}
+              />
+              {draftSearch && (
+                <button
+                  aria-label={t("clearSearch")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  onClick={() => setDraftSearch("")}
+                  type="button"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </label>
+
             <details className="group relative">
-              <summary className={toolbarIconClass} title={t("filters")}><Filter className="size-4" /><span className="hidden sm:inline">{t("filters")}</span>{activeFilters.length ? <span className="rounded-full bg-panel-green/15 px-1.5 text-[11px] text-panel-green">{activeFilters.length}</span> : null}</summary>
-              <div className="absolute right-0 top-11 z-30 w-72 space-y-3 rounded-md border border-panel-line bg-slate-950 p-3 shadow-[0_6px_12px_rgba(0,0,0,0.35)]">
+              <summary className={toolbarIconClass} title={t("filters")}>
+                <Filter className="size-3.5" />
+                <span className="hidden sm:inline text-xs">{t("filters")}</span>
+                {activeFilters.length > 0 && (
+                  <span className="rounded-full bg-panel-green/20 px-1.5 text-[10px] font-bold text-panel-green">
+                    {activeFilters.length}
+                  </span>
+                )}
+              </summary>
+              <div className="absolute right-0 top-11 z-30 w-72 space-y-3 rounded-xl border border-panel-line bg-slate-950 p-3.5 shadow-2xl">
                 <FilterSelect label={t("filterGame")} options={gameFilters} value={game} onChange={(value) => setFilter("game", value)} />
                 <FilterSelect label={t("filterStatus")} options={[{ key: "all", label: t("filterAll") }, { key: "running", label: t("filterRunning") }, { key: "stopped", label: t("filterStopped") }, { key: "errored", label: t("statusErrored") }]} value={status} onChange={(value) => setFilter("status", value)} />
                 <FilterSelect label={t("filterRunMode")} options={providerFilters.map((option) => ({ key: option.key, label: option.label ?? option.key }))} value={provider} onChange={(value) => setFilter("provider", value)} />
               </div>
             </details>
-            <button className={toolbarSquareClass} aria-label={t("refresh")} title={t("refresh")} onClick={() => void serversQuery.refetch()} type="button"><RefreshCw className={cn("size-4", serversQuery.isFetching && "animate-spin")} /></button>
+
+            <button
+              className={toolbarSquareClass}
+              aria-label={t("refresh")}
+              title={t("refresh")}
+              onClick={() => void serversQuery.refetch()}
+              type="button"
+            >
+              <RefreshCw className={cn("size-3.5", serversQuery.isFetching && "animate-spin text-panel-green")} />
+            </button>
+
             <details className="group relative">
-              <summary className={toolbarSquareClass} title={t("columnSettings")}><Columns3 className="size-4" /></summary>
-              <div className="absolute right-0 top-11 z-30 w-52 rounded-md border border-panel-line bg-slate-950 p-1.5 shadow-[0_6px_12px_rgba(0,0,0,0.35)]">
-                {optionalColumns.map((column) => <label key={column} className="flex cursor-pointer items-center justify-between rounded px-2.5 py-2 text-sm text-slate-300 hover:bg-slate-800"><span>{columnLabel(column, t)}</span><input className="accent-panel-green" type="checkbox" checked={visibleColumns.has(column)} onChange={() => toggleColumn(column)} /></label>)}
+              <summary className={toolbarSquareClass} title={t("columnSettings")}>
+                <Columns3 className="size-3.5" />
+              </summary>
+              <div className="absolute right-0 top-11 z-30 w-52 rounded-xl border border-panel-line bg-slate-950 p-2 shadow-2xl">
+                {optionalColumns.map((column) => (
+                  <label key={column} className="flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-900 transition">
+                    <span>{columnLabel(column, t)}</span>
+                    <input className="accent-panel-green" type="checkbox" checked={visibleColumns.has(column)} onChange={() => toggleColumn(column)} />
+                  </label>
+                ))}
               </div>
             </details>
           </div>
         </div>
-        {activeFilters.length ? <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-panel-line pt-2.5">{activeFilters.map((filter) => <button key={filter.key} className="inline-flex h-7 items-center gap-1.5 rounded-md border border-panel-line bg-slate-900 px-2 text-xs text-slate-300 hover:border-slate-600" onClick={() => filter.key === "search" ? setDraftSearch("") : setFilter(filter.key as "game" | "provider" | "status", "all")} type="button">{filter.label}<X className="size-3" /></button>)}<button className="ml-1 text-xs text-slate-500 hover:text-white" onClick={clearFilters} type="button">{t("clearFilters")}</button></div> : null}
-      </section>
+
+        {/* Track 3: Active Filter Chips */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-panel-line/50">
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">{isZh ? "已生效筛选:" : "Active Filters:"}</span>
+            {activeFilters.map((filter) => (
+              <button
+                key={filter.key}
+                className="inline-flex h-6 items-center gap-1 rounded-md border border-panel-line bg-slate-950 px-2 text-[11px] text-slate-300 hover:border-slate-600 transition"
+                onClick={() => filter.key === "search" ? setDraftSearch("") : setFilter(filter.key as "game" | "provider" | "status", "all")}
+                type="button"
+              >
+                <span>{filter.label}</span>
+                <X className="size-3 text-slate-500 hover:text-white" />
+              </button>
+            ))}
+            <button className="ml-1 text-[11px] text-slate-500 hover:text-slate-300 hover:underline" onClick={clearFilters} type="button">
+              {t("clearFilters")}
+            </button>
+          </div>
+        )}
+      </div>
 
       {serversQuery.isError ? <p className="mb-4 text-sm text-panel-gold">{t("apiServersUnavailable")}</p> : null}
       {servers.length ? <ServerManagementTable servers={servers} nodes={nodes} metrics={metricsQuery.data?.servers} publicHost={settingsQuery.data?.publicHost} selectedIds={selectedIds} visibleColumns={visibleColumns} sort={sort} direction={direction} onSelectionChange={setSelectedIds} onSort={handleSort} onAddressCopied={() => setNotice({ tone: "success", message: t("serverAddressCopied") })} /> : null}
-      {!servers.length ? <div className="rounded-lg border border-panel-line bg-panel-card px-5 py-12 text-center text-sm text-slate-400">{serversQuery.isLoading ? t("loading") : t("noServersMatch")}</div> : null}
+      {!servers.length ? <div className="rounded-xl border border-panel-line bg-panel-card px-5 py-12 text-center text-sm text-slate-400">{serversQuery.isLoading ? t("loading") : t("noServersMatch")}</div> : null}
       <Pagination page={page} pageSize={pageSize} total={serversQuery.data?.total ?? 0} totalPages={serversQuery.data?.totalPages ?? 0} onChange={(updates) => updateParams(updates)} t={t} />
 
       {notice ? <div className="fixed right-4 top-20 z-[80]"><ToastNotice closeLabel={t("close")} message={notice.message} tone={notice.tone} onClose={() => setNotice(null)} /></div> : null}
