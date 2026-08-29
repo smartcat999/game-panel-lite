@@ -207,6 +207,75 @@ func TestModListsPruneMissingFiles(t *testing.T) {
 	}
 }
 
+func TestServerModListEnrichesWorkshopMetadataFromLibrary(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("dst", cfg.DataDir)
+	server.GameKey = domain.GameDST
+	server.ProviderKey = domain.ProviderDST
+	createTestServer(t, db, server)
+
+	serverMod := domain.ModFile{
+		ID:          "server-workshop-mod",
+		InstanceID:  server.ID,
+		GameKey:     server.GameKey,
+		ProviderKey: server.ProviderKey,
+		FileName:    "workshop-3007715893",
+		Source:      "workshop",
+		WorkshopID:  "3007715893",
+		Title:       "Workshop 3007715893",
+		SizeBytes:   11,
+		Enabled:     false,
+		CreatedAt:   time.Now(),
+	}
+	libraryMod := domain.ModFile{
+		ID:               "library-workshop-mod",
+		InstanceID:       "unassigned",
+		GameKey:          server.GameKey,
+		ProviderKey:      server.ProviderKey,
+		FileName:         "workshop-3007715893",
+		Source:           "workshop",
+		WorkshopID:       "3007715893",
+		ModName:          "more_items_stack",
+		Title:            "更多物品堆叠/More Items Stack",
+		Description:      "Stack more items.",
+		PreviewURL:       "https://example.com/preview.png",
+		TagsJSON:         `["all_clients_require_mod"]`,
+		DependenciesJSON: `["workshop-123"]`,
+		SizeBytes:        57940,
+		Enabled:          true,
+		CreatedAt:        time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &serverMod); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateMod(context.Background(), &libraryMod); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/dst/mods", nil))
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("expected server mod list 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var mods []domain.ModFile
+	if err := json.Unmarshal(response.Body.Bytes(), &mods); err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 1 {
+		t.Fatalf("expected one server mod, got %+v", mods)
+	}
+	got := mods[0]
+	if got.ID != serverMod.ID || got.InstanceID != server.ID || got.Enabled {
+		t.Fatalf("expected server installation state to be preserved, got %+v", got)
+	}
+	if got.Title != libraryMod.Title || got.ModName != libraryMod.ModName || got.SizeBytes != libraryMod.SizeBytes {
+		t.Fatalf("expected library display metadata, got %+v", got)
+	}
+	if !reflect.DeepEqual(got.Tags, []string{"all_clients_require_mod"}) || !reflect.DeepEqual(got.Dependencies, []string{"workshop-123"}) {
+		t.Fatalf("expected hydrated library tags and dependencies, got %+v", got)
+	}
+}
+
 func TestTModLoaderModUploadIsIdempotentForSameFile(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

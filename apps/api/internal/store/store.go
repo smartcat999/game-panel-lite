@@ -560,6 +560,16 @@ func (s *Store) ListMods(ctx context.Context, instanceID string) ([]domain.ModFi
 	return mods, s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc").Find(&mods).Error
 }
 
+func (s *Store) ListLibraryModsByWorkshopIDs(ctx context.Context, workshopIDs []string) ([]domain.ModFile, error) {
+	if len(workshopIDs) == 0 {
+		return []domain.ModFile{}, nil
+	}
+	var mods []domain.ModFile
+	return mods, s.db.WithContext(ctx).
+		Where("instance_id = ? AND workshop_id IN ?", "unassigned", workshopIDs).
+		Find(&mods).Error
+}
+
 func (s *Store) GetMod(ctx context.Context, id string) (domain.ModFile, error) {
 	var mod domain.ModFile
 	err := s.db.WithContext(ctx).First(&mod, "id = ?", id).Error

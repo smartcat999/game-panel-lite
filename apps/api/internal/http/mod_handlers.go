@@ -25,6 +25,11 @@ func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	mods, err = h.enrichServerModMetadata(r.Context(), mods)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	visible, err := h.visibleServerMods(r.Context(), server, mods)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
