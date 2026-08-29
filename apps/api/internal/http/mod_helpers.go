@@ -718,6 +718,75 @@ func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]dom
 	return visible, nil
 }
 
+func (h *Handler) enrichServerModMetadata(ctx context.Context, mods []domain.ModFile) ([]domain.ModFile, error) {
+	workshopIDs := make([]string, 0, len(mods))
+	seen := make(map[string]struct{}, len(mods))
+	for _, item := range mods {
+		if item.Source != "workshop" || item.WorkshopID == "" {
+			continue
+		}
+		if _, exists := seen[item.WorkshopID]; exists {
+			continue
+		}
+		seen[item.WorkshopID] = struct{}{}
+		workshopIDs = append(workshopIDs, item.WorkshopID)
+	}
+
+	libraryMods, err := h.store.ListLibraryModsByWorkshopIDs(ctx, workshopIDs)
+	if err != nil {
+		return nil, err
+	}
+	metadataByWorkshopID := make(map[string]domain.ModFile, len(libraryMods))
+	for _, item := range libraryMods {
+		metadataByWorkshopID[item.WorkshopID] = item
+	}
+	for index := range mods {
+		metadata, exists := metadataByWorkshopID[mods[index].WorkshopID]
+		if !exists {
+			continue
+		}
+		applyLibraryModMetadata(&mods[index], metadata)
+	}
+	return mods, nil
+}
+
+func applyLibraryModMetadata(item *domain.ModFile, metadata domain.ModFile) {
+	if metadata.ModName != "" {
+		item.ModName = metadata.ModName
+	}
+	if metadata.Title != "" {
+		item.Title = metadata.Title
+	}
+	if metadata.ModVersion != "" {
+		item.ModVersion = metadata.ModVersion
+	}
+	if metadata.TModVersion != "" {
+		item.TModVersion = metadata.TModVersion
+	}
+	if metadata.CreatorSteamID != "" {
+		item.CreatorSteamID = metadata.CreatorSteamID
+	}
+	if metadata.PreviewURL != "" {
+		item.PreviewURL = metadata.PreviewURL
+	}
+	if metadata.Description != "" {
+		item.Description = metadata.Description
+	}
+	if metadata.TagsJSON != "" {
+		item.TagsJSON = metadata.TagsJSON
+	}
+	if metadata.DependenciesJSON != "" {
+		item.DependenciesJSON = metadata.DependenciesJSON
+	}
+	item.Subscriptions = metadata.Subscriptions
+	item.Favorited = metadata.Favorited
+	item.Views = metadata.Views
+	item.UpdatedAtSteam = metadata.UpdatedAtSteam
+	if metadata.SizeBytes > 0 {
+		item.SizeBytes = metadata.SizeBytes
+	}
+}
+
 func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServer, mods []domain.ModFile) ([]domain.ModFile, error) {
 	visible, err := h.visibleMods(ctx, mods)
 	if err != nil {
