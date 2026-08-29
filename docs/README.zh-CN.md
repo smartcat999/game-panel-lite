@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img alt="GamePanel Lite 产品预览" src="../apps/web/public/official/gamepanel-demo.gif" width="900" style="border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+  <a href="../apps/web/public/official/gamepanel-demo-zh-CN.mp4"><img alt="GamePanel Lite 产品预览" src="../apps/web/public/official/gamepanel-demo-zh-CN.gif" width="900" style="border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);"></a>
 </p>
 
 ---
