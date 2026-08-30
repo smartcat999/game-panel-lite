@@ -8,6 +8,7 @@ import { useToast } from "@/components/toast-context";
 import { useI18n } from "@/lib/i18n";
 import { updateGameServerConfig } from "@/lib/api";
 import { gameServerJoinPort } from "@/lib/game-server-resource";
+import { usePermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type { GameServerResource } from "@/lib/types";
 
@@ -18,6 +19,7 @@ export function ServerGameRules({
 }) {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
+  const { canEditServerConfig } = usePermissions();
   const toast = useToast();
   const client = useQueryClient();
 
@@ -81,27 +83,31 @@ export function ServerGameRules({
           </p>
         </div>
 
-        <Button
-          type="button"
-          disabled={saveMutation.isPending}
-          onClick={() => saveMutation.mutate()}
-          className="gap-2 px-6 shrink-0"
-        >
-          <Save className="size-4" />
-          <span>{saveMutation.isPending ? (isZh ? "正在保存..." : "Saving...") : (isZh ? "保存游戏规则设定" : "Save Game Rules")}</span>
-        </Button>
+        {canEditServerConfig ? (
+          <Button
+            type="button"
+            disabled={saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+            className="gap-2 px-6 shrink-0"
+          >
+            <Save className="size-4" />
+            <span>{saveMutation.isPending ? (isZh ? "正在保存..." : "Saving...") : (isZh ? "保存游戏规则设定" : "Save Game Rules")}</span>
+          </Button>
+        ) : null}
       </div>
 
       {/* Render based on GameKey */}
-      {gameKey === "palworld" ? (
-        <PalworldRules draft={draft} onChange={updateField} isZh={isZh} />
-      ) : gameKey === "minecraft" ? (
-        <MinecraftRules draft={draft} onChange={updateField} isZh={isZh} />
-      ) : gameKey === "dont-starve-together" || providerKey === "dont-starve-together" ? (
-        <DSTRules draft={draft} onChange={updateField} isZh={isZh} />
-      ) : (
-        <TerrariaRules draft={draft} onChange={updateField} isZh={isZh} />
-      )}
+      <fieldset disabled={!canEditServerConfig} className="min-w-0 space-y-6">
+        {gameKey === "palworld" ? (
+          <PalworldRules draft={draft} onChange={updateField} isZh={isZh} />
+        ) : gameKey === "minecraft" ? (
+          <MinecraftRules draft={draft} onChange={updateField} isZh={isZh} />
+        ) : gameKey === "dont-starve-together" || providerKey === "dont-starve-together" ? (
+          <DSTRules draft={draft} onChange={updateField} isZh={isZh} />
+        ) : (
+          <TerrariaRules draft={draft} onChange={updateField} isZh={isZh} />
+        )}
+      </fieldset>
     </div>
   );
 }
