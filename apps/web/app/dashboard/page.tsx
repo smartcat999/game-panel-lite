@@ -204,7 +204,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="space-y-2 text-xs">
-                    {/* CPU 水位 */}
+                    {/* CPU 使用率 */}
                     <div>
                       <div className="flex justify-between text-[11px] text-slate-400 mb-1">
                         <span>CPU ({node.cpuCores || "—"} 核心)</span>
@@ -218,7 +218,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* 内存 水位 */}
+                    {/* 内存使用率 */}
                     <div>
                       <div className="flex justify-between text-[11px] text-slate-400 mb-1">
                         <span>内存 ({memoryUsedGB} / {memoryTotalGB} GB)</span>
@@ -463,7 +463,7 @@ export default function DashboardPage() {
                   <span className="text-slate-200 font-medium truncate block">{activeNode.name}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">CPU 水位 ({activeNode.cpuCores || "—"} 核)</span>
+                  <span className="text-[10px] text-slate-500 block">CPU 使用率 ({activeNode.cpuCores || "—"} 核)</span>
                   <span className="text-panel-green font-semibold">{cpuPercent}%</span>
                 </div>
                 <div>
