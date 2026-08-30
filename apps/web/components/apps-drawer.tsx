@@ -21,6 +21,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/permissions";
 
 interface AppsDrawerProps {
   open: boolean;
@@ -31,6 +32,7 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
   const pathname = usePathname();
   const { locale } = useI18n();
   const isZh = locale === "zh";
+  const { canAccessGameAssets, canCreateServer, canEditSettings } = usePermissions();
 
   // Close on ESC
   useEffect(() => {
@@ -55,10 +57,10 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
       items: [
         { href: "/dashboard", label: isZh ? "仪表盘" : "Dashboard", desc: isZh ? "集群资源与实例总览" : "Infrastructure & servers overview", icon: Gauge },
         { href: "/servers", label: isZh ? "游戏服务器" : "Game Servers", desc: isZh ? "多实例运行与控制台管理" : "Instances management & web console", icon: HardDrive },
-        { href: "/activity", label: isZh ? "监控与活动" : "Monitoring & Activity", desc: isZh ? "实时时序指标与审计日志" : "Live metrics & audit streams", icon: Activity }
+        ...(canAccessGameAssets ? [{ href: "/activity", label: isZh ? "监控与活动" : "Monitoring & Activity", desc: isZh ? "实时时序指标与审计日志" : "Live metrics & audit streams", icon: Activity }] : [])
       ]
     },
-    {
+    ...(canAccessGameAssets ? [{
       title: isZh ? "游戏与数字资产" : "Game Assets & Mods",
       items: [
         { href: "/games", label: isZh ? "游戏库" : "Game Library", desc: isZh ? "支持的原生与模组服务端" : "Supported games & engines", icon: Gamepad2 },
@@ -67,14 +69,14 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
         { href: "/worlds", label: isZh ? "世界地图" : "World Archives", desc: isZh ? "游戏存档与地图文件管理" : "Saves & map files management", icon: Globe2 },
         { href: "/backups", label: isZh ? "备份中心" : "Backup Vault", desc: isZh ? "快照创建与一键还原" : "Snapshots & disaster recovery", icon: Archive }
       ]
-    },
-    {
+    }] : []),
+    ...(canEditSettings ? [{
       title: isZh ? "系统与集群管理" : "Cluster & System",
       items: [
         { href: "/settings", label: isZh ? "控制台设置" : "Settings & Fleet", desc: isZh ? "团队 RBAC、计算节点与安全" : "Team RBAC, compute nodes & security", icon: Settings },
         { href: "/versions", label: isZh ? "版本与更新" : "Version & Updates", desc: isZh ? "系统固件与升级通道" : "System release & channels", icon: PackageCheck }
       ]
-    }
+    }] : [])
   ];
 
   return (
@@ -103,14 +105,14 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
         </div>
 
         {/* Quick Create Server Action */}
-        <div className="mt-4">
+        {canCreateServer ? <div className="mt-4">
           <Link href="/servers/new" onClick={onClose} className="block">
             <Button variant="primary" className="w-full h-9 justify-center gap-2 text-xs font-semibold">
               <Plus className="size-4" />
               {isZh ? "新建游戏服务器" : "Create New Server"}
             </Button>
           </Link>
-        </div>
+        </div> : null}
 
         {/* Groups */}
         <div className="mt-4 flex-1 space-y-6 overflow-y-auto pr-1">

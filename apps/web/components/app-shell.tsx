@@ -21,6 +21,8 @@ import { TopNav } from "@/components/top-nav";
 import { AppsDrawer } from "@/components/apps-drawer";
 import { ClusterStatusPill } from "@/components/cluster-status-pill";
 import { ClusterFleetPopover } from "@/components/cluster-fleet-popover";
+import { PermissionDenied } from "@/components/permission-denied";
+import { usePermissions } from "@/lib/permissions";
 import {
   changeAdminPassword,
   getAuthBootstrap,
@@ -43,6 +45,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { locale, setLocale, t } = useI18n();
   const isZh = locale.startsWith("zh");
+  const { canAccessGameAssets, canCreateServer, canEditSettings } = usePermissions();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -71,6 +74,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     mutationFn: (nextLocale: Locale) => updateLocale(nextLocale),
     onSuccess: async (result) => {
       setLocale(result.locale);
+      window.localStorage.setItem("gamepanel.locale", result.locale);
       setSelectedLocale(result.locale);
       setAccountMessage(t("languageSaved"));
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
@@ -94,7 +98,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (settingsQuery.data?.locale) {
+    if (settingsQuery.data?.locale && !window.localStorage.getItem("gamepanel.locale")) {
       setLocale(settingsQuery.data.locale);
       setSelectedLocale(settingsQuery.data.locale);
     }
@@ -120,7 +124,13 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const saveLocale = () => {
     setAccountMessage("");
-    localeMutation.mutate(selectedLocale);
+    if (canEditSettings) {
+      localeMutation.mutate(selectedLocale);
+      return;
+    }
+    window.localStorage.setItem("gamepanel.locale", selectedLocale);
+    setLocale(selectedLocale);
+    setAccountMessage(t("languageSaved"));
   };
 
   const submitPasswordChange = (event: FormEvent<HTMLFormElement>) => {
@@ -255,7 +265,9 @@ function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main Content Area */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {pageAllowed(pathname, canAccessGameAssets, canCreateServer, canEditSettings) ? children : <PermissionDenied />}
+      </main>
 
       {/* Apps and Quick Navigation Drawer */}
       <AppsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
@@ -386,4 +398,16 @@ function AppChrome({ children }: { children: ReactNode }) {
       )}
     </div>
   );
+}
+
+function pageAllowed(pathname: string, canAccessGameAssets: boolean, canCreateServer: boolean, canEditSettings: boolean) {
+  if (pathname.startsWith("/servers/new")) return canCreateServer;
+  if (pathname.startsWith("/settings") || pathname.startsWith("/versions")) {
+    return canEditSettings;
+  }
+  if (["/games", "/mods", "/presets", "/worlds", "/backups"].some((path) => pathname.startsWith(path))) {
+    return canAccessGameAssets;
+  }
+  if (pathname.startsWith("/activity")) return canAccessGameAssets;
+  return true;
 }

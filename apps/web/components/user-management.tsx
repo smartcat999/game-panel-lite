@@ -162,6 +162,34 @@ export function UserManagement() {
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-3 md:grid-cols-3">
+        {[
+          {
+            icon: ShieldCheck,
+            title: isZh ? "管理员" : "Administrator",
+            description: isZh ? "服务器、用户、节点、全局设置、版本更新与删除权限。" : "Full server, user, node, settings, release, and deletion access.",
+            tone: "border-purple-500/25 bg-purple-500/5 text-purple-300"
+          },
+          {
+            icon: UserCheck,
+            title: isZh ? "运维成员" : "Operator",
+            description: isZh ? "可创建、配置和启停服务器，管理模组、玩家、世界与备份；不能删除实例或修改系统。" : "Can operate servers and manage game assets, but cannot delete instances or change the system.",
+            tone: "border-sky-500/25 bg-sky-500/5 text-sky-300"
+          },
+          {
+            icon: Eye,
+            title: isZh ? "只读访客" : "Viewer",
+            description: isZh ? "仅查看仪表盘、服务器大厅、运行状态和加入信息，不显示维护入口。" : "Can only view dashboards, server lobbies, status, and join information.",
+            tone: "border-slate-700 bg-slate-900/60 text-slate-300"
+          }
+        ].map(({ description, icon: Icon, title, tone }) => (
+          <div className={`rounded-xl border p-4 ${tone}`} key={title}>
+            <div className="flex items-center gap-2 text-sm font-semibold"><Icon aria-hidden="true" className="size-4" />{title}</div>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{description}</p>
+          </div>
+        ))}
+      </div>
+
       {/* 1. Public Registration Security Policy */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
         <div className="space-y-1">

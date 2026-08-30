@@ -73,6 +73,7 @@ import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigFiel
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/permissions";
 import type { Backup, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "players" | "version" | "config" | "worlds" | "backups" | "mods";
@@ -124,6 +125,7 @@ function formatMemoryLimitLabel(value: number, t: (key: "unlimited" | "memoryGbV
 
 export default function ServerDetailPage() {
   const { locale, t } = useI18n();
+  const { canControlServer, canManageShares, isViewer } = usePermissions();
   const params = useParams<{ id: string }>();
   const id = params.id;
   const client = useQueryClient();
@@ -168,27 +170,27 @@ export default function ServerDetailPage() {
     refetchInterval: resourceStatus === "running" ? 5000 : false,
     retry: false
   });
-  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(serverResource && visibleCapabilities.saveSnapshots), retry: false });
+  const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: Boolean(!isViewer && serverResource && visibleCapabilities.saveSnapshots), retry: false });
   const modsQuery = useQuery({
     queryKey: ["mods", id],
     queryFn: () => listMods(id),
-    enabled: Boolean(serverResource && capabilities.mods),
+    enabled: Boolean(!isViewer && serverResource && capabilities.mods),
     retry: false
   });
   const globalModsQuery = useQuery({
     queryKey: ["global-mods"],
     queryFn: listGlobalMods,
-    enabled: Boolean(serverResource && capabilities.mods),
+    enabled: Boolean(!isViewer && serverResource && capabilities.mods),
     retry: false
   });
   const modPacksQuery = useQuery({
     queryKey: ["mod-packs"],
     queryFn: listModPacks,
-    enabled: Boolean(serverResource && capabilities.mods),
+    enabled: Boolean(!isViewer && serverResource && capabilities.mods),
     retry: false
   });
   const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, enabled: Boolean(serverResource && capabilities.mods), retry: false, staleTime: 5 * 60 * 1000 });
-  const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(serverResource), retry: false });
+  const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(canManageShares && serverResource), retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, enabled: Boolean(serverResource), retry: false, staleTime: 30_000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
   const joinInfoQuery = useQuery({
@@ -588,8 +590,11 @@ export default function ServerDetailPage() {
   const supportsDirectModUpload = Boolean(modUploadAccept);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
   const isZh = locale.startsWith("zh");
-  const tabs: { id: TabId; label: string }[] = useMemo(() => [
-    { id: "overview", label: isZh ? "🎮 服务器大厅" : t("tabOverview") },
+  const tabs: { id: TabId; label: string }[] = useMemo(() => {
+    const overviewTab = { id: "overview" as const, label: isZh ? "🎮 服务器大厅" : t("tabOverview") };
+    if (isViewer) return [overviewTab];
+    return [
+    overviewTab,
     ...(visibleCapabilities.backups ? [{ id: "backups" as const, label: isZh ? "💾 备份与回档" : t("tabBackups") }] : []),
     { id: "config", label: isZh ? "⚙️ 游戏配置" : t("tabConfig") },
     ...(capabilities.mods ? [{ id: "mods" as const, label: isZh ? "📦 模组管理" : t("tabMods") }] : []),
@@ -598,7 +603,8 @@ export default function ServerDetailPage() {
     ...(!capabilities.consoleCommands ? [{ id: "logs" as const, label: isZh ? "📟 运行日志" : t("tabLogs") }] : []),
     ...(capabilities.playerList ? [{ id: "players" as const, label: isZh ? "👥 在线玩家" : t("tabPlayers") }] : []),
     ...(serverResource?.providerKey === "palworld" ? [{ id: "version" as const, label: t("tabVersion") }] : [])
-  ], [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isZh, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
+    ];
+  }, [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isViewer, isZh, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
   useEffect(() => {
     if (serverResource && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
@@ -704,9 +710,10 @@ export default function ServerDetailPage() {
         <ServerLobbyBanner
           server={serverResource}
           publicHost={settingsQuery.data?.publicHost}
+          canControl={canControlServer}
           disabled={gameUpdateActive || worldRegenerationActive}
           onAction={(action) => serverAction.mutate(action)}
-          onOpenShare={openShareDialog}
+          onOpenShare={canManageShares ? openShareDialog : undefined}
         />
       </div>
 
@@ -830,7 +837,7 @@ export default function ServerDetailPage() {
           {activeTab === "players" && capabilities.playerList && (
             <PlayersPanel serverId={serverResource.id} />
           )}
-          {serverResource.providerKey === "palworld" ? (
+          {!isViewer && serverResource.providerKey === "palworld" ? (
             <div className={activeTab === "version" ? "" : "hidden"}>
               <GameUpdateCard
                 playersOnline={playersOnline}
@@ -932,7 +939,7 @@ export default function ServerDetailPage() {
         </aside>
       </div>
 
-      <ShareServerDialog
+      {canManageShares ? <ShareServerDialog
         copied={copied}
         open={shareDialogOpen}
         shareDisabling={shareDisable.isPending}
@@ -948,9 +955,9 @@ export default function ServerDetailPage() {
         onDisableShare={() => shareDisable.mutate()}
         onEnableShare={() => shareEnable.mutate()}
         onShareIncludePasswordChange={setShareIncludePassword}
-      />
+      /> : null}
 
-      {capabilities.worldRegeneration ? (
+      {!isViewer && capabilities.worldRegeneration ? (
         <WorldRegenerationAction
           open={worldRegenerationDialogOpen}
           playersOnline={playersOnline}

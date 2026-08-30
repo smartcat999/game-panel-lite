@@ -15,11 +15,13 @@ import { formatRuntimeInstallError } from "@/lib/runtime-errors";
 import { isRuntimeImagePreparing, isRuntimeImageReady, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import { cn } from "@/lib/utils";
 import type { GameCatalogEntry, ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
+import { usePermissions } from "@/lib/permissions";
 
 import { GameAssetsSubNav } from "@/components/sub-nav";
 
 export default function GamesPage() {
   const { t } = useI18n();
+  const { canCreateServer, canManageSystem } = usePermissions();
   const queryClient = useQueryClient();
   const gamesQuery = useQuery({
     queryKey: ["games"],
@@ -44,6 +46,8 @@ export default function GamesPage() {
           <GameRuntimeCard
             key={game.key}
             game={game}
+            canCreateServer={canCreateServer}
+            canInstall={canManageSystem}
             installError={install.error ? formatRuntimeInstallError(install.error, t) : ""}
             installingProvider={install.variables?.providerKey}
             isInstalling={install.isPending}
@@ -58,12 +62,16 @@ export default function GamesPage() {
 
 function GameRuntimeCard({
   game,
+  canCreateServer,
+  canInstall,
   installError,
   installingProvider,
   isInstalling,
   onInstall,
 }: {
   game: GameCatalogEntry;
+  canCreateServer: boolean;
+  canInstall: boolean;
   installError: string;
   installingProvider?: ProviderKey;
   isInstalling: boolean;
@@ -112,6 +120,8 @@ function GameRuntimeCard({
               <ProviderRuntimeRow
                 key={provider.key}
                 game={game}
+                canCreateServer={canCreateServer}
+                canInstall={canInstall}
                 installError={installError}
                 installingProvider={installingProvider}
                 isInstalling={isInstalling}
@@ -130,6 +140,8 @@ function GameRuntimeCard({
 
 function ProviderRuntimeRow({
   game,
+  canCreateServer,
+  canInstall,
   installError,
   installingProvider,
   isInstalling,
@@ -138,6 +150,8 @@ function ProviderRuntimeRow({
   showProviderTitle
 }: {
   game: GameCatalogEntry;
+  canCreateServer: boolean;
+  canInstall: boolean;
   installError: string;
   installingProvider?: ProviderKey;
   isInstalling: boolean;
@@ -180,7 +194,7 @@ function ProviderRuntimeRow({
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {ready ? (
+        {ready && canCreateServer ? (
           <Link
             href={`/servers/new?game=${encodeURIComponent(game.key)}&provider=${encodeURIComponent(provider.key)}${provider.recommendedVersion ? `&version=${encodeURIComponent(provider.recommendedVersion)}` : ""}`}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-panel-green px-4 text-sm font-semibold text-slate-950 transition hover:bg-panel-green/90 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
@@ -188,7 +202,7 @@ function ProviderRuntimeRow({
             <Plus aria-hidden="true" className="size-4" />
             {t("gameLibraryCreate")}
           </Link>
-        ) : (
+        ) : canInstall ? (
           <Button
             type="button"
             variant={failed ? "secondary" : "primary"}
@@ -199,7 +213,7 @@ function ProviderRuntimeRow({
             {preparing ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Download aria-hidden="true" className="size-4" />}
             {preparing ? t("gameLibraryInstalling") : updateAvailable ? t("gameLibraryUpdate") : t("gameLibraryInstall")}
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
   );

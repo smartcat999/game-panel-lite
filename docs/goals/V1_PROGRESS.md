@@ -1,5 +1,13 @@
 # V1 Progress
 
+## 2026-08-30
+
+- Centralized administrator, operator, and viewer permissions in one backend role matrix and returned effective capabilities with the authenticated account.
+- Enforced read and mutation permissions on the backend for server operations, deletion, game assets, activity events, nodes, system maintenance, global settings, and tenant-administration scaffolding.
+- Aligned navigation and server-detail surfaces with the same role model: viewers only see dashboards, server lobbies, status, and join information; operators retain game-server maintenance without deletion or system access.
+- Added an explicit permission matrix to team settings, protected direct page navigation, stored non-admin language preferences locally, and hardened organization member role, identity, duplicate, owner-removal, and quota validation.
+- Added backend authorization and frontend role-matrix tests; frontend lint, typecheck, focused tests, and production build pass.
+
 ## 2026-08-28
 
 - Replaced imperative remote lifecycle tasks with durable workload assignments and worker observations: the API now writes desired state, the worker reconciles real Docker state, and the controller derives status only from matching assignment UID and generation.

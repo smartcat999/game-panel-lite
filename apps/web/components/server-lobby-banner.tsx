@@ -30,12 +30,14 @@ function formatServerUptime(server: GameServerResource) {
 export function ServerLobbyBanner({
   server,
   publicHost,
+  canControl = true,
   disabled,
   onAction,
   onOpenShare
 }: {
   server: GameServerResource;
   publicHost?: string;
+  canControl?: boolean;
   disabled?: boolean;
   onAction: (action: "start" | "stop" | "restart") => void;
   onOpenShare?: () => void;
@@ -133,7 +135,7 @@ export function ServerLobbyBanner({
         </div>
 
         {/* Right: Quick Action Controls */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {canControl ? <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           {isRunning ? (
             <>
               <button
@@ -166,7 +168,7 @@ export function ServerLobbyBanner({
               <span>{isZh ? "一键启动房间" : "Start Game Room"}</span>
             </button>
           )}
-        </div>
+        </div> : null}
       </div>
 
       {/* Bottom Connect & Share Bar */}

@@ -108,14 +108,34 @@ func (h *Handler) addOrganizationMember(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "userId is required")
 		return
 	}
+	if _, err := h.store.GetOrganization(r.Context(), orgID); err != nil {
+		writeError(w, http.StatusNotFound, "organization not found")
+		return
+	}
+	account, err := h.store.GetAdminAccount(r.Context(), req.UserID)
+	if err != nil {
+		account, err = h.store.GetAdminAccountByUsername(r.Context(), req.UserID)
+	}
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
 	if req.Role == "" {
 		req.Role = domain.RoleMember
+	}
+	if req.Role != domain.RoleAdmin && req.Role != domain.RoleMember && req.Role != domain.RoleViewer {
+		writeError(w, http.StatusBadRequest, "invalid role, allowed: admin, member, viewer")
+		return
+	}
+	if _, err := h.store.GetOrganizationMember(r.Context(), orgID, account.ID); err == nil {
+		writeError(w, http.StatusConflict, "user is already an organization member")
+		return
 	}
 
 	member := domain.OrganizationMember{
 		ID:             uuid.NewString(),
 		OrganizationID: orgID,
-		UserID:         req.UserID,
+		UserID:         account.ID,
 		Role:           req.Role,
 		CreatedAt:      time.Now().UTC(),
 	}
@@ -129,6 +149,15 @@ func (h *Handler) addOrganizationMember(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	orgID := chi.URLParam(r, "id")
 	userID := chi.URLParam(r, "userId")
+	member, err := h.store.GetOrganizationMember(r.Context(), orgID, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "organization member not found")
+		return
+	}
+	if member.Role == domain.RoleOwner {
+		writeError(w, http.StatusBadRequest, "organization owner cannot be removed")
+		return
+	}
 	if err := h.store.RemoveOrganizationMember(r.Context(), orgID, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remove member: "+err.Error())
 		return
@@ -158,6 +187,10 @@ type updateQuotaRequest struct {
 
 func (h *Handler) updateOrganizationQuota(w http.ResponseWriter, r *http.Request) {
 	orgID := chi.URLParam(r, "id")
+	if _, err := h.store.GetOrganization(r.Context(), orgID); err != nil {
+		writeError(w, http.StatusNotFound, "organization not found")
+		return
+	}
 	var req updateQuotaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request payload")

@@ -2,6 +2,24 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { getAuthBootstrap } from "./api";
+import type { Permission, UserRole } from "./types";
+
+const rolePermissions: Record<UserRole, readonly Permission[]> = {
+  admin: [
+    "server.view", "server.create", "server.control", "server.configure", "server.delete",
+    "backup.manage", "world.manage", "mod.manage", "player.manage", "share.manage",
+    "node.manage", "team.manage", "settings.manage", "system.manage"
+  ],
+  member: [
+    "server.view", "server.create", "server.control", "server.configure",
+    "backup.manage", "world.manage", "mod.manage", "player.manage", "share.manage"
+  ],
+  viewer: ["server.view"]
+};
+
+export function permissionsForRole(role: UserRole): readonly Permission[] {
+  return rolePermissions[role];
+}
 
 export function usePermissions() {
   const authQuery = useQuery({
@@ -12,30 +30,37 @@ export function usePermissions() {
   });
 
   const account = authQuery.data?.account;
-  // 如果没有 account（例如单机未启用登录）默认为 admin，如果有 account 则根据其实际 role
-  const role = account ? account.role : "admin";
+  const role: UserRole = account?.role ?? (authQuery.data?.initialized === false ? "admin" : "viewer");
+  const permissions = new Set<Permission>(account?.permissions ?? permissionsForRole(role));
+  const can = (permission: Permission) => permissions.has(permission);
 
   const isViewer = role === "viewer";
   const isMember = role === "member";
-  const isAdmin = role === "admin" || (role as string) === "owner";
+  const isAdmin = role === "admin";
 
   return {
     account,
     role,
+    permissions,
+    can,
     isViewer,
     isMember,
     isAdmin,
     isLoading: authQuery.isLoading,
     // 细粒度权限判定
-    canCreateServer: !isViewer,
-    canControlServer: !isViewer, // 启动、停止、重启
-    canEditServerConfig: !isViewer, // 编辑房间参数、Mod、世界
-    canDeleteServer: !isViewer && !isMember, // 仅 Admin 可删除
-    canManageBackups: !isViewer, // 创建/恢复/删除备份
-    canManageWorlds: !isViewer, // 新建/重置世界
-    canManageMods: !isViewer, // 安装/卸载 Mod
-    canManageNodes: isAdmin, // 接入/编辑/删除节点
-    canManageTeam: isAdmin, // 添加/移除成员、修改权限
-    canEditSettings: isAdmin // 控制台全局配置、HTTPS、更新
+    canCreateServer: can("server.create"),
+    canControlServer: can("server.control"),
+    canEditServerConfig: can("server.configure"),
+    canDeleteServer: can("server.delete"),
+    canManageBackups: can("backup.manage"),
+    canManageWorlds: can("world.manage"),
+    canManageMods: can("mod.manage"),
+    canManagePlayers: can("player.manage"),
+    canManageShares: can("share.manage"),
+    canManageNodes: can("node.manage"),
+    canManageTeam: can("team.manage"),
+    canEditSettings: can("settings.manage"),
+    canManageSystem: can("system.manage"),
+    canAccessGameAssets: !isViewer
   };
 }

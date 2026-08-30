@@ -7,11 +7,13 @@ import { useQuery } from "@tanstack/react-query";
 import { listGameServers } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/lib/permissions";
 
 export function TopNav() {
   const pathname = usePathname();
   const { locale } = useI18n();
   const isZh = locale === "zh";
+  const { canAccessGameAssets, canEditSettings } = usePermissions();
 
   const serversQuery = useQuery({
     queryKey: ["game-servers"],
@@ -37,7 +39,7 @@ export function TopNav() {
       badge: runningCount > 0 ? `${runningCount}` : undefined,
       active: pathname.startsWith("/servers")
     },
-    {
+    ...(canAccessGameAssets ? [{
       href: "/games",
       title: isZh ? "游戏、模组与世界资产" : "Games, Mods & World Assets",
       icon: Gamepad2,
@@ -47,19 +49,19 @@ export function TopNav() {
         pathname.startsWith("/presets") ||
         pathname.startsWith("/worlds") ||
         pathname.startsWith("/backups")
-    },
-    {
+    }] : []),
+    ...(canAccessGameAssets ? [{
       href: "/activity",
       title: isZh ? "监控与活动事件" : "Monitoring & Activity",
       icon: Activity,
       active: pathname.startsWith("/activity")
-    },
-    {
+    }] : []),
+    ...(canEditSettings ? [{
       href: "/settings",
       title: isZh ? "系统、节点与集群设置" : "System & Cluster Settings",
       icon: Settings,
       active: pathname.startsWith("/settings") || pathname.startsWith("/versions")
-    }
+    }] : [])
   ];
 
   return (

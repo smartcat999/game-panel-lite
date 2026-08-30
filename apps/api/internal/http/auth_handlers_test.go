@@ -179,3 +179,96 @@ func TestUserManagementAndRegistrationPolicy(t *testing.T) {
 		t.Fatalf("expected member access 403, got %d: %s", memberAccess.Code, memberAccess.Body.String())
 	}
 }
+
+func TestRolePermissionsProtectMutations(t *testing.T) {
+	router, _, _ := newTestRouter(t)
+
+	setup := httptest.NewRecorder()
+	setupReq := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/setup", strings.NewReader(`{"username":"superadmin","password":"password123"}`))
+	setupReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(setup, setupReq)
+	adminCookie := authCookieFromRecorder(t, setup)
+
+	createAccount := func(username, role string) {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(stdhttp.MethodPost, "/api/users", strings.NewReader(`{"username":"`+username+`","password":"password123","role":"`+role+`"}`))
+		request.Header.Set("Content-Type", "application/json")
+		request.AddCookie(adminCookie)
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != stdhttp.StatusCreated {
+			t.Fatalf("create %s: expected 201, got %d: %s", role, recorder.Code, recorder.Body.String())
+		}
+	}
+	login := func(username string) *stdhttp.Cookie {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"`+username+`","password":"password123"}`))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != stdhttp.StatusOK {
+			t.Fatalf("login %s: expected 200, got %d: %s", username, recorder.Code, recorder.Body.String())
+		}
+		return authCookieFromRecorder(t, recorder)
+	}
+	request := func(method, path, body string, cookie *stdhttp.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.AddCookie(cookie)
+		router.ServeHTTP(recorder, req)
+		return recorder
+	}
+
+	createAccount("operator1", "member")
+	createAccount("observer1", "viewer")
+	memberCookie := login("operator1")
+	viewerCookie := login("observer1")
+
+	viewerBootstrap := request(stdhttp.MethodGet, "/api/auth/bootstrap", "", viewerCookie)
+	if viewerBootstrap.Code != stdhttp.StatusOK || !strings.Contains(viewerBootstrap.Body.String(), `"permissions":["server.view"]`) {
+		t.Fatalf("expected viewer bootstrap to expose read-only permissions, got %d: %s", viewerBootstrap.Code, viewerBootstrap.Body.String())
+	}
+
+	viewerRead := request(stdhttp.MethodGet, "/api/servers", "", viewerCookie)
+	if viewerRead.Code != stdhttp.StatusOK {
+		t.Fatalf("expected viewer read access 200, got %d: %s", viewerRead.Code, viewerRead.Body.String())
+	}
+	viewerWrite := request(stdhttp.MethodPost, "/api/servers", `{}`, viewerCookie)
+	if viewerWrite.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected viewer write access 403, got %d: %s", viewerWrite.Code, viewerWrite.Body.String())
+	}
+	viewerActivity := request(stdhttp.MethodGet, "/api/activity", "", viewerCookie)
+	if viewerActivity.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected viewer activity access 403, got %d: %s", viewerActivity.Code, viewerActivity.Body.String())
+	}
+	viewerMonitoringEvents := request(stdhttp.MethodGet, "/api/monitoring/events", "", viewerCookie)
+	if viewerMonitoringEvents.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected viewer monitoring events access 403, got %d: %s", viewerMonitoringEvents.Code, viewerMonitoringEvents.Body.String())
+	}
+	viewerWorlds := request(stdhttp.MethodGet, "/api/worlds", "", viewerCookie)
+	if viewerWorlds.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected viewer world access 403, got %d: %s", viewerWorlds.Code, viewerWorlds.Body.String())
+	}
+
+	memberDelete := request(stdhttp.MethodDelete, "/api/servers/missing", "", memberCookie)
+	if memberDelete.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected member server delete 403, got %d: %s", memberDelete.Code, memberDelete.Body.String())
+	}
+	memberSettings := request(stdhttp.MethodPut, "/api/settings/public-host", `{"publicHost":"games.example.com"}`, memberCookie)
+	if memberSettings.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected member settings mutation 403, got %d: %s", memberSettings.Code, memberSettings.Body.String())
+	}
+	memberTenant := request(stdhttp.MethodGet, "/api/organizations", "", memberCookie)
+	if memberTenant.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected member tenant administration 403, got %d: %s", memberTenant.Code, memberTenant.Body.String())
+	}
+
+	memberOperation := request(stdhttp.MethodPost, "/api/servers/missing/start", "", memberCookie)
+	if memberOperation.Code == stdhttp.StatusForbidden {
+		t.Fatalf("expected member lifecycle permission, got 403: %s", memberOperation.Body.String())
+	}
+}

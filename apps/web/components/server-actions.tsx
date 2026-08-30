@@ -57,6 +57,7 @@ export function ServerActions({
   const lifecycleBusy = status === "creating" || status === "starting" || status === "stopping" || status === "restarting" || status === "deleting";
   const controlsDisabled = disabled || Boolean(busyAction) || lifecycleBusy || isViewer;
   const canDelete = (status === "stopped" || status === "errored") && canDeleteServer;
+  const canShowDelete = showDelete && canDeleteServer;
   // Restart is a refresh-style launch operation: a running server is recreated,
   // while a stopped or failed server is started through the same refresh path.
   const showRowRestart = rowMode;
@@ -111,8 +112,8 @@ export function ServerActions({
     const rect = moreButtonRef.current?.getBoundingClientRect();
     if (!rect) return;
     const menuWidth = 144;
-    const visibleActionCount = Number(showRowRestart) + Number(Boolean(onRegenerateWorld)) + Number(showDelete);
-    const hasSeparatedDelete = showDelete && (showRowRestart || Boolean(onRegenerateWorld));
+    const visibleActionCount = Number(showRowRestart) + Number(Boolean(onRegenerateWorld)) + Number(canShowDelete);
+    const hasSeparatedDelete = canShowDelete && (showRowRestart || Boolean(onRegenerateWorld));
     const estimatedHeight = visibleActionCount * 32 + 8 + (hasSeparatedDelete ? 9 : 0);
     setMorePosition({
       left: Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth)),
@@ -204,6 +205,8 @@ export function ServerActions({
       ? "h-10 w-full min-w-0 whitespace-nowrap px-2 text-sm"
       : undefined;
 
+  if (isViewer) return null;
+
   return (
     <>
       <div className={cn(rowMode ? "flex flex-nowrap justify-end gap-1.5" : compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
@@ -238,7 +241,7 @@ export function ServerActions({
             {copiedInvite ? t("copied") : t("actionCopyInvite")}
           </Button>
         )}
-        {rowMode || onRegenerateWorld || showDelete ? (
+        {rowMode || onRegenerateWorld || canShowDelete ? (
           <button
             aria-expanded={moreOpen}
             aria-haspopup="menu"
@@ -295,8 +298,8 @@ export function ServerActions({
                 <Globe2 aria-hidden="true" className="size-3.5" />
                 {regenerationBusy ? t("worldRegenerationProgress") : t("worldRegenerateAction")}
               </button> : null}
-              {showDelete && (onRegenerateWorld || showRowRestart) ? <div className="mx-2 my-1 border-t border-white/10" /> : null}
-              {showDelete ? (
+              {canShowDelete && (onRegenerateWorld || showRowRestart) ? <div className="mx-2 my-1 border-t border-white/10" /> : null}
+              {canShowDelete ? (
                 <button
                   className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-red-400/60 disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={controlsDisabled || !canDelete}

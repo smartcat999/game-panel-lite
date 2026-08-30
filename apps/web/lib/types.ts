@@ -425,10 +425,27 @@ export type ActivityEvent = {
 
 export type UserRole = "admin" | "member" | "viewer";
 
+export type Permission =
+  | "server.view"
+  | "server.create"
+  | "server.control"
+  | "server.configure"
+  | "server.delete"
+  | "backup.manage"
+  | "world.manage"
+  | "mod.manage"
+  | "player.manage"
+  | "share.manage"
+  | "node.manage"
+  | "team.manage"
+  | "settings.manage"
+  | "system.manage";
+
 export type UserAccount = {
   id: string;
   username: string;
   role: UserRole;
+  permissions?: Permission[];
   createdAt?: string;
 };
 
