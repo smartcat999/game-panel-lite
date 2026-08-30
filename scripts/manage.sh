@@ -31,6 +31,8 @@ case "$ACTION" in
   update)
     docker compose "$@" pull $SERVICES
     docker compose "$@" up -d --remove-orphans --pull never $SERVICES
+    # Refresh Docker DNS resolutions after API and Web containers are replaced.
+    docker compose "$@" up -d --remove-orphans --pull never --no-deps --force-recreate nginx
     ;;
   stop)
     docker compose "$@" stop $SERVICES
