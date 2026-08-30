@@ -514,7 +514,7 @@ export function NodeManagement() {
                 })}
                 className="h-8 text-xs bg-panel-green text-slate-950 font-bold hover:bg-panel-green/90"
               >
-                {updateMutation.isPending ? t("saving") : t("save")}
+                {updateMutation.isPending ? t("saving") : t("saveButton")}
               </Button>
             </div>
           </div>
