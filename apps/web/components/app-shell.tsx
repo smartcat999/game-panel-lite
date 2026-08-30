@@ -54,6 +54,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [accountMessage, setAccountMessage] = useState("");
 
   const profileRef = useRef<HTMLDivElement>(null);
@@ -87,6 +88,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     onSuccess: () => {
       setCurrentPassword("");
       setNewPassword("");
+      setConfirmPassword("");
       setAccountMessage(t("passwordChanged"));
     },
     onError: (err) => setAccountMessage(err instanceof Error ? err.message : t("passwordChangeFailed"))
@@ -136,8 +138,11 @@ function AppChrome({ children }: { children: ReactNode }) {
   const submitPasswordChange = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAccountMessage("");
+    if (newPassword !== confirmPassword) return;
     passwordMutation.mutate();
   };
+
+  const passwordMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   return (
     <div className="min-h-screen bg-[#070b12] text-slate-100 selection:bg-panel-green/30">
@@ -350,7 +355,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                     disabled={localeMutation.isPending}
                     onClick={saveLocale}
                   >
-                    {localeMutation.isPending ? t("saving") : t("save")}
+                    {localeMutation.isPending ? t("saving") : t("saveButton")}
                   </Button>
                 </div>
               </div>
@@ -371,10 +376,27 @@ function AppChrome({ children }: { children: ReactNode }) {
                   <Input
                     type="password"
                     required
+                    minLength={8}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="h-8 text-xs bg-slate-950 border-slate-700"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-slate-300">{t("confirmNewPassword")}</label>
+                  <Input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    aria-invalid={passwordMismatch}
+                    className={cn(
+                      "h-8 text-xs bg-slate-950 border-slate-700",
+                      passwordMismatch && "border-rose-500 focus-visible:ring-rose-500/30"
+                    )}
+                  />
+                  {passwordMismatch && <p className="text-xs text-rose-400">{t("passwordsDoNotMatch")}</p>}
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button
@@ -386,9 +408,15 @@ function AppChrome({ children }: { children: ReactNode }) {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={passwordMutation.isPending}
+                    disabled={
+                      passwordMutation.isPending ||
+                      !currentPassword ||
+                      !newPassword ||
+                      !confirmPassword ||
+                      newPassword !== confirmPassword
+                    }
                   >
-                    {passwordMutation.isPending ? t("saving") : t("save")}
+                    {passwordMutation.isPending ? t("saving") : t("saveButton")}
                   </Button>
                 </div>
               </form>
