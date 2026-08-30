@@ -1,6 +1,6 @@
 services:
   api:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.2.5}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.2.6}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -12,7 +12,7 @@ services:
       GAMEPANEL_PROVIDER_CATALOG_PATH: ${GAMEPANEL_PROVIDER_CATALOG_PATH:-/etc/gamepanel/providers.json}
       GAMEPANEL_IMAGE_REGION: ${GAMEPANEL_IMAGE_REGION:-global}
       GAMEPANEL_IMAGE_REGISTRY: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}
-      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.2.5}
+      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.2.6}
       GAMEPANEL_PROMETHEUS_URL: ${GAMEPANEL_PROMETHEUS_URL:-http://127.0.0.1:9090}
       GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
       GAMEPANEL_RELEASE_MANIFEST_URL: ${GAMEPANEL_RELEASE_MANIFEST_URL:-https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json}
@@ -27,7 +27,7 @@ services:
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
 
   updater:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-updater:${GAMEPANEL_IMAGE_TAG:-v0.2.5}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-updater:${GAMEPANEL_IMAGE_TAG:-v0.2.6}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -42,7 +42,7 @@ services:
       - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
 
   gamepanel-exporter:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.2.5}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.2.6}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -116,7 +116,7 @@ services:
       - /:/host:ro,rslave
 
   web:
-    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.2.5}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.2.6}
     pull_policy: always
     restart: unless-stopped
     environment:

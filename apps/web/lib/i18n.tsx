@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type Locale = "zh" | "en";
 
@@ -3202,6 +3202,10 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>("zh");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("gamepanel.locale");
+    if (saved === "zh" || saved === "en") setLocale(saved);
+  }, []);
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,

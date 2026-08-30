@@ -35,6 +35,7 @@
 - **⏱️ Time-Machine Snapshots & Rollback**: One-click world snapshots, backup downloads, and instant disaster recovery without touching the CLI.
 - **📊 Production-Grade Observability**: Native Prometheus metrics, host & container resource tracking (CPU, RAM, Network I/O), and cluster event streaming.
 - **💻 Interactive Web Console & Real-time Logs**: Low-latency SSE logs, terminal command shortcuts, and integrated player lobby management.
+- **👥 Role-Aware Local Collaboration**: Administrators, operators, and read-only viewers receive distinct navigation, actions, and backend-enforced permissions inside one self-hosted panel.
 - **🛡️ Container Isolation & Security**: Each game server runs in an isolated Docker container with strict CPU/memory limits and dedicated volume mounts.
 
 ---

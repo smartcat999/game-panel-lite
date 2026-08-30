@@ -30,7 +30,7 @@ export default function ServersPage() {
 function ServersPageContent() {
   const { t, locale } = useI18n();
   const isZh = locale === "zh";
-  const { canCreateServer, isViewer } = usePermissions();
+  const { canCreateServer, canDeleteServer, isViewer } = usePermissions();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -261,15 +261,19 @@ function ServersPageContent() {
                           icon={<RotateCcw className="size-3.5 text-sky-400" />}
                           label={t("actionRestart")}
                         />
-                        <div className="my-1 border-t border-panel-line" />
-                        <MenuButton
-                          danger
-                          disabled={!canDeleteSelection || bulkMutation.isPending}
-                          title={!canDeleteSelection && selectedIds.size ? t("deleteRequiresStopped") : undefined}
-                          onClick={() => setDeleteConfirmOpen(true)}
-                          icon={<Trash2 className="size-3.5" />}
-                          label={t("deleteSelectedServers")}
-                        />
+                        {canDeleteServer ? (
+                          <>
+                            <div className="my-1 border-t border-panel-line" />
+                            <MenuButton
+                              danger
+                              disabled={!canDeleteSelection || bulkMutation.isPending}
+                              title={!canDeleteSelection && selectedIds.size ? t("deleteRequiresStopped") : undefined}
+                              onClick={() => setDeleteConfirmOpen(true)}
+                              icon={<Trash2 className="size-3.5" />}
+                              label={t("deleteSelectedServers")}
+                            />
+                          </>
+                        ) : null}
                       </div>
                     </details>
                   </>

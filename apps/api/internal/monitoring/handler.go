@@ -18,11 +18,11 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Register(r chi.Router) {
+func (h *Handler) Register(r chi.Router, eventMiddleware func(http.Handler) http.Handler) {
 	r.Get("/api/monitoring/overview", h.overview)
 	r.Get("/api/monitoring/metrics", h.metrics)
 	r.Get("/api/monitoring/server-load", h.serverLoad)
-	r.Get("/api/monitoring/events", h.events)
+	r.With(eventMiddleware).Get("/api/monitoring/events", h.events)
 	r.Get("/api/monitoring/platform", h.platform)
 	r.Get("/api/servers/{id}/metrics", h.serverMetrics)
 	r.Get("/api/servers/{id}/events", h.serverEvents)

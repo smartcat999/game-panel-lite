@@ -52,7 +52,7 @@ func Load() Config {
 		ProviderCatalogPath:    value("GAMEPANEL_PROVIDER_CATALOG_PATH", "./config/providers.json"),
 		ImageRegion:            value("GAMEPANEL_IMAGE_REGION", "global"),
 		ImageRegistry:          value("GAMEPANEL_IMAGE_REGISTRY", "smartcat99999"),
-		ImageTag:               value("GAMEPANEL_IMAGE_TAG", "v0.2.5"),
+		ImageTag:               value("GAMEPANEL_IMAGE_TAG", "v0.2.6"),
 		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
 		PrometheusQueryTimeout: queryTimeout,
 		ReleaseManifestURL:     value("GAMEPANEL_RELEASE_MANIFEST_URL", "https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json"),

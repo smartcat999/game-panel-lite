@@ -81,6 +81,18 @@ Client and server mod requirements differ. Check the mod classification and make
 
 ## 7. HTTPS and panel updates
 
+### User roles
+
+Administrators can create local accounts and assign roles under **Settings → Team & Workspace**:
+
+| Role | Access |
+| --- | --- |
+| Administrator | Full server, user, node, global settings, release update, and deletion access |
+| Operator | Create, configure, and control servers; manage mods, players, worlds, and backups; cannot delete servers or change the system |
+| Viewer | View only the dashboard, server lobby, runtime status, and join information |
+
+The interface removes navigation and actions that the current role cannot use, and the backend verifies every request independently. These roles support collaboration inside one self-hosted panel; they do not claim complete resource isolation between separate tenants.
+
 ### HTTPS
 
 1. Point a domain to the server's public IP.
