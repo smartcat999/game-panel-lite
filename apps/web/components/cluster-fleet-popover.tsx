@@ -19,6 +19,7 @@ import {
 import { listComputeNodes, listGameServers, getObservabilityMetrics, getNodeJoinCommand, createComputeNode } from "@/lib/api";
 import { gameServerStatus } from "@/lib/game-server-resource";
 import { useI18n } from "@/lib/i18n";
+import { usePermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
 import { TrafficTopology } from "@/components/traffic-topology";
@@ -26,6 +27,7 @@ import { TrafficTopology } from "@/components/traffic-topology";
 export function ClusterFleetPopover() {
   const { locale } = useI18n();
   const isZh = locale === "zh";
+  const { canEditSettings, canManageNodes } = usePermissions();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -175,14 +177,16 @@ export function ClusterFleetPopover() {
               </div>
             </div>
 
-            <Link
-              href="/settings"
-              onClick={() => setIsOpen(false)}
-              className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:text-white transition"
-              title={isZh ? "节点管理设置" : "Node Settings"}
-            >
-              <Settings className="size-3.5" />
-            </Link>
+            {canEditSettings ? (
+              <Link
+                href="/settings"
+                onClick={() => setIsOpen(false)}
+                className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:text-white transition"
+                title={isZh ? "节点管理设置" : "Node Settings"}
+              >
+                <Settings className="size-3.5" />
+              </Link>
+            ) : null}
           </div>
 
           {/* 实时系统指标条 */}
@@ -267,7 +271,7 @@ export function ClusterFleetPopover() {
 
           {/* 底部快捷操作 */}
           <div className="pt-2 border-t border-slate-800">
-            <div className="grid grid-cols-2 gap-2">
+            <div className={cn("grid gap-2", canManageNodes ? "grid-cols-2" : "grid-cols-1")}>
               <button
                 type="button"
                 onClick={() => {
@@ -280,20 +284,22 @@ export function ClusterFleetPopover() {
                 <span>{isZh ? "网络拓扑" : "Topology"}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  setNewNodeName(`Worker-Node-${nodes.length}`);
-                  setNewNodeRegion("");
-                  setGeneratedJoinData(null);
-                  setJoinModalOpen(true);
-                }}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950 hover:bg-emerald-900 py-2 text-xs font-medium text-emerald-300 hover:text-white transition shadow-xs"
-              >
-                <Plus className="size-3.5" />
-                <span>{isZh ? "添加节点" : "Add Node"}</span>
-              </button>
+              {canManageNodes ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setNewNodeName(`Worker-Node-${nodes.length}`);
+                    setNewNodeRegion("");
+                    setGeneratedJoinData(null);
+                    setJoinModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950 hover:bg-emerald-900 py-2 text-xs font-medium text-emerald-300 hover:text-white transition shadow-xs"
+                >
+                  <Plus className="size-3.5" />
+                  <span>{isZh ? "添加节点" : "Add Node"}</span>
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -333,7 +339,7 @@ export function ClusterFleetPopover() {
       )}
 
       {/* Node Join Command Modal via createPortal */}
-      {mounted && joinModalOpen && createPortal(
+      {mounted && canManageNodes && joinModalOpen && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
           onClick={(e) => {

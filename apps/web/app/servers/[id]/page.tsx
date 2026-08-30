@@ -1113,6 +1113,7 @@ function OverviewTab({
   resource: GameServerResource;
   runtimeError: string;
 }) {
+  const { canEditSettings, canManageNodes } = usePermissions();
   const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 60000 });
   const nodeInfo = nodesQuery.data?.find((n) => n.id === resource.nodeId);
   const isWorker = Boolean(resource.nodeId && resource.nodeId !== "node-local");
@@ -1139,9 +1140,11 @@ function OverviewTab({
               <p className="text-[11px] text-slate-500">实例容器所在的物理/云端主机及连接路由模式</p>
             </div>
           </div>
-          <Link href="/settings" className="text-xs text-panel-green hover:underline flex items-center gap-1">
-            管理集群节点 <ExternalLink className="size-3" />
-          </Link>
+          {canManageNodes && canEditSettings ? (
+            <Link href="/settings" className="text-xs text-panel-green hover:underline flex items-center gap-1">
+              管理集群节点 <ExternalLink className="size-3" />
+            </Link>
+          ) : null}
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
