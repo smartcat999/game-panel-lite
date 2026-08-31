@@ -52,7 +52,11 @@ type TopologyTooltipParams = {
   };
 };
 
-export function TrafficTopology() {
+type TrafficTopologyProps = {
+  showTitle?: boolean;
+};
+
+export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
   const echartsRef = useRef<EChartsType | null>(null);
@@ -445,12 +449,16 @@ export function TrafficTopology() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-[#090d16] p-4 shadow-sm">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-xs">
-              <Network className="size-4" />
-            </span>
-            <h2 className="text-sm font-bold tracking-tight text-white">
-              {isZh ? "分布式集群网络与流量拓扑 (Live Graph Engine)" : "Distributed Network & Traffic Topology"}
-            </h2>
+            {showTitle ? (
+              <>
+                <span className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-xs">
+                  <Network className="size-4" />
+                </span>
+                <h2 className="text-sm font-bold tracking-tight text-white">
+                  {isZh ? "分布式集群网络与流量拓扑 (Live Graph Engine)" : "Distributed Network & Traffic Topology"}
+                </h2>
+              </>
+            ) : null}
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
               <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
               {nodes.length} Nodes · {totalRunning} Active Workloads
