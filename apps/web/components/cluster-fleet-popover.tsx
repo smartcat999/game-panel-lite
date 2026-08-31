@@ -331,7 +331,7 @@ export function ClusterFleetPopover() {
             </div>
 
             <div className="rounded-xl overflow-hidden border border-slate-800/80">
-              <TrafficTopology />
+              <TrafficTopology showTitle={false} />
             </div>
           </div>
         </div>,
