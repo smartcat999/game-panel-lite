@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { describeResourceAction, formatServerDetailError, isServerLockedForResourceChanges } from "./server-detail-actions";
+import { describeResourceAction, formatServerDetailError, isServerLockedForResourceChanges, shouldRenderServerDetailTabs } from "./server-detail-actions";
 import type { ServerStatus } from "./types";
 
 describe("server detail action feedback", () => {
+  it("does not render capability-dependent tabs while provider capabilities are loading", () => {
+    expect(shouldRenderServerDetailTabs({ providerResolved: false, providerQueryPending: true })).toBe(false);
+    expect(shouldRenderServerDetailTabs({ providerResolved: true, providerQueryPending: false })).toBe(true);
+    expect(shouldRenderServerDetailTabs({ providerResolved: false, providerQueryPending: false })).toBe(true);
+  });
+
   it("turns raw Docker runtime errors into user-facing guidance", () => {
     expect(formatServerDetailError(new Error("Docker runtime unavailable: Cannot connect to Docker daemon"))).toBe(
       "Docker 未连接，请先在设置页完成 Docker Host 配置。"

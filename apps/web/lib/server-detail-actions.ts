@@ -17,6 +17,16 @@ export function isServerLockedForResourceChanges(status?: ServerStatus) {
   return status === "running" || isServerLifecyclePending(status);
 }
 
+export function shouldRenderServerDetailTabs({
+  providerResolved,
+  providerQueryPending
+}: {
+  providerResolved: boolean;
+  providerQueryPending: boolean;
+}) {
+  return providerResolved || !providerQueryPending;
+}
+
 export function formatServerDetailError(
   error: unknown,
   copy: ServerDetailErrorCopy = {

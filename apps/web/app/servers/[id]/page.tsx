@@ -70,7 +70,7 @@ import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMode, gam
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
-import { describeResourceAction, formatServerDetailError, isServerLifecyclePending } from "@/lib/server-detail-actions";
+import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
@@ -151,6 +151,10 @@ export default function ServerDetailPage() {
     () => gamesQuery.data?.flatMap((game) => game.providers).find((provider) => provider.key === serverResource?.providerKey),
     [gamesQuery.data, serverResource?.providerKey]
   );
+  const renderTabs = shouldRenderServerDetailTabs({
+    providerResolved: Boolean(providerCatalog),
+    providerQueryPending: gamesQuery.isPending
+  });
   const capabilities = providerCatalog?.capabilities ?? {
     ...defaultCapabilities,
     mods: serverResource ? gameServerMode(serverResource) === "tmodloader" : false
@@ -719,44 +723,52 @@ export default function ServerDetailPage() {
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0">
-          <div className="mb-4 flex gap-2 overflow-x-auto rounded-lg border border-panel-line bg-panel-card px-3 py-3" role="tablist" aria-label={serverResource.name}>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                id={`server-detail-tab-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-controls="server-detail-tabpanel"
-                aria-selected={activeTab === tab.id}
-                tabIndex={activeTab === tab.id ? 0 : -1}
-                className={cn(
-                  "relative shrink-0 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
-                  activeTab === tab.id && "border-panel-green/40 bg-panel-green/15 text-white shadow-[inset_0_0_0_1px_rgba(123,217,120,0.18)]"
-                )}
-                onClick={() => setActiveTab(tab.id)}
-                onKeyDown={(event) => {
-                  const currentIndex = tabs.findIndex((item) => item.id === tab.id);
-                  const nextIndex = event.key === "Home"
-                    ? 0
-                    : event.key === "End"
-                      ? tabs.length - 1
-                      : event.key === "ArrowRight"
-                        ? (currentIndex + 1) % tabs.length
-                        : event.key === "ArrowLeft"
-                          ? (currentIndex - 1 + tabs.length) % tabs.length
-                          : -1;
-                  if (nextIndex < 0) return;
-                  event.preventDefault();
-                  const nextTab = tabs[nextIndex];
-                  if (!nextTab) return;
-                  setActiveTab(nextTab.id);
-                  window.requestAnimationFrame(() => document.getElementById(`server-detail-tab-${nextTab.id}`)?.focus());
-                }}
-              >
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
+          {renderTabs ? (
+            <div className="mb-4 flex gap-2 overflow-x-auto rounded-lg border border-panel-line bg-panel-card px-3 py-3" role="tablist" aria-label={serverResource.name}>
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  id={`server-detail-tab-${tab.id}`}
+                  type="button"
+                  role="tab"
+                  aria-controls="server-detail-tabpanel"
+                  aria-selected={activeTab === tab.id}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  className={cn(
+                    "relative shrink-0 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
+                    activeTab === tab.id && "border-panel-green/40 bg-panel-green/15 text-white shadow-[inset_0_0_0_1px_rgba(123,217,120,0.18)]"
+                  )}
+                  onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={(event) => {
+                    const currentIndex = tabs.findIndex((item) => item.id === tab.id);
+                    const nextIndex = event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? tabs.length - 1
+                        : event.key === "ArrowRight"
+                          ? (currentIndex + 1) % tabs.length
+                          : event.key === "ArrowLeft"
+                            ? (currentIndex - 1 + tabs.length) % tabs.length
+                            : -1;
+                    if (nextIndex < 0) return;
+                    event.preventDefault();
+                    const nextTab = tabs[nextIndex];
+                    if (!nextTab) return;
+                    setActiveTab(nextTab.id);
+                    window.requestAnimationFrame(() => document.getElementById(`server-detail-tab-${nextTab.id}`)?.focus());
+                  }}
+                >
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-4 flex h-[66px] items-center gap-3 rounded-lg border border-panel-line bg-panel-card px-4" aria-busy="true" aria-label={t("loading")}>
+              <span className="h-9 w-32 animate-pulse rounded-md bg-slate-800" aria-hidden="true" />
+              <span className="h-9 w-28 animate-pulse rounded-md bg-slate-800" aria-hidden="true" />
+              <span className="h-9 w-28 animate-pulse rounded-md bg-slate-800" aria-hidden="true" />
+            </div>
+          )}
 
           {gameUpdateActive && activeTab !== "version" ? (
             <button
