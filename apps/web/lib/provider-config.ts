@@ -26,8 +26,16 @@ export function updateProviderConfigPayload(
   field: ProviderConfigField,
   value: string | boolean
 ): ProviderConfigPayload {
+  return updateProviderConfigPath(payload, field.name, coerceProviderFieldValue(field, value));
+}
+
+export function updateProviderConfigPath(
+  payload: ProviderConfigPayload,
+  path: string,
+  value: unknown
+): ProviderConfigPayload {
   return {
-    ...setProviderConfigValue({ ...payload }, field.name, coerceProviderFieldValue(field, value))
+    ...setProviderConfigValue({ ...payload }, path, value)
   };
 }
 

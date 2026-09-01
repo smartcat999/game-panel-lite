@@ -19,6 +19,7 @@ export type ProviderCapabilities = {
 export type ProviderConfigField = {
   name: string;
   label: string;
+  labelEn?: string;
   type: "text" | "password" | "number" | "select" | "boolean" | string;
   required: boolean;
   default?: unknown;

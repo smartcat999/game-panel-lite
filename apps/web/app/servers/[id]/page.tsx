@@ -795,6 +795,7 @@ export default function ServerDetailPage() {
           {activeTab === "overview" && (
             <OverviewTab
               resource={serverResource}
+              providerFields={providerCatalog?.configSchema}
               events={visibleServerEvents}
               eventsLoading={serverEventsQuery.isLoading}
               runtimeError={runtimeErrorMessage}
@@ -850,7 +851,7 @@ export default function ServerDetailPage() {
           ) : null}
           {activeTab === "config" && (
             <div className="space-y-6">
-              <ServerGameRules server={serverResource} />
+              <ServerGameRules providerFields={providerCatalog?.configSchema} server={serverResource} />
               <ResourceLimitsCard
                 cpuPercent={statsQuery.data?.cpuPercent}
                 memoryMb={statsQuery.data?.memoryMb}
@@ -1105,11 +1106,13 @@ export default function ServerDetailPage() {
 function OverviewTab({
   events,
   eventsLoading,
+  providerFields,
   resource,
   runtimeError
 }: {
   events: MonitoringEvent[];
   eventsLoading: boolean;
+  providerFields?: ProviderConfigField[];
   resource: GameServerResource;
   runtimeError: string;
 }) {
@@ -1126,7 +1129,7 @@ function OverviewTab({
   return (
     <div className="space-y-6">
       {/* 1. Visual Game Rules & Environment */}
-      <ServerGameRules server={resource} />
+      <ServerGameRules providerFields={providerFields} server={resource} />
 
       {/* 3. Compute Node Topology Card */}
       <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
