@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 const provider: ProviderCatalog = {
@@ -104,6 +104,31 @@ describe("provider config helpers", () => {
     expect(playersField).toBeDefined();
     const updated = updateProviderConfigPayload(payload, playersField!, "12");
     expect(providerConfigValue(updated, "gameplay.maxPlayers")).toBe(12);
+  });
+
+  it("updates deeply nested paths without replacing sibling world rules", () => {
+    const payload = {
+      world: {
+        preset: "forest_default",
+        overrides: {
+          grass: "often",
+          winters_feast: "default"
+        }
+      }
+    };
+
+    const updated = updateProviderConfigPath(payload, "world.overrides.winters_feast", "enabled");
+
+    expect(updated).toEqual({
+      world: {
+        preset: "forest_default",
+        overrides: {
+          grass: "often",
+          winters_feast: "enabled"
+        }
+      }
+    });
+    expect(payload.world.overrides.winters_feast).toBe("default");
   });
 
   it("keeps nested schema defaults when stored override groups are empty", () => {

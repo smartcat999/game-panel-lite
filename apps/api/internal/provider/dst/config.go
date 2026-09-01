@@ -77,6 +77,7 @@ func worldOptionFields(prefix string, world string) []domain.ProviderConfigField
 		fields = append(fields, domain.ProviderConfigField{
 			Name:    prefix + ".overrides." + item.Key,
 			Label:   item.Label,
+			LabelEn: item.LabelEn,
 			Type:    "select",
 			Default: defaultForWorld(item, world),
 			Options: options,

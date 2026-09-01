@@ -2,19 +2,22 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Flame, KeyRound, Moon, Save, Shield, ShieldAlert, Sliders, Sparkles, Swords, Users, Zap } from "lucide-react";
+import { CalendarDays, Check, Flame, KeyRound, Moon, Save, Shield, ShieldAlert, Sliders, Sparkles, Swords, Users, Zap } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { useToast } from "@/components/toast-context";
 import { useI18n } from "@/lib/i18n";
 import { updateGameServerConfig } from "@/lib/api";
 import { gameServerJoinPort } from "@/lib/game-server-resource";
 import { usePermissions } from "@/lib/permissions";
+import { providerConfigValue, updateProviderConfigPath } from "@/lib/provider-config";
 import { cn } from "@/lib/utils";
-import type { GameServerResource } from "@/lib/types";
+import type { GameServerResource, ProviderConfigField } from "@/lib/types";
 
 export function ServerGameRules({
+  providerFields = [],
   server
 }: {
+  providerFields?: ProviderConfigField[];
   server: GameServerResource;
 }) {
   const { locale } = useI18n();
@@ -32,19 +35,7 @@ export function ServerGameRules({
   const [draft, setDraft] = useState<Record<string, unknown>>({ ...currentConfig });
 
   const updateField = (key: string, value: unknown) => {
-    setDraft((prev) => {
-      const next = { ...prev, [key]: value };
-      if (key.includes(".")) {
-        const parts = key.split(".");
-        const parent = parts[0];
-        const child = parts[1];
-        if (parent && child) {
-          const parentObj = { ...((next[parent] ?? {}) as Record<string, unknown>), [child]: value };
-          next[parent] = parentObj;
-        }
-      }
-      return next;
-    });
+    setDraft((prev) => updateProviderConfigPath(prev, key, value));
   };
 
   const saveMutation = useMutation({
@@ -103,7 +94,7 @@ export function ServerGameRules({
         ) : gameKey === "minecraft" ? (
           <MinecraftRules draft={draft} onChange={updateField} isZh={isZh} />
         ) : gameKey === "dont-starve-together" || providerKey === "dont-starve-together" ? (
-          <DSTRules draft={draft} onChange={updateField} isZh={isZh} />
+          <DSTRules draft={draft} fields={providerFields} onChange={updateField} isZh={isZh} />
         ) : (
           <TerrariaRules draft={draft} onChange={updateField} isZh={isZh} />
         )}
@@ -555,10 +546,12 @@ function MinecraftRules({
 // -------------------------------------------------------------
 function DSTRules({
   draft,
+  fields,
   onChange,
   isZh
 }: {
   draft: Record<string, unknown>;
+  fields: ProviderConfigField[];
   onChange: (key: string, value: unknown) => void;
   isZh: boolean;
 }) {
@@ -580,6 +573,10 @@ function DSTRules({
   );
   const pvp = Boolean(draft["gameplay.pvp"] ?? gameplayObj.pvp ?? draft.pvp ?? false);
   const maxPlayers = Number(draft["gameplay.maxPlayers"] ?? gameplayObj.maxPlayers ?? draft.maxPlayers ?? 6);
+  const seasonalEventFields = fields.filter((field) => field.group === "dst.world.worldsettings.events");
+  const specialEventField = fields.find((field) => field.name === "world.overrides.specialevent");
+  const followsOfficialEvent = providerConfigValue(draft, "world.overrides.specialevent") !== "none";
+  const enabledSeasonalEvents = seasonalEventFields.filter((field) => providerConfigValue(draft, field.name) === "enabled").length;
 
   const dstModes = [
     { key: "survival", labelZh: "生存模式 (标准)", labelEn: "Survival", descZh: "死后变成鬼魂，全员死亡世界重置", descEn: "Standard DST survival" },
@@ -704,6 +701,79 @@ function DSTRules({
           </div>
         </div>
       </div>
+
+      {specialEventField && seasonalEventFields.length > 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-2">
+              <CalendarDays className="mt-0.5 size-4 shrink-0 text-panel-gold" />
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                  {isZh ? "季节活动" : "Seasonal Events"}
+                </h4>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                  {isZh
+                    ? "可同时启用多个额外活动。设置应用于地面世界，保存并重启服务器后生效，无需重新生成世界。"
+                    : "Enable multiple extra events at the same time. Changes apply to the Forest world after saving and restarting the server; world regeneration is not required."}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 rounded bg-panel-green/10 px-2 py-1 text-[10px] font-medium text-panel-green">
+              {isZh ? `已额外启用 ${enabledSeasonalEvents} 项` : `${enabledSeasonalEvents} extra enabled`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={followsOfficialEvent}
+            onClick={() => onChange(specialEventField.name, followsOfficialEvent ? "none" : "default")}
+            className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-950/60 px-3.5 py-3 text-left transition hover:border-slate-700"
+          >
+            <span>
+              <span className="block text-xs font-bold text-slate-200">
+                {isZh ? "跟随官方当前活动" : "Follow the current official event"}
+              </span>
+              <span className="mt-1 block text-[11px] text-slate-500">
+                {isZh ? "由当前游戏版本决定默认启用的官方活动。" : "Use the default official event included in the current game build."}
+              </span>
+            </span>
+            <span aria-hidden="true" className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", followsOfficialEvent ? "bg-panel-green" : "bg-slate-700")}>
+              <span className={cn("absolute left-0.5 top-0.5 size-4 rounded-full bg-white transition-transform", followsOfficialEvent ? "translate-x-4" : "translate-x-0")} />
+            </span>
+          </button>
+
+          <div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              {isZh ? "额外启用的活动（支持多选）" : "Extra events (multiple selection)"}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {seasonalEventFields.map((field) => {
+                const enabled = providerConfigValue(draft, field.name) === "enabled";
+                return (
+                  <button
+                    key={field.name}
+                    type="button"
+                    aria-pressed={enabled}
+                    onClick={() => onChange(field.name, enabled ? "default" : "enabled")}
+                    className={cn(
+                      "flex min-h-11 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition",
+                      enabled
+                        ? "border-panel-green/60 bg-panel-green/10 text-panel-green"
+                        : "border-slate-800 bg-slate-950/50 text-slate-300 hover:border-slate-700"
+                    )}
+                  >
+                    <span>{isZh ? field.label : field.labelEn ?? field.label}</span>
+                    <span className={cn("flex size-4 shrink-0 items-center justify-center rounded border", enabled ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600")}>
+                      {enabled ? <Check className="size-3" /> : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

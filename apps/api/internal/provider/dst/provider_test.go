@@ -28,7 +28,14 @@ func TestProviderCatalogMetadata(t *testing.T) {
 		t.Fatalf("expected current DST schema to expose the complete world menu, got %d fields", got)
 	}
 	grassGekkoFound := false
+	seasonalEventCount := 0
 	for _, field := range provider.ConfigSchema() {
+		if field.Group == "dst.world.worldsettings.events" {
+			seasonalEventCount++
+			if field.LabelEn == "" {
+				t.Fatalf("seasonal event %q must expose an English label", field.Name)
+			}
+		}
 		if field.Name != "world.overrides.grassgekkos" {
 			continue
 		}
@@ -36,6 +43,9 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	}
 	if !grassGekkoFound {
 		t.Fatal("expected official Chinese Grass Gekko Morphing world setting")
+	}
+	if seasonalEventCount != 13 {
+		t.Fatalf("expected 13 configurable seasonal events, got %d", seasonalEventCount)
 	}
 	for _, expected := range []string{"identity.serverName", "identity.clusterName", "identity.description", "identity.password", "identity.clusterToken", "identity.visibility", "gameplay.maxPlayers", "gameplay.gameMode", "gameplay.pvp", "gameplay.pauseWhenEmpty", "gameplay.consoleEnabled", "world.preset", "caves.enabled"} {
 		if !names[expected] {
@@ -54,6 +64,25 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	}
 	if names["workshopIds"] {
 		t.Fatalf("workshop IDs should be managed from the mod library, not the config schema: %+v", provider.ConfigSchema())
+	}
+}
+
+func TestSeasonalEventsRenderAsMasterWorldOverrides(t *testing.T) {
+	lua := renderLevelDataOverrideLua("forest", "forest_default", map[string]string{
+		"specialevent":          "none",
+		"winters_feast":         "enabled",
+		"year_of_the_knight":    "enabled",
+		"year_of_the_dragonfly": "default",
+	})
+	for _, expected := range []string{
+		`specialevent = "none"`,
+		`winters_feast = "enabled"`,
+		`year_of_the_knight = "enabled"`,
+		`year_of_the_dragonfly = "default"`,
+	} {
+		if !strings.Contains(lua, expected) {
+			t.Fatalf("expected seasonal override %q, got:\n%s", expected, lua)
+		}
 	}
 }
 

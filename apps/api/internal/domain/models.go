@@ -40,6 +40,7 @@ type ProviderCapabilities struct {
 type ProviderConfigField struct {
 	Name     string                      `json:"name"`
 	Label    string                      `json:"label"`
+	LabelEn  string                      `json:"labelEn,omitempty"`
 	Type     string                      `json:"type"`
 	Required bool                        `json:"required"`
 	Default  any                         `json:"default,omitempty"`
