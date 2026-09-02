@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock3, Copy, ExternalLink, KeyRound, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
+import { Check, Clock3, Copy, ExternalLink, Eye, EyeOff, KeyRound, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
 import { ServerGameArt } from "@/components/server-game-art";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { useToast } from "@/components/toast-context";
@@ -48,6 +48,7 @@ export function ServerLobbyBanner({
 
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const status = gameServerStatus(server);
   const isRunning = status === "running";
@@ -192,9 +193,23 @@ export function ServerLobbyBanner({
           <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-slate-300">
             <KeyRound className="size-3.5 text-slate-400" />
             <span className="text-slate-400 font-sans">{isZh ? "进服密码:" : "Password:"}</span>
-            <span className={password ? "font-bold text-panel-gold" : "text-slate-500 font-sans"}>
-              {password ? password : (isZh ? "无密码 (公开)" : "None")}
-            </span>
+            {password ? (
+              <div className="flex items-center gap-1.5 font-mono">
+                <span className="font-bold text-panel-gold tracking-wider">
+                  {showPassword ? password : "••••••••"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  title={showPassword ? (isZh ? "隐藏密码" : "Hide Password") : (isZh ? "显示密码" : "Show Password")}
+                  className="rounded p-0.5 text-slate-400 hover:text-white transition"
+                >
+                  {showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                </button>
+              </div>
+            ) : (
+              <span className="text-slate-500 font-sans">{isZh ? "无密码 (公开)" : "None"}</span>
+            )}
           </div>
         </div>
 

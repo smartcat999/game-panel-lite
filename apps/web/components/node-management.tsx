@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Server,
@@ -16,6 +17,7 @@ import {
   Radio,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
   Pencil,
   Settings2
 } from "lucide-react";
@@ -39,12 +41,18 @@ export function NodeManagement() {
   const queryClient = useQueryClient();
   const { canManageNodes } = usePermissions();
 
+  const [mounted, setMounted] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingNode, setEditingNode] = useState<ComputeNode | null>(null);
+  const [deletingNode, setDeletingNode] = useState<ComputeNode | null>(null);
   const [joinModalNode, setJoinModalNode] = useState<ComputeNode | null>(null);
   const [joinCommandData, setJoinCommandData] = useState<NodeJoinCommand | null>(null);
   const [isJoinLoading, setIsJoinLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Add Form state
   const [newNodeName, setNewNodeName] = useState("");
@@ -94,6 +102,7 @@ export function NodeManagement() {
     mutationFn: deleteComputeNode,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compute-nodes"] });
+      setDeletingNode(null);
     }
   });
 
@@ -317,11 +326,7 @@ export function NodeManagement() {
                   {!node.isLocal && canManageNodes && (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (confirm(isZh ? `确定要移除节点 "${node.name}" 吗？` : `Remove node "${node.name}"?`)) {
-                          deleteMutation.mutate(node.id);
-                        }
-                      }}
+                      onClick={() => setDeletingNode(node)}
                       className="rounded p-1 text-slate-500 hover:bg-red-950/40 hover:text-red-400 transition"
                       title={isZh ? "删除节点" : "Delete Node"}
                     >
@@ -610,6 +615,74 @@ export function NodeManagement() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Node Confirmation Modal via createPortal */}
+      {mounted && deletingNode && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteMutation.isPending) {
+              setDeletingNode(null);
+            }
+          }}
+        >
+          <div className="relative w-full max-w-md rounded-2xl border border-rose-950/80 bg-[#0e1422] p-6 shadow-2xl shadow-black/90 space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-slate-800/80 pb-3.5">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white tracking-wide">
+                  {isZh ? "确认移除计算节点" : "Remove Compute Node"}
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {deletingNode.name}
+                  {deletingNode.region ? ` (${deletingNode.region})` : ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Warning Message Box */}
+            <div className="rounded-xl border border-rose-900/40 bg-rose-950/20 p-3.5 text-xs text-rose-300 leading-relaxed space-y-2">
+              <p className="font-semibold text-rose-200">
+                {isZh
+                  ? `您确定要从集群中移除节点 "${deletingNode.name}" 吗？`
+                  : `Are you sure you want to remove node "${deletingNode.name}"?`}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {isZh
+                  ? "⚠️ 移除后，主控将注销与该节点的连接通道。若该节点上仍有正在运行的游戏服务器，请在移除前先停止或迁移，否则实例可能脱离面板调度。"
+                  : "⚠️ Removing this node will terminate the master-agent tunnel. If servers are currently running on it, please stop or migrate them first."}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2.5 border-t border-slate-800/80 pt-3">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={deleteMutation.isPending}
+                onClick={() => setDeletingNode(null)}
+                className="h-9 px-4 text-xs font-medium"
+              >
+                {t("cancel")}
+              </Button>
+              <Button
+                type="button"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate(deletingNode.id)}
+                className="h-9 px-4 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-950/50"
+              >
+                {deleteMutation.isPending
+                  ? isZh ? "正在移除..." : "Removing..."
+                  : isZh ? "确认移除节点" : "Confirm Remove"}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
