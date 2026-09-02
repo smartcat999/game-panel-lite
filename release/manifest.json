@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
   "channel": "stable",
-  "version": "v0.2.12",
-  "publishedAt": "2026-09-02T16:18:53Z",
-  "releaseNotesUrl": "https://github.com/smartcat999/game-panel-lite/releases/tag/v0.2.12",
+  "version": "v0.2.13",
+  "publishedAt": "2026-09-02T20:32:00Z",
+  "releaseNotesUrl": "https://github.com/smartcat999/game-panel-lite/releases/tag/v0.2.13",
   "images": {
     "api": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-api:v0.2.12",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-api:v0.2.12"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-api:v0.2.13",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-api:v0.2.13"
     },
     "web": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-web:v0.2.12",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-web:v0.2.12"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-web:v0.2.13",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-web:v0.2.13"
     },
     "exporter": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-exporter:v0.2.12",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-exporter:v0.2.12"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-exporter:v0.2.13",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-exporter:v0.2.13"
     },
     "updater": {
-      "dockerHub": "docker.io/smartcat99999/game-panel-lite-updater:v0.2.12",
-      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-updater:v0.2.12"
+      "dockerHub": "docker.io/smartcat99999/game-panel-lite-updater:v0.2.13",
+      "aliyun": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/game-panel-lite-updater:v0.2.13"
     },
     "nginx": {
       "dockerHub": "docker.io/smartcat99999/nginx:1.27-alpine",
