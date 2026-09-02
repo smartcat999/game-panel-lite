@@ -55,6 +55,37 @@ export function isAdvancedProviderConfigField(providerKey: string, field: Provid
   return false;
 }
 
+const curatedGameRuleFields: Record<string, ReadonlySet<string>> = {
+  "dont-starve-together": new Set([
+    "caves.enabled",
+    "gameplay.gameMode",
+    "gameplay.maxPlayers",
+    "gameplay.pauseWhenEmpty",
+    "gameplay.pvp",
+    "world.overrides.specialevent"
+  ]),
+  minecraft: new Set(["difficulty", "gameMode", "maxPlayers", "onlineMode", "whitelistEnabled"]),
+  palworld: new Set([
+    "baseCampWorkerMaxNum",
+    "captureRate",
+    "deathPenalty",
+    "eggHatchingTime",
+    "enableFastTravel",
+    "enableInvaderEnemy",
+    "expRate",
+    "maxPlayers",
+    "pvp",
+    "serverPassword"
+  ])
+};
+
+export function isCuratedGameRuleField(providerKey: string, field: ProviderConfigField): boolean {
+  if (providerKey === "dont-starve-together" && field.group === "dst.world.worldsettings.events") {
+    return true;
+  }
+  return curatedGameRuleFields[providerKey]?.has(field.name) ?? false;
+}
+
 export function isWorldGenerationProviderConfigField(providerKey: string, field: ProviderConfigField): boolean {
   if (providerKey !== "dont-starve-together") return false;
   return field.name === "world.preset"

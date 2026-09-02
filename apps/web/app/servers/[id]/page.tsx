@@ -69,7 +69,7 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
-import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
@@ -807,7 +807,6 @@ export default function ServerDetailPage() {
           {activeTab === "overview" && (
             <OverviewTab
               resource={serverResource}
-              providerFields={providerCatalog?.configSchema}
               events={visibleServerEvents}
               eventsLoading={serverEventsQuery.isLoading}
               runtimeError={runtimeErrorMessage}
@@ -863,15 +862,6 @@ export default function ServerDetailPage() {
           ) : null}
           {activeTab === "config" && (
             <div className="space-y-6">
-              <ServerGameRules providerFields={providerCatalog?.configSchema} server={serverResource} />
-              <ResourceLimitsCard
-                cpuPercent={statsQuery.data?.cpuPercent}
-                memoryMb={statsQuery.data?.memoryMb}
-                resource={serverResource}
-                restartPending={configRestart.isPending}
-                onEdit={() => setResourceDialogOpen(true)}
-                onRestart={() => setPendingConfigRestart(true)}
-              />
               <ConfigTab
                 provider={providerCatalog}
                 resource={serverResource}
@@ -882,6 +872,14 @@ export default function ServerDetailPage() {
                 onRegenerateWorld={capabilities.worldRegeneration ? () => setWorldRegenerationDialogOpen(true) : undefined}
                 onRestart={() => setPendingConfigRestart(true)}
                 onSave={(nextConfig, hostPort) => configSave.mutate({ config: nextConfig, hostPort })}
+              />
+              <ResourceLimitsCard
+                cpuPercent={statsQuery.data?.cpuPercent}
+                memoryMb={statsQuery.data?.memoryMb}
+                resource={serverResource}
+                restartPending={configRestart.isPending}
+                onEdit={() => setResourceDialogOpen(true)}
+                onRestart={() => setPendingConfigRestart(true)}
               />
             </div>
           )}
@@ -1118,13 +1116,11 @@ export default function ServerDetailPage() {
 function OverviewTab({
   events,
   eventsLoading,
-  providerFields,
   resource,
   runtimeError
 }: {
   events: MonitoringEvent[];
   eventsLoading: boolean;
-  providerFields?: ProviderConfigField[];
   resource: GameServerResource;
   runtimeError: string;
 }) {
@@ -1140,10 +1136,7 @@ function OverviewTab({
   const internalPort = resource.spec.network?.port ?? 0;
   return (
     <div className="space-y-6">
-      {/* 1. Visual Game Rules & Environment */}
-      <ServerGameRules providerFields={providerFields} server={resource} />
-
-      {/* 3. Compute Node Topology Card */}
+      {/* Compute Node Topology Card */}
       <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1785,6 +1778,7 @@ function ConfigTab({
   });
   const currentProviderPayload = resourceProviderPayload;
   const providerFields = provider?.configSchema ?? [];
+  const providerEditorFields = providerFields.filter((field) => !isCuratedGameRuleField(resource.providerKey, field));
   const worldGenerationDirty = !isTerrariaProvider && providerFields.some((field) =>
     isWorldGenerationProviderConfigField(resource.providerKey, field)
       && providerConfigFieldChanged(currentProviderPayload, providerDraft, field)
@@ -1804,6 +1798,13 @@ function ConfigTab({
   const restartRequired = running && !dirty && (restartRecommended || (!worldGenerationOnlyPending && gameServerConfigPendingRestart(resource)));
   const showConfigActions = dirty || savePending || saveSuccess || restartRequired || lifecycleLocked;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  const updateGameRule = (key: string, value: unknown) => {
+    if (isTerrariaProvider) {
+      setDraft((current) => ({ ...current, [key]: value } as TerrariaConfig));
+      return;
+    }
+    setProviderDraft((current) => updateProviderConfigPath(current, key, value));
+  };
   useEffect(() => {
     if (dirty || !running || !gameServerConfigPendingRestart(resource)) {
       setRestartRecommended(false);
@@ -1830,7 +1831,6 @@ function ConfigTab({
   }, [previewOpen]);
   const secretSeed = secretSeedKeyFor(draft.seed);
   const worldEvilLabel = draft.worldEvil === "corruption" ? t("tagCorruption") : draft.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
-  const difficultyLabel = draft.difficulty === "journey" ? t("tagJourney") : draft.difficulty === "classic" ? t("tagClassic") : draft.difficulty === "expert" ? t("tagExpert") : t("tagMaster");
   const worldSizeLabel = draft.worldSize === "small" ? t("tagSmallWorld") : draft.worldSize === "medium" ? t("tagMediumWorld") : t("tagLargeWorld");
   const seedLabel = secretSeed
     ? terrariaSecretSeeds.find((s) => s.key === secretSeed)?.label ?? draft.seed ?? ""
@@ -1845,6 +1845,14 @@ function ConfigTab({
         onSave(isTerrariaProvider ? normalizedDraft : providerDraft, hostPortDraft);
       }
     }}>
+      <ServerGameRules
+        disabled={disabled}
+        draft={isTerrariaProvider ? (draft as unknown as Record<string, unknown>) : providerDraft}
+        onChange={updateGameRule}
+        providerFields={providerFields}
+        server={resource}
+      />
+
       <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1865,9 +1873,6 @@ function ConfigTab({
                 <Field label={t("serverName")}>
                   <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
                 </Field>
-                <Field label={t("password")}>
-                  <Input value={draft.password ?? ""} onChange={(event) => update("password", event.target.value)} disabled={disabled} />
-                </Field>
                 <Field label={t("motd")}>
                   <Input
                     type="text"
@@ -1881,9 +1886,6 @@ function ConfigTab({
                 <Field label={t("externalPort")}>
                   <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
                 </Field>
-                <Field label={t("maxPlayers")}>
-                  <Input type="number" min={1} max={255} value={draft.maxPlayers} onChange={(event) => update("maxPlayers", Number(event.target.value))} disabled={disabled} />
-                </Field>
               </div>
             </div>
             <div className="mt-4 grid overflow-hidden rounded-md border border-panel-line bg-slate-950/40 sm:grid-cols-2 sm:divide-x sm:divide-panel-line max-sm:divide-y max-sm:divide-panel-line">
@@ -1895,7 +1897,7 @@ function ConfigTab({
           <>
             <ProviderConfigEditor
               disabled={disabled}
-              fields={provider?.configSchema ?? []}
+              fields={providerEditorFields}
               hasUnsavedWorldGenerationChanges={worldGenerationDirty}
               payload={providerDraft}
               providerKey={provider?.key ?? ""}
@@ -1923,7 +1925,6 @@ function ConfigTab({
           <ReadOnlyField label={t("gameVersion")} value={gameServerVersion(resource)} />
           <ReadOnlyField label={t("worldSize")} value={worldSizeLabel} />
           <ReadOnlyField label={t("worldEvil")} value={worldEvilLabel} />
-          <ReadOnlyField label={t("difficulty")} value={difficultyLabel} />
           <ReadOnlyField label={t("internalPort")} value={String(terrariaInternalPort)} />
           <ReadOnlyField label={t("customSeed")} value={seedLabel} help={t("worldSeedHint")} />
           {seedModeCount > 0 ? (

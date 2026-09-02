@@ -1,102 +1,61 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Check, Flame, KeyRound, Moon, Save, Shield, ShieldAlert, Sliders, Sparkles, Swords, Users, Zap } from "lucide-react";
-import { Button, Input } from "@/components/ui";
-import { useToast } from "@/components/toast-context";
+import { CalendarDays, Check, Flame, KeyRound, Moon, Shield, ShieldAlert, Sliders, Sparkles, Swords, Users, Zap } from "lucide-react";
+import { Input } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
-import { updateGameServerConfig } from "@/lib/api";
-import { gameServerJoinPort } from "@/lib/game-server-resource";
-import { usePermissions } from "@/lib/permissions";
-import { providerConfigValue, updateProviderConfigPath } from "@/lib/provider-config";
+import { providerConfigValue } from "@/lib/provider-config";
 import { cn } from "@/lib/utils";
 import type { GameServerResource, ProviderConfigField } from "@/lib/types";
 
 export function ServerGameRules({
+  disabled = false,
+  draft,
+  onChange,
   providerFields = [],
   server
 }: {
+  disabled?: boolean;
+  draft: Record<string, unknown>;
+  onChange: (key: string, value: unknown) => void;
   providerFields?: ProviderConfigField[];
   server: GameServerResource;
 }) {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
-  const { canEditServerConfig } = usePermissions();
-  const toast = useToast();
-  const client = useQueryClient();
 
   const gameKey = server.gameKey || "terraria";
   const providerKey = server.providerKey;
 
-  const currentConfig = (server.spec?.config ?? {}) as Record<string, unknown>;
-
-  // Form State
-  const [draft, setDraft] = useState<Record<string, unknown>>({ ...currentConfig });
-
-  const updateField = (key: string, value: unknown) => {
-    setDraft((prev) => updateProviderConfigPath(prev, key, value));
-  };
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      await updateGameServerConfig(server.id, draft, gameServerJoinPort(server));
-    },
-    onSuccess: async () => {
-      toast.success(
-        isZh ? "游戏房间规则已保存！" : "Game Rules Saved!",
-        isZh ? "请重启房间以使新规则完全生效" : "Restart room to apply changes."
-      );
-      await client.invalidateQueries({ queryKey: ["game-server", server.id] });
-      await client.invalidateQueries({ queryKey: ["game-servers"] });
-    },
-    onError: (err) => {
-      toast.error(isZh ? "保存失败" : "Failed to save", err instanceof Error ? err.message : "");
-    }
-  });
-
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
-      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5">
         <div>
           <div className="flex items-center gap-2">
             <Sliders className="size-4 text-panel-green" />
             <h3 className="text-sm font-bold text-white tracking-tight">
-              {isZh ? "🎮 游戏规则与房间设定" : "🎮 Game Room Rules & Settings"}
+              {isZh ? "🎮 常用游戏规则" : "🎮 Common Game Rules"}
             </h3>
             <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300">
               {gameKey.toUpperCase()}
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            {isZh ? "调整核心游戏倍率与难度，保存后重启房间生效" : "Adjust rates & gameplay. Restart room to apply."}
+            {isZh ? "集中调整常用玩法与房间规则，修改会随本页其他配置一并保存" : "Adjust common gameplay and room rules, then save all changes together."}
           </p>
         </div>
-
-        {canEditServerConfig ? (
-          <Button
-            type="button"
-            disabled={saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
-            className="gap-2 px-6 shrink-0"
-          >
-            <Save className="size-4" />
-            <span>{saveMutation.isPending ? (isZh ? "正在保存..." : "Saving...") : (isZh ? "保存游戏规则设定" : "Save Game Rules")}</span>
-          </Button>
-        ) : null}
       </div>
 
       {/* Render based on GameKey */}
-      <fieldset disabled={!canEditServerConfig} className="min-w-0 space-y-6">
+      <fieldset disabled={disabled} className="min-w-0 space-y-6">
         {gameKey === "palworld" ? (
-          <PalworldRules draft={draft} onChange={updateField} isZh={isZh} />
+          <PalworldRules draft={draft} onChange={onChange} isZh={isZh} />
         ) : gameKey === "minecraft" ? (
-          <MinecraftRules draft={draft} onChange={updateField} isZh={isZh} />
+          <MinecraftRules draft={draft} onChange={onChange} isZh={isZh} />
         ) : gameKey === "dont-starve-together" || providerKey === "dont-starve-together" ? (
-          <DSTRules draft={draft} fields={providerFields} onChange={updateField} isZh={isZh} />
+          <DSTRules draft={draft} fields={providerFields} onChange={onChange} isZh={isZh} />
         ) : (
-          <TerrariaRules draft={draft} onChange={updateField} isZh={isZh} />
+          <TerrariaRules draft={draft} onChange={onChange} isZh={isZh} />
         )}
       </fieldset>
     </div>

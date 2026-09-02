@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isCuratedGameRuleField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 const provider: ProviderCatalog = {
@@ -188,6 +188,18 @@ describe("provider config helpers", () => {
     expect(isAdvancedProviderConfigField("dont-starve-together", dstRule)).toBe(true);
     expect(isAdvancedProviderConfigField("palworld", palRate)).toBe(true);
     expect(isAdvancedProviderConfigField("palworld", palName)).toBe(false);
+  });
+
+  it("identifies fields already rendered by the curated game rules", () => {
+    expect(isCuratedGameRuleField("dont-starve-together", field({ name: "gameplay.gameMode" }))).toBe(true);
+    expect(isCuratedGameRuleField("dont-starve-together", field({
+      name: "world.overrides.winters_feast",
+      group: "dst.world.worldsettings.events"
+    }))).toBe(true);
+    expect(isCuratedGameRuleField("dont-starve-together", field({ name: "identity.serverName" }))).toBe(false);
+    expect(isCuratedGameRuleField("palworld", field({ name: "expRate" }))).toBe(true);
+    expect(isCuratedGameRuleField("palworld", field({ name: "serverName" }))).toBe(false);
+    expect(isCuratedGameRuleField("minecraft", field({ name: "difficulty" }))).toBe(true);
   });
 
   it("detects numeric and nested values that differ from schema defaults", () => {
