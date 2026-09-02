@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-GAMEPANEL_VERSION="${GAMEPANEL_VERSION:-v0.2.11}"
+GAMEPANEL_VERSION="${GAMEPANEL_VERSION:-v0.2.12}"
 REPO_ARCHIVE_URL="${GAMEPANEL_ARCHIVE_URL:-https://github.com/smartcat999/game-panel-lite/archive/refs/tags/$GAMEPANEL_VERSION.tar.gz}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gamepanel-lite"
 INSTALL_PATH_FILE="$CONFIG_DIR/install-path"
