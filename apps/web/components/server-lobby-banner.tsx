@@ -190,19 +190,21 @@ export function ServerLobbyBanner({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-slate-300">
-            <KeyRound className="size-3.5 text-slate-400" />
-            <span className="text-slate-400 font-sans">{isZh ? "进服密码:" : "Password:"}</span>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-1.5 text-slate-300 min-w-[12rem] justify-between">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <KeyRound className="size-3.5 text-slate-400" />
+              <span className="text-slate-400 font-sans">{isZh ? "进服密码:" : "Password:"}</span>
+            </div>
             {password ? (
               <div className="flex items-center gap-1.5 font-mono">
-                <span className="font-bold text-panel-gold tracking-wider">
+                <span className="inline-block min-w-[4.2rem] text-right font-bold text-panel-gold tracking-wider select-none">
                   {showPassword ? password : "••••••••"}
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   title={showPassword ? (isZh ? "隐藏密码" : "Hide Password") : (isZh ? "显示密码" : "Show Password")}
-                  className="rounded p-0.5 text-slate-400 hover:text-white transition"
+                  className="rounded p-0.5 text-slate-400 hover:text-white transition shrink-0"
                 >
                   {showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 </button>
