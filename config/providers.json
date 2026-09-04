@@ -7,7 +7,7 @@
   "providers": {
     "terraria-vanilla": {
       "imageTemplate": "{registry}/terraria-vanilla:{version}",
-      "versions": ["1.4.5.6"]
+      "versions": ["1.4.5.8", "1.4.5.7", "1.4.5.6"]
     },
     "terraria-tmodloader": {
       "imageTemplate": "{registry}/tmodloader:{version}",
