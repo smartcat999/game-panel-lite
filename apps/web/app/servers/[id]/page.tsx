@@ -346,8 +346,13 @@ export default function ServerDetailPage() {
   });
   const serverAction = useMutation({
     mutationFn: (action: "start" | "stop" | "restart") => gameServerAction(id, action),
-    onSuccess: async (updatedServer) => {
-      showSuccess(t("serverRestartQueued"));
+    onSuccess: async (updatedServer, action) => {
+      const message = action === "start"
+        ? t("serverStartQueued")
+        : action === "stop"
+        ? t("serverStopQueued")
+        : t("serverRestartQueued");
+      showSuccess(message);
       setServerResourceCache(updatedServer);
       await client.invalidateQueries({ queryKey: ["game-server", id] });
       await client.invalidateQueries({ queryKey: ["game-servers"] });
