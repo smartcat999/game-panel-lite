@@ -653,9 +653,27 @@ export function NodeManagement() {
               </p>
               <p className="text-[11px] text-slate-400">
                 {isZh
-                  ? "⚠️ 移除后，主控将注销与该节点的连接通道。若该节点上仍有正在运行的游戏服务器，请在移除前先停止或迁移，否则实例可能脱离面板调度。"
-                  : "⚠️ Removing this node will terminate the master-agent tunnel. If servers are currently running on it, please stop or migrate them first."}
+                  ? "主控只会注销节点和接入凭据，不会卸载目标主机上的 Agent。若该节点仍有游戏服务器，请先停止或迁移。"
+                  : "The control plane only removes the node and revokes its credentials. It does not uninstall the agent from the worker host. Stop or migrate any game servers first."}
               </p>
+              <div className="rounded-lg border border-slate-800 bg-slate-950/80 p-2.5">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-slate-300">
+                    {isZh ? "在目标主机执行 Agent 卸载命令" : "Run on the worker host to remove the agent"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("docker update --restart=no gamepanel-agent && docker rm -f gamepanel-agent", "remove-agent")}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-800 hover:text-white"
+                  >
+                    {copiedKey === "remove-agent" ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    {copiedKey === "remove-agent" ? (isZh ? "已复制" : "Copied") : (isZh ? "复制命令" : "Copy command")}
+                  </button>
+                </div>
+                <code className="block overflow-x-auto whitespace-nowrap font-mono text-[10px] text-slate-400">
+                  docker update --restart=no gamepanel-agent &amp;&amp; docker rm -f gamepanel-agent
+                </code>
+              </div>
             </div>
 
             {/* Actions */}
