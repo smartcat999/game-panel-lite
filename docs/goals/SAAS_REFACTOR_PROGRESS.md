@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | M0 依赖检查与 CI | 部分完成 | AST 规则覆盖新增根级共享模块；gofmt 门禁和独立 Agent 构建已加入；完整模块方向与远端 CI 仍待验收 |
 | M1 插件注册、目录、通用文件集合 | 完成当前批次 | edfb004a；注册/目录/文件传递测试 |
-| 配置预览、预设、恢复解析归属 Provider | 本地验证通过 | gameconfig 用例、Provider 能力、兼容/恢复失败/路径逃逸测试 |
+| 配置预览、预设、恢复解析归属 Provider | 本地验证通过 | gameconfig 用例、Provider 能力、兼容/恢复失败/路径逃逸测试；配置输入归一化、校验与摘要已统一到 gameconfig，嵌套输入隔离；预设按 schema 脱敏嵌套密码字段，创建/更新落库前及历史读取响应均覆盖，旧数据库原文清理仍待迁移 |
 | 世界文件定位归属 Provider | 部分完成 | WorldFilesProvider；世界上传格式与其他存档操作仍需迁移 |
 | 模组清单与文件布局归属 Provider | 本地验证通过 | ModManifestProvider、ModFilesProvider、共享 modruntime 用例 |
 | 模组来源能力与注册校验 | 部分完成 | ModSupportProvider；支持上传与 Workshop 的判断已改为能力声明；同名依赖查找与分配已限制在同一 Provider；未知 Provider 不回退 tModLoader；名称/依赖元数据已集中到 modcatalog，依赖图遍历已集中到 modruntime；运行文件安装/删除已集中到 modruntime 并使用 os.Root；上传扩展名/辅助缓存文件由 Provider 声明并注入缓存服务；tMod 元数据解析已迁回 Terraria Provider，经 ModInspector 调用；严格包验证、元数据写入与完整安装事务仍待实现 |

@@ -211,12 +211,12 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unknown provider")
 		return
 	}
-	configPayload, _, err := decodeProviderConfigPayload(gameProvider, nil, resource.Spec.Config)
+	configPayload, _, err := h.gameConfig.Normalize(resource.ProviderKey, resource.Spec.ConfigVersion, nil, resource.Spec.Config)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	summary, err := providerConfigSummary(gameProvider, configPayload)
+	summary, err := h.gameConfig.Summary(gameProvider.Key(), configPayload)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -324,11 +324,7 @@ func worldCompatibleWithServer(world domain.World, server domain.GameServer) boo
 }
 
 func (h *Handler) upsertWorldSnapshotRecord(ctx context.Context, server domain.GameServer, name string, fileName string, size int64) (domain.World, bool, error) {
-	gameProvider, ok := h.provider.Get(server.ProviderKey)
-	if !ok {
-		return domain.World{}, false, fmt.Errorf("unknown provider")
-	}
-	configPayload, configPayloadJSON, err := decodeProviderConfigPayload(gameProvider, nil, server.Spec.Config)
+	configPayload, configPayloadJSON, err := h.gameConfig.Normalize(server.ProviderKey, server.Spec.ConfigVersion, nil, server.Spec.Config)
 	if err != nil {
 		return domain.World{}, false, err
 	}

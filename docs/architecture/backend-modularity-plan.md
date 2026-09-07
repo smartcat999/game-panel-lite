@@ -188,3 +188,11 @@ modruntime 统一负责配置版本检查、写操作生命周期限制、文件
 HTTP 继续承担认证路由、实例查询、维护状态检查、本进程实例锁、活动记录和错误响应；multipart 请求有整体大小上限并清理解析临时文件。应用模块接收已授权实例快照，不自行做数据库授权，因此成员关系与文件副作用的跨进程原子性、远程 Agent 文件访问仍未完成。此批不代表整个 HTTP 层已脱离 Store/Runtime。
 
 验收：测试插件使用不同 Provider key 和嵌套目录完成配置增删读写，无需修改 Handler；路径逃逸、符号链接、非法 JSON、超限读取/上传、取消及忙碌/不兼容版本均有拒绝测试。HTTP 原有配置生命周期及新增拒绝后文件不变测试通过。架构检查禁止该 Handler 再导入 os、filepath 或 safety 承担文件操作。全量 Go 测试、vet、modruntime/Provider race、前端 typecheck/build 和受版本控制源码 lint 均通过。
+
+## 配置输入与预设脱敏归属
+
+创建实例、配置编辑、世界分配/快照和预设保存共用 gameconfig.Normalize、Validate、Summary。Normalize 在调用 Provider 前检查配置版本，保留原有顶层覆盖语义，并通过 JSON 复制隔离嵌套配置和 Provider 默认值；Provider 原地修改输入或返回错误时不会污染调用者的原始配置。校验保持独立，允许创建流程补入 Provider 相关值后再校验；仍有具体游戏创建编排留在 Handler，尚未完成整个创建用例迁移。
+
+预设 PublicConfig 按 Provider ConfigSchema 的 password 字段处理嵌套路径及字面点分键，同时保留旧顶层凭证键的兼容脱敏。脱敏后不再调用 Normalize，避免默认值重新引入敏感字段。PublicPreset 分别清理 config、configPayload 和 configPayloadJSON，列表和详情接口也处理历史记录。未知 Provider 或损坏的历史 JSON 返回错误，不输出无法确认已脱敏的预设。
+
+修复前 DST 的 identity.password / identity.clusterToken 嵌套字段未被顶层 delete 删除。现在创建/更新在持久化前脱敏，历史读取在序列化前脱敏，测试检查响应、持久化结果与非敏感字段保留。已有数据库原文及旧备份不在此批自动改写；仍需专门的数据清理迁移与历史凭证处理。预设租户归属尚未完成，不以移除凭证替代租户授权。

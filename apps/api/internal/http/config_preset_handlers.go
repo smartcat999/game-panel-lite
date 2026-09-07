@@ -37,6 +37,13 @@ func (h *Handler) listConfigPresets(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	for i := range presets {
+		presets[i], err = h.gameConfig.PublicPreset(presets[i])
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, presets)
 }
 
@@ -44,6 +51,11 @@ func (h *Handler) getConfigPreset(w http.ResponseWriter, r *http.Request) {
 	preset, err := h.store.GetConfigPreset(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "config preset not found")
+		return
+	}
+	preset, err = h.gameConfig.PublicPreset(preset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, preset)
@@ -142,7 +154,7 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 	if !ok {
 		return domain.ConfigPreset{}, fmt.Errorf("unknown provider")
 	}
-	configPayload, configPayloadJSON, err := decodeProviderConfigPayload(gameProvider, payload.Config, nil)
+	configPayload, configPayloadJSON, err := h.gameConfig.Normalize(gameProvider.Key(), gameProvider.CatalogMetadata().ConfigVersion, payload.Config, nil)
 	if err != nil {
 		return domain.ConfigPreset{}, err
 	}
@@ -152,7 +164,7 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 	if !providerSupportsVersion(gameProvider, payload.Version) {
 		return domain.ConfigPreset{}, fmt.Errorf("unsupported provider version")
 	}
-	if err := validateProviderConfigPayload(gameProvider, configPayload); err != nil {
+	if err := h.gameConfig.Validate(gameProvider.Key(), configPayload); err != nil {
 		return domain.ConfigPreset{}, err
 	}
 	resources, err := normalizeResourceLimits(payload.Resources)
@@ -181,11 +193,7 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 	if err != nil {
 		return domain.ConfigPreset{}, err
 	}
-	configPayloadJSON, err = sanitizePresetConfigPayload(gameProvider, configPayloadJSON)
-	if err != nil {
-		return domain.ConfigPreset{}, err
-	}
-	configPayload, err = configPayloadMap(configPayloadJSON)
+	configPayload, configPayloadJSON, err = h.gameConfig.PublicConfig(gameProvider.Key(), configPayload)
 	if err != nil {
 		return domain.ConfigPreset{}, err
 	}

@@ -87,8 +87,8 @@ func forbiddenImport(file, imported string) string {
 	if file == "apps/api/internal/http/mod_config_handlers.go" && (imported == "os" || imported == "path/filepath" || imported == api+"safety") {
 		return "mod configuration file operations belong to modruntime"
 	}
-	if (under("modcatalog") || under("modruntime")) && (imported == "net/http" || strings.HasPrefix(imported, api+"http") || strings.HasPrefix(imported, api+"server") || strings.HasPrefix(imported, api+"store") || strings.HasPrefix(imported, api+"runtime")) {
-		return "shared mod rules must not depend on transport, lifecycle or concrete persistence/runtime"
+	if (under("modcatalog") || under("modruntime") || under("gameconfig")) && (imported == "net/http" || strings.HasPrefix(imported, api+"http") || strings.HasPrefix(imported, api+"server") || strings.HasPrefix(imported, api+"store") || strings.HasPrefix(imported, api+"runtime")) {
+		return "shared configuration and mod rules must not depend on transport, lifecycle or concrete persistence/runtime"
 	}
 	if under("domain") && (strings.HasPrefix(imported, api) || imported == "net/http" || strings.HasPrefix(imported, "github.com/go-chi/")) {
 		return "domain must not depend on transport, services or infrastructure"
@@ -110,6 +110,8 @@ func TestImportRules(t *testing.T) {
 	}{
 		{"apps/api/internal/http/mod_config_handlers.go", "os", true},
 		{"apps/api/internal/http/mod_config_handlers.go", api + "modruntime", false},
+		{"apps/api/internal/gameconfig/payload.go", api + "store", true},
+		{"apps/api/internal/gameconfig/payload.go", api + "provider", false},
 		{"apps/api/internal/modcatalog/metadata.go", api + "store", true},
 		{"apps/api/internal/modruntime/dependencies.go", api + "server", true},
 		{"apps/api/internal/modruntime/dependencies.go", api + "modcatalog", false},

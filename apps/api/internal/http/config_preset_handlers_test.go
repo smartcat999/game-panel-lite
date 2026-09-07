@@ -122,3 +122,57 @@ func TestConfigPresetUpdateAndBatchDelete(t *testing.T) {
 		t.Fatalf("expected one successful and one failed delete, got %+v", result)
 	}
 }
+
+func TestDSTPresetSecretsAreRemovedFromWritesAndHistoricalReads(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	body := `{"name":"DST private","providerKey":"dont-starve-together","modIds":[],"config":{"identity":{"serverName":"Friends","clusterName":"Friends","password":"join-secret","clusterToken":"klei-secret"}}}`
+	create := httptest.NewRecorder()
+	router.ServeHTTP(create, httptest.NewRequest(stdhttp.MethodPost, "/api/config-presets", strings.NewReader(body)))
+	if create.Code != stdhttp.StatusCreated {
+		t.Fatalf("create: %d %s", create.Code, create.Body.String())
+	}
+	var created domain.ConfigPreset
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	update := httptest.NewRecorder()
+	router.ServeHTTP(update, httptest.NewRequest(stdhttp.MethodPut, "/api/config-presets/"+created.ID, strings.NewReader(body)))
+	if update.Code != stdhttp.StatusOK {
+		t.Fatalf("update: %d %s", update.Code, update.Body.String())
+	}
+	stored, err := db.GetConfigPreset(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, _ := json.Marshal(stored)
+	for _, response := range []string{create.Body.String(), update.Body.String(), string(persisted)} {
+		if strings.Contains(response, "join-secret") || strings.Contains(response, "klei-secret") {
+			t.Fatal("new preset retained credentials")
+		}
+		if !strings.Contains(response, "Friends") {
+			t.Fatal("public fields lost")
+		}
+	}
+	legacyJSON := `{"identity":{"serverName":"Legacy Friends","password":"old-secret","clusterToken":"old-token"}}`
+	var legacyConfig map[string]any
+	if err := json.Unmarshal([]byte(legacyJSON), &legacyConfig); err != nil {
+		t.Fatal(err)
+	}
+	legacy := domain.ConfigPreset{ID: "legacy-sensitive-preset", Name: "Legacy", GameKey: domain.GameDST, ProviderKey: domain.ProviderDST, Config: legacyConfig, ConfigPayload: legacyConfig, ConfigPayloadJSON: legacyJSON, ModIDsJSON: "[]"}
+	if err := db.CreateConfigPreset(context.Background(), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/config-presets", "/api/config-presets/" + legacy.ID} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodGet, path, nil))
+		if response.Code != stdhttp.StatusOK {
+			t.Fatalf("read: %d %s", response.Code, response.Body.String())
+		}
+		if strings.Contains(response.Body.String(), "old-secret") || strings.Contains(response.Body.String(), "old-token") {
+			t.Fatal("historical preset leaked credentials")
+		}
+		if !strings.Contains(response.Body.String(), "Legacy Friends") {
+			t.Fatal("historical public fields lost")
+		}
+	}
+}

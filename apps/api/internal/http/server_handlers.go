@@ -113,16 +113,16 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
-	configPayload, _, err := decodeProviderConfigPayload(gameProvider, payload.Config, server.Spec.Config)
+	configPayload, _, err := h.gameConfig.Normalize(server.ProviderKey, server.Spec.ConfigVersion, payload.Config, server.Spec.Config)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := validateProviderConfigPayload(gameProvider, configPayload); err != nil {
+	if err := h.gameConfig.Validate(gameProvider.Key(), configPayload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	summary, err := providerConfigSummary(gameProvider, configPayload)
+	summary, err := h.gameConfig.Summary(gameProvider.Key(), configPayload)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -204,12 +204,12 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	configPayload, _, err := decodeProviderConfigPayload(gameProvider, payload.Config, nil)
+	configPayload, _, err := h.gameConfig.Normalize(gameProvider.Key(), gameProvider.CatalogMetadata().ConfigVersion, payload.Config, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	summary, err := providerConfigSummary(gameProvider, configPayload)
+	summary, err := h.gameConfig.Summary(gameProvider.Key(), configPayload)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -237,7 +237,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		}
 		configPayload = withDSTWorkshopIDs(configPayload, workshopIDs)
 	}
-	if err := validateProviderConfigPayload(gameProvider, configPayload); err != nil {
+	if err := h.gameConfig.Validate(gameProvider.Key(), configPayload); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
