@@ -84,6 +84,9 @@ func forbiddenImport(file, imported string) string {
 	if strings.HasPrefix(imported, "gorm.io/") && !under("store") {
 		return "GORM belongs to persistence adapters"
 	}
+	if (under("modcatalog") || under("modruntime")) && (imported == "net/http" || strings.HasPrefix(imported, api+"http") || strings.HasPrefix(imported, api+"server") || strings.HasPrefix(imported, api+"store") || strings.HasPrefix(imported, api+"runtime")) {
+		return "shared mod rules must not depend on transport, lifecycle or concrete persistence/runtime"
+	}
 	if under("domain") && (strings.HasPrefix(imported, api) || imported == "net/http" || strings.HasPrefix(imported, "github.com/go-chi/")) {
 		return "domain must not depend on transport, services or infrastructure"
 	}
@@ -102,6 +105,10 @@ func TestImportRules(t *testing.T) {
 		file, imported string
 		forbidden      bool
 	}{
+		{"apps/api/internal/modcatalog/metadata.go", api + "store", true},
+		{"apps/api/internal/modruntime/dependencies.go", api + "server", true},
+		{"apps/api/internal/modruntime/dependencies.go", api + "modcatalog", false},
+		{"apps/api/internal/modcatalog/metadata.go", api + "domain", false},
 		{"apps/api/internal/http/new.go", api + "provider/terraria", true},
 		{"apps/agent/main.go", "github.com/smartcat999/game-panel-lite/internal/runtime/docker", false},
 		{"apps/agent/reconcile.go", "github.com/docker/docker/client", true},

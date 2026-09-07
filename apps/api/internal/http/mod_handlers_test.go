@@ -17,6 +17,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
@@ -1348,7 +1349,7 @@ func TestRuntimeModPresentUsesWorkshopInternalModName(t *testing.T) {
 		FileName:    "workshop-2831752947",
 		Title:       "LuiAFK Reborn",
 	}
-	if identity := modIdentity(item); identity != "miningcracks_take_on_luiafk" {
+	if identity := modcatalog.Identity(item); identity != "miningcracks_take_on_luiafk" {
 		t.Fatalf("expected workshop internal mod name, got %q", identity)
 	}
 	if !runtimeModPresent(server, item) {

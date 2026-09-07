@@ -154,3 +154,7 @@ M0：建立导入基线与行为测试，记录例外。M1：修正 Registry 元
 API 与 Agent 共用 internal/workload 的 Assignment、Spec 和 Observation，保留 CPU、内存与 TCP/UDP 端口字段，避免双方复制结构导致字段丢失。internal/worker 通过消费方 Runtime 接口协调状态；Docker SDK、日志、stdin 和文件准备集中在 internal/runtime/docker。Agent 入口显式组装，轮询和连接随进程 context 取消并等待退出。
 
 远端 Spec.DataDir 不决定本机挂载路径；Agent 从本地 AGENT_INSTANCE_ROOT 和实例 ID 派生目录。默认 bridge 网络，按协议绑定端口并应用资源限制。部署配置与验证方式见 [Agent runtime](agent-runtime.md)。本批保留已有文件权限兼容策略，不代表不受信模组的强隔离已完成；新旧 assignment 的分布式 fencing 与调度租约仍需后续验证。
+
+## 模组规则共享进展
+
+HTTP 与启动规划共用 modcatalog.Identity/Dependencies，统一名称推导、持久元数据优先级及同 Provider 推荐目录回退。modruntime.ResolveDependencies 负责依赖图遍历、去重与取消；调用方提供按当前实例/Provider 查找或安装依赖的函数。该用例顺序执行，返回新分配记录，不承诺失败时回滚此前安装。上传解析、元数据写入、文件与数据库事务仍需继续迁移。架构测试禁止这两个共享模块反向依赖 HTTP、server 或具体 store/runtime。

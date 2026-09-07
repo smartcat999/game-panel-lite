@@ -183,31 +183,9 @@ func (p *RuntimeModPlanner) upsertWorkshopModRecord(ctx context.Context, provide
 }
 
 func (p *RuntimeModPlanner) ensureModDependencies(ctx context.Context, server domain.GameServer, roots []domain.ModFile) ([]domain.ModFile, error) {
-	added := make([]domain.ModFile, 0)
-	queue := append([]domain.ModFile(nil), roots...)
-	seen := make(map[string]struct{}, len(queue))
-	for len(queue) > 0 {
-		item := queue[0]
-		queue = queue[1:]
-		key := modIdentity(item)
-		if key != "" {
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
-		}
-		for _, dependencyName := range modDependencies(item) {
-			dependency, created, err := p.ensureModDependency(ctx, server, dependencyName)
-			if err != nil {
-				return nil, err
-			}
-			if created {
-				added = append(added, dependency)
-			}
-			queue = append(queue, dependency)
-		}
-	}
-	return added, nil
+	return modruntime.ResolveDependencies(ctx, roots, func(ctx context.Context, name string) (domain.ModFile, bool, error) {
+		return p.ensureModDependency(ctx, server, name)
+	})
 }
 
 func (p *RuntimeModPlanner) ensureModDependency(ctx context.Context, server domain.GameServer, dependencyName string) (domain.ModFile, bool, error) {
@@ -240,7 +218,7 @@ func (p *RuntimeModPlanner) findServerModByModName(ctx context.Context, instance
 	for _, item := range mods {
 		// Normalize pre-provider legacy records before applying the provider scope.
 		hydrateModMetadata(&item)
-		if item.ProviderKey == providerKey && modIdentity(item) == modName {
+		if item.ProviderKey == providerKey && modcatalog.Identity(item) == modName {
 			return item, true, nil
 		}
 	}
@@ -255,7 +233,7 @@ func (p *RuntimeModPlanner) findLibraryModByModName(ctx context.Context, provide
 	for _, item := range mods {
 		// Normalize pre-provider legacy records before applying the provider scope.
 		hydrateModMetadata(&item)
-		if item.ProviderKey == providerKey && modIdentity(item) == modName {
+		if item.ProviderKey == providerKey && modcatalog.Identity(item) == modName {
 			return item, true, nil
 		}
 	}
@@ -380,31 +358,11 @@ func hydrateModMetadata(item *domain.ModFile) {
 		item.Title = "Workshop " + item.WorkshopID
 	}
 	if item.ModName == "" {
-		item.ModName = modIdentity(*item)
+		item.ModName = modcatalog.Identity(*item)
 	}
 	if len(item.Dependencies) == 0 {
-		item.Dependencies = modDependencies(*item)
+		item.Dependencies = modcatalog.Dependencies(*item)
 	}
-}
-
-func modIdentity(item domain.ModFile) string {
-	if item.WorkshopID != "" {
-		if recommended, ok := modcatalog.RecommendedModByProviderAndWorkshopID(item.ProviderKey, item.WorkshopID); ok {
-			for _, value := range []string{recommended.ModName, recommended.Title} {
-				value = strings.TrimSpace(value)
-				if value != "" {
-					return value
-				}
-			}
-		}
-	}
-	for _, value := range []string{item.ModName, item.Title, strings.TrimSuffix(item.FileName, filepath.Ext(item.FileName))} {
-		value = strings.TrimSpace(value)
-		if value != "" && !strings.HasPrefix(value, "workshop-") {
-			return value
-		}
-	}
-	return ""
 }
 
 func applyFileModMetadata(item *domain.ModFile) {
@@ -450,27 +408,6 @@ func gameKeyForProvider(providerKey domain.ProviderKey) domain.GameKey {
 	default:
 		return domain.GameTerraria
 	}
-}
-
-func modDependencies(item domain.ModFile) []string {
-	if len(item.Dependencies) > 0 {
-		return uniqueModIDs(item.Dependencies)
-	}
-	if strings.TrimSpace(item.DependenciesJSON) != "" {
-		var values []string
-		if err := json.Unmarshal([]byte(item.DependenciesJSON), &values); err == nil {
-			return uniqueModIDs(values)
-		}
-	}
-	if item.WorkshopID != "" {
-		if recommended, ok := modcatalog.RecommendedModByProviderAndWorkshopID(item.ProviderKey, item.WorkshopID); ok {
-			return uniqueModIDs(recommended.Dependencies)
-		}
-	}
-	if recommended, ok := modcatalog.RecommendedModByProviderAndModName(item.ProviderKey, modIdentity(item)); ok {
-		return uniqueModIDs(recommended.Dependencies)
-	}
-	return nil
 }
 
 func uniqueModIDs(values []string) []string {

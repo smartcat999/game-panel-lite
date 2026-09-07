@@ -2,6 +2,9 @@
 
 ## 2026-09-07
 
+- Consolidated duplicate HTTP/lifecycle mod identity and dependency metadata rules into modcatalog. Consolidated dependency graph traversal into modruntime, with sequential resolution, cycle/diamond deduplication and context cancellation. Existing persistence operations remain caller-owned; errors do not imply rollback of prior assignments.
+- Added shared-interface tests for metadata precedence, provider-scoped fallback, independent result slices, cyclic/diamond graphs, existing dependencies, failure and cancellation. Import checks prevent these shared modules from reaching back into HTTP, server or concrete store/runtime packages. Remaining upload/metadata write/install transaction work remains in the SaaS checklist. Validation passed: gofmt, full go test ./..., go vet ./..., modcatalog/modruntime/HTTP/server race tests and expanded architecture tests. No frontend code or wire contract changed.
+
 - Corrected mod dependency resolution in HTTP and lifecycle planning: match the target provider as well as the mod name, and resolve catalog dependencies within that provider. Unknown providers no longer silently use tModLoader recommendations.
 - Reject direct cross-provider mod assignment before filesystem/database mutation. Existing pre-provider records retain the established legacy hydration behavior. Regression tests cover same-name collisions in instance/library records, cross-provider assignment rejection and catalog fallback rejection. This fixes a concrete migration prerequisite; complete mod application-module consolidation remains pending. Validation passed: gofmt, go test ./..., go vet ./..., and race tests for modcatalog/server/http. No frontend code or response shape changed in this batch.
 
