@@ -56,3 +56,28 @@ func TestIncompatibleConfigMutationsPreserveServerAndBackup(t *testing.T) {
 		t.Fatalf("preview: %d %s", response.Code, response.Body.String())
 	}
 }
+
+func TestBackupSourceCompatibilityIsCheckedBeforeArchiveAccess(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	createTestServer(t, db, testServer("backup-target", cfg.DataDir))
+	ctx := context.Background()
+	for _, source := range []domain.Backup{
+		{ID: "future", InstanceID: "backup-target", ProviderKey: domain.ProviderTerrariaVanilla, ConfigVersion: 2, FileName: "future.zip"},
+		{ID: "foreign", InstanceID: "backup-target", ProviderKey: domain.ProviderPalworld, ConfigVersion: 1, FileName: "foreign.zip"},
+	} {
+		if err := db.CreateBackup(ctx, &source); err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{"/api/backups/" + source.ID + "/restore", "/api/servers/backup-target/saves/" + source.ID + "/restore"} {
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
+			if response.Code != http.StatusConflict {
+				t.Fatalf("%s: %d %s", path, response.Code, response.Body.String())
+			}
+		}
+		stored, err := db.GetBackup(ctx, source.ID)
+		if err != nil || stored.ConfigVersion != source.ConfigVersion || stored.ProviderKey != source.ProviderKey {
+			t.Fatalf("source metadata lost: %+v %v", stored, err)
+		}
+	}
+}

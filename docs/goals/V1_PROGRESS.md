@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Persisted source game/provider and configuration format on new manual, save snapshot, pre-update and pre-regeneration backup records. Existing zero/unrecorded metadata retains legacy format-1 compatibility; list hydration no longer overwrites recorded source identity with current instance identity.
+- Both restore endpoints check recorded source provider/configuration compatibility before archive access. Added create/persistence, immutable hydration and pre-extraction rejection tests. OpenAPI now describes backup source fields.
+- Source metadata currently lives in the database, not inside portable ZIP files. Standalone import verification, explicit database migrations and archive/source integrity remain pending; existing SQLite schema setup uses AutoMigrate. Validation passed: gofmt, full Go tests, vet, gameconfig/store/HTTP race regression and OpenAPI YAML parsing. No frontend source changed.
+
 - Extended configuration version checks to generic config editing, versioned preview, and gameconfig restoration. Both backup restore endpoints check the target configuration before archive extraction or orphan-record pruning.
 - Added regressions proving incompatible edits/restores preserve the stored server spec and backup record, and incompatible direct restore does not persist/mutate caller state. Preview accepts optional configVersion (legacy zero remains format 1), documented in OpenAPI.
 - Source backup format/version metadata, other config mutation paths and explicit migrations are still pending. Target-instance preflight does not establish backup-source compatibility. Validation passed: gofmt, full Go tests, vet, gameconfig/HTTP race tests and OpenAPI YAML parsing. No frontend source changed.

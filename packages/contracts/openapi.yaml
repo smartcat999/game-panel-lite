@@ -982,12 +982,22 @@ paths:
       responses:
         "200":
           description: Backup list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Backup"
   /api/servers/{id}/backups:
     post:
       summary: Create manual backup
       responses:
         "201":
           description: Created backup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backup"
         "409":
           description: A game update is active for this server
   /api/backups/{id}/restore:
@@ -1053,6 +1063,34 @@ paths:
           description: Invalid config
 components:
   schemas:
+    Backup:
+      type: object
+      required: [id, instanceId, fileName, worldName, sizeBytes, type, createdAt]
+      properties:
+        id:
+          type: string
+        instanceId:
+          type: string
+        gameKey:
+          type: string
+        providerKey:
+          type: string
+          description: Recorded source provider; historical records may omit this value.
+        configVersion:
+          type: integer
+          minimum: 0
+          description: Recorded source configuration format. Missing or zero denotes legacy format 1.
+        fileName:
+          type: string
+        worldName:
+          type: string
+        sizeBytes:
+          type: integer
+        type:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
     PanelBuildInfo:
       type: object
       required: [name, version, commit, buildTime, goVersion]

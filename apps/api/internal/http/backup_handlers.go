@@ -63,7 +63,7 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	item := domain.Backup{ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: serverWorldName(server), SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
+	item := domain.Backup{ConfigVersion: snapshotConfigVersion(server), GameKey: server.GameKey, ProviderKey: server.ProviderKey, ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: serverWorldName(server), SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
 	if err := h.store.CreateBackup(r.Context(), &item); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -80,8 +80,12 @@ func (h *Handler) hydrateBackupResource(ctx context.Context, backup domain.Backu
 	if err != nil {
 		return backup
 	}
-	backup.GameKey = server.GameKey
-	backup.ProviderKey = server.ProviderKey
+	if backup.GameKey == "" {
+		backup.GameKey = server.GameKey
+	}
+	if backup.ProviderKey == "" {
+		backup.ProviderKey = server.ProviderKey
+	}
 	return backup
 }
 
@@ -126,7 +130,7 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "stop the server before restoring a backup")
 		return
 	}
-	if err := h.gameConfig.Check(resource); err != nil {
+	if err := h.gameConfig.CheckBackup(resource, item); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -220,7 +224,7 @@ func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	item := domain.Backup{ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: serverWorldName(server), SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
+	item := domain.Backup{ConfigVersion: snapshotConfigVersion(server), GameKey: server.GameKey, ProviderKey: server.ProviderKey, ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: serverWorldName(server), SizeBytes: size, Type: "Manual", CreatedAt: time.Now()}
 	if err := h.store.CreateBackup(r.Context(), &item); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -285,7 +289,7 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "stop the server before restoring a save snapshot")
 		return
 	}
-	if err := h.gameConfig.Check(resource); err != nil {
+	if err := h.gameConfig.CheckBackup(resource, item); err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
@@ -365,4 +369,12 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), item.InstanceID, "backup.deleted", fmt.Sprintf("Deleted backup %s", item.FileName), activityBackupPayload(item, nil))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Unversioned stored configurations are the original format, never the latest.
+func snapshotConfigVersion(server domain.GameServer) int {
+	if server.Spec.ConfigVersion == 0 {
+		return 1
+	}
+	return server.Spec.ConfigVersion
 }

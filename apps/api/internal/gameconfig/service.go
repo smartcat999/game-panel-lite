@@ -145,3 +145,16 @@ func (s *Service) Check(server domain.GameServer) error {
 	}
 	return provider.CheckConfigVersion(item, server.Spec.ConfigVersion)
 }
+
+// CheckBackup validates immutable source metadata as well as the target before
+// extraction. Legacy records without source metadata retain format-1 semantics.
+func (s *Service) CheckBackup(server domain.GameServer, backup domain.Backup) error {
+	if err := s.Check(server); err != nil {
+		return err
+	}
+	if backup.ProviderKey != "" && backup.ProviderKey != server.ProviderKey {
+		return fmt.Errorf("backup provider does not match target server")
+	}
+	item, _ := s.providers.Get(server.ProviderKey)
+	return provider.CheckConfigVersion(item, backup.ConfigVersion)
+}

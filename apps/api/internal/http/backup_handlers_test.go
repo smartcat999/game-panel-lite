@@ -38,6 +38,10 @@ func TestBackupCreateListDownloadRestoreAndDeleteEndpoints(t *testing.T) {
 	if err := json.Unmarshal(create.Body.Bytes(), &backup); err != nil {
 		t.Fatal(err)
 	}
+	stored, err := db.GetBackup(context.Background(), backup.ID)
+	if err != nil || stored.ConfigVersion != 1 || stored.ProviderKey != server.ProviderKey || stored.GameKey != server.GameKey {
+		t.Fatalf("backup source not persisted: %+v %v", stored, err)
+	}
 	if backup.InstanceID != "backup-source" || backup.FileName == "" {
 		t.Fatalf("expected created backup metadata, got %+v", backup)
 	}
@@ -297,5 +301,16 @@ func TestBackupSourceMutationsPruneMissingFiles(t *testing.T) {
 	}
 	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("expected missing backup record pruned after restore miss, got err=%v", err)
+	}
+}
+
+func TestBackupHydrationPreservesRecordedSource(t *testing.T) {
+	_, db, cfg := newTestRouter(t)
+	createTestServer(t, db, testServer("changed-provider", cfg.DataDir))
+	handler := &Handler{store: db}
+	source := domain.Backup{InstanceID: "changed-provider", GameKey: domain.GamePalworld, ProviderKey: domain.ProviderPalworld, ConfigVersion: 2}
+	got := handler.hydrateBackupResource(context.Background(), source)
+	if got.GameKey != source.GameKey || got.ProviderKey != source.ProviderKey || got.ConfigVersion != 2 {
+		t.Fatalf("source replaced with current server metadata: %+v", got)
 	}
 }

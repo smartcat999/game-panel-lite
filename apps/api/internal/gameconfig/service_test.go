@@ -159,3 +159,22 @@ func TestIncompatibleConfigCannotBePreviewedOrRestored(t *testing.T) {
 		t.Fatal("incompatible preview accepted")
 	}
 }
+
+func TestBackupCompatibilityUsesSourceVersion(t *testing.T) {
+	service := testService(t, &configStore{})
+	server := configServer(t)
+	for _, tc := range []struct {
+		source domain.Backup
+		wantOK bool
+	}{
+		{domain.Backup{}, true},
+		{domain.Backup{ProviderKey: server.ProviderKey, ConfigVersion: 1}, true},
+		{domain.Backup{ProviderKey: server.ProviderKey, ConfigVersion: 2}, false},
+		{domain.Backup{ProviderKey: domain.ProviderPalworld, ConfigVersion: 1}, false},
+		{domain.Backup{ConfigVersion: -1}, false},
+	} {
+		if err := service.CheckBackup(server, tc.source); (err == nil) != tc.wantOK {
+			t.Fatalf("source=%+v err=%v", tc.source, err)
+		}
+	}
+}

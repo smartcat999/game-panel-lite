@@ -540,7 +540,7 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameUpdateApply(ctx, server, &job, err)
 		return
 	}
-	backup := domain.Backup{ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: serverWorldName(server), SizeBytes: size, Type: "Pre-update", CreatedAt: time.Now().UTC()}
+	backup := domain.Backup{ConfigVersion: snapshotConfigVersion(server), GameKey: server.GameKey, ProviderKey: server.ProviderKey, ID: uuid.NewString(), InstanceID: server.ID, FileName: filepath.Base(path), WorldName: serverWorldName(server), SizeBytes: size, Type: "Pre-update", CreatedAt: time.Now().UTC()}
 	if err := h.store.CreateBackup(ctx, &backup); err != nil {
 		_ = os.Remove(path)
 		h.failGameUpdateApply(ctx, server, &job, err)

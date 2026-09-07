@@ -243,15 +243,16 @@ type ConfigPreset struct {
 }
 
 type Backup struct {
-	ID          string      `json:"id" gorm:"primaryKey"`
-	InstanceID  string      `json:"instanceId" gorm:"index"`
-	GameKey     GameKey     `json:"gameKey,omitempty" gorm:"-"`
-	ProviderKey ProviderKey `json:"providerKey,omitempty" gorm:"-"`
-	FileName    string      `json:"fileName"`
-	WorldName   string      `json:"worldName"`
-	SizeBytes   int64       `json:"sizeBytes"`
-	Type        string      `json:"type"`
-	CreatedAt   time.Time   `json:"createdAt"`
+	ConfigVersion int         `json:"configVersion,omitempty"`
+	ID            string      `json:"id" gorm:"primaryKey"`
+	InstanceID    string      `json:"instanceId" gorm:"index"`
+	GameKey       GameKey     `json:"gameKey,omitempty"`
+	ProviderKey   ProviderKey `json:"providerKey,omitempty"`
+	FileName      string      `json:"fileName"`
+	WorldName     string      `json:"worldName"`
+	SizeBytes     int64       `json:"sizeBytes"`
+	Type          string      `json:"type"`
+	CreatedAt     time.Time   `json:"createdAt"`
 }
 
 type World struct {
