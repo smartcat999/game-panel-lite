@@ -26,7 +26,7 @@ type activityControllerStore interface {
 }
 
 type assignmentControllerStore interface {
-	UpsertWorkloadAssignment(context.Context, *domain.WorkloadAssignment) error
+	PublishWorkloadAssignment(context.Context, domain.GameServer, *domain.WorkloadAssignment) error
 	GetWorkloadAssignmentByServer(context.Context, string) (domain.WorkloadAssignment, error)
 	DeleteWorkloadAssignment(context.Context, string) error
 	GetWorkloadObservation(context.Context, string) (domain.WorkloadObservation, error)
@@ -209,7 +209,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	if item.Spec.DesiredState == domain.DesiredDeleted {
 		assignment.DeletionTimestamp = &now
 	}
-	if err := assignments.UpsertWorkloadAssignment(ctx, &assignment); err != nil {
+	if err := assignments.PublishWorkloadAssignment(ctx, before, &assignment); err != nil {
 		c.logger.Warn("failed to persist remote workload assignment", "server", item.ID, "node", item.NodeID, "error", err)
 		return
 	}

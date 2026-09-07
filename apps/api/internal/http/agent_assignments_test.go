@@ -33,7 +33,11 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 		Spec:      domain.WorkloadSpec{ServerID: "server-1", Image: "game:1", Resources: domain.WorkloadResources{CPULimitCores: 1.5, MemoryLimitMB: 2048}, Network: domain.WorkloadNetwork{Port: 7777, HostPort: 47777, AdditionalPorts: []domain.WorkloadPort{{Port: 8888, HostPort: 48888, Protocol: "udp"}}}},
 		CreatedAt: now, UpdatedAt: now,
 	}
-	if err := db.UpsertWorkloadAssignment(context.Background(), &assignment); err != nil {
+	instance := domain.GameServer{ID: assignment.ServerID, NodeID: assignment.NodeID, Spec: domain.ServerSpec{Generation: assignment.Generation, DesiredState: assignment.DesiredState}}
+	if err := db.CreateGameServer(context.Background(), &instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.PublishWorkloadAssignment(context.Background(), instance, &assignment); err != nil {
 		t.Fatalf("create assignment: %v", err)
 	}
 

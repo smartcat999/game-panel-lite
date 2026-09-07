@@ -29,7 +29,7 @@ func TestWorkloadAssignmentAndObservationRoundTrip(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}
-	if err := db.UpsertWorkloadAssignment(ctx, &assignment); err != nil {
+	if err := db.upsertWorkloadAssignment(ctx, &assignment); err != nil {
 		t.Fatalf("upsert assignment: %v", err)
 	}
 

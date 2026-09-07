@@ -554,6 +554,10 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 	observation.CreatedAt = now
 	observation.UpdatedAt = now
 	if err := h.store.UpsertWorkloadObservation(r.Context(), &observation); err != nil {
+		if errors.Is(err, store.ErrReconciliationSuperseded) {
+			writeError(w, http.StatusConflict, "assignment changed or observation generation is invalid")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to persist workload observation")
 		return
 	}

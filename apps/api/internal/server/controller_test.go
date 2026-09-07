@@ -29,7 +29,7 @@ func (s *assignmentControllerFakeStore) SaveReconciledGameServer(_ context.Conte
 	return nil
 }
 
-func (s *assignmentControllerFakeStore) UpsertWorkloadAssignment(_ context.Context, assignment *domain.WorkloadAssignment) error {
+func (s *assignmentControllerFakeStore) PublishWorkloadAssignment(_ context.Context, _ domain.GameServer, assignment *domain.WorkloadAssignment) error {
 	copy := *assignment
 	s.assignment = &copy
 	return nil

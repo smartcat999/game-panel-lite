@@ -1077,7 +1077,7 @@ func (s *Store) GetNodeTask(ctx context.Context, taskID string) (domain.NodeTask
 	return task, err
 }
 
-func (s *Store) UpsertWorkloadAssignment(ctx context.Context, assignment *domain.WorkloadAssignment) error {
+func (s *Store) upsertWorkloadAssignment(ctx context.Context, assignment *domain.WorkloadAssignment) error {
 	var current domain.WorkloadAssignment
 	err := s.db.WithContext(ctx).First(&current, "server_id = ?", assignment.ServerID).Error
 	if err == nil {
@@ -1120,20 +1120,36 @@ func (s *Store) DeleteWorkloadAssignment(ctx context.Context, serverID string) e
 }
 
 func (s *Store) UpsertWorkloadObservation(ctx context.Context, observation *domain.WorkloadObservation) error {
-	var current domain.WorkloadObservation
-	err := s.db.WithContext(ctx).First(&current, "assignment_uid = ?", observation.AssignmentUID).Error
-	if err == nil {
-		if current.ObservedGeneration > observation.ObservedGeneration {
-			return nil
+	if observation.ObservedGeneration < 0 {
+		return ErrReconciliationSuperseded
+	}
+	return s.Transaction(ctx, func(tx *Store) error {
+		// Lock the assignment itself so concurrent reports and placement changes
+		// serialize. HTTP authorization alone cannot close this commit-time race.
+		locked := tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).
+			Where("uid = ? AND server_id = ? AND node_id = ? AND generation >= ?", observation.AssignmentUID, observation.ServerID, observation.NodeID, observation.ObservedGeneration).
+			UpdateColumn("updated_at", gorm.Expr("updated_at"))
+		if locked.Error != nil {
+			return locked.Error
 		}
-		observation.ID = current.ID
-		observation.CreatedAt = current.CreatedAt
-		return s.db.WithContext(ctx).Save(observation).Error
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-	return s.db.WithContext(ctx).Create(observation).Error
+		if locked.RowsAffected == 0 {
+			return ErrReconciliationSuperseded
+		}
+		var current domain.WorkloadObservation
+		err := tx.db.WithContext(ctx).First(&current, "assignment_uid = ?", observation.AssignmentUID).Error
+		if err == nil {
+			if current.ObservedGeneration > observation.ObservedGeneration {
+				return nil
+			}
+			observation.ID = current.ID
+			observation.CreatedAt = current.CreatedAt
+			return tx.db.WithContext(ctx).Save(observation).Error
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		return tx.db.WithContext(ctx).Create(observation).Error
+	})
 }
 
 func (s *Store) GetWorkloadObservation(ctx context.Context, assignmentUID string) (domain.WorkloadObservation, error) {
