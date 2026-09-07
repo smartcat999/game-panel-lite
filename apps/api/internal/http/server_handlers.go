@@ -238,11 +238,12 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		GameKey:     gameProvider.GameKey(),
 		ProviderKey: payload.ProviderKey,
 		Spec: domain.ServerSpec{
-			Generation:   1,
-			DesiredState: domain.DesiredRunning,
-			Version:      payload.Version,
-			Config:       configPayload,
-			ModIDs:       modIDs,
+			ConfigVersion: gameProvider.CatalogMetadata().ConfigVersion,
+			Generation:    1,
+			DesiredState:  domain.DesiredRunning,
+			Version:       payload.Version,
+			Config:        configPayload,
+			ModIDs:        modIDs,
 			Resources: domain.ServerResources{
 				CPULimitCores: resources.CPULimitCores,
 				MemoryLimitMB: resources.MemoryLimitMB,

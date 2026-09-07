@@ -58,6 +58,7 @@ type ServerRuntimeSpec struct {
 }
 
 type ServerSpec struct {
+	ConfigVersion   int                `json:"configVersion,omitempty"`
 	Generation      int                `json:"generation"`
 	DesiredState    ServerDesiredState `json:"desiredState"`
 	Version         string             `json:"version,omitempty"`

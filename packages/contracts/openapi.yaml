@@ -1465,6 +1465,10 @@ components:
       type: object
       required: [generation, desiredState]
       properties:
+        configVersion:
+          type: integer
+          minimum: 0
+          description: Provider configuration format version. Missing or zero identifies legacy format 1, not the latest version.
         generation:
           type: integer
           minimum: 1

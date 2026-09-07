@@ -162,3 +162,9 @@ HTTP 与启动规划共用 modcatalog.Identity/Dependencies，统一名称推导
 模组运行文件统一通过 modruntime.Install/Remove 操作，由 Provider 提供相对路径，应用用例持有 os.Root 并在实例目录内完成暂存、替换和删除。安装先完成全部暂存，再逐文件 rename；读取失败不发布半写入文件，但多个 rename 与数据库写入仍不具备事务原子性。保留现有容器镜像依赖的文件权限，后续强隔离需结合运行用户与卷所有权实现。
 
 模组二进制元数据由可选 ModInspector 能力解析，当前 tMod 实现在 Terraria Provider 内。modruntime 负责打开文件并传递 context，HTTP 仅消费通用名称、版本、加载器版本。当前上传接口保留元数据解析失败后继续上传的兼容策略；元数据提取不等于完整包验证，后续严格校验需单独验收。
+
+## 插件与配置版本基线
+
+ProviderCatalogMetadata 声明 PluginVersion（数字 major.minor.patch）和 ConfigVersion（正整数），独立于游戏发行版本。当前所有 Provider 以 1.0.0 / 1 建立版本基线。Registry 在启动时验证声明，新建实例保存 spec.configVersion，WorkloadBuilder 在文件或模组操作前检查配置版本。历史零值固定解释为格式 1，不能随插件升级自动变成最新版本。
+
+当前只允许读取与 Provider 声明相同的格式；尚未实现自动迁移，也未覆盖全部配置编辑/恢复入口。未来格式升级必须增加显式迁移、事务与恢复演练，不能仅修改版本常量。插件版本目前属于内部描述，不代表外部 RPC 协议或独立发布机制已完成。

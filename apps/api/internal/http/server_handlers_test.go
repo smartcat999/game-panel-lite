@@ -105,6 +105,9 @@ func TestCreateTModLoaderServerPersistsDesiredModIDs(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &server); err != nil {
 		t.Fatal(err)
 	}
+	if server.Spec.ConfigVersion != 1 {
+		t.Fatalf("missing provider config version: %d", server.Spec.ConfigVersion)
+	}
 	if !reflect.DeepEqual(server.Spec.ModIDs, []string{"mod-a", "mod-b"}) {
 		t.Fatalf("expected desired mod ids to be persisted, got %+v", server.Spec.ModIDs)
 	}

@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Introduced independent plugin release and configuration format declarations for every registered provider. Registry rejects malformed numeric major.minor.patch release identifiers and nonpositive configuration versions. Current providers declare release 1.0.0 / configuration format 1 as the initial contract baseline.
+- New instances persist spec.configVersion; omitted/zero legacy values mean format 1, not the newest format. Workload construction rejects incompatible formats before directory creation/mod planning. Added OpenAPI documentation, registry compatibility tests, persistence/create assertions and a no-filesystem-mutation regression.
+- Configuration editing/restoration guards, explicit migrations and compatibility across actual future provider releases are not yet implemented. Plugin version metadata does not imply hot loading or a versioned RPC protocol. Validation passed: gofmt, full Go tests/vet, provider/server/store/HTTP race tests, frontend typecheck/build, tracked-source lint and OpenAPI YAML parsing. Existing worktree-wide lint failures in unrelated local recording scripts remain unchanged.
+
 - Moved tMod binary metadata parsing and its tests out of the generic mod cache package into Terraria Provider. Added optional ModInspector and generic ModMetadata with loader version; HTTP delegates inspection through modruntime with request cancellation and no concrete format parser import.
 - Removed provider-specific conditions around applying returned metadata. Existing database/wire fields remain compatible. Added malformed/truncated/oversized-string/UTF-8 header tests and a synthetic inspector test covering registration, missing files, unknown providers, optional capability and cancellation.
 - Metadata inspection remains best-effort at current upload endpoints; this does not validate complete archives or reject all unsafe packages. Strict upload validation and installation transactions remain pending. Validation passed: gofmt, full Go tests, vet and Terraria/modruntime/HTTP/server race tests. No frontend code or wire schema changed.

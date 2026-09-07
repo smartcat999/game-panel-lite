@@ -83,7 +83,7 @@ type catalogTestProvider struct {
 func (p catalogTestProvider) Key() domain.ProviderKey { return p.id }
 func (catalogTestProvider) GameKey() domain.GameKey   { return "test-game" }
 func (p catalogTestProvider) CatalogMetadata() domain.ProviderCatalogMetadata {
-	return domain.ProviderCatalogMetadata{
+	return domain.ProviderCatalogMetadata{PluginVersion: "1.0.0", ConfigVersion: 1,
 		GameName: "Test Game", GameDescription: "Plugin-owned metadata", CoverImage: "test-cover", Priority: p.priority,
 	}
 }

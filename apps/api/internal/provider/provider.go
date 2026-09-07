@@ -119,6 +119,9 @@ func NewRegistry(providers ...GameProvider) (*Registry, error) {
 		if _, exists := registry.providers[item.Key()]; exists {
 			return nil, fmt.Errorf("duplicate provider ID: %s", item.Key())
 		}
+		if err := validateVersionContract(item); err != nil {
+			return nil, err
+		}
 		if err := validateCapabilities(item); err != nil {
 			return nil, err
 		}

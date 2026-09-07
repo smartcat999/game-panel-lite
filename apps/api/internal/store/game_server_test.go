@@ -19,10 +19,11 @@ func TestGameServerCRUDPersistsSpecAndStatus(t *testing.T) {
 		GameKey:     domain.GameTerraria,
 		ProviderKey: domain.ProviderTerrariaVanilla,
 		Spec: domain.ServerSpec{
-			Generation:   2,
-			DesiredState: domain.DesiredRunning,
-			Version:      "1.4.5.6",
-			Config:       map[string]any{"worldName": "Friends World"},
+			ConfigVersion: 3,
+			Generation:    2,
+			DesiredState:  domain.DesiredRunning,
+			Version:       "1.4.5.6",
+			Config:        map[string]any{"worldName": "Friends World"},
 		},
 		Status: domain.ServerRuntimeStatus{
 			Phase:              domain.PhasePending,
@@ -37,6 +38,9 @@ func TestGameServerCRUDPersistsSpecAndStatus(t *testing.T) {
 	stored, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatalf("get game server: %v", err)
+	}
+	if stored.Spec.ConfigVersion != 3 {
+		t.Fatalf("config version lost: %d", stored.Spec.ConfigVersion)
 	}
 	if stored.Spec.DesiredState != domain.DesiredRunning {
 		t.Fatalf("expected desired running, got %q", stored.Spec.DesiredState)

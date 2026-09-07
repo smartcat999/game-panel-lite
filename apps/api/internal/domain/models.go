@@ -89,6 +89,8 @@ type WorldRegenerationPlan struct {
 // ProviderCatalogMetadata describes a provider's game and default catalog order.
 // Lower priority values sort first; provider ID breaks ties.
 type ProviderCatalogMetadata struct {
+	PluginVersion   string
+	ConfigVersion   int
 	GameName        string
 	GameDescription string
 	CoverImage      string

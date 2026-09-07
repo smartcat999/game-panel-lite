@@ -35,6 +35,9 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 	if !ok {
 		return domain.WorkloadSpec{}, fmt.Errorf("unknown provider: %s", server.ProviderKey)
 	}
+	if err := provider.CheckConfigVersion(gameProvider, server.Spec.ConfigVersion); err != nil {
+		return domain.WorkloadSpec{}, err
+	}
 	version := server.Spec.Version
 	if version == "" || !providerVersionSupported(gameProvider.Versions(), version) {
 		version = recommendedProviderVersion(gameProvider.Versions())

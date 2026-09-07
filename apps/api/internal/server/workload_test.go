@@ -311,7 +311,7 @@ type customGameProvider struct{ provider.GameProvider }
 func (customGameProvider) Key() domain.ProviderKey { return "custom-provider" }
 func (customGameProvider) GameKey() domain.GameKey { return "custom-game" }
 func (customGameProvider) CatalogMetadata() domain.ProviderCatalogMetadata {
-	return domain.ProviderCatalogMetadata{GameName: "Custom Game"}
+	return domain.ProviderCatalogMetadata{PluginVersion: "1.0.0", ConfigVersion: 1, GameName: "Custom Game"}
 }
 func (customGameProvider) RuntimeConfigForResource(domain.GameServer) (domain.ProviderRuntimeConfig, error) {
 	return domain.ProviderRuntimeConfig{
@@ -339,4 +339,18 @@ func TestProviderWorkloadBuilderSupportsNewGameFiles(t *testing.T) {
 
 func (customGameProvider) Capabilities() domain.ProviderCapabilities {
 	return domain.ProviderCapabilities{}
+}
+
+func TestWorkloadRejectsUnknownConfigBeforeFilesystemMutation(t *testing.T) {
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "must-not-create")
+	p := terraria.NewVanillaProvider()
+	builder := NewProviderWorkloadBuilder(mustRegistry(t, p))
+	server := domain.GameServer{ProviderKey: p.Key(), Spec: domain.ServerSpec{ConfigVersion: 99, Runtime: domain.ServerRuntimeSpec{DataDir: dataDir}}}
+	if _, err := builder.BuildWorkloadSpec(context.Background(), server); err == nil {
+		t.Fatal("incompatible config accepted")
+	}
+	if _, err := os.Stat(dataDir); !os.IsNotExist(err) {
+		t.Fatalf("filesystem mutated: %v", err)
+	}
 }
