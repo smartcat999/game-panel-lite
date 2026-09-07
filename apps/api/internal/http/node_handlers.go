@@ -150,15 +150,6 @@ type updateNodeRequest struct {
 
 func (h *Handler) updateNode(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	node, err := h.store.GetComputeNode(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "node not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to get node: "+err.Error())
-		return
-	}
 
 	var req updateNodeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -166,23 +157,33 @@ func (h *Handler) updateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	patch := store.NodeConfigurationPatch{}
 	if req.Name != nil && strings.TrimSpace(*req.Name) != "" {
-		node.Name = strings.TrimSpace(*req.Name)
+		value := strings.TrimSpace(*req.Name)
+		patch.Name = &value
 	}
 	if req.Region != nil {
-		node.Region = strings.TrimSpace(*req.Region)
+		value := strings.TrimSpace(*req.Region)
+		patch.Region = &value
 	}
 	if req.PublicIP != nil {
-		node.PublicIP = strings.TrimSpace(*req.PublicIP)
+		value := strings.TrimSpace(*req.PublicIP)
+		patch.PublicIP = &value
 	}
 	if req.Host != nil && strings.TrimSpace(*req.Host) != "" {
-		node.Host = strings.TrimSpace(*req.Host)
+		value := strings.TrimSpace(*req.Host)
+		patch.Host = &value
 	}
 	if req.Port != nil && *req.Port > 0 {
-		node.Port = *req.Port
+		patch.Port = req.Port
 	}
 
-	if err := h.store.UpdateComputeNode(r.Context(), &node); err != nil {
+	node, err := h.store.UpdateNodeConfiguration(r.Context(), id, patch)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "node not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to update node: "+err.Error())
 		return
 	}
@@ -364,23 +365,13 @@ func (h *Handler) pingNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	latency := int64(4)
-	if !node.IsLocal {
-		latency = 12
-	}
-	node.PingLatencyMS = latency
-	node.LastHeartbeat = time.Now().UTC()
-	if !node.IsLocal && time.Since(node.LastHeartbeat) > 45*time.Second {
-		node.Status = "offline"
-	} else {
-		node.Status = "online"
-	}
-	_ = h.store.UpdateComputeNode(r.Context(), &node)
+	// This endpoint reports the last Agent observation; it does not probe the node
+	// or manufacture a heartbeat that could make an offline node schedulable.
 
 	writeJSON(w, http.StatusOK, pingNodeResponse{
 		NodeID:    node.ID,
 		Status:    node.Status,
-		LatencyMS: latency,
+		LatencyMS: node.PingLatencyMS,
 		CheckedAt: time.Now().UTC(),
 	})
 }

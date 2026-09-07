@@ -315,11 +315,11 @@ export function NodeManagement() {
                       type="button"
                       onClick={() => pingMutation.mutate(node.id)}
                       disabled={pingMutation.isPending}
-                      title={isZh ? "测速探活" : "Ping & Health Check"}
+                      title={isZh ? "刷新最近上报状态" : "Refresh last reported status"}
                       className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-900 hover:text-white transition"
                     >
                       <Activity className="size-3 text-panel-green" />
-                      <span>{isZh ? "探活" : "Ping"}</span>
+                      <span>{isZh ? "刷新状态" : "Refresh status"}</span>
                     </button>
                   </div>
 
