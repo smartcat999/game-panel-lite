@@ -69,7 +69,11 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 	if !reflect.DeepEqual(assignments[0].Spec, assignment.Spec) {
 		t.Fatalf("worker protocol dropped fields: %+v", assignments[0].Spec)
 	}
-	statusBody := []byte(`{"observedGeneration":1,"actualState":"running","reconcileDurationSeconds":0.25}`)
+	lease, err := db.AcquireExecutionLease(context.Background(), store.ExecutionLeaseRequest{NodeID: "node-a", NodeToken: "token-a", AssignmentUID: assignment.UID, HolderID: "reporter", Generation: 1}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusBody := []byte(`{"leaseHolderId":"reporter","leaseFence":1,"observedGeneration":1,"actualState":"running","reconcileDurationSeconds":0.25}`)
 	forbiddenRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/agent/assignments/uid-1/status", bytes.NewReader(statusBody))
 	forbiddenRequest.Header.Set("X-Node-Token", "token-b")
 	forbiddenResponse := httptest.NewRecorder()
@@ -78,6 +82,13 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 		t.Fatalf("expected other node status report 403, got %d", forbiddenResponse.Code)
 	}
 
+	legacyStatus := httptest.NewRequest(stdhttp.MethodPost, "/api/agent/assignments/uid-1/status", strings.NewReader(`{"observedGeneration":1,"actualState":"running"}`))
+	legacyStatus.Header.Set("X-Node-Token", "token-a")
+	legacyStatusResponse := httptest.NewRecorder()
+	router.ServeHTTP(legacyStatusResponse, legacyStatus)
+	if legacyStatusResponse.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("unleased report accepted: %d", legacyStatusResponse.Code)
+	}
 	statusRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/agent/assignments/uid-1/status", bytes.NewReader(statusBody))
 	statusRequest.Header.Set("X-Node-Token", "token-a")
 	statusResponse := httptest.NewRecorder()
@@ -110,7 +121,7 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 	if err := json.Unmarshal(refreshed.Body.Bytes(), &assignments); err != nil || len(assignments) != 1 || assignments[0].ObservationToken != observation.ID {
 		t.Fatalf("missing observation token: %s", refreshed.Body.String())
 	}
-	body, err := json.Marshal(workload.Observation{ObservationToken: assignments[0].ObservationToken, ObservedGeneration: 1, ActualState: "stopped"})
+	body, err := json.Marshal(workload.Observation{LeaseHolderID: "reporter", LeaseFence: lease.Fence, ObservationToken: assignments[0].ObservationToken, ObservedGeneration: 1, ActualState: "stopped"})
 	if err != nil {
 		t.Fatal(err)
 	}

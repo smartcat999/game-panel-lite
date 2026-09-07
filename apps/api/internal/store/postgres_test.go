@@ -216,6 +216,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testAgentNodeReports(t, db)
 	testNodeConfiguration(t, db)
 	testExecutionLeases(t, db)
+	testLeasedObservations(t, db)
 	testNodeArtifactAuthorization(t, db)
 	testArtifactReferenceLifecycle(t, db)
 	var referenceCount int64

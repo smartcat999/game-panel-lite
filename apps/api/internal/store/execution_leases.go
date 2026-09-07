@@ -65,51 +65,8 @@ func (s *Store) changeExecutionLease(ctx context.Context, request ExecutionLease
 	}
 	var lease ExecutionLease
 	err := s.Transaction(ctx, func(tx *Store) error {
-		// Lock order: node, instance, assignment, lease. Token rotation and deletion
-		// must serialize with authorization, not merely precede an HTTP handler.
-		locked := tx.db.WithContext(ctx).Model(&domain.ComputeNode{}).Where("id = ? AND token = ?", request.NodeID, request.NodeToken).UpdateColumn("updated_at", gorm.Expr("updated_at"))
-		if locked.Error != nil {
-			return locked.Error
-		}
-		if locked.RowsAffected != 1 {
-			return ErrExecutionLeaseUnavailable
-		}
-		assignment, err := tx.GetWorkloadAssignmentByUID(ctx, request.AssignmentUID)
+		assignment, now, err := tx.lockExecutionAssignment(ctx, request)
 		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				return ErrExecutionLeaseUnavailable
-			}
-			return err
-		}
-		locked = tx.db.WithContext(ctx).Model(&domain.GameServer{}).Where("id = ? AND node_id = ?", assignment.ServerID, request.NodeID).UpdateColumn("updated_at", gorm.Expr("updated_at"))
-		if locked.Error != nil {
-			return locked.Error
-		}
-		if locked.RowsAffected != 1 {
-			return ErrExecutionLeaseUnavailable
-		}
-		server, err := tx.GetGameServer(ctx, assignment.ServerID)
-		if err != nil {
-			return err
-		}
-		if server.Spec.Generation != request.Generation || server.Spec.DesiredState != assignment.DesiredState {
-			return ErrExecutionLeaseUnavailable
-		}
-		locked = tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).Where("uid = ? AND server_id = ? AND node_id = ? AND generation = ?", request.AssignmentUID, assignment.ServerID, request.NodeID, request.Generation).UpdateColumn("updated_at", gorm.Expr("updated_at"))
-		if locked.Error != nil {
-			return locked.Error
-		}
-		if locked.RowsAffected != 1 {
-			return ErrExecutionLeaseUnavailable
-		}
-		// Use the database clock after acquiring locks; control-plane hosts need not
-		// agree on wall time, and time spent waiting for locks cannot renew a stale claim.
-		var now int64
-		clockSQL := "SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"
-		if tx.db.Dialector.Name() == "postgres" {
-			clockSQL = "SELECT CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)"
-		}
-		if err := tx.db.Raw(clockSQL).Scan(&now).Error; err != nil {
 			return err
 		}
 		seed := ExecutionLease{ServerID: assignment.ServerID}
@@ -145,4 +102,56 @@ func (s *Store) changeExecutionLease(ctx context.Context, request ExecutionLease
 		return tx.db.First(&lease, "server_id = ?", assignment.ServerID).Error
 	})
 	return lease, err
+}
+
+// Caller must hold a transaction for the entire protected write.
+func (tx *Store) lockExecutionAssignment(ctx context.Context, request ExecutionLeaseRequest) (domain.WorkloadAssignment, int64, error) {
+	// Lock order: node, instance, assignment, lease. Token rotation and deletion
+	// must serialize with authorization, not merely precede an HTTP handler.
+	locked := tx.db.WithContext(ctx).Model(&domain.ComputeNode{}).Where("id = ? AND token = ?", request.NodeID, request.NodeToken).UpdateColumn("updated_at", gorm.Expr("updated_at"))
+	if locked.Error != nil {
+		return domain.WorkloadAssignment{}, 0, locked.Error
+	}
+	if locked.RowsAffected != 1 {
+		return domain.WorkloadAssignment{}, 0, ErrExecutionLeaseUnavailable
+	}
+	assignment, err := tx.GetWorkloadAssignmentByUID(ctx, request.AssignmentUID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return domain.WorkloadAssignment{}, 0, ErrExecutionLeaseUnavailable
+		}
+		return domain.WorkloadAssignment{}, 0, err
+	}
+	locked = tx.db.WithContext(ctx).Model(&domain.GameServer{}).Where("id = ? AND node_id = ?", assignment.ServerID, request.NodeID).UpdateColumn("updated_at", gorm.Expr("updated_at"))
+	if locked.Error != nil {
+		return domain.WorkloadAssignment{}, 0, locked.Error
+	}
+	if locked.RowsAffected != 1 {
+		return domain.WorkloadAssignment{}, 0, ErrExecutionLeaseUnavailable
+	}
+	server, err := tx.GetGameServer(ctx, assignment.ServerID)
+	if err != nil {
+		return domain.WorkloadAssignment{}, 0, err
+	}
+	if server.Spec.Generation != request.Generation || server.Spec.DesiredState != assignment.DesiredState {
+		return domain.WorkloadAssignment{}, 0, ErrExecutionLeaseUnavailable
+	}
+	locked = tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).Where("uid = ? AND server_id = ? AND node_id = ? AND generation = ?", request.AssignmentUID, assignment.ServerID, request.NodeID, request.Generation).UpdateColumn("updated_at", gorm.Expr("updated_at"))
+	if locked.Error != nil {
+		return domain.WorkloadAssignment{}, 0, locked.Error
+	}
+	if locked.RowsAffected != 1 {
+		return domain.WorkloadAssignment{}, 0, ErrExecutionLeaseUnavailable
+	}
+	// Use the database clock after acquiring locks; control-plane hosts need not
+	// agree on wall time, and time spent waiting for locks cannot renew a stale claim.
+	var now int64
+	clockSQL := "SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"
+	if tx.db.Dialector.Name() == "postgres" {
+		clockSQL = "SELECT CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)"
+	}
+	if err := tx.db.Raw(clockSQL).Scan(&now).Error; err != nil {
+		return domain.WorkloadAssignment{}, 0, err
+	}
+	return assignment, now, nil
 }

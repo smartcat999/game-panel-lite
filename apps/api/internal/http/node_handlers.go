@@ -559,6 +559,10 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "invalid observation body")
 		return
 	}
+	if report.LeaseHolderID == "" || report.LeaseFence <= 0 {
+		writeError(w, http.StatusBadRequest, "execution lease identity is required")
+		return
+	}
 	observation := domain.WorkloadObservation{ObservationToken: report.ObservationToken, ObservedGeneration: report.ObservedGeneration, RuntimeID: report.RuntimeID, ActualState: domain.ServerActualState(report.ActualState), Conditions: report.Conditions, LastError: report.LastError, ReconcileDurationSeconds: report.ReconcileDurationSeconds, ObservedAt: report.ObservedAt}
 	if observation.ObservedGeneration > assignment.Generation {
 		writeError(w, http.StatusConflict, "observation generation is newer than assignment")
@@ -578,7 +582,12 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 	}
 	observation.CreatedAt = now
 	observation.UpdatedAt = now
-	if err := h.store.UpsertWorkloadObservation(r.Context(), &observation); err != nil {
+	leaseRequest := store.ExecutionLeaseRequest{NodeID: node.ID, NodeToken: node.Token, AssignmentUID: assignment.UID, Generation: report.ObservedGeneration, HolderID: report.LeaseHolderID}
+	if err := h.store.SaveAgentWorkloadObservation(r.Context(), leaseRequest, report.LeaseFence, &observation); err != nil {
+		if errors.Is(err, store.ErrExecutionLeaseUnavailable) {
+			writeError(w, http.StatusConflict, "execution lease expired or authorization changed")
+			return
+		}
 		if errors.Is(err, store.ErrReconciliationSuperseded) {
 			writeError(w, http.StatusConflict, "assignment changed or observation generation is invalid")
 			return

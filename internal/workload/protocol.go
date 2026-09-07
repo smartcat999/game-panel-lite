@@ -66,6 +66,8 @@ type Assignment struct {
 }
 
 type Observation struct {
+	LeaseHolderID            string      `json:"leaseHolderId,omitempty"`
+	LeaseFence               int64       `json:"leaseFence,omitempty"`
 	ObservationToken         string      `json:"observationToken"`
 	ObservedGeneration       int         `json:"observedGeneration"`
 	RuntimeID                string      `json:"runtimeId,omitempty"`

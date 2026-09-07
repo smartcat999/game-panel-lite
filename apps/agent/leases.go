@@ -107,6 +107,13 @@ func reconcileLeasedAssignment(ctx context.Context, client *http.Client, cfg Age
 	}
 	guarded := worker.AuthorizeMutations(runtime, func(ctx context.Context) error { _, err := lease.exchange(ctx, "renew", grant.Fence); return err })
 	observation := worker.Reconcile(executionCtx, a, guarded)
+	observation.LeaseHolderID = lease.holder
+	observation.LeaseFence = grant.Fence
+	// Persist while the lease is still held. An uncertain response retains the
+	// grant; a subsequent poll will fetch the latest observation token.
+	if err := reportWorkloadObservation(executionCtx, &lease.client, cfg, a, observation); err != nil {
+		return observation, fmt.Errorf("report leased observation: %w", err)
+	}
 	// Runtime errors may describe an in-flight or ambiguous Docker operation.
 	// Keep the grant until expiration in that case, including cancellation.
 	if observation.LastError == "" && executionCtx.Err() == nil {

@@ -415,12 +415,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [observedGeneration, actualState]
+              required: [observedGeneration, actualState, leaseHolderId, leaseFence]
               properties:
                 observationToken:
                   type: string
-                  description: Token from assignment polling. Required for writes after the first observation; successful writes rotate it. Lower-generation reports may be acknowledged without writing.
-                observedGeneration: {type: integer, minimum: 0}
+                  description: Token from assignment polling. Required for writes after the first observation; successful writes rotate it. The report must also hold the current execution lease and match the exact current instance and assignment generation.
+                leaseHolderId: {type: string, minLength: 1, maxLength: 128}
+                leaseFence: {type: integer, format: int64, minimum: 1}
+                observedGeneration: {type: integer, minimum: 1}
                 actualState: {type: string}
                 runtimeId: {type: string}
                 lastError: {type: string}
@@ -431,9 +433,9 @@ paths:
                   items: {type: object}
       responses:
         "200":
-          description: Report accepted; reports below the persisted generation do not change the observation
+          description: Report committed under the active execution lease. Reporting does not extend the lease; release only after receiving confirmation.
         "400":
-          description: Invalid JSON or reconcile duration
+          description: Invalid JSON, reconcile duration or missing lease identity
         "401":
           description: Invalid node token
         "403":
@@ -441,7 +443,7 @@ paths:
         "404":
           description: Assignment not found
         "409":
-          description: Observation token expired, assignment changed, or generation invalid. Poll and observe again.
+          description: Execution lease expired/released/superseded, node authorization changed, observation token expired, or generation invalid. Poll and observe again; do not retry an old report under a new lease.
         "500":
           description: Observation storage unavailable
   /api/auth/password:

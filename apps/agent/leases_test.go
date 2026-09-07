@@ -42,11 +42,23 @@ func (r *leaseTestRuntime) Start(context.Context, worker.State) error {
 }
 
 func TestLeasedReconciliation(t *testing.T) {
-	for _, mode := range []string{"success", "busy", "old-api", "transport-error", "renewal-rejected", "wrong-renewal-fence", "ambiguous-create", "wrong-grant", "expired-local-window"} {
+	for _, mode := range []string{"success", "report-rejected", "busy", "old-api", "transport-error", "renewal-rejected", "wrong-renewal-fence", "ambiguous-create", "wrong-grant", "expired-local-window"} {
 		t.Run(mode, func(t *testing.T) {
 			a := workload.Assignment{UID: "uid", ServerID: "server", NodeID: "node", Generation: 1, DesiredState: "running"}
 			var actions []string
 			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/api/agent/assignments/uid/status" {
+					actions = append(actions, "report")
+					var report workload.Observation
+					if err := json.NewDecoder(r.Body).Decode(&report); err != nil || report.LeaseHolderID == "" || report.LeaseFence != 1 {
+						t.Errorf("missing report lease: %+v %v", report, err)
+					}
+					status := 200
+					if mode == "report-rejected" {
+						status = 409
+					}
+					return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+				}
 				if r.Header.Get("X-Node-Token") != "token" || r.URL.Path != "/api/agent/assignments/uid/lease" {
 					t.Errorf("invalid lease request: %s", r.URL.Path)
 				}
@@ -84,8 +96,12 @@ func TestLeasedReconciliation(t *testing.T) {
 			runtime := &leaseTestRuntime{failCreate: mode == "ambiguous-create"}
 			observation, err := reconcileLeasedAssignment(context.Background(), client, AgentConfig{MasterURL: "http://master", Token: "token"}, slog.New(slog.NewTextHandler(io.Discard, nil)), a, runtime)
 			switch mode {
+			case "report-rejected":
+				if err == nil || !reflect.DeepEqual(actions, []string{"acquire", "renew", "renew", "report"}) {
+					t.Fatalf("released unconfirmed report: %v %v", err, actions)
+				}
 			case "success":
-				if err != nil || observation.LastError != "" || observation.ActualState != "running" || !reflect.DeepEqual(actions, []string{"acquire", "renew", "renew", "release"}) {
+				if err != nil || observation.LastError != "" || observation.ActualState != "running" || !reflect.DeepEqual(actions, []string{"acquire", "renew", "renew", "report", "release"}) {
 					t.Fatalf("success: %+v %v %v", observation, err, actions)
 				}
 			case "busy", "old-api", "transport-error", "wrong-grant", "expired-local-window":
@@ -93,11 +109,11 @@ func TestLeasedReconciliation(t *testing.T) {
 					t.Fatalf("executed without lease: %v %v", err, runtime.calls)
 				}
 			case "renewal-rejected", "wrong-renewal-fence":
-				if err != nil || observation.LastError == "" || !reflect.DeepEqual(runtime.calls, []string{"inspect"}) || !reflect.DeepEqual(actions, []string{"acquire", "renew"}) {
+				if err != nil || observation.LastError == "" || !reflect.DeepEqual(runtime.calls, []string{"inspect"}) || !reflect.DeepEqual(actions, []string{"acquire", "renew", "report"}) {
 					t.Fatalf("continued after revocation: %+v %v %v", observation, runtime.calls, actions)
 				}
 			case "ambiguous-create":
-				if observation.LastError == "" || !reflect.DeepEqual(actions, []string{"acquire", "renew"}) {
+				if observation.LastError == "" || !reflect.DeepEqual(actions, []string{"acquire", "renew", "report"}) {
 					t.Fatalf("released ambiguous execution: %+v %v", observation, actions)
 				}
 			}

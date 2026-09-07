@@ -44,13 +44,10 @@ func reconcileAssignments(ctx context.Context, client *http.Client, cfg AgentCon
 		if ctx.Err() != nil {
 			return
 		}
-		observation, err := reconcileLeasedAssignment(ctx, client, cfg, logger, assignment, runtime)
+		_, err := reconcileLeasedAssignment(ctx, client, cfg, logger, assignment, runtime)
 		if err != nil {
-			logger.Warn("workload execution lease unavailable", "server_id", assignment.ServerID, "error", err)
+			logger.Warn("leased workload reconciliation failed", "server_id", assignment.ServerID, "error", err)
 			continue
-		}
-		if err := reportWorkloadObservation(ctx, client, cfg, assignment, observation); err != nil {
-			logger.Warn("failed to report workload observation", "server_id", assignment.ServerID, "error", err)
 		}
 	}
 }
