@@ -160,7 +160,7 @@ func (h *Handler) runWorldRegeneration(parent context.Context, server domain.Gam
 	}
 
 	h.updateWorldRegenerationJob(&job, domain.WorldRegenerationJobRunning, domain.WorldRegenerationStageBackingUp, 24, "")
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, dataDir)
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).Create(server.ID, dataDir)
 	if err != nil {
 		h.failWorldRegenerationAndRestore(server, &job, nil, fmt.Errorf("create pre-regeneration backup: %w", err))
 		return

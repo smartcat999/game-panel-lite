@@ -58,7 +58,7 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, dataDir)
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).Create(server.ID, dataDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -148,7 +148,9 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, dataDir); err != nil {
+	if err := backupsvc.NewService(h.cfg.DataDir).RestoreChecked(item.InstanceID, item.FileName, dataDir, func(metadata backupsvc.Metadata) error {
+		return h.gameConfig.CheckBackup(resource, domain.Backup{ProviderKey: domain.ProviderKey(metadata.ProviderKey), ConfigVersion: metadata.ConfigVersion})
+	}); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -219,7 +221,7 @@ func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, dataDir)
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).Create(server.ID, dataDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -307,7 +309,9 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, dataDir); err != nil {
+	if err := backupsvc.NewService(h.cfg.DataDir).RestoreChecked(item.InstanceID, item.FileName, dataDir, func(metadata backupsvc.Metadata) error {
+		return h.gameConfig.CheckBackup(resource, domain.Backup{ProviderKey: domain.ProviderKey(metadata.ProviderKey), ConfigVersion: metadata.ConfigVersion})
+	}); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -377,4 +381,8 @@ func snapshotConfigVersion(server domain.GameServer) int {
 		return 1
 	}
 	return server.Spec.ConfigVersion
+}
+
+func archiveMetadata(server domain.GameServer) backupsvc.Metadata {
+	return backupsvc.Metadata{FormatVersion: 1, GameKey: string(server.GameKey), ProviderKey: string(server.ProviderKey), ConfigVersion: snapshotConfigVersion(server)}
 }

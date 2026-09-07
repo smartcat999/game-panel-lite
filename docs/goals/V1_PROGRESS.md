@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- New production backups embed .gamepanel-backup.json with archive format, source game/provider and configuration versions. All manual/snapshot/pre-update/pre-regeneration creators pass metadata. Restore checks bounded metadata before destination creation, rejects malformed/duplicate/unsupported metadata and skips the metadata entry during extraction.
+- Added root-confined restore writes to prevent existing target symlinks escaping the game directory. Tests cover metadata round trips, callback rejection before target creation, malformed/duplicate/oversized metadata, no metadata extraction and symlink escape. HTTP verifies embedded compatibility even when the database record appears compatible.
+- Legacy ZIPs without metadata retain format-1 semantics. Archive metadata is not authentication; full extraction rollback, standalone import workflows and signed integrity remain pending. Validation passed: gofmt, full Go tests, vet, and backup/gameconfig/HTTP race regression including the embedded-version endpoint test. No frontend code or response schema changed.
+
 - Persisted source game/provider and configuration format on new manual, save snapshot, pre-update and pre-regeneration backup records. Existing zero/unrecorded metadata retains legacy format-1 compatibility; list hydration no longer overwrites recorded source identity with current instance identity.
 - Both restore endpoints check recorded source provider/configuration compatibility before archive access. Added create/persistence, immutable hydration and pre-extraction rejection tests. OpenAPI now describes backup source fields.
 - Source metadata currently lives in the database, not inside portable ZIP files. Standalone import verification, explicit database migrations and archive/source integrity remain pending; existing SQLite schema setup uses AutoMigrate. Validation passed: gofmt, full Go tests, vet, gameconfig/store/HTTP race regression and OpenAPI YAML parsing. No frontend source changed.

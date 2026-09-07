@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
 
@@ -79,5 +82,32 @@ func TestBackupSourceCompatibilityIsCheckedBeforeArchiveAccess(t *testing.T) {
 		if err != nil || stored.ConfigVersion != source.ConfigVersion || stored.ProviderKey != source.ProviderKey {
 			t.Fatalf("source metadata lost: %+v %v", stored, err)
 		}
+	}
+}
+
+func TestRestoreChecksEmbeddedVersionEvenWhenRecordMatches(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	fixture := testServer("embedded-target", cfg.DataDir)
+	createTestServer(t, db, fixture)
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "world"), []byte("future"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	metadata := backupsvc.Metadata{FormatVersion: 1, GameKey: string(fixture.GameKey), ProviderKey: string(fixture.ProviderKey), ConfigVersion: 2}
+	path, _, err := backupsvc.NewService(cfg.DataDir).WithMetadata(metadata).Create(fixture.ID, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := domain.Backup{ID: "embedded", InstanceID: fixture.ID, FileName: filepath.Base(path), ProviderKey: fixture.ProviderKey, ConfigVersion: 1}
+	if err := db.CreateBackup(context.Background(), &item); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/backups/embedded/restore", nil))
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "config version") {
+		t.Fatalf("restore=%d %s", response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(fixture.DataDir, "world")); !os.IsNotExist(err) {
+		t.Fatalf("archive extracted before check: %v", err)
 	}
 }

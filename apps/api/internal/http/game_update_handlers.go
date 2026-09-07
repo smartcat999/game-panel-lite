@@ -535,7 +535,7 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("prepare Palworld save directory: %w", err))
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).CreateSubtree(server.ID, dataDir, filepath.Join("Pal", "Saved"))
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).CreateSubtree(server.ID, dataDir, filepath.Join("Pal", "Saved"))
 	if err != nil {
 		h.failGameUpdateApply(ctx, server, &job, err)
 		return

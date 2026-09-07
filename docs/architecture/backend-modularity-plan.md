@@ -168,3 +168,9 @@ HTTP 与启动规划共用 modcatalog.Identity/Dependencies，统一名称推导
 ProviderCatalogMetadata 声明 PluginVersion（数字 major.minor.patch）和 ConfigVersion（正整数），独立于游戏发行版本。当前所有 Provider 以 1.0.0 / 1 建立版本基线。Registry 在启动时验证声明，新建实例保存 spec.configVersion，WorkloadBuilder 在文件或模组操作前检查配置版本。历史零值固定解释为格式 1，不能随插件升级自动变成最新版本。
 
 当前只允许读取与 Provider 声明相同的格式；尚未实现自动迁移，也未覆盖全部配置编辑/恢复入口。未来格式升级必须增加显式迁移、事务与恢复演练，不能仅修改版本常量。插件版本目前属于内部描述，不代表外部 RPC 协议或独立发布机制已完成。
+
+## 备份内嵌来源
+
+新归档写入保留文件 `.gamepanel-backup.json`，包含归档格式 1、来源游戏/Provider 和配置版本。元数据最多 16 KiB，读取时拒绝重复条目、损坏字段及未知格式；恢复入口在创建目标目录前检查兼容性，元数据不会写入游戏目录。历史无元数据 ZIP 按配置格式 1 处理。
+
+归档元数据仅描述兼容性，不证明真实性。恢复通过 os.Root 限制写入范围，但文件仍逐个写入，尚不提供整包失败回滚。独立 ZIP 导入、完整性验证及事务恢复仍需后续验收。

@@ -13,7 +13,8 @@ import (
 )
 
 type Service struct {
-	dataDir string
+	dataDir  string
+	metadata *Metadata
 }
 
 func NewService(dataDir string) *Service {
@@ -81,6 +82,13 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		}
 	}()
 	zipper := zip.NewWriter(out)
+	if s.metadata != nil {
+		if err := writeMetadata(zipper, *s.metadata); err != nil {
+			_ = zipper.Close()
+			_ = out.Close()
+			return "", 0, err
+		}
+	}
 	walkErr := filepath.WalkDir(sourceDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -91,6 +99,9 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		rel, err := filepath.Rel(archiveRoot, path)
 		if err != nil {
 			return err
+		}
+		if filepath.ToSlash(rel) == metadataPath {
+			return fmt.Errorf("backup source uses reserved metadata filename")
 		}
 		writer, err := zipper.Create(rel)
 		if err != nil {
@@ -132,6 +143,12 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 }
 
 func (s *Service) Restore(instanceID string, fileName string, targetDir string) error {
+	return s.RestoreChecked(instanceID, fileName, targetDir, nil)
+}
+
+// RestoreChecked validates archive metadata before creating or modifying target
+// files. Extraction is root-confined but is not a multi-file transaction.
+func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir string, check func(Metadata) error) error {
 	backupPath, err := s.Path(instanceID, fileName)
 	if err != nil {
 		return err
@@ -141,6 +158,15 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 		return err
 	}
 	defer reader.Close()
+	metadata, err := readMetadata(reader.File)
+	if err != nil {
+		return err
+	}
+	if check != nil {
+		if err := check(metadata); err != nil {
+			return err
+		}
+	}
 	cleanTarget, err := filepath.Abs(targetDir)
 	if err != nil {
 		return err
@@ -148,7 +174,15 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 	if err := os.MkdirAll(cleanTarget, 0o755); err != nil {
 		return err
 	}
+	root, err := os.OpenRoot(cleanTarget)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	for _, file := range reader.File {
+		if file.Name == metadataPath {
+			continue
+		}
 		if file.FileInfo().IsDir() {
 			continue
 		}
@@ -162,14 +196,14 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 		if target != cleanTarget && !strings.HasPrefix(target, cleanTarget+string(filepath.Separator)) {
 			return fmt.Errorf("backup contains unsafe path")
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		if err := root.MkdirAll(filepath.Dir(file.Name), 0o755); err != nil {
 			return err
 		}
 		in, err := file.Open()
 		if err != nil {
 			return err
 		}
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		out, err := root.OpenFile(file.Name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
 			_ = in.Close()
 			return err
