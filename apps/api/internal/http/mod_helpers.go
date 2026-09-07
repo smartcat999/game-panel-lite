@@ -18,6 +18,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 func (h *Handler) copyLibraryModToServerCache(item domain.ModFile, targetInstanceID string) (int64, error) {
@@ -764,6 +765,12 @@ func runtimeModPresent(server domain.GameServer, item domain.ModFile) bool {
 	dataDir := strings.TrimSpace(server.Spec.Runtime.DataDir)
 	if server.ProviderKey != domain.ProviderTerrariaTModLoader || dataDir == "" {
 		return true
+	}
+	if !server.IsLocal() {
+		if cond, ok := workload.FindCondition(server.Status.Conditions, workload.ConditionArtifactsReady); ok {
+			return cond.Status == workload.ConditionStatusTrue
+		}
+		return server.Status.ActualState == domain.ActualRunning && server.Status.AppliedGeneration >= server.Spec.Generation
 	}
 	candidates := []string{filepath.Join(dataDir, "Mods", item.FileName)}
 	if identity := modcatalog.Identity(item); identity != "" {

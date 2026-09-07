@@ -7,12 +7,19 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type assignmentControllerFakeStore struct {
 	servers     []domain.GameServer
 	assignment  *domain.WorkloadAssignment
 	observation *domain.WorkloadObservation
+	activities  []domain.ActivityEvent
+}
+
+func (s *assignmentControllerFakeStore) CreateActivity(_ context.Context, event *domain.ActivityEvent) error {
+	s.activities = append(s.activities, *event)
+	return nil
 }
 
 func (s *assignmentControllerFakeStore) ListGameServers(context.Context) ([]domain.GameServer, error) {
@@ -240,5 +247,114 @@ func TestReconciliationActivityEventsForFailure(t *testing.T) {
 	}
 	if events[0].Payload["lastError"] != "bad config" {
 		t.Fatalf("expected failure payload, got %+v", events[0].Payload)
+	}
+}
+
+func TestReconciliationActivityEventsForArtifacts(t *testing.T) {
+	now := time.Unix(1000, 0)
+	before := domain.GameServer{
+		ID:          "server-1",
+		Name:        "Friends",
+		GameKey:     domain.GameTerraria,
+		ProviderKey: domain.ProviderTerrariaVanilla,
+		Spec:        domain.ServerSpec{Generation: 2, DesiredState: domain.DesiredRunning},
+		Status:      domain.ServerRuntimeStatus{Phase: domain.PhasePending},
+	}
+
+	// Ready transition
+	readyAfter := before
+	readyAfter.Status.Phase = domain.PhaseRunning
+	readyAfter.Status.ActualState = domain.ActualRunning
+	readyAfter.Status.ObservedGeneration = 2
+	readyAfter.Status.AppliedGeneration = 2
+	readyAfter.Status.Conditions = []domain.ServerCondition{{
+		Type:   workload.ConditionArtifactsReady,
+		Status: workload.ConditionStatusTrue,
+		Reason: "Ready",
+	}}
+	readyEvents := reconciliationActivityEvents(before, readyAfter, now, nil, "operation-1")
+	foundReady := false
+	for _, e := range readyEvents {
+		if e.Type == "server.artifacts.ready" {
+			foundReady = true
+			break
+		}
+	}
+	if !foundReady {
+		t.Fatalf("expected server.artifacts.ready event, got %+v", readyEvents)
+	}
+
+	// Failed transition
+	failedAfter := before
+	failedAfter.Status.Phase = domain.PhaseFailed
+	failedAfter.Status.LastError = "artifact download failed"
+	failedAfter.Status.ObservedGeneration = 2
+	failedAfter.Status.Conditions = []domain.ServerCondition{{
+		Type:    workload.ConditionArtifactsReady,
+		Status:  workload.ConditionStatusFalse,
+		Reason:  "PreparationFailed",
+		Message: "checksum mismatch for mod.bin",
+	}}
+	failedEvents := reconciliationActivityEvents(before, failedAfter, now, nil, "operation-2")
+	foundFailed := false
+	for _, e := range failedEvents {
+		if e.Type == "server.artifacts.failed" {
+			foundFailed = true
+			break
+		}
+	}
+	if !foundFailed {
+		t.Fatalf("expected server.artifacts.failed event, got %+v", failedEvents)
+	}
+}
+
+func TestRemoteControllerRecordsArtifactActivity(t *testing.T) {
+	store := &assignmentControllerFakeStore{servers: []domain.GameServer{{
+		ID:          "server-1",
+		NodeID:      "node-1",
+		Name:        "Friends",
+		GameKey:     domain.GameTerraria,
+		ProviderKey: domain.ProviderTerrariaVanilla,
+		Spec:        domain.ServerSpec{Generation: 3, DesiredState: domain.DesiredRunning},
+		Status:      domain.ServerRuntimeStatus{Phase: domain.PhasePending, ActualState: domain.ActualMissing},
+	}}}
+	controller := NewController(store, NewRuntimeReconciler(&fakeBuilder{}, nil), nil)
+	controller.RunOnce(context.Background())
+
+	if store.assignment == nil {
+		t.Fatal("expected durable assignment")
+	}
+
+	store.observation = &domain.WorkloadObservation{
+		AssignmentUID:      store.assignment.UID,
+		ServerID:           "server-1",
+		NodeID:             "node-1",
+		ObservedGeneration: 3,
+		RuntimeID:          "container-1",
+		ActualState:        domain.ActualRunning,
+		Conditions: []domain.ServerCondition{{
+			Type:   workload.ConditionArtifactsReady,
+			Status: workload.ConditionStatusTrue,
+			Reason: "Ready",
+		}},
+		Artifacts: []domain.ArtifactObservation{{
+			ID:     "mod-1",
+			Path:   "Mods/mod1.tmod",
+			Status: workload.ArtifactStatusReady,
+		}},
+	}
+	controller.RunOnce(context.Background())
+	if store.servers[0].Status.Phase != domain.PhaseRunning {
+		t.Fatalf("expected running status, got %+v", store.servers[0].Status)
+	}
+	foundReady := false
+	for _, a := range store.activities {
+		if a.Type == "server.artifacts.ready" {
+			foundReady = true
+			break
+		}
+	}
+	if !foundReady {
+		t.Fatalf("expected server.artifacts.ready activity recorded in store, got %+v", store.activities)
 	}
 }

@@ -3,6 +3,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -61,15 +62,42 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 	if assignment.DesiredState == "running" && len(assignment.Spec.Options.Artifacts) > 0 {
 		if err := workload.ValidateArtifacts(assignment.Spec.Options); err != nil {
 			observation.LastError = err.Error()
+			observation.Conditions = workload.SetCondition(observation.Conditions, workload.Condition{
+				Type:               workload.ConditionArtifactsReady,
+				Status:             workload.ConditionStatusFalse,
+				Reason:             "ValidationFailed",
+				Message:            err.Error(),
+				ObservedGeneration: assignment.Generation,
+				LastTransitionAt:   observation.ObservedAt,
+			})
+			observation.Artifacts = failedArtifactObservations(assignment.Spec.Options.Artifacts, err)
 			return observation
 		}
 		capable, ok := runtime.(ArtifactRuntime)
 		if !ok {
 			observation.LastError = "runtime does not support workload artifacts"
+			observation.Conditions = workload.SetCondition(observation.Conditions, workload.Condition{
+				Type:               workload.ConditionArtifactsReady,
+				Status:             workload.ConditionStatusFalse,
+				Reason:             "RuntimeNotSupported",
+				Message:            observation.LastError,
+				ObservedGeneration: assignment.Generation,
+				LastTransitionAt:   observation.ObservedAt,
+			})
+			observation.Artifacts = failedArtifactObservations(assignment.Spec.Options.Artifacts, errors.New(observation.LastError))
 			return observation
 		}
 		if err := capable.ValidateArtifacts(assignment); err != nil {
 			observation.LastError = err.Error()
+			observation.Conditions = workload.SetCondition(observation.Conditions, workload.Condition{
+				Type:               workload.ConditionArtifactsReady,
+				Status:             workload.ConditionStatusFalse,
+				Reason:             "ArtifactLimitsExceeded",
+				Message:            err.Error(),
+				ObservedGeneration: assignment.Generation,
+				LastTransitionAt:   observation.ObservedAt,
+			})
+			observation.Artifacts = failedArtifactObservations(assignment.Spec.Options.Artifacts, err)
 			return observation
 		}
 	}
@@ -86,6 +114,15 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 		prepared, prepareErr := runtime.(ArtifactRuntime).PrepareArtifacts(ctx, assignment)
 		if prepareErr != nil {
 			observation.LastError = prepareErr.Error()
+			observation.Conditions = workload.SetCondition(observation.Conditions, workload.Condition{
+				Type:               workload.ConditionArtifactsReady,
+				Status:             workload.ConditionStatusFalse,
+				Reason:             "PreparationFailed",
+				Message:            prepareErr.Error(),
+				ObservedGeneration: assignment.Generation,
+				LastTransitionAt:   observation.ObservedAt,
+			})
+			observation.Artifacts = failedArtifactObservations(assignment.Spec.Options.Artifacts, prepareErr)
 			return observation
 		}
 		defer func() {
@@ -168,7 +205,71 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 	default:
 		observation.ActualState = "stopped"
 	}
+	if assignment.DesiredState == "running" && len(assignment.Spec.Options.Artifacts) > 0 && observation.ActualState == "running" {
+		observation.Conditions = workload.SetCondition(observation.Conditions, workload.Condition{
+			Type:               workload.ConditionArtifactsReady,
+			Status:             workload.ConditionStatusTrue,
+			Reason:             "Ready",
+			Message:            "Artifacts prepared and mounted successfully",
+			ObservedGeneration: assignment.Generation,
+			LastTransitionAt:   observation.ObservedAt,
+		})
+		observation.Artifacts = readyArtifactObservations(assignment.Spec.Options.Artifacts)
+	}
 	return observation
+}
+
+func failedArtifactObservations(artifacts []workload.Artifact, err error) []workload.ArtifactObservation {
+	var target *workload.ArtifactError
+	hasTarget := errors.As(err, &target)
+	results := make([]workload.ArtifactObservation, 0, len(artifacts))
+	failedSeen := false
+	for _, item := range artifacts {
+		if hasTarget {
+			if !failedSeen && item.ID != target.Artifact.ID {
+				results = append(results, workload.ArtifactObservation{
+					ID:     item.ID,
+					Path:   item.Path,
+					Status: workload.ArtifactStatusReady,
+				})
+			} else if item.ID == target.Artifact.ID {
+				failedSeen = true
+				results = append(results, workload.ArtifactObservation{
+					ID:     item.ID,
+					Path:   item.Path,
+					Status: workload.ArtifactStatusFailed,
+					Error:  target.Err.Error(),
+				})
+			} else {
+				results = append(results, workload.ArtifactObservation{
+					ID:     item.ID,
+					Path:   item.Path,
+					Status: workload.ArtifactStatusFailed,
+					Error:  "preparation aborted due to earlier failure",
+				})
+			}
+		} else {
+			results = append(results, workload.ArtifactObservation{
+				ID:     item.ID,
+				Path:   item.Path,
+				Status: workload.ArtifactStatusFailed,
+				Error:  err.Error(),
+			})
+		}
+	}
+	return results
+}
+
+func readyArtifactObservations(artifacts []workload.Artifact) []workload.ArtifactObservation {
+	results := make([]workload.ArtifactObservation, 0, len(artifacts))
+	for _, item := range artifacts {
+		results = append(results, workload.ArtifactObservation{
+			ID:     item.ID,
+			Path:   item.Path,
+			Status: workload.ArtifactStatusReady,
+		})
+	}
+	return results
 }
 
 func validateObservedWorkload(state State, assignment workload.Assignment) error {

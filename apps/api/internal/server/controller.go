@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type ControllerStore interface {
@@ -228,6 +229,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 			})
 			setPhase(&item.Status, domain.PhaseReconciling, now)
 			_ = c.store.SaveReconciledGameServer(ctx, before, item)
+			c.recordReconcileEvents(ctx, before, item, nil)
 			return
 		}
 	}
@@ -238,6 +240,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 		item.Status.ActualState = domain.ActualUnknown
 		setPhase(&item.Status, domain.PhaseReconciling, now)
 		_ = c.store.SaveReconciledGameServer(ctx, before, item)
+		c.recordReconcileEvents(ctx, before, item, nil)
 		return
 	}
 	item.Status.RuntimeID = observation.RuntimeID
@@ -248,11 +251,13 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	if observation.LastError != "" {
 		setPhase(&item.Status, domain.PhaseFailed, now)
 		_ = c.store.SaveReconciledGameServer(ctx, before, item)
+		c.recordReconcileEvents(ctx, before, item, nil)
 		return
 	}
 	if observation.ObservedGeneration < assignment.Generation {
 		setPhase(&item.Status, domain.PhaseReconciling, now)
 		_ = c.store.SaveReconciledGameServer(ctx, before, item)
+		c.recordReconcileEvents(ctx, before, item, nil)
 		return
 	}
 	item.Status.AppliedGeneration = observation.ObservedGeneration
@@ -283,22 +288,18 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 				if err := deletingStore.DeleteGameServer(ctx, item.ID); err != nil {
 					c.logger.Warn("failed to delete remote server record", "server", item.ID, "error", err)
 				}
+				c.recordReconcileEvents(ctx, before, item, nil)
 				return
 			}
 		}
 		setPhase(&item.Status, domain.PhaseDeleting, now)
 	}
 	_ = c.store.SaveReconciledGameServer(ctx, before, item)
+	c.recordReconcileEvents(ctx, before, item, nil)
 }
 
 func upsertServerCondition(conditions []domain.ServerCondition, condition domain.ServerCondition) []domain.ServerCondition {
-	for i := range conditions {
-		if conditions[i].Type == condition.Type {
-			conditions[i] = condition
-			return conditions
-		}
-	}
-	return append(conditions, condition)
+	return workload.SetCondition(conditions, condition)
 }
 
 func (c *Controller) lockFor(id string) *sync.Mutex {
@@ -356,6 +357,19 @@ func reconciliationActivityEvents(before domain.GameServer, after domain.GameSer
 		}
 		if after.Status.RuntimeID != "" && !lifecycle.hasPrefix("server.container.create.") {
 			events = append(events, newReconciliationActivity(after, "server.runtime.created", "Created runtime workload for server "+after.Name, now, operationID))
+		}
+	}
+	beforeArt, beforeHasArt := workload.FindCondition(before.Status.Conditions, workload.ConditionArtifactsReady)
+	afterArt, afterHasArt := workload.FindCondition(after.Status.Conditions, workload.ConditionArtifactsReady)
+	if afterHasArt {
+		if afterArt.Status == workload.ConditionStatusTrue {
+			if !beforeHasArt || beforeArt.Status != workload.ConditionStatusTrue || before.Status.AppliedGeneration != after.Status.AppliedGeneration {
+				events = append(events, newReconciliationActivity(after, "server.artifacts.ready", "Artifacts prepared successfully for server "+after.Name, now, operationID))
+			}
+		} else if afterArt.Status == workload.ConditionStatusFalse {
+			if !beforeHasArt || beforeArt.Status != workload.ConditionStatusFalse || beforeArt.Message != afterArt.Message || before.Status.ObservedGeneration != after.Status.ObservedGeneration {
+				events = append(events, newReconciliationActivity(after, "server.artifacts.failed", "Failed to prepare artifacts for server "+after.Name+": "+afterArt.Message, now, operationID))
+			}
 		}
 	}
 	if after.Status.Phase == domain.PhaseFailed && (before.Status.Phase != domain.PhaseFailed || before.Status.LastError != after.Status.LastError || before.Status.ObservedGeneration != after.Status.ObservedGeneration) {

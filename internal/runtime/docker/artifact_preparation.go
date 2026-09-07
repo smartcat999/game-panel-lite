@@ -68,18 +68,18 @@ func (a *Adapter) PrepareArtifacts(ctx context.Context, assignment workload.Assi
 		filename := strconv.Itoa(i)
 		file, err := stage.OpenFile(filename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 		if err != nil {
-			return fail(err)
+			return fail(&workload.ArtifactError{Artifact: item, Err: err})
 		}
 		writeErr := a.writeArtifact(ctx, assignment, item, file)
 		if writeErr == nil {
 			writeErr = file.Sync()
 		}
 		if err := errors.Join(writeErr, file.Close()); err != nil {
-			return fail(err)
+			return fail(&workload.ArtifactError{Artifact: item, Err: err})
 		}
 		verified, err := stage.Open(filename)
 		if err != nil {
-			return fail(err)
+			return fail(&workload.ArtifactError{Artifact: item, Err: err})
 		}
 		cache.files[item] = verified
 	}

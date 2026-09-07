@@ -65,17 +65,50 @@ type Assignment struct {
 	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
+const (
+	ConditionArtifactsReady = "ArtifactsReady"
+	ConditionAgentReachable = "AgentReachable"
+
+	ConditionStatusTrue    = "True"
+	ConditionStatusFalse   = "False"
+	ConditionStatusUnknown = "Unknown"
+
+	ArtifactStatusReady  = "ready"
+	ArtifactStatusFailed = "failed"
+)
+
+type ArtifactObservation struct {
+	ID     string `json:"id"`
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+type ArtifactError struct {
+	Artifact Artifact
+	Err      error
+}
+
+func (e *ArtifactError) Error() string {
+	return "artifact " + e.Artifact.ID + " (" + e.Artifact.Path + "): " + e.Err.Error()
+}
+
+func (e *ArtifactError) Unwrap() error {
+	return e.Err
+}
+
 type Observation struct {
-	LeaseHolderID            string      `json:"leaseHolderId,omitempty"`
-	LeaseFence               int64       `json:"leaseFence,omitempty"`
-	ObservationToken         string      `json:"observationToken"`
-	ObservedGeneration       int         `json:"observedGeneration"`
-	RuntimeID                string      `json:"runtimeId,omitempty"`
-	ActualState              string      `json:"actualState"`
-	Conditions               []Condition `json:"conditions,omitempty"`
-	LastError                string      `json:"lastError,omitempty"`
-	ReconcileDurationSeconds float64     `json:"reconcileDurationSeconds"`
-	ObservedAt               time.Time   `json:"observedAt"`
+	LeaseHolderID            string                `json:"leaseHolderId,omitempty"`
+	LeaseFence               int64                 `json:"leaseFence,omitempty"`
+	ObservationToken         string                `json:"observationToken"`
+	ObservedGeneration       int                   `json:"observedGeneration"`
+	RuntimeID                string                `json:"runtimeId,omitempty"`
+	ActualState              string                `json:"actualState"`
+	Conditions               []Condition           `json:"conditions,omitempty"`
+	Artifacts                []ArtifactObservation `json:"artifacts,omitempty"`
+	LastError                string                `json:"lastError,omitempty"`
+	ReconcileDurationSeconds float64               `json:"reconcileDurationSeconds"`
+	ObservedAt               time.Time             `json:"observedAt"`
 }
 
 type Condition struct {
@@ -85,4 +118,23 @@ type Condition struct {
 	Message            string    `json:"message,omitempty"`
 	ObservedGeneration int       `json:"observedGeneration,omitempty"`
 	LastTransitionAt   time.Time `json:"lastTransitionAt"`
+}
+
+func SetCondition(conditions []Condition, condition Condition) []Condition {
+	for i := range conditions {
+		if conditions[i].Type == condition.Type {
+			conditions[i] = condition
+			return conditions
+		}
+	}
+	return append(conditions, condition)
+}
+
+func FindCondition(conditions []Condition, conditionType string) (Condition, bool) {
+	for _, c := range conditions {
+		if c.Type == conditionType {
+			return c, true
+		}
+	}
+	return Condition{}, false
 }

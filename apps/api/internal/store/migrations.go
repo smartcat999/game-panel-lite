@@ -33,6 +33,9 @@ var nodeWorkloadCapabilitiesSQL string
 //go:embed migrations/008_execution_leases.sql
 var executionLeasesSQL string
 
+//go:embed migrations/009_workload_observation_artifacts.sql
+var workloadObservationArtifactsSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -43,7 +46,17 @@ type migrationRecord struct {
 }
 
 func postgresMigrations() []sqlMigration {
-	return []sqlMigration{{1, "postgres_baseline", postgresBaseline}, {2, "world_ownership", worldOwnership}, {3, "activity_ownership", activityOwnership}, {4, "preset_ownership", presetOwnership}, {5, "mod_library_ownership", modLibraryOwnership}, {6, "artifact_references", artifactReferencesSQL}, {7, "node_workload_capabilities", nodeWorkloadCapabilitiesSQL}, {8, "execution_leases", executionLeasesSQL}}
+	return []sqlMigration{
+		{1, "postgres_baseline", postgresBaseline},
+		{2, "world_ownership", worldOwnership},
+		{3, "activity_ownership", activityOwnership},
+		{4, "preset_ownership", presetOwnership},
+		{5, "mod_library_ownership", modLibraryOwnership},
+		{6, "artifact_references", artifactReferencesSQL},
+		{7, "node_workload_capabilities", nodeWorkloadCapabilitiesSQL},
+		{8, "execution_leases", executionLeasesSQL},
+		{9, "workload_observation_artifacts", workloadObservationArtifactsSQL},
+	}
 }
 
 // migratePostgres serializes cooperating initializers per schema and commits

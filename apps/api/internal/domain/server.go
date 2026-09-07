@@ -85,6 +85,7 @@ type ServerRuntimeStatus struct {
 }
 
 type ServerCondition = workload.Condition
+type ArtifactObservation = workload.ArtifactObservation
 
 type GameServer struct {
 	ID             string              `json:"id" gorm:"primaryKey"`

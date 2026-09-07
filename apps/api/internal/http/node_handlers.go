@@ -563,7 +563,7 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "execution lease identity is required")
 		return
 	}
-	observation := domain.WorkloadObservation{ObservationToken: report.ObservationToken, ObservedGeneration: report.ObservedGeneration, RuntimeID: report.RuntimeID, ActualState: domain.ServerActualState(report.ActualState), Conditions: report.Conditions, LastError: report.LastError, ReconcileDurationSeconds: report.ReconcileDurationSeconds, ObservedAt: report.ObservedAt}
+	observation := domain.WorkloadObservation{ObservationToken: report.ObservationToken, ObservedGeneration: report.ObservedGeneration, RuntimeID: report.RuntimeID, ActualState: domain.ServerActualState(report.ActualState), Conditions: report.Conditions, Artifacts: report.Artifacts, LastError: report.LastError, ReconcileDurationSeconds: report.ReconcileDurationSeconds, ObservedAt: report.ObservedAt}
 	if observation.ObservedGeneration > assignment.Generation {
 		writeError(w, http.StatusConflict, "observation generation is newer than assignment")
 		return
@@ -595,13 +595,15 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "failed to persist workload observation")
 		return
 	}
-	h.apiMetrics.ObserveWorkloadReconcile(
-		node.ID,
-		assignment.ServerID,
-		time.Duration(observation.ReconcileDurationSeconds*float64(time.Second)),
-		assignment.Generation-observation.ObservedGeneration,
-		observation.LastError != "",
-	)
+	if h.apiMetrics != nil {
+		h.apiMetrics.ObserveWorkloadReconcile(
+			node.ID,
+			assignment.ServerID,
+			time.Duration(observation.ReconcileDurationSeconds*float64(time.Second)),
+			assignment.Generation-observation.ObservedGeneration,
+			observation.LastError != "",
+		)
+	}
 	writeJSON(w, http.StatusOK, map[string]int{"acceptedGeneration": observation.ObservedGeneration})
 }
 

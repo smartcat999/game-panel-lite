@@ -230,3 +230,79 @@ func TestArtifactsRequireRuntimeSupportBeforeReplacement(t *testing.T) {
 		t.Fatalf("unsupported artifacts blocked stop: %+v", result)
 	}
 }
+
+type mockPreparedRuntime struct {
+	*memoryRuntime
+	released bool
+}
+
+func (m *mockPreparedRuntime) Release() error {
+	m.released = true
+	return nil
+}
+
+type mockArtifactRuntime struct {
+	memoryRuntime
+	prepareErr error
+}
+
+func (m *mockArtifactRuntime) ValidateArtifacts(a workload.Assignment) error {
+	return nil
+}
+
+func (m *mockArtifactRuntime) PrepareArtifacts(ctx context.Context, a workload.Assignment) (PreparedRuntime, error) {
+	if m.prepareErr != nil {
+		return nil, m.prepareErr
+	}
+	return &mockPreparedRuntime{memoryRuntime: &m.memoryRuntime}, nil
+}
+
+func TestArtifactsObservationSuccess(t *testing.T) {
+	a := assignment()
+	a.Spec.Options.Artifacts = []workload.Artifact{
+		{ID: "mod-1", Path: "Mods/mod1.tmod", SHA256: strings.Repeat("a", 64), SizeBytes: 100},
+		{ID: "mod-2", Path: "Mods/mod2.tmod", SHA256: strings.Repeat("b", 64), SizeBytes: 200},
+	}
+	r := &mockArtifactRuntime{}
+	observation := Reconcile(context.Background(), a, r)
+	if observation.LastError != "" || observation.ActualState != "running" {
+		t.Fatalf("unexpected reconcile failure: %+v", observation)
+	}
+	cond, ok := workload.FindCondition(observation.Conditions, workload.ConditionArtifactsReady)
+	if !ok || cond.Status != workload.ConditionStatusTrue || cond.Reason != "Ready" {
+		t.Fatalf("expected ArtifactsReady True condition, got %+v", observation.Conditions)
+	}
+	if len(observation.Artifacts) != 2 {
+		t.Fatalf("expected 2 artifact observations, got %+v", observation.Artifacts)
+	}
+	if observation.Artifacts[0].Status != workload.ArtifactStatusReady || observation.Artifacts[1].Status != workload.ArtifactStatusReady {
+		t.Fatalf("expected all artifacts ready, got %+v", observation.Artifacts)
+	}
+}
+
+func TestArtifactsObservationFailure(t *testing.T) {
+	a := assignment()
+	art1 := workload.Artifact{ID: "mod-1", Path: "Mods/mod1.tmod", SHA256: strings.Repeat("a", 64), SizeBytes: 100}
+	art2 := workload.Artifact{ID: "mod-2", Path: "Mods/mod2.tmod", SHA256: strings.Repeat("b", 64), SizeBytes: 200}
+	a.Spec.Options.Artifacts = []workload.Artifact{art1, art2}
+	r := &mockArtifactRuntime{
+		prepareErr: &workload.ArtifactError{Artifact: art2, Err: errors.New("checksum mismatch")},
+	}
+	observation := Reconcile(context.Background(), a, r)
+	if observation.LastError == "" {
+		t.Fatal("expected failure")
+	}
+	cond, ok := workload.FindCondition(observation.Conditions, workload.ConditionArtifactsReady)
+	if !ok || cond.Status != workload.ConditionStatusFalse || cond.Reason != "PreparationFailed" {
+		t.Fatalf("expected ArtifactsReady False condition, got %+v", observation.Conditions)
+	}
+	if len(observation.Artifacts) != 2 {
+		t.Fatalf("expected 2 artifact observations, got %+v", observation.Artifacts)
+	}
+	if observation.Artifacts[0].Status != workload.ArtifactStatusReady {
+		t.Fatalf("expected art1 ready, got %+v", observation.Artifacts[0])
+	}
+	if observation.Artifacts[1].Status != workload.ArtifactStatusFailed || observation.Artifacts[1].Error != "checksum mismatch" {
+		t.Fatalf("expected art2 failed with checksum mismatch, got %+v", observation.Artifacts[1])
+	}
+}

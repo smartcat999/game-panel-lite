@@ -495,8 +495,9 @@ type WorkloadObservation struct {
 	ObservedGeneration       int               `json:"observedGeneration"`
 	RuntimeID                string            `json:"runtimeId,omitempty"`
 	ActualState              ServerActualState `json:"actualState"`
-	Conditions               []ServerCondition `json:"conditions,omitempty" gorm:"serializer:json"`
-	LastError                string            `json:"lastError,omitempty"`
+	Conditions               []ServerCondition     `json:"conditions,omitempty" gorm:"serializer:json"`
+	Artifacts                []ArtifactObservation `json:"artifacts,omitempty" gorm:"serializer:json"`
+	LastError                string                `json:"lastError,omitempty"`
 	ReconcileDurationSeconds float64           `json:"reconcileDurationSeconds" gorm:"-"`
 	ObservedAt               time.Time         `json:"observedAt"`
 	CreatedAt                time.Time         `json:"createdAt"`
