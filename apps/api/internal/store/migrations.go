@@ -78,3 +78,23 @@ func migratePostgres(ctx context.Context, db *gorm.DB, migrations []sqlMigration
 		return nil
 	})
 }
+
+// checkPostgresSchema performs SELECTs only, so runtime roles do not need DDL
+// or writes to the migration ledger. Deployment must migrate before startup.
+func checkPostgresSchema(ctx context.Context, db *gorm.DB, migrations []sqlMigration) error {
+	var applied []migrationRecord
+	if err := db.WithContext(ctx).Table("gamepanel_schema_migrations").Order("version").Find(&applied).Error; err != nil {
+		return fmt.Errorf("read schema version; run database migration before starting API: %w", err)
+	}
+	if len(applied) != len(migrations) {
+		return fmt.Errorf("database migration version does not match this binary; run the matching migration job")
+	}
+	for index, migration := range migrations {
+		checksum := fmt.Sprintf("%x", sha256.Sum256([]byte(migration.sql)))
+		record := applied[index]
+		if record.Version != migration.version || record.Name != migration.name || record.Checksum != checksum {
+			return fmt.Errorf("migration %d history/checksum mismatch", migration.version)
+		}
+	}
+	return nil
+}

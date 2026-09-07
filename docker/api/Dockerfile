@@ -15,6 +15,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build \
   -ldflags "-X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.Version=${GAMEPANEL_VERSION} -X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.Commit=${GAMEPANEL_COMMIT} -X github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo.BuildTime=${GAMEPANEL_BUILD_TIME}" \
   -o /out/gamepanel-api ./apps/api/cmd/server
 
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /out/gamepanel-migrate ./apps/api/cmd/migrate
+
 FROM debian:bookworm-slim AS runner
 
 RUN apt-get update \
@@ -22,6 +24,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/gamepanel-api /usr/local/bin/gamepanel-api
+COPY --from=builder /out/gamepanel-migrate /usr/local/bin/gamepanel-migrate
 
 ENV GAMEPANEL_HOST=0.0.0.0 \
   GAMEPANEL_PORT=4000 \

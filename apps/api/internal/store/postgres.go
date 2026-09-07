@@ -17,6 +17,36 @@ func OpenConfigured(path, dsn string, maxConnections int) (*Store, error) {
 	if strings.TrimSpace(dsn) == "" {
 		return Open(path)
 	}
+	db, err := connectPostgres(dsn, maxConnections)
+	if err != nil {
+		return nil, err
+	}
+	pool, _ := db.DB()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := checkPostgresSchema(ctx, db, postgresMigrations()); err != nil {
+		_ = pool.Close()
+		return nil, err
+	}
+	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
+}
+
+// MigratePostgres is an administrative operation for the deployment job, not
+// API startup. Credentials must grant DDL rights for the selected schema.
+func MigratePostgres(ctx context.Context, dsn string) error {
+	if strings.TrimSpace(dsn) == "" {
+		return fmt.Errorf("PostgreSQL DSN is required for migration")
+	}
+	db, err := connectPostgres(dsn, 1)
+	if err != nil {
+		return err
+	}
+	pool, _ := db.DB()
+	defer pool.Close()
+	return migratePostgres(ctx, db, postgresMigrations())
+}
+
+func connectPostgres(dsn string, maxConnections int) (*gorm.DB, error) {
 	if maxConnections == 0 {
 		maxConnections = 20
 	}
@@ -35,13 +65,7 @@ func OpenConfigured(path, dsn string, maxConnections int) (*Store, error) {
 	pool.SetMaxOpenConns(maxConnections)
 	pool.SetMaxIdleConns(maxConnections)
 	pool.SetConnMaxLifetime(30 * time.Minute)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if err := migratePostgres(ctx, db, postgresMigrations()); err != nil {
-		_ = pool.Close()
-		return nil, err
-	}
-	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
+	return db, nil
 }
 
 func (s *Store) Close() error {

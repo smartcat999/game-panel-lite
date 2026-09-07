@@ -46,12 +46,19 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := admin.ExecContext(ctx, "CREATE TABLE "+schema+".adoption_probe (id integer)"); err != nil {
 		t.Fatal(err)
 	}
-	if opened, err := OpenConfigured("", parsed.String(), 2); err == nil {
-		opened.Close()
+	if err := MigratePostgres(ctx, parsed.String()); err == nil {
 		t.Fatal("unversioned populated schema silently adopted")
 	}
 	if _, err := admin.ExecContext(ctx, "DROP TABLE "+schema+".adoption_probe"); err != nil {
 		t.Fatalf("unversioned schema modified: %v", err)
+	}
+	if opened, err := OpenConfigured("", parsed.String(), 2); err == nil {
+		opened.Close()
+		t.Fatal("API started before migration")
+	}
+	var tableCount int
+	if err := admin.QueryRowContext(ctx, "SELECT count(*) FROM information_schema.tables WHERE table_schema=$1", schema).Scan(&tableCount); err != nil || tableCount != 0 {
+		t.Fatalf("API created schema objects: %d %v", tableCount, err)
 	}
 	var starters sync.WaitGroup
 	failures := make(chan error, 4)
@@ -59,10 +66,7 @@ func TestPostgresIntegration(t *testing.T) {
 		starters.Add(1)
 		go func() {
 			defer starters.Done()
-			opened, err := OpenConfigured("", parsed.String(), 2)
-			if err == nil {
-				err = opened.Close()
-			}
+			err := MigratePostgres(ctx, parsed.String())
 			failures <- err
 		}()
 	}
@@ -78,6 +82,39 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+
+	role := "gamepanel_runtime_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := admin.ExecContext(ctx, "CREATE ROLE "+role+" LOGIN"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := admin.Exec("DROP OWNED BY " + role + "; DROP ROLE " + role); err != nil {
+			t.Error(err)
+		}
+	}()
+	if _, err := admin.ExecContext(ctx, "GRANT USAGE ON SCHEMA "+schema+" TO "+role+"; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA "+schema+" TO "+role+"; REVOKE INSERT,UPDATE,DELETE ON "+schema+".gamepanel_schema_migrations FROM "+role); err != nil {
+		t.Fatal(err)
+	}
+	runtimeURL := *parsed
+	runtimeURL.User = url.User(role)
+	runtimeDB, err := OpenConfigured("", runtimeURL.String(), 2)
+	if err != nil {
+		t.Fatalf("runtime role startup: %v", err)
+	}
+	defer runtimeDB.Close()
+	if err := runtimeDB.db.Exec("CREATE TABLE forbidden_runtime_ddl (id integer)").Error; err == nil {
+		t.Fatal("runtime role can create tables")
+	}
+	if err := runtimeDB.db.Exec("UPDATE gamepanel_schema_migrations SET checksum='forbidden'").Error; err == nil {
+		t.Fatal("runtime role can edit migration history")
+	}
+	runtimeServer := domain.GameServer{ID: "runtime-role", Name: "runtime", Spec: domain.ServerSpec{ConfigVersion: 1}}
+	if err := runtimeDB.CreateGameServer(ctx, &runtimeServer); err != nil {
+		t.Fatalf("runtime role write: %v", err)
+	}
+	if _, err := runtimeDB.GetGameServer(ctx, runtimeServer.ID); err != nil {
+		t.Fatalf("runtime role read: %v", err)
+	}
 	server := domain.GameServer{ID: "server", Name: "test", ProviderKey: domain.ProviderTerrariaVanilla, Spec: domain.ServerSpec{Generation: 1, ConfigVersion: 1, Config: map[string]any{"worldName": "世界"}}}
 	if err := db.CreateGameServer(ctx, &server); err != nil {
 		t.Fatal(err)

@@ -36,6 +36,8 @@ jobs:
           fi
       - name: Build standalone Linux Agent
         run: CGO_ENABLED=0 GOOS=linux go build -o "$RUNNER_TEMP/gamepanel-agent" ./apps/agent
+      - name: Build standalone migration command
+        run: CGO_ENABLED=0 GOOS=linux go build -o "$RUNNER_TEMP/gamepanel-migrate" ./apps/api/cmd/migrate
       - name: Test behavior and architecture boundaries
         run: go test ./...
       - name: Vet

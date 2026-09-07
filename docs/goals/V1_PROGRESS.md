@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Separated PostgreSQL migration execution from API startup. Added gamepanel-migrate with cancellation/deadline support and included it in the API Docker image. API connections now only read/verify migration versions and checksums; they never initialize a PostgreSQL schema.
+- Real PostgreSQL tests verify a missing schema stays empty on API startup failure, concurrent explicit migrations remain safe, and a dedicated runtime role can start/read/write application data without CREATE or migration-ledger write privileges. Temporary test roles/schemas are cleaned up.
+- Production role provisioning, tenant RLS, SQLite data migration and rolling deployment compatibility remain pending. Startup now requires a prior migration job; see architecture/postgresql.md. Validation passed: gofmt, full Go tests, go vet, live PostgreSQL role/migration integration under race, Linux migration binary build and repeat execution of the CLI on a disposable database. CI YAML parsed successfully. No frontend code changed; remote CI was not run.
+
 - Replaced PostgreSQL AutoMigrate with a frozen, embedded SQL baseline and checksum/version ledger. Startup serializes migrations per schema using a transaction advisory lock; DDL and ledger changes commit atomically. SQLite startup remains unchanged.
 - Real PostgreSQL integration now exercises four concurrent initializers, idempotent reopen, failed DDL rollback/retry, tampered checksum rejection and refusal of a database newer than the binary. Populated unversioned schemas require explicit adoption and are not automatically modified.
 - Existing experimental PostgreSQL databases need an adoption/data-transfer procedure; it is not implemented yet. Dedicated migration jobs, SQLite migration, runtime least-privilege roles and deployment downgrade remain pending. No destructive down script was added. Validation passed: gofmt, full Go tests, vet and real PostgreSQL integration under race, including unversioned-schema rejection. Temporary baseline generator removed and disposable PostgreSQL container deleted. No frontend source or API contract changed.
