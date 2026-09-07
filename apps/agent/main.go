@@ -11,17 +11,27 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/smartcat999/game-panel-lite/internal/runtime/docker"
+	"github.com/smartcat999/game-panel-lite/internal/worker"
 )
+
+type agentRuntime interface {
+	worker.Runtime
+	Console(context.Context, string, string) error
+	Containers(context.Context) ([]worker.Container, error)
+	Logs(context.Context, string) ([]string, error)
+	Info(context.Context) (string, int, error)
+}
 
 type AgentConfig struct {
 	MasterURL string
@@ -55,6 +65,22 @@ const AgentVersion = "v0.4.48"
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	dockerHost := os.Getenv("DOCKER_HOST")
+	if dockerHost == "" {
+		dockerHost = "unix:///var/run/docker.sock"
+	}
+	instanceRoot := os.Getenv("AGENT_INSTANCE_ROOT")
+	if instanceRoot == "" {
+		instanceRoot = "/var/lib/gamepanel/instances"
+	}
+	runtimeAdapter, err := docker.NewAdapter(dockerHost, instanceRoot)
+	if err != nil {
+		logger.Error("initialize runtime", "error", err)
+		os.Exit(1)
+	}
+	defer runtimeAdapter.Close()
 
 	masterURL := os.Getenv("MASTER_URL")
 	if masterURL == "" {
@@ -101,7 +127,7 @@ func main() {
 	cores := runtime.NumCPU()
 	memTotalMB := getMemoryTotalMB()
 	diskTotalGB := getDiskTotalGB("/")
-	dockerVer, runningContainers := getDockerInfo()
+	dockerVer, runningContainers := getDockerInfo(ctx, runtimeAdapter)
 	osInfo := fmt.Sprintf("%s/%s (%s)", runtime.GOOS, runtime.GOARCH, getDistroName())
 
 	logger.Info("detected system specifications",
@@ -130,9 +156,11 @@ func main() {
 	registered := false
 	for i := 0; i < 5; i++ {
 		start := time.Now()
-		if err := sendRegister(client, cfg.MasterURL, regPayload); err != nil {
+		if err := sendRegister(ctx, client, cfg.MasterURL, regPayload); err != nil {
 			logger.Warn("registration attempt failed, retrying in 3s...", "attempt", i+1, "error", err)
-			time.Sleep(3 * time.Second)
+			if !retryDelay(ctx, 3*time.Second) {
+				return
+			}
 			continue
 		}
 		latency := time.Since(start).Milliseconds()
@@ -146,15 +174,15 @@ func main() {
 	}
 
 	// Step 3: Start background Reverse Tunnel Loop & Log Streamer
-	go startTunnelLoop(cfg, logger)
-	go startLogStreamerLoop(client, cfg, logger)
+	var loops sync.WaitGroup
+	loops.Add(2)
+	go func() { defer loops.Done(); startTunnelLoop(ctx, cfg, logger) }()
+	go func() { defer loops.Done(); startLogStreamerLoop(ctx, client, cfg, logger, runtimeAdapter) }()
+	defer func() { cancel(); loops.Wait() }()
 
 	// Step 4: Heartbeat Loop
 	ticker := time.NewTicker(cfg.Interval)
 	defer ticker.Stop()
-
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	logger.Info("agent entered active heartbeat loop", "interval_sec", cfg.Interval.Seconds())
 
@@ -163,7 +191,7 @@ func main() {
 		case <-ticker.C:
 			memUsedMB := getMemoryUsedMB()
 			diskUsedGB := getDiskUsedGB("/")
-			_, activeCount := getDockerInfo()
+			_, activeCount := getDockerInfo(ctx, runtimeAdapter)
 			cpuPercent := getCPUUsagePercent()
 
 			hbPayload := HeartbeatPayload{
@@ -175,7 +203,7 @@ func main() {
 			}
 
 			start := time.Now()
-			if err := sendHeartbeat(client, cfg.MasterURL, hbPayload); err != nil {
+			if err := sendHeartbeat(ctx, client, cfg.MasterURL, hbPayload); err != nil {
 				logger.Warn("failed to send heartbeat to master", "error", err)
 			} else {
 				latency := int(time.Since(start).Milliseconds())
@@ -183,11 +211,11 @@ func main() {
 			}
 
 			// Poll and execute pending tasks from master
-			reconcileAssignments(client, cfg, logger)
-			pollAndExecuteTasks(client, cfg, logger)
+			reconcileAssignments(ctx, client, cfg, logger, runtimeAdapter)
+			pollAndExecuteTasks(ctx, client, cfg, logger, runtimeAdapter)
 
-		case sig := <-stopChan:
-			logger.Info("received shutdown signal, terminating worker agent", "signal", sig.String())
+		case <-ctx.Done():
+			logger.Info("received shutdown signal, terminating worker agent")
 			return
 		}
 	}
@@ -200,22 +228,28 @@ type TunnelRequest struct {
 	TargetPort int    `json:"targetPort"`
 }
 
-func startTunnelLoop(cfg AgentConfig, logger *slog.Logger) {
+func startTunnelLoop(ctx context.Context, cfg AgentConfig, logger *slog.Logger) {
+	var bridges sync.WaitGroup
+	defer bridges.Wait()
 	logger.Info("started reverse stream tunnel listener loop")
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	for {
+	for ctx.Err() == nil {
 		url := fmt.Sprintf("%s/api/agent/tunnel/poll", cfg.MasterURL)
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
-			time.Sleep(3 * time.Second)
+			if !retryDelay(ctx, 3*time.Second) {
+				return
+			}
 			continue
 		}
 		req.Header.Set("X-Node-Token", cfg.Token)
 
 		resp, err := client.Do(req)
 		if err != nil {
-			time.Sleep(2 * time.Second)
+			if !retryDelay(ctx, 2*time.Second) {
+				return
+			}
 			continue
 		}
 
@@ -223,31 +257,29 @@ func startTunnelLoop(cfg AgentConfig, logger *slog.Logger) {
 			var tunnelReq TunnelRequest
 			if err := json.NewDecoder(resp.Body).Decode(&tunnelReq); err == nil && tunnelReq.StreamID != "" {
 				logger.Info("received incoming tunnel stream request", "stream_id", tunnelReq.StreamID, "target_port", tunnelReq.TargetPort)
-				go bridgeReverseStream(cfg, tunnelReq, logger)
+				bridges.Add(1)
+				go func() { defer bridges.Done(); bridgeReverseStream(ctx, cfg, tunnelReq, logger) }()
 			}
 		}
 		resp.Body.Close()
 	}
 }
 
-func bridgeReverseStream(cfg AgentConfig, req TunnelRequest, logger *slog.Logger) {
+func bridgeReverseStream(ctx context.Context, cfg AgentConfig, req TunnelRequest, logger *slog.Logger) {
 	targetPort := req.TargetPort
-	if targetPort <= 0 {
-		targetPort = 7777
+	if targetPort < 1 || targetPort > 65535 {
+		logger.Warn("invalid tunnel target port", "port", targetPort)
+		return
 	}
-
-	logger.Info("bridge received tunnel request, dialing local container", "port", targetPort, "stream_id", req.StreamID)
-
-	// 1. Connect to local game container port (try targetPort, fallback to 7777)
-	localConn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", targetPort), 1500*time.Millisecond)
-	if err != nil && targetPort != 7777 {
-		localConn, err = net.DialTimeout("tcp", "127.0.0.1:7777", 2*time.Second)
-	}
+	dialer := net.Dialer{Timeout: 1500 * time.Millisecond}
+	localConn, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", targetPort))
 	if err != nil {
 		logger.Warn("failed to connect to local game port for tunnel", "port", targetPort, "error", err)
 		return
 	}
 	defer localConn.Close()
+	stopLocal := context.AfterFunc(ctx, func() { _ = localConn.Close() })
+	defer stopLocal()
 	logger.Info("bridge connected to local game container port successfully", "stream_id", req.StreamID)
 
 	// 2. Connect to Master tunnel endpoint
@@ -273,15 +305,17 @@ func bridgeReverseStream(cfg AgentConfig, req TunnelRequest, logger *slog.Logger
 				Timeout: 8 * time.Second,
 			},
 		}
-		rawConn, err = tlsDialer.Dial("tcp", hostPort)
+		rawConn, err = tlsDialer.DialContext(ctx, "tcp", hostPort)
 	} else {
-		rawConn, err = net.DialTimeout("tcp", hostPort, 8*time.Second)
+		rawConn, err = (&net.Dialer{Timeout: 8 * time.Second}).DialContext(ctx, "tcp", hostPort)
 	}
 	if err != nil {
 		logger.Warn("failed to dial master for tunnel connection", "error", err)
 		return
 	}
 	defer rawConn.Close()
+	stopRemote := context.AfterFunc(ctx, func() { _ = rawConn.Close() })
+	defer stopRemote()
 	logger.Info("bridge connected to master tunnel endpoint successfully", "stream_id", req.StreamID)
 
 	reqPath := fmt.Sprintf("/api/agent/tunnel/connect?streamId=%s", req.StreamID)
@@ -317,133 +351,67 @@ func bridgeReverseStream(cfg AgentConfig, req TunnelRequest, logger *slog.Logger
 	logger.Info("tunnel bridge closed", "stream_id", req.StreamID)
 }
 
-func startLogStreamerLoop(client *http.Client, cfg AgentConfig, logger *slog.Logger) {
+func startLogStreamerLoop(ctx context.Context, client *http.Client, cfg AgentConfig, logger *slog.Logger, runtime agentRuntime) {
 	logger.Info("started background container log streamer")
-	socketPath := "/var/run/docker.sock"
-	httpc := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
-		Timeout: 5 * time.Second,
-	}
-
 	lastSentDigest := make(map[string][sha256.Size]byte)
-
+	ticker := time.NewTicker(1500 * time.Millisecond)
+	defer ticker.Stop()
 	for {
-		time.Sleep(1500 * time.Millisecond)
-
-		// List all containers
-		resp, err := httpc.Get("http://localhost/containers/json?all=1")
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		pollCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		containers, err := runtime.Containers(pollCtx)
+		cancel()
 		if err != nil {
 			continue
 		}
-		var containers []struct {
-			ID    string   `json:"Id"`
-			Names []string `json:"Names"`
-			State string   `json:"State"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&containers)
-		resp.Body.Close()
-
+		active := make(map[string]bool, len(containers))
 		for _, c := range containers {
-			serverID := serverIDFromContainerNames(c.Names)
-			if serverID == "" {
+			active[c.ServerID] = true
+		}
+		for id := range lastSentDigest {
+			if !active[id] {
+				delete(lastSentDigest, id)
+			}
+		}
+		for _, c := range containers {
+			logCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			lines, err := runtime.Logs(logCtx, c.ID)
+			cancel()
+			if err != nil || len(lines) == 0 {
 				continue
 			}
-
-			// Read recent 200 lines
-			logsURL := fmt.Sprintf("http://localhost/containers/%s/logs?stdout=1&stderr=1&timestamps=0&tail=200", c.ID)
-			lResp, lErr := httpc.Get(logsURL)
-			if lErr != nil {
+			payload, _ := json.Marshal(map[string][]string{"lines": lines})
+			digest := sha256.Sum256(payload)
+			if lastSentDigest[c.ServerID] == digest {
 				continue
 			}
-
-			logData, _ := io.ReadAll(lResp.Body)
-			lResp.Body.Close()
-
-			if len(logData) == 0 {
+			endpoint := fmt.Sprintf("%s/api/agent/servers/%s/logs", cfg.MasterURL, url.PathEscape(c.ServerID))
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+			if err != nil {
 				continue
 			}
-
-			lines := cleanDockerLogLines(logData)
-			if len(lines) == 0 {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Node-Token", cfg.Token)
+			response, err := client.Do(req)
+			if err != nil {
+				logger.Warn("failed to upload log snapshot", "server_id", c.ServerID, "error", err)
 				continue
 			}
-
-			digest := sha256.Sum256(logData)
-			if previous, ok := lastSentDigest[serverID]; !ok || previous != digest {
-				uploadURL := fmt.Sprintf("%s/api/agent/servers/%s/logs", cfg.MasterURL, serverID)
-				payload := map[string][]string{"lines": lines}
-				pBytes, _ := json.Marshal(payload)
-				uReq, _ := http.NewRequest(http.MethodPost, uploadURL, bytes.NewReader(pBytes))
-				uReq.Header.Set("Content-Type", "application/json")
-				uReq.Header.Set("X-Node-Token", cfg.Token)
-				if uResp, uErr := client.Do(uReq); uErr == nil {
-					if uResp.StatusCode >= 200 && uResp.StatusCode < 300 {
-						lastSentDigest[serverID] = digest
-					} else {
-						logger.Warn("master rejected container log snapshot", "server_id", serverID, "status", uResp.StatusCode)
-					}
-					uResp.Body.Close()
-				} else {
-					logger.Warn("failed to upload container log snapshot", "server_id", serverID, "error", uErr)
-				}
+			if response.StatusCode >= 200 && response.StatusCode < 300 {
+				lastSentDigest[c.ServerID] = digest
 			}
+			response.Body.Close()
 		}
 	}
 }
 
-func serverIDFromContainerNames(names []string) string {
-	for _, name := range names {
-		clean := strings.TrimPrefix(name, "/")
-		candidate := clean
-		if strings.HasPrefix(clean, "gamepanel-") {
-			candidate = strings.TrimPrefix(clean, "gamepanel-")
-		}
-		if uuid.Validate(candidate) == nil {
-			return candidate
-		}
-	}
-	return ""
-}
-
-func cleanDockerLogLines(data []byte) []string {
-	var lines []string
-	idx := 0
-	for idx < len(data) {
-		if idx+8 <= len(data) && (data[idx] == 1 || data[idx] == 2 || data[idx] == 0) && data[idx+1] == 0 && data[idx+2] == 0 && data[idx+3] == 0 {
-			frameLen := int(data[idx+4])<<24 | int(data[idx+5])<<16 | int(data[idx+6])<<8 | int(data[idx+7])
-			idx += 8
-			if frameLen > 0 && idx+frameLen <= len(data) {
-				chunk := string(data[idx : idx+frameLen])
-				for _, line := range strings.Split(chunk, "\n") {
-					line = strings.TrimRight(line, "\r")
-					if strings.TrimSpace(line) != "" {
-						lines = append(lines, line)
-					}
-				}
-				idx += frameLen
-				continue
-			}
-		}
-		// Fallback line by line
-		chunk := string(data[idx:])
-		for _, line := range strings.Split(chunk, "\n") {
-			line = strings.TrimRight(line, "\r")
-			if strings.TrimSpace(line) != "" {
-				lines = append(lines, line)
-			}
-		}
-		break
-	}
-	return lines
-}
-
-func pollAndExecuteTasks(client *http.Client, cfg AgentConfig, logger *slog.Logger) {
+func pollAndExecuteTasks(ctx context.Context, client *http.Client, cfg AgentConfig, logger *slog.Logger, runtime agentRuntime) {
 	url := fmt.Sprintf("%s/api/agent/tasks", cfg.MasterURL)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
@@ -469,7 +437,7 @@ func pollAndExecuteTasks(client *http.Client, cfg AgentConfig, logger *slog.Logg
 		if task.Action != "exec_command" {
 			taskErr = fmt.Errorf("lifecycle task %q is obsolete; workload state is reconciled from assignments", task.Action)
 		} else {
-			taskErr = executeDockerTask(task, logger)
+			taskErr = executeRuntimeTask(ctx, task, runtime)
 		}
 		ackStatus := "completed"
 		errMsg := ""
@@ -480,7 +448,7 @@ func pollAndExecuteTasks(client *http.Client, cfg AgentConfig, logger *slog.Logg
 		} else {
 			logger.Info("task completed successfully", "task_id", task.ID)
 		}
-		_ = ackTask(client, cfg.MasterURL, task.ID, ackStatus, errMsg, cfg.Token)
+		_ = ackTask(ctx, client, cfg.MasterURL, task.ID, ackStatus, errMsg, cfg.Token)
 	}
 }
 
@@ -496,14 +464,14 @@ type NodeTask struct {
 	Status   string `json:"status"`
 }
 
-func ackTask(client *http.Client, masterURL, taskID, status, errMsg, token string) error {
+func ackTask(ctx context.Context, client *http.Client, masterURL, taskID, status, errMsg, token string) error {
 	url := fmt.Sprintf("%s/api/agent/tasks/%s/ack", masterURL, taskID)
 	payload := map[string]string{
 		"status": status,
 		"error":  errMsg,
 	}
 	data, _ := json.Marshal(payload)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -517,197 +485,32 @@ func ackTask(client *http.Client, masterURL, taskID, status, errMsg, token strin
 	return nil
 }
 
-func executeDockerTask(task NodeTask, logger *slog.Logger) error {
-	socketPath := "/var/run/docker.sock"
-	httpc := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
-		Timeout: 60 * time.Second,
+func executeRuntimeTask(ctx context.Context, task NodeTask, runtime agentRuntime) error {
+	if task.Action != "exec_command" {
+		return fmt.Errorf("lifecycle task %q is obsolete; use assignments", task.Action)
 	}
-
-	containerName := fmt.Sprintf("gamepanel-%s", task.ServerID)
-
-	switch task.Action {
-	case "exec_command":
-		cmd := task.Payload
-		if cmd == "" {
-			return nil
-		}
-		return sendAgentConsoleInput(context.Background(), containerName, cmd)
-
-	case "stop":
-		url := fmt.Sprintf("http://localhost/containers/%s/stop?t=10", containerName)
-		req, _ := http.NewRequest(http.MethodPost, url, nil)
-		resp, err := httpc.Do(req)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
-		return nil
-
-	case "delete":
-		url := fmt.Sprintf("http://localhost/containers/%s?force=true", containerName)
-		req, _ := http.NewRequest(http.MethodDelete, url, nil)
-		resp, err := httpc.Do(req)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
-		return nil
-
-	case "start", "create", "restart":
-		// 1. Parse Workload Spec Payload if available
-		type WorkloadPayload struct {
-			Image   string `json:"image"`
-			DataDir string `json:"dataDir"`
-			Options struct {
-				Env        []string          `json:"env"`
-				Cmd        []string          `json:"cmd"`
-				Files      map[string]string `json:"files"`
-				DataMounts []string          `json:"dataMounts"`
-			} `json:"options"`
-		}
-
-		var spec WorkloadPayload
-		if task.Payload != "" {
-			_ = json.Unmarshal([]byte(task.Payload), &spec)
-		}
-
-		image := task.Image
-		if image == "" && spec.Image != "" {
-			image = spec.Image
-		}
-		if image == "" {
-			image = "smartcat99999/terraria-vanilla:1.4.5.6"
-		}
-
-		// 2. Prepare Local Host Instance Directory & Config Files
-		localInstanceDir := fmt.Sprintf("/var/lib/gamepanel/instances/%s", task.ServerID)
-		_ = os.MkdirAll(localInstanceDir, 0o777)
-		_ = os.Chmod(localInstanceDir, 0o777)
-		_ = os.MkdirAll(fmt.Sprintf("%s/Worlds", localInstanceDir), 0o777)
-		_ = os.Chmod(fmt.Sprintf("%s/Worlds", localInstanceDir), 0o777)
-		_ = os.MkdirAll(fmt.Sprintf("%s/logs", localInstanceDir), 0o777)
-		_ = os.Chmod(fmt.Sprintf("%s/logs", localInstanceDir), 0o777)
-		for filename, content := range spec.Options.Files {
-			filePath := fmt.Sprintf("%s/%s", localInstanceDir, filename)
-			_ = os.WriteFile(filePath, []byte(content), 0o666)
-			_ = os.Chmod(filePath, 0o666)
-			logger.Info("wrote container config file on worker node", "file", filePath, "bytes", len(content))
-		}
-
-		// 3. Check if container already exists
-		checkURL := fmt.Sprintf("http://localhost/containers/%s/json", containerName)
-		checkReq, _ := http.NewRequest(http.MethodGet, checkURL, nil)
-		checkResp, err := httpc.Do(checkReq)
-		if err == nil && checkResp.StatusCode == http.StatusOK {
-			checkResp.Body.Close()
-			// Remove old container to apply new volume mounts/envs cleanly
-			rmURL := fmt.Sprintf("http://localhost/containers/%s?force=true", containerName)
-			rmReq, _ := http.NewRequest(http.MethodDelete, rmURL, nil)
-			if rmResp, rmErr := httpc.Do(rmReq); rmErr == nil {
-				rmResp.Body.Close()
-			}
-		}
-		if checkResp != nil {
-			checkResp.Body.Close()
-		}
-
-		// 4. Pull Image if necessary
-		pullURL := fmt.Sprintf("http://localhost/images/create?fromImage=%s", image)
-		pullReq, _ := http.NewRequest(http.MethodPost, pullURL, nil)
-		if pResp, pErr := httpc.Do(pullReq); pErr == nil {
-			_, _ = io.Copy(io.Discard, pResp.Body)
-			pResp.Body.Close()
-		}
-
-		// 5. Build exact Binds list from spec.Options.DataMounts
-		var binds []string
-		for _, mount := range spec.Options.DataMounts {
-			if mount == "" {
-				continue
-			}
-			if hostSub, contSub, ok := strings.Cut(mount, ":"); ok {
-				hostPath := fmt.Sprintf("%s/%s", localInstanceDir, strings.TrimSpace(hostSub))
-				if strings.HasSuffix(hostSub, ".txt") || strings.HasSuffix(hostSub, ".json") {
-					if _, err := os.Stat(hostPath); os.IsNotExist(err) {
-						_ = os.WriteFile(hostPath, []byte(""), 0o666)
-					}
-				} else {
-					_ = os.MkdirAll(hostPath, 0o777)
-				}
-				binds = append(binds, fmt.Sprintf("%s:%s", hostPath, strings.TrimSpace(contSub)))
-			}
-		}
-		if len(binds) == 0 {
-			binds = []string{
-				fmt.Sprintf("%s/serverconfig.txt:/home/container/serverconfig.txt", localInstanceDir),
-				fmt.Sprintf("%s/Worlds:/home/container/Worlds", localInstanceDir),
-				fmt.Sprintf("%s/logs:/home/container/logs", localInstanceDir),
-			}
-		}
-
-		// 6. Ensure full recursive permissions across all files and dirs in instance path
-		_ = filepath.Walk(localInstanceDir, func(path string, info os.FileInfo, err error) error {
-			if err == nil {
-				if info.IsDir() {
-					_ = os.Chmod(path, 0o777)
-				} else {
-					_ = os.Chmod(path, 0o666)
-				}
-			}
-			return nil
-		})
-
-		// 7. Create Container with host network, volume binds, envs, cmd, OpenStdin, User root
-		createURL := fmt.Sprintf("http://localhost/containers/create?name=%s", containerName)
-		createPayload := map[string]interface{}{
-			"Image":       image,
-			"User":        "0:0",
-			"Env":         spec.Options.Env,
-			"Cmd":         spec.Options.Cmd,
-			"OpenStdin":   true,
-			"AttachStdin": true,
-			"HostConfig": map[string]interface{}{
-				"RestartPolicy": map[string]interface{}{
-					"Name": "unless-stopped",
-				},
-				"NetworkMode": "host",
-				"Binds":       binds,
-			},
-		}
-		createData, _ := json.Marshal(createPayload)
-		cReq, _ := http.NewRequest(http.MethodPost, createURL, bytes.NewReader(createData))
-		cReq.Header.Set("Content-Type", "application/json")
-		cResp, err := httpc.Do(cReq)
-		if err != nil {
-			return err
-		}
-		defer cResp.Body.Close()
-
-		// 6. Start Container
-		startURL := fmt.Sprintf("http://localhost/containers/%s/start", containerName)
-		sReq, _ := http.NewRequest(http.MethodPost, startURL, nil)
-		sResp, err := httpc.Do(sReq)
-		if err != nil {
-			return err
-		}
-		defer sResp.Body.Close()
+	if strings.TrimSpace(task.Payload) == "" {
 		return nil
 	}
-	return nil
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	state, err := runtime.Inspect(ctx, task.ServerID)
+	if err != nil {
+		return err
+	}
+	if !state.Exists || !state.Managed || state.ServerID != task.ServerID || state.NodeID != task.NodeID {
+		return fmt.Errorf("console target is not owned by the assigned server and node")
+	}
+	return runtime.Console(ctx, task.ServerID, task.Payload)
 }
 
-func sendRegister(client *http.Client, masterURL string, payload RegisterPayload) error {
+func sendRegister(ctx context.Context, client *http.Client, masterURL string, payload RegisterPayload) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	url := fmt.Sprintf("%s/api/agent/register", masterURL)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -725,13 +528,13 @@ func sendRegister(client *http.Client, masterURL string, payload RegisterPayload
 	return nil
 }
 
-func sendHeartbeat(client *http.Client, masterURL string, payload HeartbeatPayload) error {
+func sendHeartbeat(ctx context.Context, client *http.Client, masterURL string, payload HeartbeatPayload) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	url := fmt.Sprintf("%s/api/agent/heartbeat", masterURL)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -857,45 +660,23 @@ func getDistroName() string {
 	return "Linux"
 }
 
-func getDockerInfo() (string, int) {
-	// Query local Docker socket via Unix domain socket
-	socketPath := "/var/run/docker.sock"
-	if _, err := os.Stat(socketPath); err != nil {
+func getDockerInfo(ctx context.Context, runtime agentRuntime) (string, int) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	version, count, err := runtime.Info(ctx)
+	if err != nil {
 		return "N/A", 0
 	}
+	return version, count
+}
 
-	httpc := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", socketPath)
-			},
-		},
-		Timeout: 3 * time.Second,
+func retryDelay(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
-
-	// 1. Get Docker version
-	dockerVersion := "v24.0+"
-	resp, err := httpc.Get("http://localhost/version")
-	if err == nil {
-		defer resp.Body.Close()
-		var verResp struct {
-			Version string `json:"Version"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&verResp); err == nil && verResp.Version != "" {
-			dockerVersion = verResp.Version
-		}
-	}
-
-	// 2. Get running containers count
-	runningCount := 0
-	resp2, err := httpc.Get("http://localhost/containers/json")
-	if err == nil {
-		defer resp2.Body.Close()
-		var containers []map[string]interface{}
-		if err := json.NewDecoder(resp2.Body).Decode(&containers); err == nil {
-			runningCount = len(containers)
-		}
-	}
-
-	return dockerVersion, runningCount
 }

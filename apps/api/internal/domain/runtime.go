@@ -1,39 +1,13 @@
 package domain
 
-type WorkloadResources struct {
-	CPULimitCores float64 `json:"cpuLimitCores,omitempty"`
-	MemoryLimitMB int     `json:"memoryLimitMb,omitempty"`
-}
+import "github.com/smartcat999/game-panel-lite/internal/workload"
 
-type WorkloadNetwork struct {
-	Port            int            `json:"port,omitempty"`
-	HostPort        int            `json:"hostPort,omitempty"`
-	Protocol        string         `json:"protocol,omitempty"`
-	AdditionalPorts []WorkloadPort `json:"additionalPorts,omitempty"`
-}
-
-type WorkloadPort struct {
-	Port     int    `json:"port"`
-	HostPort int    `json:"hostPort"`
-	Protocol string `json:"protocol,omitempty"`
-}
-
-type WorkloadOptions struct {
-	Env        []string          `json:"env,omitempty"`
-	Cmd        []string          `json:"cmd,omitempty"`
-	Files      map[string]string `json:"files,omitempty"`
-	DataMounts []string          `json:"dataMounts,omitempty"`
-}
-
-type WorkloadSpec struct {
-	ServerID  string            `json:"serverId"`
-	Name      string            `json:"name"`
-	Image     string            `json:"image"`
-	Network   WorkloadNetwork   `json:"network,omitempty"`
-	Resources WorkloadResources `json:"resources,omitempty"`
-	DataDir   string            `json:"dataDir,omitempty"`
-	Options   WorkloadOptions   `json:"options,omitempty"`
-}
+// Aliases retain domain call sites while using one shared workload wire shape.
+type WorkloadResources = workload.Resources
+type WorkloadNetwork = workload.Network
+type WorkloadPort = workload.Port
+type WorkloadOptions = workload.Options
+type WorkloadSpec = workload.Spec
 
 type ProviderRuntimeConfig struct {
 	Port            int             `json:"port,omitempty"`

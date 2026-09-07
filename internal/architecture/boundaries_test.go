@@ -13,25 +13,20 @@ import (
 
 const api = "github.com/smartcat999/game-panel-lite/apps/api/internal/"
 
-// These file/import pairs are the existing game-specific integrations scheduled
-// for M2 (game integration) and M3 (Agent runtime) in docs/architecture/backend-modularity-plan.md. New exceptions require
-// an explicit review; stale exceptions fail so the baseline can only shrink.
-var legacyImports = map[string][]string{
-	"apps/agent/reconcile.go": {"github.com/docker/docker/api/types", "github.com/docker/docker/client"},
-}
-
 func TestBackendImportBoundaries(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("cannot locate repository")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
-	seen := map[string]bool{}
-	err := filepath.WalkDir(filepath.Join(root, "apps"), func(path string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if entry.IsDir() {
+			if path != root && filepath.Dir(path) == root && entry.Name() != "apps" && entry.Name() != "internal" {
+				return filepath.SkipDir
+			}
 			if entry.Name() == "node_modules" || entry.Name() == ".next" {
 				return filepath.SkipDir
 			}
@@ -58,17 +53,6 @@ func TestBackendImportBoundaries(t *testing.T) {
 			if reason == "" {
 				continue
 			}
-			excepted := false
-			for _, allowed := range legacyImports[relative] {
-				if imported == allowed {
-					seen[relative+" -> "+imported] = true
-					excepted = true
-					break
-				}
-			}
-			if excepted {
-				continue
-			}
 			t.Errorf("%s imports %s: %s", relative, imported, reason)
 		}
 		return nil
@@ -76,19 +60,25 @@ func TestBackendImportBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for file, imports := range legacyImports {
-		for _, imported := range imports {
-			key := file + " -> " + imported
-			if !seen[key] {
-				t.Errorf("remove stale import exception: %s", key)
-			}
-		}
-	}
+
 }
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
-	if strings.HasPrefix(imported, "github.com/docker/") && !under("runtime/docker") {
+	if strings.HasPrefix(file, "internal/workload/") && (strings.Contains(imported, ".") || imported == "net/http") {
+		return "shared workload protocol must be infrastructure independent"
+	}
+	if strings.HasPrefix(file, "internal/worker/") && (strings.HasPrefix(imported, api) || strings.Contains(imported, "/internal/runtime/") || imported == "net/http") {
+		return "worker coordinates runtime interfaces without transport or adapter dependencies"
+	}
+	if strings.HasPrefix(imported, "github.com/smartcat999/game-panel-lite/internal/runtime/") && !under("app") && !under("runtime/docker") && file != "apps/agent/main.go" && !strings.HasPrefix(file, "internal/runtime/") {
+		return "concrete shared runtime belongs in an adapter or composition root"
+	}
+	if strings.HasPrefix(file, "internal/runtime/") && strings.HasPrefix(imported, api) {
+		return "shared runtimes cannot depend on control-plane internals"
+	}
+
+	if strings.HasPrefix(imported, "github.com/docker/") && !under("runtime/docker") && !strings.HasPrefix(file, "internal/runtime/docker/") {
 		return "Docker SDK belongs to the Docker RuntimeAdapter"
 	}
 	if strings.HasPrefix(imported, "gorm.io/") && !under("store") {
@@ -113,6 +103,13 @@ func TestImportRules(t *testing.T) {
 		forbidden      bool
 	}{
 		{"apps/api/internal/http/new.go", api + "provider/terraria", true},
+		{"apps/agent/main.go", "github.com/smartcat999/game-panel-lite/internal/runtime/docker", false},
+		{"apps/agent/reconcile.go", "github.com/docker/docker/client", true},
+		{"internal/runtime/docker/adapter.go", "github.com/docker/docker/client", false},
+		{"internal/runtime/docker/adapter.go", api + "store", true},
+		{"internal/worker/reconciler.go", "github.com/smartcat999/game-panel-lite/internal/runtime/docker", true},
+		{"internal/workload/protocol.go", "net/http", true},
+		{"apps/api/internal/http/new.go", "github.com/smartcat999/game-panel-lite/internal/runtime/docker", true},
 		{"apps/api/internal/http/world_handlers.go", api + "provider/minecraft", true},
 		{"apps/api/internal/app/app.go", api + "provider/terraria", false},
 		{"apps/api/internal/runtime/docker/adapter.go", "github.com/docker/docker/client", false},

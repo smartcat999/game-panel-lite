@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Extracted shared workload wire types and runtime-independent worker reconciliation. Agent Docker SDK, file preparation, logs and console now live in a dedicated adapter; all recorded import exceptions are removed. CPU/memory and TCP/UDP mappings now survive the shared assignment protocol and reach Docker.
+- Added cancellation and goroutine ownership to Agent loops, managed workload ownership checks, and local-root file mounts. Removed legacy lifecycle execution and the tunnel game-port fallback. Distributed fencing and stronger tenant isolation remain pending.
+- Validated full Go tests/vet, shared packages and Agent race tests, frontend typecheck/build, tracked-source lint and standalone Linux Agent build. Worktree-wide lint still has previously recorded unrelated local-script failures. A real disposable Alpine workload passed create/reconcile/resource/port/stdin/stop/delete checks. Added formatting, Linux Agent build and opt-in Docker integration to CI; remote CI has not run. Formatting the existing DST provider was necessary for the new formatting gate.
+
 - Continued M2: moved legacy configuration preview/presets and restored-config parsing behind provider capabilities and a gameconfig application module. Restore reads are confined with os.Root, bounded to 1 MiB, and update caller state only after persistence succeeds.
 - Moved world-file candidates, mod file layouts and tModLoader enabled/workshop manifests into providers. HTTP and lifecycle callers share modruntime for manifests; mod source support is declared by providers, and Registry rejects selected capability/implementation mismatches.
 - Removed all seven direct concrete-provider import exceptions from HTTP/server code; two Agent Docker imports remain. This does not finish M2: upload parsing, mod metadata/dependencies, world storage and further HTTP orchestration still require migration. Track the full remaining scope in SAAS_REFACTOR_PROGRESS.md.

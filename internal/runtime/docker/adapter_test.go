@@ -1,0 +1,131 @@
+package docker
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
+)
+
+func testAdapter(t *testing.T, handle http.HandlerFunc) *Adapter {
+	t.Helper()
+	server := httptest.NewServer(handle)
+	t.Cleanup(server.Close)
+	cli, err := client.NewClientWithOpts(client.WithHost(server.URL), client.WithVersion("1.44"), client.WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cli.Close() })
+	return &Adapter{client: cli, dataDir: t.TempDir()}
+}
+func TestCreatePreservesNetworkResourcesAndOwnership(t *testing.T) {
+	var got struct {
+		container.Config
+		HostConfig container.HostConfig
+	}
+	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/images/create"):
+			io.WriteString(w, `{"status":"ready"}`)
+		case strings.HasSuffix(r.URL.Path, "/containers/create"):
+			if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+				t.Error(err)
+			}
+			w.WriteHeader(http.StatusCreated)
+			io.WriteString(w, `{"Id":"runtime"}`)
+		default:
+			t.Errorf("unexpected request %s", r.URL.Path)
+			w.WriteHeader(500)
+		}
+	})
+	a := workload.Assignment{UID: "uid", ServerID: "server", NodeID: "node", Generation: 3, Spec: workload.Spec{
+		Image: "example:1", DataDir: "/must/not/use/control-plane/path",
+		Resources: workload.Resources{CPULimitCores: 1.5, MemoryLimitMB: 2048},
+		Network:   workload.Network{Port: 7777, HostPort: 47777, Protocol: "tcp", AdditionalPorts: []workload.Port{{Port: 8888, HostPort: 48888, Protocol: "udp"}}},
+		Options:   workload.Options{Files: map[string]string{"settings/server.ini": "content"}},
+	}}
+	if err := adapter.Create(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	if got.HostConfig.NanoCPUs != 1500000000 || got.HostConfig.Memory != 2048*1024*1024 {
+		t.Fatalf("resource limits lost: %+v", got.HostConfig.Resources)
+	}
+	if got.HostConfig.NetworkMode == "host" || got.HostConfig.PortBindings["7777/tcp"][0].HostPort != "47777" || got.HostConfig.PortBindings["8888/udp"][0].HostPort != "48888" {
+		t.Fatalf("network lost: %+v", got.HostConfig)
+	}
+	if got.Labels[labelUID] != "uid" || got.Labels[labelNode] != "node" || got.Labels[labelGeneration] != "3" {
+		t.Fatalf("ownership lost: %v", got.Labels)
+	}
+	if len(got.HostConfig.Binds) != 1 || !strings.HasPrefix(got.HostConfig.Binds[0], adapter.dataDir) {
+		t.Fatalf("unexpected binds: %v", got.HostConfig.Binds)
+	}
+	content, err := os.ReadFile(filepath.Join(adapter.dataDir, "server/settings/server.ini"))
+	if err != nil || string(content) != "content" {
+		t.Fatalf("file=%q err=%v", content, err)
+	}
+}
+func TestPullFailurePreventsContainerCreation(t *testing.T) {
+	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/images/create") {
+			t.Fatalf("unexpected create after failed pull: %s", r.URL.Path)
+		}
+		io.WriteString(w, `{"error":"registry unavailable"}`)
+	})
+	err := adapter.Create(context.Background(), workload.Assignment{ServerID: "server", Spec: workload.Spec{Image: "example:1"}})
+	if err == nil || !strings.Contains(err.Error(), "registry unavailable") {
+		t.Fatalf("pull failure ignored: %v", err)
+	}
+}
+func TestPrepareFilesRejectsTraversalAndEscapingSymlink(t *testing.T) {
+	for _, name := range []string{"../escape", "link/escape"} {
+		dir, outside := t.TempDir(), t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(dir, "link")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := prepareFiles(dir, workload.Options{Files: map[string]string{name: "bad"}}); err == nil {
+			t.Fatalf("accepted %s", name)
+		}
+		if _, err := os.Stat(filepath.Join(outside, "escape")); !os.IsNotExist(err) {
+			t.Fatalf("outside file touched: %v", err)
+		}
+	}
+}
+func TestPrepareFilesRejectsSymlinkMount(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Symlink(t.TempDir(), filepath.Join(dir, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := prepareFiles(dir, workload.Options{DataMounts: []string{"linked:/data"}}); err == nil {
+		t.Fatal("accepted symlink mount")
+	}
+}
+func TestLifecycleOperationsAreIdempotent(t *testing.T) {
+	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/start") || strings.HasSuffix(r.URL.Path, "/stop") {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"message":"missing"}`)
+	})
+	for _, run := range []func(context.Context, string) error{adapter.Start, adapter.Stop, adapter.Remove} {
+		if err := run(context.Background(), "server"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, err := adapter.Inspect(context.Background(), "server")
+	if err != nil || state.Exists {
+		t.Fatalf("inspect missing: %+v %v", state, err)
+	}
+}

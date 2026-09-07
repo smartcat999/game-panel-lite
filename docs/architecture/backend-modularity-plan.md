@@ -4,7 +4,7 @@
 
 ## 首批落地情况
 
-- `internal/architecture/boundaries_test.go` 在 Go 测试中解析生产源码导入，限制 domain、具体 Provider、Docker SDK 和 GORM 的依赖方向。原九条存量导入已减少为 Agent 单文件的两条 Docker 导入例外，移除存量引用后必须同步删除例外；这不是完整的所有模块隔离证明。
+- `internal/architecture/boundaries_test.go` 在 Go 测试中解析生产源码导入，限制 domain、具体 Provider、Docker SDK 和 GORM 的依赖方向。原九条存量导入例外已全部移除；新增根级 workload、worker 与 Docker adapter 也受导入规则约束；这不是完整的所有模块隔离证明。
 - `.github/workflows/backend.yml` 对 PR 和 main/feat/v1-full-run 推送执行 Go 测试、vet、Provider/Runtime race 检查。当前只完成本地验证，远端工作流尚未运行。
 - Provider 新增 CatalogMetadata，元信息与默认排序由各游戏的 catalog.go 提供；NewRegistry 返回错误以拒绝重复或空 ID。应用入口负责处理错误，测试使用包内构造辅助函数。
 - 通用契约删除 ConfigText，文件全部通过 Options.Files 传递。Terraria Provider 拥有 serverconfig.txt 文件名，运行时不再为其他游戏创建无关配置文件。未注册游戏不再以写死的 planned 条目出现在目录。
@@ -148,3 +148,9 @@ Registry 的职责仅为注册、校验、查找和枚举：
 M0：建立导入基线与行为测试，记录例外。M1：修正 Registry 元数据与重复注册，再移除通用文件名特判。M2：把模组和世界操作移入 Provider 能力与应用用例，保持 API 行为。M3：结合 SaaS P1 拆租户/持久化，再结合 P2 拆执行进程和共享协议。
 
 每批独立验证，不进行全仓库一次性目录重排。先通过测试再删除本批造成的旧代码，不顺手改造无关模块。M0/M1 已完成首批实现；M2/M3 和更完整的能力校验、模块隔离仍按上述计划推进。
+
+## Agent 共享执行协议落地
+
+API 与 Agent 共用 internal/workload 的 Assignment、Spec 和 Observation，保留 CPU、内存与 TCP/UDP 端口字段，避免双方复制结构导致字段丢失。internal/worker 通过消费方 Runtime 接口协调状态；Docker SDK、日志、stdin 和文件准备集中在 internal/runtime/docker。Agent 入口显式组装，轮询和连接随进程 context 取消并等待退出。
+
+远端 Spec.DataDir 不决定本机挂载路径；Agent 从本地 AGENT_INSTANCE_ROOT 和实例 ID 派生目录。默认 bridge 网络，按协议绑定端口并应用资源限制。部署配置与验证方式见 [Agent runtime](agent-runtime.md)。本批保留已有文件权限兼容策略，不代表不受信模组的强隔离已完成；新旧 assignment 的分布式 fencing 与调度租约仍需后续验证。

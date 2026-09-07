@@ -6,7 +6,7 @@
 
 | 要求 | 当前状态 | 证据或后续验证 |
 | --- | --- | --- |
-| M0 依赖检查与 CI | 部分完成 | AST 规则已加入 Go 测试；还需完整模块依赖方向、根级共享模块检查、gofmt 门禁及远端 CI 验证 |
+| M0 依赖检查与 CI | 部分完成 | AST 规则覆盖新增根级共享模块；gofmt 门禁和独立 Agent 构建已加入；完整模块方向与远端 CI 仍待验收 |
 | M1 插件注册、目录、通用文件集合 | 完成当前批次 | edfb004a；注册/目录/文件传递测试 |
 | 配置预览、预设、恢复解析归属 Provider | 本地验证通过 | gameconfig 用例、Provider 能力、兼容/恢复失败/路径逃逸测试 |
 | 世界文件定位归属 Provider | 部分完成 | WorldFilesProvider；世界上传格式与其他存档操作仍需迁移 |
@@ -14,7 +14,7 @@
 | 模组来源能力与注册校验 | 部分完成 | ModSupportProvider；支持上传与 Workshop 的判断已改为能力声明；上传解析、元数据、依赖规则仍待集中 |
 | HTTP 与生命周期仅依赖应用用例 | 未完成 | 具体 Provider 导入已消除，但多个 Handler 仍持有 Store/Runtime 并含编排逻辑 |
 | 插件版本、配置版本与完整能力校验 | 未完成 | 已校验部分能力；版本演进协议和其他能力矩阵待实现 |
-| M3 Agent RuntimeAdapter 与共享执行协议 | 未完成 | apps/agent/reconcile.go 仍有两条 Docker SDK 导入例外 |
+| M3 Agent RuntimeAdapter 与共享执行协议 | 本地验证通过 | internal/workload、worker、runtime/docker；导入例外归零；真实一次性 Docker 容器的资源/端口/控制台/生命周期验证通过；分布式租约与隔离不在本批验收内 |
 | 身份/租户/持久化模块所有权 | 未完成 | 待配合 PostgreSQL 与租户迁移实现；不是简单拆文件 |
 | PostgreSQL 与显式数据库迁移 | 未完成 | 需真实数据库迁移与回滚演练 |
 | 全链路租户授权、RLS、配额并发 | 未完成 | 需双租户接口/文件/SSE/后台任务测试及竞争测试 |

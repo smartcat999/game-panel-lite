@@ -4,6 +4,7 @@ WORKDIR /src
 
 COPY go.mod go.sum ./
 COPY vendor ./vendor
+COPY internal ./internal
 
 COPY apps/api ./apps/api
 

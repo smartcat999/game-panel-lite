@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type ServerDesiredState string
@@ -81,14 +83,7 @@ type ServerRuntimeStatus struct {
 	LastTransitionAt   time.Time         `json:"lastTransitionAt,omitempty"`
 }
 
-type ServerCondition struct {
-	Type               string    `json:"type"`
-	Status             string    `json:"status"`
-	Reason             string    `json:"reason,omitempty"`
-	Message            string    `json:"message,omitempty"`
-	ObservedGeneration int       `json:"observedGeneration,omitempty"`
-	LastTransitionAt   time.Time `json:"lastTransitionAt"`
-}
+type ServerCondition = workload.Condition
 
 type GameServer struct {
 	ID             string              `json:"id" gorm:"primaryKey"`

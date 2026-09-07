@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
+	"reflect"
 )
 
 func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
@@ -28,7 +30,7 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 	assignment := domain.WorkloadAssignment{
 		ID: "assignment-1", UID: "uid-1", ServerID: "server-1", NodeID: "node-a",
 		Generation: 1, DesiredState: domain.DesiredRunning,
-		Spec:      domain.WorkloadSpec{ServerID: "server-1", Image: "game:1"},
+		Spec:      domain.WorkloadSpec{ServerID: "server-1", Image: "game:1", Resources: domain.WorkloadResources{CPULimitCores: 1.5, MemoryLimitMB: 2048}, Network: domain.WorkloadNetwork{Port: 7777, HostPort: 47777, AdditionalPorts: []domain.WorkloadPort{{Port: 8888, HostPort: 48888, Protocol: "udp"}}}},
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := db.UpsertWorkloadAssignment(context.Background(), &assignment); err != nil {
@@ -48,11 +50,14 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 	if listResponse.Code != stdhttp.StatusOK {
 		t.Fatalf("expected assignment list 200, got %d: %s", listResponse.Code, listResponse.Body.String())
 	}
-	var assignments []domain.WorkloadAssignment
+	var assignments []workload.Assignment
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &assignments); err != nil || len(assignments) != 1 || assignments[0].UID != assignment.UID {
 		t.Fatalf("unexpected assignments: %v %+v", err, assignments)
 	}
 
+	if !reflect.DeepEqual(assignments[0].Spec, assignment.Spec) {
+		t.Fatalf("worker protocol dropped fields: %+v", assignments[0].Spec)
+	}
 	statusBody := []byte(`{"observedGeneration":1,"actualState":"running","reconcileDurationSeconds":0.25}`)
 	forbiddenRequest := httptest.NewRequest(stdhttp.MethodPost, "/api/agent/assignments/uid-1/status", bytes.NewReader(statusBody))
 	forbiddenRequest.Header.Set("X-Node-Token", "token-b")

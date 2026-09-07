@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type createNodeRequest struct {
@@ -506,7 +508,11 @@ func (h *Handler) listAgentAssignments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.apiMetrics.SetWorkloadBacklog(node.ID, pending)
-	writeJSON(w, http.StatusOK, assignments)
+	response := make([]workload.Assignment, 0, len(assignments))
+	for _, item := range assignments {
+		response = append(response, workload.Assignment{ID: item.ID, UID: item.UID, ServerID: item.ServerID, NodeID: item.NodeID, Generation: item.Generation, DesiredState: string(item.DesiredState), Spec: item.Spec, DeletionTimestamp: item.DeletionTimestamp, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt})
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Request) {
@@ -523,11 +529,12 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusForbidden, "assignment belongs to another node")
 		return
 	}
-	var observation domain.WorkloadObservation
-	if err := json.NewDecoder(r.Body).Decode(&observation); err != nil {
+	var report workload.Observation
+	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid observation body")
 		return
 	}
+	observation := domain.WorkloadObservation{ObservedGeneration: report.ObservedGeneration, RuntimeID: report.RuntimeID, ActualState: domain.ServerActualState(report.ActualState), Conditions: report.Conditions, LastError: report.LastError, ReconcileDurationSeconds: report.ReconcileDurationSeconds, ObservedAt: report.ObservedAt}
 	if observation.ObservedGeneration > assignment.Generation {
 		writeError(w, http.StatusConflict, "observation generation is newer than assignment")
 		return
