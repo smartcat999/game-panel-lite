@@ -3,6 +3,7 @@ package modruntime
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -13,16 +14,9 @@ import (
 // Providers without an inspector return empty metadata. This is not a complete
 // package safety or integrity validation.
 func (s *Service) Inspect(ctx context.Context, key domain.ProviderKey, path string) (domain.ModMetadata, error) {
-	if err := ctx.Err(); err != nil {
+	inspector, err := s.modInspector(ctx, key)
+	if err != nil || inspector == nil {
 		return domain.ModMetadata{}, err
-	}
-	item, ok := s.providers.Get(key)
-	if !ok {
-		return domain.ModMetadata{}, fmt.Errorf("unknown provider: %s", key)
-	}
-	inspector, ok := item.(provider.ModInspector)
-	if !ok {
-		return domain.ModMetadata{}, nil
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -30,4 +24,24 @@ func (s *Service) Inspect(ctx context.Context, key domain.ProviderKey, path stri
 	}
 	defer file.Close()
 	return inspector.InspectMod(contextReader{ctx, file})
+}
+
+// InspectReader consumes an already confined file handle or upload stream.
+func (s *Service) InspectReader(ctx context.Context, key domain.ProviderKey, reader io.Reader) (domain.ModMetadata, error) {
+	inspector, err := s.modInspector(ctx, key)
+	if err != nil || inspector == nil {
+		return domain.ModMetadata{}, err
+	}
+	return inspector.InspectMod(contextReader{ctx, reader})
+}
+func (s *Service) modInspector(ctx context.Context, key domain.ProviderKey) (provider.ModInspector, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	item, ok := s.providers.Get(key)
+	if !ok {
+		return nil, fmt.Errorf("unknown provider: %s", key)
+	}
+	inspector, _ := item.(provider.ModInspector)
+	return inspector, nil
 }

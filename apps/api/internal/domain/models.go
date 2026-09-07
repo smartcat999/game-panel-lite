@@ -526,3 +526,13 @@ type Setting struct {
 const (
 	SettingKeyAllowRegistration = "allow_public_registration"
 )
+
+// LibraryCommitOutcome tells the upload application whether published bytes may
+// be discarded after a metadata error. Uncertain is never safe to discard.
+type LibraryCommitOutcome string
+
+const (
+	LibraryCommitApplied   LibraryCommitOutcome = "applied"
+	LibraryCommitRejected  LibraryCommitOutcome = "rejected"
+	LibraryCommitUncertain LibraryCommitOutcome = "uncertain"
+)

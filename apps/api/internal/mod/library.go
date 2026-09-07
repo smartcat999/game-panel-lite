@@ -14,6 +14,7 @@ import (
 )
 
 var ErrLibraryFile = errors.New("invalid workspace library file")
+var ErrUploadTooLarge = errors.New("mod upload exceeds size limit")
 
 // StoredFile describes immutable bytes, not a database commit. Callers publish
 // metadata only after success and retain orphan cleanup/retry responsibility.
@@ -49,7 +50,7 @@ func (s *Service) PutLibrary(ctx context.Context, item domain.ModFile, reader io
 		var probe [1]byte
 		n, err := io.ReadFull(&contextReader{ctx: ctx, reader: reader}, probe[:])
 		if n != 0 {
-			copyErr = fmt.Errorf("mod upload exceeds %d bytes", maxBytes)
+			copyErr = fmt.Errorf("%w: %d bytes", ErrUploadTooLarge, maxBytes)
 		} else if err != nil && err != io.EOF {
 			copyErr = err
 		}

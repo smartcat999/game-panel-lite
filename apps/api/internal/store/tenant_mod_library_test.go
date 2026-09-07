@@ -27,10 +27,10 @@ func testTenantModLibrary(t *testing.T, db *Store) {
 		}
 	}
 	item := domain.ModFile{ID: "owned-library-mod", InstanceID: "unassigned", OrganizationID: "library-a", ProviderKey: domain.ProviderTerrariaTModLoader, FileName: "same.tmod", WorkshopID: "123", Source: "workshop", Enabled: true}
-	if err := db.CreateOwnedLibraryMod(ctx, "library-b", &item); !errors.Is(err, ErrWorkspaceWriteDenied) {
+	if outcome, err := db.CommitLibraryUpload(ctx, "library-b", &item); outcome != domain.LibraryCommitRejected || !errors.Is(err, ErrWorkspaceWriteDenied) {
 		t.Fatalf("foreign create: %v", err)
 	}
-	if err := db.CreateOwnedLibraryMod(ctx, "library-a", &item); err != nil {
+	if outcome, err := db.CommitLibraryUpload(ctx, "library-a", &item); outcome != domain.LibraryCommitApplied || err != nil {
 		t.Fatal(err)
 	}
 	duplicate := item

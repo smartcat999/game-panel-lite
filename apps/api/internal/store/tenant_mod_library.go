@@ -52,19 +52,33 @@ func (s *Store) lockLibraryWriter(ctx context.Context, userID, orgID string) err
 	}
 	return s.lockWorkspaceWriter(ctx, orgID, userID)
 }
+func (s *Store) CheckLibraryWriter(ctx context.Context, userID, orgID string) error {
+	return s.Transaction(ctx, func(tx *Store) error { return tx.lockLibraryWriter(ctx, userID, orgID) })
+}
 func (s *Store) CreateOwnedLibraryMod(ctx context.Context, userID string, item *domain.ModFile) error {
+	_, err := s.CommitLibraryUpload(ctx, userID, item)
+	return err
+}
+func (s *Store) CommitLibraryUpload(ctx context.Context, userID string, item *domain.ModFile) (domain.LibraryCommitOutcome, error) {
 	if item.InstanceID != "unassigned" || item.ID == "" || item.ProviderKey == "" || item.FileName == "" || item.Revision != 0 {
-		return ErrInvalidModLibrary
+		return domain.LibraryCommitRejected, ErrInvalidModLibrary
 	}
-	return s.Transaction(ctx, func(tx *Store) error {
+	outcome := domain.LibraryCommitRejected
+	err := s.Transaction(ctx, func(tx *Store) error {
 		if err := tx.lockLibraryWriter(ctx, userID, item.OrganizationID); err != nil {
 			return err
 		}
 		if err := tx.libraryModCollision(ctx, *item); err != nil {
 			return err
 		}
+		// From this point an insert or COMMIT failure may have an uncertain result.
+		outcome = domain.LibraryCommitUncertain
 		return tx.CreateMod(ctx, item)
 	})
+	if err == nil {
+		outcome = domain.LibraryCommitApplied
+	}
+	return outcome, err
 }
 
 // One workspace lock also serializes duplicate detection, pack reference checks

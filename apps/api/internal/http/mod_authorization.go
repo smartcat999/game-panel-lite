@@ -12,6 +12,10 @@ import (
 // permission. Legacy unassigned library ownership is a separate migration.
 func (h *Handler) modTransferSource(w http.ResponseWriter, r *http.Request, item domain.ModFile) (string, bool) {
 	if item.InstanceID == "unassigned" {
+		if allocationActor(r) != "" {
+			writeError(w, http.StatusNotFound, "mod not found")
+			return "", false
+		}
 		return "", true
 	}
 	source, err := h.store.GetGameServer(r.Context(), item.InstanceID)

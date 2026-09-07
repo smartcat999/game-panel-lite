@@ -16,19 +16,26 @@ import (
 )
 
 type modPackResponse struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	GameKey     domain.GameKey     `json:"gameKey,omitempty"`
-	ProviderKey domain.ProviderKey `json:"providerKey,omitempty"`
-	ModIDs      []string           `json:"modIds"`
-	Mods        []domain.ModFile   `json:"mods"`
-	CreatedAt   time.Time          `json:"createdAt"`
-	UpdatedAt   time.Time          `json:"updatedAt"`
+	OrganizationID string             `json:"organizationId,omitempty"`
+	ID             string             `json:"id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	GameKey        domain.GameKey     `json:"gameKey,omitempty"`
+	ProviderKey    domain.ProviderKey `json:"providerKey,omitempty"`
+	ModIDs         []string           `json:"modIds"`
+	Mods           []domain.ModFile   `json:"mods"`
+	CreatedAt      time.Time          `json:"createdAt"`
+	UpdatedAt      time.Time          `json:"updatedAt"`
 }
 
 func (h *Handler) listModPacks(w http.ResponseWriter, r *http.Request) {
-	packs, err := h.store.ListModPacks(r.Context())
+	var packs []domain.ModPack
+	var err error
+	if actor := allocationActor(r); actor != "" {
+		packs, err = h.store.ListUserModPacks(r.Context(), actor)
+	} else {
+		packs, err = h.store.ListModPacks(r.Context())
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -258,14 +265,20 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 	}
 	mods := make([]domain.ModFile, 0, len(modIDs))
 	for _, modID := range modIDs {
-		item, err := h.store.GetMod(ctx, modID)
+		var item domain.ModFile
+		var err error
+		if account, ok := accountFromContext(ctx); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+			item, err = h.store.GetUserLibraryMod(ctx, account.ID, modID)
+		} else {
+			item, err = h.store.GetMod(ctx, modID)
+		}
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				continue
 			}
 			return modPackResponse{}, err
 		}
-		if item.InstanceID != "unassigned" {
+		if item.InstanceID != "unassigned" || item.OrganizationID != pack.OrganizationID {
 			continue
 		}
 		hydrateModMetadata(&item)
@@ -273,15 +286,16 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 	}
 	gameKey, providerKey := modPackGameMetadata(mods)
 	return modPackResponse{
-		ID:          pack.ID,
-		Name:        pack.Name,
-		Description: pack.Description,
-		GameKey:     gameKey,
-		ProviderKey: providerKey,
-		ModIDs:      modIDs,
-		Mods:        mods,
-		CreatedAt:   pack.CreatedAt,
-		UpdatedAt:   pack.UpdatedAt,
+		OrganizationID: pack.OrganizationID,
+		ID:             pack.ID,
+		Name:           pack.Name,
+		Description:    pack.Description,
+		GameKey:        gameKey,
+		ProviderKey:    providerKey,
+		ModIDs:         modIDs,
+		Mods:           mods,
+		CreatedAt:      pack.CreatedAt,
+		UpdatedAt:      pack.UpdatedAt,
 	}, nil
 }
 

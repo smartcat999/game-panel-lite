@@ -387,6 +387,10 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listGlobalMods(w http.ResponseWriter, r *http.Request) {
+	if allocationActor(r) != "" {
+		h.listMyLibraryMods(w, r)
+		return
+	}
 	mods, err := h.store.ListMods(r.Context(), "unassigned")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -424,7 +428,12 @@ func (h *Handler) listRecommendedMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	mods, err := h.store.ListMods(r.Context(), "unassigned")
+	var mods []domain.ModFile
+	if actor := allocationActor(r); actor != "" {
+		mods, err = h.store.ListUserLibraryMods(r.Context(), actor)
+	} else {
+		mods, err = h.store.ListMods(r.Context(), "unassigned")
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

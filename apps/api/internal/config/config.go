@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
+const DefaultModUploadMaxBytes int64 = 256 << 20
+
 type Config struct {
+	ModUploadMaxBytes      int64
 	Host                   string
 	Port                   string
 	DataDir                string
@@ -49,7 +52,12 @@ func Load() Config {
 	if maxConnections <= 0 {
 		maxConnections = 20
 	}
+	uploadMax, _ := strconv.ParseInt(value("GAMEPANEL_MOD_UPLOAD_MAX_BYTES", ""), 10, 64)
+	if uploadMax <= 0 {
+		uploadMax = DefaultModUploadMaxBytes
+	}
 	return Config{
+		ModUploadMaxBytes:      uploadMax,
 		DatabaseURL:            value("GAMEPANEL_DATABASE_URL", ""),
 		DBMaxConnections:       maxConnections,
 		Host:                   value("GAMEPANEL_HOST", "0.0.0.0"),
@@ -80,4 +88,11 @@ func value(key string, fallback string) string {
 		return got
 	}
 	return fallback
+}
+
+func (c Config) ModUploadLimit() int64 {
+	if c.ModUploadMaxBytes > 0 {
+		return c.ModUploadMaxBytes
+	}
+	return DefaultModUploadMaxBytes
 }

@@ -5,6 +5,70 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/auth/me/mods:
+    get:
+      security:
+        - sessionCookie: []
+      summary: List library mods in the current account's workspaces
+      description: Requires an authenticated account with mod management permission. Current workspace membership is checked in SQL. This endpoint does not include legacy unowned library records or instance mods.
+      responses:
+        "200":
+          description: Workspace library records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ModFile'}
+        "401": {description: Authentication required}
+        "403": {description: Mod management permission required}
+  /api/auth/me/mods/upload:
+    post:
+      security:
+        - sessionCookie: []
+      summary: Upload an immutable workspace library file
+      description: The raw file body is bounded by GAMEPANEL_MOD_UPLOAD_MAX_BYTES (default 256 MiB). Workspace write permission is checked before consuming the body and again at commit. Optional Provider metadata inspection is enforced when supplied; this is not a complete package security scan. The server generates the upload ID. Existing filenames in the same workspace and Provider are rejected.
+      parameters:
+        - in: query
+          name: organizationId
+          required: true
+          schema: {type: string, minLength: 1}
+        - in: query
+          name: providerKey
+          required: true
+          schema: {type: string, minLength: 1}
+        - in: query
+          name: fileName
+          required: true
+          schema: {type: string, minLength: 1}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+      responses:
+        "201":
+          description: File published and metadata committed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ModFile'}
+        "400": {description: Invalid upload or package metadata}
+        "401": {description: Authentication required}
+        "403": {description: Workspace write permission required, including revocation during upload}
+        "404": {description: Workspace not found}
+        "409": {description: Filename already exists in the workspace and Provider}
+        "413": {description: Configured upload size limit exceeded}
+        "415": {description: application/octet-stream required}
+        "500": {description: Upload failed}
+        "503":
+          description: File retained after an uncertain commit or failed cleanup; requires reconciliation. Do not assume that the metadata was committed or blindly delete the file.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, uploadId]
+                properties:
+                  error: {type: string}
+                  uploadId: {type: string}
   /api/config-presets:
     get:
       summary: List presets visible through current workspace membership
@@ -2265,6 +2329,16 @@ components:
       type: object
       required: [id, instanceId, fileName, sizeBytes, enabled, createdAt]
       properties:
+        organizationId:
+          type: string
+          description: Workspace owner of a library resource; absent on legacy records.
+        providerKey:
+          type: string
+        gameKey:
+          type: string
+        contentHash:
+          type: string
+          description: SHA-256 of uploaded bytes when available.
         id:
           type: string
         instanceId:
@@ -2279,7 +2353,7 @@ components:
         source:
           type: string
           enum: [upload, workshop]
-          description: Upload means a .tmod file; workshop means an independent Steam Workshop item.
+          description: Upload means a file accepted by the Provider upload capability; workshop means an independent Steam Workshop item.
         workshopId:
           type: string
           description: Steam Workshop item ID when source is workshop.

@@ -33,3 +33,16 @@ func TestLoadUsesDockerDefaultHost(t *testing.T) {
 		t.Fatalf("expected Docker default host, got %q", cfg.DockerHost)
 	}
 }
+
+func TestModUploadSizePolicy(t *testing.T) {
+	for _, raw := range []string{"", "0", "-1", "invalid"} {
+		t.Setenv("GAMEPANEL_MOD_UPLOAD_MAX_BYTES", raw)
+		if got := Load().ModUploadLimit(); got != DefaultModUploadMaxBytes {
+			t.Fatalf("fallback %q: %d", raw, got)
+		}
+	}
+	t.Setenv("GAMEPANEL_MOD_UPLOAD_MAX_BYTES", "12345")
+	if got := Load().ModUploadLimit(); got != 12345 {
+		t.Fatalf("configured limit: %d", got)
+	}
+}

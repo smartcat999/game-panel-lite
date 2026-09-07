@@ -51,7 +51,7 @@ func TestModAssignmentChecksBothInstanceWorkspaces(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		return rec
 	}
-	for _, tc := range []struct{ source, target string }{{"mod-org-b", "mod-org-a"}, {"mod-org-a", "mod-org-b"}, {"legacy-library", "mod-org-b"}} {
+	for _, tc := range []struct{ source, target string }{{"mod-org-b", "mod-org-a"}, {"mod-org-a", "mod-org-b"}, {"legacy-library", "mod-org-b"}, {"legacy-library", "mod-org-a"}} {
 		got := assign(tc.source, tc.target)
 		if got.Code != http.StatusNotFound {
 			t.Fatalf("foreign transfer %s -> %s: %d %s", tc.source, tc.target, got.Code, got.Body.String())
@@ -88,7 +88,7 @@ func TestModAssignmentChecksBothInstanceWorkspaces(t *testing.T) {
 	if err := db.AddOrganizationMember(ctx, &viewer); err != nil {
 		t.Fatal(err)
 	}
-	if got := assign("legacy-library", "mod-org-a"); got.Code != http.StatusForbidden {
+	if got := assign("mod-org-a", "mod-org-a"); got.Code != http.StatusForbidden {
 		t.Fatalf("read-only target: %d %s", got.Code, got.Body.String())
 	}
 	mods, err := db.ListMods(ctx, "mod-org-b")

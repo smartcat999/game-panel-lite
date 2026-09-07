@@ -382,6 +382,8 @@ export const worldSchema = z.object({
 
 export const modFileSchema = z.object({
   id: z.string().min(1),
+  organizationId: z.string().min(1).optional(),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   fileName: z.string().min(1),
   source: z.enum(["upload", "workshop"]).optional(),
   workshopId: z.string().regex(/^\d+$/).optional(),

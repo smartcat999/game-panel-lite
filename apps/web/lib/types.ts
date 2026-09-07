@@ -310,6 +310,8 @@ export type Backup = {
 
 export type ModFile = {
   id: string;
+  organizationId?: string;
+  contentHash?: string;
   instanceId: string;
   gameKey?: GameKey;
   providerKey?: ProviderKey;
@@ -406,6 +408,7 @@ export type WorkshopPreview = {
 };
 
 export type ModPack = {
+  organizationId?: string;
   id: string;
   name: string;
   description: string;

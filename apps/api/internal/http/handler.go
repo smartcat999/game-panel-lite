@@ -15,6 +15,8 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
+	modfiles "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modlibrary"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
@@ -26,6 +28,7 @@ import (
 )
 
 type Handler struct {
+	modLibrary     *modlibrary.Service
 	modRuntime     *modruntime.Service
 	gameConfig     *gameconfig.Service
 	ctx            context.Context
@@ -83,6 +86,7 @@ func NewHandler(
 	}
 	handler := &Handler{
 		modRuntime:       modRuntime,
+		modLibrary:       modlibrary.NewService(store, modfiles.NewService(cfg.DataDir, modRuntime.StoredFileName), providers),
 		gameConfig:       gameConfig,
 		cfg:              cfg,
 		logger:           logger,
@@ -160,6 +164,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Use(h.requireAuth)
 		r.Use(h.requireMutationPermission)
 		r.Get("/api/auth/me", h.currentAccount)
+		r.With(h.requirePermission(domain.PermissionModManage, "mod management permission required")).Get("/api/auth/me/mods", h.listMyLibraryMods)
+		r.With(h.requirePermission(domain.PermissionModManage, "mod management permission required")).Post("/api/auth/me/mods/upload", h.uploadMyLibraryMod)
 		r.Get("/api/auth/me/organizations", h.listMyOrganizations)
 		r.Get("/api/auth/me/organizations/{id}", h.getMyOrganization)
 		r.Post("/api/auth/password", h.changePassword)
@@ -280,20 +286,20 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireServerAccess).Delete("/api/servers/{id}/mod-configs/{name}", h.deleteModConfig)
 		r.With(h.requirePermission(domain.PermissionModManage, "member role required")).Get("/api/mods", h.listGlobalMods)
 		r.With(h.requirePermission(domain.PermissionModManage, "member role required")).Get("/api/mods/recommended", h.listRecommendedMods)
-		r.Post("/api/mods/recommended/import", h.importRecommendedMod)
-		r.Post("/api/mods/upload", h.uploadGlobalMod)
-		r.Post("/api/mods/workshop/preview", h.previewWorkshopCollection)
-		r.Post("/api/mods/workshop/items/preview", h.previewWorkshopItems)
-		r.Post("/api/mods/workshop", h.importGlobalWorkshopMods)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mods/recommended/import", h.importRecommendedMod)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mods/upload", h.uploadGlobalMod)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mods/workshop/preview", h.previewWorkshopCollection)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mods/workshop/items/preview", h.previewWorkshopItems)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mods/workshop", h.importGlobalWorkshopMods)
 		r.Post("/api/mods/{id}/assign", h.assignMod)
-		r.Post("/api/mods/batch-delete", h.batchDeleteGlobalMods)
-		r.Delete("/api/mods/{id}", h.deleteGlobalMod)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mods/batch-delete", h.batchDeleteGlobalMods)
+		r.With(h.requireLegacyLibraryAdmin).Delete("/api/mods/{id}", h.deleteGlobalMod)
 		r.With(h.requirePermission(domain.PermissionModManage, "member role required")).Get("/api/mod-packs", h.listModPacks)
-		r.Post("/api/mod-packs", h.createModPack)
-		r.Post("/api/mod-packs/workshop", h.createModPackFromWorkshopCollection)
-		r.Patch("/api/mod-packs/{id}", h.updateModPack)
-		r.Post("/api/mod-packs/batch-delete", h.batchDeleteModPacks)
-		r.Delete("/api/mod-packs/{id}", h.deleteModPack)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mod-packs", h.createModPack)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mod-packs/workshop", h.createModPackFromWorkshopCollection)
+		r.With(h.requireLegacyLibraryAdmin).Patch("/api/mod-packs/{id}", h.updateModPack)
+		r.With(h.requireLegacyLibraryAdmin).Post("/api/mod-packs/batch-delete", h.batchDeleteModPacks)
+		r.With(h.requireLegacyLibraryAdmin).Delete("/api/mod-packs/{id}", h.deleteModPack)
 		r.Get("/api/terraria/presets", h.presets)
 		r.Get("/api/terraria/versions", h.versions)
 		r.Post("/api/terraria/config/preview", h.configPreview)
