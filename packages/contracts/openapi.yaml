@@ -989,12 +989,29 @@ paths:
   /api/worlds:
     get:
       summary: List worlds
+      description: Customer results use persistent workspace ownership. Unowned legacy worlds are platform-only; missing files are omitted without deleting metadata.
       responses:
         "200":
           description: World list
   /api/worlds/import:
     post:
       summary: Import .wld world file
+      description: Attached imports require target workspace write permission. Unassigned imports use a private workspace directory; organizationId is optional only when the customer belongs to exactly one workspace.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                instanceId:
+                  type: string
+                organizationId:
+                  type: string
       responses:
         "200":
           description: Updated existing world file record
@@ -1003,6 +1020,7 @@ paths:
   /api/worlds/{id}/assign:
     post:
       summary: Assign world to server
+      description: Customers need write membership for both the source and target, which must belong to the same workspace.
       responses:
         "200":
           description: Assigned world

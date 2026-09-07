@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"mime/multipart"
 	stdhttp "net/http"
 	"net/http/httptest"
@@ -17,7 +16,6 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 	worldsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/world"
 )
 
@@ -190,7 +188,7 @@ func TestWorldImportRejectsUnknownInstance(t *testing.T) {
 	}
 }
 
-func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
+func TestWorldReadsPreserveMissingFileMetadata(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	world := domain.World{
 		ID:         "missing-world",
@@ -213,8 +211,8 @@ func TestWorldListPrunesMissingFilesAndDownloadReturnsJSONError(t *testing.T) {
 	if !strings.Contains(download.Body.String(), "world file not found on disk") {
 		t.Fatalf("expected JSON missing file error, got %q", download.Body.String())
 	}
-	if _, err := db.GetWorld(context.Background(), world.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected missing world record deleted after download miss, got err=%v", err)
+	if _, err := db.GetWorld(context.Background(), world.ID); err != nil {
+		t.Fatalf("expected missing world record retained after download miss, got err=%v", err)
 	}
 
 	list := httptest.NewRecorder()

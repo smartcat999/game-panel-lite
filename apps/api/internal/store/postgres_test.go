@@ -60,6 +60,18 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := admin.QueryRowContext(ctx, "SELECT count(*) FROM information_schema.tables WHERE table_schema=$1", schema).Scan(&tableCount); err != nil || tableCount != 0 {
 		t.Fatalf("API created schema objects: %d %v", tableCount, err)
 	}
+	baselineDB, err := connectPostgres(parsed.String(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migratePostgres(ctx, baselineDB, postgresMigrations()[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := baselineDB.Exec("INSERT INTO game_servers (id, organization_id) VALUES ('legacy-world-owner','legacy-org'); INSERT INTO worlds (id, instance_id) VALUES ('legacy-world','legacy-world-owner')").Error; err != nil {
+		t.Fatal(err)
+	}
+	baselinePool, _ := baselineDB.DB()
+	baselinePool.Close()
 	var starters sync.WaitGroup
 	failures := make(chan error, 4)
 	for i := 0; i < 4; i++ {
@@ -82,6 +94,10 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	legacyWorld, err := db.GetWorld(ctx, "legacy-world")
+	if err != nil || legacyWorld.OrganizationID != "legacy-org" {
+		t.Fatalf("world ownership migration: %+v %v", legacyWorld, err)
+	}
 
 	role := "gamepanel_runtime_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	if _, err := admin.ExecContext(ctx, "CREATE ROLE "+role+" LOGIN"); err != nil {
@@ -163,10 +179,11 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := db.GetGameServer(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("not found: %v", err)
 	}
+	testWorldOwnershipQueries(t, db)
 	testTenantBackupQueries(t, db)
 	testTenantServerQueries(t, db)
 	testPersonalOrganizations(t, db)
-	migrations := append(postgresMigrations(), sqlMigration{2, "failure_probe", "CREATE TABLE migration_failure_probe (id integer); SELECT * FROM deliberately_missing_relation;"})
+	migrations := append(postgresMigrations(), sqlMigration{len(postgresMigrations()) + 1, "failure_probe", "CREATE TABLE migration_failure_probe (id integer); SELECT * FROM deliberately_missing_relation;"})
 	if err := migratePostgres(ctx, db.db, migrations); err == nil {
 		t.Fatal("broken migration accepted")
 	}
@@ -175,7 +192,7 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatalf("failed DDL not rolled back: %v %v", exists, err)
 	}
 	var records int64
-	if err := db.db.Table("gamepanel_schema_migrations").Count(&records).Error; err != nil || records != 1 {
+	if err := db.db.Table("gamepanel_schema_migrations").Count(&records).Error; err != nil || records != int64(len(postgresMigrations())) {
 		t.Fatalf("migration ledger: %d %v", records, err)
 	}
 	if err := migratePostgres(ctx, db.db, postgresMigrations()); err != nil {

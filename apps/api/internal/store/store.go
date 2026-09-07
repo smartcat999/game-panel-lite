@@ -55,6 +55,13 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
+	if err := db.Exec("UPDATE worlds SET organization_id = (SELECT organization_id FROM game_servers WHERE game_servers.id = worlds.instance_id) WHERE (organization_id = '' OR organization_id IS NULL) AND instance_id IN (SELECT id FROM game_servers WHERE organization_id IS NOT NULL)").Error; err != nil {
+		pool, _ := db.DB()
+		if pool != nil {
+			_ = pool.Close()
+		}
+		return nil, err
+	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 

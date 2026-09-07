@@ -20,7 +20,11 @@ import (
 )
 
 func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {
-	worlds, err := h.store.ListWorlds(r.Context())
+	list := h.store.ListWorlds
+	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+		list = func(ctx context.Context) ([]domain.World, error) { return h.store.ListUserWorlds(ctx, account.ID) }
+	}
+	worlds, err := list(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -28,13 +32,12 @@ func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {
 	svc := worldsvc.NewService(h.cfg.DataDir)
 	visible := make([]domain.World, 0, len(worlds))
 	for _, world := range worlds {
-		path, err := svc.Path(world.InstanceID, world.FileName)
+		path, err := svc.WithOrganization(world.OrganizationID).Path(world.InstanceID, world.FileName)
 		if err != nil {
 			continue
 		}
 		if _, err := os.Stat(path); err != nil {
-			h.logger.Warn("world file missing, pruning orphaned record", "worldId", world.ID, "path", path)
-			_ = h.store.DeleteWorld(r.Context(), world.ID)
+			h.logger.Warn("world file missing", "worldId", world.ID, "path", path)
 			continue
 		}
 		visible = append(visible, h.hydrateWorldResource(r.Context(), world))
@@ -48,13 +51,27 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 		instanceID = "unassigned"
 	}
 	var providerKey domain.ProviderKey
+	var organizationID string
 	if instanceID != "unassigned" {
 		server, err := h.store.GetGameServer(r.Context(), instanceID)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "server not found")
 			return
 		}
+		if !h.worldTargetAllowed(w, r, server, "") {
+			return
+		}
+		organizationID = server.OrganizationID
 		providerKey = server.ProviderKey
+	}
+	if instanceID == "unassigned" {
+		var status int
+		var err error
+		organizationID, status, err = h.creationOrganization(r, r.FormValue("organizationId"))
+		if err != nil {
+			writeError(w, status, err.Error())
+			return
+		}
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -62,12 +79,12 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	_, size, err := worldsvc.NewService(h.cfg.DataDir).Import(instanceID, header.Filename, file)
+	_, size, err := worldsvc.NewService(h.cfg.DataDir).WithOrganization(organizationID).Import(instanceID, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	item, created, err := h.upsertWorldRecord(r.Context(), instanceID, header.Filename[:len(header.Filename)-len(filepath.Ext(header.Filename))], header.Filename, size)
+	item, created, err := h.upsertWorldRecord(r.Context(), organizationID, instanceID, header.Filename[:len(header.Filename)-len(filepath.Ext(header.Filename))], header.Filename, size)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -87,19 +104,17 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "world not found")
+	item, ok := h.worldForRequest(w, r, chi.URLParam(r, "id"))
+	if !ok {
 		return
 	}
-	path, err := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	path, err := worldsvc.NewService(h.cfg.DataDir).WithOrganization(item.OrganizationID).Path(item.InstanceID, item.FileName)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if _, err := os.Stat(path); err != nil {
-		h.logger.Warn("world file missing during download, pruning orphaned record", "worldId", item.ID, "path", path)
-		_ = h.store.DeleteWorld(r.Context(), item.ID)
+		h.logger.Warn("world file missing during download", "worldId", item.ID, "path", path)
 		writeError(w, http.StatusNotFound, "world file not found on disk")
 		return
 	}
@@ -158,9 +173,8 @@ func (h *Handler) createWorldSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "world not found")
+	item, ok := h.worldForRequest(w, r, chi.URLParam(r, "id"))
+	if !ok {
 		return
 	}
 	var payload struct {
@@ -175,6 +189,9 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 	resource, err := h.store.GetGameServer(r.Context(), payload.InstanceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if !h.worldTargetAllowed(w, r, resource, item.OrganizationID) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), resource.ID) {
@@ -208,7 +225,7 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := h.clearActiveWorlds(r.Context(), payload.InstanceID, item.ID); err != nil {
+	if err := h.clearActiveWorlds(r.Context(), item.OrganizationID, payload.InstanceID, item.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -254,7 +271,7 @@ func (h *Handler) hydrateWorldResource(ctx context.Context, world domain.World) 
 }
 
 func (h *Handler) materializeWorldForRuntime(world domain.World, server domain.GameServer) error {
-	sourcePath, err := worldsvc.NewService(h.cfg.DataDir).Path(world.InstanceID, world.FileName)
+	sourcePath, err := worldsvc.NewService(h.cfg.DataDir).WithOrganization(world.OrganizationID).Path(world.InstanceID, world.FileName)
 	if err != nil {
 		return err
 	}
@@ -271,13 +288,13 @@ func (h *Handler) materializeWorldForRuntime(world domain.World, server domain.G
 	return nil
 }
 
-func (h *Handler) clearActiveWorlds(ctx context.Context, instanceID string, keepWorldID string) error {
+func (h *Handler) clearActiveWorlds(ctx context.Context, organizationID string, instanceID string, keepWorldID string) error {
 	worlds, err := h.store.ListWorlds(ctx)
 	if err != nil {
 		return err
 	}
 	for _, world := range worlds {
-		if world.ID == keepWorldID || world.ActiveInstanceID != instanceID {
+		if world.OrganizationID != organizationID || world.ID == keepWorldID || world.ActiveInstanceID != instanceID {
 			continue
 		}
 		world.ActiveInstanceID = ""
@@ -289,8 +306,8 @@ func (h *Handler) clearActiveWorlds(ctx context.Context, instanceID string, keep
 	return nil
 }
 
-func (h *Handler) upsertWorldRecord(ctx context.Context, instanceID string, name string, fileName string, size int64) (domain.World, bool, error) {
-	if existing, err := h.store.GetWorldByInstanceAndFile(ctx, instanceID, fileName); err == nil {
+func (h *Handler) upsertWorldRecord(ctx context.Context, organizationID string, instanceID string, name string, fileName string, size int64) (domain.World, bool, error) {
+	if existing, err := h.store.GetWorldByOrganizationInstanceAndFile(ctx, organizationID, instanceID, fileName); err == nil {
 		existing.Name = name
 		existing.SizeBytes = size
 		existing.UpdatedAt = time.Now()
@@ -298,7 +315,7 @@ func (h *Handler) upsertWorldRecord(ctx context.Context, instanceID string, name
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return domain.World{}, false, err
 	}
-	item := domain.World{ID: uuid.NewString(), InstanceID: instanceID, Name: name, FileName: fileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	item := domain.World{OrganizationID: organizationID, ID: uuid.NewString(), InstanceID: instanceID, Name: name, FileName: fileName, SizeBytes: size, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	return item, true, h.store.CreateWorld(ctx, &item)
 }
 
@@ -319,6 +336,7 @@ func (h *Handler) upsertWorldSnapshotRecord(ctx context.Context, server domain.G
 		existing.Name = name
 		existing.SizeBytes = size
 		existing.ProviderKey = server.ProviderKey
+		existing.OrganizationID = server.OrganizationID
 		existing.Source = "server_snapshot"
 		existing.Config = configPayload
 		existing.ConfigPayload = configPayload
@@ -332,6 +350,7 @@ func (h *Handler) upsertWorldSnapshotRecord(ctx context.Context, server domain.G
 		return domain.World{}, false, err
 	}
 	item := domain.World{
+		OrganizationID:    server.OrganizationID,
 		ID:                uuid.NewString(),
 		InstanceID:        server.ID,
 		ProviderKey:       server.ProviderKey,
@@ -402,9 +421,8 @@ func safeWorldSnapshotFileName(name string) string {
 }
 
 func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetWorld(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "world not found")
+	item, ok := h.worldForRequest(w, r, chi.URLParam(r, "id"))
+	if !ok {
 		return
 	}
 	if inUse, err := h.worldTemplateInUse(r.Context(), item.ID); err != nil {
@@ -421,7 +439,7 @@ func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	path, _ := worldsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
+	path, _ := worldsvc.NewService(h.cfg.DataDir).WithOrganization(item.OrganizationID).Path(item.InstanceID, item.FileName)
 	if err := removeStoredFile(path); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

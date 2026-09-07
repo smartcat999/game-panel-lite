@@ -9,11 +9,25 @@ import (
 )
 
 type Service struct {
-	dataDir string
+	dataDir        string
+	organizationID string
 }
 
 func NewService(dataDir string) *Service {
 	return &Service{dataDir: dataDir}
+}
+
+// WithOrganization isolates personal library uploads while preserving the
+// existing per-instance layout for assigned and historical files.
+func (s *Service) WithOrganization(id string) *Service {
+	return &Service{dataDir: s.dataDir, organizationID: id}
+}
+
+func (s *Service) directory(instanceID string) (string, error) {
+	if instanceID == "unassigned" && s.organizationID != "" {
+		return safety.SafeJoin(s.dataDir, "tenant-worlds", s.organizationID, instanceID)
+	}
+	return safety.SafeJoin(s.dataDir, "worlds", instanceID)
 }
 
 func (s *Service) Import(instanceID string, fileName string, reader io.Reader) (string, int64, error) {
@@ -21,7 +35,7 @@ func (s *Service) Import(instanceID string, fileName string, reader io.Reader) (
 	if err != nil {
 		return "", 0, err
 	}
-	dir, err := safety.SafeJoin(s.dataDir, "worlds", instanceID)
+	dir, err := s.directory(instanceID)
 	if err != nil {
 		return "", 0, err
 	}
@@ -43,5 +57,9 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return safety.SafeJoin(s.dataDir, "worlds", instanceID, safeName)
+	dir, err := s.directory(instanceID)
+	if err != nil {
+		return "", err
+	}
+	return safety.SafeJoin(dir, safeName)
 }

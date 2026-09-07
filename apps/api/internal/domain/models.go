@@ -256,6 +256,7 @@ type Backup struct {
 }
 
 type World struct {
+	OrganizationID    string         `json:"organizationId,omitempty" gorm:"index;not null;default:''"`
 	ID                string         `json:"id" gorm:"primaryKey"`
 	InstanceID        string         `json:"instanceId" gorm:"index"`
 	GameKey           GameKey        `json:"gameKey,omitempty" gorm:"-"`

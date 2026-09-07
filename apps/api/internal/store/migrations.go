@@ -12,6 +12,9 @@ import (
 //go:embed migrations/001_postgres_baseline.sql
 var postgresBaseline string
 
+//go:embed migrations/002_world_ownership.sql
+var worldOwnership string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -22,7 +25,7 @@ type migrationRecord struct {
 }
 
 func postgresMigrations() []sqlMigration {
-	return []sqlMigration{{1, "postgres_baseline", postgresBaseline}}
+	return []sqlMigration{{1, "postgres_baseline", postgresBaseline}, {2, "world_ownership", worldOwnership}}
 }
 
 // migratePostgres serializes cooperating initializers per schema and commits

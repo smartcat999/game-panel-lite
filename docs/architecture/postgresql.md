@@ -25,3 +25,9 @@ Run `go run ./apps/api/cmd/migrate -timeout 1m` with `GAMEPANEL_DATABASE_URL` se
 Start the API with a separate DSN granting schema usage, SELECT on `gamepanel_schema_migrations`, and required SELECT/INSERT/UPDATE/DELETE rights on application tables. Do not grant runtime CREATE on the schema or writes on the migration ledger. The API now checks version/checksums with SELECTs only and fails on a missing, older, newer or mismatched ledger. Grant permissions on newly added tables as part of future migrations/provisioning.
 
 This verifies separation of DDL privileges, not tenant isolation. RLS, per-tenant transaction context, quota concurrency, migration/rolling-deployment compatibility and production role management still require implementation and validation.
+
+## World ownership migration
+
+Migration 002 adds persistent world organization ownership and copies the current source instance organization for historical attached worlds. Unassigned/unowned legacy records remain platform-only until explicitly adopted. New private unassigned uploads use `tenant-worlds/<organization>/unassigned`; existing assigned and legacy file paths are unchanged. SQLite initialization performs the same backfill for blank ownership, and never replaces an existing owner. Back up before upgrading; this does not implement old-binary rolling compatibility or a downgrade.
+
+Moving an instance between organizations still requires a separate ownership/file-transfer procedure; changing its organization field alone is not a supported tenant migration.
