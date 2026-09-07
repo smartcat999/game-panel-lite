@@ -255,6 +255,7 @@ func (h *Handler) agentRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before := node
 	if req.CPUCores > 0 {
 		node.CPUCores = req.CPUCores
 	}
@@ -281,12 +282,12 @@ func (h *Handler) agentRegister(w http.ResponseWriter, r *http.Request) {
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
 	node.UpdatedAt = time.Now().UTC()
-	h.apiMetrics.ObserveAgentHeartbeat(node.ID, node.LastHeartbeat)
 
-	if err := h.store.UpdateComputeNode(r.Context(), &node); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update node status: "+err.Error())
+	if err := h.store.SaveAgentRegistration(r.Context(), before, node); err != nil {
+		writeNodeReportError(w, err)
 		return
 	}
+	h.apiMetrics.ObserveAgentHeartbeat(node.ID, node.LastHeartbeat)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
@@ -317,6 +318,7 @@ func (h *Handler) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before := node
 	node.CPUUsagePercent = req.CPUUsagePercent
 	if req.MemoryUsedMB > 0 {
 		node.MemoryUsedMB = req.MemoryUsedMB
@@ -335,9 +337,12 @@ func (h *Handler) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
 	node.UpdatedAt = time.Now().UTC()
-	h.apiMetrics.ObserveAgentHeartbeat(node.ID, node.LastHeartbeat)
 
-	_ = h.store.UpdateComputeNode(r.Context(), &node)
+	if err := h.store.SaveAgentHeartbeat(r.Context(), before, node); err != nil {
+		writeNodeReportError(w, err)
+		return
+	}
+	h.apiMetrics.ObserveAgentHeartbeat(node.ID, node.LastHeartbeat)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":        true,
@@ -756,4 +761,12 @@ func knownWorkloadCapabilities(advertised []string) []string {
 		}
 	}
 	return nil
+}
+
+func writeNodeReportError(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrReconciliationSuperseded) {
+		writeError(w, http.StatusConflict, "node report superseded or authorization changed")
+		return
+	}
+	writeError(w, http.StatusInternalServerError, "failed to persist node report")
 }

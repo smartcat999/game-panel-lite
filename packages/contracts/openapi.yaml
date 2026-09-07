@@ -225,6 +225,7 @@ paths:
         "200": {description: Node report accepted}
         "400": {description: Invalid report}
         "401": {description: Invalid node token}
+        "409": {description: Node report superseded or node authorization changed before persistence}
         "500": {description: Node lookup or persistence failed}
   /api/agent/heartbeat:
     post:
@@ -248,6 +249,7 @@ paths:
         "200": {description: Node report accepted}
         "400": {description: Invalid report}
         "401": {description: Invalid node token}
+        "409": {description: Node report superseded or node authorization changed before persistence}
         "500": {description: Node lookup or persistence failed}
   /api/agent/assignments:
     get:
