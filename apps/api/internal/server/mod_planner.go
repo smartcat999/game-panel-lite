@@ -33,13 +33,14 @@ type ModStore interface {
 }
 
 type RuntimeModPlanner struct {
-	runtime *modruntime.Service
-	dataDir string
-	store   ModStore
+	runtime   *modruntime.Service
+	providers ProviderRegistry
+	dataDir   string
+	store     ModStore
 }
 
 func NewRuntimeModPlanner(dataDir string, store ModStore, providers ProviderRegistry) *RuntimeModPlanner {
-	return &RuntimeModPlanner{dataDir: dataDir, store: store, runtime: modruntime.NewService(providers, store)}
+	return &RuntimeModPlanner{dataDir: dataDir, store: store, providers: providers, runtime: modruntime.NewService(providers, store)}
 }
 
 func (p *RuntimeModPlanner) PlanMods(ctx context.Context, server domain.GameServer) error {

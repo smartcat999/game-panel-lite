@@ -7,6 +7,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type ProviderRegistry interface {
@@ -28,6 +29,11 @@ func (b *ProviderWorkloadBuilder) WithModPlanner(planner ModPlanner) *ProviderWo
 }
 
 func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server domain.GameServer) (domain.WorkloadSpec, error) {
+	// Stop/delete operate on observed runtime identity and must remain available
+	// when an uploaded source or provider configuration is no longer usable.
+	if !server.IsLocal() && (server.Spec.DesiredState == domain.DesiredStopped || server.Spec.DesiredState == domain.DesiredDeleted) {
+		return domain.WorkloadSpec{ServerID: server.ID, Name: server.Name}, nil
+	}
 	if b.providers == nil {
 		return domain.WorkloadSpec{}, fmt.Errorf("provider registry is required")
 	}
@@ -42,15 +48,26 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 	if version == "" || !providerVersionSupported(gameProvider.Versions(), version) {
 		version = recommendedProviderVersion(gameProvider.Versions())
 	}
-	if server.Spec.Runtime.DataDir != "" {
-		if err := os.MkdirAll(server.Spec.Runtime.DataDir, 0o755); err != nil {
+	remoteMods := workload.Options{}
+	if server.IsLocal() {
+		if server.Spec.Runtime.DataDir != "" {
+			if err := os.MkdirAll(server.Spec.Runtime.DataDir, 0o755); err != nil {
+				return domain.WorkloadSpec{}, err
+			}
+		}
+		if b.mods != nil {
+			if err := b.mods.PlanMods(ctx, server); err != nil {
+				return domain.WorkloadSpec{}, err
+			}
+		}
+	} else if planner, ok := b.mods.(RemoteModPlanner); ok {
+		var err error
+		remoteMods, err = planner.PlanRemoteMods(ctx, server)
+		if err != nil {
 			return domain.WorkloadSpec{}, err
 		}
-	}
-	if b.mods != nil {
-		if err := b.mods.PlanMods(ctx, server); err != nil {
-			return domain.WorkloadSpec{}, err
-		}
+	} else if len(server.Spec.ModIDs) > 0 {
+		return domain.WorkloadSpec{}, fmt.Errorf("remote mod planner is required")
 	}
 	runtimeConfig, err := runtimeConfigForResource(gameProvider, server)
 	if err != nil {
@@ -59,6 +76,15 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 	files := map[string]string{}
 	for name, content := range runtimeConfig.Options.Files {
 		files[name] = content
+	}
+	for name, content := range remoteMods.Files {
+		if _, exists := files[name]; exists {
+			return domain.WorkloadSpec{}, fmt.Errorf("mod manifest conflicts with runtime config %q", name)
+		}
+		files[name] = content
+	}
+	if err := workload.ValidateArtifacts(workload.Options{Files: files, Artifacts: remoteMods.Artifacts}); err != nil {
+		return domain.WorkloadSpec{}, err
 	}
 	additionalPorts := make([]domain.WorkloadPort, 0, len(runtimeConfig.AdditionalPorts))
 	for _, port := range runtimeConfig.AdditionalPorts {
@@ -87,6 +113,7 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 			Env:        runtimeEnvironment(runtimeConfig.Options.Env, server),
 			Cmd:        append([]string{}, runtimeConfig.Options.Cmd...),
 			Files:      files,
+			Artifacts:  remoteMods.Artifacts,
 			DataMounts: append([]string{}, runtimeConfig.Options.DataMounts...),
 		},
 	}, nil
