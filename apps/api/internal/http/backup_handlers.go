@@ -18,7 +18,11 @@ import (
 )
 
 func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
-	backups, err := h.store.ListBackups(r.Context())
+	list := h.store.ListBackups
+	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+		list = func(ctx context.Context) ([]domain.Backup, error) { return h.store.ListUserBackups(ctx, account.ID) }
+	}
+	backups, err := list(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -31,8 +35,7 @@ func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, err := os.Stat(path); err != nil {
-			h.logger.Warn("backup file missing, pruning orphaned record", "backupId", b.ID, "path", path)
-			_ = h.store.DeleteBackup(r.Context(), b.ID)
+			h.logger.Warn("backup file missing", "backupId", b.ID, "path", path)
 			continue
 		}
 		visible = append(visible, h.hydrateBackupResource(r.Context(), b))
@@ -90,9 +93,8 @@ func (h *Handler) hydrateBackupResource(ctx context.Context, backup domain.Backu
 }
 
 func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "backup not found")
+	item, ok := h.backupForRequest(w, r, chi.URLParam(r, "id"))
+	if !ok {
 		return
 	}
 	path, err := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)
@@ -101,8 +103,7 @@ func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := os.Stat(path); err != nil {
-		h.logger.Warn("backup file missing during download, pruning orphaned record", "backupId", item.ID, "path", path)
-		_ = h.store.DeleteBackup(r.Context(), item.ID)
+		h.logger.Warn("backup file missing during download", "backupId", item.ID, "path", path)
 		writeError(w, http.StatusNotFound, "backup file not found on disk")
 		return
 	}
@@ -110,9 +111,8 @@ func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "backup not found")
+	item, ok := h.backupForRequest(w, r, chi.URLParam(r, "id"))
+	if !ok {
 		return
 	}
 	unlock := h.lockServerMutation(item.InstanceID)
@@ -190,7 +190,6 @@ func (h *Handler) listServerSaves(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, err := os.Stat(path); err != nil {
-			_ = h.store.DeleteBackup(r.Context(), b.ID)
 			continue
 		}
 		visible = append(visible, h.hydrateBackupResource(r.Context(), b))
@@ -255,7 +254,6 @@ func (h *Handler) downloadServerSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := os.Stat(path); err != nil {
-		_ = h.store.DeleteBackup(r.Context(), item.ID)
 		writeError(w, http.StatusNotFound, "save snapshot file not found on disk")
 		return
 	}
@@ -353,9 +351,8 @@ func (h *Handler) pruneMissingBackupSource(ctx context.Context, item domain.Back
 }
 
 func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
-	item, err := h.store.GetBackup(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "backup not found")
+	item, ok := h.backupForRequest(w, r, chi.URLParam(r, "id"))
+	if !ok {
 		return
 	}
 	path, _ := backupsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.FileName)

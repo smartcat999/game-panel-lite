@@ -166,7 +166,7 @@ func TestServerSavesEndpointsAreGameAware(t *testing.T) {
 	}
 }
 
-func TestDownloadBackupPrunesMissingFileRecord(t *testing.T) {
+func TestDownloadBackupPreservesMissingFileRecord(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	backup := domain.Backup{
 		ID:         "missing-backup",
@@ -189,8 +189,8 @@ func TestDownloadBackupPrunesMissingFileRecord(t *testing.T) {
 	if !strings.Contains(download.Body.String(), "backup file not found on disk") {
 		t.Fatalf("expected JSON missing file error, got %q", download.Body.String())
 	}
-	if _, err := db.GetBackup(context.Background(), backup.ID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("expected missing backup record deleted after download miss, got err=%v", err)
+	if _, err := db.GetBackup(context.Background(), backup.ID); err != nil {
+		t.Fatalf("expected missing backup record preserved after download miss, got err=%v", err)
 	}
 }
 

@@ -1023,6 +1023,7 @@ paths:
   /api/backups:
     get:
       summary: List backups
+      description: Customers see backups only through current instance workspace membership. Missing files are omitted without deleting metadata.
       responses:
         "200":
           description: Backup list
@@ -1047,6 +1048,7 @@ paths:
   /api/backups/{id}/restore:
     post:
       summary: Restore backup
+      description: Customer access requires current instance workspace membership; mutations require workspace write permission. Missing or inaccessible backups return 404.
       responses:
         "200":
           description: Restored backup
@@ -1055,12 +1057,14 @@ paths:
   /api/backups/{id}/download:
     get:
       summary: Download backup archive
+      description: Customer access requires current instance workspace membership; mutations require workspace write permission. Missing or inaccessible backups return 404.
       responses:
         "200":
           description: Backup archive
   /api/backups/{id}:
     delete:
       summary: Delete backup
+      description: Customer access requires current instance workspace membership; mutations require workspace write permission. Missing or inaccessible backups return 404.
       responses:
         "200":
           description: Deleted backup
