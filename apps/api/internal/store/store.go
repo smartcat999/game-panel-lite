@@ -165,6 +165,10 @@ type GameServerPage struct {
 }
 
 func (s *Store) ListGameServersPage(ctx context.Context, options GameServerListOptions) (GameServerPage, error) {
+	return s.listGameServersPage(s.db.WithContext(ctx).Model(&domain.GameServer{}), options)
+}
+
+func (s *Store) listGameServersPage(query *gorm.DB, options GameServerListOptions) (GameServerPage, error) {
 	page := options.Page
 	if page < 1 {
 		page = 1
@@ -174,7 +178,10 @@ func (s *Store) ListGameServersPage(ctx context.Context, options GameServerListO
 		pageSize = 20
 	}
 
-	query := s.db.WithContext(ctx).Model(&domain.GameServer{})
+	phaseExpr := "json_extract(status, '$.phase')"
+	if s.db.Dialector.Name() == "postgres" {
+		phaseExpr = "status::jsonb ->> 'phase'"
+	}
 	if search := strings.TrimSpace(options.Search); search != "" {
 		like := "%" + strings.ToLower(search) + "%"
 		query = query.Where("lower(name) LIKE ? OR lower(id) LIKE ?", like, like)
@@ -187,11 +194,11 @@ func (s *Store) ListGameServersPage(ctx context.Context, options GameServerListO
 	}
 	switch strings.TrimSpace(options.Status) {
 	case "running":
-		query = query.Where("json_extract(status, '$.phase') = ?", domain.PhaseRunning)
+		query = query.Where(phaseExpr+" = ?", domain.PhaseRunning)
 	case "stopped":
-		query = query.Where("json_extract(status, '$.phase') = ?", domain.PhaseStopped)
+		query = query.Where(phaseExpr+" = ?", domain.PhaseStopped)
 	case "errored":
-		query = query.Where("json_extract(status, '$.phase') = ?", domain.PhaseFailed)
+		query = query.Where(phaseExpr+" = ?", domain.PhaseFailed)
 	}
 
 	var total int64
@@ -208,7 +215,7 @@ func (s *Store) ListGameServersPage(ctx context.Context, options GameServerListO
 	case "name":
 		order = "lower(name) " + direction
 	case "status":
-		order = "json_extract(status, '$.phase') " + direction
+		order = phaseExpr + " " + direction
 	case "createdAt":
 		order = "created_at " + direction
 	case "updatedAt", "":

@@ -363,6 +363,7 @@ paths:
   /api/servers:
     get:
       summary: List servers
+      description: Customer lists and pagination totals include only current workspace memberships. Platform administrators retain global visibility.
       responses:
         "200":
           description: Server list
@@ -374,7 +375,7 @@ paths:
                   $ref: "#/components/schemas/GameServer"
     post:
       summary: Create server
-      description: Creates a server resource with desired state running. Runtime reconciliation is handled asynchronously by the server controller.
+      description: Creates a server resource with desired state running. Customers must select a workspace with write membership; when exactly one workspace is available, it is selected automatically. Runtime reconciliation is handled asynchronously by the server controller.
       requestBody:
         required: true
         content:
@@ -1390,6 +1391,9 @@ components:
       type: object
       required: [providerKey, config]
       properties:
+        organizationId:
+          type: string
+          description: Resource workspace. Customer creation validates current write membership; legacy platform resources may omit it.
         name:
           type: string
         providerKey:
@@ -1443,6 +1447,9 @@ components:
       type: object
       required: [id, name, gameKey, providerKey, spec, status, createdAt, updatedAt]
       properties:
+        organizationId:
+          type: string
+          description: Resource workspace. Customer creation validates current write membership; legacy platform resources may omit it.
         id:
           type: string
         name:

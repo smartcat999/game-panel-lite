@@ -23,10 +23,20 @@ import (
 )
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
+	list := h.store.ListGameServers
+	listPage := h.store.ListGameServersPage
+	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+		list = func(ctx context.Context) ([]domain.GameServer, error) {
+			return h.store.ListUserGameServers(ctx, account.ID)
+		}
+		listPage = func(ctx context.Context, options store.GameServerListOptions) (store.GameServerPage, error) {
+			return h.store.ListUserGameServersPage(ctx, account.ID, options)
+		}
+	}
 	if r.URL.Query().Has("page") || r.URL.Query().Has("pageSize") {
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
-		servers, err := h.store.ListGameServersPage(r.Context(), store.GameServerListOptions{
+		servers, err := listPage(r.Context(), store.GameServerListOptions{
 			Page:        page,
 			PageSize:    pageSize,
 			Search:      r.URL.Query().Get("search"),
@@ -43,7 +53,7 @@ func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, servers)
 		return
 	}
-	servers, err := h.store.ListGameServers(r.Context())
+	servers, err := list(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -155,17 +165,23 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload struct {
-		Name        string               `json:"name"`
-		ProviderKey domain.ProviderKey   `json:"providerKey"`
-		Config      json.RawMessage      `json:"config"`
-		HostPort    int                  `json:"hostPort,omitempty"`
-		ModIDs      []string             `json:"modIds,omitempty"`
-		Version     string               `json:"version"`
-		Resources   resourceLimitPayload `json:"resources,omitempty"`
-		NodeID      string               `json:"nodeId,omitempty"`
+		OrganizationID string               `json:"organizationId,omitempty"`
+		Name           string               `json:"name"`
+		ProviderKey    domain.ProviderKey   `json:"providerKey"`
+		Config         json.RawMessage      `json:"config"`
+		HostPort       int                  `json:"hostPort,omitempty"`
+		ModIDs         []string             `json:"modIds,omitempty"`
+		Version        string               `json:"version"`
+		Resources      resourceLimitPayload `json:"resources,omitempty"`
+		NodeID         string               `json:"nodeId,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	organizationID, status, err := h.creationOrganization(r, payload.OrganizationID)
+	if err != nil {
+		writeError(w, status, err.Error())
 		return
 	}
 	nodeID := payload.NodeID
@@ -236,11 +252,12 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	server := domain.GameServer{
-		ID:          id,
-		NodeID:      nodeID,
-		Name:        payload.Name,
-		GameKey:     gameProvider.GameKey(),
-		ProviderKey: payload.ProviderKey,
+		ID:             id,
+		OrganizationID: organizationID,
+		NodeID:         nodeID,
+		Name:           payload.Name,
+		GameKey:        gameProvider.GameKey(),
+		ProviderKey:    payload.ProviderKey,
 		Spec: domain.ServerSpec{
 			ConfigVersion: gameProvider.CatalogMetadata().ConfigVersion,
 			Generation:    1,

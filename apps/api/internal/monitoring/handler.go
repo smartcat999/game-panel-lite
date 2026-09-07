@@ -18,14 +18,14 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) Register(r chi.Router, eventMiddleware func(http.Handler) http.Handler) {
-	r.Get("/api/monitoring/overview", h.overview)
-	r.Get("/api/monitoring/metrics", h.metrics)
-	r.Get("/api/monitoring/server-load", h.serverLoad)
-	r.With(eventMiddleware).Get("/api/monitoring/events", h.events)
-	r.Get("/api/monitoring/platform", h.platform)
-	r.Get("/api/servers/{id}/metrics", h.serverMetrics)
-	r.Get("/api/servers/{id}/events", h.serverEvents)
+func (h *Handler) Register(r chi.Router, platformMiddleware, serverMiddleware func(http.Handler) http.Handler) {
+	r.With(platformMiddleware).Get("/api/monitoring/overview", h.overview)
+	r.With(platformMiddleware).Get("/api/monitoring/metrics", h.metrics)
+	r.With(platformMiddleware).Get("/api/monitoring/server-load", h.serverLoad)
+	r.With(platformMiddleware).Get("/api/monitoring/events", h.events)
+	r.With(platformMiddleware).Get("/api/monitoring/platform", h.platform)
+	r.With(serverMiddleware).Get("/api/servers/{id}/metrics", h.serverMetrics)
+	r.With(serverMiddleware).Get("/api/servers/{id}/events", h.serverEvents)
 }
 
 func (h *Handler) overview(w http.ResponseWriter, r *http.Request) {

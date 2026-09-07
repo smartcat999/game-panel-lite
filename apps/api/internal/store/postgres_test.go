@@ -163,6 +163,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := db.GetGameServer(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("not found: %v", err)
 	}
+	testTenantServerQueries(t, db)
 	testPersonalOrganizations(t, db)
 	migrations := append(postgresMigrations(), sqlMigration{2, "failure_probe", "CREATE TABLE migration_failure_probe (id integer); SELECT * FROM deliberately_missing_relation;"})
 	if err := migratePostgres(ctx, db.db, migrations); err == nil {

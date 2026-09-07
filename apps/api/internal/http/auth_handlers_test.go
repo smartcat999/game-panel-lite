@@ -255,8 +255,8 @@ func TestRolePermissionsProtectMutations(t *testing.T) {
 	}
 
 	memberDelete := request(stdhttp.MethodDelete, "/api/servers/missing", "", memberCookie)
-	if memberDelete.Code != stdhttp.StatusForbidden {
-		t.Fatalf("expected member server delete 403, got %d: %s", memberDelete.Code, memberDelete.Body.String())
+	if memberDelete.Code != stdhttp.StatusNotFound {
+		t.Fatalf("expected inaccessible server delete 404, got %d: %s", memberDelete.Code, memberDelete.Body.String())
 	}
 	memberSettings := request(stdhttp.MethodPut, "/api/settings/public-host", `{"publicHost":"games.example.com"}`, memberCookie)
 	if memberSettings.Code != stdhttp.StatusForbidden {
