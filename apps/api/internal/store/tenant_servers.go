@@ -35,3 +35,12 @@ func (s *Store) ServerMembershipRole(ctx context.Context, userID, serverID strin
 	}
 	return member.Role, err
 }
+
+func (s *Store) GetUserGameServer(ctx context.Context, userID, id string) (domain.GameServer, error) {
+	var server domain.GameServer
+	err := s.userServers(ctx, userID).Where("id = ?", id).Take(&server).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = ErrNotFound
+	}
+	return server, err
+}

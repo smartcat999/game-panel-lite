@@ -152,3 +152,6 @@ func ServerStatusFromRuntime(desired ServerDesiredState, status ServerRuntimeSta
 		return StatusStopped
 	}
 }
+
+// IsLocal identifies the built-in node, including legacy instances without a node ID.
+func (s GameServer) IsLocal() bool { return s.NodeID == "" || s.NodeID == "node-local" }

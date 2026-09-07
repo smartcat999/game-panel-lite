@@ -1066,6 +1066,62 @@ paths:
       responses:
         "200":
           description: Mod list
+  /api/servers/{id}/mods/installation-requests:
+    post:
+      summary: Request installation of an uploaded workspace mod
+      description: Requires an authenticated workspace writer with mod management permission. The instance must be stopped on the local node. Appends a same-workspace, same-provider uploaded library source to desired configuration; files are installed by the planner on the next start. Remote file delivery and Workshop sources are not supported by this endpoint. Acknowledgement does not mean installation has completed. Refresh instance state after any uncertain response; requests are not automatically retried.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [modId, generation]
+              properties:
+                modId:
+                  type: string
+                generation:
+                  type: integer
+                  minimum: 1
+      responses:
+        "202":
+          description: Desired source saved, or already present at the submitted generation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [serverId, generation, modIds, state]
+                properties:
+                  serverId:
+                    type: string
+                  generation:
+                    type: integer
+                  modIds:
+                    type: array
+                    items:
+                      type: string
+                  state:
+                    type: string
+                    enum: [requested]
+        "400":
+          description: Invalid request, source, or provider capability
+        "401":
+          description: Authentication required
+        "403":
+          description: Workspace or platform permission denied
+        "404":
+          description: Instance or source is not visible to the account
+        "409":
+          description: Refresh required, instance must be stopped locally, or source changed
+        "500":
+          description: Request result could not be confirmed; refresh before submitting again
   /api/servers/{id}/mods/upload:
     post:
       summary: Upload tModLoader mod metadata or .tmod file

@@ -29,6 +29,7 @@ import (
 
 type Handler struct {
 	modLibrary     *modlibrary.Service
+	modInstaller   *modlibrary.Installer
 	modRuntime     *modruntime.Service
 	gameConfig     *gameconfig.Service
 	ctx            context.Context
@@ -86,6 +87,7 @@ func NewHandler(
 	}
 	handler := &Handler{
 		modRuntime:       modRuntime,
+		modInstaller:     modlibrary.NewInstaller(store, providers),
 		modLibrary:       modlibrary.NewService(store, modfiles.NewService(cfg.DataDir, modRuntime.StoredFileName), providers),
 		gameConfig:       gameConfig,
 		cfg:              cfg,
@@ -276,6 +278,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireServerAccess).Delete("/api/servers/{id}/share", h.disableServerShare)
 		r.With(h.requireServerAccess, h.requirePermission(domain.PermissionModManage, "member role required")).Get("/api/servers/{id}/mods", h.listMods)
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/mods/upload", h.uploadMod)
+		r.With(h.requireServerAccess, h.requirePermission(domain.PermissionModManage, "mod management permission required")).Post("/api/servers/{id}/mods/installation-requests", h.requestModInstallation)
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/mods/workshop", h.importWorkshopMods)
 		r.With(h.requireServerAccess).Patch("/api/servers/{id}/mods/{modId}", h.updateMod)
 		r.With(h.requireServerAccess).Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)

@@ -108,7 +108,7 @@ func (c *Controller) RunOnce(ctx context.Context) {
 			if listenPort <= 0 {
 				listenPort = item.Spec.Network.Port
 			}
-			if item.Status.Phase == domain.PhaseRunning && item.NodeID != "" && item.NodeID != "node-local" && listenPort > 0 {
+			if item.Status.Phase == domain.PhaseRunning && !item.IsLocal() && listenPort > 0 {
 				_ = c.gateway.RegisterForward(gateway.ForwardRule{
 					ID:         item.ID,
 					NodeID:     item.NodeID,
@@ -120,7 +120,7 @@ func (c *Controller) RunOnce(ctx context.Context) {
 			}
 		}
 
-		isRemote := item.NodeID != "" && item.NodeID != "node-local"
+		isRemote := !item.IsLocal()
 		if !isRemote && !c.reconciler.NeedsReconcile(item) {
 			continue
 		}
@@ -135,7 +135,7 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 
 	// Remote workloads converge through durable desired assignments and worker
 	// observations. Lifecycle is never dispatched as an imperative node task.
-	if item.NodeID != "" && item.NodeID != "node-local" {
+	if !item.IsLocal() {
 		c.reconcileRemote(ctx, item)
 		return
 	}
