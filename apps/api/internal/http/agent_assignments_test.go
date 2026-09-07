@@ -124,3 +124,34 @@ func TestAgentDockerCommandMountsWorkerDataDirectory(t *testing.T) {
 		t.Fatalf("expected worker data mount in agent command, got %q", command)
 	}
 }
+
+func TestAgentArtifactCapabilityNegotiation(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	node := domain.ComputeNode{ID: "artifact-node", Token: "artifact-token"}
+	if err := db.CreateComputeNode(context.Background(), &node); err != nil {
+		t.Fatal(err)
+	}
+	instance := domain.GameServer{ID: "artifact-server", NodeID: node.ID, Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredRunning}}
+	if err := db.CreateGameServer(context.Background(), &instance); err != nil {
+		t.Fatal(err)
+	}
+	assignment := domain.WorkloadAssignment{ID: "artifact-assignment", UID: "artifact-uid", ServerID: instance.ID, NodeID: node.ID, Generation: 1, DesiredState: domain.DesiredRunning, Spec: workload.Spec{Options: workload.Options{Artifacts: []workload.Artifact{{ID: "source", Path: "Mods/mod.bin", SizeBytes: 1, SHA256: strings.Repeat("a", 64)}}}}}
+	if err := db.PublishWorkloadAssignment(context.Background(), instance, &assignment); err != nil {
+		t.Fatal(err)
+	}
+	for _, capability := range []string{"", "other-feature", "artifacts-v10", "other-feature, artifacts-v1"} {
+		request := httptest.NewRequest(stdhttp.MethodGet, "/api/agent/assignments", nil)
+		request.Header.Set("X-Node-Token", node.Token)
+		request.Header.Set("X-Workload-Capabilities", capability)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if capability == "other-feature, artifacts-v1" {
+			var items []workload.Assignment
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &items) != nil || len(items) != 1 || len(items[0].Spec.Options.Artifacts) != 1 {
+				t.Fatalf("capable poll: %d %s", response.Code, response.Body.String())
+			}
+		} else if response.Code != 409 {
+			t.Fatalf("legacy poll %q: %d", capability, response.Code)
+		}
+	}
+}

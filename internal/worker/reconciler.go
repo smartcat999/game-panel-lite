@@ -47,6 +47,23 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 		observation.LastError = "workload server ID does not match assignment"
 		return observation
 	}
+	if assignment.DesiredState == "running" && len(assignment.Spec.Options.Artifacts) > 0 {
+		if err := workload.ValidateArtifacts(assignment.Spec.Options); err != nil {
+			observation.LastError = err.Error()
+			return observation
+		}
+		capable, ok := runtime.(interface {
+			ValidateArtifacts(workload.Assignment) error
+		})
+		if !ok {
+			observation.LastError = "runtime does not support workload artifacts"
+			return observation
+		}
+		if err := capable.ValidateArtifacts(assignment); err != nil {
+			observation.LastError = err.Error()
+			return observation
+		}
+	}
 	state, err := runtime.Inspect(ctx, assignment.ServerID)
 	if err != nil {
 		observation.LastError = err.Error()

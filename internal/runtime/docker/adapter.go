@@ -30,8 +30,10 @@ const labelGeneration = "io.gamepanel.generation"
 const labelManaged = "io.gamepanel.managed"
 
 type Adapter struct {
-	client  *client.Client
-	dataDir string
+	client         *client.Client
+	dataDir        string
+	artifactSource ArtifactSource
+	artifactLimits ArtifactLimits
 }
 
 var _ worker.Runtime = (*Adapter)(nil)
@@ -78,6 +80,9 @@ func (a *Adapter) Inspect(ctx context.Context, serverID string) (worker.State, e
 	return state, nil
 }
 func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) error {
+	if err := a.ValidateArtifacts(assignment); err != nil {
+		return err
+	}
 	name, err := containerName(assignment.ServerID)
 	if err != nil {
 		return err
@@ -116,7 +121,9 @@ func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) er
 		return err
 	}
 	instanceDir := filepath.Join(a.dataDir, assignment.ServerID)
-	_, err = prepareFilesAndCommit(instanceDir, assignment.Spec.Options, func(binds []string) error {
+	_, err = prepareFilesWithArtifacts(instanceDir, assignment.Spec.Options, func(w io.Writer, artifact workload.Artifact) error {
+		return a.writeArtifact(ctx, assignment, artifact, w)
+	}, func(binds []string) error {
 		host := &container.HostConfig{
 			Binds: binds, PortBindings: bindings,
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},

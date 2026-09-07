@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -39,12 +40,19 @@ func newFileTransaction(root *os.Root) (*fileTransaction, error) {
 	return &fileTransaction{root: root, stage: stage}, nil
 }
 func (tx *fileTransaction) stageFile(name, content string) error {
+	return tx.stageContent(name, func(w io.Writer) error { _, err := io.WriteString(w, content); return err })
+}
+
+func (tx *fileTransaction) stageContent(name string, write func(io.Writer) error) error {
 	staged := filepath.Join(tx.stage, strconv.Itoa(len(tx.files))+".new")
 	file, err := tx.root.OpenFile(staged, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
-	_, writeErr := file.WriteString(content)
+	writeErr := write(file)
+	if writeErr == nil {
+		writeErr = file.Sync()
+	}
 	if err := errors.Join(writeErr, file.Close()); err != nil {
 		return err
 	}

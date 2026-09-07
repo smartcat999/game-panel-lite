@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/internal/workload"
@@ -214,5 +215,18 @@ func TestCreatedContainerIsValidatedBeforeStart(t *testing.T) {
 		if call == "start" {
 			t.Fatal("started competing container")
 		}
+	}
+}
+
+func TestArtifactsRequireRuntimeSupportBeforeReplacement(t *testing.T) {
+	a := assignment()
+	a.Spec.Options.Artifacts = []workload.Artifact{{ID: "id", Path: "mod.bin", SHA256: strings.Repeat("a", 64), SizeBytes: 1}}
+	r := &memoryRuntime{state: State{Exists: true, ID: "old", Managed: true, ServerID: a.ServerID, NodeID: a.NodeID, UID: a.UID, Generation: 1, Running: true}}
+	if result := Reconcile(context.Background(), a, r); result.LastError == "" || len(r.calls) != 0 {
+		t.Fatalf("unsupported runtime mutated: %+v %v", result, r.calls)
+	}
+	a.DesiredState = "stopped"
+	if result := Reconcile(context.Background(), a, r); result.LastError != "" || result.ActualState != "stopped" {
+		t.Fatalf("unsupported artifacts blocked stop: %+v", result)
 	}
 }

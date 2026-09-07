@@ -208,6 +208,13 @@ paths:
       summary: Poll assignments for the authenticated node
       security:
         - nodeToken: []
+      parameters:
+        - in: header
+          name: X-Workload-Capabilities
+          required: false
+          description: Comma-separated capabilities. A worker may advertise artifacts-v1 only after its authorized artifact source and resource limits are configured. A running artifact workload causes a 409 response when this capability is absent. Stopping or deleting does not require artifact downloads.
+          schema:
+            type: string
       responses:
         "200":
           description: Assigned workloads, each carrying the current observationToken (empty before the first report). Echo this token in the next report; after a conflict, poll and observe again.
@@ -224,10 +231,37 @@ paths:
                     nodeId: {type: string}
                     generation: {type: integer}
                     desiredState: {type: string}
-                    spec: {type: object}
+                    spec:
+                      type: object
+                      properties:
+                        options:
+                          type: object
+                          properties:
+                            artifacts:
+                              type: array
+                              description: Immutable file references. No host paths or arbitrary download URLs. Control-plane publication and authorized node downloads are not yet enabled.
+                              items:
+                                type: object
+                                required: [id, path, sha256, sizeBytes]
+                                properties:
+                                  id:
+                                    type: string
+                                    maxLength: 128
+                                    pattern: '^[A-Za-z0-9_-]+$'
+                                  path:
+                                    type: string
+                                    description: Canonical relative slash-separated destination, without traversal or configuration conflicts
+                                  sha256:
+                                    type: string
+                                    pattern: '^[a-f0-9]{64}$'
+                                  sizeBytes:
+                                    type: integer
+                                    minimum: 1
                     observationToken: {type: string}
         "401":
           description: Invalid node token
+        "409":
+          description: Agent lacks the capability required by a running assignment
         "500":
           description: Assignment or observation storage unavailable
   /api/agent/assignments/{uid}/status:

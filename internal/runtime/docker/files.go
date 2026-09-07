@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,7 +21,18 @@ func prepareFiles(dir string, options workload.Options) ([]string, error) {
 // The caller holds the per-instance creation lock. Commit runs only after all
 // files and mounts are prepared; a definite failure restores prior files.
 func prepareFilesAndCommit(dir string, options workload.Options, commit func([]string) error) (binds []string, err error) {
-	names := make([]string, 0, len(options.Files))
+	return prepareFilesWithArtifacts(dir, options, nil, commit)
+}
+
+func prepareFilesWithArtifacts(dir string, options workload.Options, writeArtifact func(io.Writer, workload.Artifact) error, commit func([]string) error) (binds []string, err error) {
+	if err := workload.ValidateArtifacts(options); err != nil {
+		return nil, err
+	}
+	if len(options.Artifacts) > 0 && writeArtifact == nil {
+		return nil, fmt.Errorf("artifact source is required")
+	}
+	artifacts := map[string]workload.Artifact{}
+	names := make([]string, 0, len(options.Files)+len(options.Artifacts))
 	contents := map[string]string{}
 	for name, content := range options.Files {
 		clean := filepath.Clean(name)
@@ -32,6 +44,12 @@ func prepareFilesAndCommit(dir string, options workload.Options, commit func([]s
 		}
 		names = append(names, clean)
 		contents[clean] = content
+	}
+	for _, artifact := range options.Artifacts {
+		name := filepath.FromSlash(artifact.Path)
+		artifacts[name] = artifact
+		names = append(names, name)
+		contents[name] = ""
 	}
 	sort.Strings(names)
 	for _, name := range names {
@@ -94,7 +112,11 @@ func prepareFilesAndCommit(dir string, options workload.Options, commit func([]s
 	}
 	defer func() { err = tx.finish(err) }()
 	for _, name := range names {
-		if err := tx.stageFile(name, contents[name]); err != nil {
+		if artifact, ok := artifacts[name]; ok {
+			if err := tx.stageContent(name, func(w io.Writer) error { return writeArtifact(w, artifact) }); err != nil {
+				return nil, err
+			}
+		} else if err := tx.stageFile(name, contents[name]); err != nil {
 			return nil, err
 		}
 	}

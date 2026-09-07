@@ -4,6 +4,8 @@ package workload
 
 import "time"
 
+const ArtifactCapability = "artifacts-v1"
+
 type Resources struct {
 	CPULimitCores float64 `json:"cpuLimitCores,omitempty"`
 	MemoryLimitMB int     `json:"memoryLimitMb,omitempty"`
@@ -22,7 +24,16 @@ type Port struct {
 	Protocol string `json:"protocol,omitempty"`
 }
 
+// Artifact identifies immutable bytes; transport endpoints and host paths are never carried in the descriptor.
+type Artifact struct {
+	ID        string `json:"id"`
+	Path      string `json:"path"`
+	SHA256    string `json:"sha256"`
+	SizeBytes int64  `json:"sizeBytes"`
+}
+
 type Options struct {
+	Artifacts  []Artifact        `json:"artifacts,omitempty"`
 	Env        []string          `json:"env,omitempty"`
 	Cmd        []string          `json:"cmd,omitempty"`
 	Files      map[string]string `json:"files,omitempty"`
