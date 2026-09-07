@@ -5,6 +5,49 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/auth/me/organizations:
+    get:
+      summary: List workspaces for the authenticated user's current memberships
+      description: Ignores client-supplied user IDs. Platform roles do not bypass membership. Returns an empty array when no memberships remain.
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Current user's workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PersonalOrganization"
+        "401":
+          description: Authentication required, including before initial setup
+        "500":
+          description: Persistence unavailable
+  /api/auth/me/organizations/{id}:
+    get:
+      summary: Read a workspace through current membership
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workspace visible to the authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalOrganization"
+        "401":
+          description: Authentication required
+        "404":
+          description: Workspace missing or user is not a current member
+        "500":
+          description: Persistence unavailable
   /healthz:
     get:
       summary: Health check
@@ -1062,7 +1105,30 @@ paths:
         "400":
           description: Invalid config
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gamepanel_session
   schemas:
+    PersonalOrganization:
+      type: object
+      required: [id, name, slug, plan, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Backup:
       type: object
       required: [id, instanceId, fileName, worldName, sizeBytes, type, createdAt]

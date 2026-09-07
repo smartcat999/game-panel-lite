@@ -160,6 +160,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Use(h.requireAuth)
 		r.Use(h.requireMutationPermission)
 		r.Get("/api/auth/me", h.currentAccount)
+		r.Get("/api/auth/me/organizations", h.listMyOrganizations)
+		r.Get("/api/auth/me/organizations/{id}", h.getMyOrganization)
 		r.Post("/api/auth/password", h.changePassword)
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAdmin)

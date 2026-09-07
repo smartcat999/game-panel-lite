@@ -170,7 +170,7 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	if err := h.store.CreateAdminAccount(r.Context(), &account); err != nil {
+	if err := h.store.CreateAccountWithPersonalOrganization(r.Context(), &account); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
