@@ -1,5 +1,14 @@
 # V1 Progress
 
+## 2026-09-07
+
+- Implemented the first backend modularity batch for the SaaS roadmap: game catalog metadata and recommendation priorities now come from registered providers, and duplicate provider IDs fail application startup instead of overwriting an implementation.
+- Removed the legacy ConfigText side channel from provider/runtime contracts. Terraria renders serverconfig.txt into the same file collection as other provider assets; generic workload conversion and Docker creation no longer identify or create that filename specially. Unregistered games no longer appear as hardcoded planned catalog entries.
+- Added AST import-boundary tests for domain, concrete providers, Docker SDK and GORM access, with nine exact legacy import exceptions across eight files assigned to M2/M3. Added a backend GitHub Actions workflow for Go tests, vet and focused race checks; remote CI has not run yet.
+- Added regression coverage for duplicate registration, plugin-owned catalog metadata/order, a new game flowing through the workload builder, file round trips, nested/empty files and lexical path traversal rejection.
+- Validation: changed Go files formatted; go test ./..., go vet ./..., focused provider/runtime race tests, pnpm typecheck and pnpm build pass. Full pnpm lint reports 123 pre-existing errors in untracked recording scripts and ignored tmp scripts; tracked JS/TS sources are checked separately without modifying those user files. No live Docker game deployment or scale test was performed.
+- Next: migrate game-specific mod/world integrations behind provider capabilities and application use cases, then address the Agent runtime import exceptions alongside the shared execution protocol.
+
 ## 2026-08-30
 
 - Centralized administrator, operator, and viewer permissions in one backend role matrix and returned effective capabilities with the authenticated account.

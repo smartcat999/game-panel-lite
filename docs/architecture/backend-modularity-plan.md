@@ -1,0 +1,150 @@
+# 后端模块化与插件扩展方案
+
+日期：2026-09-07。状态：M0 依赖基线与 M1 Registry/文件传递改造已实施，其余为迁移计划。
+
+## 首批落地情况
+
+- `internal/architecture/boundaries_test.go` 在 Go 测试中解析生产源码导入，限制 domain、具体 Provider、Docker SDK 和 GORM 的依赖方向。九条存量导入按八个具体文件保留，移除存量引用后必须同步删除例外；这不是完整的所有模块隔离证明。
+- `.github/workflows/backend.yml` 对 PR 和 main/feat/v1-full-run 推送执行 Go 测试、vet、Provider/Runtime race 检查。当前只完成本地验证，远端工作流尚未运行。
+- Provider 新增 CatalogMetadata，元信息与默认排序由各游戏的 catalog.go 提供；NewRegistry 返回错误以拒绝重复或空 ID。应用入口负责处理错误，测试使用包内构造辅助函数。
+- 通用契约删除 ConfigText，文件全部通过 Options.Files 传递。Terraria Provider 拥有 serverconfig.txt 文件名，运行时不再为其他游戏创建无关配置文件。未注册游戏不再以写死的 planned 条目出现在目录。
+- 当前保留 HTTP 契约及已注册游戏的展示内容、顺序。此批次不含数据库迁移、RPC 插件、安全沙箱或模组/世界操作迁移。
+
+本地复验：`go test ./...`、`go vet ./...`、`go test -race ./apps/api/internal/provider/... ./apps/api/internal/runtime/...`、`pnpm typecheck`、`pnpm build`。工作区全目录 lint 的原有脚本错误详见 V1_PROGRESS；不要为本次改造删除或改写用户录屏文件。
+
+本文补充 [ToC SaaS 方案](toc-saas-platform-plan.md)。目标是让新游戏、新执行后端和商业能力有明确归属，使业务变更集中在少量模块中，并通过 CI 验证依赖约束。
+
+## 核心决策
+
+采用模块化单体、显式构造依赖、小接口、静态编译的受信插件。API、Controller、Agent 可分别构建部署；共享协议必须位于三个程序都能合法导入的位置。
+
+不采用通用插件框架包办所有业务，不为每个结构体创建 interface，不引入反射依赖注入或全局 Service Locator。只有存在实际变化或外部交互的接口才增加 Adapter。
+
+首期“插件化”表示新增 Go 包、注册实现、重新构建发布，不表示租户上传二进制、运行时热加载或不受信代码执行。将来确需独立发布外部插件时，再评估版本化 RPC 插件协议。
+
+## 官方案例与取舍
+
+| 一手参考 | 借鉴 | 本项目选择 |
+| --- | --- | --- |
+| [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments) | 消费方定义所需接口、错误与 context 习惯 | 小接口由调用模块拥有；实现返回具体类型，不做全套 Java 式分层 |
+| [Caddy 扩展机制](https://caddyserver.com/docs/extending-caddy) | 模块标识、注册、配置和生命周期 | 借鉴描述与验证契约，使用显式注册，避免依靠 init 的隐式副作用 |
+| [HashiCorp go-plugin](https://github.com/hashicorp/go-plugin) | 通过 RPC 连接独立插件进程 | 作为独立发布插件的后续选项，首期不用额外 RPC；进程隔离不等于安全沙箱 |
+
+以上是参考事实与本项目的设计选择，不声称这些项目完整采用本文目录或规则。更详细的原始资料见 [参考笔记](go-plugin-reference-notes.md)。
+
+## 模块职责与接口
+
+| Module | 拥有的规则与数据 | 不得承担 |
+| --- | --- | --- |
+| identity | 用户、凭证、Session | 游戏、套餐权益 |
+| tenancy | 组织、Membership、组织权限 | 平台机器操作 |
+| billing | 订单、支付、订阅、权益、对账 | 直接启动容器 |
+| server | 实例 spec/status、操作意图、生命周期 | 游戏命令、Docker SDK、支付渠道规则 |
+| scheduling | 节点选择、容量与端口预留、租约 | 游戏配置渲染 |
+| assets | 世界/备份元数据、对象归属、恢复编排 | 直接识别游戏存档格式 |
+| provider | 游戏配置、文件格式、命令、存档和模组规则 | 读取用户数据库、订单、任意平台密钥 |
+| runtime | 工作负载创建/观察/停止、执行与 IO | 按游戏 ID 分支 |
+
+跨模块通过公开用例、值类型或持久事件交互，禁止直接写其他模块的表。初期允许共用 PostgreSQL；模块所有权不意味着每模块独立数据库。
+
+跨模块一致性必须具体设计：权益校验、配额与实例创建由明确的应用用例协调；需要原子性的预留和 outbox 放同一事务，通过用例所需的窄事务接口实现。支付外部调用不能放进数据库长事务。异步通知只用于允许最终一致的工作，不把全部函数调用替换成事件。
+
+## 目录与依赖
+
+目标目录示意，按迁移批次建立，不一次性搬动全仓库：
+
+```text
+apps/api/cmd/server/          # HTTP 进程入口
+apps/api/cmd/controller/      # 协调进程入口
+apps/api/internal/app/        # 组合根：显式接线
+apps/api/internal/identity/
+apps/api/internal/tenancy/
+apps/api/internal/billing/
+apps/api/internal/server/    # 用例、规则、消费方接口
+apps/api/internal/server/internal/persistence/  # 仅 server 树可导入
+apps/api/internal/scheduling/
+apps/api/internal/assets/
+apps/api/internal/http/       # transport，只做解码/认证映射/响应
+internal/workload/            # API 与 Agent 共用的窄协议
+internal/provider/            # 受信游戏插件契约及实现
+internal/runtime/             # 共用执行契约及实现
+apps/agent/                  # Agent 的组合根与执行循环
+```
+
+Go 的 `apps/api/internal` 不能被 `apps/agent` 合法导入；共享契约迁往根级 internal 时，必须同步检查导入可见性。禁止通过复制一套协议结构解决共享问题。
+
+依赖规则：
+
+- app 组合根可以引用具体 Adapter 并完成注册；普通用例只能依赖消费方接口。
+- domain/规则代码不得导入 net/http、chi、GORM、Docker 或具体 Provider。
+- HTTP 不导入具体游戏实现，不访问 GORM、不直接调用 Runtime；现有专用接口通过对应应用用例适配。
+- Docker SDK 只由 Docker Runtime Adapter 引用；对象存储、支付 SDK 同样限制在对应 Adapter。
+- 顶层 `internal` 只能防止仓库外部导入，不能阻止同层包相互导入；更细隔离使用嵌套 internal 和 CI import 规则。
+- 不扩大现有 domain/models.go 为所有业务共享模型桶；逐步把账号、订单等模型迁回所有者，公开交互使用小型类型。
+
+## 游戏插件契约
+
+保留现有 GameProvider 和能力接口，按真实调用场景收敛，避免新造一个涵盖所有游戏功能的巨型接口。
+
+插件描述包含稳定 ID、游戏元信息、插件版本与支持的配置 schema 版本；游戏版本、插件版本、配置版本分别管理。插件先解析/校验原始配置，再使用内部强类型 Config 生成结构化 WorkloadSpec 和相对路径文件集合。
+
+Registry 的职责仅为注册、校验、查找和枚举：
+
+- 重复 ID 直接返回启动错误，不能静默覆盖。
+- 已声明能力必须具备对应实现；不支持的能力返回统一 Unsupported 错误。
+- 元信息由插件提供；展示排序、上架状态、推荐版本属于目录策略，不依赖通用代码的游戏 switch。
+- Registry 启动完成后只读；首期不支持在服务请求期间热变更插件。
+- 注册只在组合根，例如显式传入 Terraria、DST 等构造结果；这里列出具体实现是合理依赖组装，不是业务硬编码。
+
+只有多实现的实际需求才提取支付/对象存储/通知扩展接口。数据库是持久化 Adapter，租户授权与账务不作为可被插件替换的随意钩子。
+
+若将来支持外部 RPC 插件，补齐协议协商、超时、取消、资源限制、重启策略、兼容测试和二进制来源控制。RPC 插件即使独立进程，也必须另行限制 OS 权限及网络访问。
+
+## hard code 的处理规则
+
+| 内容 | 应放位置 |
+| --- | --- |
+| 游戏配置文件名、Steam AppID、命令语法、存档格式 | 对应 Provider 的强类型常量或实现 |
+| 镜像 digest、可售版本、推荐顺序、上架状态 | 版本化游戏目录；更新时校验 |
+| 区域、节点池、容量、套餐价格和权益 | 明确拥有者的数据表或配置；价格保存版本快照 |
+| 并发数、轮询周期、超时、退避上限 | 有默认值、有范围校验的类型化部署配置 |
+| 路径隔离、权限检查、金额约束、状态机合法转换 | 核心规则代码与测试，不能通过配置关闭 |
+
+业务逻辑不要全部改成 YAML、任意脚本或 map[string]any。固定协议值留在代码中合理，关键是归属正确；配置化同样要有 schema、默认值、验证和升级策略。
+
+## 已观察到的优先改造点
+
+1. `provider/provider.go` 的 Games 和 providerCatalogPriority 写死游戏目录及 Terraria 排序；迁往插件描述与目录策略。NewRegistry 当前覆盖重复 key，应增加冲突检测。
+2. `runtime/runtime.go` 的转换函数识别 serverconfig.txt；`runtime/docker/adapter.go` 写同名文件；`server/workload.go` 也有兼容处理。Provider 应输出通用文件集合，再由受控文件写入模块校验路径和大小。
+3. `server/mod_planner.go` 导入具体 Terraria 实现，并按多个 Provider ID 分支；将模组规则留在 Provider，公共下载、暂存、安装事务由应用用例编排。
+4. 多个 HTTP 文件引用 Terraria 实现或按其 ID 分支；保持现有 HTTP 契约，逐路径迁往用例接口，不让 Handler 再补新的游戏知识。
+5. `store/store.go` 集合了账号、实例、组织和节点等持久化职责；结合 PostgreSQL/租户迁移按归属拆分，避免仅把文件拆开却继续暴露一个万能 Store。
+
+这些是抽样证据，不是完整审计结果；游戏专用兼容路由可临时保留，但需要明确迁移范围。
+
+## Go 编程约定
+
+- 小写、表达领域的包名；避免 utils/common/helpers 大杂烩和重复包名前缀。
+- 显式构造函数注入依赖；避免全局可变单例，启动阶段验证必需依赖。
+- context.Context 作为需要取消的操作首参，贯穿数据库和网络；goroutine 明确由谁启动、停止和等待，队列及并发有上限。
+- 错误用 errors.Is/As 匹配，用 %w 包装上下文；业务错误在 HTTP 层集中映射状态码，不比较错误字符串，不在每层重复记录同一个错误。
+- 外部 JSON 在入口校验并转成强类型；动态游戏配置只在插件契约边缘出现，插件内部及时解析。
+- 日志记录 operation/assignment 等关联信息，密码与凭证禁止写日志。接口注释说明幂等性、并发性、取消和所有权，而不是重述函数名。
+
+## 通过工具保障边界
+
+后续实施增加 CI 架构检查：基于 `go list -json ./...` 的直接导入图与 AST 检查禁用依赖，按包维护明确允许列表；存量例外只列具体路径和迁移任务，新代码不能扩大例外。
+
+验收用例：
+
+- 添加测试用 Provider，只增加实现与显式注册即可出现在目录、生成 workload；不修改 Handler、Controller、Docker Adapter。新能力本身仍可能需要扩展契约及 UI，不承诺任意功能零修改。
+- 所有真实 Runtime Adapter 运行共享行为契约测试，检查幂等、取消、NotFound 和状态观察；真实 Docker 集成测试覆盖假实现不能证明的行为。
+- 拒绝重复插件 ID、错误配置版本、不一致能力声明；备份与模组路径遍历测试保持通过。
+- 跨租户测试、任务重复与重启测试在重构前后保持通过，不能用接口抽象替代授权验证。
+- CI 运行 gofmt 检查、go test ./...、go vet ./...、适用包的 race 测试及依赖规则；前后端协议变化时运行现有前端检查。
+
+## 迁移顺序
+
+M0：建立导入基线与行为测试，记录例外。M1：修正 Registry 元数据与重复注册，再移除通用文件名特判。M2：把模组和世界操作移入 Provider 能力与应用用例，保持 API 行为。M3：结合 SaaS P1 拆租户/持久化，再结合 P2 拆执行进程和共享协议。
+
+每批独立验证，不进行全仓库一次性目录重排。先通过测试再删除本批造成的旧代码，不顺手改造无关模块。M0/M1 已完成首批实现；M2/M3 和更完整的能力校验、模块隔离仍按上述计划推进。

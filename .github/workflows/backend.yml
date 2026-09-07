@@ -1,0 +1,22 @@
+name: Backend
+on:
+  pull_request:
+  push:
+    branches: [main, feat/v1-full-run]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test behavior and architecture boundaries
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Check registry and runtime races
+        run: go test -race ./apps/api/internal/provider/... ./apps/api/internal/runtime/...

@@ -251,3 +251,27 @@ func TestConsumeImagePullReportsProgress(t *testing.T) {
 		t.Fatalf("expected final progress to be 100, got %v", progresses)
 	}
 }
+
+func TestWriteDataFilePreservesNamesAndRejectsTraversal(t *testing.T) {
+	for _, name := range []string{"serverconfig.txt", "settings/game.ini", "nested/empty.cfg"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			content := "configuration"
+			if name == "nested/empty.cfg" {
+				content = ""
+			}
+			if err := writeDataFile(root, name, content); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(root, name))
+			if err != nil || string(got) != content {
+				t.Fatalf("content=%q err=%v", got, err)
+			}
+		})
+	}
+	for _, name := range []string{"..", "../outside.ini", ".", "/outside.ini"} {
+		if err := writeDataFile(t.TempDir(), name, "configuration"); err == nil {
+			t.Errorf("accepted invalid file path %q", name)
+		}
+	}
+}

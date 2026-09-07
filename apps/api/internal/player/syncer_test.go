@@ -9,7 +9,6 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -69,7 +68,7 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 	runtimeAdapter := &playerRuntime{logs: "Server started\n: yyds (192.168.215.1:32643)\n\n1个玩家已连接。\n"}
 	syncer := NewSyncer(
 		db,
-		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
+		mustRegistry(t, terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
 		runtimeAdapter,
 		config.Config{},
 	)
@@ -126,7 +125,7 @@ func TestRunOnceClearsPlayerCountForStoppedServer(t *testing.T) {
 	}
 	syncer := NewSyncer(
 		db,
-		provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
+		mustRegistry(t, terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
 		&playerRuntime{},
 		config.Config{},
 	)
@@ -160,7 +159,7 @@ func TestRunOnceUpdatesPalworldCountFromPlayerLogging(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtimeAdapter := &playerRuntime{logs: "Running Palworld dedicated server on :8211\nAlice has joined\nBob has joined\nAlice has left\n"}
-	syncer := NewSyncer(db, provider.NewRegistry(palworld.NewProvider()), runtimeAdapter, config.Config{})
+	syncer := NewSyncer(db, mustRegistry(t, palworld.NewProvider()), runtimeAdapter, config.Config{})
 	if err := syncer.RunOnce(context.Background()); err != nil {
 		t.Fatal(err)
 	}

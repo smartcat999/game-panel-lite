@@ -71,6 +71,15 @@ type WorldRegenerationPlan struct {
 	SavePaths []string
 }
 
+// ProviderCatalogMetadata describes a provider's game and default catalog order.
+// Lower priority values sort first; provider ID breaks ties.
+type ProviderCatalogMetadata struct {
+	GameName        string
+	GameDescription string
+	CoverImage      string
+	Priority        int
+}
+
 type GameCatalogEntry struct {
 	Key         GameKey           `json:"key"`
 	Name        string            `json:"name"`

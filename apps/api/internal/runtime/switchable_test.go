@@ -105,7 +105,7 @@ func TestSwitchableAdapterSetChangesDelegatedRuntime(t *testing.T) {
 	}
 }
 
-func TestContainerSpecFromWorkloadSplitsLegacyConfigFile(t *testing.T) {
+func TestContainerSpecFromWorkloadPreservesFiles(t *testing.T) {
 	spec := ContainerSpecFromWorkload(domain.WorkloadSpec{
 		ServerID: "srv-1",
 		Name:     "Friends",
@@ -129,14 +129,15 @@ func TestContainerSpecFromWorkloadSplitsLegacyConfigFile(t *testing.T) {
 	if spec.InstanceID != "srv-1" || spec.Image != "game:latest" {
 		t.Fatalf("unexpected container spec: %+v", spec)
 	}
-	if spec.ConfigText != "config" {
-		t.Fatalf("expected config text to be split out, got %q", spec.ConfigText)
+	if spec.Options.Files["serverconfig.txt"] != "config" {
+		t.Fatalf("expected config file to remain, got %q", spec.Options.Files["serverconfig.txt"])
 	}
 	if spec.Options.Files["extra.txt"] != "extra" {
 		t.Fatalf("expected extra file to remain, got %+v", spec.Options.Files)
 	}
-	if _, ok := spec.Options.Files["serverconfig.txt"]; ok {
-		t.Fatal("serverconfig.txt should not be duplicated in options files")
+	roundTrip := WorkloadSpecFromContainer(spec)
+	if roundTrip.Options.Files["serverconfig.txt"] != "config" || roundTrip.Options.Files["extra.txt"] != "extra" {
+		t.Fatalf("files lost during round trip: %+v", roundTrip.Options.Files)
 	}
 }
 

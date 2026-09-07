@@ -54,9 +54,6 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 		return domain.WorkloadSpec{}, err
 	}
 	files := map[string]string{}
-	if runtimeConfig.ConfigText != "" {
-		files["serverconfig.txt"] = runtimeConfig.ConfigText
-	}
 	for name, content := range runtimeConfig.Options.Files {
 		files[name] = content
 	}

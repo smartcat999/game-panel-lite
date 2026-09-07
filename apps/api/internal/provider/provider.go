@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -11,6 +12,7 @@ type GameProvider interface {
 	Key() domain.ProviderKey
 	Name() string
 	Description() string
+	CatalogMetadata() domain.ProviderCatalogMetadata
 	Capabilities() domain.ProviderCapabilities
 	ConfigSchema() []domain.ProviderConfigField
 	Image() string
@@ -74,12 +76,20 @@ type Registry struct {
 	providers map[domain.ProviderKey]GameProvider
 }
 
-func NewRegistry(providers ...GameProvider) *Registry {
+// NewRegistry constructs a registry that is read-only after startup. Duplicate IDs
+// are configuration errors rather than implicit overrides.
+func NewRegistry(providers ...GameProvider) (*Registry, error) {
 	registry := &Registry{providers: map[domain.ProviderKey]GameProvider{}}
 	for _, item := range providers {
+		if item == nil || item.Key() == "" || item.GameKey() == "" {
+			return nil, fmt.Errorf("provider and game IDs are required")
+		}
+		if _, exists := registry.providers[item.Key()]; exists {
+			return nil, fmt.Errorf("duplicate provider ID: %s", item.Key())
+		}
 		registry.providers[item.Key()] = item
 	}
-	return registry
+	return registry, nil
 }
 
 func (r *Registry) Get(key domain.ProviderKey) (GameProvider, bool) {
@@ -99,43 +109,16 @@ func (r *Registry) List() []GameProvider {
 }
 
 func (r *Registry) Games() []domain.GameCatalogEntry {
-	games := map[domain.GameKey]domain.GameCatalogEntry{
-		domain.GameTerraria: {
-			Key:         domain.GameTerraria,
-			Name:        "Terraria",
-			Description: "2D sandbox adventure server for vanilla and tModLoader worlds.",
-			Status:      "available",
-			CoverImage:  "terraria",
-		},
-		domain.GamePalworld: {
-			Key:         domain.GamePalworld,
-			Name:        "Palworld",
-			Description: "Survival crafting server for small friend groups. Provider implementation is next on the roadmap.",
-			Status:      "planned",
-			CoverImage:  "palworld",
-		},
-		domain.GameDST: {
-			Key:         domain.GameDST,
-			Name:        "Don't Starve Together",
-			Description: "Co-op survival server for private friend groups.",
-			Status:      "planned",
-			CoverImage:  "dont-starve-together",
-		},
-		domain.GameMinecraft: {
-			Key:         domain.GameMinecraft,
-			Name:        "Minecraft Java",
-			Description: "Vanilla Minecraft Java Edition server for friends.",
-			Status:      "planned",
-			CoverImage:  "minecraft",
-		},
-	}
+	games := map[domain.GameKey]domain.GameCatalogEntry{}
 	for _, item := range r.List() {
+		metadata := item.CatalogMetadata()
 		entry := games[item.GameKey()]
 		if entry.Key == "" {
 			entry = domain.GameCatalogEntry{
 				Key:         item.GameKey(),
-				Name:        string(item.GameKey()),
-				Description: item.Description(),
+				Name:        metadata.GameName,
+				Description: metadata.GameDescription,
+				CoverImage:  metadata.CoverImage,
 				Status:      "available",
 			}
 		}
@@ -155,7 +138,7 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 	}
 	out := make([]domain.GameCatalogEntry, 0, len(games))
 	for _, item := range games {
-		sortProviderCatalog(item.Providers)
+		r.sortProviderCatalog(item.Providers)
 		out = append(out, item)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -167,10 +150,10 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 	return out
 }
 
-func sortProviderCatalog(providers []domain.ProviderCatalog) {
+func (r *Registry) sortProviderCatalog(providers []domain.ProviderCatalog) {
 	sort.SliceStable(providers, func(i, j int) bool {
-		leftPriority := providerCatalogPriority(providers[i].Key)
-		rightPriority := providerCatalogPriority(providers[j].Key)
+		leftPriority := r.providers[providers[i].Key].CatalogMetadata().Priority
+		rightPriority := r.providers[providers[j].Key].CatalogMetadata().Priority
 		if leftPriority != rightPriority {
 			return leftPriority < rightPriority
 		}
@@ -178,17 +161,6 @@ func sortProviderCatalog(providers []domain.ProviderCatalog) {
 	})
 	for index := range providers {
 		providers[index].Recommended = index == 0
-	}
-}
-
-func providerCatalogPriority(key domain.ProviderKey) int {
-	switch key {
-	case domain.ProviderTerrariaVanilla:
-		return 10
-	case domain.ProviderTerrariaTModLoader:
-		return 20
-	default:
-		return 100
 	}
 }
 

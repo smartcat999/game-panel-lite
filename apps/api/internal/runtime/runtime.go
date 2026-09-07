@@ -17,7 +17,6 @@ type ContainerSpec struct {
 	AdditionalPorts []ContainerPort
 	Resources       ContainerResources
 	DataDir         string
-	ConfigText      string
 	Options         ContainerOptions
 }
 
@@ -171,13 +170,8 @@ type WorkloadIOAdapter interface {
 }
 
 func ContainerSpecFromWorkload(spec domain.WorkloadSpec) ContainerSpec {
-	configText := ""
 	files := map[string]string{}
 	for name, content := range spec.Options.Files {
-		if name == "serverconfig.txt" {
-			configText = content
-			continue
-		}
 		files[name] = content
 	}
 	return ContainerSpec{
@@ -197,8 +191,7 @@ func ContainerSpecFromWorkload(spec domain.WorkloadSpec) ContainerSpec {
 			CPULimitCores: spec.Resources.CPULimitCores,
 			MemoryLimitMB: spec.Resources.MemoryLimitMB,
 		},
-		DataDir:    spec.DataDir,
-		ConfigText: configText,
+		DataDir: spec.DataDir,
 		Options: ContainerOptions{
 			Env:          append([]string{}, spec.Options.Env...),
 			Cmd:          append([]string{}, spec.Options.Cmd...),
@@ -211,9 +204,6 @@ func ContainerSpecFromWorkload(spec domain.WorkloadSpec) ContainerSpec {
 
 func WorkloadSpecFromContainer(spec ContainerSpec) domain.WorkloadSpec {
 	files := map[string]string{}
-	if spec.ConfigText != "" {
-		files["serverconfig.txt"] = spec.ConfigText
-	}
 	for name, content := range spec.Options.Files {
 		files[name] = content
 	}

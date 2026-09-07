@@ -385,11 +385,14 @@ func resourceRuntimeConfig(server domain.GameServer, fallback Config, optionsFor
 		return domain.ProviderRuntimeConfig{}, err
 	}
 	options := optionsFor(config)
+	if options.Files == nil {
+		options.Files = map[string]string{}
+	}
+	options.Files["serverconfig.txt"] = configText
 	return domain.ProviderRuntimeConfig{
-		Port:       config.Port,
-		Protocol:   options.PortProtocol,
-		ConfigText: configText,
-		Options:    workloadOptions(options),
+		Port:     config.Port,
+		Protocol: options.PortProtocol,
+		Options:  workloadOptions(options),
 	}, nil
 }
 

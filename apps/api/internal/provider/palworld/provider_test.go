@@ -115,8 +115,8 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtimeConfig.ConfigText != "" {
-		t.Fatalf("Palworld resource runtime should not render legacy serverconfig.txt, got %q", runtimeConfig.ConfigText)
+	if runtimeConfig.Options.Files["serverconfig.txt"] != "" {
+		t.Fatalf("Palworld resource runtime should not render legacy serverconfig.txt, got %q", runtimeConfig.Options.Files["serverconfig.txt"])
 	}
 	options := runtimeConfig.Options
 	env := strings.Join(options.Env, "\n")

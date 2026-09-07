@@ -19,7 +19,7 @@ import (
 )
 
 func TestProviderWorkloadBuilderUsesProviderRuntimeContract(t *testing.T) {
-	registry := provider.NewRegistry(terraria.NewVanillaProvider(runtimecatalog.Catalog{}))
+	registry := mustRegistry(t, terraria.NewVanillaProvider(runtimecatalog.Catalog{}))
 	builder := NewProviderWorkloadBuilder(registry)
 	server := domain.GameServer{
 		ID:          "srv-1",
@@ -66,7 +66,7 @@ func TestProviderWorkloadBuilderUsesProviderRuntimeContract(t *testing.T) {
 }
 
 func TestProviderWorkloadBuilderPassesDSTModSyncMode(t *testing.T) {
-	registry := provider.NewRegistry(dst.NewProvider(runtimecatalog.Catalog{}))
+	registry := mustRegistry(t, dst.NewProvider(runtimecatalog.Catalog{}))
 	builder := NewProviderWorkloadBuilder(registry)
 	server := domain.GameServer{
 		ID:          "dst-sync",
@@ -123,7 +123,7 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 	if err := db.CreateMod(context.Background(), &libraryMod); err != nil {
 		t.Fatal(err)
 	}
-	registry := provider.NewRegistry(terraria.NewTModLoaderProvider(runtimecatalog.Catalog{}))
+	registry := mustRegistry(t, terraria.NewTModLoaderProvider(runtimecatalog.Catalog{}))
 	builder := NewProviderWorkloadBuilder(registry).WithModPlanner(NewRuntimeModPlanner(root, db))
 	dataDir := filepath.Join(root, "instances", "srv-mods")
 	server := domain.GameServer{
@@ -271,7 +271,7 @@ func TestProviderWorkloadBuilderUsesResourceRuntimeProviders(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			registry := provider.NewRegistry(tt.provider)
+			registry := mustRegistry(t, tt.provider)
 			builder := NewProviderWorkloadBuilder(registry)
 			spec, err := builder.BuildWorkloadSpec(context.Background(), domain.GameServer{
 				ID:          "srv-" + tt.name,
@@ -301,4 +301,37 @@ func containsEnv(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// A new game only supplies the provider contracts and registration; the builder
+// must carry its files and ports without knowing their game-specific meaning.
+type customGameProvider struct{ provider.GameProvider }
+
+func (customGameProvider) Key() domain.ProviderKey { return "custom-provider" }
+func (customGameProvider) GameKey() domain.GameKey { return "custom-game" }
+func (customGameProvider) CatalogMetadata() domain.ProviderCatalogMetadata {
+	return domain.ProviderCatalogMetadata{GameName: "Custom Game"}
+}
+func (customGameProvider) RuntimeConfigForResource(domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	return domain.ProviderRuntimeConfig{
+		Port: 9000, Protocol: "udp",
+		Options: domain.WorkloadOptions{Files: map[string]string{"settings/game.ini": "mode=cooperative"}},
+	}, nil
+}
+
+func TestProviderWorkloadBuilderSupportsNewGameFiles(t *testing.T) {
+	registry := mustRegistry(t, customGameProvider{GameProvider: terraria.NewVanillaProvider()})
+	spec, err := NewProviderWorkloadBuilder(registry).BuildWorkloadSpec(context.Background(), domain.GameServer{
+		ID: "custom", GameKey: "custom-game", ProviderKey: "custom-provider",
+		Spec: domain.ServerSpec{Network: domain.ServerNetworkSpec{HostPort: 19000}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spec.Options.Files) != 1 || spec.Options.Files["settings/game.ini"] != "mode=cooperative" {
+		t.Fatalf("unexpected files: %+v", spec.Options.Files)
+	}
+	if spec.Network.Port != 9000 || spec.Network.HostPort != 19000 || spec.Network.Protocol != "udp" {
+		t.Fatalf("unexpected network: %+v", spec.Network)
+	}
 }

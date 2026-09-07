@@ -39,7 +39,6 @@ type ProviderRuntimeConfig struct {
 	Port            int             `json:"port,omitempty"`
 	AdditionalPorts []int           `json:"additionalPorts,omitempty"`
 	Protocol        string          `json:"protocol,omitempty"`
-	ConfigText      string          `json:"configText,omitempty"`
 	Options         WorkloadOptions `json:"options,omitempty"`
 }
 

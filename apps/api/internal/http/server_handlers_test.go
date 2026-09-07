@@ -190,8 +190,8 @@ func TestStartPalworldServerRuntimeSpecUsesConfigPayload(t *testing.T) {
 			t.Fatalf("expected runtime env to contain %q, got:\n%s", expected, env)
 		}
 	}
-	if spec.ConfigText != "" {
-		t.Fatalf("Palworld runtime should not write legacy serverconfig.txt, got:\n%s", spec.ConfigText)
+	if spec.Options.Files["serverconfig.txt"] != "" {
+		t.Fatalf("Palworld runtime should not write legacy serverconfig.txt, got:\n%s", spec.Options.Files["serverconfig.txt"])
 	}
 	waitForServerStatus(t, db, server.ID, domain.StatusRunning)
 }

@@ -59,9 +59,6 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(dataDir, "serverconfig.txt"), []byte(spec.ConfigText), 0o644); err != nil {
-		return "", err
-	}
 	for name, content := range spec.Options.Files {
 		if err := writeDataFile(dataDir, name, content); err != nil {
 			return "", err

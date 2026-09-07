@@ -387,8 +387,8 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtimeConfig.ConfigText != "" {
-		t.Fatalf("DST resource runtime should not render legacy serverconfig.txt, got %q", runtimeConfig.ConfigText)
+	if runtimeConfig.Options.Files["serverconfig.txt"] != "" {
+		t.Fatalf("DST resource runtime should not render legacy serverconfig.txt, got %q", runtimeConfig.Options.Files["serverconfig.txt"])
 	}
 	if len(runtimeConfig.AdditionalPorts) != 1 || runtimeConfig.AdditionalPorts[0] != 11000 {
 		t.Fatalf("expected Caves UDP port 11000, got %v", runtimeConfig.AdditionalPorts)

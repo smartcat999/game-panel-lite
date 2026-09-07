@@ -10,7 +10,7 @@ import (
 )
 
 func TestRegistryFindsTerrariaProviders(t *testing.T) {
-	registry := NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider())
+	registry := mustRegistry(t, terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider())
 	if _, ok := registry.Get(domain.ProviderTerrariaVanilla); !ok {
 		t.Fatal("expected vanilla provider")
 	}
@@ -20,7 +20,7 @@ func TestRegistryFindsTerrariaProviders(t *testing.T) {
 }
 
 func TestRegistryBuildsGameCatalog(t *testing.T) {
-	registry := NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider())
+	registry := mustRegistry(t, terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider())
 	games := registry.Games()
 	if len(games) < 3 {
 		t.Fatalf("expected available Terraria, Palworld, and DST entries, got %+v", games)
@@ -63,5 +63,45 @@ func TestRegistryBuildsGameCatalog(t *testing.T) {
 	}
 	if dstGame.Providers[0].Key != domain.ProviderDST || !dstGame.Providers[0].Capabilities.Backups {
 		t.Fatalf("expected DST provider capabilities, got %+v", dstGame.Providers[0])
+	}
+}
+
+func TestRegistryRejectsDuplicateIDs(t *testing.T) {
+	registry, err := NewRegistry(terraria.NewVanillaProvider(), terraria.NewVanillaProvider())
+	if err == nil || registry != nil {
+		t.Fatalf("duplicate registration must fail without a partial registry: registry=%v err=%v", registry, err)
+	}
+}
+
+// A plugin with a new ID and game can supply metadata without editing Registry.
+type catalogTestProvider struct {
+	GameProvider
+	id       domain.ProviderKey
+	priority int
+}
+
+func (p catalogTestProvider) Key() domain.ProviderKey { return p.id }
+func (catalogTestProvider) GameKey() domain.GameKey   { return "test-game" }
+func (p catalogTestProvider) CatalogMetadata() domain.ProviderCatalogMetadata {
+	return domain.ProviderCatalogMetadata{
+		GameName: "Test Game", GameDescription: "Plugin-owned metadata", CoverImage: "test-cover", Priority: p.priority,
+	}
+}
+
+func TestRegistryDiscoversPluginMetadataAndOrder(t *testing.T) {
+	registry := mustRegistry(t,
+		catalogTestProvider{GameProvider: terraria.NewVanillaProvider(), id: "a-plugin", priority: 20},
+		catalogTestProvider{GameProvider: terraria.NewVanillaProvider(), id: "z-plugin", priority: 10},
+	)
+	games := registry.Games()
+	if len(games) != 1 {
+		t.Fatalf("unregistered games leaked into catalog: %+v", games)
+	}
+	game := games[0]
+	if game.Name != "Test Game" || game.Description != "Plugin-owned metadata" || game.CoverImage != "test-cover" {
+		t.Fatalf("lost plugin metadata: %+v", game)
+	}
+	if game.Providers[0].Key != "z-plugin" || !game.Providers[0].Recommended || game.Providers[1].Recommended {
+		t.Fatalf("provider priority was ignored: %+v", game.Providers)
 	}
 }

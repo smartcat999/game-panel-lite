@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -50,13 +51,16 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		imageRegion = savedImageRegion
 	}
 	providerCatalog = providerCatalog.WithActiveRegistry(imageRegion)
-	registry := provider.NewRegistry(
+	registry, err := provider.NewRegistry(
 		terraria.NewVanillaProvider(providerCatalog),
 		terraria.NewTModLoaderProvider(providerCatalog),
 		palworld.NewProvider(providerCatalog),
 		dst.NewProvider(providerCatalog),
 		minecraft.NewProvider(providerCatalog),
 	)
+	if err != nil {
+		return nil, fmt.Errorf("initialize providers: %w", err)
+	}
 	adapter, err := dockerruntime.NewAdapter(cfg.DockerHost)
 	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()
 	if err != nil {

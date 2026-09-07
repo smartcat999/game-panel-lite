@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -734,7 +733,7 @@ func newGameUpdateUnitHandler(t *testing.T, adapter runtime.Adapter) (*Handler, 
 	dataDir := filepath.Join(root, "data")
 	return &Handler{
 		store:            db,
-		provider:         provider.NewRegistry(palworld.NewProvider()),
+		provider:         mustRegistry(t, palworld.NewProvider()),
 		runtime:          runtime.NewSwitchableAdapter(adapter),
 		runtimeImageJobs: map[string]domain.RuntimeImageStatus{},
 	}, db, dataDir
