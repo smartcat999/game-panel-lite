@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 	worldsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/world"
 )
@@ -363,21 +363,15 @@ func (h *Handler) currentRuntimeWorldPath(server domain.GameServer) (string, err
 }
 
 func (h *Handler) runtimeWorldPathCandidates(server domain.GameServer) []string {
-	summary, err := h.configSummaryForServer(server)
-	worldName := serverWorldName(server)
-	if err == nil && strings.TrimSpace(summary.WorldName) != "" {
-		worldName = summary.WorldName
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return nil
 	}
-	worldFile := worldName + ".wld"
-	candidates := []string{}
-	if server.ProviderKey == domain.ProviderTerrariaVanilla || server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		config, err := terraria.ConfigFromPayload(server.Spec.Config, terraria.Config{WorldName: worldName})
-		if err != nil {
-			config = terraria.Config{WorldName: worldName}
-		}
-		candidates = append(candidates, terraria.RuntimeWorldFiles(server.ProviderKey, config)...)
+	worlds, ok := gameProvider.(provider.WorldFilesProvider)
+	if !ok {
+		return nil
 	}
-	candidates = append(candidates, worldFile, filepath.Join("Worlds", worldFile), filepath.Join("worlds", worldFile))
+	candidates := worlds.WorldFiles(server)
 	seen := map[string]bool{}
 	result := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {

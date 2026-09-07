@@ -14,7 +14,6 @@ import (
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
@@ -310,45 +309,7 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) syncRestoredGameServerConfig(ctx context.Context, server *domain.GameServer) error {
-	if server.ProviderKey != domain.ProviderTerrariaVanilla && server.ProviderKey != domain.ProviderTerrariaTModLoader {
-		return nil
-	}
-	dataDir, err := serverDataDir(*server)
-	if err != nil {
-		return err
-	}
-	configBytes, err := os.ReadFile(filepath.Join(dataDir, "serverconfig.txt"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	fallback, err := terraria.ConfigFromPayload(server.Spec.Config, terraria.NewVanillaProvider().DefaultConfig())
-	if err != nil {
-		return err
-	}
-	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		fallback, err = terraria.ConfigFromPayload(server.Spec.Config, terraria.NewTModLoaderProvider().DefaultConfig())
-		if err != nil {
-			return err
-		}
-	}
-	nextConfig, err := terraria.ParseServerConfig(fallback, string(configBytes))
-	if err != nil {
-		return err
-	}
-	nextConfig = normalizeTerrariaRuntimeConfig(nextConfig)
-	configPayload := terraria.PayloadFromConfig(nextConfig)
-	server.Spec.Config = configPayload
-	server.Spec.Network.Port = nextConfig.Port
-	server.Spec.Generation++
-	if server.Spec.Generation <= 0 {
-		server.Spec.Generation = 1
-	}
-	server.Status.Phase = domain.PhasePending
-	server.UpdatedAt = time.Now()
-	return h.store.SaveGameServer(ctx, server)
+	return h.gameConfig.Restore(ctx, server)
 }
 
 func (h *Handler) upsertBackupRecord(ctx context.Context, instanceID string, fileName string, worldName string, size int64, backupType string) (domain.Backup, bool, error) {

@@ -63,10 +63,3 @@ func ensureRuntimeDataDir(path string) error {
 	}
 	return os.Chmod(path, 0o777)
 }
-
-func writeRuntimeDataFile(targetPath string, content []byte) error {
-	if err := ensureRuntimeDataDir(filepath.Dir(targetPath)); err != nil {
-		return err
-	}
-	return os.WriteFile(targetPath, content, 0o666)
-}

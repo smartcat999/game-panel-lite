@@ -1,11 +1,37 @@
 package provider
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
+
+// ErrUnsupported is returned when a provider does not implement an optional capability.
+var ErrUnsupported = errors.New("provider capability unsupported")
+
+type PresetProvider interface {
+	Presets() []domain.ProviderPreset
+}
+type ConfigPreviewProvider interface {
+	PreviewConfig(json.RawMessage) (map[string]string, error)
+}
+type ConfigRestoreProvider interface {
+	ConfigRestoreFile() string
+	RestoreConfig(map[string]any, []byte) (map[string]any, int, error)
+}
+type WorldFilesProvider interface {
+	WorldFiles(domain.GameServer) []string
+}
+
+type ModSupportProvider interface{ ModSupport() domain.ModSupport }
+
+type ModFilesProvider interface{ RuntimeModFiles(string) []string }
+type ModManifestProvider interface {
+	ModManifest([]domain.ModFile) (map[string]string, error)
+}
 
 type GameProvider interface {
 	GameKey() domain.GameKey
@@ -86,6 +112,9 @@ func NewRegistry(providers ...GameProvider) (*Registry, error) {
 		}
 		if _, exists := registry.providers[item.Key()]; exists {
 			return nil, fmt.Errorf("duplicate provider ID: %s", item.Key())
+		}
+		if err := validateCapabilities(item); err != nil {
+			return nil, err
 		}
 		registry.providers[item.Key()] = item
 	}

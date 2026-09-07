@@ -47,7 +47,7 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if !providerSupportsUploadedMods(server.ProviderKey) {
+	if !h.providerSupportsUploadedMods(server.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "uploaded mods are not supported for this provider")
 		return
 	}
@@ -128,7 +128,7 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if !providerSupportsWorkshopMods(server.ProviderKey) {
+	if !h.providerSupportsWorkshopMods(server.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 		return
 	}
@@ -205,7 +205,7 @@ func (h *Handler) importGlobalWorkshopMods(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !providerSupportsWorkshopMods(providerKey) {
+	if !h.providerSupportsWorkshopMods(providerKey) {
 		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 		return
 	}
@@ -504,7 +504,7 @@ func (h *Handler) importRecommendedMod(w http.ResponseWriter, r *http.Request) {
 	if payload.ProviderKey == "" {
 		payload.ProviderKey = domain.ProviderTerrariaTModLoader
 	}
-	if providerSupportsWorkshopMods(payload.ProviderKey) {
+	if h.providerSupportsWorkshopMods(payload.ProviderKey) {
 		workshopID := strings.TrimSpace(payload.WorkshopID)
 		if workshopID == "" {
 			workshopID = strings.TrimSpace(payload.ExternalID)
@@ -593,7 +593,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if !providerSupportsMods(targetServer.ProviderKey) {
+	if !h.providerSupportsMods(targetServer.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
 		return
 	}
@@ -610,7 +610,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "workshop mods are not supported on ARM Docker hosts; upload the .tmod file instead")
 			return
 		}
-		if !providerSupportsWorkshopMods(targetServer.ProviderKey) {
+		if !h.providerSupportsWorkshopMods(targetServer.ProviderKey) {
 			writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 			return
 		}

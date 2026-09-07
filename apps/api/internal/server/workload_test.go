@@ -124,7 +124,7 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry := mustRegistry(t, terraria.NewTModLoaderProvider(runtimecatalog.Catalog{}))
-	builder := NewProviderWorkloadBuilder(registry).WithModPlanner(NewRuntimeModPlanner(root, db))
+	builder := NewProviderWorkloadBuilder(registry).WithModPlanner(NewRuntimeModPlanner(root, db, registry))
 	dataDir := filepath.Join(root, "instances", "srv-mods")
 	server := domain.GameServer{
 		ID:          "srv-mods",
@@ -334,4 +334,8 @@ func TestProviderWorkloadBuilderSupportsNewGameFiles(t *testing.T) {
 	if spec.Network.Port != 9000 || spec.Network.HostPort != 19000 || spec.Network.Protocol != "udp" {
 		t.Fatalf("unexpected network: %+v", spec.Network)
 	}
+}
+
+func (customGameProvider) Capabilities() domain.ProviderCapabilities {
+	return domain.ProviderCapabilities{}
 }

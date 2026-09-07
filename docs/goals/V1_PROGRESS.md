@@ -2,6 +2,11 @@
 
 ## 2026-09-07
 
+- Continued M2: moved legacy configuration preview/presets and restored-config parsing behind provider capabilities and a gameconfig application module. Restore reads are confined with os.Root, bounded to 1 MiB, and update caller state only after persistence succeeds.
+- Moved world-file candidates, mod file layouts and tModLoader enabled/workshop manifests into providers. HTTP and lifecycle callers share modruntime for manifests; mod source support is declared by providers, and Registry rejects selected capability/implementation mismatches.
+- Removed all seven direct concrete-provider import exceptions from HTTP/server code; two Agent Docker imports remain. This does not finish M2: upload parsing, mod metadata/dependencies, world storage and further HTTP orchestration still require migration. Track the full remaining scope in SAAS_REFACTOR_PROGRESS.md.
+- M2 batch checks pass: go test ./..., go vet ./..., race tests for gameconfig/modruntime/providers/server, frontend typecheck/build and tracked-source lint. The worktree-wide lint issue from unrelated local scripts remains; no live Docker, payment or scale claims are made.
+
 - Implemented the first backend modularity batch for the SaaS roadmap: game catalog metadata and recommendation priorities now come from registered providers, and duplicate provider IDs fail application startup instead of overwriting an implementation.
 - Removed the legacy ConfigText side channel from provider/runtime contracts. Terraria renders serverconfig.txt into the same file collection as other provider assets; generic workload conversion and Docker creation no longer identify or create that filename specially. Unregistered games no longer appear as hardcoded planned catalog entries.
 - Added AST import-boundary tests for domain, concrete providers, Docker SDK and GORM access, with nine exact legacy import exceptions across eight files assigned to M2/M3. Added a backend GitHub Actions workflow for Go tests, vet and focused race checks; remote CI has not run yet.

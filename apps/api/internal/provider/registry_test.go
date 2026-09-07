@@ -105,3 +105,21 @@ func TestRegistryDiscoversPluginMetadataAndOrder(t *testing.T) {
 		t.Fatalf("provider priority was ignored: %+v", game.Providers)
 	}
 }
+
+func (catalogTestProvider) Capabilities() domain.ProviderCapabilities {
+	return domain.ProviderCapabilities{}
+}
+
+type invalidCapabilityProvider struct {
+	GameProvider
+	caps domain.ProviderCapabilities
+}
+
+func (p invalidCapabilityProvider) Capabilities() domain.ProviderCapabilities { return p.caps }
+func TestRegistryRejectsUnimplementedCapabilities(t *testing.T) {
+	for _, caps := range []domain.ProviderCapabilities{{Mods: true}, {WorldRegeneration: true}, {KickPlayer: true}, {Whitelist: true}} {
+		if got, err := NewRegistry(invalidCapabilityProvider{GameProvider: terraria.NewVanillaProvider(), caps: caps}); err == nil || got != nil {
+			t.Fatalf("accepted unimplemented capabilities %+v", caps)
+		}
+	}
+}

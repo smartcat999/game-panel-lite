@@ -165,7 +165,7 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 		}
 	}
 	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
-	if len(modIDs) > 0 && !providerSupportsMods(payload.ProviderKey) {
+	if len(modIDs) > 0 && !h.providerSupportsMods(payload.ProviderKey) {
 		return domain.ConfigPreset{}, fmt.Errorf("mods are not supported for this provider")
 	}
 	for _, modID := range modIDs {

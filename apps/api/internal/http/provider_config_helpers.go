@@ -7,13 +7,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 )
-
-func normalizeTerrariaRuntimeConfig(config terraria.Config) terraria.Config {
-	config.Port = terraria.DefaultInternalPort
-	return terraria.NormalizeConfig(config)
-}
 
 func decodeProviderConfigPayload(gameProvider provider.GameProvider, raw json.RawMessage, fallback map[string]any) (map[string]any, string, error) {
 	payloadProvider, ok := gameProvider.(provider.ConfigPayloadProvider)

@@ -12,9 +12,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
 	apihttp "github.com/smartcat999/game-panel-lite/apps/api/internal/http"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/player"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
@@ -84,7 +87,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	go serverctrl.NewController(
 		db,
 		serverctrl.NewRuntimeReconciler(
-			serverctrl.NewProviderWorkloadBuilder(registry).WithModPlanner(serverctrl.NewRuntimeModPlanner(cfg.DataDir, db)),
+			serverctrl.NewProviderWorkloadBuilder(registry).WithModPlanner(serverctrl.NewRuntimeModPlanner(cfg.DataDir, db, registry)),
 			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
 		).WithImageLoader(serverctrl.NewRuntimeImageLoader(cfg.DataDir, switchableRuntime)),
 		logger,
@@ -94,7 +97,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return dockerruntime.NewAdapter(host)
 	}
 	apiMetrics := metrics.NewRegistry()
-	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway)
+	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway, gameconfig.NewService(registry, db, domain.ProviderTerrariaVanilla), modruntime.NewService(registry, db))
 	handler.Start(appCtx)
 
 	router := chi.NewRouter()

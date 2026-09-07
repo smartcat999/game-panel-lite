@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	workshopsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/workshop"
 )
 
@@ -45,7 +48,8 @@ func TestWorkshopCollectionPreviewMarksExistingItemsAndCachesMetadata(t *testing
 		t.Fatal(err)
 	}
 	handler := &Handler{
-		store: db,
+		modRuntime: modruntime.NewService(mustRegistry(t, terraria.NewTModLoaderProvider(), dst.NewProvider()), db),
+		store:      db,
 		workshopResolver: staticWorkshopResolver{collection: workshopsvc.Collection{
 			ID:    "900",
 			Title: "Friends Pack",
@@ -104,7 +108,8 @@ func TestWorkshopItemPreviewFetchesMetadataBeforeImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := &Handler{
-		store: db,
+		modRuntime: modruntime.NewService(mustRegistry(t, terraria.NewTModLoaderProvider(), dst.NewProvider()), db),
+		store:      db,
 		workshopResolver: staticWorkshopResolver{items: []workshopsvc.Item{
 			{WorkshopID: "100", Title: "Existing Mod", FileSize: 1024},
 			{WorkshopID: "200", Title: "Fresh Steam Title", FileSize: 2048, Tags: []string{"New Content"}},
@@ -154,8 +159,9 @@ func TestCreateModPackFromWorkshopCollectionImportsAndReusesLibraryMods(t *testi
 	}
 	previewID := "preview-1"
 	handler := &Handler{
-		store:  db,
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		modRuntime: modruntime.NewService(mustRegistry(t, terraria.NewTModLoaderProvider(), dst.NewProvider()), db),
+		store:      db,
+		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		workshopPreviews: map[string]cachedWorkshopPreview{
 			previewID: {
 				ProviderKey: domain.ProviderTerrariaTModLoader,

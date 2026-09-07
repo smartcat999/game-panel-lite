@@ -17,14 +17,7 @@ const api = "github.com/smartcat999/game-panel-lite/apps/api/internal/"
 // for M2 (game integration) and M3 (Agent runtime) in docs/architecture/backend-modularity-plan.md. New exceptions require
 // an explicit review; stale exceptions fail so the baseline can only shrink.
 var legacyImports = map[string][]string{
-	"apps/api/internal/http/terraria_handlers.go":       {api + "provider/terraria"},
-	"apps/api/internal/http/world_handlers.go":          {api + "provider/terraria"},
-	"apps/api/internal/http/backup_handlers.go":         {api + "provider/terraria"},
-	"apps/api/internal/http/types.go":                   {api + "provider/terraria"},
-	"apps/api/internal/http/provider_config_helpers.go": {api + "provider/terraria"},
-	"apps/api/internal/http/mod_helpers.go":             {api + "provider/terraria"},
-	"apps/api/internal/server/mod_planner.go":           {api + "provider/terraria"},
-	"apps/agent/reconcile.go":                           {"github.com/docker/docker/api/types", "github.com/docker/docker/client"},
+	"apps/agent/reconcile.go": {"github.com/docker/docker/api/types", "github.com/docker/docker/client"},
 }
 
 func TestBackendImportBoundaries(t *testing.T) {

@@ -58,7 +58,7 @@ func (h *Handler) previewWorkshopCollection(w http.ResponseWriter, r *http.Reque
 	if payload.ProviderKey == "" {
 		payload.ProviderKey = domain.ProviderTerrariaTModLoader
 	}
-	if !providerSupportsWorkshopMods(payload.ProviderKey) {
+	if !h.providerSupportsWorkshopMods(payload.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 		return
 	}
@@ -164,7 +164,7 @@ func (h *Handler) previewWorkshopItems(w http.ResponseWriter, r *http.Request) {
 	if payload.ProviderKey == "" {
 		payload.ProviderKey = domain.ProviderTerrariaTModLoader
 	}
-	if !providerSupportsWorkshopMods(payload.ProviderKey) {
+	if !h.providerSupportsWorkshopMods(payload.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "workshop mods are not supported for this provider")
 		return
 	}

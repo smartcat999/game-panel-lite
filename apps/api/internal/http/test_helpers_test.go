@@ -20,6 +20,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
@@ -110,6 +112,8 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 		func(string) (runtime.Adapter, error) { return runtime.NewMockAdapter(), nil },
 		nil,
 		nil,
+		gameconfig.NewService(registry, db, domain.ProviderTerrariaVanilla),
+		modruntime.NewService(registry, db),
 	)
 	if seedInstallMarkers {
 		seedRuntimeInstallMarkers(t, handler)

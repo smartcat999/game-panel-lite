@@ -6,11 +6,10 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 )
 
 func (h *Handler) presets(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, terraria.Presets)
+	writeJSON(w, http.StatusOK, h.gameConfig.Presets())
 }
 
 func (h *Handler) versions(w http.ResponseWriter, r *http.Request) {
@@ -44,16 +43,16 @@ func normalizeStoredProviderVersion(gameProvider provider.GameProvider, version 
 
 func (h *Handler) configPreview(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		Config terrariaPreviewConfig `json:"config"`
+		Config json.RawMessage `json:"config"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	rendered, err := terraria.RenderServerConfig(payload.Config.ToDomain())
+	rendered, err := h.gameConfig.Preview("", payload.Config)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"serverconfig": rendered})
+	writeJSON(w, http.StatusOK, rendered)
 }

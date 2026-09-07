@@ -198,7 +198,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
-	if len(modIDs) > 0 && !providerSupportsMods(payload.ProviderKey) {
+	if len(modIDs) > 0 && !h.providerSupportsMods(payload.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
 		return
 	}

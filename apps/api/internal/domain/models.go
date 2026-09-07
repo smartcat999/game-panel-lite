@@ -24,6 +24,12 @@ type Player struct {
 
 type PlayerLogEvent string
 
+// ModSupport describes the sources accepted by a game provider.
+type ModSupport struct {
+	UploadExtensions []string
+	Workshop         bool
+}
+
 type ProviderCapabilities struct {
 	ConsoleCommands   bool `json:"consoleCommands"`
 	PlayerList        bool `json:"playerList"`
@@ -78,6 +84,14 @@ type ProviderCatalogMetadata struct {
 	GameDescription string
 	CoverImage      string
 	Priority        int
+}
+
+type ProviderPreset struct {
+	Key         string         `json:"key"`
+	Label       string         `json:"label"`
+	Description string         `json:"description"`
+	ProviderKey ProviderKey    `json:"providerKey"`
+	Config      map[string]any `json:"config"`
 }
 
 type GameCatalogEntry struct {

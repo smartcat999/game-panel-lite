@@ -12,8 +12,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
@@ -24,6 +26,8 @@ import (
 )
 
 type Handler struct {
+	modRuntime     *modruntime.Service
+	gameConfig     *gameconfig.Service
 	ctx            context.Context
 	cfg            config.Config
 	logger         *slog.Logger
@@ -71,11 +75,15 @@ func NewHandler(
 	runtimeFactory func(string) (runtime.Adapter, error),
 	apiMetrics *metrics.Registry,
 	streamGateway *gateway.StreamGateway,
+	gameConfig *gameconfig.Service,
+	modRuntime *modruntime.Service,
 ) *Handler {
 	if apiMetrics == nil {
 		apiMetrics = metrics.NewRegistry()
 	}
 	handler := &Handler{
+		modRuntime:       modRuntime,
+		gameConfig:       gameConfig,
 		cfg:              cfg,
 		logger:           logger,
 		store:            store,

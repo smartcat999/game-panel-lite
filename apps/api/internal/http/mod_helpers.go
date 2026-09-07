@@ -16,7 +16,6 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modcatalog"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
@@ -442,7 +441,7 @@ func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.Ga
 	if err != nil {
 		return err
 	}
-	for _, relPath := range runtimeModFiles(server.ProviderKey, item.FileName) {
+	for _, relPath := range h.modRuntime.Paths(server.ProviderKey, item.FileName) {
 		targetPath := filepath.Join(dataDir, relPath)
 		if err := copyStoredFile(sourcePath, targetPath); err != nil {
 			return err
@@ -456,7 +455,7 @@ func (h *Handler) removeRuntimeMod(item domain.ModFile, server domain.GameServer
 	if err != nil {
 		return err
 	}
-	for _, relPath := range runtimeModFiles(server.ProviderKey, item.FileName) {
+	for _, relPath := range h.modRuntime.Paths(server.ProviderKey, item.FileName) {
 		if err := removeStoredFile(filepath.Join(dataDir, relPath)); err != nil {
 			return err
 		}
@@ -465,71 +464,7 @@ func (h *Handler) removeRuntimeMod(item domain.ModFile, server domain.GameServer
 }
 
 func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.GameServer) error {
-	if server.ProviderKey != domain.ProviderTerrariaTModLoader {
-		return nil
-	}
-	mods, err := h.store.ListMods(ctx, server.ID)
-	if err != nil {
-		return err
-	}
-	enabled := make([]string, 0, len(mods))
-	workshopIDs := make([]string, 0, len(mods))
-	for _, item := range mods {
-		if !item.Enabled {
-			continue
-		}
-		if item.Source == "workshop" && item.WorkshopID != "" {
-			workshopIDs = append(workshopIDs, item.WorkshopID)
-			if name := modIdentity(item); name != "" {
-				enabled = append(enabled, name)
-			}
-			continue
-		}
-		if isTModPackage(item.FileName) {
-			if name := modIdentity(item); name != "" {
-				enabled = append(enabled, name)
-			}
-		}
-	}
-	sort.Strings(enabled)
-	sort.Strings(workshopIDs)
-	payload, err := json.MarshalIndent(enabled, "", "  ")
-	if err != nil {
-		return err
-	}
-	payload = append(payload, '\n')
-	dataDir, err := serverDataDir(server)
-	if err != nil {
-		return err
-	}
-	for _, relPath := range runtimeModFiles(server.ProviderKey, "enabled.json") {
-		targetPath := filepath.Join(dataDir, relPath)
-		if err := writeRuntimeDataFile(targetPath, payload); err != nil {
-			return err
-		}
-	}
-	if err := h.writeRuntimeInstallFile(server, workshopIDs); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (h *Handler) writeRuntimeInstallFile(server domain.GameServer, workshopIDs []string) error {
-	content := ""
-	if len(workshopIDs) > 0 {
-		content = strings.Join(workshopIDs, "\n") + "\n"
-	}
-	dataDir, err := serverDataDir(server)
-	if err != nil {
-		return err
-	}
-	for _, relPath := range runtimeModFiles(server.ProviderKey, "install.txt") {
-		targetPath := filepath.Join(dataDir, relPath)
-		if err := writeRuntimeDataFile(targetPath, []byte(content)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return h.modRuntime.Sync(ctx, server)
 }
 
 func isTModPackage(fileName string) bool {
@@ -562,16 +497,16 @@ func providerModUploadError(providerKey domain.ProviderKey) string {
 	}
 }
 
-func providerSupportsMods(providerKey domain.ProviderKey) bool {
-	return providerKey == domain.ProviderTerrariaTModLoader || providerKey == domain.ProviderDST || providerKey == domain.ProviderPalworld
+func (h *Handler) providerSupportsMods(providerKey domain.ProviderKey) bool {
+	return len(h.modRuntime.Support(providerKey).UploadExtensions) > 0 || h.modRuntime.Support(providerKey).Workshop
 }
 
-func providerSupportsUploadedMods(providerKey domain.ProviderKey) bool {
-	return providerKey == domain.ProviderTerrariaTModLoader || providerKey == domain.ProviderPalworld
+func (h *Handler) providerSupportsUploadedMods(providerKey domain.ProviderKey) bool {
+	return len(h.modRuntime.Support(providerKey).UploadExtensions) > 0
 }
 
-func providerSupportsWorkshopMods(providerKey domain.ProviderKey) bool {
-	return providerKey == domain.ProviderTerrariaTModLoader || providerKey == domain.ProviderDST
+func (h *Handler) providerSupportsWorkshopMods(providerKey domain.ProviderKey) bool {
+	return h.modRuntime.Support(providerKey).Workshop
 }
 
 func gameKeyForProvider(providerKey domain.ProviderKey) domain.GameKey {
@@ -584,15 +519,6 @@ func gameKeyForProvider(providerKey domain.ProviderKey) domain.GameKey {
 		return domain.GameMinecraft
 	default:
 		return domain.GameTerraria
-	}
-}
-
-func runtimeModFiles(providerKey domain.ProviderKey, fileName string) []string {
-	switch providerKey {
-	case domain.ProviderPalworld:
-		return []string{filepath.Join("Pal", "Content", "Paks", "~mods", fileName)}
-	default:
-		return terraria.RuntimeModFiles(providerKey, fileName)
 	}
 }
 

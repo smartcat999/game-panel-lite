@@ -1,14 +1,14 @@
 # 后端模块化与插件扩展方案
 
-日期：2026-09-07。状态：M0 依赖基线与 M1 Registry/文件传递改造已实施，其余为迁移计划。
+日期：2026-09-07。状态：M0 依赖基线与 M1 已实施，M2 进行中。完整剩余范围见 [验收清单](../goals/SAAS_REFACTOR_PROGRESS.md)。
 
 ## 首批落地情况
 
-- `internal/architecture/boundaries_test.go` 在 Go 测试中解析生产源码导入，限制 domain、具体 Provider、Docker SDK 和 GORM 的依赖方向。九条存量导入按八个具体文件保留，移除存量引用后必须同步删除例外；这不是完整的所有模块隔离证明。
+- `internal/architecture/boundaries_test.go` 在 Go 测试中解析生产源码导入，限制 domain、具体 Provider、Docker SDK 和 GORM 的依赖方向。原九条存量导入已减少为 Agent 单文件的两条 Docker 导入例外，移除存量引用后必须同步删除例外；这不是完整的所有模块隔离证明。
 - `.github/workflows/backend.yml` 对 PR 和 main/feat/v1-full-run 推送执行 Go 测试、vet、Provider/Runtime race 检查。当前只完成本地验证，远端工作流尚未运行。
 - Provider 新增 CatalogMetadata，元信息与默认排序由各游戏的 catalog.go 提供；NewRegistry 返回错误以拒绝重复或空 ID。应用入口负责处理错误，测试使用包内构造辅助函数。
 - 通用契约删除 ConfigText，文件全部通过 Options.Files 传递。Terraria Provider 拥有 serverconfig.txt 文件名，运行时不再为其他游戏创建无关配置文件。未注册游戏不再以写死的 planned 条目出现在目录。
-- 当前保留 HTTP 契约及已注册游戏的展示内容、顺序。此批次不含数据库迁移、RPC 插件、安全沙箱或模组/世界操作迁移。
+- 当前保留 HTTP 契约及已注册游戏的展示内容、顺序。后续 M2 已加入 gameconfig 与 modruntime 应用模块，预览/恢复解析、世界候选路径和模组清单迁回 Provider；完整模组/世界编排仍在迁移。数据库迁移、RPC 插件、安全沙箱未完成。
 
 本地复验：`go test ./...`、`go vet ./...`、`go test -race ./apps/api/internal/provider/... ./apps/api/internal/runtime/...`、`pnpm typecheck`、`pnpm build`。工作区全目录 lint 的原有脚本错误详见 V1_PROGRESS；不要为本次改造删除或改写用户录屏文件。
 
