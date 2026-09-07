@@ -248,6 +248,11 @@ paths:
                                     type: string
                                     maxLength: 128
                                     pattern: '^[A-Za-z0-9_-]+$'
+                                  revision:
+                                    type: integer
+                                    minimum: 0
+                                    default: 0
+                                    description: Library metadata revision pinned by the publisher; omitted legacy descriptors mean revision zero. Referenced sources cannot be edited or deleted until the persisted manifest releases them.
                                   path:
                                     type: string
                                     description: Canonical relative slash-separated destination, without traversal or configuration conflicts

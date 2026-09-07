@@ -132,7 +132,7 @@ func (p *RuntimeModPlanner) PlanRemoteMods(ctx context.Context, target domain.Ga
 			return result, fmt.Errorf("provider has no destination for mod %s", item.ID)
 		}
 		for _, path := range paths {
-			result.Artifacts = append(result.Artifacts, workload.Artifact{ID: item.ID, Path: filepath.ToSlash(path), SHA256: item.ContentHash, SizeBytes: item.SizeBytes})
+			result.Artifacts = append(result.Artifacts, workload.Artifact{ID: item.ID, Revision: item.Revision, Path: filepath.ToSlash(path), SHA256: item.ContentHash, SizeBytes: item.SizeBytes})
 		}
 	}
 	if manifestOK {

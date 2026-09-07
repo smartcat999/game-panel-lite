@@ -19,7 +19,7 @@ func ValidateArtifacts(options Options) error {
 	}
 	for _, item := range options.Artifacts {
 		digest, err := hex.DecodeString(item.SHA256)
-		if item.ID == "" || len(item.ID) > 128 || strings.TrimSpace(item.ID) != item.ID || strings.ContainsAny(item.ID, "/\\\x00") || item.SizeBytes <= 0 || err != nil || len(digest) != 32 || strings.ToLower(item.SHA256) != item.SHA256 {
+		if item.Revision < 0 || item.ID == "" || len(item.ID) > 128 || strings.TrimSpace(item.ID) != item.ID || strings.ContainsAny(item.ID, "/\\\x00") || item.SizeBytes <= 0 || err != nil || len(digest) != 32 || strings.ToLower(item.SHA256) != item.SHA256 {
 			return fmt.Errorf("invalid workload artifact identity")
 		}
 		for _, char := range item.ID {

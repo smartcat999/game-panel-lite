@@ -35,7 +35,7 @@ func (s *Store) ResolveArtifactForNode(ctx context.Context, nodeID, uid string, 
 		if candidate.ID != artifactID {
 			continue
 		}
-		if found && (candidate.SHA256 != ref.SHA256 || candidate.SizeBytes != ref.SizeBytes) {
+		if found && (candidate.Revision != ref.Revision || candidate.SHA256 != ref.SHA256 || candidate.SizeBytes != ref.SizeBytes) {
 			return item, ref, ErrInvalidModLibrary
 		}
 		if !found {
@@ -60,7 +60,7 @@ func (s *Store) ResolveArtifactForNode(ctx context.Context, nodeID, uid string, 
 	if err != nil {
 		return item, ref, err
 	}
-	if item.ContentHash != ref.SHA256 || item.SizeBytes != ref.SizeBytes {
+	if item.Revision != ref.Revision || item.ContentHash != ref.SHA256 || item.SizeBytes != ref.SizeBytes {
 		return domain.ModFile{}, ref, ErrInvalidModLibrary
 	}
 	if err := s.CheckModTarget(ctx, target); err != nil {

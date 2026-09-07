@@ -110,6 +110,9 @@ func (s *Store) SaveOwnedLibraryMod(ctx context.Context, userID string, before, 
 		if err := tx.lockLibraryWriter(ctx, userID, before.OrganizationID); err != nil {
 			return err
 		}
+		if err := tx.artifactReferences(ctx, before.OrganizationID, before.ID); err != nil {
+			return err
+		}
 		after.Revision = before.Revision + 1
 		result := tx.libraryModSnapshot(ctx, before).Select("revision", "mod_name", "title", "mod_version", "t_mod_version", "creator_steam_id", "preview_url", "description", "content_hash", "tags_json", "subscriptions", "favorited", "views", "updated_at_steam", "size_bytes", "enabled", "dependencies_json").Updates(&after)
 		return libraryWriteResult(result)
@@ -196,6 +199,9 @@ func (s *Store) SaveOwnedModPack(ctx context.Context, userID string, before, aft
 // update the instance/pack/preset first, under the same workspace writer lock.
 func (s *Store) libraryReferences(ctx context.Context, orgID, modID, packID string) error {
 	if modID != "" {
+		if err := s.artifactReferences(ctx, orgID, modID); err != nil {
+			return err
+		}
 		var servers []domain.GameServer
 		if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&servers).Error; err != nil {
 			return err

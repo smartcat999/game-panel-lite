@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"reflect"
 )
@@ -131,12 +132,22 @@ func TestAgentArtifactCapabilityNegotiation(t *testing.T) {
 	if err := db.CreateComputeNode(context.Background(), &node); err != nil {
 		t.Fatal(err)
 	}
-	instance := domain.GameServer{ID: "artifact-server", NodeID: node.ID, Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredRunning}}
-	if err := db.CreateGameServer(context.Background(), &instance); err != nil {
+	org := domain.Organization{ID: "capability-space", Slug: "capability-space"}
+	if err := db.CreateOrganization(context.Background(), &org, "capability-owner"); err != nil {
 		t.Fatal(err)
 	}
+	source := domain.ModFile{ID: "source", OrganizationID: org.ID, InstanceID: "unassigned", ProviderKey: domain.ProviderTerrariaTModLoader, Source: "upload", FileName: "mod.tmod", ContentHash: strings.Repeat("a", 64), SizeBytes: 1}
+	if err := db.CreateOwnedLibraryMod(context.Background(), "capability-owner", &source); err != nil {
+		t.Fatal(err)
+	}
+	instance := domain.GameServer{ID: "artifact-server", OrganizationID: org.ID, ProviderKey: source.ProviderKey, NodeID: node.ID, Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredRunning}}
 	assignment := domain.WorkloadAssignment{ID: "artifact-assignment", UID: "artifact-uid", ServerID: instance.ID, NodeID: node.ID, Generation: 1, DesiredState: domain.DesiredRunning, Spec: workload.Spec{Options: workload.Options{Artifacts: []workload.Artifact{{ID: "source", Path: "Mods/mod.bin", SizeBytes: 1, SHA256: strings.Repeat("a", 64)}}}}}
-	if err := db.PublishWorkloadAssignment(context.Background(), instance, &assignment); err != nil {
+	if err := db.Transaction(context.Background(), func(tx *store.Store) error {
+		if err := tx.CreateGameServer(context.Background(), &instance); err != nil {
+			return err
+		}
+		return tx.PublishWorkloadAssignment(context.Background(), instance, &assignment)
+	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, capability := range []string{"", "other-feature", "artifacts-v10", "other-feature, artifacts-v1"} {

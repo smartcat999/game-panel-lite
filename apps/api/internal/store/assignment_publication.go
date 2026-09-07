@@ -20,6 +20,17 @@ func (s *Store) PublishWorkloadAssignment(ctx context.Context, before domain.Gam
 		return err
 	}
 	return s.Transaction(ctx, func(tx *Store) error {
+		if len(assignment.Spec.Options.Artifacts) > 0 {
+			if before.OrganizationID == "" {
+				return ErrInvalidModLibrary
+			}
+			if err := tx.lockWorkspace(ctx, before.OrganizationID); err != nil {
+				return err
+			}
+			if err := tx.validatePublishedArtifacts(ctx, before, *assignment); err != nil {
+				return err
+			}
+		}
 		locked := tx.db.WithContext(ctx).Model(&domain.GameServer{}).
 			Where("id = ? AND spec = ? AND COALESCE(node_id, '') = ? AND COALESCE(organization_id, '') = ?", before.ID, string(spec), before.NodeID, before.OrganizationID).
 			UpdateColumn("updated_at", gorm.Expr("updated_at"))

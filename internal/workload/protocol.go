@@ -26,6 +26,7 @@ type Port struct {
 
 // Artifact identifies immutable bytes; transport endpoints and host paths are never carried in the descriptor.
 type Artifact struct {
+	Revision  int64  `json:"revision,omitempty"`
 	ID        string `json:"id"`
 	Path      string `json:"path"`
 	SHA256    string `json:"sha256"`
