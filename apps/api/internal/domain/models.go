@@ -126,6 +126,7 @@ type RuntimeImageStatus struct {
 }
 
 type ProviderCatalog struct {
+	UploadExtensions   []string              `json:"uploadExtensions,omitempty"`
 	Key                ProviderKey           `json:"key"`
 	Name               string                `json:"name"`
 	Description        string                `json:"description"`

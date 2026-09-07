@@ -164,7 +164,12 @@ func (r *Registry) Games() []domain.GameCatalogEntry {
 				Status:      "available",
 			}
 		}
+		var extensions []string
+		if support, ok := item.(ModSupportProvider); ok && item.Capabilities().Mods {
+			extensions = append([]string{}, support.ModSupport().UploadExtensions...)
+		}
 		entry.Providers = append(entry.Providers, domain.ProviderCatalog{
+			UploadExtensions:   extensions,
 			Key:                item.Key(),
 			Name:               item.Name(),
 			Description:        item.Description(),

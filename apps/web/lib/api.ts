@@ -245,6 +245,8 @@ function toBackup(backup: ApiBackup): Backup {
 }
 
 type ApiModFile = {
+  organizationId?: string;
+  contentHash?: string;
   id: string;
   instanceId: string;
   gameKey?: string;
@@ -299,6 +301,7 @@ type ApiRecommendedMod = {
 };
 
 type ApiModPack = {
+  organizationId?: string;
   id: string;
   name: string;
   description: string;
@@ -1096,6 +1099,8 @@ export async function deleteModConfig(serverId: string, name: string): Promise<v
 function toModFile(file: ApiModFile): ModFile {
   return {
     id: file.id,
+    organizationId: file.organizationId,
+    contentHash: file.contentHash,
     instanceId: file.instanceId,
     gameKey: file.gameKey,
     providerKey: file.providerKey,
@@ -1156,6 +1161,7 @@ function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
 function toModPack(pack: ApiModPack): ModPack {
   return {
     id: pack.id,
+    organizationId: pack.organizationId,
     name: pack.name,
     description: pack.description,
     gameKey: pack.gameKey,
@@ -1733,4 +1739,32 @@ export async function getServerGatewayStatus(id: string): Promise<ServerGatewayD
     throw new Error("Unable to load gateway status");
   }
   return (await response.json()) as ServerGatewayDiagnostic;
+}
+
+export class WorkspaceModUploadError extends Error {
+  constructor(message: string, public readonly status: number, public readonly uploadId?: string) {
+    super(message);
+    this.name = "WorkspaceModUploadError";
+  }
+  get uncertain() { return this.status === 0 || this.status === 503; }
+}
+
+export async function uploadWorkspaceMod(organizationId: string, providerKey: ProviderKey, file: File): Promise<ModFile> {
+  const query = new URLSearchParams({ organizationId, providerKey, fileName: file.name });
+  let response: Response;
+  try {
+    response = await apiFetch(`${API_BASE}/api/auth/me/mods/upload?${query}`, {
+      method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file
+    });
+  } catch {
+    throw new WorkspaceModUploadError("Upload response unavailable; check the library before uploading again", 0);
+  }
+  const payload = await response.json().catch(() => null) as (ApiModFile & { error?: string; uploadId?: string }) | null;
+  if (!response.ok) {
+    throw new WorkspaceModUploadError(payload?.error ?? "Unable to upload mod", response.status, payload?.uploadId);
+  }
+  if (!payload?.id || payload.organizationId !== organizationId) {
+    throw new WorkspaceModUploadError("Upload response could not be verified; check the library before uploading again", 0);
+  }
+  return toModFile(payload);
 }

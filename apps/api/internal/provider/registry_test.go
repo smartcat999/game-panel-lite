@@ -123,3 +123,28 @@ func TestRegistryRejectsUnimplementedCapabilities(t *testing.T) {
 		}
 	}
 }
+
+func TestCatalogExposesUploadExtensionsWithoutAuxiliaryCacheFiles(t *testing.T) {
+	registry := mustRegistry(t, terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider())
+	game, ok := registry.Game(domain.GameTerraria)
+	if !ok {
+		t.Fatal("missing game")
+	}
+	for _, item := range game.Providers {
+		if item.Key == domain.ProviderTerrariaVanilla && len(item.UploadExtensions) != 0 {
+			t.Fatal("vanilla advertised mod uploads")
+		}
+		if item.Key == domain.ProviderTerrariaTModLoader {
+			if len(item.UploadExtensions) != 1 || item.UploadExtensions[0] != ".tmod" {
+				t.Fatalf("upload policy: %v", item.UploadExtensions)
+			}
+			item.UploadExtensions[0] = ".changed"
+		}
+	}
+	refreshed, _ := registry.Game(domain.GameTerraria)
+	for _, item := range refreshed.Providers {
+		if item.Key == domain.ProviderTerrariaTModLoader && item.UploadExtensions[0] != ".tmod" {
+			t.Fatal("catalog mutated provider policy")
+		}
+	}
+}

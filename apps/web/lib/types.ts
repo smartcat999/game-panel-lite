@@ -42,6 +42,7 @@ export type RuntimeImageStatus = {
 };
 
 export type ProviderCatalog = {
+  uploadExtensions?: string[];
   key: ProviderKey;
   name: string;
   description: string;

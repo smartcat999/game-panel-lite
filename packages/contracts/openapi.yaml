@@ -5,6 +5,37 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/games:
+    get:
+      summary: List the registered game and Provider catalog
+      responses:
+        "200":
+          description: Provider uploadExtensions exposes user-upload formats only, excluding internal auxiliary cache files. Missing or empty extensions mean local uploads are unavailable. Clients must not infer formats from game names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [key, name, providers]
+                  properties:
+                    key: {type: string}
+                    name: {type: string}
+                    providers:
+                      type: array
+                      items:
+                        type: object
+                        required: [key, name, capabilities]
+                        properties:
+                          key: {type: string}
+                          name: {type: string}
+                          capabilities:
+                            type: object
+                            properties:
+                              mods: {type: boolean}
+                          uploadExtensions:
+                            type: array
+                            items: {type: string}
   /api/auth/me/mods:
     get:
       security:

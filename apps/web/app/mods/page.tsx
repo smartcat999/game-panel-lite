@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { useAuthBootstrap } from "@/lib/auth-session";
+import { WorkspaceModLibrary } from "@/components/workspace-mod-library";
 import Link from "next/link";
 import { Check, Clock3, Compass, Download, ExternalLink, Library, Package, Trash2, Upload, Users, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +33,8 @@ type DependencyImportPlan = {
 };
 export default function ModsPage() {
   const { locale, t } = useI18n();
+  const auth = useAuthBootstrap();
+  const isCustomer = !!auth.data?.account && auth.data.account.role !== "admin";
   const globalInputRef = useRef<HTMLInputElement>(null);
   const client = useQueryClient();
   const [errorMessage, setErrorMessage] = useState("");
@@ -64,7 +68,7 @@ export default function ModsPage() {
   const modPacksQuery = useQuery({ queryKey: ["mod-packs"], queryFn: listModPacks, retry: false });
   const recommendedModsQuery = useQuery({ queryKey: ["recommended-mods"], queryFn: listRecommendedMods, retry: false });
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
-  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000 });
+  const dockerStatusQuery = useQuery({ queryKey: ["docker-status"], queryFn: getDockerStatus, retry: false, refetchInterval: 5000, enabled: !isCustomer });
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
 
   const globalUpload = useMutation({
@@ -400,7 +404,7 @@ export default function ModsPage() {
           </div>
 
           <p className="hidden sm:block truncate text-xs text-slate-400 font-medium">
-            {activeView === "discover" ? t("discoverModsHint") : activeView === "library" ? t("modLibraryHint") : t("modPacksHint")}
+            {isCustomer ? (locale.startsWith("zh") ? "工作区资源仅对成员可见；本地模组请在模组库上传。" : "Workspace resources are visible to members. Upload local mods in the library.") : activeView === "discover" ? t("discoverModsHint") : activeView === "library" ? t("modLibraryHint") : t("modPacksHint")}
           </p>
         </div>
 
@@ -419,7 +423,7 @@ export default function ModsPage() {
               </Button>
             )}
 
-            {activeView === "library" && (
+            {activeView === "library" && !isCustomer && (
               selectedLibraryIds.size > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 border border-emerald-500/30 rounded-lg p-1 animate-in fade-in zoom-in-95 duration-150">
                   <span className="px-2 text-xs font-mono font-bold text-panel-green">
@@ -476,7 +480,7 @@ export default function ModsPage() {
               )
             )}
 
-            {activeView === "packs" && (
+            {activeView === "packs" && !isCustomer && (
               selectedModPackIds.size > 0 ? (
                 <div className="flex flex-wrap items-center gap-1.5 bg-slate-950/80 border border-emerald-500/30 rounded-lg p-1 animate-in fade-in zoom-in-95 duration-150">
                   <span className="px-2 text-xs font-mono font-bold text-panel-green">
@@ -562,7 +566,7 @@ export default function ModsPage() {
                 item={item}
                 locale={locale}
                 busy={workshopImport.isPending || workshopItemsPreview.isPending || recommendedImport.isPending || (isWorkshopRecommended(item) && workshopUnsupported)}
-                disabledReason={recommendedModDisabledReason(item, workshopUnsupported, t)}
+                disabledReason={isCustomer ? (locale.startsWith("zh") ? "当前工作区暂不支持在线导入，请上传本地文件。" : "Online import is not yet available for workspaces. Upload a local file instead.") : recommendedModDisabledReason(item, workshopUnsupported, t)}
                 onAdd={() => {
                   if (isWorkshopRecommended(item) && item.workshopId) {
                     const providerKey = item.providerKey ?? "terraria-tmodloader";
@@ -581,7 +585,7 @@ export default function ModsPage() {
         </section>
       ) : activeView === "library" ? (
         <section className="mt-4">
-          <div>
+          {isCustomer ? <WorkspaceModLibrary mods={searchedGlobalMods} /> : <div>
             {searchedGlobalMods.length > 0 ? (
               <LibraryModTable
                 games={gamesQuery.data ?? []}
@@ -601,11 +605,12 @@ export default function ModsPage() {
                 </div>
               </Card>
             )}
-          </div>
+          </div>}
         </section>
       ) : (
         <section className="mt-4">
           <div>
+            {isCustomer ? <Card className="space-y-3 p-5"><p className="text-sm text-slate-400">{locale.startsWith("zh") ? "工作区模组包暂不可编辑。" : "Workspace packs are currently read-only."}</p>{searchedModPacks.map(pack => <p key={pack.id} className="text-sm text-slate-200">{pack.name} · {pack.mods.length}</p>)}</Card> : <>
             {searchedModPacks.length > 0 ? (
               <ModPackTable
                 games={gamesQuery.data ?? []}
@@ -625,6 +630,7 @@ export default function ModsPage() {
                 </div>
               </Card>
             )}
+          </>}
           </div>
         </section>
       )}
