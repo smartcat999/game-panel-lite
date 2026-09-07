@@ -10,6 +10,8 @@ import (
 
 var errCreateLockBusy = errors.New("instance creation lock is held")
 
+// Create, Start, Stop and Remove share this lock. Keep the historical directory
+// name so cooperating processes continue to use the same inode.
 // The lock inode is retained: unlinking it would let another process lock a
 // different inode while a waiter still holds the old one.
 func lockInstanceCreation(ctx context.Context, dataDir, serverID string) (func(), error) {

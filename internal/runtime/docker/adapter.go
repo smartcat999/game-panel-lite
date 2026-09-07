@@ -151,6 +151,14 @@ func (a *Adapter) Start(ctx context.Context, observed worker.State) error {
 	if err != nil {
 		return err
 	}
+	unlock, err := lockInstanceCreation(ctx, a.dataDir, observed.ServerID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if err := checkInstanceRecovery(a.dataDir, observed.ServerID); err != nil {
+		return err
+	}
 	err = a.client.ContainerStart(ctx, id, types.ContainerStartOptions{})
 	if errdefs.IsNotModified(err) {
 		return nil
@@ -162,6 +170,11 @@ func (a *Adapter) Stop(ctx context.Context, observed worker.State) error {
 	if err != nil {
 		return err
 	}
+	unlock, err := lockInstanceCreation(ctx, a.dataDir, observed.ServerID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	timeout := 20
 	err = a.client.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout})
 	if errdefs.IsNotModified(err) || client.IsErrNotFound(err) {
@@ -174,6 +187,11 @@ func (a *Adapter) Remove(ctx context.Context, observed worker.State) error {
 	if err != nil {
 		return err
 	}
+	unlock, err := lockInstanceCreation(ctx, a.dataDir, observed.ServerID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	err = a.client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{Force: true})
 	if client.IsErrNotFound(err) {
 		return nil

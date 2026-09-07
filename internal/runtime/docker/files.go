@@ -74,14 +74,8 @@ func prepareFilesAndCommit(dir string, options workload.Options, commit func([]s
 		return nil, err
 	}
 	defer root.Close()
-	entries, err := fs.ReadDir(root.FS(), ".")
-	if err != nil {
+	if err := checkPreparationRecovery(root); err != nil {
 		return nil, err
-	}
-	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".gamepanel-prepare-") {
-			return nil, fmt.Errorf("configuration recovery must be resolved before retry: %s", entry.Name())
-		}
 	}
 
 	for _, name := range names {
@@ -149,6 +143,41 @@ func rejectSymlink(root *os.Root, path string) error {
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("data mount source contains a symlink")
+		}
+	}
+	return nil
+}
+
+// Missing instance directories are valid for containers without local data.
+// Existing directories must be confined and free of pending file transactions.
+func checkInstanceRecovery(dataDir, serverID string) error {
+	root, err := os.OpenRoot(dataDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	if err := rejectSymlink(root, serverID); err != nil {
+		return err
+	}
+	instance, err := root.OpenRoot(serverID)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer instance.Close()
+	return checkPreparationRecovery(instance)
+}
+
+func checkPreparationRecovery(root *os.Root) error {
+	entries, err := fs.ReadDir(root.FS(), ".")
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".gamepanel-prepare-") {
+			return fmt.Errorf("configuration recovery must be resolved before retry: %s", entry.Name())
 		}
 	}
 	return nil
