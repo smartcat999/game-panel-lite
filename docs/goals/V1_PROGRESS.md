@@ -2,6 +2,9 @@
 
 ## 2026-09-07
 
+- Centralized mod runtime file installation/removal in modruntime. HTTP and startup planning now pass context and source readers to one implementation; deleted the duplicate server file copier. Provider paths are validated before staging rather than silently discarded.
+- Confined destination filesystem operations with os.Root, staged all copies before publishing and used per-file atomic rename. Tests cover symlink/traversal escapes, unchanged existing files on read failure/cancellation, staging cleanup, repeated replacement/removal and runtime-compatible permissions. Multi-file publication and database changes remain non-transactional; this is not strong tenant isolation. Validation passed: gofmt, full Go tests, vet, and final modruntime/HTTP/server race regression after retaining runtime permissions. No frontend code or wire contract changed.
+
 - Consolidated duplicate HTTP/lifecycle mod identity and dependency metadata rules into modcatalog. Consolidated dependency graph traversal into modruntime, with sequential resolution, cycle/diamond deduplication and context cancellation. Existing persistence operations remain caller-owned; errors do not imply rollback of prior assignments.
 - Added shared-interface tests for metadata precedence, provider-scoped fallback, independent result slices, cyclic/diamond graphs, existing dependencies, failure and cancellation. Import checks prevent these shared modules from reaching back into HTTP, server or concrete store/runtime packages. Remaining upload/metadata write/install transaction work remains in the SaaS checklist. Validation passed: gofmt, full go test ./..., go vet ./..., modcatalog/modruntime/HTTP/server race tests and expanded architecture tests. No frontend code or wire contract changed.
 

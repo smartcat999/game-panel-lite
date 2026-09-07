@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +90,7 @@ func (p *RuntimeModPlanner) assignLibraryMod(ctx context.Context, server domain.
 	if err != nil {
 		return domain.ModFile{}, err
 	}
-	if err := p.materializeModForRuntime(assigned, server); err != nil {
+	if err := p.materializeModForRuntime(ctx, assigned, server); err != nil {
 		return domain.ModFile{}, err
 	}
 	return assigned, nil
@@ -240,7 +239,7 @@ func (p *RuntimeModPlanner) findLibraryModByModName(ctx context.Context, provide
 	return domain.ModFile{}, false, nil
 }
 
-func (p *RuntimeModPlanner) materializeModForRuntime(item domain.ModFile, server domain.GameServer) error {
+func (p *RuntimeModPlanner) materializeModForRuntime(ctx context.Context, item domain.ModFile, server domain.GameServer) error {
 	if item.Source == "workshop" {
 		return nil
 	}
@@ -248,47 +247,13 @@ func (p *RuntimeModPlanner) materializeModForRuntime(item domain.ModFile, server
 	if err != nil {
 		return err
 	}
-	dataDir := strings.TrimSpace(server.Spec.Runtime.DataDir)
-	if dataDir == "" {
-		return fmt.Errorf("server data dir is empty")
-	}
-	for _, relPath := range p.runtime.Paths(server.ProviderKey, item.FileName) {
-		targetPath := filepath.Join(dataDir, relPath)
-		if err := copyFile(sourcePath, targetPath); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func copyFile(sourcePath string, targetPath string) error {
-	src, err := os.Open(sourcePath)
+	source, err := os.Open(sourcePath)
 	if err != nil {
 		return err
 	}
-	defer src.Close()
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-		return err
-	}
-	out, err := os.CreateTemp(filepath.Dir(targetPath), "."+filepath.Base(targetPath)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := out.Name()
-	defer func() {
-		_ = os.Remove(tmpName)
-	}()
-	if _, err := io.Copy(out, src); err != nil {
-		_ = out.Close()
-		return err
-	}
-	if err := out.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmpName, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, targetPath)
+	defer source.Close()
+	dataDir := server.Spec.Runtime.DataDir
+	return p.runtime.Install(ctx, server.ProviderKey, item.FileName, dataDir, source)
 }
 
 func applyTModMetadata(item *domain.ModFile, metadata modsvc.Metadata) {

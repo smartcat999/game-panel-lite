@@ -87,7 +87,7 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		if err := h.materializeModForRuntime(item, server); err != nil {
+		if err := h.materializeModForRuntime(r.Context(), item, server); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -364,7 +364,7 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Source != "workshop" {
-		if err := h.removeRuntimeMod(item, server); err != nil {
+		if err := h.removeRuntimeMod(r.Context(), item, server); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -663,7 +663,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if targetServer.ProviderKey == domain.ProviderTerrariaTModLoader {
-		if err := h.materializeModForRuntime(assigned, targetServer); err != nil {
+		if err := h.materializeModForRuntime(r.Context(), assigned, targetServer); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

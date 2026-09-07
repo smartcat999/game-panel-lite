@@ -40,24 +40,24 @@ func (s *Service) Support(key domain.ProviderKey) domain.ModSupport {
 	return support.ModSupport()
 }
 
-func (s *Service) Paths(key domain.ProviderKey, filename string) []string {
+func (s *Service) paths(key domain.ProviderKey, filename string) ([]string, error) {
 	item, ok := s.providers.Get(key)
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("unknown provider: %s", key)
 	}
 	layout, ok := item.(provider.ModFilesProvider)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	paths := []string{}
 	for _, path := range layout.RuntimeModFiles(filename) {
 		clean := filepath.Clean(path)
 		if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-			continue
+			return nil, fmt.Errorf("invalid provider mod path %q", path)
 		}
 		paths = append(paths, clean)
 	}
-	return paths
+	return paths, nil
 }
 
 // Sync writes only manifests returned by the provider, inside the instance root.

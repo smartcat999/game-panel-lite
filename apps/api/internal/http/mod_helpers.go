@@ -188,7 +188,7 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 		if err != nil {
 			return domain.ModFile{}, false, err
 		}
-		if err := h.materializeModForRuntime(assigned, server); err != nil {
+		if err := h.materializeModForRuntime(ctx, assigned, server); err != nil {
 			return domain.ModFile{}, false, err
 		}
 		return assigned, created, nil
@@ -371,7 +371,7 @@ func hydrateModGameMetadata(item *domain.ModFile) {
 	}
 }
 
-func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.GameServer) error {
+func (h *Handler) materializeModForRuntime(ctx context.Context, item domain.ModFile, server domain.GameServer) error {
 	if item.Source == "workshop" {
 		return nil
 	}
@@ -379,30 +379,24 @@ func (h *Handler) materializeModForRuntime(item domain.ModFile, server domain.Ga
 	if err != nil {
 		return err
 	}
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
 	dataDir, err := serverDataDir(server)
 	if err != nil {
 		return err
 	}
-	for _, relPath := range h.modRuntime.Paths(server.ProviderKey, item.FileName) {
-		targetPath := filepath.Join(dataDir, relPath)
-		if err := copyStoredFile(sourcePath, targetPath); err != nil {
-			return err
-		}
-	}
-	return nil
+	return h.modRuntime.Install(ctx, server.ProviderKey, item.FileName, dataDir, source)
 }
 
-func (h *Handler) removeRuntimeMod(item domain.ModFile, server domain.GameServer) error {
+func (h *Handler) removeRuntimeMod(ctx context.Context, item domain.ModFile, server domain.GameServer) error {
 	dataDir, err := serverDataDir(server)
 	if err != nil {
 		return err
 	}
-	for _, relPath := range h.modRuntime.Paths(server.ProviderKey, item.FileName) {
-		if err := removeStoredFile(filepath.Join(dataDir, relPath)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return h.modRuntime.Remove(ctx, server.ProviderKey, item.FileName, dataDir)
 }
 
 func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.GameServer) error {
