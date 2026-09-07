@@ -37,6 +37,9 @@ func reconcileAssignments(ctx context.Context, client *http.Client, cfg AgentCon
 		return
 	}
 	for _, assignment := range assignments {
+		if ctx.Err() != nil {
+			return
+		}
 		reconcileCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		observation := worker.Reconcile(reconcileCtx, assignment, runtime)
 		cancel()

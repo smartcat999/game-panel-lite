@@ -180,44 +180,32 @@ func main() {
 	go func() { defer loops.Done(); startLogStreamerLoop(ctx, client, cfg, logger, runtimeAdapter) }()
 	defer func() { cancel(); loops.Wait() }()
 
-	// Step 4: Heartbeat Loop
-	ticker := time.NewTicker(cfg.Interval)
-	defer ticker.Stop()
-
 	logger.Info("agent entered active heartbeat loop", "interval_sec", cfg.Interval.Seconds())
-
-	for {
-		select {
-		case <-ticker.C:
-			memUsedMB := getMemoryUsedMB()
-			diskUsedGB := getDiskUsedGB("/")
-			_, activeCount := getDockerInfo(ctx, runtimeAdapter)
-			cpuPercent := getCPUUsagePercent()
-
-			hbPayload := HeartbeatPayload{
-				Token:           cfg.Token,
-				CPUUsagePercent: cpuPercent,
-				MemoryUsedMB:    memUsedMB,
-				DiskUsedGB:      diskUsedGB,
-				RunningCount:    activeCount,
-			}
-
-			start := time.Now()
-			if err := sendHeartbeat(ctx, client, cfg.MasterURL, hbPayload); err != nil {
-				logger.Warn("failed to send heartbeat to master", "error", err)
-			} else {
-				latency := int(time.Since(start).Milliseconds())
-				logger.Debug("heartbeat reported successfully", "latency_ms", latency, "cpu_usage", cpuPercent, "mem_used_mb", memUsedMB)
-			}
-
-			// Poll and execute pending tasks from master
-			reconcileAssignments(ctx, client, cfg, logger, runtimeAdapter)
+	runAgentControlLoops(ctx, cfg.Interval, func(ctx context.Context) {
+		reportAgentHeartbeat(ctx, client, cfg, logger, runtimeAdapter)
+	}, func(ctx context.Context) {
+		reconcileAssignments(ctx, client, cfg, logger, runtimeAdapter)
+		if ctx.Err() == nil {
 			pollAndExecuteTasks(ctx, client, cfg, logger, runtimeAdapter)
-
-		case <-ctx.Done():
-			logger.Info("received shutdown signal, terminating worker agent")
-			return
 		}
+	})
+	logger.Info("received shutdown signal, terminating worker agent")
+}
+
+func reportAgentHeartbeat(ctx context.Context, client *http.Client, cfg AgentConfig, logger *slog.Logger, runtime agentRuntime) {
+	memUsedMB := getMemoryUsedMB()
+	diskUsedGB := getDiskUsedGB("/")
+	_, activeCount := getDockerInfo(ctx, runtime)
+	cpuPercent := getCPUUsagePercent()
+	payload := HeartbeatPayload{
+		Token: cfg.Token, CPUUsagePercent: cpuPercent,
+		MemoryUsedMB: memUsedMB, DiskUsedGB: diskUsedGB, RunningCount: activeCount,
+	}
+	start := time.Now()
+	if err := sendHeartbeat(ctx, client, cfg.MasterURL, payload); err != nil {
+		logger.Warn("failed to send heartbeat to master", "error", err)
+	} else {
+		logger.Debug("heartbeat reported successfully", "latency_ms", time.Since(start).Milliseconds(), "cpu_usage", cpuPercent, "mem_used_mb", memUsedMB)
 	}
 }
 
@@ -432,6 +420,9 @@ func pollAndExecuteTasks(ctx context.Context, client *http.Client, cfg AgentConf
 	}
 
 	for _, task := range tasks {
+		if ctx.Err() != nil {
+			return
+		}
 		logger.Info("executing remote node task", "task_id", task.ID, "action", task.Action, "server_id", task.ServerID)
 		var taskErr error
 		if task.Action != "exec_command" {
