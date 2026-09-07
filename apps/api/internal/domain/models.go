@@ -276,6 +276,8 @@ type World struct {
 }
 
 type ModFile struct {
+	OrganizationID   string      `json:"organizationId,omitempty" gorm:"index;not null;default:''"`
+	Revision         int64       `json:"-" gorm:"not null;default:0"`
 	ID               string      `json:"id" gorm:"primaryKey"`
 	InstanceID       string      `json:"instanceId" gorm:"index"`
 	GameKey          GameKey     `json:"gameKey,omitempty" gorm:"index"`
@@ -307,12 +309,14 @@ type ModFile struct {
 }
 
 type ModPack struct {
-	ID          string    `json:"id" gorm:"primaryKey"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	ModIDsJSON  string    `json:"-" gorm:"column:mod_ids_json"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	OrganizationID string    `json:"organizationId,omitempty" gorm:"index;not null;default:''"`
+	Revision       int64     `json:"-" gorm:"not null;default:0"`
+	ID             string    `json:"id" gorm:"primaryKey"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	ModIDsJSON     string    `json:"-" gorm:"column:mod_ids_json"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type ActivityEvent struct {

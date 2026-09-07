@@ -12,6 +12,7 @@
 | 世界文件定位归属 Provider | 部分完成 | WorldFilesProvider；世界上传格式与其他存档操作仍需迁移 |
 | 模组清单与文件布局归属 Provider | 本地验证通过 | ModManifestProvider、ModFilesProvider、共享 modruntime 用例 |
 | 模组来源能力与注册校验 | 部分完成 | ModSupportProvider；支持上传与 Workshop 的判断已改为能力声明；同名依赖查找与分配已限制在同一 Provider；未知 Provider 不回退 tModLoader；名称/依赖元数据已集中到 modcatalog，依赖图遍历已集中到 modruntime；运行文件安装/删除已集中到 modruntime 并使用 os.Root；上传扩展名/辅助缓存文件由 Provider 声明并注入缓存服务；tMod 元数据解析已迁回 Terraria Provider，经 ModInspector 调用；严格包验证、元数据写入与完整安装事务仍待实现 |
+| 工作区模组库持久化 | 部分完成 | ModFile/ModPack 归属与 revision、PostgreSQL 005 迁移；成员 SQL 读取、事务写权限/CAS、同空间同 Provider 引用及删除竞争约束通过 SQLite/PostgreSQL/race；旧全局查询排除工作区记录，预设非法引用返回 400；客户 HTTP/文件目录/Workshop 缓存/依赖安装尚未接入，引用关系表与容量验证待完成 |
 | HTTP 与生命周期仅依赖应用用例 | 未完成 | 具体 Provider 导入已消除；JSON 模组配置目录由 Provider 能力声明，格式/大小/版本/文件 IO 已迁入 modruntime，Handler 移除游戏 ID 与固定目录判断，新增自定义插件及拒绝后文件不变测试；多个 Handler 仍持有 Store/Runtime 并含编排逻辑 |
 | 插件版本、配置版本与完整能力校验 | 部分完成 | Provider 声明插件/配置版本；Registry 校验声明，创建保存配置版本，执行前拒绝不兼容版本；通用编辑/预览和目标实例恢复前已检查版本；新备份持久化来源版本并在恢复前校验；ZIP 已内嵌来源并在解压前校验；其他配置变更路径、自动迁移及能力矩阵仍待实现 |
 | M3 Agent RuntimeAdapter 与共享执行协议 | 本地验证通过 | internal/workload、worker、runtime/docker；导入例外归零；真实一次性 Docker 容器的资源/端口/控制台/生命周期验证通过；分布式租约与隔离不在本批验收内 |

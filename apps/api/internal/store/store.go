@@ -602,13 +602,19 @@ func (s *Store) DeleteServerShareByInstance(ctx context.Context, instanceID stri
 	return s.db.WithContext(ctx).Delete(&domain.ServerShare{}, "instance_id = ?", instanceID).Error
 }
 
+// Legacy/instance persistence is retained for existing internal callers. Workspace
+// library writes must use the Owned operations in tenant_mod_library.go.
 func (s *Store) CreateMod(ctx context.Context, mod *domain.ModFile) error {
 	return s.db.WithContext(ctx).Create(mod).Error
 }
 
 func (s *Store) ListMods(ctx context.Context, instanceID string) ([]domain.ModFile, error) {
 	var mods []domain.ModFile
-	return mods, s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc").Find(&mods).Error
+	query := s.db.WithContext(ctx).Where("instance_id = ?", instanceID)
+	if instanceID == "unassigned" {
+		query = query.Where("organization_id = ?", "")
+	}
+	return mods, query.Order("created_at desc").Find(&mods).Error
 }
 
 func (s *Store) ListLibraryModsByWorkshopIDs(ctx context.Context, workshopIDs []string) ([]domain.ModFile, error) {
@@ -617,13 +623,14 @@ func (s *Store) ListLibraryModsByWorkshopIDs(ctx context.Context, workshopIDs []
 	}
 	var mods []domain.ModFile
 	return mods, s.db.WithContext(ctx).
-		Where("instance_id = ? AND workshop_id IN ?", "unassigned", workshopIDs).
+		Where("instance_id = ? AND organization_id = ? AND workshop_id IN ?", "unassigned", "", workshopIDs).
 		Find(&mods).Error
 }
 
+// GetMod excludes workspace library items; use GetUserLibraryMod for those.
 func (s *Store) GetMod(ctx context.Context, id string) (domain.ModFile, error) {
 	var mod domain.ModFile
-	err := s.db.WithContext(ctx).First(&mod, "id = ?", id).Error
+	err := s.db.WithContext(ctx).Where("instance_id <> ? OR organization_id = ?", "unassigned", "").First(&mod, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return mod, ErrNotFound
 	}
@@ -632,7 +639,7 @@ func (s *Store) GetMod(ctx context.Context, id string) (domain.ModFile, error) {
 
 func (s *Store) GetModByInstanceAndFile(ctx context.Context, instanceID string, fileName string) (domain.ModFile, error) {
 	var mod domain.ModFile
-	err := s.db.WithContext(ctx).First(&mod, "instance_id = ? AND file_name = ?", instanceID, fileName).Error
+	err := s.db.WithContext(ctx).Where("instance_id <> ? OR organization_id = ?", "unassigned", "").First(&mod, "instance_id = ? AND file_name = ?", instanceID, fileName).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return mod, ErrNotFound
 	}
@@ -641,7 +648,7 @@ func (s *Store) GetModByInstanceAndFile(ctx context.Context, instanceID string, 
 
 func (s *Store) GetModByInstanceAndWorkshopID(ctx context.Context, instanceID string, workshopID string) (domain.ModFile, error) {
 	var mod domain.ModFile
-	err := s.db.WithContext(ctx).First(&mod, "instance_id = ? AND workshop_id = ?", instanceID, workshopID).Error
+	err := s.db.WithContext(ctx).Where("instance_id <> ? OR organization_id = ?", "unassigned", "").First(&mod, "instance_id = ? AND workshop_id = ?", instanceID, workshopID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return mod, ErrNotFound
 	}
@@ -662,12 +669,12 @@ func (s *Store) CreateModPack(ctx context.Context, pack *domain.ModPack) error {
 
 func (s *Store) ListModPacks(ctx context.Context) ([]domain.ModPack, error) {
 	var packs []domain.ModPack
-	return packs, s.db.WithContext(ctx).Order("created_at desc").Find(&packs).Error
+	return packs, s.db.WithContext(ctx).Where("organization_id = ?", "").Order("created_at desc").Find(&packs).Error
 }
 
 func (s *Store) GetModPack(ctx context.Context, id string) (domain.ModPack, error) {
 	var pack domain.ModPack
-	err := s.db.WithContext(ctx).First(&pack, "id = ?", id).Error
+	err := s.db.WithContext(ctx).Where("organization_id = ?", "").First(&pack, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return pack, ErrNotFound
 	}

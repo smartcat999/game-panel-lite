@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
 type configPresetPayload struct {
@@ -85,7 +87,7 @@ func (h *Handler) createConfigPreset(w http.ResponseWriter, r *http.Request) {
 	preset.CreatedAt = time.Now()
 	preset.UpdatedAt = preset.CreatedAt
 	if err := h.store.CreateOwnedConfigPreset(r.Context(), allocationActor(r), &preset); err != nil {
-		writeAllocationError(w, err)
+		writePresetWriteError(w, err)
 		return
 	}
 	hydratePresetConfigPayload(&preset)
@@ -111,7 +113,7 @@ func (h *Handler) updateConfigPreset(w http.ResponseWriter, r *http.Request) {
 	preset.CreatedAt = existing.CreatedAt
 	preset.UpdatedAt = time.Now()
 	if err := h.store.SaveOwnedConfigPreset(r.Context(), allocationActor(r), existing, preset); err != nil {
-		writeAllocationError(w, err)
+		writePresetWriteError(w, err)
 		return
 	}
 	hydratePresetConfigPayload(&preset)
@@ -125,7 +127,7 @@ func (h *Handler) deleteConfigPreset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.DeleteOwnedConfigPreset(r.Context(), allocationActor(r), existing); err != nil {
-		writeAllocationError(w, err)
+		writePresetWriteError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -234,4 +236,12 @@ func (h *Handler) visibleConfigPreset(r *http.Request, id string) (domain.Config
 		return h.store.GetUserConfigPreset(r.Context(), actor, id)
 	}
 	return h.store.GetConfigPreset(r.Context(), id)
+}
+
+func writePresetWriteError(w http.ResponseWriter, err error) {
+	if errors.Is(err, store.ErrInvalidModLibrary) {
+		writeError(w, http.StatusBadRequest, "mod references must belong to the preset workspace and provider")
+		return
+	}
+	writeAllocationError(w, err)
 }

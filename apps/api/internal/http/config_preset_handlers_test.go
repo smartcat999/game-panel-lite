@@ -176,3 +176,26 @@ func TestDSTPresetSecretsAreRemovedFromWritesAndHistoricalReads(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspacePresetRejectsLegacyLibraryReference(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	ctx := context.Background()
+	org := domain.Organization{ID: "preset-library-workspace", Slug: "preset-library-workspace"}
+	if err := db.CreateOrganization(ctx, &org, ""); err != nil {
+		t.Fatal(err)
+	}
+	mod := domain.ModFile{ID: "legacy-preset-reference", InstanceID: "unassigned", ProviderKey: domain.ProviderPalworld, FileName: "legacy.pak"}
+	if err := db.CreateMod(ctx, &mod); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{"name":"Workspace preset","organizationId":"preset-library-workspace","providerKey":"palworld","version":"v2.4.1","modIds":["legacy-preset-reference"],"config":{"serverName":"Friends","saveName":"Starter Save","maxPlayers":10,"adminPassword":"test-admin-secret"}}`
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodPost, "/api/config-presets", strings.NewReader(payload)))
+	if response.Code != stdhttp.StatusBadRequest || !strings.Contains(response.Body.String(), "preset workspace") {
+		t.Fatalf("workspace reference rejection: %d %s", response.Code, response.Body.String())
+	}
+	presets, err := db.ListConfigPresets(ctx)
+	if err != nil || len(presets) != 0 {
+		t.Fatalf("invalid preset persisted: %+v %v", presets, err)
+	}
+}

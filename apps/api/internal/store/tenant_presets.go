@@ -45,6 +45,9 @@ func (s *Store) CreateOwnedConfigPreset(ctx context.Context, userID string, pres
 		if err := tx.lockPresetWriter(ctx, userID, preset.OrganizationID); err != nil {
 			return err
 		}
+		if err := tx.validatePresetLibrary(ctx, *preset); err != nil {
+			return err
+		}
 		return tx.CreateConfigPreset(ctx, preset)
 	})
 }
@@ -57,6 +60,9 @@ func (s *Store) SaveOwnedConfigPreset(ctx context.Context, userID string, before
 	}
 	return s.Transaction(ctx, func(tx *Store) error {
 		if err := tx.lockPresetWriter(ctx, userID, before.OrganizationID); err != nil {
+			return err
+		}
+		if err := tx.validatePresetLibrary(ctx, after); err != nil {
 			return err
 		}
 		after.Revision = before.Revision + 1

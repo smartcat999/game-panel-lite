@@ -67,7 +67,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := migratePostgres(ctx, baselineDB, postgresMigrations()[:1]); err != nil {
 		t.Fatal(err)
 	}
-	if err := baselineDB.Exec("INSERT INTO game_servers (id, organization_id) VALUES ('legacy-world-owner','legacy-org'); INSERT INTO worlds (id, instance_id) VALUES ('legacy-world','legacy-world-owner'); INSERT INTO activity_events (id, instance_id) VALUES ('legacy-event','legacy-world-owner')").Error; err != nil {
+	if err := baselineDB.Exec("INSERT INTO game_servers (id, organization_id) VALUES ('legacy-world-owner','legacy-org'); INSERT INTO worlds (id, instance_id) VALUES ('legacy-world','legacy-world-owner'); INSERT INTO activity_events (id, instance_id) VALUES ('legacy-event','legacy-world-owner'); INSERT INTO mod_files (id, instance_id) VALUES ('legacy-mod-migration','unassigned'); INSERT INTO mod_packs (id) VALUES ('legacy-pack-migration')").Error; err != nil {
 		t.Fatal(err)
 	}
 	baselinePool, _ := baselineDB.DB()
@@ -102,6 +102,21 @@ func TestPostgresIntegration(t *testing.T) {
 	legacyWorld, err := db.GetWorld(ctx, "legacy-world")
 	if err != nil || legacyWorld.OrganizationID != "legacy-org" {
 		t.Fatalf("world ownership migration: %+v %v", legacyWorld, err)
+	}
+
+	legacyMod, err := db.GetMod(ctx, "legacy-mod-migration")
+	if err != nil || legacyMod.OrganizationID != "" || legacyMod.Revision != 0 {
+		t.Fatalf("legacy mod ownership guessed: %+v %v", legacyMod, err)
+	}
+	legacyPack, err := db.GetModPack(ctx, "legacy-pack-migration")
+	if err != nil || legacyPack.OrganizationID != "" || legacyPack.Revision != 0 {
+		t.Fatalf("legacy pack ownership guessed: %+v %v", legacyPack, err)
+	}
+	if err := db.DeleteMod(ctx, legacyMod.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DeleteModPack(ctx, legacyPack.ID); err != nil {
+		t.Fatal(err)
 	}
 
 	role := "gamepanel_runtime_" + strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -188,6 +203,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testReconciliationPersistence(t, db)
 	testTenantAllocations(t, db)
 	testTenantPresets(t, db)
+	testTenantModLibrary(t, db)
 	testPlayerObservations(t, db)
 	testServerLifecycleWrites(t, db)
 	testAssignmentPublication(t, db)
