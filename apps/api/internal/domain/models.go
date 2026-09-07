@@ -24,6 +24,13 @@ type Player struct {
 
 type PlayerLogEvent string
 
+// ModMetadata contains optional package metadata returned by a provider.
+type ModMetadata struct {
+	Name          string
+	Version       string
+	LoaderVersion string
+}
+
 // ModSupport describes the sources accepted by a game provider.
 type ModSupport struct {
 	UploadExtensions []string

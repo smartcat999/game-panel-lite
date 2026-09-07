@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -24,6 +25,11 @@ type ConfigRestoreProvider interface {
 }
 type WorldFilesProvider interface {
 	WorldFiles(domain.GameServer) []string
+}
+
+// ModInspector reads optional package metadata; format validation belongs to the provider.
+type ModInspector interface {
+	InspectMod(io.Reader) (domain.ModMetadata, error)
 }
 
 type ModSupportProvider interface{ ModSupport() domain.ModSupport }

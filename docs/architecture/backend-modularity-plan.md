@@ -160,3 +160,5 @@ API 与 Agent 共用 internal/workload 的 Assignment、Spec 和 Observation，�
 HTTP 与启动规划共用 modcatalog.Identity/Dependencies，统一名称推导、持久元数据优先级及同 Provider 推荐目录回退。modruntime.ResolveDependencies 负责依赖图遍历、去重与取消；调用方提供按当前实例/Provider 查找或安装依赖的函数。该用例顺序执行，返回新分配记录，不承诺失败时回滚此前安装。上传解析、元数据写入、文件与数据库事务仍需继续迁移。架构测试禁止这两个共享模块反向依赖 HTTP、server 或具体 store/runtime。
 
 模组运行文件统一通过 modruntime.Install/Remove 操作，由 Provider 提供相对路径，应用用例持有 os.Root 并在实例目录内完成暂存、替换和删除。安装先完成全部暂存，再逐文件 rename；读取失败不发布半写入文件，但多个 rename 与数据库写入仍不具备事务原子性。保留现有容器镜像依赖的文件权限，后续强隔离需结合运行用户与卷所有权实现。
+
+模组二进制元数据由可选 ModInspector 能力解析，当前 tMod 实现在 Terraria Provider 内。modruntime 负责打开文件并传递 context，HTTP 仅消费通用名称、版本、加载器版本。当前上传接口保留元数据解析失败后继续上传的兼容策略；元数据提取不等于完整包验证，后续严格校验需单独验收。

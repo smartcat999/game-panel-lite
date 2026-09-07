@@ -36,11 +36,11 @@ func (h *Handler) copyLibraryModToServerCache(item domain.ModFile, targetInstanc
 	return size, err
 }
 
-func (h *Handler) upsertModRecord(ctx context.Context, server domain.GameServer, instanceID string, fileName string, size int64, metadata modsvc.Metadata) (domain.ModFile, bool, error) {
+func (h *Handler) upsertModRecord(ctx context.Context, server domain.GameServer, instanceID string, fileName string, size int64, metadata domain.ModMetadata) (domain.ModFile, bool, error) {
 	return h.upsertModRecordForProvider(ctx, server.ProviderKey, instanceID, fileName, size, metadata)
 }
 
-func (h *Handler) upsertModRecordForProvider(ctx context.Context, providerKey domain.ProviderKey, instanceID string, fileName string, size int64, metadata modsvc.Metadata) (domain.ModFile, bool, error) {
+func (h *Handler) upsertModRecordForProvider(ctx context.Context, providerKey domain.ProviderKey, instanceID string, fileName string, size int64, metadata domain.ModMetadata) (domain.ModFile, bool, error) {
 	if existing, err := h.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.SizeBytes = size
 		existing.Enabled = true
@@ -49,9 +49,7 @@ func (h *Handler) upsertModRecordForProvider(ctx context.Context, providerKey do
 		if existing.Source == "" {
 			existing.Source = "upload"
 		}
-		if providerKey == domain.ProviderTerrariaTModLoader {
-			applyTModMetadata(&existing, metadata)
-		}
+		applyModMetadata(&existing, metadata)
 		applyFileModMetadata(&existing)
 		hydrateModMetadata(&existing)
 		return existing, false, h.store.SaveMod(ctx, &existing)
@@ -59,15 +57,13 @@ func (h *Handler) upsertModRecordForProvider(ctx context.Context, providerKey do
 		return domain.ModFile{}, false, err
 	}
 	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, GameKey: gameKeyForProvider(providerKey), ProviderKey: providerKey, FileName: fileName, Source: "upload", SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
-	if providerKey == domain.ProviderTerrariaTModLoader {
-		applyTModMetadata(&item, metadata)
-	}
+	applyModMetadata(&item, metadata)
 	applyFileModMetadata(&item)
 	hydrateModMetadata(&item)
 	return item, true, h.store.CreateMod(ctx, &item)
 }
 
-func applyTModMetadata(item *domain.ModFile, metadata modsvc.Metadata) {
+func applyModMetadata(item *domain.ModFile, metadata domain.ModMetadata) {
 	if metadata.Name != "" {
 		item.ModName = metadata.Name
 		item.Title = metadata.Name
@@ -75,16 +71,16 @@ func applyTModMetadata(item *domain.ModFile, metadata modsvc.Metadata) {
 	if metadata.Version != "" {
 		item.ModVersion = metadata.Version
 	}
-	if metadata.TModLoaderVersion != "" {
-		item.TModVersion = metadata.TModLoaderVersion
+	if metadata.LoaderVersion != "" {
+		item.TModVersion = metadata.LoaderVersion
 	}
 }
 
-func metadataFromMod(item domain.ModFile) modsvc.Metadata {
-	return modsvc.Metadata{
-		Name:              item.Title,
-		Version:           item.ModVersion,
-		TModLoaderVersion: item.TModVersion,
+func metadataFromMod(item domain.ModFile) domain.ModMetadata {
+	return domain.ModMetadata{
+		Name:          item.Title,
+		Version:       item.ModVersion,
+		LoaderVersion: item.TModVersion,
 	}
 }
 

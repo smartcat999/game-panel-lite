@@ -1,56 +1,42 @@
-package mod
+package terraria
 
 import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"os"
 	"unicode/utf8"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
 
-type Metadata struct {
-	Name              string
-	Version           string
-	TModLoaderVersion string
-}
-
-func Inspect(path string) (Metadata, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return Metadata{}, err
-	}
-	defer file.Close()
-	return ReadMetadata(file)
-}
-
-func ReadMetadata(reader io.Reader) (Metadata, error) {
+func (TModLoaderProvider) InspectMod(reader io.Reader) (domain.ModMetadata, error) {
 	var magic [4]byte
 	if _, err := io.ReadFull(reader, magic[:]); err != nil {
-		return Metadata{}, err
+		return domain.ModMetadata{}, err
 	}
 	if string(magic[:]) != "TMOD" {
-		return Metadata{}, fmt.Errorf("invalid tmod header")
+		return domain.ModMetadata{}, fmt.Errorf("invalid tmod header")
 	}
 	tmodVersion, err := readBinaryString(reader)
 	if err != nil {
-		return Metadata{}, err
+		return domain.ModMetadata{}, err
 	}
 	if _, err := io.CopyN(io.Discard, reader, 20+256); err != nil {
-		return Metadata{}, err
+		return domain.ModMetadata{}, err
 	}
 	var dataLength uint32
 	if err := binary.Read(reader, binary.LittleEndian, &dataLength); err != nil {
-		return Metadata{}, err
+		return domain.ModMetadata{}, err
 	}
 	name, err := readBinaryString(reader)
 	if err != nil {
-		return Metadata{}, err
+		return domain.ModMetadata{}, err
 	}
 	version, err := readBinaryString(reader)
 	if err != nil {
-		return Metadata{}, err
+		return domain.ModMetadata{}, err
 	}
-	return Metadata{Name: name, Version: version, TModLoaderVersion: tmodVersion}, nil
+	return domain.ModMetadata{Name: name, Version: version, LoaderVersion: tmodVersion}, nil
 }
 
 func readBinaryString(reader io.Reader) (string, error) {

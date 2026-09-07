@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Moved tMod binary metadata parsing and its tests out of the generic mod cache package into Terraria Provider. Added optional ModInspector and generic ModMetadata with loader version; HTTP delegates inspection through modruntime with request cancellation and no concrete format parser import.
+- Removed provider-specific conditions around applying returned metadata. Existing database/wire fields remain compatible. Added malformed/truncated/oversized-string/UTF-8 header tests and a synthetic inspector test covering registration, missing files, unknown providers, optional capability and cancellation.
+- Metadata inspection remains best-effort at current upload endpoints; this does not validate complete archives or reject all unsafe packages. Strict upload validation and installation transactions remain pending. Validation passed: gofmt, full Go tests, vet and Terraria/modruntime/HTTP/server race tests. No frontend code or wire schema changed.
+
 - Removed provider switches from mod cache filename validation and per-instance upload extension checks. Providers declare accepted upload extensions and exact auxiliary cache names; modruntime exposes separate user-upload and internal-cache validation, injected into the cache service.
 - Added a synthetic .addon provider regression proving upload/cache extensibility without handler or storage changes. Auxiliary manifests and unknown providers are rejected at the user-upload boundary. Legacy Terraria global routes remain compatible.
 - Fixed ignored cache path errors in single/batch deletion: normalize legacy record metadata, validate the path and retain the database record when validation or removal fails. Binary mod parsing and complete installation transactions remain pending. Validation passed: gofmt, full go test ./..., go vet ./..., and final mod/modruntime/HTTP/server race tests. No frontend code or response schema changed.

@@ -74,12 +74,9 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	metadata := modsvc.Metadata{}
-	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		metadata, err = modsvc.Inspect(path)
-		if err != nil {
-			h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
-		}
+	metadata, err := h.modRuntime.Inspect(r.Context(), server.ProviderKey, path)
+	if err != nil {
+		h.logger.Warn("failed to parse mod metadata", "provider", server.ProviderKey, "file", header.Filename, "error", err)
 	}
 	item, created, err := h.upsertModRecord(r.Context(), server, server.ID, header.Filename, size, metadata)
 	if err != nil {
@@ -556,9 +553,9 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	metadata, err := modsvc.Inspect(path)
+	metadata, err := h.modRuntime.Inspect(r.Context(), domain.ProviderTerrariaTModLoader, path)
 	if err != nil {
-		h.logger.Warn("failed to parse tmod metadata", "file", header.Filename, "error", err)
+		h.logger.Warn("failed to parse mod metadata", "file", header.Filename, "error", err)
 	}
 	item, created, err := h.upsertModRecordForProvider(r.Context(), domain.ProviderTerrariaTModLoader, "unassigned", header.Filename, size, metadata)
 	if err != nil {
