@@ -249,15 +249,22 @@ func startTunnelLoop(ctx context.Context, cfg AgentConfig, logger *slog.Logger) 
 			continue
 		}
 
+		dispatched := false
 		if resp.StatusCode == http.StatusOK {
 			var tunnelReq TunnelRequest
 			if err := json.NewDecoder(resp.Body).Decode(&tunnelReq); err == nil && tunnelReq.StreamID != "" {
+				dispatched = true
 				logger.Info("received incoming tunnel stream request", "stream_id", tunnelReq.StreamID, "target_port", tunnelReq.TargetPort)
 				bridges.Add(1)
 				go func() { defer bridges.Done(); bridgeReverseStream(ctx, cfg, tunnelReq, logger) }()
 			}
 		}
+		// Drain small error/empty responses so retries can reuse the connection.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
 		resp.Body.Close()
+		if !dispatched && !retryDelay(ctx, 2*time.Second) {
+			return
+		}
 	}
 }
 
