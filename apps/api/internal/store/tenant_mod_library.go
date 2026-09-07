@@ -193,9 +193,20 @@ func (s *Store) SaveOwnedModPack(ctx context.Context, userID string, before, aft
 }
 
 // Referenced resources cannot be removed silently. The caller must explicitly
-// update the pack/preset first, under the same workspace writer lock.
+// update the instance/pack/preset first, under the same workspace writer lock.
 func (s *Store) libraryReferences(ctx context.Context, orgID, modID, packID string) error {
 	if modID != "" {
+		var servers []domain.GameServer
+		if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&servers).Error; err != nil {
+			return err
+		}
+		for _, server := range servers {
+			for _, id := range server.Spec.ModIDs {
+				if id == modID {
+					return ErrInvalidModLibrary
+				}
+			}
+		}
 		var packs []domain.ModPack
 		if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&packs).Error; err != nil {
 			return err

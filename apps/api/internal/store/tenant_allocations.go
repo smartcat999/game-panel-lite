@@ -103,6 +103,9 @@ func (s *Store) CreateAllocatedGameServer(ctx context.Context, userID string, in
 		if err != nil {
 			return err
 		}
+		if err := tx.validateServerModReferences(ctx, *instance); err != nil {
+			return err
+		}
 		if err := tx.checkAllocation(ctx, quota, instance); err != nil {
 			return err
 		}
@@ -120,6 +123,9 @@ func (s *Store) SaveAllocatedGameServer(ctx context.Context, userID string, befo
 		}
 		quota, err := tx.GetTenantQuota(ctx, before.OrganizationID)
 		if err != nil {
+			return err
+		}
+		if err := tx.validateServerModReferences(ctx, after); err != nil {
 			return err
 		}
 		if err := tx.checkAllocation(ctx, quota, &after); err != nil {

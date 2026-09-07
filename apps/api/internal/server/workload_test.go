@@ -154,6 +154,10 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 		},
 	}
 
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err := builder.BuildWorkloadSpec(context.Background(), server); err != nil {
 		t.Fatalf("build workload spec: %v", err)
 	}

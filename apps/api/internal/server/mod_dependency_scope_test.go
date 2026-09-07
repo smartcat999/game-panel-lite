@@ -23,7 +23,15 @@ func TestDependencyLookupStaysWithinProvider(t *testing.T) {
 			}
 		}
 	}
-	item, ok, err := resolver.findLibraryModByModName(ctx, domain.ProviderTerrariaTModLoader, "SharedDependency")
+	target := domain.GameServer{ID: "scope-target", ProviderKey: domain.ProviderTerrariaTModLoader}
+	if err := db.CreateGameServer(ctx, &target); err != nil {
+		t.Fatal(err)
+	}
+	otherTarget := domain.GameServer{ID: "scope-dst-target", ProviderKey: domain.ProviderDST}
+	if err := db.CreateGameServer(ctx, &otherTarget); err != nil {
+		t.Fatal(err)
+	}
+	item, ok, err := resolver.findLibraryModByModName(ctx, target, "SharedDependency")
 	if err != nil || !ok || item.ProviderKey != domain.ProviderTerrariaTModLoader {
 		t.Fatalf("wrong library dependency: %+v %v %v", item, ok, err)
 	}
@@ -31,7 +39,7 @@ func TestDependencyLookupStaysWithinProvider(t *testing.T) {
 	if err != nil || !ok || item.ProviderKey != domain.ProviderTerrariaTModLoader {
 		t.Fatalf("wrong server dependency: %+v %v %v", item, ok, err)
 	}
-	if _, ok, err := resolver.findLibraryModByModName(ctx, domain.ProviderDST, "SharedDependency"); err != nil || ok {
+	if _, ok, err := resolver.findLibraryModByModName(ctx, otherTarget, "SharedDependency"); err != nil || ok {
 		t.Fatalf("cross-game fallback: %v %v", ok, err)
 	}
 }

@@ -109,7 +109,7 @@ func writeAllocationError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, store.ErrQuotaExceeded), errors.Is(err, store.ErrReconciliationSuperseded):
 		status = http.StatusConflict
-	case errors.Is(err, store.ErrFiniteResourcesRequired), errors.Is(err, store.ErrInvalidQuota):
+	case errors.Is(err, store.ErrFiniteResourcesRequired), errors.Is(err, store.ErrInvalidQuota), errors.Is(err, store.ErrInvalidModLibrary):
 		status = http.StatusBadRequest
 	case errors.Is(err, store.ErrWorkspaceWriteDenied):
 		status = http.StatusForbidden

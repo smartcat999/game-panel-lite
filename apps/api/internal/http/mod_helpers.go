@@ -165,7 +165,7 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 	if existing, ok, err := h.findServerModByModName(ctx, server.ID, server.ProviderKey, dependencyName); err != nil || ok {
 		return existing, false, err
 	}
-	if library, ok, err := h.findLibraryModByModName(ctx, server.ProviderKey, dependencyName); err != nil || ok {
+	if library, ok, err := h.findLibraryModByModName(ctx, server, dependencyName); err != nil || ok {
 		if err != nil {
 			return domain.ModFile{}, false, err
 		}
@@ -212,15 +212,15 @@ func (h *Handler) findServerModByModName(ctx context.Context, instanceID string,
 	return domain.ModFile{}, false, nil
 }
 
-func (h *Handler) findLibraryModByModName(ctx context.Context, providerKey domain.ProviderKey, modName string) (domain.ModFile, bool, error) {
-	mods, err := h.store.ListMods(ctx, "unassigned")
+func (h *Handler) findLibraryModByModName(ctx context.Context, server domain.GameServer, modName string) (domain.ModFile, bool, error) {
+	mods, err := h.store.ListLibraryModsForServer(ctx, server)
 	if err != nil {
 		return domain.ModFile{}, false, err
 	}
 	for _, item := range mods {
 		// Normalize pre-provider legacy records before applying the provider scope.
 		hydrateModMetadata(&item)
-		if item.ProviderKey == providerKey && modcatalog.Identity(item) == modName {
+		if item.ProviderKey == server.ProviderKey && modcatalog.Identity(item) == modName {
 			return item, true, nil
 		}
 	}

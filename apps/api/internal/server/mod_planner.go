@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -23,7 +22,9 @@ type ModPlanner interface {
 }
 
 type ModStore interface {
-	GetMod(context.Context, string) (domain.ModFile, error)
+	GetModForServer(context.Context, domain.GameServer, string) (domain.ModFile, error)
+	ListLibraryModsForServer(context.Context, domain.GameServer) ([]domain.ModFile, error)
+	CheckModTarget(context.Context, domain.GameServer) error
 	GetModByInstanceAndFile(context.Context, string, string) (domain.ModFile, error)
 	GetModByInstanceAndWorkshopID(context.Context, string, string) (domain.ModFile, error)
 	ListMods(context.Context, string) ([]domain.ModFile, error)
@@ -45,12 +46,19 @@ func (p *RuntimeModPlanner) PlanMods(ctx context.Context, server domain.GameServ
 	if p == nil || p.store == nil || !p.providerSupportsMods(server.ProviderKey) {
 		return nil
 	}
+	if err := p.store.CheckModTarget(ctx, server); err != nil {
+		return err
+	}
+	sources := make([]domain.ModFile, 0, len(server.Spec.ModIDs))
 	roots := make([]domain.ModFile, 0, len(server.Spec.ModIDs))
 	for _, modID := range uniqueModIDs(server.Spec.ModIDs) {
-		item, err := p.store.GetMod(ctx, modID)
+		item, err := p.store.GetModForServer(ctx, server, modID)
 		if err != nil {
 			return fmt.Errorf("resolve desired mod %s: %w", modID, err)
 		}
+		sources = append(sources, item)
+	}
+	for _, item := range sources {
 		assigned, err := p.assignLibraryMod(ctx, server, item)
 		if err != nil {
 			return err
@@ -58,6 +66,9 @@ func (p *RuntimeModPlanner) PlanMods(ctx context.Context, server domain.GameServ
 		roots = append(roots, assigned)
 	}
 	if _, err := p.ensureModDependencies(ctx, server, roots); err != nil {
+		return err
+	}
+	if err := p.store.CheckModTarget(ctx, server); err != nil {
 		return err
 	}
 	return p.runtime.Sync(ctx, server)
@@ -69,8 +80,14 @@ func (p *RuntimeModPlanner) assignLibraryMod(ctx context.Context, server domain.
 		return domain.ModFile{}, fmt.Errorf("mod provider does not match target server")
 	}
 
+	if item.InstanceID == "unassigned" && item.OrganizationID != server.OrganizationID {
+		return domain.ModFile{}, fmt.Errorf("mod workspace does not match target server")
+	}
 	if item.InstanceID != "unassigned" && item.InstanceID != server.ID {
 		return domain.ModFile{}, fmt.Errorf("mod %s is not available in the library", item.ID)
+	}
+	if err := p.store.CheckModTarget(ctx, server); err != nil {
+		return domain.ModFile{}, err
 	}
 	if item.Source == "workshop" {
 		if !p.providerSupportsWorkshopMods(server.ProviderKey) {
@@ -86,7 +103,7 @@ func (p *RuntimeModPlanner) assignLibraryMod(ctx context.Context, server domain.
 	if err != nil {
 		return domain.ModFile{}, err
 	}
-	assigned, _, err := p.upsertModRecord(ctx, server.ProviderKey, server.ID, item.FileName, size, metadataFromMod(item))
+	assigned, _, err := p.upsertModRecord(ctx, server.ProviderKey, server.ID, item.FileName, size, item)
 	if err != nil {
 		return domain.ModFile{}, err
 	}
@@ -98,11 +115,7 @@ func (p *RuntimeModPlanner) assignLibraryMod(ctx context.Context, server domain.
 
 func (p *RuntimeModPlanner) copyLibraryModToServerCache(item domain.ModFile, targetInstanceID string) (int64, error) {
 	svc := modsvc.NewService(p.dataDir, p.runtime.StoredFileName)
-	sourcePath, err := svc.Path(item.InstanceID, item.ProviderKey, item.FileName)
-	if err != nil {
-		return 0, err
-	}
-	src, err := os.Open(sourcePath)
+	src, err := svc.Open(item)
 	if err != nil {
 		return 0, fmt.Errorf("mod file not found")
 	}
@@ -111,7 +124,7 @@ func (p *RuntimeModPlanner) copyLibraryModToServerCache(item domain.ModFile, tar
 	return size, err
 }
 
-func (p *RuntimeModPlanner) upsertModRecord(ctx context.Context, providerKey domain.ProviderKey, instanceID string, fileName string, size int64, metadata domain.ModMetadata) (domain.ModFile, bool, error) {
+func (p *RuntimeModPlanner) upsertModRecord(ctx context.Context, providerKey domain.ProviderKey, instanceID string, fileName string, size int64, source domain.ModFile) (domain.ModFile, bool, error) {
 	if existing, err := p.store.GetModByInstanceAndFile(ctx, instanceID, fileName); err == nil {
 		existing.SizeBytes = size
 		existing.Enabled = true
@@ -120,7 +133,9 @@ func (p *RuntimeModPlanner) upsertModRecord(ctx context.Context, providerKey dom
 		if existing.Source == "" {
 			existing.Source = "upload"
 		}
-		applyModMetadata(&existing, metadata)
+		applyModMetadata(&existing, metadataFromMod(source))
+		existing.ModName = source.ModName
+		existing.DependenciesJSON = source.DependenciesJSON
 		applyFileModMetadata(&existing)
 		hydrateModMetadata(&existing)
 		return existing, false, p.store.SaveMod(ctx, &existing)
@@ -128,7 +143,9 @@ func (p *RuntimeModPlanner) upsertModRecord(ctx context.Context, providerKey dom
 		return domain.ModFile{}, false, err
 	}
 	item := domain.ModFile{ID: uuid.NewString(), InstanceID: instanceID, GameKey: gameKeyForProvider(providerKey), ProviderKey: providerKey, FileName: fileName, Source: "upload", SizeBytes: size, Enabled: true, CreatedAt: time.Now()}
-	applyModMetadata(&item, metadata)
+	applyModMetadata(&item, metadataFromMod(source))
+	item.ModName = source.ModName
+	item.DependenciesJSON = source.DependenciesJSON
 	applyFileModMetadata(&item)
 	hydrateModMetadata(&item)
 	return item, true, p.store.CreateMod(ctx, &item)
@@ -191,7 +208,7 @@ func (p *RuntimeModPlanner) ensureModDependency(ctx context.Context, server doma
 	if existing, ok, err := p.findServerModByModName(ctx, server.ID, server.ProviderKey, dependencyName); err != nil || ok {
 		return existing, false, err
 	}
-	if library, ok, err := p.findLibraryModByModName(ctx, server.ProviderKey, dependencyName); err != nil || ok {
+	if library, ok, err := p.findLibraryModByModName(ctx, server, dependencyName); err != nil || ok {
 		if err != nil {
 			return domain.ModFile{}, false, err
 		}
@@ -220,15 +237,15 @@ func (p *RuntimeModPlanner) findServerModByModName(ctx context.Context, instance
 	return domain.ModFile{}, false, nil
 }
 
-func (p *RuntimeModPlanner) findLibraryModByModName(ctx context.Context, providerKey domain.ProviderKey, modName string) (domain.ModFile, bool, error) {
-	mods, err := p.store.ListMods(ctx, "unassigned")
+func (p *RuntimeModPlanner) findLibraryModByModName(ctx context.Context, server domain.GameServer, modName string) (domain.ModFile, bool, error) {
+	mods, err := p.store.ListLibraryModsForServer(ctx, server)
 	if err != nil {
 		return domain.ModFile{}, false, err
 	}
 	for _, item := range mods {
 		// Normalize pre-provider legacy records before applying the provider scope.
 		hydrateModMetadata(&item)
-		if item.ProviderKey == providerKey && modcatalog.Identity(item) == modName {
+		if item.ProviderKey == server.ProviderKey && modcatalog.Identity(item) == modName {
 			return item, true, nil
 		}
 	}
@@ -239,11 +256,7 @@ func (p *RuntimeModPlanner) materializeModForRuntime(ctx context.Context, item d
 	if item.Source == "workshop" {
 		return nil
 	}
-	sourcePath, err := modsvc.NewService(p.dataDir, p.runtime.StoredFileName).Path(item.InstanceID, item.ProviderKey, item.FileName)
-	if err != nil {
-		return err
-	}
-	source, err := os.Open(sourcePath)
+	source, err := modsvc.NewService(p.dataDir, p.runtime.StoredFileName).Open(item)
 	if err != nil {
 		return err
 	}

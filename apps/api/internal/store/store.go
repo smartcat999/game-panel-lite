@@ -169,6 +169,9 @@ func (s *Store) SaveGameServer(ctx context.Context, server *domain.GameServer) e
 				return err
 			}
 		}
+		if err := tx.validateServerModReferences(ctx, *server); err != nil {
+			return err
+		}
 		return tx.db.WithContext(ctx).Save(server).Error
 	})
 }
