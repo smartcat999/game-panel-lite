@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -273,5 +274,37 @@ func TestWriteDataFilePreservesNamesAndRejectsTraversal(t *testing.T) {
 		if err := writeDataFile(t.TempDir(), name, "configuration"); err == nil {
 			t.Errorf("accepted invalid file path %q", name)
 		}
+	}
+}
+
+func TestDefaultHostConfigSecurityAndResources(t *testing.T) {
+	spec := runtime.ContainerSpec{
+		Port:     7777,
+		HostPort: 47777,
+		Resources: runtime.ContainerResources{
+			CPULimitCores: 2.0,
+			MemoryLimitMB: 4096,
+		},
+	}
+	binds := []string{"/host/data:/data"}
+	hostConfig := defaultHostConfig(spec, binds)
+
+	if len(hostConfig.SecurityOpt) != 1 || hostConfig.SecurityOpt[0] != "no-new-privileges:true" {
+		t.Fatalf("security opt mismatch: %+v", hostConfig.SecurityOpt)
+	}
+
+	expectedCapDrop := []string{"SYS_ADMIN", "NET_ADMIN", "SYS_RAWIO", "SYS_MODULE", "SYS_PTRACE", "SYS_BOOT"}
+	if !reflect.DeepEqual([]string(hostConfig.CapDrop), expectedCapDrop) {
+		t.Fatalf("cap drop mismatch: got %v, want %v", hostConfig.CapDrop, expectedCapDrop)
+	}
+
+	if hostConfig.Resources.NanoCPUs != 2_000_000_000 {
+		t.Fatalf("expected 2 cores NanoCPUs, got %d", hostConfig.Resources.NanoCPUs)
+	}
+	if hostConfig.Resources.Memory != 4096*1024*1024 {
+		t.Fatalf("expected 4096MB memory, got %d", hostConfig.Resources.Memory)
+	}
+	if hostConfig.RestartPolicy.Name != "unless-stopped" {
+		t.Fatalf("restart policy mismatch: %s", hostConfig.RestartPolicy.Name)
 	}
 }

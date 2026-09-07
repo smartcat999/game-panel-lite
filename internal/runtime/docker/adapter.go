@@ -128,6 +128,8 @@ func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) er
 			Binds: binds, PortBindings: bindings,
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 			Resources:     container.Resources{NanoCPUs: int64(assignment.Spec.Resources.CPULimitCores * 1e9), Memory: int64(assignment.Spec.Resources.MemoryLimitMB) * 1024 * 1024},
+			SecurityOpt:   []string{"no-new-privileges:true"},
+			CapDrop:       []string{"SYS_ADMIN", "NET_ADMIN", "SYS_RAWIO", "SYS_MODULE", "SYS_PTRACE", "SYS_BOOT"},
 		}
 		_, createErr := a.client.ContainerCreate(ctx, &container.Config{
 			Image: assignment.Spec.Image, Env: assignment.Spec.Options.Env, Cmd: assignment.Spec.Options.Cmd,

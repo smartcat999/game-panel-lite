@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -72,6 +73,13 @@ func TestCreatePreservesNetworkResourcesAndOwnership(t *testing.T) {
 	}
 	if got.Labels[labelUID] != "uid" || got.Labels[labelNode] != "node" || got.Labels[labelGeneration] != "3" {
 		t.Fatalf("ownership lost: %v", got.Labels)
+	}
+	if len(got.HostConfig.SecurityOpt) != 1 || got.HostConfig.SecurityOpt[0] != "no-new-privileges:true" {
+		t.Fatalf("security opt lost: %+v", got.HostConfig.SecurityOpt)
+	}
+	expectedCapDrop := []string{"SYS_ADMIN", "NET_ADMIN", "SYS_RAWIO", "SYS_MODULE", "SYS_PTRACE", "SYS_BOOT"}
+	if !reflect.DeepEqual([]string(got.HostConfig.CapDrop), expectedCapDrop) {
+		t.Fatalf("cap drop mismatch: got %v, want %v", got.HostConfig.CapDrop, expectedCapDrop)
 	}
 	if len(got.HostConfig.Binds) != 1 || !strings.HasPrefix(got.HostConfig.Binds[0], adapter.dataDir) {
 		t.Fatalf("unexpected binds: %v", got.HostConfig.Binds)

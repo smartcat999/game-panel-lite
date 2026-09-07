@@ -74,20 +74,7 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 	if err != nil {
 		return "", err
 	}
-	hostConfig := &container.HostConfig{
-		Binds:        binds,
-		PortBindings: natPortMaps(spec),
-		// Docker remembers containers stopped explicitly by the user. With
-		// unless-stopped, desired-running game servers recover after a host or
-		// daemon restart while instances stopped through GamePanel stay stopped.
-		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-	}
-	if spec.Resources.CPULimitCores > 0 {
-		hostConfig.Resources.NanoCPUs = int64(spec.Resources.CPULimitCores * 1_000_000_000)
-	}
-	if spec.Resources.MemoryLimitMB > 0 {
-		hostConfig.Resources.Memory = int64(spec.Resources.MemoryLimitMB) * 1024 * 1024
-	}
+	hostConfig := defaultHostConfig(spec, binds)
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image:        spec.Image,
 		User:         "0:0",
@@ -181,4 +168,21 @@ func (a *Adapter) inspectContainerState(ctx context.Context, containerID string)
 		return domain.StatusErrored, fmt.Errorf("%s (exit code %d)", detail, got.State.ExitCode)
 	}
 	return domain.StatusStopped, nil
+}
+
+func defaultHostConfig(spec runtime.ContainerSpec, binds []string) *container.HostConfig {
+	hostConfig := &container.HostConfig{
+		Binds:         binds,
+		PortBindings:  natPortMaps(spec),
+		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+		SecurityOpt:   []string{"no-new-privileges:true"},
+		CapDrop:       []string{"SYS_ADMIN", "NET_ADMIN", "SYS_RAWIO", "SYS_MODULE", "SYS_PTRACE", "SYS_BOOT"},
+	}
+	if spec.Resources.CPULimitCores > 0 {
+		hostConfig.Resources.NanoCPUs = int64(spec.Resources.CPULimitCores * 1_000_000_000)
+	}
+	if spec.Resources.MemoryLimitMB > 0 {
+		hostConfig.Resources.Memory = int64(spec.Resources.MemoryLimitMB) * 1024 * 1024
+	}
+	return hostConfig
 }
