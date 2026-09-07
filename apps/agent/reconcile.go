@@ -21,6 +21,9 @@ func reconcileAssignments(ctx context.Context, client *http.Client, cfg AgentCon
 		return
 	}
 	req.Header.Set("X-Node-Token", cfg.Token)
+	if cfg.ArtifactsEnabled {
+		req.Header.Set("X-Workload-Capabilities", "artifacts-v1")
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Warn("failed to fetch workload assignments", "error", err)

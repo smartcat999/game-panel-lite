@@ -239,7 +239,7 @@ paths:
                           properties:
                             artifacts:
                               type: array
-                              description: Immutable file references. No host paths or arbitrary download URLs. Authorized node download is available for persisted manifests; automatic publication and production Agent downloads are not yet wired.
+                              description: Immutable file references. No host paths or arbitrary download URLs. Authorized node download is available for persisted manifests; production Agent downloads are configured; automatic manifest publication is still pending.
                               items:
                                 type: object
                                 required: [id, path, sha256, sizeBytes]
@@ -267,7 +267,7 @@ paths:
   /api/agent/assignments/{uid}/artifacts/{artifactId}:
     get:
       summary: Download an uploaded workspace artifact for the current node assignment
-      description: Requires the owning node token, a current running assignment and instance generation, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. This is request-scoped authorization, not a lease or in-flight revocation guarantee. The worker must verify the received bytes before replacing a container. Automatic manifest publication and production Agent downloads are not yet wired.
+      description: Requires the owning node token, a current running assignment and instance generation, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. This is request-scoped authorization, not a lease or in-flight revocation guarantee. The worker must verify the received bytes before replacing a container. Production Agent downloads are configured; automatic manifest publication is still pending.
       security:
         - nodeToken: []
       parameters:

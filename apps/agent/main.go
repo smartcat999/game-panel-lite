@@ -34,11 +34,12 @@ type agentRuntime interface {
 }
 
 type AgentConfig struct {
-	MasterURL string
-	Token     string
-	NodeName  string
-	PublicIP  string
-	Interval  time.Duration
+	MasterURL        string
+	Token            string
+	NodeName         string
+	PublicIP         string
+	Interval         time.Duration
+	ArtifactsEnabled bool
 }
 
 type RegisterPayload struct {
@@ -75,12 +76,6 @@ func main() {
 	if instanceRoot == "" {
 		instanceRoot = "/var/lib/gamepanel/instances"
 	}
-	runtimeAdapter, err := docker.NewAdapter(dockerHost, instanceRoot)
-	if err != nil {
-		logger.Error("initialize runtime", "error", err)
-		os.Exit(1)
-	}
-	defer runtimeAdapter.Close()
 
 	masterURL := os.Getenv("MASTER_URL")
 	if masterURL == "" {
@@ -115,6 +110,19 @@ func main() {
 		PublicIP:  publicIP,
 		Interval:  10 * time.Second,
 	}
+
+	limits, err := agentArtifactLimits(os.Getenv)
+	if err != nil {
+		logger.Error("configure artifact limits", "error", err)
+		os.Exit(1)
+	}
+	runtimeAdapter, err := newAgentRuntime(dockerHost, instanceRoot, cfg, limits)
+	if err != nil {
+		logger.Error("initialize runtime", "error", err)
+		os.Exit(1)
+	}
+	defer runtimeAdapter.Close()
+	cfg.ArtifactsEnabled = true
 
 	logger.Info("starting gamepanel lite worker agent",
 		"version", AgentVersion,
@@ -670,4 +678,39 @@ func retryDelay(ctx context.Context, delay time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+func agentArtifactLimits(getenv func(string) string) (docker.ArtifactLimits, error) {
+	limits := docker.ArtifactLimits{MaxFiles: 128, MaxFileBytes: 256 << 20, MaxTotalBytes: 1 << 30}
+	if raw := getenv("AGENT_ARTIFACT_MAX_FILES"); raw != "" {
+		count, err := strconv.Atoi(raw)
+		if err != nil || count <= 0 {
+			return limits, fmt.Errorf("AGENT_ARTIFACT_MAX_FILES must be a positive integer")
+		}
+		limits.MaxFiles = count
+	}
+	for _, option := range []struct {
+		name  string
+		value *int64
+	}{
+		{"AGENT_ARTIFACT_MAX_FILE_BYTES", &limits.MaxFileBytes},
+		{"AGENT_ARTIFACT_MAX_TOTAL_BYTES", &limits.MaxTotalBytes},
+	} {
+		if raw := getenv(option.name); raw != "" {
+			size, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || size <= 0 {
+				return limits, fmt.Errorf("%s must be a positive integer", option.name)
+			}
+			*option.value = size
+		}
+	}
+	return limits, nil
+}
+
+func newAgentRuntime(host, root string, cfg AgentConfig, limits docker.ArtifactLimits) (*docker.Adapter, error) {
+	source, err := newArtifactSource(cfg.MasterURL, cfg.Token, &http.Client{Timeout: 90 * time.Second})
+	if err != nil {
+		return nil, err
+	}
+	return docker.NewAdapterWithArtifacts(host, root, source, limits)
 }
