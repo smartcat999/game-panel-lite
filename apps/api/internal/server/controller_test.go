@@ -19,10 +19,10 @@ func (s *assignmentControllerFakeStore) ListGameServers(context.Context) ([]doma
 	return append([]domain.GameServer{}, s.servers...), nil
 }
 
-func (s *assignmentControllerFakeStore) SaveGameServer(_ context.Context, server *domain.GameServer) error {
+func (s *assignmentControllerFakeStore) SaveReconciledGameServer(_ context.Context, before domain.GameServer, server domain.GameServer) error {
 	for i := range s.servers {
 		if s.servers[i].ID == server.ID {
-			s.servers[i] = *server
+			s.servers[i] = server
 			return nil
 		}
 	}

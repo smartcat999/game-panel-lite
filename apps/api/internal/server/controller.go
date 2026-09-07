@@ -14,7 +14,7 @@ import (
 
 type ControllerStore interface {
 	ListGameServers(context.Context) ([]domain.GameServer, error)
-	SaveGameServer(context.Context, *domain.GameServer) error
+	SaveReconciledGameServer(context.Context, domain.GameServer, domain.GameServer) error
 }
 
 type deletingControllerStore interface {
@@ -153,7 +153,7 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 			return
 		}
 	}
-	if err := c.store.SaveGameServer(ctx, &updated); err != nil {
+	if err := c.store.SaveReconciledGameServer(ctx, item, updated); err != nil {
 		c.logger.Warn("failed to save reconciled server", "server", item.ID, "error", err)
 		return
 	}
@@ -165,6 +165,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	if !ok || c.reconciler == nil || c.reconciler.Builder() == nil {
 		return
 	}
+	before := item
 	now := time.Now().UTC()
 	current, currentErr := assignments.GetWorkloadAssignmentByServer(ctx, item.ID)
 	assignmentUID := current.UID
@@ -183,7 +184,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 			item.Status.LastError = err.Error()
 			item.Status.ActualState = domain.ActualUnknown
 			setPhase(&item.Status, domain.PhaseFailed, now)
-			_ = c.store.SaveGameServer(ctx, &item)
+			_ = c.store.SaveReconciledGameServer(ctx, before, item)
 			return
 		}
 		workloadSpec = built
@@ -220,7 +221,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 				LastTransitionAt:   now,
 			})
 			setPhase(&item.Status, domain.PhaseReconciling, now)
-			_ = c.store.SaveGameServer(ctx, &item)
+			_ = c.store.SaveReconciledGameServer(ctx, before, item)
 			return
 		}
 	}
@@ -230,7 +231,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	if err != nil || observation.AssignmentUID != assignment.UID || observation.NodeID != assignment.NodeID {
 		item.Status.ActualState = domain.ActualUnknown
 		setPhase(&item.Status, domain.PhaseReconciling, now)
-		_ = c.store.SaveGameServer(ctx, &item)
+		_ = c.store.SaveReconciledGameServer(ctx, before, item)
 		return
 	}
 	item.Status.RuntimeID = observation.RuntimeID
@@ -240,12 +241,12 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	item.Status.LastError = observation.LastError
 	if observation.LastError != "" {
 		setPhase(&item.Status, domain.PhaseFailed, now)
-		_ = c.store.SaveGameServer(ctx, &item)
+		_ = c.store.SaveReconciledGameServer(ctx, before, item)
 		return
 	}
 	if observation.ObservedGeneration < assignment.Generation {
 		setPhase(&item.Status, domain.PhaseReconciling, now)
-		_ = c.store.SaveGameServer(ctx, &item)
+		_ = c.store.SaveReconciledGameServer(ctx, before, item)
 		return
 	}
 	item.Status.AppliedGeneration = observation.ObservedGeneration
@@ -274,7 +275,7 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 		}
 		setPhase(&item.Status, domain.PhaseDeleting, now)
 	}
-	_ = c.store.SaveGameServer(ctx, &item)
+	_ = c.store.SaveReconciledGameServer(ctx, before, item)
 }
 
 func upsertServerCondition(conditions []domain.ServerCondition, condition domain.ServerCondition) []domain.ServerCondition {

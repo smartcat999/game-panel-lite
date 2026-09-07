@@ -185,6 +185,7 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatalf("not found: %v", err)
 	}
 	testTenantActivity(t, db)
+	testReconciliationPersistence(t, db)
 	testCredentialRotation(t, db)
 	testConcurrentCredentialRotation(t, db)
 	testWorldOwnershipQueries(t, db)
