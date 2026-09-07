@@ -126,6 +126,10 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "stop the server before restoring a backup")
 		return
 	}
+	if err := h.gameConfig.Check(resource); err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	missing, err := h.pruneMissingBackupSource(r.Context(), item)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -279,6 +283,10 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if isGameServerLockedForMutation(resource) {
 		writeError(w, http.StatusConflict, "stop the server before restoring a save snapshot")
+		return
+	}
+	if err := h.gameConfig.Check(resource); err != nil {
+		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
 	missing, err := h.pruneMissingBackupSource(r.Context(), item)

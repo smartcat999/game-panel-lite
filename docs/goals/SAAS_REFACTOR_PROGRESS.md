@@ -13,7 +13,7 @@
 | 模组清单与文件布局归属 Provider | 本地验证通过 | ModManifestProvider、ModFilesProvider、共享 modruntime 用例 |
 | 模组来源能力与注册校验 | 部分完成 | ModSupportProvider；支持上传与 Workshop 的判断已改为能力声明；同名依赖查找与分配已限制在同一 Provider；未知 Provider 不回退 tModLoader；名称/依赖元数据已集中到 modcatalog，依赖图遍历已集中到 modruntime；运行文件安装/删除已集中到 modruntime 并使用 os.Root；上传扩展名/辅助缓存文件由 Provider 声明并注入缓存服务；tMod 元数据解析已迁回 Terraria Provider，经 ModInspector 调用；严格包验证、元数据写入与完整安装事务仍待实现 |
 | HTTP 与生命周期仅依赖应用用例 | 未完成 | 具体 Provider 导入已消除，但多个 Handler 仍持有 Store/Runtime 并含编排逻辑 |
-| 插件版本、配置版本与完整能力校验 | 部分完成 | Provider 声明插件/配置版本；Registry 校验声明，创建保存配置版本，执行前拒绝不兼容版本；配置编辑/恢复、自动迁移及其他能力矩阵仍待实现 |
+| 插件版本、配置版本与完整能力校验 | 部分完成 | Provider 声明插件/配置版本；Registry 校验声明，创建保存配置版本，执行前拒绝不兼容版本；通用编辑/预览和目标实例恢复前已检查版本；备份来源版本、其他配置变更路径、自动迁移及能力矩阵仍待实现 |
 | M3 Agent RuntimeAdapter 与共享执行协议 | 本地验证通过 | internal/workload、worker、runtime/docker；导入例外归零；真实一次性 Docker 容器的资源/端口/控制台/生命周期验证通过；分布式租约与隔离不在本批验收内 |
 | 身份/租户/持久化模块所有权 | 未完成 | 待配合 PostgreSQL 与租户迁移实现；不是简单拆文件 |
 | PostgreSQL 与显式数据库迁移 | 未完成 | 需真实数据库迁移与回滚演练 |

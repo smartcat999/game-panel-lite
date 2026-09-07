@@ -59,13 +59,16 @@ func (s *Service) Presets() []domain.ProviderPreset {
 	return result
 }
 
-func (s *Service) Preview(key domain.ProviderKey, raw json.RawMessage) (map[string]string, error) {
+func (s *Service) Preview(key domain.ProviderKey, version int, raw json.RawMessage) (map[string]string, error) {
 	if key == "" {
 		key = s.defaultProvider
 	}
 	item, ok := s.providers.Get(key)
 	if !ok {
 		return nil, fmt.Errorf("unknown provider: %s", key)
+	}
+	if err := provider.CheckConfigVersion(item, version); err != nil {
+		return nil, err
 	}
 	preview, ok := item.(provider.ConfigPreviewProvider)
 	if !ok {
@@ -81,6 +84,9 @@ func (s *Service) Restore(ctx context.Context, server *domain.GameServer) error 
 	item, ok := s.providers.Get(server.ProviderKey)
 	if !ok {
 		return fmt.Errorf("unknown provider: %s", server.ProviderKey)
+	}
+	if err := provider.CheckConfigVersion(item, server.Spec.ConfigVersion); err != nil {
+		return err
 	}
 	restore, ok := item.(provider.ConfigRestoreProvider)
 	if !ok {
@@ -128,4 +134,14 @@ func (s *Service) Restore(ctx context.Context, server *domain.GameServer) error 
 	}
 	*server = updated
 	return nil
+}
+
+// Check verifies a stored configuration before callers perform mutations such
+// as extracting a backup. It does not inspect the backup's own format version.
+func (s *Service) Check(server domain.GameServer) error {
+	item, ok := s.providers.Get(server.ProviderKey)
+	if !ok {
+		return fmt.Errorf("unknown provider: %s", server.ProviderKey)
+	}
+	return provider.CheckConfigVersion(item, server.Spec.ConfigVersion)
 }

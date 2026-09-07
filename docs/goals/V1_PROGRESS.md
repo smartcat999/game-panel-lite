@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Extended configuration version checks to generic config editing, versioned preview, and gameconfig restoration. Both backup restore endpoints check the target configuration before archive extraction or orphan-record pruning.
+- Added regressions proving incompatible edits/restores preserve the stored server spec and backup record, and incompatible direct restore does not persist/mutate caller state. Preview accepts optional configVersion (legacy zero remains format 1), documented in OpenAPI.
+- Source backup format/version metadata, other config mutation paths and explicit migrations are still pending. Target-instance preflight does not establish backup-source compatibility. Validation passed: gofmt, full Go tests, vet, gameconfig/HTTP race tests and OpenAPI YAML parsing. No frontend source changed.
+
 - Introduced independent plugin release and configuration format declarations for every registered provider. Registry rejects malformed numeric major.minor.patch release identifiers and nonpositive configuration versions. Current providers declare release 1.0.0 / configuration format 1 as the initial contract baseline.
 - New instances persist spec.configVersion; omitted/zero legacy values mean format 1, not the newest format. Workload construction rejects incompatible formats before directory creation/mod planning. Added OpenAPI documentation, registry compatibility tests, persistence/create assertions and a no-filesystem-mutation regression.
 - Configuration editing/restoration guards, explicit migrations and compatibility across actual future provider releases are not yet implemented. Plugin version metadata does not imply hot loading or a versioned RPC protocol. Validation passed: gofmt, full Go tests/vet, provider/server/store/HTTP race tests, frontend typecheck/build, tracked-source lint and OpenAPI YAML parsing. Existing worktree-wide lint failures in unrelated local recording scripts remain unchanged.

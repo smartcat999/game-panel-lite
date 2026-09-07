@@ -43,13 +43,14 @@ func normalizeStoredProviderVersion(gameProvider provider.GameProvider, version 
 
 func (h *Handler) configPreview(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		Config json.RawMessage `json:"config"`
+		Config        json.RawMessage `json:"config"`
+		ConfigVersion int             `json:"configVersion,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	rendered, err := h.gameConfig.Preview("", payload.Config)
+	rendered, err := h.gameConfig.Preview("", payload.ConfigVersion, payload.Config)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

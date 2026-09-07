@@ -62,17 +62,17 @@ func TestPreviewUsesCapabilityAndDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.Preview("", raw)
+	result, err := service.Preview("", 0, raw)
 	if err != nil || !strings.Contains(result["serverconfig"], "worldname=Friends World") {
 		t.Fatalf("result=%v err=%v", result, err)
 	}
-	if _, err := service.Preview(domain.ProviderPalworld, raw); !errors.Is(err, provider.ErrUnsupported) {
+	if _, err := service.Preview(domain.ProviderPalworld, 0, raw); !errors.Is(err, provider.ErrUnsupported) {
 		t.Fatalf("expected unsupported: %v", err)
 	}
-	if _, err := service.Preview("missing", raw); err == nil {
+	if _, err := service.Preview("missing", 0, raw); err == nil {
 		t.Fatal("unknown provider accepted")
 	}
-	if _, err := service.Preview("", json.RawMessage(`{"maxPlayers":"invalid"}`)); err == nil {
+	if _, err := service.Preview("", 0, json.RawMessage(`{"maxPlayers":"invalid"}`)); err == nil {
 		t.Fatal("invalid config accepted")
 	}
 }
@@ -139,5 +139,23 @@ func TestRestoreRejectsEscapingSymlinkAndOversizedFile(t *testing.T) {
 				t.Fatal("invalid or missing input persisted")
 			}
 		})
+	}
+}
+
+func TestIncompatibleConfigCannotBePreviewedOrRestored(t *testing.T) {
+	store := &configStore{}
+	service := testService(t, store)
+	server := configServer(t)
+	server.Spec.ConfigVersion = 99
+	before, _ := json.Marshal(server)
+	if err := service.Restore(context.Background(), &server); err == nil {
+		t.Fatal("incompatible restore accepted")
+	}
+	after, _ := json.Marshal(server)
+	if string(before) != string(after) || store.calls != 0 {
+		t.Fatal("incompatible restore mutated resource")
+	}
+	if _, err := service.Preview(server.ProviderKey, 99, json.RawMessage(`{}`)); err == nil {
+		t.Fatal("incompatible preview accepted")
 	}
 }

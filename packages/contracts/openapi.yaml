@@ -1033,6 +1033,10 @@ paths:
               type: object
               required: [config]
               properties:
+                configVersion:
+                  type: integer
+                  minimum: 0
+                  description: Configuration format version; omitted or zero means legacy format 1.
                 config:
                   $ref: "#/components/schemas/TerrariaConfig"
       responses:

@@ -97,6 +97,10 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unknown provider")
 		return
 	}
+	if err := h.gameConfig.Check(server); err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
 	configPayload, _, err := decodeProviderConfigPayload(gameProvider, payload.Config, server.Spec.Config)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
