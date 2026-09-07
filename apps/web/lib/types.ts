@@ -251,6 +251,7 @@ export type ServerShare = {
 };
 
 export type ConfigPreset = {
+  organizationId?: string;
   id: string;
   name: string;
   gameKey: GameKey;

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,13 +14,14 @@ import (
 )
 
 type configPresetPayload struct {
-	Name        string               `json:"name"`
-	ProviderKey domain.ProviderKey   `json:"providerKey"`
-	Config      json.RawMessage      `json:"config"`
-	Version     string               `json:"version"`
-	Resources   resourceLimitPayload `json:"resources,omitempty"`
-	ModPackID   string               `json:"modPackId,omitempty"`
-	ModIDs      []string             `json:"modIds"`
+	OrganizationID string               `json:"organizationId,omitempty"`
+	Name           string               `json:"name"`
+	ProviderKey    domain.ProviderKey   `json:"providerKey"`
+	Config         json.RawMessage      `json:"config"`
+	Version        string               `json:"version"`
+	Resources      resourceLimitPayload `json:"resources,omitempty"`
+	ModPackID      string               `json:"modPackId,omitempty"`
+	ModIDs         []string             `json:"modIds"`
 }
 
 type configPresetBatchDeletePayload struct {
@@ -32,7 +34,13 @@ type configPresetBatchDeleteResult struct {
 }
 
 func (h *Handler) listConfigPresets(w http.ResponseWriter, r *http.Request) {
-	presets, err := h.store.ListConfigPresets(r.Context())
+	list := h.store.ListConfigPresets
+	if actor := allocationActor(r); actor != "" {
+		list = func(ctx context.Context) ([]domain.ConfigPreset, error) {
+			return h.store.ListUserConfigPresets(ctx, actor)
+		}
+	}
+	presets, err := list(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -48,7 +56,7 @@ func (h *Handler) listConfigPresets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getConfigPreset(w http.ResponseWriter, r *http.Request) {
-	preset, err := h.store.GetConfigPreset(r.Context(), chi.URLParam(r, "id"))
+	preset, err := h.visibleConfigPreset(r, chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "config preset not found")
 		return
@@ -67,11 +75,17 @@ func (h *Handler) createConfigPreset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	organizationID, status, err := h.creationOrganization(r, preset.OrganizationID)
+	if err != nil {
+		writeError(w, status, err.Error())
+		return
+	}
+	preset.OrganizationID = organizationID
 	preset.ID = uuid.NewString()
 	preset.CreatedAt = time.Now()
 	preset.UpdatedAt = preset.CreatedAt
-	if err := h.store.CreateConfigPreset(r.Context(), &preset); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.store.CreateOwnedConfigPreset(r.Context(), allocationActor(r), &preset); err != nil {
+		writeAllocationError(w, err)
 		return
 	}
 	hydratePresetConfigPayload(&preset)
@@ -79,7 +93,7 @@ func (h *Handler) createConfigPreset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateConfigPreset(w http.ResponseWriter, r *http.Request) {
-	existing, err := h.store.GetConfigPreset(r.Context(), chi.URLParam(r, "id"))
+	existing, err := h.visibleConfigPreset(r, chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "config preset not found")
 		return
@@ -89,10 +103,15 @@ func (h *Handler) updateConfigPreset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if preset.OrganizationID != "" && preset.OrganizationID != existing.OrganizationID {
+		writeError(w, http.StatusBadRequest, "preset workspace cannot be changed")
+		return
+	}
+	preset.OrganizationID = existing.OrganizationID
 	preset.CreatedAt = existing.CreatedAt
 	preset.UpdatedAt = time.Now()
-	if err := h.store.SaveConfigPreset(r.Context(), &preset); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.store.SaveOwnedConfigPreset(r.Context(), allocationActor(r), existing, preset); err != nil {
+		writeAllocationError(w, err)
 		return
 	}
 	hydratePresetConfigPayload(&preset)
@@ -100,12 +119,13 @@ func (h *Handler) updateConfigPreset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deleteConfigPreset(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.store.GetConfigPreset(r.Context(), chi.URLParam(r, "id")); err != nil {
+	existing, err := h.visibleConfigPreset(r, chi.URLParam(r, "id"))
+	if err != nil {
 		writeError(w, http.StatusNotFound, "config preset not found")
 		return
 	}
-	if err := h.store.DeleteConfigPreset(r.Context(), chi.URLParam(r, "id")); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.store.DeleteOwnedConfigPreset(r.Context(), allocationActor(r), existing); err != nil {
+		writeAllocationError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -128,11 +148,12 @@ func (h *Handler) batchDeleteConfigPresets(w http.ResponseWriter, r *http.Reques
 	}
 	result := configPresetBatchDeleteResult{Succeeded: []map[string]string{}, Failed: []map[string]string{}}
 	for _, id := range ids {
-		if _, err := h.store.GetConfigPreset(r.Context(), id); err != nil {
+		existing, err := h.visibleConfigPreset(r, id)
+		if err != nil {
 			result.Failed = append(result.Failed, map[string]string{"id": id, "error": "config preset not found"})
 			continue
 		}
-		if err := h.store.DeleteConfigPreset(r.Context(), id); err != nil {
+		if err := h.store.DeleteOwnedConfigPreset(r.Context(), allocationActor(r), existing); err != nil {
 			result.Failed = append(result.Failed, map[string]string{"id": id, "error": err.Error()})
 			continue
 		}
@@ -145,6 +166,9 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 	var payload configPresetPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		return domain.ConfigPreset{}, fmt.Errorf("invalid JSON body")
+	}
+	if allocationActor(r) != "" && (payload.ModPackID != "" || len(uniqueNonEmptyStrings(payload.ModIDs)) > 0) {
+		return domain.ConfigPreset{}, fmt.Errorf("tenant preset mod references require a workspace-owned mod library")
 	}
 	payload.Name = strings.TrimSpace(payload.Name)
 	if payload.Name == "" {
@@ -198,9 +222,16 @@ func (h *Handler) buildConfigPreset(r *http.Request, id string) (domain.ConfigPr
 		return domain.ConfigPreset{}, err
 	}
 	return domain.ConfigPreset{
-		ID: id, Name: payload.Name, GameKey: gameProvider.GameKey(), ProviderKey: payload.ProviderKey,
+		OrganizationID: strings.TrimSpace(payload.OrganizationID), ID: id, Name: payload.Name, GameKey: gameProvider.GameKey(), ProviderKey: payload.ProviderKey,
 		Version: payload.Version, Config: configPayload, ConfigPayloadJSON: configPayloadJSON, ConfigPayload: configPayload,
 		CPULimitCores: resources.CPULimitCores, MemoryLimitMB: resources.MemoryLimitMB, ModPackID: payload.ModPackID,
 		ModIDsJSON: string(modIDsJSON), ModIDs: modIDs,
 	}, nil
+}
+
+func (h *Handler) visibleConfigPreset(r *http.Request, id string) (domain.ConfigPreset, error) {
+	if actor := allocationActor(r); actor != "" {
+		return h.store.GetUserConfigPreset(r.Context(), actor, id)
+	}
+	return h.store.GetConfigPreset(r.Context(), id)
 }

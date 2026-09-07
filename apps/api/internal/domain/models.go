@@ -225,6 +225,8 @@ type ServerShare struct {
 }
 
 type ConfigPreset struct {
+	Revision          int64          `json:"-" gorm:"not null;default:0"`
+	OrganizationID    string         `json:"organizationId,omitempty" gorm:"index"`
 	ID                string         `json:"id" gorm:"primaryKey"`
 	Name              string         `json:"name"`
 	GameKey           GameKey        `json:"gameKey" gorm:"index"`

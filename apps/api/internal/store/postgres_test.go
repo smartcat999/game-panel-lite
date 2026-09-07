@@ -187,6 +187,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testTenantActivity(t, db)
 	testReconciliationPersistence(t, db)
 	testTenantAllocations(t, db)
+	testTenantPresets(t, db)
 	testPlayerObservations(t, db)
 	testServerLifecycleWrites(t, db)
 	testAssignmentPublication(t, db)

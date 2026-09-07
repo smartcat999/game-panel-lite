@@ -18,6 +18,9 @@ var worldOwnership string
 //go:embed migrations/003_activity_ownership.sql
 var activityOwnership string
 
+//go:embed migrations/004_preset_ownership.sql
+var presetOwnership string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -28,7 +31,7 @@ type migrationRecord struct {
 }
 
 func postgresMigrations() []sqlMigration {
-	return []sqlMigration{{1, "postgres_baseline", postgresBaseline}, {2, "world_ownership", worldOwnership}, {3, "activity_ownership", activityOwnership}}
+	return []sqlMigration{{1, "postgres_baseline", postgresBaseline}, {2, "world_ownership", worldOwnership}, {3, "activity_ownership", activityOwnership}, {4, "preset_ownership", presetOwnership}}
 }
 
 // migratePostgres serializes cooperating initializers per schema and commits

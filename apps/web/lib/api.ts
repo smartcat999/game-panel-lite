@@ -817,6 +817,7 @@ export async function listConfigPresets(): Promise<ConfigPreset[]> {
 }
 
 export type ConfigPresetInput = {
+  organizationId?: string;
   name: string;
   providerKey: ProviderKey;
   config: TerrariaConfig | Record<string, unknown>;

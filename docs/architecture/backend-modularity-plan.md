@@ -196,3 +196,13 @@ HTTP 继续承担认证路由、实例查询、维护状态检查、本进程实
 预设 PublicConfig 按 Provider ConfigSchema 的 password 字段处理嵌套路径及字面点分键，同时保留旧顶层凭证键的兼容脱敏。脱敏后不再调用 Normalize，避免默认值重新引入敏感字段。PublicPreset 分别清理 config、configPayload 和 configPayloadJSON，列表和详情接口也处理历史记录。未知 Provider 或损坏的历史 JSON 返回错误，不输出无法确认已脱敏的预设。
 
 修复前 DST 的 identity.password / identity.clusterToken 嵌套字段未被顶层 delete 删除。现在创建/更新在持久化前脱敏，历史读取在序列化前脱敏，测试检查响应、持久化结果与非敏感字段保留。已有数据库原文及旧备份不在此批自动改写；仍需专门的数据清理迁移与历史凭证处理。预设租户归属尚未完成，不以移除凭证替代租户授权。
+
+## 预设空间归属与写入版本
+
+ConfigPreset 增加 organizationId 和内部 revision。客户列表/详情通过当前空间成员关系在 SQL 中过滤；历史空归属记录仅保留平台管理员/既有未初始化自托管策略访问，不自动分配。创建接收 organizationId，客户恰好属于一个空间时可省略；多空间客户必须明确选择。更新不允许移动空间。
+
+创建、更新与删除通过独立持久化用例，在事务内锁定空间并再次验证写角色。更新/删除比较空间、ID、revision；每次更新递增 revision，拒绝并发旧编辑、旧删除以及删除后的插入式复活。批量删除对每条记录独立授权和提交，结果保留 succeeded/failed 结构。HTTP 仍持有具体 Store，后续须继续迁入完整 tenancy/preset 应用用例。
+
+PostgreSQL 迁移 004 增加归属和 revision，SQLite 使用现有 AutoMigrate。升级应先停止旧 API 进程，执行匹配版本迁移命令，再启动新 API；旧版本运行中的进程仍缺少租户过滤，不能与新进程混跑。未执行迁移的新 PostgreSQL API 会拒绝启动。旧预设归属接管与历史敏感原文清理需显式迁移，不能猜测所有者。
+
+全局模组和模组包尚未拥有租户归属，因此客户创建/更新预设暂不接受 modIds/modPackId 引用；管理员保留原能力。完成空间模组库后应恢复经归属验证的引用。这是过渡限制，不是模组功能已完成 SaaS 验收。前端类型与 OpenAPI 增加 organizationId，当前多空间创建选择 UI 仍需完善。

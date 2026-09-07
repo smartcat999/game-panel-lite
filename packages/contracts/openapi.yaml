@@ -5,6 +5,109 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/config-presets:
+    get:
+      summary: List presets visible through current workspace membership
+      responses:
+        "200":
+          description: Customers see owned workspace presets only. Platform administrators retain global access. Password fields are redacted, including historical presets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ConfigPreset'}
+    post:
+      summary: Create a workspace-owned configuration preset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfigPresetInput'}
+      responses:
+        "201":
+          description: Created after transactional membership verification
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConfigPreset'}
+        "400": {description: Invalid input or workspace selection required}
+        "403": {description: Workspace write permission required}
+        "404": {description: Workspace not found}
+  /api/config-presets/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: {type: string}
+    get:
+      summary: Read a visible preset with credentials redacted
+      responses:
+        "200":
+          description: Visible preset
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConfigPreset'}
+        "404": {description: Preset missing or outside current memberships}
+    put:
+      summary: Replace preset content while preserving workspace ownership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfigPresetInput'}
+      responses:
+        "200":
+          description: Updated preset
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ConfigPreset'}
+        "400": {description: Invalid input or attempt to change workspace}
+        "403": {description: Workspace write permission required}
+        "404": {description: Preset missing or outside current memberships}
+        "409": {description: Preset changed or was deleted during the request}
+    delete:
+      summary: Delete a visible preset after transactional permission and revision checks
+      responses:
+        "204": {description: Deleted}
+        "403": {description: Workspace write permission required}
+        "404": {description: Preset missing or outside current memberships}
+        "409": {description: Preset changed or was deleted during the request}
+  /api/config-presets/batch-delete:
+    post:
+      summary: Delete up to 100 unique presets, checking each independently
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: {type: string}
+      responses:
+        "200":
+          description: Per-item results; foreign presets fail without being deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [succeeded, failed]
+                properties:
+                  succeeded:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: string}
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: string}
+                        error: {type: string}
+        "400": {description: Empty or oversized unique ID list}
   /api/agent/assignments:
     get:
       summary: Poll assignments for the authenticated node
@@ -1284,6 +1387,49 @@ components:
       in: cookie
       name: gamepanel_session
   schemas:
+    ConfigPresetInput:
+      type: object
+      required: [name, providerKey]
+      properties:
+        organizationId:
+          type: string
+          description: Creation may omit this for customers with exactly one workspace. Updates preserve existing ownership and reject another workspace. Legacy unowned presets remain administrator-only.
+        name: {type: string}
+        providerKey: {type: string}
+        version: {type: string}
+        config: {type: object}
+        resources:
+          type: object
+          properties:
+            cpuLimitCores: {type: number}
+            memoryLimitMb: {type: integer}
+        modPackId:
+          type: string
+          description: Customer references are unavailable until the mod library supports workspace ownership.
+        modIds:
+          type: array
+          items: {type: string}
+          description: Customers must omit this or send an empty list until the mod library supports workspace ownership.
+    ConfigPreset:
+      type: object
+      required: [id, name, gameKey, providerKey, modIds, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        organizationId: {type: string}
+        name: {type: string}
+        gameKey: {type: string}
+        providerKey: {type: string}
+        version: {type: string}
+        config: {type: object}
+        configPayload: {type: object}
+        cpuLimitCores: {type: number}
+        memoryLimitMb: {type: integer}
+        modPackId: {type: string}
+        modIds:
+          type: array
+          items: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     PersonalOrganization:
       type: object
       required: [id, name, slug, plan, createdAt, updatedAt]
