@@ -251,6 +251,51 @@ paths:
         "401": {description: Invalid node token}
         "409": {description: Node report superseded or node authorization changed before persistence}
         "500": {description: Node lookup or persistence failed}
+  /api/agent/assignments/{uid}/lease:
+    post:
+      summary: Acquire, renew or release an execution lease for an exact assignment
+      description: Requires the owning node token and current instance/assignment generation. A fresh holderId identifies each reconciliation attempt. Acquire uses fence 0; renew/release require the granted positive fence. Conflicts do not authorize execution. New Agents require a lease and renew before each lifecycle mutation, but runtime fencing and lost-node shutdown remain separate work.
+      security:
+        - nodeToken: []
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, generation, holderId]
+              properties:
+                action: {type: string, enum: [acquire, renew, release]}
+                generation: {type: integer, minimum: 1}
+                holderId: {type: string, minLength: 1, maxLength: 128}
+                fence: {type: integer, format: int64, minimum: 0, default: 0}
+      responses:
+        "200":
+          description: Confirmed acquire or renewal. Treat validForMs conservatively from the client request start, never from receipt. No clock synchronization with the API host is required for that local deadline.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assignmentUid, serverId, nodeId, generation, holderId, fence, validForMs]
+                properties:
+                  assignmentUid: {type: string}
+                  serverId: {type: string}
+                  nodeId: {type: string}
+                  generation: {type: integer, minimum: 1}
+                  holderId: {type: string}
+                  fence: {type: integer, format: int64, minimum: 1}
+                  validForMs: {type: integer, format: int64, enum: [120000]}
+        "204": {description: Released. Release only after all operations and cleanup have completed successfully.}
+        "400": {description: Invalid action, identity, fence or request body}
+        "401": {description: Missing or invalid node token}
+        "409": {description: Lease held, expired, superseded or no longer authorized}
+        "500": {description: Persistence failed; execution is not authorized by an uncertain response}
   /api/agent/assignments:
     get:
       summary: Poll assignments for the authenticated node
@@ -260,7 +305,7 @@ paths:
         - in: header
           name: X-Workload-Capabilities
           required: false
-          description: Comma-separated capabilities. A worker may advertise artifacts-v1 only after its authorized artifact source and resource limits are configured. A running artifact workload causes a 409 response when this capability is absent. Stopping or deleting does not require artifact downloads.
+          description: Comma-separated capabilities. All polls require execution-lease-v1; older workers receive 409 and must be upgraded. A worker may advertise artifacts-v1 only after its authorized artifact source and resource limits are configured. A running artifact workload causes a 409 response when this capability is absent. Stopping or deleting does not require artifact downloads, but still requires an execution lease.
           schema:
             type: string
       responses:
@@ -314,7 +359,7 @@ paths:
         "401":
           description: Invalid node token
         "409":
-          description: Agent lacks the capability required by a running assignment
+          description: Agent lacks execution-lease-v1 or the artifact capability required by a running assignment
         "500":
           description: Assignment or observation storage unavailable
   /api/agent/assignments/{uid}/artifacts/{artifactId}:

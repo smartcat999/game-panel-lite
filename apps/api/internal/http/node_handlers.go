@@ -500,11 +500,18 @@ func (h *Handler) listAgentAssignments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list workload assignments")
 		return
 	}
-	supportsArtifacts := false
+	supportsArtifacts, supportsLeases := false, false
 	for _, entry := range strings.Split(strings.Join(r.Header.Values("X-Workload-Capabilities"), ","), ",") {
+		if strings.TrimSpace(entry) == workload.ExecutionLeaseCapability {
+			supportsLeases = true
+		}
 		if strings.TrimSpace(entry) == workload.ArtifactCapability {
 			supportsArtifacts = true
 		}
+	}
+	if !supportsLeases {
+		writeError(w, http.StatusConflict, "agent must support execution-lease-v1 before receiving workloads")
+		return
 	}
 	for _, item := range assignments {
 		if item.DesiredState == domain.DesiredRunning && len(item.Spec.Options.Artifacts) > 0 && !supportsArtifacts {

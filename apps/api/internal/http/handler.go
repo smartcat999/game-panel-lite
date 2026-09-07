@@ -159,6 +159,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/agent/tasks", h.listAgentTasks)
 	r.Post("/api/agent/tasks/{taskId}/ack", h.ackAgentTask)
 	r.Get("/api/agent/assignments", h.listAgentAssignments)
+	r.Post("/api/agent/assignments/{uid}/lease", h.changeAgentLease)
 	r.Get("/api/agent/assignments/{uid}/artifacts/{artifactId}", h.downloadAgentArtifact)
 	r.Post("/api/agent/assignments/{uid}/status", h.reportAgentAssignmentStatus)
 	r.Get("/api/agent/tunnel/poll", h.pollAgentTunnel)

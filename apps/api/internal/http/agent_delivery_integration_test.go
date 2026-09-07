@@ -69,6 +69,7 @@ func TestAgentArtifactDeliveryIntegration(t *testing.T) {
 	router.Post("/api/agent/register", handler.agentRegister)
 	router.Post("/api/agent/heartbeat", handler.agentHeartbeat)
 	router.Get("/api/agent/assignments", handler.listAgentAssignments)
+	router.Post("/api/agent/assignments/{uid}/lease", handler.changeAgentLease)
 	router.Post("/api/agent/assignments/{uid}/status", handler.reportAgentAssignmentStatus)
 	router.Get("/api/agent/assignments/{uid}/artifacts/{artifactId}", handler.downloadAgentArtifact)
 	router.Get("/api/agent/tasks", handler.listAgentTasks)

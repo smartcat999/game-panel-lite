@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/internal/worker"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type slowControlRuntime struct {
@@ -53,6 +54,13 @@ func TestAgentHeartbeatContinuesDuringWorkAndShutdownWaits(t *testing.T) {
 		case "/api/agent/assignments":
 			polls.Add(1)
 			body = `[{"uid":"first","nodeId":"node","serverId":"one","generation":1,"desiredState":"running"},{"uid":"second","nodeId":"node","serverId":"two","generation":1,"desiredState":"running"}]`
+		case "/api/agent/assignments/first/lease":
+			var lease workload.LeaseRequest
+			if err := json.NewDecoder(req.Body).Decode(&lease); err != nil {
+				t.Error(err)
+			}
+			grant, _ := json.Marshal(workload.LeaseGrant{AssignmentUID: "first", NodeID: "node", ServerID: "one", Generation: 1, HolderID: lease.HolderID, Fence: 1, ValidForMS: 120000})
+			body = string(grant)
 		case "/api/agent/heartbeat":
 			var payload HeartbeatPayload
 			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil || payload.Token != "token" || payload.RunningCount != 1 {

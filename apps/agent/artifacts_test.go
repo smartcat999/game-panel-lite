@@ -147,9 +147,9 @@ func TestArtifactConfigurationAndCapabilities(t *testing.T) {
 	}
 	for _, enabled := range []bool{false, true} {
 		client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			expected := ""
+			expected := workload.ExecutionLeaseCapability
 			if enabled {
-				expected = "artifacts-v1"
+				expected += "," + workload.ArtifactCapability
 			}
 			if r.Header.Get("X-Workload-Capabilities") != expected {
 				t.Error("incorrect capabilities")

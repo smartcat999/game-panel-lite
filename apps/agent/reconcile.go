@@ -5,14 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/smartcat999/game-panel-lite/internal/worker"
-	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
+
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 func reconcileAssignments(ctx context.Context, client *http.Client, cfg AgentConfig, logger *slog.Logger, runtime agentRuntime) {
@@ -21,9 +20,11 @@ func reconcileAssignments(ctx context.Context, client *http.Client, cfg AgentCon
 		return
 	}
 	req.Header.Set("X-Node-Token", cfg.Token)
+	capabilities := workload.ExecutionLeaseCapability
 	if cfg.ArtifactsEnabled {
-		req.Header.Set("X-Workload-Capabilities", "artifacts-v1")
+		capabilities += "," + workload.ArtifactCapability
 	}
+	req.Header.Set("X-Workload-Capabilities", capabilities)
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Warn("failed to fetch workload assignments", "error", err)
@@ -43,9 +44,11 @@ func reconcileAssignments(ctx context.Context, client *http.Client, cfg AgentCon
 		if ctx.Err() != nil {
 			return
 		}
-		reconcileCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
-		observation := worker.Reconcile(reconcileCtx, assignment, runtime)
-		cancel()
+		observation, err := reconcileLeasedAssignment(ctx, client, cfg, logger, assignment, runtime)
+		if err != nil {
+			logger.Warn("workload execution lease unavailable", "server_id", assignment.ServerID, "error", err)
+			continue
+		}
 		if err := reportWorkloadObservation(ctx, client, cfg, assignment, observation); err != nil {
 			logger.Warn("failed to report workload observation", "server_id", assignment.ServerID, "error", err)
 		}

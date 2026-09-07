@@ -50,6 +50,12 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 
 	listRequest := httptest.NewRequest(stdhttp.MethodGet, "/api/agent/assignments", nil)
 	listRequest.Header.Set("X-Node-Token", "token-a")
+	legacyResponse := httptest.NewRecorder()
+	router.ServeHTTP(legacyResponse, listRequest)
+	if legacyResponse.Code != stdhttp.StatusConflict {
+		t.Fatalf("legacy worker received workloads: %d", legacyResponse.Code)
+	}
+	listRequest.Header.Set("X-Workload-Capabilities", workload.ExecutionLeaseCapability)
 	listResponse := httptest.NewRecorder()
 	router.ServeHTTP(listResponse, listRequest)
 	if listResponse.Code != stdhttp.StatusOK {
@@ -98,6 +104,7 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 	}
 	refreshReq := httptest.NewRequest(stdhttp.MethodGet, "/api/agent/assignments", nil)
 	refreshReq.Header.Set("X-Node-Token", "token-a")
+	refreshReq.Header.Set("X-Workload-Capabilities", workload.ExecutionLeaseCapability)
 	refreshed := httptest.NewRecorder()
 	router.ServeHTTP(refreshed, refreshReq)
 	if err := json.Unmarshal(refreshed.Body.Bytes(), &assignments); err != nil || len(assignments) != 1 || assignments[0].ObservationToken != observation.ID {
@@ -153,7 +160,7 @@ func TestAgentArtifactCapabilityNegotiation(t *testing.T) {
 	for _, capability := range []string{"", "other-feature", "artifacts-v10", "other-feature, artifacts-v1"} {
 		request := httptest.NewRequest(stdhttp.MethodGet, "/api/agent/assignments", nil)
 		request.Header.Set("X-Node-Token", node.Token)
-		request.Header.Set("X-Workload-Capabilities", capability)
+		request.Header.Set("X-Workload-Capabilities", workload.ExecutionLeaseCapability+","+capability)
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
 		if capability == "other-feature, artifacts-v1" {
