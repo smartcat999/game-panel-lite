@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +35,13 @@ func OpenConfigured(path, dsn string, maxConnections int) (*Store, error) {
 	pool.SetMaxOpenConns(maxConnections)
 	pool.SetMaxIdleConns(maxConnections)
 	pool.SetConnMaxLifetime(30 * time.Minute)
-	return initialize(db)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := migratePostgres(ctx, db, postgresMigrations()); err != nil {
+		_ = pool.Close()
+		return nil, err
+	}
+	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 
 func (s *Store) Close() error {

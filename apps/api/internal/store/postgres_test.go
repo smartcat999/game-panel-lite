@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,6 +43,36 @@ func TestPostgresIntegration(t *testing.T) {
 	query := parsed.Query()
 	query.Set("search_path", schema)
 	parsed.RawQuery = query.Encode()
+	if _, err := admin.ExecContext(ctx, "CREATE TABLE "+schema+".adoption_probe (id integer)"); err != nil {
+		t.Fatal(err)
+	}
+	if opened, err := OpenConfigured("", parsed.String(), 2); err == nil {
+		opened.Close()
+		t.Fatal("unversioned populated schema silently adopted")
+	}
+	if _, err := admin.ExecContext(ctx, "DROP TABLE "+schema+".adoption_probe"); err != nil {
+		t.Fatalf("unversioned schema modified: %v", err)
+	}
+	var starters sync.WaitGroup
+	failures := make(chan error, 4)
+	for i := 0; i < 4; i++ {
+		starters.Add(1)
+		go func() {
+			defer starters.Done()
+			opened, err := OpenConfigured("", parsed.String(), 2)
+			if err == nil {
+				err = opened.Close()
+			}
+			failures <- err
+		}()
+	}
+	starters.Wait()
+	close(failures)
+	for err := range failures {
+		if err != nil {
+			t.Fatalf("concurrent migration: %v", err)
+		}
+	}
 	db, err := OpenConfigured("", parsed.String(), 4)
 	if err != nil {
 		t.Fatal(err)
@@ -95,6 +126,32 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := db.GetGameServer(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("not found: %v", err)
 	}
+	migrations := append(postgresMigrations(), sqlMigration{2, "failure_probe", "CREATE TABLE migration_failure_probe (id integer); SELECT * FROM deliberately_missing_relation;"})
+	if err := migratePostgres(ctx, db.db, migrations); err == nil {
+		t.Fatal("broken migration accepted")
+	}
+	var exists bool
+	if err := db.db.Raw("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='migration_failure_probe')").Scan(&exists).Error; err != nil || exists {
+		t.Fatalf("failed DDL not rolled back: %v %v", exists, err)
+	}
+	var records int64
+	if err := db.db.Table("gamepanel_schema_migrations").Count(&records).Error; err != nil || records != 1 {
+		t.Fatalf("migration ledger: %d %v", records, err)
+	}
+	if err := migratePostgres(ctx, db.db, postgresMigrations()); err != nil {
+		t.Fatalf("retry after failed migration: %v", err)
+	}
+	if err := migratePostgres(ctx, db.db, nil); err == nil {
+		t.Fatal("older binary accepted newer schema")
+	}
+	if err := db.db.Exec("UPDATE gamepanel_schema_migrations SET checksum='tampered'").Error; err != nil {
+		t.Fatal(err)
+	}
+	if opened, err := OpenConfigured("", parsed.String(), 2); err == nil {
+		opened.Close()
+		t.Fatal("checksum mismatch accepted")
+	}
+
 }
 
 func TestPostgresConfigRejectsInvalidPoolAndRedactsDSN(t *testing.T) {
