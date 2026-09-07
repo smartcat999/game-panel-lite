@@ -130,7 +130,7 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 			serverctrl.NewRuntimeAdapterClient(runtimeAdapter),
 		),
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	).WithInterval(10 * time.Millisecond).Start(controllerCtx)
+	).WithDataRoot(cfg.DataDir).WithInterval(10 * time.Millisecond).Start(controllerCtx)
 	return router, db, cfg
 }
 

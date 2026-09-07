@@ -42,6 +42,7 @@ type Controller struct {
 	gateway    *gateway.StreamGateway
 	logger     *slog.Logger
 	interval   time.Duration
+	dataRoot   string
 	locksMu    sync.Mutex
 	locks      map[string]*sync.Mutex
 }
@@ -60,6 +61,11 @@ func NewController(store ControllerStore, reconciler *Reconciler, logger *slog.L
 		interval:   3 * time.Second,
 		locks:      map[string]*sync.Mutex{},
 	}
+}
+
+func (c *Controller) WithDataRoot(dataRoot string) *Controller {
+	c.dataRoot = dataRoot
+	return c
 }
 
 func (c *Controller) WithGateway(gw *gateway.StreamGateway) *Controller {
@@ -141,7 +147,7 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 	}
 	if updated.Status.Phase == domain.PhaseDeleted {
 		if deletingStore, ok := c.store.(deletingControllerStore); ok {
-			if err := cleanupOwnedResources(ctx, c.store, updated); err != nil {
+			if err := cleanupOwnedResources(ctx, c.store, updated, c.dataRoot); err != nil {
 				c.logger.Warn("failed to clean owned server resources", "server", item.ID, "error", err)
 				return
 			}
@@ -266,9 +272,16 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	case domain.DesiredDeleted:
 		if observation.ActualState == domain.ActualMissing {
 			if deletingStore, deleteOK := c.store.(deletingControllerStore); deleteOK {
-				if err := cleanupOwnedResources(ctx, c.store, item); err == nil {
-					_ = assignments.DeleteWorkloadAssignment(ctx, item.ID)
-					_ = deletingStore.DeleteGameServer(ctx, item.ID)
+				if err := cleanupOwnedResources(ctx, c.store, item, c.dataRoot); err != nil {
+					c.logger.Warn("failed to clean remote server resources", "server", item.ID, "error", err)
+					return
+				}
+				if err := assignments.DeleteWorkloadAssignment(ctx, item.ID); err != nil {
+					c.logger.Warn("failed to delete remote workload assignment", "server", item.ID, "error", err)
+					return
+				}
+				if err := deletingStore.DeleteGameServer(ctx, item.ID); err != nil {
+					c.logger.Warn("failed to delete remote server record", "server", item.ID, "error", err)
 				}
 				return
 			}

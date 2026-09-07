@@ -98,7 +98,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
 		).WithImageLoader(serverctrl.NewRuntimeImageLoader(cfg.DataDir, switchableRuntime)),
 		logger,
-	).WithGateway(streamGateway).Start(appCtx)
+	).WithDataRoot(cfg.DataDir).WithGateway(streamGateway).Start(appCtx)
 
 	dockerFactory := func(host string) (runtime.Adapter, error) {
 		return dockerruntime.NewAdapter(host)
