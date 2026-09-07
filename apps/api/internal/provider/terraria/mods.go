@@ -74,5 +74,5 @@ func runtimeModIdentity(item domain.ModFile) string {
 }
 
 func (TModLoaderProvider) ModSupport() domain.ModSupport {
-	return domain.ModSupport{UploadExtensions: []string{".tmod"}, Workshop: true}
+	return domain.ModSupport{UploadExtensions: []string{".tmod"}, CacheFiles: []string{"install.txt", "enabled.json"}, Workshop: true}
 }

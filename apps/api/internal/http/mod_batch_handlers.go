@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-
-	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 )
 
 const maxModBatchSize = 100
@@ -44,8 +42,7 @@ func (h *Handler) batchDeleteGlobalMods(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 		if item.Source != "workshop" {
-			path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
-			if err := removeStoredFile(path); err != nil {
+			if err := h.removeCachedMod(item); err != nil {
 				response.Failed = append(response.Failed, modBatchResult{ID: id, Error: err.Error()})
 				continue
 			}

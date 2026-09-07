@@ -65,11 +65,11 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	if !isProviderModPackage(server.ProviderKey, header.Filename) {
-		writeError(w, http.StatusBadRequest, providerModUploadError(server.ProviderKey))
+	if _, err := h.modRuntime.UploadFileName(server.ProviderKey, header.Filename); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload(server.ID, server.ProviderKey, header.Filename, file)
+	path, size, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Upload(server.ID, server.ProviderKey, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -368,8 +368,7 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
-		if err := removeStoredFile(path); err != nil {
+		if err := h.removeCachedMod(item); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -548,11 +547,11 @@ func (h *Handler) uploadGlobalMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	if !isTModPackage(header.Filename) {
-		writeError(w, http.StatusBadRequest, "only .tmod files can be uploaded as mods")
+	if _, err := h.modRuntime.UploadFileName(domain.ProviderTerrariaTModLoader, header.Filename); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := modsvc.NewService(h.cfg.DataDir).Upload("unassigned", domain.ProviderTerrariaTModLoader, header.Filename, file)
+	path, size, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Upload("unassigned", domain.ProviderTerrariaTModLoader, header.Filename, file)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -707,8 +706,7 @@ func (h *Handler) deleteGlobalMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Source != "workshop" {
-		path, _ := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
-		if err := removeStoredFile(path); err != nil {
+		if err := h.removeCachedMod(item); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

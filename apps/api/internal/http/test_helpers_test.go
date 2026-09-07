@@ -21,6 +21,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
+	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
@@ -804,4 +805,10 @@ func testServer(id string, dataDir string) testServerFixture {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+}
+
+func newTestModService(t *testing.T, dir string) *modsvc.Service {
+	t.Helper()
+	providers := mustRegistry(t, terraria.NewTModLoaderProvider(), palworld.NewProvider())
+	return modsvc.NewService(dir, modruntime.NewService(providers, nil).StoredFileName)
 }

@@ -17,7 +17,6 @@ import (
 
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -877,7 +876,7 @@ func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 	if err := db.CreateBackup(context.Background(), &backup); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := modsvc.NewService(cfg.DataDir).Upload(server.ID, domain.ProviderTerrariaTModLoader, "owned.tmod", bytes.NewBufferString("mod")); err != nil {
+	if _, _, err := newTestModService(t, cfg.DataDir).Upload(server.ID, domain.ProviderTerrariaTModLoader, "owned.tmod", bytes.NewBufferString("mod")); err != nil {
 		t.Fatal(err)
 	}
 	mod := domain.ModFile{

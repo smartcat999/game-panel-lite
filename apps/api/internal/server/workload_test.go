@@ -9,6 +9,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
@@ -108,7 +109,7 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := modsvc.NewService(root).Upload("unassigned", domain.ProviderTerrariaTModLoader, "quality.tmod", strings.NewReader("quality-mod")); err != nil {
+	if _, _, err := modsvc.NewService(root, modruntime.NewService(mustRegistry(t, terraria.NewTModLoaderProvider()), nil).StoredFileName).Upload("unassigned", domain.ProviderTerrariaTModLoader, "quality.tmod", strings.NewReader("quality-mod")); err != nil {
 		t.Fatal(err)
 	}
 	libraryMod := domain.ModFile{

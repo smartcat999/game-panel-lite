@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/safety"
 )
 
 func TestUploadValidatesModFiles(t *testing.T) {
-	service := NewService(t.TempDir())
+	service := NewService(t.TempDir(), fixturePolicy)
 	for _, name := range []string{"cool.tmod", "install.txt", "enabled.json"} {
 		if _, _, err := service.Upload("srv", domain.ProviderTerrariaTModLoader, name, strings.NewReader("x")); err != nil {
 			t.Fatalf("expected %s to upload: %v", name, err)
@@ -22,7 +23,7 @@ func TestUploadValidatesModFiles(t *testing.T) {
 }
 
 func TestUploadValidatesPalworldPakFiles(t *testing.T) {
-	service := NewService(t.TempDir())
+	service := NewService(t.TempDir(), fixturePolicy)
 	if _, _, err := service.Upload("srv", domain.ProviderPalworld, "better-pals.pak", strings.NewReader("x")); err != nil {
 		t.Fatalf("expected pak to upload: %v", err)
 	}
@@ -31,4 +32,14 @@ func TestUploadValidatesPalworldPakFiles(t *testing.T) {
 			t.Fatalf("expected %s to fail", name)
 		}
 	}
+}
+
+func fixturePolicy(key domain.ProviderKey, name string) (string, error) {
+	if name == "install.txt" || name == "enabled.json" {
+		return safety.SafeFileName(name, ".txt", ".json")
+	}
+	if key == domain.ProviderPalworld {
+		return safety.SafeFileName(name, ".pak")
+	}
+	return safety.SafeFileName(name, ".tmod")
 }

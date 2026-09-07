@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Removed provider switches from mod cache filename validation and per-instance upload extension checks. Providers declare accepted upload extensions and exact auxiliary cache names; modruntime exposes separate user-upload and internal-cache validation, injected into the cache service.
+- Added a synthetic .addon provider regression proving upload/cache extensibility without handler or storage changes. Auxiliary manifests and unknown providers are rejected at the user-upload boundary. Legacy Terraria global routes remain compatible.
+- Fixed ignored cache path errors in single/batch deletion: normalize legacy record metadata, validate the path and retain the database record when validation or removal fails. Binary mod parsing and complete installation transactions remain pending. Validation passed: gofmt, full go test ./..., go vet ./..., and final mod/modruntime/HTTP/server race tests. No frontend code or response schema changed.
+
 - Centralized mod runtime file installation/removal in modruntime. HTTP and startup planning now pass context and source readers to one implementation; deleted the duplicate server file copier. Provider paths are validated before staging rather than silently discarded.
 - Confined destination filesystem operations with os.Root, staged all copies before publishing and used per-file atomic rename. Tests cover symlink/traversal escapes, unchanged existing files on read failure/cancellation, staging cleanup, repeated replacement/removal and runtime-compatible permissions. Multi-file publication and database changes remain non-transactional; this is not strong tenant isolation. Validation passed: gofmt, full Go tests, vet, and final modruntime/HTTP/server race regression after retaining runtime permissions. No frontend code or wire contract changed.
 

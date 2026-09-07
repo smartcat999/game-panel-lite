@@ -21,7 +21,8 @@ import (
 )
 
 func (h *Handler) copyLibraryModToServerCache(item domain.ModFile, targetInstanceID string) (int64, error) {
-	svc := modsvc.NewService(h.cfg.DataDir)
+	hydrateModGameMetadata(&item)
+	svc := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName)
 	sourcePath, err := svc.Path(item.InstanceID, item.ProviderKey, item.FileName)
 	if err != nil {
 		return 0, err
@@ -375,7 +376,7 @@ func (h *Handler) materializeModForRuntime(ctx context.Context, item domain.ModF
 	if item.Source == "workshop" {
 		return nil
 	}
-	sourcePath, err := modsvc.NewService(h.cfg.DataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
+	sourcePath, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Path(item.InstanceID, item.ProviderKey, item.FileName)
 	if err != nil {
 		return err
 	}
@@ -405,32 +406,6 @@ func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.Game
 
 func isTModPackage(fileName string) bool {
 	return strings.EqualFold(filepath.Ext(fileName), ".tmod")
-}
-
-func isPakPackage(fileName string) bool {
-	return strings.EqualFold(filepath.Ext(fileName), ".pak")
-}
-
-func isProviderModPackage(providerKey domain.ProviderKey, fileName string) bool {
-	switch providerKey {
-	case domain.ProviderTerrariaTModLoader:
-		return isTModPackage(fileName)
-	case domain.ProviderPalworld:
-		return isPakPackage(fileName)
-	default:
-		return false
-	}
-}
-
-func providerModUploadError(providerKey domain.ProviderKey) string {
-	switch providerKey {
-	case domain.ProviderPalworld:
-		return "only .pak files can be uploaded as Palworld mods"
-	case domain.ProviderTerrariaTModLoader:
-		return "only .tmod files can be uploaded as mods"
-	default:
-		return "uploaded mods are not supported for this provider"
-	}
 }
 
 func (h *Handler) providerSupportsMods(providerKey domain.ProviderKey) bool {
@@ -546,7 +521,7 @@ func (h *Handler) syncDSTDesiredWorkshopConfig(ctx context.Context, server *doma
 }
 
 func (h *Handler) visibleMods(ctx context.Context, mods []domain.ModFile) ([]domain.ModFile, error) {
-	svc := modsvc.NewService(h.cfg.DataDir)
+	svc := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName)
 	visible := make([]domain.ModFile, 0, len(mods))
 	for _, item := range mods {
 		hydrateModGameMetadata(&item)
@@ -791,4 +766,13 @@ func isDigitsOnly(value string) bool {
 		}
 	}
 	return true
+}
+
+func (h *Handler) removeCachedMod(item domain.ModFile) error {
+	hydrateModGameMetadata(&item)
+	path, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Path(item.InstanceID, item.ProviderKey, item.FileName)
+	if err != nil {
+		return err
+	}
+	return removeStoredFile(path)
 }

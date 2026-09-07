@@ -10,15 +10,18 @@ import (
 )
 
 type Service struct {
-	dataDir string
+	dataDir      string
+	validateFile func(domain.ProviderKey, string) (string, error)
 }
 
-func NewService(dataDir string) *Service {
-	return &Service{dataDir: dataDir}
+// NewService requires a provider-aware filename policy. The policy returns a
+// validated basename or an error, and is shared by cache reads and writes.
+func NewService(dataDir string, validateFile func(domain.ProviderKey, string) (string, error)) *Service {
+	return &Service{dataDir: dataDir, validateFile: validateFile}
 }
 
 func (s *Service) Upload(instanceID string, providerKey domain.ProviderKey, fileName string, reader io.Reader) (string, int64, error) {
-	safeName, err := safeModFile(providerKey, fileName)
+	safeName, err := s.validateFile(providerKey, fileName)
 	if err != nil {
 		return "", 0, err
 	}
@@ -55,23 +58,9 @@ func (s *Service) Upload(instanceID string, providerKey domain.ProviderKey, file
 }
 
 func (s *Service) Path(instanceID string, providerKey domain.ProviderKey, fileName string) (string, error) {
-	safeName, err := safeModFile(providerKey, fileName)
+	safeName, err := s.validateFile(providerKey, fileName)
 	if err != nil {
 		return "", err
 	}
 	return safety.SafeJoin(s.dataDir, "mods", instanceID, safeName)
-}
-
-func safeModFile(providerKey domain.ProviderKey, fileName string) (string, error) {
-	if fileName == "install.txt" || fileName == "enabled.json" {
-		return safety.SafeFileName(fileName, ".txt", ".json")
-	}
-	switch providerKey {
-	case domain.ProviderPalworld:
-		return safety.SafeFileName(fileName, ".pak")
-	case domain.ProviderTerrariaTModLoader:
-		return safety.SafeFileName(fileName, ".tmod")
-	default:
-		return safety.SafeFileName(fileName, ".tmod")
-	}
 }

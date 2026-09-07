@@ -97,7 +97,7 @@ func (p *RuntimeModPlanner) assignLibraryMod(ctx context.Context, server domain.
 }
 
 func (p *RuntimeModPlanner) copyLibraryModToServerCache(item domain.ModFile, targetInstanceID string) (int64, error) {
-	svc := modsvc.NewService(p.dataDir)
+	svc := modsvc.NewService(p.dataDir, p.runtime.StoredFileName)
 	sourcePath, err := svc.Path(item.InstanceID, item.ProviderKey, item.FileName)
 	if err != nil {
 		return 0, err
@@ -243,7 +243,7 @@ func (p *RuntimeModPlanner) materializeModForRuntime(ctx context.Context, item d
 	if item.Source == "workshop" {
 		return nil
 	}
-	sourcePath, err := modsvc.NewService(p.dataDir).Path(item.InstanceID, item.ProviderKey, item.FileName)
+	sourcePath, err := modsvc.NewService(p.dataDir, p.runtime.StoredFileName).Path(item.InstanceID, item.ProviderKey, item.FileName)
 	if err != nil {
 		return err
 	}

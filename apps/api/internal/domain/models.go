@@ -27,7 +27,9 @@ type PlayerLogEvent string
 // ModSupport describes the sources accepted by a game provider.
 type ModSupport struct {
 	UploadExtensions []string
-	Workshop         bool
+	// CacheFiles are provider-owned auxiliary files, never accepted as user uploads.
+	CacheFiles []string
+	Workshop   bool
 }
 
 type ProviderCapabilities struct {
