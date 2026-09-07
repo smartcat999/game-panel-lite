@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -542,6 +543,8 @@ type serverWatchEvent struct {
 
 func (h *Handler) serverWatch(w http.ResponseWriter, r *http.Request) {
 	serverID := chi.URLParam(r, "id")
+	r, stopAuthorization := h.watchStreamAuthorization(w, r, serverID, domain.PermissionServerView, streamAuthorizationInterval)
+	defer stopAuthorization()
 	if _, err := h.store.GetGameServer(r.Context(), serverID); err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
@@ -559,13 +562,22 @@ func (h *Handler) serverWatch(w http.ResponseWriter, r *http.Request) {
 		defer h.apiMetrics.AddSSEConnection("server_watch", -1)
 	}
 	send := func() bool {
+		if r.Context().Err() != nil {
+			return false
+		}
 		snapshot, err := h.serverWatchSnapshot(r.Context(), serverID)
+		if r.Context().Err() != nil {
+			return false
+		}
 		if err != nil {
 			_, _ = fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
 			if h.apiMetrics != nil {
 				h.apiMetrics.AddSSEEvent("server_watch", "error")
 			}
 			flusher.Flush()
+			return false
+		}
+		if r.Context().Err() != nil {
 			return false
 		}
 		if err := writeSSEJSON(w, "snapshot", snapshot); err != nil {
@@ -691,6 +703,8 @@ func writeSSEJSON(w http.ResponseWriter, eventName string, payload any) error {
 }
 
 func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
+	r, stopAuthorization := h.watchStreamAuthorization(w, r, chi.URLParam(r, "id"), domain.PermissionServerConfigure, streamAuthorizationInterval)
+	defer stopAuthorization()
 	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
@@ -715,6 +729,9 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 		h.agentLogsMu.RUnlock()
 
 		for _, line := range cached {
+			if r.Context().Err() != nil {
+				return
+			}
 			_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
 		}
 		if flusher != nil {
@@ -746,6 +763,9 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 				if !ok {
 					return
 				}
+				if r.Context().Err() != nil {
+					return
+				}
 				_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", line)
 				if h.apiMetrics != nil {
 					h.apiMetrics.AddSSEEvent("server_logs", "log")
@@ -768,6 +788,9 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	stream, err := h.runtime.LogsWorkload(r.Context(), server.Status.RuntimeID, true)
 	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
 		if strings.TrimSpace(server.Status.LastError) != "" {
 			_, _ = fmt.Fprintf(w, "event: log\ndata: %s\n\n", server.Status.LastError)
 			if h.apiMetrics != nil {
@@ -783,10 +806,16 @@ func (h *Handler) serverLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	defer stream.Close()
+	closeStream := sync.OnceFunc(func() { _ = stream.Close() })
+	stopClose := context.AfterFunc(r.Context(), closeStream)
+	defer stopClose()
+	defer closeStream()
 	scanner := bufio.NewScanner(stream)
 	recentLines := make([]string, 0, 120)
 	for scanner.Scan() {
+		if r.Context().Err() != nil {
+			return
+		}
 		line := scanner.Text()
 		recentLines = append(recentLines, line)
 		if len(recentLines) > 120 {

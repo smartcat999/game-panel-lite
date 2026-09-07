@@ -674,6 +674,7 @@ paths:
   /api/servers/{id}/logs:
     get:
       summary: Stream server logs with SSE
+      description: Session, current role and workspace membership are rechecked every five seconds with a two-second query deadline. Revocation ends the stream without a final event; clients must handle EOF/reconnect authorization failure.
       responses:
         "200":
           description: SSE log stream
