@@ -36,12 +36,12 @@ export function WorkspaceModInstallation({ mods, workspaces }: { mods: ModFile[]
       ]);
     }
   });
-  const ready = matches && servers.isSuccess && target.isSuccess && !target.isFetching && local && stopped && !requested && !needsRefresh && !install.isPending;
+  const ready = matches && servers.isSuccess && target.isSuccess && !target.isFetching && stopped && !requested && !needsRefresh && !install.isPending;
   const selectClass = "mt-2 h-10 w-full rounded-md border border-panel-line bg-panel-card px-3 text-sm text-slate-100 disabled:opacity-50";
   const failure = install.error instanceof ModInstallationError ? install.error : undefined;
   return <Card className="p-5">
     <h2 className="font-semibold text-slate-100">{zh ? "安装工作区模组" : "Install a workspace mod"}</h2>
-    <p className="mt-2 text-sm text-slate-400">{zh ? "选择同工作区的本地停服实例。请求保存后，在实例下次启动时安装文件；此操作不会启动实例。" : "Choose a stopped local instance in the same workspace. Files are installed on its next start. This request does not start the instance."}</p>
+    <p className="mt-2 text-sm text-slate-400">{zh ? "选择同工作区的停服实例。请求保存后，在实例下次启动时安装文件；此操作不会启动实例。" : "Choose a stopped instance in the same workspace. Files are installed on its next start. This request does not start the instance."}</p>
     <form className="mt-4 space-y-4" onSubmit={event => {
       event.preventDefault();
       if (ready && mod && current) install.mutate({ serverId, modId, generation: current.spec.generation, serverName: current.name, modName: mod.title || mod.fileName });
@@ -62,7 +62,7 @@ export function WorkspaceModInstallation({ mods, workspaces }: { mods: ModFile[]
       </div>
       {servers.isError && <p role="alert" className="text-sm text-panel-gold">{zh ? "实例列表加载失败。" : "Unable to load instances."}</p>}
       {mod && servers.isSuccess && targets.length === 0 && <p className="text-sm text-slate-400">{zh ? "此工作区没有匹配游戏类型的实例。" : "No matching instances in this workspace."}</p>}
-      {serverId && (target.isError ? <p role="alert" className="text-sm text-panel-gold">{zh ? "无法读取实例，请刷新后重新选择。" : "Unable to read the instance. Refresh and select again."}</p> : target.isFetching ? <p className="text-sm text-slate-400">{zh ? "正在核对实例…" : "Checking instance…"}</p> : matches && <p className="text-sm text-slate-400">{requested ? (zh ? "此模组已在实例配置中，请到实例页面查看启动与运行状态。" : "This mod is already in the instance configuration. Check its startup and runtime status on the instance page.") : !local ? (zh ? "远端节点的模组文件分发尚未开放。" : "Mod file delivery to remote nodes is not available yet.") : !stopped ? (zh ? "请先停止实例，再刷新状态。" : "Stop the instance, then refresh its state.") : (zh ? "实例已停服，可以保存安装请求。" : "Instance is stopped and ready for an installation request.")}</p>)}
+      {serverId && (target.isError ? <p role="alert" className="text-sm text-panel-gold">{zh ? "无法读取实例，请刷新后重新选择。" : "Unable to read the instance. Refresh and select again."}</p> : target.isFetching ? <p className="text-sm text-slate-400">{zh ? "正在核对实例…" : "Checking instance…"}</p> : matches && <p className="text-sm text-slate-400">{requested ? (zh ? "此模组已在实例配置中，请到实例页面查看启动与运行状态。" : "This mod is already in the instance configuration. Check its startup and runtime status on the instance page.") : !stopped ? (zh ? "请先停止实例，再刷新状态。" : "Stop the instance, then refresh its state.") : (local ? (zh ? "实例已停服，可以保存安装请求。" : "Instance is stopped and ready for an installation request.") : (zh ? "远端实例已停服；提交时将检查节点在线状态及制品分发能力。" : "Remote instance is stopped; node availability and artifact support are checked when saving."))}</p>)}
       <div className="flex flex-wrap gap-3">
         <Button type="submit" disabled={!ready}>{install.isPending ? (zh ? "正在保存…" : "Saving…") : (zh ? "保存安装请求" : "Save installation request")}</Button>
         <Button type="button" variant="secondary" disabled={install.isPending || target.isFetching || servers.isFetching} onClick={async () => {

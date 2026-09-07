@@ -110,7 +110,7 @@ export function WorkspaceModLibrary({ mods }: { mods: ModFile[] }) {
     </Card>
     <WorkspaceModInstallation mods={mods} workspaces={availableSpaces} />
     <Card className="overflow-x-auto p-4">
-      <p className="mb-3 text-sm text-slate-400">{zh ? "模组按所属工作区保存。支持为本地停服实例保存安装请求；删除与在线导入暂未开放。" : "Mods are stored in their workspace. Installation requests are available for stopped local instances. Deletion and online import are not yet available."}</p>
+      <p className="mb-3 text-sm text-slate-400">{zh ? "模组按所属工作区保存。支持为停服实例保存安装请求；远端节点需在线且支持制品分发。删除与在线导入暂未开放。" : "Mods are stored in their workspace. Installation requests are available for stopped instances; remote nodes must be online and support artifact delivery. Deletion and online import are not yet available."}</p>
       <table className="w-full text-left text-sm">
         <thead><tr className="text-slate-400"><th className="p-2">{zh ? "模组" : "Mod"}</th><th className="p-2">{zh ? "工作区" : "Workspace"}</th><th className="p-2">{zh ? "游戏类型" : "Provider"}</th><th className="p-2">{zh ? "大小" : "Size"}</th></tr></thead>
         <tbody>{mods.map(item => <tr key={item.id} className="border-t border-panel-line"><td className="p-2 text-slate-100">{item.title || item.modName || item.fileName}<p className="text-xs text-slate-500">{item.fileName}</p></td><td className="p-2 text-slate-300">{availableSpaces.find(space => space.id === item.organizationId)?.name || item.organizationId}</td><td className="p-2 text-slate-300">{providers.find(provider => provider.key === item.providerKey)?.label || item.providerKey}</td><td className="p-2 text-slate-300">{item.size}</td></tr>)}</tbody>

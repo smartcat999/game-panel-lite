@@ -11,9 +11,10 @@ import (
 )
 
 type installationRepo struct {
-	server    domain.GameServer
-	source    domain.ModFile
-	committed *domain.GameServer
+	server      domain.GameServer
+	source      domain.ModFile
+	committed   *domain.GameServer
+	remoteReady bool
 }
 
 func (r *installationRepo) GetUserGameServer(context.Context, string, string) (domain.GameServer, error) {
@@ -33,10 +34,13 @@ func TestInstallationUsesProviderUploadContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"accepted", "foreign-space", "foreign-provider", "workshop", "unsupported-file", "already-requested"} {
+	for _, mode := range []string{"accepted", "foreign-space", "foreign-provider", "workshop", "unsupported-file", "already-requested", "remote-ready"} {
 		t.Run(mode, func(t *testing.T) {
 			repo := &installationRepo{server: domain.GameServer{ID: "server", OrganizationID: "space", ProviderKey: plugin.Key(), Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredStopped}, Status: domain.ServerRuntimeStatus{Phase: domain.PhaseStopped}}, source: domain.ModFile{ID: "mod", InstanceID: "unassigned", OrganizationID: "space", ProviderKey: plugin.Key(), Source: "upload", FileName: "same.tmod"}}
 			switch mode {
+			case "remote-ready":
+				repo.server.NodeID = "remote"
+				repo.remoteReady = true
 			case "foreign-space":
 				repo.source.OrganizationID = "foreign"
 			case "foreign-provider":
@@ -49,7 +53,7 @@ func TestInstallationUsesProviderUploadContract(t *testing.T) {
 				repo.server.Spec.ModIDs = []string{"mod"}
 			}
 			result, err := NewInstaller(repo, registry).Request(context.Background(), "user", "server", "mod", 1)
-			if mode == "accepted" || mode == "already-requested" {
+			if mode == "accepted" || mode == "already-requested" || mode == "remote-ready" {
 				want := 2
 				if mode == "already-requested" {
 					want = 1
@@ -65,4 +69,8 @@ func TestInstallationUsesProviderUploadContract(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (r *installationRepo) RemoteArtifactsAvailable(context.Context, string) (bool, error) {
+	return r.remoteReady, nil
 }

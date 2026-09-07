@@ -203,6 +203,52 @@ paths:
                         id: {type: string}
                         error: {type: string}
         "400": {description: Empty or oversized unique ID list}
+  /api/agent/register:
+    post:
+      summary: Register Agent hardware and configured workload capabilities
+      description: Authenticates the node token in the JSON body. Workload capabilities are derived from configured runtime support. Omitted capabilities clear prior support for downgraded or legacy Agents; only recognized capabilities are persisted.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string}
+                workloadCapabilities:
+                  type: array
+                  items: {type: string}
+                  description: Currently recognizes artifacts-v1. Additional hardware or heartbeat metric fields are accepted by the existing Agent protocol.
+      responses:
+        "200": {description: Node report accepted}
+        "400": {description: Invalid report}
+        "401": {description: Invalid node token}
+        "500": {description: Node lookup or persistence failed}
+  /api/agent/heartbeat:
+    post:
+      summary: Refresh Agent liveness and configured workload capabilities
+      description: Authenticates the node token in the JSON body. Workload capabilities are derived from configured runtime support. Omitted capabilities clear prior support for downgraded or legacy Agents; only recognized capabilities are persisted.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string}
+                workloadCapabilities:
+                  type: array
+                  items: {type: string}
+                  description: Currently recognizes artifacts-v1. Additional hardware or heartbeat metric fields are accepted by the existing Agent protocol.
+      responses:
+        "200": {description: Node report accepted}
+        "400": {description: Invalid report}
+        "401": {description: Invalid node token}
+        "500": {description: Node lookup or persistence failed}
   /api/agent/assignments:
     get:
       summary: Poll assignments for the authenticated node
@@ -239,7 +285,7 @@ paths:
                           properties:
                             artifacts:
                               type: array
-                              description: Immutable file references. No host paths or arbitrary download URLs. Authorized node download is available for persisted manifests; production Agent downloads are configured; the control-plane builder publishes same-workspace uploaded sources and their dependency closure. Customer remote installation and multi-node runtime verification remain pending.
+                              description: Immutable file references. No host paths or arbitrary download URLs. Authorized node download is available for persisted manifests; production Agent downloads are configured; the control-plane builder publishes same-workspace uploaded sources and their dependency closure. Customer requests support online artifact-capable nodes; cross-host runtime verification remains pending.
                               items:
                                 type: object
                                 required: [id, path, sha256, sizeBytes]
@@ -272,7 +318,7 @@ paths:
   /api/agent/assignments/{uid}/artifacts/{artifactId}:
     get:
       summary: Download an uploaded workspace artifact for the current node assignment
-      description: Requires the owning node token, a current running assignment and instance generation, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. This is request-scoped authorization, not a lease or in-flight revocation guarantee. The worker must verify the received bytes before replacing a container. Production Agent downloads are configured; the control-plane builder publishes same-workspace uploaded sources and their dependency closure. Customer remote installation and multi-node runtime verification remain pending.
+      description: Requires the owning node token, a current running assignment and instance generation, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. This is request-scoped authorization, not a lease or in-flight revocation guarantee. The worker must verify the received bytes before replacing a container. Production Agent downloads are configured; the control-plane builder publishes same-workspace uploaded sources and their dependency closure. Customer requests support online artifact-capable nodes; cross-host runtime verification remains pending.
       security:
         - nodeToken: []
       parameters:
@@ -1145,7 +1191,7 @@ paths:
   /api/servers/{id}/mods/installation-requests:
     post:
       summary: Request installation of an uploaded workspace mod
-      description: Requires an authenticated workspace writer with mod management permission. The instance must be stopped on the local node. Appends a same-workspace, same-provider uploaded library source to desired configuration; files are installed by the planner on the next start. Remote file delivery and Workshop sources are not supported by this endpoint. Acknowledgement does not mean installation has completed. Refresh instance state after any uncertain response; requests are not automatically retried.
+      description: Requires an authenticated workspace writer with mod management permission. The instance must be stopped. Remote nodes must be online, have a heartbeat no older than 45 seconds, and advertise artifacts-v1; eligibility is rechecked in the write transaction. Appends a same-workspace, same-provider uploaded library source to desired configuration; files are installed by the planner on the next start. Remote files are delivered by the Agent on the next start. Workshop sources are not supported by this endpoint. Acknowledgement does not mean installation has completed. Refresh instance state after any uncertain response; requests are not automatically retried.
       parameters:
         - in: path
           name: id

@@ -224,6 +224,9 @@ func TestAgentArtifactDeliveryIntegration(t *testing.T) {
 		if !found {
 			t.Fatal("Agent did not converge before deadline")
 		}
+		if ready, err := db.RemoteArtifactsAvailable(ctx, n.node.ID); err != nil || !ready {
+			t.Fatalf("production Agent did not advertise ready capability: %v", err)
+		}
 		other := nodes[0]
 		if other.node.ID == n.node.ID {
 			other = nodes[1]

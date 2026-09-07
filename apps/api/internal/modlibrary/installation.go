@@ -13,9 +13,10 @@ import (
 
 var ErrInvalidInstallation = errors.New("invalid mod installation request")
 var ErrInstallationConflict = errors.New("refresh the instance and stop it before requesting installation")
-var ErrRemoteInstallation = errors.New("uploaded mod delivery to remote nodes is not available")
+var ErrRemoteInstallation = errors.New("remote node must be online with artifacts-v1 support; update the Agent and refresh")
 
 type InstallationRepository interface {
+	RemoteArtifactsAvailable(context.Context, string) (bool, error)
 	GetUserGameServer(context.Context, string, string) (domain.GameServer, error)
 	GetUserLibraryMod(context.Context, string, string) (domain.ModFile, error)
 	CheckLibraryWriter(context.Context, string, string) error
@@ -49,7 +50,13 @@ func (s *Installer) Request(ctx context.Context, userID, serverID, modID string,
 		return domain.GameServer{}, ErrInstallationConflict
 	}
 	if !before.IsLocal() {
-		return domain.GameServer{}, ErrRemoteInstallation
+		ready, err := s.repo.RemoteArtifactsAvailable(ctx, before.NodeID)
+		if err != nil {
+			return domain.GameServer{}, err
+		}
+		if !ready {
+			return domain.GameServer{}, ErrRemoteInstallation
+		}
 	}
 	source, err := s.repo.GetUserLibraryMod(ctx, userID, modID)
 	if err != nil {

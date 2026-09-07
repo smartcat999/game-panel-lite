@@ -44,23 +44,25 @@ type joinCommandResponse struct {
 }
 
 type agentRegisterRequest struct {
-	Token         string `json:"token"`
-	CPUCores      int    `json:"cpuCores"`
-	MemoryTotalMB int64  `json:"memoryTotalMb"`
-	DiskTotalGB   int64  `json:"diskTotalGb"`
-	DockerVersion string `json:"dockerVersion"`
-	AgentVersion  string `json:"agentVersion"`
-	OSInfo        string `json:"osInfo"`
-	PublicIP      string `json:"publicIp"`
+	WorkloadCapabilities []string `json:"workloadCapabilities"`
+	Token                string   `json:"token"`
+	CPUCores             int      `json:"cpuCores"`
+	MemoryTotalMB        int64    `json:"memoryTotalMb"`
+	DiskTotalGB          int64    `json:"diskTotalGb"`
+	DockerVersion        string   `json:"dockerVersion"`
+	AgentVersion         string   `json:"agentVersion"`
+	OSInfo               string   `json:"osInfo"`
+	PublicIP             string   `json:"publicIp"`
 }
 
 type agentHeartbeatRequest struct {
-	Token           string  `json:"token"`
-	CPUUsagePercent float64 `json:"cpuUsagePercent"`
-	MemoryUsedMB    int64   `json:"memoryUsedMb"`
-	DiskUsedGB      int64   `json:"diskUsedGb"`
-	RunningCount    int     `json:"runningCount"`
-	PingLatencyMS   int64   `json:"pingLatencyMs"`
+	WorkloadCapabilities []string `json:"workloadCapabilities"`
+	Token                string   `json:"token"`
+	CPUUsagePercent      float64  `json:"cpuUsagePercent"`
+	MemoryUsedMB         int64    `json:"memoryUsedMb"`
+	DiskUsedGB           int64    `json:"diskUsedGb"`
+	RunningCount         int      `json:"runningCount"`
+	PingLatencyMS        int64    `json:"pingLatencyMs"`
 }
 
 func generateAgentToken() string {
@@ -275,6 +277,7 @@ func (h *Handler) agentRegister(w http.ResponseWriter, r *http.Request) {
 		node.PublicIP = req.PublicIP
 	}
 
+	node.WorkloadCapabilities = knownWorkloadCapabilities(req.WorkloadCapabilities)
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
 	node.UpdatedAt = time.Now().UTC()
@@ -328,6 +331,7 @@ func (h *Handler) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		node.PingLatencyMS = req.PingLatencyMS
 	}
 
+	node.WorkloadCapabilities = knownWorkloadCapabilities(req.WorkloadCapabilities)
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
 	node.UpdatedAt = time.Now().UTC()
@@ -743,4 +747,13 @@ func logSnapshotDelta(current, snapshot []string) []string {
 		}
 	}
 	return snapshot
+}
+
+func knownWorkloadCapabilities(advertised []string) []string {
+	for _, capability := range advertised {
+		if capability == workload.ArtifactCapability {
+			return []string{workload.ArtifactCapability}
+		}
+	}
+	return nil
 }

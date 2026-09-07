@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"gorm.io/gorm"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
@@ -17,6 +18,18 @@ func (s *Store) SaveModInstallationIntent(ctx context.Context, userID string, be
 	return s.Transaction(ctx, func(tx *Store) error {
 		if err := tx.lockWorkspaceWriter(ctx, before.OrganizationID, userID); err != nil {
 			return err
+		}
+		if !before.IsLocal() {
+			if err := tx.db.WithContext(ctx).Model(&domain.ComputeNode{}).Where("id = ?", before.NodeID).UpdateColumn("updated_at", gorm.Expr("updated_at")).Error; err != nil {
+				return err
+			}
+			ready, err := tx.RemoteArtifactsAvailable(ctx, before.NodeID)
+			if err != nil {
+				return err
+			}
+			if !ready {
+				return ErrReconciliationSuperseded
+			}
 		}
 		var count int64
 		if err := tx.libraryModSnapshot(ctx, source).Count(&count).Error; err != nil {

@@ -212,6 +212,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testTenantModLibrary(t, db)
 	testModSources(t, db)
 	testModInstallationIntent(t, db)
+	testRemoteInstallationCapabilities(t, db)
 	testNodeArtifactAuthorization(t, db)
 	testArtifactReferenceLifecycle(t, db)
 	var referenceCount int64

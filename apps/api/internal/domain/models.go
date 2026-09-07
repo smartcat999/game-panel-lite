@@ -409,29 +409,30 @@ type TenantUsage struct {
 }
 
 type ComputeNode struct {
-	ID              string    `json:"id" gorm:"primaryKey"`
-	Name            string    `json:"name"`
-	Host            string    `json:"host"`
-	Port            int       `json:"port"`
-	Token           string    `json:"token,omitempty"`
-	PublicIP        string    `json:"publicIp"`
-	Region          string    `json:"region"`
-	Status          string    `json:"status"`
-	IsLocal         bool      `json:"isLocal"`
-	CPUCores        int       `json:"cpuCores"`
-	CPUUsagePercent float64   `json:"cpuUsagePercent"`
-	MemoryTotalMB   int64     `json:"memoryTotalMb"`
-	MemoryUsedMB    int64     `json:"memoryUsedMb"`
-	DiskTotalGB     int64     `json:"diskTotalGb"`
-	DiskUsedGB      int64     `json:"diskUsedGb"`
-	DockerVersion   string    `json:"dockerVersion,omitempty"`
-	AgentVersion    string    `json:"agentVersion,omitempty"`
-	OSInfo          string    `json:"osInfo,omitempty"`
-	PingLatencyMS   int64     `json:"pingLatencyMs"`
-	RunningCount    int       `json:"runningCount"`
-	LastHeartbeat   time.Time `json:"lastHeartbeat"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	WorkloadCapabilities []string  `json:"workloadCapabilities" gorm:"serializer:json;type:text"`
+	ID                   string    `json:"id" gorm:"primaryKey"`
+	Name                 string    `json:"name"`
+	Host                 string    `json:"host"`
+	Port                 int       `json:"port"`
+	Token                string    `json:"token,omitempty"`
+	PublicIP             string    `json:"publicIp"`
+	Region               string    `json:"region"`
+	Status               string    `json:"status"`
+	IsLocal              bool      `json:"isLocal"`
+	CPUCores             int       `json:"cpuCores"`
+	CPUUsagePercent      float64   `json:"cpuUsagePercent"`
+	MemoryTotalMB        int64     `json:"memoryTotalMb"`
+	MemoryUsedMB         int64     `json:"memoryUsedMb"`
+	DiskTotalGB          int64     `json:"diskTotalGb"`
+	DiskUsedGB           int64     `json:"diskUsedGb"`
+	DockerVersion        string    `json:"dockerVersion,omitempty"`
+	AgentVersion         string    `json:"agentVersion,omitempty"`
+	OSInfo               string    `json:"osInfo,omitempty"`
+	PingLatencyMS        int64     `json:"pingLatencyMs"`
+	RunningCount         int       `json:"runningCount"`
+	LastHeartbeat        time.Time `json:"lastHeartbeat"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 type NodeTaskAction string

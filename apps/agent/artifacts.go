@@ -62,3 +62,10 @@ func (s *artifactSource) Open(ctx context.Context, assignment workload.Assignmen
 	// replacing a container. Closing this body also cancels network resources.
 	return resp.Body, nil
 }
+
+func (cfg AgentConfig) workloadCapabilities() []string {
+	if cfg.ArtifactsEnabled {
+		return []string{workload.ArtifactCapability}
+	}
+	return nil
+}

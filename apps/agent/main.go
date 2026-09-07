@@ -43,23 +43,25 @@ type AgentConfig struct {
 }
 
 type RegisterPayload struct {
-	Token         string `json:"token"`
-	CPUCores      int    `json:"cpuCores"`
-	MemoryTotalMB int    `json:"memoryTotalMb"`
-	DiskTotalGB   int    `json:"diskTotalGb"`
-	DockerVersion string `json:"dockerVersion"`
-	AgentVersion  string `json:"agentVersion"`
-	OSInfo        string `json:"osInfo"`
-	PublicIP      string `json:"publicIp"`
+	WorkloadCapabilities []string `json:"workloadCapabilities"`
+	Token                string   `json:"token"`
+	CPUCores             int      `json:"cpuCores"`
+	MemoryTotalMB        int      `json:"memoryTotalMb"`
+	DiskTotalGB          int      `json:"diskTotalGb"`
+	DockerVersion        string   `json:"dockerVersion"`
+	AgentVersion         string   `json:"agentVersion"`
+	OSInfo               string   `json:"osInfo"`
+	PublicIP             string   `json:"publicIp"`
 }
 
 type HeartbeatPayload struct {
-	Token           string  `json:"token"`
-	CPUUsagePercent float64 `json:"cpuUsagePercent"`
-	MemoryUsedMB    int     `json:"memoryUsedMb"`
-	DiskUsedGB      int     `json:"diskUsedGb"`
-	RunningCount    int     `json:"runningCount"`
-	PingLatencyMS   int     `json:"pingLatencyMs"`
+	WorkloadCapabilities []string `json:"workloadCapabilities"`
+	Token                string   `json:"token"`
+	CPUUsagePercent      float64  `json:"cpuUsagePercent"`
+	MemoryUsedMB         int      `json:"memoryUsedMb"`
+	DiskUsedGB           int      `json:"diskUsedGb"`
+	RunningCount         int      `json:"runningCount"`
+	PingLatencyMS        int      `json:"pingLatencyMs"`
 }
 
 const AgentVersion = "v0.4.48"
@@ -151,14 +153,15 @@ func main() {
 
 	// Step 2: Initial Registration
 	regPayload := RegisterPayload{
-		Token:         cfg.Token,
-		CPUCores:      cores,
-		MemoryTotalMB: memTotalMB,
-		DiskTotalGB:   diskTotalGB,
-		DockerVersion: dockerVer,
-		AgentVersion:  AgentVersion,
-		OSInfo:        osInfo,
-		PublicIP:      cfg.PublicIP,
+		WorkloadCapabilities: cfg.workloadCapabilities(),
+		Token:                cfg.Token,
+		CPUCores:             cores,
+		MemoryTotalMB:        memTotalMB,
+		DiskTotalGB:          diskTotalGB,
+		DockerVersion:        dockerVer,
+		AgentVersion:         AgentVersion,
+		OSInfo:               osInfo,
+		PublicIP:             cfg.PublicIP,
 	}
 
 	registered := false
@@ -206,7 +209,8 @@ func reportAgentHeartbeat(ctx context.Context, client *http.Client, cfg AgentCon
 	_, activeCount := getDockerInfo(ctx, runtime)
 	cpuPercent := getCPUUsagePercent()
 	payload := HeartbeatPayload{
-		Token: cfg.Token, CPUUsagePercent: cpuPercent,
+		WorkloadCapabilities: cfg.workloadCapabilities(),
+		Token:                cfg.Token, CPUUsagePercent: cpuPercent,
 		MemoryUsedMB: memUsedMB, DiskUsedGB: diskUsedGB, RunningCount: activeCount,
 	}
 	start := time.Now()
