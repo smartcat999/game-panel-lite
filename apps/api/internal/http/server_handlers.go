@@ -348,9 +348,9 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
-	server, err := serverctrl.NewService(h.store).RequestStart(r.Context(), id)
+	server, err := serverctrl.NewService(h.store).WithActor(allocationActor(r)).RequestStart(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "server not found")
+		writeLifecycleError(w, err)
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.start.queued", fmt.Sprintf("Queued start for server %s", server.Name), activityServerPayload(server))
@@ -365,9 +365,9 @@ func (h *Handler) stopServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
-	server, err := serverctrl.NewService(h.store).RequestStop(r.Context(), id)
+	server, err := serverctrl.NewService(h.store).WithActor(allocationActor(r)).RequestStop(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "server not found")
+		writeLifecycleError(w, err)
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.stop.queued", fmt.Sprintf("Queued stop for server %s", server.Name), activityServerPayload(server))
@@ -384,9 +384,9 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
-	server, err := serverctrl.NewService(h.store).RequestRestart(r.Context(), id)
+	server, err := serverctrl.NewService(h.store).WithActor(allocationActor(r)).RequestRestart(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "server not found")
+		writeLifecycleError(w, err)
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.restart.queued", fmt.Sprintf("Queued restart for server %s", server.Name), activityServerPayload(server))
@@ -464,13 +464,13 @@ func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
-	server, err := serverctrl.NewService(h.store).RequestDelete(r.Context(), id)
+	server, err := serverctrl.NewService(h.store).WithActor(allocationActor(r)).RequestDelete(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, serverctrl.ErrServerMustBeStoppedToDelete) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
-		writeError(w, http.StatusNotFound, "server not found")
+		writeLifecycleError(w, err)
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.delete.queued", fmt.Sprintf("Queued delete for server %s", server.Name), activityServerPayload(server))
@@ -1051,4 +1051,12 @@ func (h *Handler) requireRuntimeAvailable(ctx context.Context) error {
 		message = "Docker daemon is not available"
 	}
 	return fmt.Errorf("Docker runtime unavailable: %s", message)
+}
+
+func writeLifecycleError(w http.ResponseWriter, err error) {
+	if errors.Is(err, serverctrl.ErrServerDeletionPending) || errors.Is(err, serverctrl.ErrServerMustBeStoppedToDelete) {
+		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeAllocationError(w, err)
 }

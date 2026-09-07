@@ -11,25 +11,34 @@ import (
 )
 
 var (
+	ErrServerDeletionPending       = errors.New("server deletion is already pending")
 	ErrMissingServerName           = errors.New("server name is required")
 	ErrServerMustBeStoppedToDelete = errors.New("server must be stopped before deletion")
 )
 
 type Store interface {
 	CreateGameServer(context.Context, *domain.GameServer) error
-	SaveGameServer(context.Context, *domain.GameServer) error
+	SaveServerLifecycle(context.Context, string, domain.GameServer, domain.GameServer) error
 	GetGameServer(context.Context, string) (domain.GameServer, error)
 }
 
 type Clock func() time.Time
 
 type Service struct {
-	store Store
-	now   Clock
+	store   Store
+	actorID string
+	now     Clock
 }
 
 func NewService(store Store) *Service {
 	return &Service{store: store, now: time.Now}
+}
+
+// WithActor scopes customer commands to a current workspace writer. Internal
+// controllers and platform administrators retain the default system actor.
+func (s *Service) WithActor(userID string) *Service {
+	s.actorID = userID
+	return s
 }
 
 type CreateCommand struct {
@@ -73,13 +82,6 @@ func (s *Service) RequestRestart(ctx context.Context, id string) (domain.GameSer
 }
 
 func (s *Service) RequestDelete(ctx context.Context, id string) (domain.GameServer, error) {
-	server, err := s.store.GetGameServer(ctx, id)
-	if err != nil {
-		return domain.GameServer{}, err
-	}
-	if server.Status.Phase != domain.PhaseStopped && server.Status.Phase != domain.PhaseFailed {
-		return domain.GameServer{}, ErrServerMustBeStoppedToDelete
-	}
 	return s.updateIntent(ctx, id, domain.DesiredDeleted, "", markDeleting)
 }
 
@@ -94,6 +96,14 @@ func (s *Service) updateIntent(
 	if err != nil {
 		return domain.GameServer{}, err
 	}
+
+	if server.Spec.DesiredState == domain.DesiredDeleted {
+		return domain.GameServer{}, ErrServerDeletionPending
+	}
+	if desired == domain.DesiredDeleted && server.Status.Phase != domain.PhaseStopped && server.Status.Phase != domain.PhaseFailed {
+		return domain.GameServer{}, ErrServerMustBeStoppedToDelete
+	}
+	before := server
 	now := s.clock()
 	server.Spec.DesiredState = desired
 	if server.ProviderKey == domain.ProviderDST {
@@ -102,7 +112,7 @@ func (s *Service) updateIntent(
 	bumpSpecGeneration(&server.Spec)
 	updateStatus(&server.Status, now)
 	server.UpdatedAt = now
-	if err := s.store.SaveGameServer(ctx, &server); err != nil {
+	if err := s.store.SaveServerLifecycle(ctx, s.actorID, before, server); err != nil {
 		return domain.GameServer{}, err
 	}
 	return server, nil

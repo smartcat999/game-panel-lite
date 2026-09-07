@@ -22,8 +22,8 @@ func (s *memoryStore) CreateGameServer(_ context.Context, server *domain.GameSer
 	return nil
 }
 
-func (s *memoryStore) SaveGameServer(_ context.Context, server *domain.GameServer) error {
-	s.items[server.ID] = *server
+func (s *memoryStore) SaveServerLifecycle(_ context.Context, _ string, before, server domain.GameServer) error {
+	s.items[server.ID] = server
 	return nil
 }
 
@@ -152,5 +152,16 @@ func TestDSTStartReusesModsAndRestartRefreshesMods(t *testing.T) {
 	}
 	if stopped.Spec.Runtime.ModSyncMode != "" {
 		t.Fatalf("expected stop to clear DST mod sync mode, got %q", stopped.Spec.Runtime.ModSyncMode)
+	}
+}
+
+func TestPendingDeletionRejectsLifecycleCommands(t *testing.T) {
+	db := newMemoryStore()
+	db.items["deleting"] = domain.GameServer{ID: "deleting", Spec: domain.ServerSpec{DesiredState: domain.DesiredDeleted}, Status: domain.ServerRuntimeStatus{Phase: domain.PhaseDeleting}}
+	service := NewService(db)
+	for _, command := range []func(context.Context, string) (domain.GameServer, error){service.RequestStart, service.RequestStop, service.RequestRestart, service.RequestDelete} {
+		if _, err := command(context.Background(), "deleting"); !errors.Is(err, ErrServerDeletionPending) {
+			t.Fatalf("pending deletion: %v", err)
+		}
 	}
 }

@@ -478,7 +478,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GameServer"
         "409":
-          description: This server has an active game update task
+          description: Concurrent configuration or runtime change, deletion already pending, or maintenance active
   /api/servers/{id}/config:
     put:
       summary: Update desired server configuration
@@ -516,7 +516,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GameServer"
         "409":
-          description: A game update or runtime image task is active
+          description: Concurrent configuration or runtime change, deletion already pending, or maintenance active
   /api/servers/{id}/stop:
     post:
       summary: Request server stop
@@ -529,7 +529,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GameServer"
         "409":
-          description: This server has an active game update task
+          description: Concurrent configuration or runtime change, deletion already pending, or maintenance active
   /api/servers/{id}/restart:
     post:
       summary: Request server restart
@@ -542,7 +542,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/GameServer"
         "409":
-          description: A game update or runtime image task is active
+          description: Concurrent configuration or runtime change, deletion already pending, or maintenance active
   /api/servers/{id}/game-update:
     parameters:
       - name: id
