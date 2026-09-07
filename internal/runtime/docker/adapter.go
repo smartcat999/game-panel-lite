@@ -3,6 +3,7 @@ package docker
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,35 +116,35 @@ func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) er
 	}, host, nil, nil, name)
 	return err
 }
-func (a *Adapter) Start(ctx context.Context, serverID string) error {
-	name, err := containerName(serverID)
+func (a *Adapter) Start(ctx context.Context, observed worker.State) error {
+	id, err := mutationContainerID(observed)
 	if err != nil {
 		return err
 	}
-	err = a.client.ContainerStart(ctx, name, types.ContainerStartOptions{})
+	err = a.client.ContainerStart(ctx, id, types.ContainerStartOptions{})
 	if errdefs.IsNotModified(err) {
 		return nil
 	}
 	return err
 }
-func (a *Adapter) Stop(ctx context.Context, serverID string) error {
-	name, err := containerName(serverID)
+func (a *Adapter) Stop(ctx context.Context, observed worker.State) error {
+	id, err := mutationContainerID(observed)
 	if err != nil {
 		return err
 	}
 	timeout := 20
-	err = a.client.ContainerStop(ctx, name, container.StopOptions{Timeout: &timeout})
+	err = a.client.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout})
 	if errdefs.IsNotModified(err) || client.IsErrNotFound(err) {
 		return nil
 	}
 	return err
 }
-func (a *Adapter) Remove(ctx context.Context, serverID string) error {
-	name, err := containerName(serverID)
+func (a *Adapter) Remove(ctx context.Context, observed worker.State) error {
+	id, err := mutationContainerID(observed)
 	if err != nil {
 		return err
 	}
-	err = a.client.ContainerRemove(ctx, name, types.ContainerRemoveOptions{Force: true})
+	err = a.client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{Force: true})
 	if client.IsErrNotFound(err) {
 		return nil
 	}
@@ -251,4 +252,16 @@ func networkBindings(network workload.Network) (nat.PortSet, nat.PortMap, error)
 		bindings[port] = append(bindings[port], nat.PortBinding{HostPort: strconv.Itoa(item.HostPort)})
 	}
 	return ports, bindings, nil
+}
+
+// Require the immutable full ID returned by Inspect, never a reusable name or
+// short ID prefix. A removed target must not resolve to a replacement container.
+func mutationContainerID(observed worker.State) (string, error) {
+	if !observed.Exists || !observed.Managed || observed.ServerID == "" || observed.NodeID == "" || observed.UID == "" || observed.Generation <= 0 || len(observed.ID) != 64 {
+		return "", fmt.Errorf("complete observed container identity is required")
+	}
+	if _, err := hex.DecodeString(observed.ID); err != nil {
+		return "", fmt.Errorf("invalid observed container ID")
+	}
+	return observed.ID, nil
 }

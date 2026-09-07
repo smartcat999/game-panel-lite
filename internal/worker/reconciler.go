@@ -28,9 +28,9 @@ type State struct {
 type Runtime interface {
 	Inspect(context.Context, string) (State, error)
 	Create(context.Context, workload.Assignment) error
-	Start(context.Context, string) error
-	Stop(context.Context, string) error
-	Remove(context.Context, string) error
+	Start(context.Context, State) error
+	Stop(context.Context, State) error
+	Remove(context.Context, State) error
 }
 
 // Reconcile observes after every mutation and returns an observation even when
@@ -52,18 +52,14 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 		observation.LastError = err.Error()
 		return observation
 	}
-	if state.Exists && (!state.Managed || state.ServerID != assignment.ServerID || state.NodeID != assignment.NodeID) {
-		observation.LastError = "existing workload is not owned by this server and node"
-		return observation
-	}
-	if state.Exists && state.UID == assignment.UID && state.Generation > assignment.Generation {
-		observation.LastError = "assignment generation is older than the running workload"
+	if err := validateObservedWorkload(state, assignment); err != nil {
+		observation.LastError = err.Error()
 		return observation
 	}
 	switch assignment.DesiredState {
 	case "running":
-		if state.Exists && (state.UID != assignment.UID || state.Generation != assignment.Generation) {
-			if err = runtime.Remove(ctx, assignment.ServerID); err != nil {
+		if state.Exists && (state.Generation != assignment.Generation) {
+			if err = runtime.Remove(ctx, state); err != nil {
 				break
 			}
 			state = State{}
@@ -77,16 +73,23 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 				break
 			}
 		}
+		if err = validateObservedWorkload(state, assignment); err != nil {
+			break
+		}
+		if !state.Exists || state.Generation != assignment.Generation {
+			err = fmt.Errorf("created workload is missing or has a different generation")
+			break
+		}
 		if !state.Running {
-			err = runtime.Start(ctx, assignment.ServerID)
+			err = runtime.Start(ctx, state)
 		}
 	case "stopped":
 		if state.Exists && state.Running {
-			err = runtime.Stop(ctx, assignment.ServerID)
+			err = runtime.Stop(ctx, state)
 		}
 	case "deleted":
 		if state.Exists {
-			err = runtime.Remove(ctx, assignment.ServerID)
+			err = runtime.Remove(ctx, state)
 		}
 	default:
 		err = fmt.Errorf("unsupported desired state %q", assignment.DesiredState)
@@ -100,6 +103,10 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 		observation.LastError = err.Error()
 		return observation
 	}
+	if err := validateObservedWorkload(state, assignment); err != nil {
+		observation.LastError = err.Error()
+		return observation
+	}
 	observation.RuntimeID = state.ID
 	switch {
 	case !state.Exists:
@@ -110,4 +117,23 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 		observation.ActualState = "stopped"
 	}
 	return observation
+}
+
+func validateObservedWorkload(state State, assignment workload.Assignment) error {
+	if !state.Exists {
+		return nil
+	}
+	if !state.Managed || state.ServerID != assignment.ServerID || state.NodeID != assignment.NodeID {
+		return fmt.Errorf("existing workload is not owned by this server and node")
+	}
+	if state.UID != assignment.UID {
+		return fmt.Errorf("existing workload belongs to another assignment")
+	}
+	if state.ID == "" || state.Generation <= 0 {
+		return fmt.Errorf("existing workload identity is incomplete")
+	}
+	if state.Generation > assignment.Generation {
+		return fmt.Errorf("assignment generation is older than the running workload")
+	}
+	return nil
 }

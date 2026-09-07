@@ -31,8 +31,19 @@ func TestDockerIntegration(t *testing.T) {
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := adapter.Remove(cleanup, id); err != nil {
-			t.Errorf("remove disposable workload %s: %v", id, err)
+		observed, err := adapter.Inspect(cleanup, id)
+		if err != nil {
+			t.Errorf("inspect disposable workload %s: %v", id, err)
+			return
+		}
+		if observed.Exists {
+			if observed.ServerID != id || observed.NodeID != "integration" {
+				t.Errorf("unexpected cleanup ownership: %+v", observed)
+				return
+			}
+			if err := adapter.Remove(cleanup, observed); err != nil {
+				t.Errorf("remove disposable workload %s: %v", id, err)
+			}
 		}
 	}()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

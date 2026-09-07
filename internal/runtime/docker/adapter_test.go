@@ -13,6 +13,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/smartcat999/game-panel-lite/internal/worker"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
@@ -119,13 +120,51 @@ func TestLifecycleOperationsAreIdempotent(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 		io.WriteString(w, `{"message":"missing"}`)
 	})
-	for _, run := range []func(context.Context, string) error{adapter.Start, adapter.Stop, adapter.Remove} {
-		if err := run(context.Background(), "server"); err != nil {
+	for _, run := range []func(context.Context, worker.State) error{adapter.Start, adapter.Stop, adapter.Remove} {
+		if err := run(context.Background(), worker.State{ID: strings.Repeat("a", 64), Exists: true, Managed: true, ServerID: "server", NodeID: "node", UID: "uid", Generation: 1}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	state, err := adapter.Inspect(context.Background(), "server")
 	if err != nil || state.Exists {
 		t.Fatalf("inspect missing: %+v %v", state, err)
+	}
+}
+
+func TestMutationsAddressOnlyTheObservedContainerID(t *testing.T) {
+	id := strings.Repeat("b", 64)
+	calls := 0
+	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if !strings.HasPrefix(r.URL.Path, "/v1.44/containers/"+id) {
+			t.Errorf("mutation used a reusable target: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"message":"observed container was replaced"}`)
+	})
+	observed := worker.State{ID: id, Exists: true, Managed: true, ServerID: "server", NodeID: "node", UID: "uid", Generation: 1}
+	if err := adapter.Start(context.Background(), observed); err == nil {
+		t.Fatal("missing start target should fail")
+	}
+	if err := adapter.Stop(context.Background(), observed); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Remove(context.Background(), observed); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 3 {
+		t.Fatalf("unexpected calls: %d", calls)
+	}
+	for _, invalid := range []string{"", "gamepanel-server", id[:12], strings.Repeat("z", 64)} {
+		observed.ID = invalid
+		for _, run := range []func(context.Context, worker.State) error{adapter.Start, adapter.Stop, adapter.Remove} {
+			if err := run(context.Background(), observed); err == nil {
+				t.Fatalf("accepted mutable or invalid target %q", invalid)
+			}
+		}
+	}
+	if calls != 3 {
+		t.Fatal("invalid target reached Docker")
 	}
 }
