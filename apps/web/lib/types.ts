@@ -223,6 +223,7 @@ export type ServerRuntimeStatus = {
 };
 
 export type GameServerResource = {
+  organizationId?: string;
   id: string;
   name: string;
   nodeId?: string;

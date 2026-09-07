@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card } from "@/components/ui";
 import { listGames, listMyOrganizations, uploadWorkspaceMod, WorkspaceModUploadError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { WorkspaceModInstallation } from "@/components/workspace-mod-installation";
 import type { ModFile } from "@/lib/types";
 
 type UploadResult = { name: string; workspace: string; ok: boolean; uncertain?: boolean; message?: string; uploadId?: string };
@@ -107,8 +108,9 @@ export function WorkspaceModLibrary({ mods }: { mods: ModFile[] }) {
         </div>)}
       </div>
     </Card>
+    <WorkspaceModInstallation mods={mods} workspaces={availableSpaces} />
     <Card className="overflow-x-auto p-4">
-      <p className="mb-3 text-sm text-slate-400">{zh ? "模组按所属工作区保存。安装、删除与在线导入暂未开放。" : "Mods are stored in their workspace. Installation, deletion and online import are not yet available."}</p>
+      <p className="mb-3 text-sm text-slate-400">{zh ? "模组按所属工作区保存。支持为本地停服实例保存安装请求；删除与在线导入暂未开放。" : "Mods are stored in their workspace. Installation requests are available for stopped local instances. Deletion and online import are not yet available."}</p>
       <table className="w-full text-left text-sm">
         <thead><tr className="text-slate-400"><th className="p-2">{zh ? "模组" : "Mod"}</th><th className="p-2">{zh ? "工作区" : "Workspace"}</th><th className="p-2">{zh ? "游戏类型" : "Provider"}</th><th className="p-2">{zh ? "大小" : "Size"}</th></tr></thead>
         <tbody>{mods.map(item => <tr key={item.id} className="border-t border-panel-line"><td className="p-2 text-slate-100">{item.title || item.modName || item.fileName}<p className="text-xs text-slate-500">{item.fileName}</p></td><td className="p-2 text-slate-300">{availableSpaces.find(space => space.id === item.organizationId)?.name || item.organizationId}</td><td className="p-2 text-slate-300">{providers.find(provider => provider.key === item.providerKey)?.label || item.providerKey}</td><td className="p-2 text-slate-300">{item.size}</td></tr>)}</tbody>

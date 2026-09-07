@@ -350,6 +350,7 @@ function formatRelative(value?: string) {
 
 function gameServerResourceFromApi(server: ApiServer): GameServerResource {
   return {
+    organizationId: server.organizationId,
     id: server.id,
     name: server.name,
     nodeId: server.nodeId || (server as unknown as { node_id?: string }).node_id || undefined,
@@ -1767,4 +1768,27 @@ export async function uploadWorkspaceMod(organizationId: string, providerKey: Pr
     throw new WorkspaceModUploadError("Upload response could not be verified; check the library before uploading again", 0);
   }
   return toModFile(payload);
+}
+
+export class ModInstallationError extends Error {
+  constructor(message: string, readonly status: number) { super(message); this.name = "ModInstallationError"; }
+  get uncertain() { return this.status === 0 || this.status >= 500; }
+}
+export type ModInstallationReceipt = { serverId: string; generation: number; modIds: string[]; state: "requested" };
+export async function requestModInstallation(serverId: string, modId: string, generation: number): Promise<ModInstallationReceipt> {
+  let response: Response;
+  try {
+    response = await apiFetch(`${API_BASE}/api/servers/${encodeURIComponent(serverId)}/mods/installation-requests`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modId, generation })
+    });
+  } catch { throw new ModInstallationError("Installation response unavailable; refresh the instance before submitting again", 0); }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new ModInstallationError("Unable to save installation request", response.status);
+  if (response.status !== 202 || !payload || typeof payload !== "object" ||
+      !("serverId" in payload) || payload.serverId !== serverId || !("state" in payload) || payload.state !== "requested" ||
+      !("generation" in payload) || (payload.generation !== generation && payload.generation !== generation + 1) ||
+      !("modIds" in payload) || !Array.isArray(payload.modIds) || !payload.modIds.every(id => typeof id === "string") || !payload.modIds.includes(modId)) {
+    throw new ModInstallationError("Installation response could not be verified; refresh the instance before submitting again", 0);
+  }
+  return { serverId, state: "requested", generation: payload.generation, modIds: payload.modIds };
 }
