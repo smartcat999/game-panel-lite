@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
 const (
@@ -206,7 +207,11 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.createSessionCookie(w, r, account); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		status := http.StatusInternalServerError
+		if errors.Is(err, store.ErrCredentialsChanged) {
+			status = http.StatusUnauthorized
+		}
+		writeError(w, status, err.Error())
 		return
 	}
 	role := domain.NormalizeAccountRole(account.Role)
@@ -277,12 +282,20 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	persisted.PasswordHash = passwordHash
-	persisted.UpdatedAt = time.Now()
-	if err := h.store.SaveAdminAccount(r.Context(), &persisted); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	token, replacement, err := newSession(persisted.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create replacement session")
 		return
 	}
+	if err := h.store.RotatePassword(r.Context(), persisted.ID, persisted.PasswordHash, passwordHash, &replacement); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, store.ErrCredentialsChanged) {
+			status = http.StatusConflict
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	http.SetCookie(w, sessionCookie(r, token, replacement.ExpiresAt))
 	writeJSON(w, http.StatusOK, authAccountResponse{
 		ID:          persisted.ID,
 		Username:    persisted.Username,
@@ -396,7 +409,7 @@ func (h *Handler) updateUserRole(w http.ResponseWriter, r *http.Request) {
 	}
 	target.Role = payload.Role
 	target.UpdatedAt = time.Now()
-	if err := h.store.SaveAdminAccount(r.Context(), &target); err != nil {
+	if err := h.store.UpdateAccountRole(r.Context(), target.ID, target.Role); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -432,11 +445,16 @@ func (h *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	target.PasswordHash = passwordHash
-	target.UpdatedAt = time.Now()
-	if err := h.store.SaveAdminAccount(r.Context(), &target); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.store.RotatePassword(r.Context(), target.ID, target.PasswordHash, passwordHash, nil); err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, store.ErrCredentialsChanged) {
+			status = http.StatusConflict
+		}
+		writeError(w, status, err.Error())
 		return
+	}
+	if current, ok := accountFromContext(r.Context()); ok && current.ID == target.ID {
+		clearSessionCookie(w, r)
 	}
 	writeJSON(w, http.StatusOK, authAccountResponse{
 		ID:          target.ID,
@@ -615,23 +633,30 @@ func accountFromContext(ctx context.Context) (domain.AdminAccount, bool) {
 	return account, ok
 }
 
-func (h *Handler) createSessionCookie(w http.ResponseWriter, r *http.Request, account domain.AdminAccount) error {
+func newSession(accountID string) (string, domain.Session, error) {
 	token, err := randomToken(32)
 	if err != nil {
-		return err
+		return "", domain.Session{}, err
 	}
 	now := time.Now()
-	session := domain.Session{
+	return token, domain.Session{
 		ID:        uuid.NewString(),
-		AccountID: account.ID,
+		AccountID: accountID,
 		TokenHash: hashSessionToken(token),
 		ExpiresAt: now.Add(sessionTTL),
 		CreatedAt: now,
-	}
-	if err := h.store.DeleteExpiredSessions(r.Context(), now); err != nil {
+	}, nil
+}
+
+func (h *Handler) createSessionCookie(w http.ResponseWriter, r *http.Request, account domain.AdminAccount) error {
+	token, session, err := newSession(account.ID)
+	if err != nil {
 		return err
 	}
-	if err := h.store.CreateSession(r.Context(), &session); err != nil {
+	if err := h.store.DeleteExpiredSessions(r.Context(), time.Now()); err != nil {
+		return err
+	}
+	if err := h.store.CreateSessionForPassword(r.Context(), &session, account.PasswordHash); err != nil {
 		return err
 	}
 	http.SetCookie(w, sessionCookie(r, token, session.ExpiresAt))

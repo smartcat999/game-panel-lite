@@ -78,6 +78,23 @@ func TestAuthSetupLoginAndProtectedRoutes(t *testing.T) {
 		t.Fatalf("expected password change 200, got %d: %s", change.Code, change.Body.String())
 	}
 
+	replacementCookie := authCookieFromRecorder(t, change)
+	for _, cookie := range []*stdhttp.Cookie{setupCookie, loginCookie} {
+		stale := httptest.NewRecorder()
+		req := httptest.NewRequest(stdhttp.MethodGet, "/api/auth/me", nil)
+		req.AddCookie(cookie)
+		router.ServeHTTP(stale, req)
+		if stale.Code != stdhttp.StatusUnauthorized {
+			t.Fatalf("old session survived password change: %d", stale.Code)
+		}
+	}
+	retained := httptest.NewRecorder()
+	retainedReq := httptest.NewRequest(stdhttp.MethodGet, "/api/auth/me", nil)
+	retainedReq.AddCookie(replacementCookie)
+	router.ServeHTTP(retained, retainedReq)
+	if retained.Code != stdhttp.StatusOK {
+		t.Fatalf("replacement session failed: %d", retained.Code)
+	}
 	oldLogin := httptest.NewRecorder()
 	oldLoginReq := httptest.NewRequest(stdhttp.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"admin","password":"secret123"}`))
 	oldLoginReq.Header.Set("Content-Type", "application/json")

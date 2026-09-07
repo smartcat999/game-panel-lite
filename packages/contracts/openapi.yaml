@@ -5,6 +5,65 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/auth/password:
+    post:
+      summary: Change the current account password and rotate its sessions
+      description: Password update, revocation of all old sessions and issuance of the current browser replacement session commit atomically. Concurrent credential changes return 409.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Account response with a replacement session cookie
+        "401":
+          description: Session missing or current password incorrect
+        "409":
+          description: Credentials changed concurrently; authenticate again
+        "500":
+          description: Persistence failed; authenticate again to confirm the current credential state
+  /api/users/{id}/password:
+    put:
+      summary: Reset an account password and revoke all target sessions
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Target password changed and sessions revoked; no replacement session issued
+        "403":
+          description: Platform administrator permission required
+        "404":
+          description: Account not found
+        "409":
+          description: Credentials changed concurrently
   /api/auth/me/organizations:
     get:
       summary: List workspaces for the authenticated user's current memberships

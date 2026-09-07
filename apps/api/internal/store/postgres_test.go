@@ -179,6 +179,8 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := db.GetGameServer(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("not found: %v", err)
 	}
+	testCredentialRotation(t, db)
+	testConcurrentCredentialRotation(t, db)
 	testWorldOwnershipQueries(t, db)
 	testTenantBackupQueries(t, db)
 	testTenantServerQueries(t, db)
