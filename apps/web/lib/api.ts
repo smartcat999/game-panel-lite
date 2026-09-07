@@ -786,6 +786,7 @@ export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
 }
 
 export async function createGameServer(input: {
+  organizationId?: string;
   name: string;
   providerKey: ProviderKey;
   config: TerrariaConfig | Record<string, unknown>;
@@ -1593,6 +1594,11 @@ export type TenantUsage = {
   usedMemoryMb: number;
   quota: TenantQuota;
 };
+
+export async function listMyOrganizations(): Promise<Organization[]> {
+  const response = await apiFetch(`${API_BASE}/api/auth/me/organizations`, { cache: "no-store" });
+  return readPayload<Organization[]>(response, "Unable to load your workspaces");
+}
 
 export async function listOrganizations(): Promise<Organization[]> {
   const response = await apiFetch(`${API_BASE}/api/organizations`, { cache: "no-store" });

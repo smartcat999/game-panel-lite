@@ -19,7 +19,7 @@ import { gameDisplayName } from "@/lib/game-display";
 import { providerDisplayName } from "@/lib/provider-display";
 import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
+import { getAuthBootstrap, listMyOrganizations, listOrganizations, createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
@@ -452,6 +452,28 @@ export function CreateServerWizard() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [step, setStep] = useState(0);
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [ignoreResourceLinks, setIgnoreResourceLinks] = useState(false);
+  const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30_000 });
+  const account = authQuery.data?.account;
+  const isCustomer = Boolean(account && account.role !== "admin");
+  const organizationsQuery = useQuery({
+    queryKey: ["creation-organizations", account?.id, isCustomer],
+    queryFn: isCustomer ? listMyOrganizations : listOrganizations,
+    enabled: Boolean(account),
+    retry: false
+  });
+  const organizations = organizationsQuery.data ?? [];
+  const organizationId = organizations.some((org) => org.id === selectedOrganizationId)
+    ? selectedOrganizationId
+    : "";
+  useEffect(() => {
+    if (!selectedOrganizationId && isCustomer && organizations.length === 1 && organizations[0]) {
+      setSelectedOrganizationId(organizations[0].id);
+    }
+  }, [selectedOrganizationId, isCustomer, organizations]);
+  const workspaceReady = authQuery.isSuccess && (!account || organizationsQuery.isSuccess)
+    && (!isCustomer || Boolean(organizationId));
   const [selectedGameKey, setSelectedGameKey] = useState("");
   const [selectedProviderKey, setSelectedProviderKey] = useState<ProviderKey>("terraria-vanilla");
   const [mode, setMode] = useState<"vanilla" | "tmodloader">(defaultCreateServerMode);
@@ -500,7 +522,7 @@ export function CreateServerWizard() {
   const availableMods = filterModResources(allMods, selectedGameKey);
   const modPacks = filterModResources(allModPacks, selectedGameKey);
   const configPresets = configPresetsQuery.data ?? [];
-  const gameConfigPresets = configPresets.filter((preset) => preset.gameKey === selectedGameKey);
+  const gameConfigPresets = configPresets.filter((preset) => preset.gameKey === selectedGameKey && (preset.organizationId ?? "") === organizationId);
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
   const fallbackStepId: StepId = "review";
   const currentStepId = stepIds[step] ?? fallbackStepId;
@@ -532,6 +554,7 @@ export function CreateServerWizard() {
   };
   const create = useMutation({
     mutationFn: () => createGameServerWithResources({
+      organizationId: organizationId || undefined,
       name: selectedGameKey === "terraria"
         ? config.serverName || "Terraria Server"
         : providerServerName(providerConfigPayload, providerDisplayName(providerKey, providerKey, t) || "Game Server"),
@@ -558,6 +581,7 @@ export function CreateServerWizard() {
   });
   const saveConfigPreset = useMutation({
     mutationFn: (name: string) => createConfigPreset({
+      organizationId: organizationId || undefined,
       name,
       providerKey,
       config: selectedGameKey === "terraria" ? config : providerConfigPayload,
@@ -583,7 +607,21 @@ export function CreateServerWizard() {
     if (next && !presetName.trim()) setPresetName(defaultPresetName());
     setSaveAsPreset(next);
   };
+  const presetModsUnavailable = isCustomer && saveAsPreset && (selectedModIds.length > 0 || Boolean(selectedModPackId));
+  const changeWorkspace = (id: string) => {
+    setIgnoreResourceLinks(true);
+    setSelectedOrganizationId(id);
+    setPresetSavedForCurrentSubmit(false);
+    setSelectedWorldId("");
+    setAppliedWorldConfigId("");
+    setAppliedConfigPresetId("");
+    setSelectedModIds([]);
+    setSelectedModPackId("");
+    create.reset();
+    saveConfigPreset.reset();
+  };
   const submitCreate = () => {
+    if (!workspaceReady || presetModsUnavailable) return;
     if (!validateCurrentConfig()) return;
     if (!saveAsPreset || presetSavedForCurrentSubmit) {
       create.mutate();
@@ -668,6 +706,8 @@ export function CreateServerWizard() {
     setSelectedModIds(pack?.modIds ?? []);
   };
   const applyConfigPreset = (preset: ConfigPreset) => {
+    if (preset.organizationId && !organizations.some((org) => org.id === preset.organizationId)) return;
+    if (isCustomer && !preset.organizationId) return;
     const game = games.find((item) => item.key === preset.gameKey);
     const provider = game?.providers.find((item) => item.key === preset.providerKey);
     if (!game || !provider) return;
@@ -675,6 +715,7 @@ export function CreateServerWizard() {
     setSelectedProviderKey(provider.key);
     setMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     setSelectedPreset("custom");
+    setSelectedOrganizationId(preset.organizationId ?? "");
     const presetPayload = preset.configPayload ?? preset.config;
     if (game.key === "terraria") {
       setConfig(terrariaConfigFromPayload({ ...presetPayload, password: "" }));
@@ -780,11 +821,11 @@ export function CreateServerWizard() {
 
   useEffect(() => {
     if (!showWorldAndBackupFeatures) return;
-    if (typeof window === "undefined" || selectedWorldId) return;
+    if (typeof window === "undefined" || selectedWorldId || ignoreResourceLinks) return;
     const worldId = new URLSearchParams(window.location.search).get("worldId");
     if (!worldId) return;
     setSelectedWorldId(worldId);
-  }, [selectedWorldId]);
+  }, [selectedWorldId, ignoreResourceLinks]);
 
   useEffect(() => {
     if (selectedGameKey || games.length === 0 || appliedConfigPresetId || selectedWorldId) return;
@@ -817,12 +858,12 @@ export function CreateServerWizard() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const presetId = new URLSearchParams(window.location.search).get("presetId");
-    if (!presetId || appliedConfigPresetId === presetId || games.length === 0 || configPresets.length === 0) return;
+    if (ignoreResourceLinks || !presetId || appliedConfigPresetId === presetId || games.length === 0 || configPresets.length === 0) return;
     const preset = configPresets.find((item) => item.id === presetId);
-    if (!preset) return;
+    if (!preset || (preset.organizationId && !organizations.some((org) => org.id === preset.organizationId)) || (isCustomer && !preset.organizationId)) return;
     applyConfigPreset(preset);
     setAppliedConfigPresetId(presetId);
-  }, [appliedConfigPresetId, configPresets, games.length]);
+  }, [appliedConfigPresetId, configPresets, games.length, ignoreResourceLinks, organizations, isCustomer]);
 
   useEffect(() => {
     if (!showWorldAndBackupFeatures) return;
@@ -924,6 +965,35 @@ export function CreateServerWizard() {
             </Link>
           </div>
 
+          {account && (
+            <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+              <label htmlFor="creation-workspace" className="mb-1.5 block text-xs font-semibold text-slate-200">
+                {locale.startsWith("zh") ? "所属工作区" : "Workspace"}
+              </label>
+              <select
+                id="creation-workspace"
+                value={organizationId}
+                disabled={organizationsQuery.isPending || create.isPending || saveConfigPreset.isPending}
+                onChange={(event) => changeWorkspace(event.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-panel-green"
+              >
+                <option value="">{isCustomer ? (locale.startsWith("zh") ? "请选择工作区" : "Select a workspace") : (locale.startsWith("zh") ? "不分配工作区" : "No workspace")}</option>
+                {organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+              </select>
+              <p className="mt-1.5 text-xs text-slate-400">
+                {locale.startsWith("zh") ? "服务器和随附保存的预设将归属同一工作区。" : "The server and any saved preset will belong to the same workspace."}
+              </p>
+              {organizationsQuery.isError && (
+                <div role="alert" className="mt-2 text-xs text-panel-gold">
+                  {locale.startsWith("zh") ? "无法加载工作区。" : "Unable to load workspaces."}
+                  <button type="button" onClick={() => void organizationsQuery.refetch()} className="ml-2 underline">{locale.startsWith("zh") ? "重试" : "Retry"}</button>
+                </div>
+              )}
+              {organizationsQuery.isSuccess && isCustomer && organizations.length === 0 && (
+                <p role="alert" className="mt-2 text-xs text-panel-gold">{locale.startsWith("zh") ? "当前账号没有可用工作区，请联系管理员。" : "This account has no workspace. Contact an administrator."}</p>
+              )}
+            </div>
+          )}
             {/* Compact Stepper */}
             <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1">
               {stepIds.map((stepId, index) => {
@@ -1227,12 +1297,15 @@ export function CreateServerWizard() {
                 }
                 setStep((value) => Math.min(stepIds.length - 1, value + 1));
               }}
-              disabled={create.isPending || saveConfigPreset.isPending || !canContinueCurrentStep || (step === stepIds.length - 1 && (!canCreateSelectedProvider || (saveAsPreset && presetName.trim().length === 0)))}
+              disabled={create.isPending || saveConfigPreset.isPending || !workspaceReady || !canContinueCurrentStep || (step === stepIds.length - 1 && (presetModsUnavailable || !canCreateSelectedProvider || (saveAsPreset && presetName.trim().length === 0)))}
             >
               {step === stepIds.length - 1 ? create.isPending ? t("creating") : saveConfigPreset.isPending ? t("saving") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
+          {presetModsUnavailable && (
+            <p role="alert" className="mt-3 text-sm text-panel-gold">{locale.startsWith("zh") ? "暂时无法把模组或模组包保存到工作区预设。请关闭“保存为预设”后创建服务器。" : "Workspace presets cannot include mods or mod packs yet. Turn off saving a preset to create this server."}</p>
+          )}
           {!canContinueCurrentStep && currentStepId !== "review" && (
             <p className="mt-4 text-sm text-panel-gold">
               {t("runtimeNotInstalledForCreate")}{" "}

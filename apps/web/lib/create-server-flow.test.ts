@@ -54,6 +54,12 @@ const importedWorld: World = {
 };
 
 describe("createGameServerWithResources", () => {
+  it("passes the selected workspace through to server creation", async () => {
+    const deps = { createServer: vi.fn().mockResolvedValue(server), assignWorld: vi.fn() };
+    await createGameServerWithResources({ config, mode: "vanilla", name: "Friends", organizationId: "workspace-b", deps });
+    expect(deps.createServer).toHaveBeenCalledWith(expect.objectContaining({ organizationId: "workspace-b" }));
+  });
+
   it("assigns the selected reusable world snapshot without overriding the requested world name", async () => {
     const deps = {
       createServer: vi.fn().mockResolvedValue(server),
