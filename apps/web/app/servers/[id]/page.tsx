@@ -2364,6 +2364,17 @@ function ModsTab({
             {t("modChangesPendingRestart")}
           </div>
         ) : null}
+        {serverStatus === "starting" ? (
+          <div className="flex items-center gap-2.5 rounded-md border border-sky-500/30 bg-sky-500/10 px-3.5 py-2.5 text-sm text-sky-300">
+            <span className="size-2 rounded-full bg-sky-400 animate-pulse shrink-0" />
+            <span>{t("serverStartingModsLoadingNotice")}</span>
+          </div>
+        ) : null}
+        {serverStatus !== "running" && serverStatus !== "starting" && items.length > 0 ? (
+          <div className="rounded-md border border-slate-700/50 bg-slate-900/40 px-3.5 py-2 text-xs text-slate-400">
+            {t("serverPendingModsNotice", { count: items.length })}
+          </div>
+        ) : null}
 
         {activeSection === "installed" ? (
           <div aria-labelledby={supportsModConfigs ? "installed-mods-tab" : undefined} id="installed-mods-panel" role={supportsModConfigs ? "tabpanel" : undefined}>

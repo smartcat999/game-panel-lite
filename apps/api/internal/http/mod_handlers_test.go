@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1423,3 +1424,159 @@ func TestGlobalModDeleteRejectsServerMod(t *testing.T) {
 		t.Fatalf("expected server mod record to remain, got %v", err)
 	}
 }
+
+func TestServerModListReturnsPendingDesiredModsBeforeStartup(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	_ = cfg
+	server := domain.GameServer{
+		ID:          "dst-pending",
+		Name:        "dst-pending server",
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+		Spec: domain.ServerSpec{
+			ModIDs: []string{"library-mod-1", "library-mod-2"},
+		},
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+
+	libraryMod1 := domain.ModFile{
+		ID:          "library-mod-1",
+		InstanceID:  "unassigned",
+		GameKey:     server.GameKey,
+		ProviderKey: server.ProviderKey,
+		FileName:    "workshop-111111",
+		Source:      "workshop",
+		WorkshopID:  "111111",
+		Title:       "Mod One",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	libraryMod2 := domain.ModFile{
+		ID:          "library-mod-2",
+		InstanceID:  "unassigned",
+		GameKey:     server.GameKey,
+		ProviderKey: server.ProviderKey,
+		FileName:    "workshop-222222",
+		Source:      "workshop",
+		WorkshopID:  "222222",
+		Title:       "Mod Two",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &libraryMod1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateMod(context.Background(), &libraryMod2); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/dst-pending/mods", nil))
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var mods []domain.ModFile
+	if err := json.Unmarshal(response.Body.Bytes(), &mods); err != nil {
+		t.Fatal(err)
+	}
+	if len(mods) != 2 {
+		t.Fatalf("expected 2 pending desired mods, got %d: %+v", len(mods), mods)
+	}
+	for _, m := range mods {
+		if m.InstanceID != "dst-pending" {
+			t.Fatalf("expected InstanceID to be dst-pending, got %s", m.InstanceID)
+		}
+		if !m.Enabled {
+			t.Fatalf("expected Enabled to be true, got false")
+		}
+	}
+
+	// Test deleting pending desired mod unmarks it from server.Spec.ModIDs
+	deleteResp := httptest.NewRecorder()
+	router.ServeHTTP(deleteResp, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/dst-pending/mods/library-mod-1", nil))
+	if deleteResp.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200 delete, got %d: %s", deleteResp.Code, deleteResp.Body.String())
+	}
+	updatedServer, err := db.GetGameServer(context.Background(), "dst-pending")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(updatedServer.Spec.ModIDs, "library-mod-1") {
+		t.Fatalf("expected library-mod-1 to be removed from server.Spec.ModIDs, got %+v", updatedServer.Spec.ModIDs)
+	}
+	if !slices.Contains(updatedServer.Spec.ModIDs, "library-mod-2") {
+		t.Fatalf("expected library-mod-2 to remain in server.Spec.ModIDs, got %+v", updatedServer.Spec.ModIDs)
+	}
+}
+
+func TestModPackResponseFiltersDeletedModIDs(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	mod1 := domain.ModFile{
+		ID:          "pack-mod-1",
+		InstanceID:  "unassigned",
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+		FileName:    "workshop-333333",
+		Source:      "workshop",
+		WorkshopID:  "333333",
+		Title:       "Mod Three",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	mod2 := domain.ModFile{
+		ID:          "pack-mod-2",
+		InstanceID:  "unassigned",
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+		FileName:    "workshop-444444",
+		Source:      "workshop",
+		WorkshopID:  "444444",
+		Title:       "Mod Four",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &mod1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateMod(context.Background(), &mod2); err != nil {
+		t.Fatal(err)
+	}
+
+	pack := domain.ModPack{
+		ID:         "test-pack",
+		Name:       "Test Pack",
+		ModIDsJSON: `["pack-mod-1","pack-mod-2"]`,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	if err := db.CreateModPack(context.Background(), &pack); err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete pack-mod-2 from library
+	if err := db.DeleteMod(context.Background(), "pack-mod-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodGet, "/api/mod-packs", nil))
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var packs []modPackResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &packs); err != nil {
+		t.Fatal(err)
+	}
+	if len(packs) != 1 {
+		t.Fatalf("expected 1 pack, got %d", len(packs))
+	}
+	if len(packs[0].ModIDs) != 1 || packs[0].ModIDs[0] != "pack-mod-1" {
+		t.Fatalf("expected ModIDs to contain only [pack-mod-1], got %+v", packs[0].ModIDs)
+	}
+	_ = cfg
+}
+

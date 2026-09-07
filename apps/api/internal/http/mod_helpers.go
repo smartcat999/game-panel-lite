@@ -485,6 +485,7 @@ func (h *Handler) syncDSTDesiredWorkshopConfig(ctx context.Context, server *doma
 	for _, id := range server.Spec.ModIDs {
 		desired[id] = struct{}{}
 	}
+	seenDesired := map[string]struct{}{}
 	workshopIDs := make([]string, 0, len(mods))
 	for _, item := range mods {
 		if !item.Enabled || item.Source != "workshop" || item.WorkshopID == "" {
@@ -494,8 +495,23 @@ func (h *Handler) syncDSTDesiredWorkshopConfig(ctx context.Context, server *doma
 			continue
 		}
 		workshopIDs = append(workshopIDs, item.WorkshopID)
+		seenDesired[item.ID] = struct{}{}
+	}
+	for _, id := range server.Spec.ModIDs {
+		if _, ok := seenDesired[id]; !ok {
+			if item, err := h.store.GetModForServer(ctx, *server, id); err == nil {
+				if item.Source == "workshop" && item.WorkshopID != "" {
+					workshopIDs = append(workshopIDs, item.WorkshopID)
+				}
+			} else if item, err := h.store.GetMod(ctx, id); err == nil {
+				if item.Source == "workshop" && item.WorkshopID != "" {
+					workshopIDs = append(workshopIDs, item.WorkshopID)
+				}
+			}
+		}
 	}
 	sort.Strings(workshopIDs)
+	workshopIDs = uniqueNonEmptyStrings(workshopIDs)
 	if server.Spec.Config == nil {
 		server.Spec.Config = map[string]any{}
 	}
@@ -637,6 +653,111 @@ func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServe
 		visible[index].RuntimeEnabled = &enabled
 	}
 	return visible, nil
+}
+
+func (h *Handler) resolvePendingDesiredMods(ctx context.Context, server domain.GameServer, visible []domain.ModFile) []domain.ModFile {
+	existingIDs := make(map[string]struct{}, len(visible))
+	existingWorkshopIDs := make(map[string]struct{}, len(visible))
+	existingFileNames := make(map[string]struct{}, len(visible))
+	for _, m := range visible {
+		existingIDs[m.ID] = struct{}{}
+		if m.WorkshopID != "" {
+			existingWorkshopIDs[m.WorkshopID] = struct{}{}
+		}
+		if m.FileName != "" {
+			existingFileNames[m.FileName] = struct{}{}
+		}
+	}
+
+	var pending []domain.ModFile
+	for _, modID := range uniqueNonEmptyStrings(server.Spec.ModIDs) {
+		if _, ok := existingIDs[modID]; ok {
+			continue
+		}
+		item, err := h.store.GetModForServer(ctx, server, modID)
+		if err != nil {
+			item, err = h.store.GetMod(ctx, modID)
+			if err != nil {
+				continue
+			}
+		}
+		if item.WorkshopID != "" {
+			if _, ok := existingWorkshopIDs[item.WorkshopID]; ok {
+				continue
+			}
+		}
+		if item.FileName != "" {
+			if _, ok := existingFileNames[item.FileName]; ok {
+				continue
+			}
+		}
+		hydrateModGameMetadata(&item)
+		hydrateModMetadata(&item)
+		item.InstanceID = server.ID
+		item.GameKey = server.GameKey
+		item.ProviderKey = server.ProviderKey
+		item.Enabled = true
+		present := runtimeModPresent(server, item)
+		item.RuntimePresent = &present
+		pending = append(pending, item)
+		existingIDs[item.ID] = struct{}{}
+		if item.WorkshopID != "" {
+			existingWorkshopIDs[item.WorkshopID] = struct{}{}
+		}
+		if item.FileName != "" {
+			existingFileNames[item.FileName] = struct{}{}
+		}
+	}
+
+	if server.ProviderKey == domain.ProviderDST {
+		if modsCfg, ok := server.Spec.Config["mods"].(map[string]any); ok {
+			if rawList, ok := modsCfg["workshopIds"].([]any); ok {
+				for _, raw := range rawList {
+					wID, ok := raw.(string)
+					if !ok || strings.TrimSpace(wID) == "" {
+						continue
+					}
+					wID = strings.TrimSpace(wID)
+					if _, ok := existingWorkshopIDs[wID]; ok {
+						continue
+					}
+					item, err := h.store.GetModByInstanceAndWorkshopID(ctx, "unassigned", wID)
+					if err == nil {
+						hydrateModGameMetadata(&item)
+						hydrateModMetadata(&item)
+						item.InstanceID = server.ID
+						item.GameKey = server.GameKey
+						item.ProviderKey = server.ProviderKey
+						item.Enabled = true
+						present := true
+						item.RuntimePresent = &present
+						pending = append(pending, item)
+						existingWorkshopIDs[wID] = struct{}{}
+					} else {
+						item = domain.ModFile{
+							ID:          "workshop-" + wID,
+							InstanceID:  server.ID,
+							GameKey:     server.GameKey,
+							ProviderKey: server.ProviderKey,
+							FileName:    "workshop-" + wID,
+							Source:      "workshop",
+							WorkshopID:  wID,
+							SizeBytes:   int64(len(wID) + 1),
+							Enabled:     true,
+							CreatedAt:   time.Now(),
+						}
+						applyRecommendedModMetadataForProvider(&item, server.ProviderKey, wID)
+						present := true
+						item.RuntimePresent = &present
+						pending = append(pending, item)
+						existingWorkshopIDs[wID] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+
+	return pending
 }
 
 func runtimeModPresent(server domain.GameServer, item domain.ModFile) bool {

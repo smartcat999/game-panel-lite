@@ -524,6 +524,13 @@ export function CreateServerWizard() {
   const modPacks = filterModResources(allModPacks, selectedGameKey);
   const configPresets = configPresetsQuery.data ?? [];
   const gameConfigPresets = configPresets.filter((preset) => preset.gameKey === selectedGameKey && (preset.organizationId ?? "") === organizationId);
+  const validSelectedModIds = useMemo(() => {
+    if (modsQuery.isLoading && selectedModIds.length > 0) {
+      return selectedModIds;
+    }
+    const availableSet = new Set(availableMods.map((m) => m.id));
+    return selectedModIds.filter((id) => availableSet.has(id));
+  }, [availableMods, modsQuery.isLoading, selectedModIds]);
   const selectedModNames = availableMods.filter((m) => selectedModIds.includes(m.id)).map((m) => modDisplayName(m, locale));
   const fallbackStepId: StepId = "review";
   const currentStepId = stepIds[step] ?? fallbackStepId;
@@ -565,7 +572,7 @@ export function CreateServerWizard() {
       providerKey,
       resources: resourceLimits,
       worldId: showWorldAndBackupFeatures ? selectedWorldId || undefined : undefined,
-      modIds: selectedModIds,
+      modIds: validSelectedModIds,
       version: selectedVersion,
       nodeId: selectedNodeId
     }),
@@ -589,7 +596,7 @@ export function CreateServerWizard() {
       resources: resourceLimits,
       version: selectedVersion,
       modPackId: selectedModPackId || undefined,
-      modIds: selectedModIds
+      modIds: validSelectedModIds
     }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["config-presets"] });
@@ -704,7 +711,13 @@ export function CreateServerWizard() {
     }
     setSelectedModPackId(packId);
     const pack = modPacks.find((item) => item.id === packId);
-    setSelectedModIds(pack?.modIds ?? []);
+    const rawIds = pack?.modIds ?? [];
+    if (availableMods.length > 0) {
+      const availableSet = new Set(availableMods.map((m) => m.id));
+      setSelectedModIds(rawIds.filter((id) => availableSet.has(id)));
+    } else {
+      setSelectedModIds(rawIds);
+    }
   };
   const applyConfigPreset = (preset: ConfigPreset) => {
     if (preset.organizationId && !organizations.some((org) => org.id === preset.organizationId)) return;
@@ -727,7 +740,13 @@ export function CreateServerWizard() {
     setSelectedWorldId("");
     setAppliedWorldConfigId("");
     setSelectedModPackId(preset.modPackId ?? "");
-    setSelectedModIds(preset.modIds);
+    const rawIds = preset.modIds ?? [];
+    if (availableMods.length > 0) {
+      const availableSet = new Set(availableMods.map((m) => m.id));
+      setSelectedModIds(rawIds.filter((id) => availableSet.has(id)));
+    } else {
+      setSelectedModIds(rawIds);
+    }
     setStep(1);
   };
 
@@ -888,6 +907,18 @@ export function CreateServerWizard() {
       setStep(stepIds.length - 1);
     }
   }, [step, stepIds.length]);
+  useEffect(() => {
+    if (!modsQuery.isSuccess) return;
+    setSelectedModIds((prev) => {
+      if (prev.length === 0) return prev;
+      const availableSet = new Set(availableMods.map((m) => m.id));
+      const filtered = prev.filter((id) => availableSet.has(id));
+      if (filtered.length !== prev.length) {
+        return filtered;
+      }
+      return prev;
+    });
+  }, [availableMods, modsQuery.isSuccess]);
 
   return (
     <Card className="overflow-hidden border-slate-800 bg-slate-950/80 shadow-2xl rounded-2xl">

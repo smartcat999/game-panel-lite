@@ -284,6 +284,10 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 		hydrateModMetadata(&item)
 		mods = append(mods, item)
 	}
+	validModIDs := make([]string, 0, len(mods))
+	for _, item := range mods {
+		validModIDs = append(validModIDs, item.ID)
+	}
 	gameKey, providerKey := modPackGameMetadata(mods)
 	return modPackResponse{
 		OrganizationID: pack.OrganizationID,
@@ -292,7 +296,7 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 		Description:    pack.Description,
 		GameKey:        gameKey,
 		ProviderKey:    providerKey,
-		ModIDs:         modIDs,
+		ModIDs:         validModIDs,
 		Mods:           mods,
 		CreatedAt:      pack.CreatedAt,
 		UpdatedAt:      pack.UpdatedAt,

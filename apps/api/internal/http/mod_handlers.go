@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -34,6 +35,11 @@ func (h *Handler) listMods(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	pending := h.resolvePendingDesiredMods(r.Context(), server, visible)
+	if len(pending) > 0 {
+		pending, _ = h.enrichServerModMetadata(r.Context(), pending)
+		visible = append(visible, pending...)
 	}
 	writeJSON(w, http.StatusOK, visible)
 }
@@ -292,8 +298,45 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
+	modID := chi.URLParam(r, "modId")
+	item, err := h.store.GetMod(r.Context(), modID)
 	if err != nil || item.InstanceID != server.ID {
+		if slices.Contains(server.Spec.ModIDs, modID) {
+			if h.gameUpdateLocked(r.Context(), server.ID) {
+				writeError(w, http.StatusConflict, "server maintenance is in progress")
+				return
+			}
+			if isGameServerBusyForModMutation(server) {
+				writeError(w, http.StatusConflict, "server lifecycle action already in progress")
+				return
+			}
+			var payload struct {
+				Enabled *bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				writeError(w, http.StatusBadRequest, "invalid JSON body")
+				return
+			}
+			if payload.Enabled == nil {
+				writeError(w, http.StatusBadRequest, "enabled is required")
+				return
+			}
+			if *payload.Enabled {
+				if err := h.markModDesired(r.Context(), &server, modID); err != nil {
+					writeError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			} else {
+				if err := h.unmarkModDesired(r.Context(), &server, modID); err != nil {
+					writeError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+			}
+			item.InstanceID = server.ID
+			item.Enabled = *payload.Enabled
+			writeJSON(w, http.StatusOK, item)
+			return
+		}
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
@@ -347,8 +390,26 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	item, err := h.store.GetMod(r.Context(), chi.URLParam(r, "modId"))
+	modID := chi.URLParam(r, "modId")
+	item, err := h.store.GetMod(r.Context(), modID)
 	if err != nil || item.InstanceID != server.ID {
+		if slices.Contains(server.Spec.ModIDs, modID) {
+			if h.gameUpdateLocked(r.Context(), server.ID) {
+				writeError(w, http.StatusConflict, "server maintenance is in progress")
+				return
+			}
+			if isGameServerBusyForModMutation(server) {
+				writeError(w, http.StatusConflict, "server lifecycle action already in progress")
+				return
+			}
+			if err := h.unmarkModDesired(r.Context(), &server, modID); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			h.recordActivity(r.Context(), server.ID, "mod.deleted", fmt.Sprintf("Removed desired mod %s", modID), map[string]any{"modId": modID})
+			writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+			return
+		}
 		writeError(w, http.StatusNotFound, "mod not found")
 		return
 	}
