@@ -18,12 +18,12 @@ import { Button, Input } from "@/components/ui";
 import {
   createUser,
   deleteUser,
-  getAuthBootstrap,
   listUsers,
   resetUserPassword,
   updateRegistrationSetting,
   updateUserRole
 } from "@/lib/api";
+import { useAuthBootstrap } from "@/lib/auth-session";
 import { useI18n } from "@/lib/i18n";
 import { usePermissions } from "@/lib/permissions";
 import type { UserAccount, UserRole } from "@/lib/types";
@@ -45,10 +45,7 @@ export function UserManagement() {
 
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserAccount | null>(null);
 
-  const authQuery = useQuery({
-    queryKey: ["auth-bootstrap"],
-    queryFn: getAuthBootstrap
-  });
+  const authQuery = useAuthBootstrap();
 
   const usersQuery = useQuery({
     queryKey: ["users"],
@@ -68,7 +65,7 @@ export function UserManagement() {
           ? isZh ? "已开放新用户公开注册功能" : "Public registration enabled."
           : isZh ? "已关闭公开注册，仅管理员可创建账号" : "Public registration disabled."
       );
-      await queryClient.invalidateQueries({ queryKey: ["auth-bootstrap"] });
+      await authQuery.refetch();
     },
     onError: (err) => {
       toast.error(isZh ? "更新注册设置失败" : "Failed to update setting", err instanceof Error ? err.message : "");

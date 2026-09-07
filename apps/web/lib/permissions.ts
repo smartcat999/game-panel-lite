@@ -1,7 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { getAuthBootstrap } from "./api";
+import { useAuthBootstrap } from "./auth-session";
 import type { Permission, UserRole } from "./types";
 
 const rolePermissions: Record<UserRole, readonly Permission[]> = {
@@ -22,12 +21,7 @@ export function permissionsForRole(role: UserRole): readonly Permission[] {
 }
 
 export function usePermissions() {
-  const authQuery = useQuery({
-    queryKey: ["auth-bootstrap"],
-    queryFn: getAuthBootstrap,
-    staleTime: 60000,
-    retry: false
-  });
+  const authQuery = useAuthBootstrap();
 
   const account = authQuery.data?.account;
   const role: UserRole = account?.role ?? (authQuery.data?.initialized === false ? "admin" : "viewer");

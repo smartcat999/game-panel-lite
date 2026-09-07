@@ -1,4 +1,5 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
+import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
 import type { ActivityEvent, AuthBootstrap, Backup, ComputeNode, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
@@ -30,8 +31,10 @@ async function fetchWithTimeout(
   }
 }
 
-async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  return fetch(input, { ...init, credentials: "include" });
+async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}, signalUnauthorized = true) {
+  const response = await fetch(input, { ...init, credentials: "include" });
+  if (signalUnauthorized && response.status === 401) notifySessionExpired();
+  return response;
 }
 
 async function readPayload<T>(response: Response, fallback: string): Promise<T> {
@@ -52,8 +55,8 @@ export async function getApiHealth(): Promise<{ status: string }> {
   return (await response.json()) as { status: string };
 }
 
-export async function getAuthBootstrap(): Promise<AuthBootstrap> {
-  const response = await apiFetch(`${API_BASE}/api/auth/bootstrap`, { cache: "no-store" });
+export async function getAuthBootstrap(signal?: AbortSignal): Promise<AuthBootstrap> {
+  const response = await apiFetch(`${API_BASE}/api/auth/bootstrap`, { cache: "no-store", signal }, false);
   return readPayload<AuthBootstrap>(response, "Unable to load auth state");
 }
 

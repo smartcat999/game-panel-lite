@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Gamepad2, LockKeyhole, ShieldCheck, UserPlus } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Button, Card, Input } from "@/components/ui";
-import { getAuthBootstrap, loginAdmin, registerUser, setupAdmin } from "@/lib/api";
+import { loginAdmin, registerUser, setupAdmin } from "@/lib/api";
+import { AccountQueryScope } from "./account-query-scope";
+import { accountCacheKey, useAuthBootstrap } from "@/lib/auth-session";
 import { useI18n } from "@/lib/i18n";
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -20,10 +22,11 @@ function ProtectedAuthGate({ children }: { children: ReactNode }) {
   const { t, locale } = useI18n();
   const isZh = locale.startsWith("zh");
   const queryClient = useQueryClient();
-  const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false });
+  const authQuery = useAuthBootstrap();
 
   const refreshAuth = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["auth-bootstrap"] });
+    await authQuery.refetch();
+    queryClient.getMutationCache().clear();
   };
 
   if (authQuery.isLoading) {
@@ -48,7 +51,7 @@ function ProtectedAuthGate({ children }: { children: ReactNode }) {
     return <AuthForm initialMode="login" allowRegistration={authQuery.data.allowRegistration} onSuccess={refreshAuth} />;
   }
 
-  return children;
+  return <AccountQueryScope key={accountCacheKey(authQuery.data.account)}>{children}</AccountQueryScope>;
 }
 
 function AuthFrame({ title, description, children }: { title: string; description: string; children?: ReactNode }) {

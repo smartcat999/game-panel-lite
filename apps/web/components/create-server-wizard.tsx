@@ -8,6 +8,7 @@ import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, F
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
+import { useAuthBootstrap } from "@/lib/auth-session";
 import { useToast } from "@/components/toast-context";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
@@ -19,7 +20,7 @@ import { gameDisplayName } from "@/lib/game-display";
 import { providerDisplayName } from "@/lib/provider-display";
 import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { getAuthBootstrap, listMyOrganizations, listOrganizations, createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
+import { listMyOrganizations, listOrganizations, createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createGameServerWithResources } from "@/lib/create-server-flow";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
@@ -454,7 +455,7 @@ export function CreateServerWizard() {
   const [step, setStep] = useState(0);
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [ignoreResourceLinks, setIgnoreResourceLinks] = useState(false);
-  const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30_000 });
+  const authQuery = useAuthBootstrap();
   const account = authQuery.data?.account;
   const isCustomer = Boolean(account && account.role !== "admin");
   const organizationsQuery = useQuery({

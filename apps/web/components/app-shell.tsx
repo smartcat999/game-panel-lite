@@ -22,10 +22,10 @@ import { AppsDrawer } from "@/components/apps-drawer";
 import { ClusterStatusPill } from "@/components/cluster-status-pill";
 import { ClusterFleetPopover } from "@/components/cluster-fleet-popover";
 import { PermissionDenied } from "@/components/permission-denied";
+import { useAuthBootstrap } from "@/lib/auth-session";
 import { usePermissions } from "@/lib/permissions";
 import {
   changeAdminPassword,
-  getAuthBootstrap,
   getSettings,
   logoutAdmin,
   updateLocale
@@ -59,14 +59,14 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const profileRef = useRef<HTMLDivElement>(null);
 
-  const authQuery = useQuery({ queryKey: ["auth-bootstrap"], queryFn: getAuthBootstrap, retry: false, staleTime: 30000 });
+  const authQuery = useAuthBootstrap();
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 30000 });
 
   const logoutMutation = useMutation({
     mutationFn: logoutAdmin,
     onSuccess: async () => {
       setProfileOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["auth-bootstrap"] });
+      await authQuery.refetch();
       router.push("/dashboard");
     }
   });
