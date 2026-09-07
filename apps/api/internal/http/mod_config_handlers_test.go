@@ -2,11 +2,13 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -96,5 +98,47 @@ func TestModConfigValidationAndProviderRestriction(t *testing.T) {
 	router.ServeHTTP(unsupported, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/vanilla-config/mod-configs", nil))
 	if unsupported.Code != stdhttp.StatusBadRequest {
 		t.Fatalf("expected vanilla provider 400, got %d", unsupported.Code)
+	}
+}
+
+func TestModConfigIncompatibleVersionAndOversizedUploadPreserveFiles(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	fixture := testServer("mod-config-version", cfg.DataDir)
+	fixture.ProviderKey = domain.ProviderTerrariaTModLoader
+	createTestServer(t, db, fixture)
+	path := filepath.Join(fixture.DataDir, "ModConfigs", "Example.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"original":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := db.GetGameServer(context.Background(), fixture.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.Spec.ConfigVersion = 999
+	if err := db.SaveGameServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{stdhttp.MethodGet, stdhttp.MethodPut, stdhttp.MethodDelete} {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(method, "/api/servers/"+fixture.ID+"/mod-configs/Example.json", strings.NewReader(`{"content":"{}"}`)))
+		if response.Code != stdhttp.StatusConflict {
+			t.Fatalf("%s incompatible version: %d %s", method, response.Code, response.Body.String())
+		}
+	}
+	server.Spec.ConfigVersion = 1
+	if err := db.SaveGameServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, newMultipartFileRequest(t, stdhttp.MethodPost, "/api/servers/"+fixture.ID+"/mod-configs/upload", "file", "Example.json", bytes.Repeat([]byte("x"), maxModConfigBytes+128*1024)))
+	if response.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("oversized upload: %d", response.Code)
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil || string(actual) != `{"original":true}` {
+		t.Fatalf("rejected mutation changed config: %q %v", actual, err)
 	}
 }

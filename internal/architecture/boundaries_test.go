@@ -84,6 +84,9 @@ func forbiddenImport(file, imported string) string {
 	if strings.HasPrefix(imported, "gorm.io/") && !under("store") {
 		return "GORM belongs to persistence adapters"
 	}
+	if file == "apps/api/internal/http/mod_config_handlers.go" && (imported == "os" || imported == "path/filepath" || imported == api+"safety") {
+		return "mod configuration file operations belong to modruntime"
+	}
 	if (under("modcatalog") || under("modruntime")) && (imported == "net/http" || strings.HasPrefix(imported, api+"http") || strings.HasPrefix(imported, api+"server") || strings.HasPrefix(imported, api+"store") || strings.HasPrefix(imported, api+"runtime")) {
 		return "shared mod rules must not depend on transport, lifecycle or concrete persistence/runtime"
 	}
@@ -105,6 +108,8 @@ func TestImportRules(t *testing.T) {
 		file, imported string
 		forbidden      bool
 	}{
+		{"apps/api/internal/http/mod_config_handlers.go", "os", true},
+		{"apps/api/internal/http/mod_config_handlers.go", api + "modruntime", false},
 		{"apps/api/internal/modcatalog/metadata.go", api + "store", true},
 		{"apps/api/internal/modruntime/dependencies.go", api + "server", true},
 		{"apps/api/internal/modruntime/dependencies.go", api + "modcatalog", false},

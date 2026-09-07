@@ -32,6 +32,10 @@ type ModInspector interface {
 	InspectMod(io.Reader) (domain.ModMetadata, error)
 }
 
+// JSONModConfigProvider declares a relative directory containing editable JSON objects.
+// Providers with other configuration formats need a separate capability.
+type JSONModConfigProvider interface{ JSONModConfigDirectory() string }
+
 type ModSupportProvider interface{ ModSupport() domain.ModSupport }
 
 type ModFilesProvider interface{ RuntimeModFiles(string) []string }

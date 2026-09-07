@@ -178,3 +178,13 @@ ProviderCatalogMetadata 声明 PluginVersion（数字 major.minor.patch）和 Co
 恢复文件写入现已先完整暂存并校验 ZIP 数据，再逐文件替换；发生可返回的写入错误时恢复已替换原文件并移除新增文件。回滚失败则保留原文件暂存目录并在错误中报告位置。此机制不涵盖进程崩溃、数据库提交结果不确定或外部并发文件修改；失败后可能残留新建空目录。持久化恢复日志与跨文件/数据库事务仍待实现。
 
 RestoreHooks.Commit 现将配置解析和保存纳入文件恢复完成条件；回调返回错误会触发文件回滚。回调必须在失败时保持自身状态不变，现有 gameconfig 用例遵守这一约定。进程中断及数据库提交结果不确定仍不能靠内存回调解决，需要持久化恢复协调。
+
+## JSON 模组配置能力与应用模块
+
+`JSONModConfigProvider` 明确声明可编辑 JSON 对象配置的相对目录，tModLoader 在自身 Provider 中返回 `ModConfigs`。其他格式不隐式当作 JSON，需基于真实需求增加对应能力。HTTP 已删除 tModLoader ID 判断、固定目录及直接文件读写，改为调用 modruntime 的 ListConfigs、ReadConfig、WriteConfig、DeleteConfig。
+
+modruntime 统一负责配置版本检查、写操作生命周期限制、文件名及 JSON 对象校验、1 MiB 上限、暂存后 rename 和目录句柄内的读写。读取缺失目录返回空列表，不创建目录；路径组件拒绝已存在符号链接，实际操作使用 os.Root 限制到实例目录。写操作保留现有镜像所需的目录/文件权限；不以此声明完成租户进程强隔离。读取保留既有有效 JSON 的兼容行为，写入必须为 JSON 对象。
+
+HTTP 继续承担认证路由、实例查询、维护状态检查、本进程实例锁、活动记录和错误响应；multipart 请求有整体大小上限并清理解析临时文件。应用模块接收已授权实例快照，不自行做数据库授权，因此成员关系与文件副作用的跨进程原子性、远程 Agent 文件访问仍未完成。此批不代表整个 HTTP 层已脱离 Store/Runtime。
+
+验收：测试插件使用不同 Provider key 和嵌套目录完成配置增删读写，无需修改 Handler；路径逃逸、符号链接、非法 JSON、超限读取/上传、取消及忙碌/不兼容版本均有拒绝测试。HTTP 原有配置生命周期及新增拒绝后文件不变测试通过。架构检查禁止该 Handler 再导入 os、filepath 或 safety 承担文件操作。全量 Go 测试、vet、modruntime/Provider race、前端 typecheck/build 和受版本控制源码 lint 均通过。
