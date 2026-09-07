@@ -836,6 +836,39 @@ func TestUpdateServerConfigPersistsResourceLimitsAndRequiresRestartWhenRunning(t
 	}
 }
 
+func TestUpdateServerConfigResourcesOnlyInPlaceUpdate(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("resource-in-place", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	server.ContainerID = "container-live"
+	server.ConfigRevision = 2
+	server.AppliedConfigRevision = 2
+	createTestServer(t, db, server)
+
+	payload := `{
+		"resources":{"cpuLimitCores":2,"memoryLimitMb":4096}
+	}`
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/"+server.ID+"/config", bytes.NewBufferString(payload)))
+	if recorder.Code != stdhttp.StatusOK {
+		t.Fatalf("expected config update 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var updated domain.GameServer
+	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Spec.Resources.CPULimitCores != 2 || updated.Spec.Resources.MemoryLimitMB != 4096 {
+		t.Fatalf("expected updated resource limits, got %+v", updated.Spec.Resources)
+	}
+	if updated.Spec.Generation != 3 || updated.Status.AppliedGeneration != 3 || updated.Status.ObservedGeneration != 3 {
+		t.Fatalf("expected in-place resource update to apply generation immediately, got generation=%d applied=%d observed=%d", updated.Spec.Generation, updated.Status.AppliedGeneration, updated.Status.ObservedGeneration)
+	}
+	if updated.Status.Phase != domain.PhaseRunning || updated.Status.ActualState != domain.ActualRunning {
+		t.Fatalf("expected server to stay running, got %+v", updated.Status)
+	}
+}
+
+
 func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("owned-resources", cfg.DataDir)

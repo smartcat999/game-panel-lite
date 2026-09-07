@@ -34,3 +34,11 @@ func (c *RuntimeAdapterClient) Remove(ctx context.Context, runtimeID string) err
 func (c *RuntimeAdapterClient) Inspect(ctx context.Context, runtimeID string) (domain.WorkloadStatus, error) {
 	return c.adapter.InspectWorkload(ctx, runtimeID)
 }
+
+func (c *RuntimeAdapterClient) UpdateResources(ctx context.Context, runtimeID string, resources domain.ServerResources) error {
+	if updatable, ok := c.adapter.(runtimepkg.ResourceUpdatableAdapter); ok {
+		return updatable.UpdateWorkloadResources(ctx, runtimeID, resources)
+	}
+	return ErrUpdateNotSupported
+}
+

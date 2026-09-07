@@ -333,7 +333,7 @@ export default function ServerDetailPage() {
   const resourceSave = useMutation({
     mutationFn: ({ resources }: { resources: ResourceLimits }) => {
       if (!serverResource) throw new Error("server not loaded");
-      return updateGameServerConfig(id, terrariaConfigFromGameServer(serverResource), gameServerJoinPort(serverResource), resources);
+      return updateGameServerConfig(id, undefined, undefined, resources);
     },
     onSuccess: async (updatedServer) => {
       showSuccess(t("resourceLimitsSaved"));

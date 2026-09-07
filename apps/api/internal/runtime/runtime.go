@@ -162,6 +162,10 @@ type WorkloadAdapter interface {
 	InspectWorkload(ctx context.Context, runtimeID string) (domain.WorkloadStatus, error)
 }
 
+type ResourceUpdatableAdapter interface {
+	UpdateWorkloadResources(ctx context.Context, runtimeID string, resources domain.ServerResources) error
+}
+
 type WorkloadIOAdapter interface {
 	StatsWorkload(ctx context.Context, runtimeID string) (WorkloadStats, error)
 	LogsWorkload(ctx context.Context, runtimeID string, follow bool) (io.ReadCloser, error)

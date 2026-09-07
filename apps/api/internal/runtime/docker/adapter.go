@@ -186,3 +186,16 @@ func defaultHostConfig(spec runtime.ContainerSpec, binds []string) *container.Ho
 	}
 	return hostConfig
 }
+
+func (a *Adapter) UpdateWorkloadResources(ctx context.Context, runtimeID string, resources domain.ServerResources) error {
+	updateConfig := container.UpdateConfig{}
+	if resources.CPULimitCores > 0 {
+		updateConfig.Resources.NanoCPUs = int64(resources.CPULimitCores * 1_000_000_000)
+	}
+	if resources.MemoryLimitMB > 0 {
+		updateConfig.Resources.Memory = int64(resources.MemoryLimitMB) * 1024 * 1024
+	}
+	_, err := a.client.ContainerUpdate(ctx, runtimeID, updateConfig)
+	return err
+}
+

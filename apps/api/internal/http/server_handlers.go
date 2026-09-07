@@ -79,8 +79,6 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	unlock := h.lockServerMutation(id)
 	defer unlock()
-	h.gameUpdateJobsMu.Lock()
-	defer h.gameUpdateJobsMu.Unlock()
 	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
 		writeError(w, http.StatusConflict, "a server maintenance or runtime image task is in progress")
 		return
@@ -104,28 +102,33 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	gameProvider, ok := h.provider.Get(server.ProviderKey)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "unknown provider")
-		return
-	}
-	if err := h.gameConfig.Check(server); err != nil {
-		writeError(w, http.StatusConflict, err.Error())
-		return
-	}
-	configPayload, _, err := h.gameConfig.Normalize(server.ProviderKey, server.Spec.ConfigVersion, payload.Config, server.Spec.Config)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.gameConfig.Validate(gameProvider.Key(), configPayload); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	summary, err := h.gameConfig.Summary(gameProvider.Key(), configPayload)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+	hasConfig := len(payload.Config) > 0 && string(payload.Config) != "null"
+	if hasConfig {
+		gameProvider, ok := h.provider.Get(server.ProviderKey)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "unknown provider")
+			return
+		}
+		if err := h.gameConfig.Check(server); err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		configPayload, _, err := h.gameConfig.Normalize(server.ProviderKey, server.Spec.ConfigVersion, payload.Config, server.Spec.Config)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := h.gameConfig.Validate(gameProvider.Key(), configPayload); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		summary, err := h.gameConfig.Summary(gameProvider.Key(), configPayload)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		server.Spec.Config = configPayload
+		server.Spec.Network.Port = summary.Port
 	}
 	if payload.HostPort != nil {
 		hostPort, err := h.resolveHostPort(r.Context(), *payload.HostPort, server.ID)
@@ -144,13 +147,21 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		server.Spec.Resources.CPULimitCores = resources.CPULimitCores
 		server.Spec.Resources.MemoryLimitMB = resources.MemoryLimitMB
 	}
-	server.Spec.Config = configPayload
-	server.Spec.Network.Port = summary.Port
+	resourcesOnly := !hasConfig && payload.HostPort == nil && payload.Resources != nil
 	server.Spec.Generation++
 	if server.Spec.Generation <= 0 {
 		server.Spec.Generation = 1
 	}
 	server.UpdatedAt = time.Now()
+
+	// If only resources changed and local container is running, attempt dynamic in-place update (e.g. docker update)
+	if resourcesOnly && server.IsLocal() && server.Status.Phase == domain.PhaseRunning && server.Status.RuntimeID != "" && h.runtime != nil {
+		if err := h.runtime.UpdateWorkloadResources(r.Context(), server.Status.RuntimeID, server.Spec.Resources); err == nil {
+			server.Status.AppliedGeneration = server.Spec.Generation
+			server.Status.ObservedGeneration = server.Spec.Generation
+		}
+	}
+
 	if server.OrganizationID != "" {
 		err = h.store.SaveAllocatedGameServer(r.Context(), allocationActor(r), before, server)
 	} else {
@@ -160,7 +171,13 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeAllocationError(w, err)
 		return
 	}
-	h.recordActivity(r.Context(), server.ID, "server.config.updated", fmt.Sprintf("Updated config for %s", server.Name), activityServerPayload(server))
+	actionKey := "server.config.updated"
+	actionMsg := fmt.Sprintf("Updated config for %s", server.Name)
+	if resourcesOnly {
+		actionKey = "server.resources.updated"
+		actionMsg = fmt.Sprintf("Updated resources for %s", server.Name)
+	}
+	h.recordActivity(r.Context(), server.ID, actionKey, actionMsg, activityServerPayload(server))
 	writeJSON(w, http.StatusOK, server)
 }
 

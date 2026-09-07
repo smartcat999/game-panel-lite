@@ -437,11 +437,21 @@ export async function getGameServer(id: string): Promise<GameServerResource> {
 
 export type ServerConfigUpdatePayload = TerrariaConfig | Record<string, unknown>;
 
-export async function updateGameServerConfig(id: string, config: ServerConfigUpdatePayload, hostPort?: number, resources?: ResourceLimits): Promise<GameServerResource> {
+export async function updateGameServerConfig(id: string, config?: ServerConfigUpdatePayload, hostPort?: number, resources?: ResourceLimits): Promise<GameServerResource> {
+  const body: Record<string, unknown> = {};
+  if (config !== undefined) {
+    body.config = config;
+  }
+  if (hostPort !== undefined) {
+    body.hostPort = hostPort;
+  }
+  if (resources !== undefined) {
+    body.resources = resources;
+  }
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ config, hostPort, resources })
+    body: JSON.stringify(body)
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };

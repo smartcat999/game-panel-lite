@@ -149,3 +149,11 @@ func (s *SwitchableAdapter) LogSnapshotWorkload(ctx context.Context, runtimeID s
 func (s *SwitchableAdapter) SendCommandWorkload(ctx context.Context, runtimeID string, command string) error {
 	return s.current().SendCommandWorkload(ctx, runtimeID, command)
 }
+
+func (s *SwitchableAdapter) UpdateWorkloadResources(ctx context.Context, runtimeID string, resources domain.ServerResources) error {
+	if updatable, ok := s.current().(ResourceUpdatableAdapter); ok {
+		return updatable.UpdateWorkloadResources(ctx, runtimeID, resources)
+	}
+	return fmt.Errorf("runtime adapter does not support dynamic resource updates")
+}
+

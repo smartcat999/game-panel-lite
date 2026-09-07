@@ -67,3 +67,8 @@ func (m *MockAdapter) LogSnapshotWorkload(_ context.Context, runtimeID string) (
 func (m *MockAdapter) SendCommandWorkload(context.Context, string, string) error {
 	return nil
 }
+
+func (m *MockAdapter) UpdateWorkloadResources(context.Context, string, domain.ServerResources) error {
+	return nil
+}
+

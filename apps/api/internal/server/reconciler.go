@@ -20,6 +20,10 @@ type RuntimeClient interface {
 	Inspect(context.Context, string) (domain.WorkloadStatus, error)
 }
 
+type ResourceUpdatableRuntime interface {
+	UpdateResources(context.Context, string, domain.ServerResources) error
+}
+
 type ImageLoader interface {
 	EnsureImage(context.Context, domain.GameServer, string) error
 }
