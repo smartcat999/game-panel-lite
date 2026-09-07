@@ -64,3 +64,30 @@ func (s *Service) Path(instanceID string, providerKey domain.ProviderKey, fileNa
 	}
 	return safety.SafeJoin(s.dataDir, "mods", instanceID, safeName)
 }
+
+// Open and Remove select the storage layout from persisted ownership. Callers
+// must pass an authorized record, never a request-supplied ownership override.
+func (s *Service) Open(item domain.ModFile) (*os.File, error) {
+	if item.InstanceID == "unassigned" && item.OrganizationID != "" {
+		return s.OpenLibrary(item)
+	}
+	path, err := s.Path(item.InstanceID, item.ProviderKey, item.FileName)
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(path)
+}
+func (s *Service) Remove(item domain.ModFile) error {
+	if item.InstanceID == "unassigned" && item.OrganizationID != "" {
+		return s.RemoveLibrary(item)
+	}
+	path, err := s.Path(item.InstanceID, item.ProviderKey, item.FileName)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}

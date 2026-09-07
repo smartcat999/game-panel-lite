@@ -23,11 +23,7 @@ import (
 func (h *Handler) copyLibraryModToServerCache(item domain.ModFile, targetInstanceID string) (int64, error) {
 	hydrateModGameMetadata(&item)
 	svc := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName)
-	sourcePath, err := svc.Path(item.InstanceID, item.ProviderKey, item.FileName)
-	if err != nil {
-		return 0, err
-	}
-	src, err := os.Open(sourcePath)
+	src, err := svc.Open(item)
 	if err != nil {
 		return 0, fmt.Errorf("mod file not found")
 	}
@@ -372,11 +368,7 @@ func (h *Handler) materializeModForRuntime(ctx context.Context, item domain.ModF
 	if item.Source == "workshop" {
 		return nil
 	}
-	sourcePath, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Path(item.InstanceID, item.ProviderKey, item.FileName)
-	if err != nil {
-		return err
-	}
-	source, err := os.Open(sourcePath)
+	source, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Open(item)
 	if err != nil {
 		return err
 	}
@@ -766,9 +758,5 @@ func isDigitsOnly(value string) bool {
 
 func (h *Handler) removeCachedMod(item domain.ModFile) error {
 	hydrateModGameMetadata(&item)
-	path, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Path(item.InstanceID, item.ProviderKey, item.FileName)
-	if err != nil {
-		return err
-	}
-	return removeStoredFile(path)
+	return modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Remove(item)
 }
