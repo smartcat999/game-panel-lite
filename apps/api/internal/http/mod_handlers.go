@@ -593,6 +593,11 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	hydrateModMetadata(&item)
+	if item.ProviderKey != targetServer.ProviderKey {
+		writeError(w, http.StatusBadRequest, "mod provider does not match target server")
+		return
+	}
 	if !h.providerSupportsMods(targetServer.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
 		return

@@ -70,9 +70,10 @@ func RecommendedModByProviderAndWorkshopID(providerKey domain.ProviderKey, works
 	switch providerKey {
 	case domain.ProviderDST:
 		return RecommendedDSTModByWorkshopID(workshopID)
-	default:
+	case domain.ProviderTerrariaTModLoader:
 		return RecommendedTModLoaderModByWorkshopID(workshopID)
 	}
+	return RecommendedMod{}, false
 }
 
 func RecommendedModByProviderAndExternalID(providerKey domain.ProviderKey, externalID string) (RecommendedMod, bool) {
@@ -111,6 +112,34 @@ func RecommendedTModLoaderModByModName(modName string) (RecommendedMod, bool) {
 	}
 	for _, item := range items {
 		if item.ModName == modName {
+			return item, true
+		}
+	}
+	return RecommendedMod{}, false
+}
+
+// RecommendedModByProviderAndModName never falls back to another game's catalog.
+func RecommendedModByProviderAndModName(key domain.ProviderKey, name string) (RecommendedMod, bool) {
+	var loader func() ([]RecommendedMod, error)
+	switch key {
+	case domain.ProviderTerrariaTModLoader:
+		loader = RecommendedTModLoaderMods
+	case domain.ProviderDST:
+		loader = RecommendedDSTMods
+	case domain.ProviderPalworld:
+		loader = RecommendedPalworldMods
+	default:
+		return RecommendedMod{}, false
+	}
+	if name == "" {
+		return RecommendedMod{}, false
+	}
+	items, err := loader()
+	if err != nil {
+		return RecommendedMod{}, false
+	}
+	for _, item := range items {
+		if item.ModName == name {
 			return item, true
 		}
 	}

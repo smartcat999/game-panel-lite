@@ -65,6 +65,11 @@ func (p *RuntimeModPlanner) PlanMods(ctx context.Context, server domain.GameServ
 }
 
 func (p *RuntimeModPlanner) assignLibraryMod(ctx context.Context, server domain.GameServer, item domain.ModFile) (domain.ModFile, error) {
+	hydrateModMetadata(&item)
+	if item.ProviderKey != server.ProviderKey {
+		return domain.ModFile{}, fmt.Errorf("mod provider does not match target server")
+	}
+
 	if item.InstanceID != "unassigned" && item.InstanceID != server.ID {
 		return domain.ModFile{}, fmt.Errorf("mod %s is not available in the library", item.ID)
 	}
@@ -210,43 +215,47 @@ func (p *RuntimeModPlanner) ensureModDependency(ctx context.Context, server doma
 	if dependencyName == "" {
 		return domain.ModFile{}, false, nil
 	}
-	if existing, ok, err := p.findServerModByModName(ctx, server.ID, dependencyName); err != nil || ok {
+	if existing, ok, err := p.findServerModByModName(ctx, server.ID, server.ProviderKey, dependencyName); err != nil || ok {
 		return existing, false, err
 	}
-	if library, ok, err := p.findLibraryModByModName(ctx, dependencyName); err != nil || ok {
+	if library, ok, err := p.findLibraryModByModName(ctx, server.ProviderKey, dependencyName); err != nil || ok {
 		if err != nil {
 			return domain.ModFile{}, false, err
 		}
 		assigned, err := p.assignLibraryMod(ctx, server, library)
 		return assigned, true, err
 	}
-	recommended, ok := modcatalog.RecommendedTModLoaderModByModName(dependencyName)
+	recommended, ok := modcatalog.RecommendedModByProviderAndModName(server.ProviderKey, dependencyName)
 	if !ok || recommended.WorkshopID == "" {
 		return domain.ModFile{}, false, fmt.Errorf("missing dependency %s in mod library", dependencyName)
 	}
 	return p.upsertWorkshopModRecord(ctx, server.ProviderKey, server.ID, recommended.WorkshopID)
 }
 
-func (p *RuntimeModPlanner) findServerModByModName(ctx context.Context, instanceID string, modName string) (domain.ModFile, bool, error) {
+func (p *RuntimeModPlanner) findServerModByModName(ctx context.Context, instanceID string, providerKey domain.ProviderKey, modName string) (domain.ModFile, bool, error) {
 	mods, err := p.store.ListMods(ctx, instanceID)
 	if err != nil {
 		return domain.ModFile{}, false, err
 	}
 	for _, item := range mods {
-		if modIdentity(item) == modName {
+		// Normalize pre-provider legacy records before applying the provider scope.
+		hydrateModMetadata(&item)
+		if item.ProviderKey == providerKey && modIdentity(item) == modName {
 			return item, true, nil
 		}
 	}
 	return domain.ModFile{}, false, nil
 }
 
-func (p *RuntimeModPlanner) findLibraryModByModName(ctx context.Context, modName string) (domain.ModFile, bool, error) {
+func (p *RuntimeModPlanner) findLibraryModByModName(ctx context.Context, providerKey domain.ProviderKey, modName string) (domain.ModFile, bool, error) {
 	mods, err := p.store.ListMods(ctx, "unassigned")
 	if err != nil {
 		return domain.ModFile{}, false, err
 	}
 	for _, item := range mods {
-		if modIdentity(item) == modName {
+		// Normalize pre-provider legacy records before applying the provider scope.
+		hydrateModMetadata(&item)
+		if item.ProviderKey == providerKey && modIdentity(item) == modName {
 			return item, true, nil
 		}
 	}
@@ -454,11 +463,11 @@ func modDependencies(item domain.ModFile) []string {
 		}
 	}
 	if item.WorkshopID != "" {
-		if recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(item.WorkshopID); ok {
+		if recommended, ok := modcatalog.RecommendedModByProviderAndWorkshopID(item.ProviderKey, item.WorkshopID); ok {
 			return uniqueModIDs(recommended.Dependencies)
 		}
 	}
-	if recommended, ok := modcatalog.RecommendedTModLoaderModByModName(modIdentity(item)); ok {
+	if recommended, ok := modcatalog.RecommendedModByProviderAndModName(item.ProviderKey, modIdentity(item)); ok {
 		return uniqueModIDs(recommended.Dependencies)
 	}
 	return nil

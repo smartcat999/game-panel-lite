@@ -190,10 +190,10 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 	if dependencyName == "" {
 		return domain.ModFile{}, false, nil
 	}
-	if existing, ok, err := h.findServerModByModName(ctx, server.ID, dependencyName); err != nil || ok {
+	if existing, ok, err := h.findServerModByModName(ctx, server.ID, server.ProviderKey, dependencyName); err != nil || ok {
 		return existing, false, err
 	}
-	if library, ok, err := h.findLibraryModByModName(ctx, dependencyName); err != nil || ok {
+	if library, ok, err := h.findLibraryModByModName(ctx, server.ProviderKey, dependencyName); err != nil || ok {
 		if err != nil {
 			return domain.ModFile{}, false, err
 		}
@@ -214,7 +214,7 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 		}
 		return assigned, created, nil
 	}
-	recommended, ok := modcatalog.RecommendedTModLoaderModByModName(dependencyName)
+	recommended, ok := modcatalog.RecommendedModByProviderAndModName(server.ProviderKey, dependencyName)
 	if !ok || recommended.WorkshopID == "" {
 		return domain.ModFile{}, false, fmt.Errorf("missing dependency %s in mod library", dependencyName)
 	}
@@ -225,26 +225,30 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 	return assigned, created, err
 }
 
-func (h *Handler) findServerModByModName(ctx context.Context, instanceID string, modName string) (domain.ModFile, bool, error) {
+func (h *Handler) findServerModByModName(ctx context.Context, instanceID string, providerKey domain.ProviderKey, modName string) (domain.ModFile, bool, error) {
 	mods, err := h.store.ListMods(ctx, instanceID)
 	if err != nil {
 		return domain.ModFile{}, false, err
 	}
 	for _, item := range mods {
-		if modIdentity(item) == modName {
+		// Normalize pre-provider legacy records before applying the provider scope.
+		hydrateModMetadata(&item)
+		if item.ProviderKey == providerKey && modIdentity(item) == modName {
 			return item, true, nil
 		}
 	}
 	return domain.ModFile{}, false, nil
 }
 
-func (h *Handler) findLibraryModByModName(ctx context.Context, modName string) (domain.ModFile, bool, error) {
+func (h *Handler) findLibraryModByModName(ctx context.Context, providerKey domain.ProviderKey, modName string) (domain.ModFile, bool, error) {
 	mods, err := h.store.ListMods(ctx, "unassigned")
 	if err != nil {
 		return domain.ModFile{}, false, err
 	}
 	for _, item := range mods {
-		if modIdentity(item) == modName {
+		// Normalize pre-provider legacy records before applying the provider scope.
+		hydrateModMetadata(&item)
+		if item.ProviderKey == providerKey && modIdentity(item) == modName {
 			return item, true, nil
 		}
 	}
@@ -282,11 +286,11 @@ func modDependencies(item domain.ModFile) []string {
 		}
 	}
 	if item.WorkshopID != "" {
-		if recommended, ok := modcatalog.RecommendedTModLoaderModByWorkshopID(item.WorkshopID); ok {
+		if recommended, ok := modcatalog.RecommendedModByProviderAndWorkshopID(item.ProviderKey, item.WorkshopID); ok {
 			return uniqueNonEmptyStrings(recommended.Dependencies)
 		}
 	}
-	if recommended, ok := modcatalog.RecommendedTModLoaderModByModName(modIdentity(item)); ok {
+	if recommended, ok := modcatalog.RecommendedModByProviderAndModName(item.ProviderKey, modIdentity(item)); ok {
 		return uniqueNonEmptyStrings(recommended.Dependencies)
 	}
 	return nil

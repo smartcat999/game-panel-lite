@@ -2,6 +2,9 @@
 
 ## 2026-09-07
 
+- Corrected mod dependency resolution in HTTP and lifecycle planning: match the target provider as well as the mod name, and resolve catalog dependencies within that provider. Unknown providers no longer silently use tModLoader recommendations.
+- Reject direct cross-provider mod assignment before filesystem/database mutation. Existing pre-provider records retain the established legacy hydration behavior. Regression tests cover same-name collisions in instance/library records, cross-provider assignment rejection and catalog fallback rejection. This fixes a concrete migration prerequisite; complete mod application-module consolidation remains pending. Validation passed: gofmt, go test ./..., go vet ./..., and race tests for modcatalog/server/http. No frontend code or response shape changed in this batch.
+
 - Extracted shared workload wire types and runtime-independent worker reconciliation. Agent Docker SDK, file preparation, logs and console now live in a dedicated adapter; all recorded import exceptions are removed. CPU/memory and TCP/UDP mappings now survive the shared assignment protocol and reach Docker.
 - Added cancellation and goroutine ownership to Agent loops, managed workload ownership checks, and local-root file mounts. Removed legacy lifecycle execution and the tunnel game-port fallback. Distributed fencing and stronger tenant isolation remain pending.
 - Validated full Go tests/vet, shared packages and Agent race tests, frontend typecheck/build, tracked-source lint and standalone Linux Agent build. Worktree-wide lint still has previously recorded unrelated local-script failures. A real disposable Alpine workload passed create/reconcile/resource/port/stdin/stop/delete checks. Added formatting, Linux Agent build and opt-in Docker integration to CI; remote CI has not run. Formatting the existing DST provider was necessary for the new formatting gate.
