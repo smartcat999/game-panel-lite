@@ -33,6 +33,17 @@ type Runtime interface {
 	Remove(context.Context, State) error
 }
 
+// PreparedRuntime owns verified temporary artifact bytes for one reconciliation.
+// Release frees those bytes without closing the underlying runtime client.
+type PreparedRuntime interface {
+	Runtime
+	Release() error
+}
+type ArtifactRuntime interface {
+	ValidateArtifacts(workload.Assignment) error
+	PrepareArtifacts(context.Context, workload.Assignment) (PreparedRuntime, error)
+}
+
 // Reconcile observes after every mutation and returns an observation even when
 // an operation fails. The caller reports it and retries from current state.
 func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runtime) (observation workload.Observation) {
@@ -52,9 +63,7 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 			observation.LastError = err.Error()
 			return observation
 		}
-		capable, ok := runtime.(interface {
-			ValidateArtifacts(workload.Assignment) error
-		})
+		capable, ok := runtime.(ArtifactRuntime)
 		if !ok {
 			observation.LastError = "runtime does not support workload artifacts"
 			return observation
@@ -72,6 +81,32 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 	if err := validateObservedWorkload(state, assignment); err != nil {
 		observation.LastError = err.Error()
 		return observation
+	}
+	if assignment.DesiredState == "running" && len(assignment.Spec.Options.Artifacts) > 0 && (!state.Exists || state.Generation != assignment.Generation) {
+		prepared, prepareErr := runtime.(ArtifactRuntime).PrepareArtifacts(ctx, assignment)
+		if prepareErr != nil {
+			observation.LastError = prepareErr.Error()
+			return observation
+		}
+		defer func() {
+			if err := prepared.Release(); err != nil {
+				if observation.LastError != "" {
+					observation.LastError += "; "
+				}
+				observation.LastError += "artifact cleanup failed: " + err.Error()
+			}
+		}()
+		runtime = prepared
+		// Downloads can take time. Observe ownership again before replacing anything.
+		state, err = runtime.Inspect(ctx, assignment.ServerID)
+		if err != nil {
+			observation.LastError = err.Error()
+			return observation
+		}
+		if err := validateObservedWorkload(state, assignment); err != nil {
+			observation.LastError = err.Error()
+			return observation
+		}
 	}
 	switch assignment.DesiredState {
 	case "running":

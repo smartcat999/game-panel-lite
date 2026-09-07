@@ -239,7 +239,7 @@ paths:
                           properties:
                             artifacts:
                               type: array
-                              description: Immutable file references. No host paths or arbitrary download URLs. Control-plane publication and authorized node downloads are not yet enabled.
+                              description: Immutable file references. No host paths or arbitrary download URLs. Authorized node download is available for persisted manifests; automatic publication and production Agent downloads are not yet wired.
                               items:
                                 type: object
                                 required: [id, path, sha256, sizeBytes]
@@ -264,6 +264,43 @@ paths:
           description: Agent lacks the capability required by a running assignment
         "500":
           description: Assignment or observation storage unavailable
+  /api/agent/assignments/{uid}/artifacts/{artifactId}:
+    get:
+      summary: Download an uploaded workspace artifact for the current node assignment
+      description: Requires the owning node token, a current running assignment and instance generation, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. This is request-scoped authorization, not a lease or in-flight revocation guarantee. The worker must verify the received bytes before replacing a container. Automatic manifest publication and production Agent downloads are not yet wired.
+      security:
+        - nodeToken: []
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema: {type: string}
+        - in: path
+          name: artifactId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: generation
+          required: true
+          schema: {type: integer, minimum: 1}
+      responses:
+        "200":
+          description: Raw immutable-library file bytes; no range support
+          headers:
+            ETag:
+              schema: {type: string}
+              description: Quoted SHA-256 from the assignment manifest
+            Content-Length:
+              schema: {type: integer}
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        "400": {description: Invalid generation}
+        "401": {description: Missing, invalid or changed node token}
+        "404": {description: No current authorized assignment artifact}
+        "409": {description: Assignment or source metadata changed}
+        "503": {description: File unavailable or no longer matches the declared size}
+        "500": {description: Authorization lookup failed}
   /api/agent/assignments/{uid}/status:
     post:
       summary: Conditionally publish a runtime observation

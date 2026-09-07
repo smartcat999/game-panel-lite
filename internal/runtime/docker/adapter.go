@@ -48,7 +48,7 @@ func NewAdapter(host, dataDir string) (*Adapter, error) {
 func (a *Adapter) Close() error { return a.client.Close() }
 
 func containerName(serverID string) (string, error) {
-	if serverID == "" || serverID == "." || strings.Contains(serverID, "..") || strings.ContainsAny(serverID, "/\\") || strings.TrimSpace(serverID) != serverID {
+	if serverID == "" || serverID == "." || serverID == artifactPreparationDir || strings.Contains(serverID, "..") || strings.ContainsAny(serverID, "/\\") || strings.TrimSpace(serverID) != serverID {
 		return "", fmt.Errorf("invalid server ID")
 	}
 	return "gamepanel-" + serverID, nil
