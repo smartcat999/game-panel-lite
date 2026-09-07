@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -1141,13 +1142,21 @@ func (s *Store) UpsertWorkloadObservation(ctx context.Context, observation *doma
 			if current.ObservedGeneration > observation.ObservedGeneration {
 				return nil
 			}
-			observation.ID = current.ID
+
+			if observation.ObservationToken != current.ID {
+				return ErrReconciliationSuperseded
+			}
+			observation.ID = uuid.NewString()
 			observation.CreatedAt = current.CreatedAt
-			return tx.db.WithContext(ctx).Save(observation).Error
+			return tx.db.WithContext(ctx).Model(&domain.WorkloadObservation{}).Where("assignment_uid = ?", observation.AssignmentUID).Select("*").Updates(observation).Error
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
+		if observation.ObservationToken != "" {
+			return ErrReconciliationSuperseded
+		}
+		observation.ID = uuid.NewString()
 		return tx.db.WithContext(ctx).Create(observation).Error
 	})
 }

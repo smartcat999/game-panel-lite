@@ -5,6 +5,78 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/agent/assignments:
+    get:
+      summary: Poll assignments for the authenticated node
+      security:
+        - nodeToken: []
+      responses:
+        "200":
+          description: Assigned workloads, each carrying the current observationToken (empty before the first report). Echo this token in the next report; after a conflict, poll and observe again.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [uid, serverId, nodeId, generation, desiredState, spec, observationToken]
+                  properties:
+                    uid: {type: string}
+                    serverId: {type: string}
+                    nodeId: {type: string}
+                    generation: {type: integer}
+                    desiredState: {type: string}
+                    spec: {type: object}
+                    observationToken: {type: string}
+        "401":
+          description: Invalid node token
+        "500":
+          description: Assignment or observation storage unavailable
+  /api/agent/assignments/{uid}/status:
+    post:
+      summary: Conditionally publish a runtime observation
+      security:
+        - nodeToken: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [observedGeneration, actualState]
+              properties:
+                observationToken:
+                  type: string
+                  description: Token from assignment polling. Required for writes after the first observation; successful writes rotate it. Lower-generation reports may be acknowledged without writing.
+                observedGeneration: {type: integer, minimum: 0}
+                actualState: {type: string}
+                runtimeId: {type: string}
+                lastError: {type: string}
+                observedAt: {type: string, format: date-time}
+                reconcileDurationSeconds: {type: number, minimum: 0, maximum: 600}
+                conditions:
+                  type: array
+                  items: {type: object}
+      responses:
+        "200":
+          description: Report accepted; reports below the persisted generation do not change the observation
+        "400":
+          description: Invalid JSON or reconcile duration
+        "401":
+          description: Invalid node token
+        "403":
+          description: Assignment belongs to another node
+        "404":
+          description: Assignment not found
+        "409":
+          description: Observation token expired, assignment changed, or generation invalid. Poll and observe again.
+        "500":
+          description: Observation storage unavailable
   /api/auth/password:
     post:
       summary: Change the current account password and rotate its sessions
@@ -1203,6 +1275,10 @@ paths:
           description: Invalid config
 components:
   securitySchemes:
+    nodeToken:
+      type: apiKey
+      in: header
+      name: X-Node-Token
     sessionCookie:
       type: apiKey
       in: cookie

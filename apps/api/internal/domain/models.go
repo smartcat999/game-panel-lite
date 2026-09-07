@@ -479,6 +479,7 @@ type WorkloadAssignment struct {
 // WorkloadObservation is the worker's latest observation of real runtime state.
 // AssignmentUID fences stale reports from earlier placements of the same server.
 type WorkloadObservation struct {
+	ObservationToken         string            `json:"observationToken" gorm:"-"`
 	ID                       string            `json:"id" gorm:"primaryKey"`
 	AssignmentUID            string            `json:"assignmentUid" gorm:"uniqueIndex"`
 	ServerID                 string            `json:"serverId" gorm:"index"`

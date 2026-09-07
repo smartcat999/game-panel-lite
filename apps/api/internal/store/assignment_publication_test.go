@@ -89,7 +89,20 @@ func testAssignmentPublication(t *testing.T, db *Store) {
 		go func(generation int) {
 			defer wg.Done()
 			observation := domain.WorkloadObservation{ID: fmt.Sprintf("publication-report-%d", generation), AssignmentUID: newer.UID, ServerID: current.ID, NodeID: current.NodeID, ObservedGeneration: generation, RuntimeID: fmt.Sprintf("runtime-%d", generation)}
-			reports <- db.UpsertWorkloadObservation(ctx, &observation)
+			var result error
+			for attempt := 0; attempt < 16; attempt++ {
+				observed, readErr := db.GetWorkloadObservation(ctx, newer.UID)
+				if readErr != nil && !errors.Is(readErr, ErrNotFound) {
+					result = readErr
+					break
+				}
+				observation.ObservationToken = observed.ID
+				result = db.UpsertWorkloadObservation(ctx, &observation)
+				if !errors.Is(result, ErrReconciliationSuperseded) {
+					break
+				}
+			}
+			reports <- result
 		}(generation)
 	}
 	wg.Wait()
@@ -103,6 +116,24 @@ func testAssignmentPublication(t *testing.T, db *Store) {
 	if err != nil || latest.ObservedGeneration != 8 || latest.RuntimeID != "runtime-8" {
 		t.Fatalf("report generation rolled back: %+v %v", latest, err)
 	}
+
+	next := latest
+	next.ObservationToken = latest.ID
+	next.ActualState = domain.ActualStopped
+	if err := db.UpsertWorkloadObservation(ctx, &next); err != nil {
+		t.Fatal(err)
+	}
+	stale := latest
+	stale.ObservationToken = latest.ID
+	stale.ActualState = domain.ActualRunning
+	if err := db.UpsertWorkloadObservation(ctx, &stale); !errors.Is(err, ErrReconciliationSuperseded) {
+		t.Fatalf("stale same-generation report: %v", err)
+	}
+	saved, err := db.GetWorkloadObservation(ctx, newer.UID)
+	if err != nil || saved.ActualState != domain.ActualStopped || saved.ID == latest.ID {
+		t.Fatalf("token did not protect latest report: %+v %v", saved, err)
+	}
+	latest = saved
 	for _, invalid := range []string{"node", "server", "uid", "future", "negative"} {
 		report := latest
 		switch invalid {

@@ -118,3 +118,14 @@ func TestReconcileReportsErrorsAndCancellation(t *testing.T) {
 		t.Fatalf("cancellation: %+v", got)
 	}
 }
+
+func TestObservationEchoesAssignmentTokenIncludingFailures(t *testing.T) {
+	for _, runtimeErr := range []error{nil, errors.New("runtime unavailable")} {
+		work := assignment()
+		work.ObservationToken = "opaque-control-plane-token"
+		got := Reconcile(context.Background(), work, &memoryRuntime{err: runtimeErr})
+		if got.ObservationToken != work.ObservationToken {
+			t.Fatalf("token not preserved: %+v", got)
+		}
+	}
+}

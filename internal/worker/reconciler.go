@@ -38,7 +38,7 @@ type Runtime interface {
 func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runtime) (observation workload.Observation) {
 	started := time.Now()
 	defer func() { observation.ReconcileDurationSeconds = time.Since(started).Seconds() }()
-	observation = workload.Observation{ObservedGeneration: assignment.Generation, ActualState: "unknown", ObservedAt: time.Now().UTC()}
+	observation = workload.Observation{ObservationToken: assignment.ObservationToken, ObservedGeneration: assignment.Generation, ActualState: "unknown", ObservedAt: time.Now().UTC()}
 	if assignment.UID == "" || assignment.NodeID == "" || assignment.ServerID == "" || assignment.Generation <= 0 {
 		observation.LastError = "assignment identity and positive generation are required"
 		return observation

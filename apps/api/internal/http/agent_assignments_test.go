@@ -95,6 +95,27 @@ func TestAgentAssignmentsRequireOwningNodeToken(t *testing.T) {
 			t.Fatalf("expected agent metric %q, got:\n%s", expected, metricsBody)
 		}
 	}
+	refreshReq := httptest.NewRequest(stdhttp.MethodGet, "/api/agent/assignments", nil)
+	refreshReq.Header.Set("X-Node-Token", "token-a")
+	refreshed := httptest.NewRecorder()
+	router.ServeHTTP(refreshed, refreshReq)
+	if err := json.Unmarshal(refreshed.Body.Bytes(), &assignments); err != nil || len(assignments) != 1 || assignments[0].ObservationToken != observation.ID {
+		t.Fatalf("missing observation token: %s", refreshed.Body.String())
+	}
+	body, err := json.Marshal(workload.Observation{ObservationToken: assignments[0].ObservationToken, ObservedGeneration: 1, ActualState: "stopped"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, expected := range []int{stdhttp.StatusOK, stdhttp.StatusConflict} {
+		req := httptest.NewRequest(stdhttp.MethodPost, "/api/agent/assignments/uid-1/status", bytes.NewReader(body))
+		req.Header.Set("X-Node-Token", "token-a")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != expected {
+			t.Fatalf("report attempt %d: %d %s", i, rec.Code, rec.Body.String())
+		}
+	}
+
 }
 
 func TestAgentDockerCommandMountsWorkerDataDirectory(t *testing.T) {

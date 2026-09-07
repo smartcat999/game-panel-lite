@@ -40,6 +40,7 @@ type Spec struct {
 }
 
 type Assignment struct {
+	ObservationToken  string     `json:"observationToken"`
 	ID                string     `json:"id"`
 	UID               string     `json:"uid"`
 	ServerID          string     `json:"serverId"`
@@ -53,6 +54,7 @@ type Assignment struct {
 }
 
 type Observation struct {
+	ObservationToken         string      `json:"observationToken"`
 	ObservedGeneration       int         `json:"observedGeneration"`
 	RuntimeID                string      `json:"runtimeId,omitempty"`
 	ActualState              string      `json:"actualState"`

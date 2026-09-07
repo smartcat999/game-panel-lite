@@ -501,17 +501,23 @@ func (h *Handler) listAgentAssignments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pending := 0
-	for _, assignment := range assignments {
-		observation, observationErr := h.store.GetWorkloadObservation(r.Context(), assignment.UID)
-		if observationErr != nil || observation.ObservedGeneration < assignment.Generation {
-			pending++
-		}
-	}
-	h.apiMetrics.SetWorkloadBacklog(node.ID, pending)
 	response := make([]workload.Assignment, 0, len(assignments))
 	for _, item := range assignments {
-		response = append(response, workload.Assignment{ID: item.ID, UID: item.UID, ServerID: item.ServerID, NodeID: item.NodeID, Generation: item.Generation, DesiredState: string(item.DesiredState), Spec: item.Spec, DeletionTimestamp: item.DeletionTimestamp, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt})
+		observation, err := h.store.GetWorkloadObservation(r.Context(), item.UID)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusInternalServerError, "failed to read observation token")
+			return
+		}
+		token := ""
+		if err == nil {
+			token = observation.ID
+		}
+		if err != nil || observation.ObservedGeneration < item.Generation {
+			pending++
+		}
+		response = append(response, workload.Assignment{ObservationToken: token, ID: item.ID, UID: item.UID, ServerID: item.ServerID, NodeID: item.NodeID, Generation: item.Generation, DesiredState: string(item.DesiredState), Spec: item.Spec, DeletionTimestamp: item.DeletionTimestamp, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt})
 	}
+	h.apiMetrics.SetWorkloadBacklog(node.ID, pending)
 	writeJSON(w, http.StatusOK, response)
 }
 
@@ -534,7 +540,7 @@ func (h *Handler) reportAgentAssignmentStatus(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "invalid observation body")
 		return
 	}
-	observation := domain.WorkloadObservation{ObservedGeneration: report.ObservedGeneration, RuntimeID: report.RuntimeID, ActualState: domain.ServerActualState(report.ActualState), Conditions: report.Conditions, LastError: report.LastError, ReconcileDurationSeconds: report.ReconcileDurationSeconds, ObservedAt: report.ObservedAt}
+	observation := domain.WorkloadObservation{ObservationToken: report.ObservationToken, ObservedGeneration: report.ObservedGeneration, RuntimeID: report.RuntimeID, ActualState: domain.ServerActualState(report.ActualState), Conditions: report.Conditions, LastError: report.LastError, ReconcileDurationSeconds: report.ReconcileDurationSeconds, ObservedAt: report.ObservedAt}
 	if observation.ObservedGeneration > assignment.Generation {
 		writeError(w, http.StatusConflict, "observation generation is newer than assignment")
 		return
