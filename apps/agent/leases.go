@@ -84,6 +84,22 @@ func (c *agentLeaseClient) exchange(ctx context.Context, action string, fence in
 	return grant, nil
 }
 
+type leaseCredentialsContextKey struct{}
+
+type leaseCredentials struct {
+	holderID string
+	fence    int64
+}
+
+func withLeaseCredentials(ctx context.Context, holderID string, fence int64) context.Context {
+	return context.WithValue(ctx, leaseCredentialsContextKey{}, leaseCredentials{holderID: holderID, fence: fence})
+}
+
+func leaseCredentialsFromContext(ctx context.Context) (leaseCredentials, bool) {
+	creds, ok := ctx.Value(leaseCredentialsContextKey{}).(leaseCredentials)
+	return creds, ok
+}
+
 func reconcileLeasedAssignment(ctx context.Context, client *http.Client, cfg AgentConfig, logger *slog.Logger, a workload.Assignment, runtime agentRuntime) (workload.Observation, error) {
 	lease, err := newAgentLeaseClient(client, cfg, a)
 	if err != nil {
@@ -105,6 +121,7 @@ func reconcileLeasedAssignment(ctx context.Context, client *http.Client, cfg Age
 	if err := executionCtx.Err(); err != nil {
 		return workload.Observation{}, err
 	}
+	executionCtx = withLeaseCredentials(executionCtx, lease.holder, grant.Fence)
 	guarded := worker.AuthorizeMutations(runtime, func(ctx context.Context) error { _, err := lease.exchange(ctx, "renew", grant.Fence); return err })
 	observation := worker.Reconcile(executionCtx, a, guarded)
 	observation.LeaseHolderID = lease.holder

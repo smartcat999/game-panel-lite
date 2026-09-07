@@ -232,7 +232,7 @@ func TestAgentArtifactDeliveryIntegration(t *testing.T) {
 		if other.node.ID == n.node.ID {
 			other = nodes[1]
 		}
-		req, err := stdhttp.NewRequestWithContext(ctx, stdhttp.MethodGet, panel.URL+"/api/agent/assignments/"+n.assignment.UID+"/artifacts/"+n.source.ID+"?generation=1", nil)
+		req, err := stdhttp.NewRequestWithContext(ctx, stdhttp.MethodGet, panel.URL+"/api/agent/assignments/"+n.assignment.UID+"/artifacts/"+n.source.ID+"?generation=1&holderId=other-holder&fence=1", nil)
 		if err != nil {
 			t.Fatal(err)
 		}

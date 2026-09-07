@@ -30,8 +30,8 @@ func TestArtifactHTTPSource(t *testing.T) {
 			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected.Add(1) }))
 			defer target.Close()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/panel/api/agent/assignments/assignment/artifacts/source" || r.URL.Query().Get("generation") != "2" || r.Header.Get("X-Node-Token") != "secret" || r.Header.Get("Accept-Encoding") != "identity" {
-					t.Errorf("unexpected download request: %s", r.URL)
+				if r.URL.Path != "/panel/api/agent/assignments/assignment/artifacts/source" || r.URL.Query().Get("generation") != "2" || r.URL.Query().Get("holderId") != "holder" || r.URL.Query().Get("fence") != "1" || r.Header.Get("X-Node-Token") != "secret" || r.Header.Get("X-Lease-Holder-ID") != "holder" || r.Header.Get("X-Lease-Fence") != "1" || r.Header.Get("Accept-Encoding") != "identity" {
+					t.Errorf("unexpected download request: %s %v", r.URL, r.Header)
 				}
 				w.Header().Set("Content-Length", "4")
 				w.Header().Set("ETag", strconv.Quote(item.SHA256))
@@ -57,7 +57,11 @@ func TestArtifactHTTPSource(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			body, err := source.Open(context.Background(), assignment, item)
+			if _, err := source.Open(context.Background(), assignment, item); err == nil {
+				t.Fatal("opened artifact without execution lease credentials")
+			}
+			leasedCtx := withLeaseCredentials(context.Background(), "holder", 1)
+			body, err := source.Open(leasedCtx, assignment, item)
 			if mode == "success" {
 				if err != nil {
 					t.Fatal(err)
@@ -96,7 +100,7 @@ func TestArtifactDownloadCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := source.Open(ctx, assignment, item)
+	body, err := source.Open(withLeaseCredentials(ctx, "holder", 1), assignment, item)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,13 +172,13 @@ func TestArtifactIdentityRejectedBeforeNetwork(t *testing.T) {
 	a, item := artifactFixture()
 	for _, uid := range []string{"", "..", "a/b", "a?b", "a%2fb"} {
 		a.UID = uid
-		if _, err := source.Open(context.Background(), a, item); err == nil {
+		if _, err := source.Open(withLeaseCredentials(context.Background(), "holder", 1), a, item); err == nil {
 			t.Fatalf("accepted UID %q", uid)
 		}
 	}
 	a.UID = "assignment"
 	item.ID = "../other"
-	if _, err := source.Open(context.Background(), a, item); err == nil {
+	if _, err := source.Open(withLeaseCredentials(context.Background(), "holder", 1), a, item); err == nil {
 		t.Fatal("accepted artifact traversal")
 	}
 }
@@ -202,7 +206,7 @@ func TestAgentRuntimePreparesOnlyVerifiedHTTPBytes(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer adapter.Close()
-			prepared, err := adapter.PrepareArtifacts(context.Background(), a)
+			prepared, err := adapter.PrepareArtifacts(withLeaseCredentials(context.Background(), "holder", 1), a)
 			if payload == "evil" {
 				if err == nil {
 					prepared.Release()

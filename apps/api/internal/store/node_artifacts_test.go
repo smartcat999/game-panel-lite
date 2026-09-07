@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
@@ -38,20 +39,43 @@ func testNodeArtifactAuthorization(t *testing.T, db *Store) {
 	if err := db.PublishWorkloadAssignment(ctx, target, &assignment); err != nil {
 		t.Fatal(err)
 	}
-	resolve := func(node, uid string, generation int, id string) error {
-		_, _, err := db.ResolveArtifactForNode(ctx, node, uid, generation, id)
+	node := domain.ComputeNode{ID: target.NodeID, Token: "artifact-node-token"}
+	if err := db.CreateComputeNode(ctx, &node); err != nil {
+		t.Fatal(err)
+	}
+	leaseReq := ExecutionLeaseRequest{NodeID: node.ID, NodeToken: node.Token, AssignmentUID: assignment.UID, Generation: 1, HolderID: "artifact-holder"}
+	lease, err := db.AcquireExecutionLease(ctx, leaseReq, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolveLeased := func(nodeID, uid string, generation int, id, holderID string, fence int64) error {
+		_, _, err := db.ResolveArtifactForNode(ctx, nodeID, uid, generation, id, holderID, fence)
 		return err
+	}
+	resolve := func(nodeID, uid string, generation int, id string) error {
+		return resolveLeased(nodeID, uid, generation, id, leaseReq.HolderID, lease.Fence)
 	}
 	if err := resolve(target.NodeID, assignment.UID, 1, item.ID); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		node, uid  string
-		generation int
-		id         string
-	}{{"foreign", assignment.UID, 1, item.ID}, {target.NodeID, "missing", 1, item.ID}, {target.NodeID, assignment.UID, 2, item.ID}, {target.NodeID, assignment.UID, 1, "missing"}} {
-		if err := resolve(tc.node, tc.uid, tc.generation, tc.id); !errors.Is(err, ErrNotFound) {
-			t.Fatalf("unauthorized request: %v", err)
+		node, uid        string
+		generation       int
+		id, holder       string
+		fence            int64
+		expectedErr      error
+	}{
+		{"foreign", assignment.UID, 1, item.ID, leaseReq.HolderID, lease.Fence, ErrNotFound},
+		{target.NodeID, "missing", 1, item.ID, leaseReq.HolderID, lease.Fence, ErrNotFound},
+		{target.NodeID, assignment.UID, 2, item.ID, leaseReq.HolderID, lease.Fence, ErrNotFound},
+		{target.NodeID, assignment.UID, 1, "missing", leaseReq.HolderID, lease.Fence, ErrNotFound},
+		{target.NodeID, assignment.UID, 1, item.ID, "", lease.Fence, ErrExecutionLeaseUnavailable},
+		{target.NodeID, assignment.UID, 1, item.ID, "other-holder", lease.Fence, ErrExecutionLeaseUnavailable},
+		{target.NodeID, assignment.UID, 1, item.ID, leaseReq.HolderID, 0, ErrExecutionLeaseUnavailable},
+		{target.NodeID, assignment.UID, 1, item.ID, leaseReq.HolderID, lease.Fence + 1, ErrExecutionLeaseUnavailable},
+	} {
+		if err := resolveLeased(tc.node, tc.uid, tc.generation, tc.id, tc.holder, tc.fence); !errors.Is(err, tc.expectedErr) {
+			t.Fatalf("unauthorized request: %+v: got %v, want %v", tc, err, tc.expectedErr)
 		}
 	}
 	for _, field := range []string{"organization_id", "provider_key", "source", "content_hash", "size_bytes"} {
@@ -94,5 +118,14 @@ func testNodeArtifactAuthorization(t *testing.T, db *Store) {
 	}
 	if err := resolve(target.NodeID, assignment.UID, 1, item.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("moved node: %v", err)
+	}
+	if err := db.db.Model(&domain.GameServer{}).Where("id = ?", target.ID).UpdateColumn("node_id", target.NodeID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.db.Model(&ExecutionLease{}).Where("server_id = ?", target.ID).UpdateColumn("expires_at_ms", 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := resolve(target.NodeID, assignment.UID, 1, item.ID); !errors.Is(err, ErrExecutionLeaseUnavailable) {
+		t.Fatalf("expired lease authorized: %v", err)
 	}
 }

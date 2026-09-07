@@ -11,14 +11,17 @@ import (
 )
 
 // ResolveArtifactForNode authorizes a read against the current assignment and
-// instance, not a mod ID supplied independently by the node. It does not grant a
-// lease: callers recheck after opening a file and in-flight revocation is separate.
-func (s *Store) ResolveArtifactForNode(ctx context.Context, nodeID, uid string, generation int, artifactID string) (domain.ModFile, workload.Artifact, error) {
+// active execution lease, not a mod ID supplied independently by the node. Callers
+// recheck after opening a file and in-flight revocation is separate.
+func (s *Store) ResolveArtifactForNode(ctx context.Context, nodeID, uid string, generation int, artifactID, holderID string, fence int64) (domain.ModFile, workload.Artifact, error) {
 	var item domain.ModFile
 	var ref workload.Artifact
 	var assignment domain.WorkloadAssignment
 	if nodeID == "" || uid == "" || generation <= 0 || artifactID == "" {
 		return item, ref, ErrNotFound
+	}
+	if holderID == "" || len(holderID) > 128 || fence <= 0 {
+		return item, ref, ErrExecutionLeaseUnavailable
 	}
 	err := s.db.WithContext(ctx).Where("uid = ? AND node_id = ? AND generation = ? AND desired_state = ? AND deletion_timestamp IS NULL", uid, nodeID, generation, domain.DesiredRunning).Take(&assignment).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -77,6 +80,25 @@ func (s *Store) ResolveArtifactForNode(ctx context.Context, nodeID, uid string, 
 	}
 	if count != 1 {
 		return domain.ModFile{}, ref, ErrReconciliationSuperseded
+	}
+	var now int64
+	clockSQL := "SELECT CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"
+	if s.db.Dialector.Name() == "postgres" {
+		clockSQL = "SELECT CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)"
+	}
+	if err := s.db.WithContext(ctx).Raw(clockSQL).Scan(&now).Error; err != nil {
+		return domain.ModFile{}, ref, err
+	}
+	var leaseCount int64
+	err = s.db.WithContext(ctx).Model(&ExecutionLease{}).Where(
+		"server_id = ? AND assignment_uid = ? AND node_id = ? AND generation = ? AND holder_id = ? AND fence = ? AND expires_at_ms > ?",
+		target.ID, uid, nodeID, generation, holderID, fence, now,
+	).Count(&leaseCount).Error
+	if err != nil {
+		return domain.ModFile{}, ref, err
+	}
+	if leaseCount != 1 {
+		return domain.ModFile{}, ref, ErrExecutionLeaseUnavailable
 	}
 	return item, ref, nil
 }

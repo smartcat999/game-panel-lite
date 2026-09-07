@@ -365,7 +365,7 @@ paths:
   /api/agent/assignments/{uid}/artifacts/{artifactId}:
     get:
       summary: Download an uploaded workspace artifact for the current node assignment
-      description: Requires the owning node token, a current running assignment and instance generation, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. This is request-scoped authorization, not a lease or in-flight revocation guarantee. The worker must verify the received bytes before replacing a container. Production Agent downloads are configured; the control-plane builder publishes same-workspace uploaded sources and their dependency closure. Customer requests support online artifact-capable nodes; cross-host runtime verification remains pending.
+      description: Requires the owning node token, a current running assignment and instance generation, an active execution lease held by the caller, and a manifest entry matching the library record's workspace, provider, size and SHA-256. Authorization is rechecked after opening the file and the node token is checked again before streaming. The worker must verify the received bytes before replacing a container. Production Agent downloads are configured; the control-plane builder publishes same-workspace uploaded sources and their dependency closure. Customer requests support online artifact-capable nodes; cross-host runtime verification remains pending.
       security:
         - nodeToken: []
       parameters:
@@ -381,6 +381,14 @@ paths:
           name: generation
           required: true
           schema: {type: integer, minimum: 1}
+        - in: query
+          name: holderId
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 128}
+        - in: query
+          name: fence
+          required: true
+          schema: {type: integer, format: int64, minimum: 1}
       responses:
         "200":
           description: Raw immutable-library file bytes; no range support
@@ -393,10 +401,10 @@ paths:
           content:
             application/octet-stream:
               schema: {type: string, format: binary}
-        "400": {description: Invalid generation}
+        "400": {description: Invalid generation or execution lease identity}
         "401": {description: Missing, invalid or changed node token}
         "404": {description: No current authorized assignment artifact}
-        "409": {description: Assignment or source metadata changed}
+        "409": {description: Execution lease expired, superseded, or assignment metadata changed}
         "503": {description: File unavailable or no longer matches the declared size}
         "500": {description: Authorization lookup failed}
   /api/agent/assignments/{uid}/status:

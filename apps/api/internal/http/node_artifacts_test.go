@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -52,18 +53,44 @@ func TestAgentArtifactDownloadIsBoundToAssignment(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	request := func(token, id, generation string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest(http.MethodGet, "/api/agent/assignments/download-uid/artifacts/"+id+"?generation="+generation, nil)
+	leaseReq := store.ExecutionLeaseRequest{NodeID: "download-a", NodeToken: "download-a", AssignmentUID: assignment.UID, Generation: 1, HolderID: "download-holder"}
+	lease, err := db.AcquireExecutionLease(ctx, leaseReq, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fenceStr := strconv.FormatInt(lease.Fence, 10)
+	request := func(token, id, generation, holder, fence string) *httptest.ResponseRecorder {
+		endpoint := "/api/agent/assignments/download-uid/artifacts/" + id + "?generation=" + generation
+		if holder != "" {
+			endpoint += "&holderId=" + holder
+		}
+		if fence != "" {
+			endpoint += "&fence=" + fence
+		}
+		r := httptest.NewRequest(http.MethodGet, endpoint, nil)
 		r.Header.Set("X-Node-Token", token)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, r)
 		return w
 	}
 	for _, tc := range []struct {
-		token, id, gen string
-		status         int
-	}{{"", item.ID, "1", 401}, {"download-b", item.ID, "1", 404}, {"download-a", item.ID, "2", 404}, {"download-a", "other-source", "1", 404}, {"download-a", item.ID, "0", 400}} {
-		got := request(tc.token, tc.id, tc.gen)
+		token, id, gen, holder, fence string
+		status                        int
+	}{
+		{"", item.ID, "1", "download-holder", fenceStr, 401},
+		{"download-b", item.ID, "1", "download-holder", fenceStr, 404},
+		{"download-a", item.ID, "2", "download-holder", fenceStr, 404},
+		{"download-a", "other-source", "1", "download-holder", fenceStr, 404},
+		{"download-a", item.ID, "0", "download-holder", fenceStr, 400},
+		{"download-a", item.ID, "1", "", fenceStr, 400},
+		{"download-a", item.ID, "1", "download-holder", "", 400},
+		{"download-a", item.ID, "1", "download-holder", "0", 400},
+		{"download-a", item.ID, "1", "download-holder", "-1", 400},
+		{"download-a", item.ID, "1", "download-holder", "invalid", 400},
+		{"download-a", item.ID, "1", "other-holder", fenceStr, 409},
+		{"download-a", item.ID, "1", "download-holder", strconv.FormatInt(lease.Fence+1, 10), 409},
+	} {
+		got := request(tc.token, tc.id, tc.gen, tc.holder, tc.fence)
 		if got.Code != tc.status {
 			t.Fatalf("download authorization: %+v: %d %s", tc, got.Code, got.Body.String())
 		}
@@ -71,7 +98,7 @@ func TestAgentArtifactDownloadIsBoundToAssignment(t *testing.T) {
 			t.Fatal("unauthorized body leaked")
 		}
 	}
-	got := request("download-a", item.ID, "1")
+	got := request("download-a", item.ID, "1", "download-holder", fenceStr)
 	if got.Code != 200 || !bytes.Equal(got.Body.Bytes(), payload) || got.Header().Get("Content-Length") != strconv.Itoa(len(payload)) || got.Header().Get("ETag") != strconv.Quote(item.ContentHash) || got.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("download: %d %v %v", got.Code, got.Header(), got.Body.Bytes())
 	}
@@ -93,7 +120,7 @@ func TestAgentArtifactDownloadIsBoundToAssignment(t *testing.T) {
 	handler := &Handler{store: db, modDelivery: modlibrary.NewDelivery(db, revoking)}
 	isolated := chi.NewRouter()
 	isolated.Get("/api/agent/assignments/{uid}/artifacts/{artifactId}", handler.downloadAgentArtifact)
-	revokedRequest := httptest.NewRequest(http.MethodGet, "/api/agent/assignments/download-uid/artifacts/"+item.ID+"?generation=1", nil)
+	revokedRequest := httptest.NewRequest(http.MethodGet, "/api/agent/assignments/download-uid/artifacts/"+item.ID+"?generation=1&holderId=download-holder&fence="+fenceStr, nil)
 	revokedRequest.Header.Set("X-Node-Token", "download-a")
 	denied := httptest.NewRecorder()
 	isolated.ServeHTTP(denied, revokedRequest)
@@ -113,15 +140,25 @@ func TestAgentArtifactDownloadIsBoundToAssignment(t *testing.T) {
 	if err := files.RemoveLibrary(item); err != nil {
 		t.Fatal(err)
 	}
-	if got := request("download-a", item.ID, "1"); got.Code != 503 {
+	if got := request("download-a", item.ID, "1", "download-holder", fenceStr); got.Code != 503 {
 		t.Fatalf("missing bytes: %d %s", got.Code, got.Body.String())
 	}
 	target.Spec.Generation++
 	if err := db.SaveGameServer(ctx, &target); err != nil {
 		t.Fatal(err)
 	}
-	if got := request("download-a", item.ID, "1"); got.Code != 404 {
+	if got := request("download-a", item.ID, "1", "download-holder", fenceStr); got.Code != 404 {
 		t.Fatalf("old desired generation still authorized: %d", got.Code)
+	}
+	target.Spec.Generation--
+	if err := db.SaveGameServer(ctx, &target); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.ReleaseExecutionLease(ctx, leaseReq, lease.Fence); err != nil {
+		t.Fatal(err)
+	}
+	if got := request("download-a", item.ID, "1", "download-holder", fenceStr); got.Code != 409 {
+		t.Fatalf("released lease returned %d", got.Code)
 	}
 }
 

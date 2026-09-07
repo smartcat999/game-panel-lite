@@ -19,7 +19,7 @@ type deliveryRepoStub struct {
 	mode  string
 }
 
-func (r *deliveryRepoStub) ResolveArtifactForNode(context.Context, string, string, int, string) (domain.ModFile, workload.Artifact, error) {
+func (r *deliveryRepoStub) ResolveArtifactForNode(context.Context, string, string, int, string, string, int64) (domain.ModFile, workload.Artifact, error) {
 	r.calls++
 	if r.mode == "denied" || r.mode == "revoked" && r.calls == 2 {
 		return domain.ModFile{}, workload.Artifact{}, errors.New("denied")
@@ -53,7 +53,7 @@ func TestDeliveryRechecksAuthorizationAfterOpening(t *testing.T) {
 				repo.ref.SizeBytes = 6
 			}
 			files := &deliveryFilesStub{path: path}
-			file, _, err := NewDelivery(repo, files).Open(context.Background(), "node", "uid", 1, "source")
+			file, _, err := NewDelivery(repo, files).Open(context.Background(), "node", "uid", 1, "source", "holder", 1)
 			if mode == "success" {
 				if err != nil || file == nil || repo.calls != 2 {
 					t.Fatalf("open: %v", err)

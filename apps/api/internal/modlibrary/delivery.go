@@ -12,7 +12,7 @@ import (
 var ErrArtifactUnavailable = errors.New("artifact file is unavailable or changed")
 
 type DeliveryRepository interface {
-	ResolveArtifactForNode(context.Context, string, string, int, string) (domain.ModFile, workload.Artifact, error)
+	ResolveArtifactForNode(context.Context, string, string, int, string, string, int64) (domain.ModFile, workload.Artifact, error)
 }
 type DeliveryFiles interface {
 	OpenLibrary(domain.ModFile) (*os.File, error)
@@ -26,10 +26,10 @@ func NewDelivery(repo DeliveryRepository, files DeliveryFiles) *Delivery {
 	return &Delivery{repo: repo, files: files}
 }
 
-// Open validates both before and after opening the owned file. The caller owns
-// the returned handle. This is read authorization, not a distributed file lease.
-func (d *Delivery) Open(ctx context.Context, nodeID, uid string, generation int, id string) (*os.File, workload.Artifact, error) {
-	item, ref, err := d.repo.ResolveArtifactForNode(ctx, nodeID, uid, generation, id)
+// Open validates both before and after opening the owned file under the caller's
+// active execution lease. The caller owns the returned handle.
+func (d *Delivery) Open(ctx context.Context, nodeID, uid string, generation int, id, holderID string, fence int64) (*os.File, workload.Artifact, error) {
+	item, ref, err := d.repo.ResolveArtifactForNode(ctx, nodeID, uid, generation, id, holderID, fence)
 	if err != nil {
 		return nil, ref, err
 	}
@@ -42,7 +42,7 @@ func (d *Delivery) Open(ctx context.Context, nodeID, uid string, generation int,
 	if err != nil || !info.Mode().IsRegular() || info.Size() != ref.SizeBytes {
 		return fail(ErrArtifactUnavailable)
 	}
-	current, currentRef, err := d.repo.ResolveArtifactForNode(ctx, nodeID, uid, generation, id)
+	current, currentRef, err := d.repo.ResolveArtifactForNode(ctx, nodeID, uid, generation, id, holderID, fence)
 	if err != nil {
 		return fail(err)
 	}

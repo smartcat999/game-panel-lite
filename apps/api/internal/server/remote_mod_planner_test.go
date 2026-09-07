@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
@@ -104,12 +105,21 @@ func TestRemoteModPlanPublishesWorkspaceClosureWithoutLocalFiles(t *testing.T) {
 				if err != nil || !reflect.DeepEqual(spec, again) {
 					t.Fatalf("non-deterministic plan: %v", err)
 				}
+				node := domain.ComputeNode{ID: target.NodeID, Token: "remote-token"}
+				if err := db.CreateComputeNode(ctx, &node); err != nil {
+					t.Fatal(err)
+				}
 				assignment := domain.WorkloadAssignment{ID: "assignment", UID: "uid", NodeID: target.NodeID, ServerID: target.ID, Generation: 1, DesiredState: domain.DesiredRunning, Spec: spec}
 				if err := db.PublishWorkloadAssignment(ctx, target, &assignment); err != nil {
 					t.Fatal(err)
 				}
+				leaseReq := store.ExecutionLeaseRequest{NodeID: node.ID, NodeToken: node.Token, AssignmentUID: assignment.UID, Generation: 1, HolderID: "planner-holder"}
+				lease, err := db.AcquireExecutionLease(ctx, leaseReq, time.Minute)
+				if err != nil {
+					t.Fatal(err)
+				}
 				for _, artifact := range spec.Options.Artifacts {
-					item, ref, err := db.ResolveArtifactForNode(ctx, target.NodeID, assignment.UID, 1, artifact.ID)
+					item, ref, err := db.ResolveArtifactForNode(ctx, target.NodeID, assignment.UID, 1, artifact.ID, leaseReq.HolderID, lease.Fence)
 					if err != nil || item.ID != artifact.ID || ref.SHA256 != artifact.SHA256 {
 						t.Fatalf("published artifact not authorized: %v", err)
 					}

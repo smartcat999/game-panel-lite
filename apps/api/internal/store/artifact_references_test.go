@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
@@ -31,6 +32,10 @@ func testArtifactReferenceLifecycle(t *testing.T, db *Store) {
 	if err := db.CreateGameServer(ctx, &target); err != nil {
 		t.Fatal(err)
 	}
+	node := domain.ComputeNode{ID: target.NodeID, Token: "ref-token"}
+	if err := db.CreateComputeNode(ctx, &node); err != nil {
+		t.Fatal(err)
+	}
 	item := domain.ModFile{ID: "ref-dependency", OrganizationID: org.ID, ProviderKey: target.ProviderKey, InstanceID: "unassigned", Source: "upload", FileName: "dep.tmod", ContentHash: strings.Repeat("a", 64), SizeBytes: 4}
 	if err := db.CreateOwnedLibraryMod(ctx, "ref-owner", &item); err != nil {
 		t.Fatal(err)
@@ -51,7 +56,12 @@ func testArtifactReferenceLifecycle(t *testing.T, db *Store) {
 	if err := db.PublishWorkloadAssignment(ctx, target, &assignment); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := db.ResolveArtifactForNode(ctx, target.NodeID, assignment.UID, 1, item.ID); err != nil {
+	leaseReq := ExecutionLeaseRequest{NodeID: node.ID, NodeToken: node.Token, AssignmentUID: assignment.UID, Generation: 1, HolderID: "ref-holder"}
+	lease, err := db.AcquireExecutionLease(ctx, leaseReq, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.ResolveArtifactForNode(ctx, target.NodeID, assignment.UID, 1, item.ID, leaseReq.HolderID, lease.Fence); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.DeleteOwnedLibraryMod(ctx, "ref-owner", item); !errors.Is(err, ErrInvalidModLibrary) {

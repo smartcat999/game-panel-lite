@@ -40,15 +40,23 @@ func (s *artifactSource) Open(ctx context.Context, assignment workload.Assignmen
 			return nil, fmt.Errorf("invalid artifact assignment UID")
 		}
 	}
+	creds, ok := leaseCredentialsFromContext(ctx)
+	if !ok || creds.holderID == "" || len(creds.holderID) > 128 || creds.fence <= 0 {
+		return nil, fmt.Errorf("artifact download requires active execution lease credentials in context")
+	}
 	if err := workload.ValidateArtifacts(workload.Options{Artifacts: []workload.Artifact{item}}); err != nil {
 		return nil, err
 	}
-	endpoint := fmt.Sprintf("%s/api/agent/assignments/%s/artifacts/%s?generation=%d", s.base, url.PathEscape(assignment.UID), url.PathEscape(item.ID), assignment.Generation)
+	endpoint := fmt.Sprintf("%s/api/agent/assignments/%s/artifacts/%s?generation=%d&holderId=%s&fence=%d",
+		s.base, url.PathEscape(assignment.UID), url.PathEscape(item.ID), assignment.Generation,
+		url.QueryEscape(creds.holderID), creds.fence)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("X-Node-Token", s.token)
+	req.Header.Set("X-Lease-Holder-ID", creds.holderID)
+	req.Header.Set("X-Lease-Fence", strconv.FormatInt(creds.fence, 10))
 	req.Header.Set("Accept-Encoding", "identity")
 	resp, err := s.client.Do(req)
 	if err != nil {
