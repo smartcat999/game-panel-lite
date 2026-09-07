@@ -95,3 +95,26 @@ func (h *Handler) serverTransferAllowed(w http.ResponseWriter, r *http.Request, 
 	}
 	return true
 }
+
+func allocationActor(r *http.Request) string {
+	account, ok := accountFromContext(r.Context())
+	if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+		return ""
+	}
+	return account.ID
+}
+
+func writeAllocationError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	switch {
+	case errors.Is(err, store.ErrQuotaExceeded), errors.Is(err, store.ErrReconciliationSuperseded):
+		status = http.StatusConflict
+	case errors.Is(err, store.ErrFiniteResourcesRequired), errors.Is(err, store.ErrInvalidQuota):
+		status = http.StatusBadRequest
+	case errors.Is(err, store.ErrWorkspaceWriteDenied):
+		status = http.StatusForbidden
+	case errors.Is(err, store.ErrNotFound):
+		status = http.StatusNotFound
+	}
+	writeError(w, status, err.Error())
+}

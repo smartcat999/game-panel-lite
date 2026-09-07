@@ -26,7 +26,7 @@ func TestServerRoutesEnforceTenantMembership(t *testing.T) {
 		if err := db.CreateOrganization(ctx, &org, id); err != nil {
 			t.Fatal(err)
 		}
-		server := domain.GameServer{ID: id, Name: id, OrganizationID: id, Status: domain.ServerRuntimeStatus{Phase: domain.PhaseStopped}}
+		server := domain.GameServer{ID: id, Name: id, OrganizationID: id, Spec: domain.ServerSpec{Resources: domain.ServerResources{CPULimitCores: 1, MemoryLimitMB: 1024}}, Status: domain.ServerRuntimeStatus{Phase: domain.PhaseStopped}}
 		if err := db.CreateGameServer(ctx, &server); err != nil {
 			t.Fatal(err)
 		}
@@ -84,10 +84,24 @@ func TestServerRoutesEnforceTenantMembership(t *testing.T) {
 	if got := request(http.MethodPost, "/api/servers", `{"organizationId":"tenant-b"}`); got.Code != http.StatusNotFound {
 		t.Fatalf("foreign creation: %d %s", got.Code, got.Body.String())
 	}
-	got := request(http.MethodPost, "/api/servers", `{"name":"Owned server","providerKey":"terraria-vanilla","config":{}}`)
+	got := request(http.MethodPost, "/api/servers", `{"resources":{"cpuLimitCores":1,"memoryLimitMb":1024},"name":"Owned server","providerKey":"terraria-vanilla","config":{}}`)
 	var created domain.GameServer
 	if err := json.Unmarshal(got.Body.Bytes(), &created); err != nil || got.Code != http.StatusCreated || created.OrganizationID != "tenant-a" {
 		t.Fatalf("owned creation: %d %s %v", got.Code, got.Body.String(), err)
+	}
+
+	if err := db.UpdateTenantQuota(ctx, domain.TenantQuota{OrganizationID: "tenant-a", MaxServers: 2, MaxCPUCores: 2, MaxMemoryMB: 2048, MaxStorageGB: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if got := request(http.MethodPost, "/api/servers", `{"resources":{"cpuLimitCores":1,"memoryLimitMb":1024},"providerKey":"terraria-vanilla","config":{}}`); got.Code != http.StatusConflict {
+		t.Fatalf("quota creation: %d %s", got.Code, got.Body.String())
+	}
+
+	if got := request(http.MethodPut, "/api/servers/"+created.ID+"/config", `{"resources":{"cpuLimitCores":2,"memoryLimitMb":1024},"config":{}}`); got.Code != http.StatusConflict {
+		t.Fatalf("quota config update: %d %s", got.Code, got.Body.String())
+	}
+	if got := request(http.MethodPost, "/api/servers", `{"providerKey":"terraria-vanilla","config":{}}`); got.Code != http.StatusBadRequest {
+		t.Fatalf("unlimited creation: %d %s", got.Code, got.Body.String())
 	}
 	if err := db.RemoveOrganizationMember(ctx, "tenant-a", "tenant-a"); err != nil {
 		t.Fatal(err)

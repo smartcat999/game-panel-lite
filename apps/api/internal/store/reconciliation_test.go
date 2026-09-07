@@ -43,7 +43,7 @@ func testReconciliationPersistence(t *testing.T, db *Store) {
 				if err := db.DeleteGameServer(ctx, original.ID); err != nil {
 					t.Fatal(err)
 				}
-			} else if err := db.SaveGameServer(ctx, &current); err != nil {
+			} else if err := db.db.WithContext(ctx).Save(&current).Error; err != nil {
 				t.Fatal(err)
 			}
 			result := original

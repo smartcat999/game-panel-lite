@@ -196,18 +196,6 @@ func (h *Handler) updateOrganizationQuota(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "invalid request payload")
 		return
 	}
-	if req.MaxServers <= 0 {
-		req.MaxServers = 10
-	}
-	if req.MaxCPUCores <= 0 {
-		req.MaxCPUCores = 16.0
-	}
-	if req.MaxMemoryMB <= 0 {
-		req.MaxMemoryMB = 32768
-	}
-	if req.MaxStorageGB <= 0 {
-		req.MaxStorageGB = 100
-	}
 
 	quota := domain.TenantQuota{
 		OrganizationID: orgID,
@@ -218,7 +206,7 @@ func (h *Handler) updateOrganizationQuota(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.store.UpdateTenantQuota(r.Context(), quota); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update quota: "+err.Error())
+		writeAllocationError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, quota)

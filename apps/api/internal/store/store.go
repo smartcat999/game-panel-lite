@@ -148,7 +148,28 @@ func (s *Store) CreateGameServer(ctx context.Context, server *domain.GameServer)
 }
 
 func (s *Store) SaveGameServer(ctx context.Context, server *domain.GameServer) error {
-	return s.db.WithContext(ctx).Save(server).Error
+	if server.OrganizationID == "" {
+		return s.db.WithContext(ctx).Save(server).Error
+	}
+	return s.Transaction(ctx, func(tx *Store) error {
+		if err := tx.lockWorkspace(ctx, server.OrganizationID); err != nil {
+			return err
+		}
+		current, err := tx.GetGameServer(ctx, server.ID)
+		if err != nil {
+			return err
+		}
+		if current.Spec.Resources != server.Spec.Resources {
+			quota, err := tx.GetTenantQuota(ctx, server.OrganizationID)
+			if err != nil {
+				return err
+			}
+			if err := tx.checkAllocation(ctx, quota, server); err != nil {
+				return err
+			}
+		}
+		return tx.db.WithContext(ctx).Save(server).Error
+	})
 }
 
 func (s *Store) ListGameServers(ctx context.Context) ([]domain.GameServer, error) {
@@ -886,23 +907,28 @@ func (s *Store) GetTenantQuota(ctx context.Context, orgID string) (domain.Tenant
 	var quota domain.TenantQuota
 	err := s.db.WithContext(ctx).First(&quota, "organization_id = ?", orgID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.TenantQuota{
-			OrganizationID: orgID,
-			MaxServers:     10,
-			MaxCPUCores:    16.0,
-			MaxMemoryMB:    32768,
-			MaxStorageGB:   100,
-		}, nil
+		return quota, ErrNotFound
 	}
 	return quota, err
 }
 
 func (s *Store) UpdateTenantQuota(ctx context.Context, quota domain.TenantQuota) error {
-	return s.db.WithContext(ctx).Save(&quota).Error
+	return s.Transaction(ctx, func(tx *Store) error {
+		if err := tx.lockWorkspace(ctx, quota.OrganizationID); err != nil {
+			return err
+		}
+		if err := tx.checkAllocation(ctx, quota, nil); err != nil {
+			return err
+		}
+		return tx.db.WithContext(ctx).Save(&quota).Error
+	})
 }
 
 func (s *Store) GetTenantUsage(ctx context.Context, orgID string) (domain.TenantUsage, error) {
-	quota, _ := s.GetTenantQuota(ctx, orgID)
+	quota, err := s.GetTenantQuota(ctx, orgID)
+	if err != nil {
+		return domain.TenantUsage{}, err
+	}
 	var servers []domain.GameServer
 	if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&servers).Error; err != nil {
 		return domain.TenantUsage{Quota: quota}, err
@@ -915,9 +941,9 @@ func (s *Store) GetTenantUsage(ctx context.Context, orgID string) (domain.Tenant
 	for _, srv := range servers {
 		if srv.Status.ActualState == domain.ActualRunning {
 			running++
-			usedCpu += srv.Spec.Resources.CPULimitCores
-			usedMemory += srv.Spec.Resources.MemoryLimitMB
 		}
+		usedCpu += srv.Spec.Resources.CPULimitCores
+		usedMemory += srv.Spec.Resources.MemoryLimitMB
 	}
 
 	return domain.TenantUsage{

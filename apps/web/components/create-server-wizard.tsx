@@ -460,7 +460,7 @@ export function CreateServerWizard() {
   const [providerConfigPayload, setProviderConfigPayload] = useState<ProviderConfigPayload>({});
   const [hostPortMode, setHostPortMode] = useState<"auto" | "manual">("auto");
   const [hostPort, setHostPort] = useState(terrariaInternalPort);
-  const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 0, memoryLimitMb: 0 });
+  const [resourceLimits, setResourceLimits] = useState<ResourceLimits>({ cpuLimitCores: 2, memoryLimitMb: 4096 });
   const [version, setVersion] = useState("");
   const [configValidationErrors, setConfigValidationErrors] = useState<ConfigValidationErrors>({});
   const [saveAsPreset, setSaveAsPreset] = useState(false);
@@ -680,7 +680,7 @@ export function CreateServerWizard() {
       setConfig(terrariaConfigFromPayload({ ...presetPayload, password: "" }));
     }
     setProviderConfigPayload(presetPayload);
-    setResourceLimits({ cpuLimitCores: preset.cpuLimitCores ?? 0, memoryLimitMb: preset.memoryLimitMb ?? 0 });
+    setResourceLimits({ cpuLimitCores: preset.cpuLimitCores ?? 2, memoryLimitMb: preset.memoryLimitMb ?? 4096 });
     setVersion(preset.version ?? "");
     setSelectedWorldId("");
     setAppliedWorldConfigId("");

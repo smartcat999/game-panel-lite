@@ -94,6 +94,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
+	before := server
 	var payload struct {
 		Config    json.RawMessage       `json:"config"`
 		HostPort  *int                  `json:"hostPort,omitempty"`
@@ -150,8 +151,13 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		server.Spec.Generation = 1
 	}
 	server.UpdatedAt = time.Now()
-	if err := h.store.SaveGameServer(r.Context(), &server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if server.OrganizationID != "" {
+		err = h.store.SaveAllocatedGameServer(r.Context(), allocationActor(r), before, server)
+	} else {
+		err = h.store.SaveGameServer(r.Context(), &server)
+	}
+	if err != nil {
+		writeAllocationError(w, err)
 		return
 	}
 	h.recordActivity(r.Context(), server.ID, "server.config.updated", fmt.Sprintf("Updated config for %s", server.Name), activityServerPayload(server))
@@ -241,6 +247,12 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	persisted := false
+	defer func() {
+		if !persisted {
+			_ = os.Remove(dataDir)
+		}
+	}()
 	hostPort, err := h.resolveHostPort(r.Context(), payload.HostPort, "")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -284,10 +296,16 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	if err := h.store.CreateGameServer(r.Context(), &server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if server.OrganizationID != "" {
+		err = h.store.CreateAllocatedGameServer(r.Context(), allocationActor(r), &server)
+	} else {
+		err = h.store.CreateGameServer(r.Context(), &server)
+	}
+	if err != nil {
+		writeAllocationError(w, err)
 		return
 	}
+	persisted = true
 	h.recordActivity(r.Context(), server.ID, "server.created", fmt.Sprintf("Created server %s", server.Name), activityServerPayload(server))
 	writeJSON(w, http.StatusCreated, server)
 }

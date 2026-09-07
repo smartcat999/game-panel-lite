@@ -435,7 +435,7 @@ paths:
                   $ref: "#/components/schemas/GameServer"
     post:
       summary: Create server
-      description: Creates a server resource with desired state running. Customers must select a workspace with write membership; when exactly one workspace is available, it is selected automatically. Runtime reconciliation is handled asynchronously by the server controller.
+      description: Creates a server resource with desired state running. Customers must select a workspace with write membership; when exactly one workspace is available, it is selected automatically. Workspace instances require positive CPU and memory limits; creation atomically reserves instance count, CPU, and memory against the persisted workspace quota. Stopped instances retain reservations. Runtime reconciliation is handled asynchronously by the server controller.
       requestBody:
         required: true
         content:
@@ -449,8 +449,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "400":
+          description: Invalid resources or unlimited workspace allocation
+        "403":
+          description: Workspace write permission required
+        "404":
+          description: Workspace, persisted quota, or server not found
         "409":
-          description: A game update or runtime image task is active
+          description: Workspace quota exceeded, configuration changed concurrently, or a maintenance task is active
   /api/servers/{id}:
     get:
       summary: Get server
@@ -476,7 +482,7 @@ paths:
   /api/servers/{id}/config:
     put:
       summary: Update desired server configuration
-      description: Updates spec.config/spec.network/spec.resources, bumps spec.generation, and lets the controller apply changes asynchronously.
+      description: Updates spec.config/spec.network/spec.resources, bumps spec.generation, and lets the controller apply changes asynchronously. Workspace resource changes reserve quota atomically and reject stale configuration snapshots. CPU and memory must have positive limits.
       requestBody:
         required: true
         content:
@@ -490,8 +496,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GameServer"
+        "400":
+          description: Invalid resources or unlimited workspace allocation
+        "403":
+          description: Workspace write permission required
+        "404":
+          description: Workspace, persisted quota, or server not found
         "409":
-          description: A game update or runtime image task is active
+          description: Workspace quota exceeded, configuration changed concurrently, or a maintenance task is active
   /api/servers/{id}/start:
     post:
       summary: Request server start
@@ -1936,18 +1948,18 @@ components:
                 type: number
     ResourceLimits:
       type: object
-      description: Optional maximum resources for one game server container. Zero means unlimited.
+      description: Maximum resources for one game server container. Workspace instances require positive CPU and memory limits. Zero means unlimited only for self-hosted instances without a workspace.
       properties:
         cpuLimitCores:
           type: number
           minimum: 0
           maximum: 64
-          description: Maximum CPU cores. Zero means Docker default/unlimited.
+          description: Maximum CPU cores. Zero means Docker default/unlimited only without a workspace.
         memoryLimitMb:
           type: integer
           minimum: 0
           maximum: 262144
-          description: Maximum memory in MB. Zero means Docker default/unlimited.
+          description: Maximum memory in MB. Zero means Docker default/unlimited only without a workspace.
     LogSnapshot:
       type: object
       required: [lines]

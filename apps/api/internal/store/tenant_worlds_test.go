@@ -77,7 +77,7 @@ func TestSQLiteBackfillsWorldOwnerWithoutReassigningExistingOwnership(t *testing
 		t.Fatalf("backfill: %+v %v", got, err)
 	}
 	server.OrganizationID = "new-org"
-	if err := db.SaveGameServer(ctx, &server); err != nil {
+	if err := db.db.WithContext(ctx).Save(&server).Error; err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
