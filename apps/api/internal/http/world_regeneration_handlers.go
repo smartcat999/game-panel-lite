@@ -150,13 +150,15 @@ func (h *Handler) runWorldRegeneration(parent context.Context, server domain.Gam
 	}
 
 	h.updateWorldRegenerationJob(&job, domain.WorldRegenerationJobRunning, domain.WorldRegenerationStageStopping, 8, "")
-	if _, err := serverctrl.NewService(h.store).RequestStop(ctx, server.ID); err != nil {
-		h.failWorldRegenerationJob(&job, err)
-		return
-	}
-	if err := h.waitForServerState(ctx, server.ID, domain.ActualStopped, 2*time.Minute); err != nil {
-		h.failWorldRegenerationAndRestore(server, &job, nil, err)
-		return
+	if !isGameServerStableStopped(server) {
+		if _, err := serverctrl.NewService(h.store).RequestStop(ctx, server.ID); err != nil {
+			h.failWorldRegenerationJob(&job, err)
+			return
+		}
+		if err := h.waitForServerState(ctx, server.ID, domain.ActualStopped, 2*time.Minute); err != nil {
+			h.failWorldRegenerationAndRestore(server, &job, nil, err)
+			return
+		}
 	}
 
 	h.updateWorldRegenerationJob(&job, domain.WorldRegenerationJobRunning, domain.WorldRegenerationStageBackingUp, 24, "")

@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
-	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
@@ -109,29 +107,38 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := modsvc.NewService(root, modruntime.NewService(mustRegistry(t, terraria.NewTModLoaderProvider()), nil).StoredFileName).Upload("unassigned", domain.ProviderTerrariaTModLoader, "quality.tmod", strings.NewReader("quality-mod")); err != nil {
+	ctx := context.Background()
+	org := domain.Organization{ID: "workspace", Slug: "workspace"}
+	if err := db.CreateOrganization(ctx, &org, "owner"); err != nil {
 		t.Fatal(err)
 	}
+
 	libraryMod := domain.ModFile{
-		ID:         "mod-quality",
-		InstanceID: "unassigned",
-		FileName:   "quality.tmod",
-		Title:      "Quality",
-		ModName:    "Quality",
-		SizeBytes:  int64(len("quality-mod")),
-		Enabled:    true,
+		ID:             "mod-quality",
+		InstanceID:     "unassigned",
+		OrganizationID: org.ID,
+		ProviderKey:    domain.ProviderTerrariaTModLoader,
+		Source:         "upload",
+		FileName:       "quality.tmod",
+		Title:          "Quality",
+		ModName:        "Quality",
+		SizeBytes:      int64(len("quality-mod")),
+		ContentHash:    strings.Repeat("a", 64),
+		Enabled:        true,
 	}
-	if err := db.CreateMod(context.Background(), &libraryMod); err != nil {
+	if err := db.CreateMod(ctx, &libraryMod); err != nil {
 		t.Fatal(err)
 	}
 	registry := mustRegistry(t, terraria.NewTModLoaderProvider(runtimecatalog.Catalog{}))
 	builder := NewProviderWorkloadBuilder(registry).WithModPlanner(NewRuntimeModPlanner(root, db, registry))
 	dataDir := filepath.Join(root, "instances", "srv-mods")
 	server := domain.GameServer{
-		ID:          "srv-mods",
-		Name:        "Modded",
-		GameKey:     domain.GameTerraria,
-		ProviderKey: domain.ProviderTerrariaTModLoader,
+		ID:             "srv-mods",
+		OrganizationID: org.ID,
+		NodeID:         "node-1",
+		Name:           "Modded",
+		GameKey:        domain.GameTerraria,
+		ProviderKey:    domain.ProviderTerrariaTModLoader,
 		Spec: domain.ServerSpec{
 			Generation:   1,
 			DesiredState: domain.DesiredRunning,
@@ -154,33 +161,22 @@ func TestProviderWorkloadBuilderPlansDesiredModsFromServerSpec(t *testing.T) {
 		},
 	}
 
-	if err := db.CreateGameServer(context.Background(), &server); err != nil {
+	if err := db.CreateGameServer(ctx, &server); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := builder.BuildWorkloadSpec(context.Background(), server); err != nil {
+	spec, err := builder.BuildWorkloadSpec(ctx, server)
+	if err != nil {
 		t.Fatalf("build workload spec: %v", err)
 	}
-	copied, err := os.ReadFile(filepath.Join(root, "mods", "srv-mods", "quality.tmod"))
-	if err != nil {
-		t.Fatal(err)
+	if len(spec.Options.Artifacts) != 1 || spec.Options.Artifacts[0].ID != "mod-quality" {
+		t.Fatalf("expected planned mod artifact, got %+v", spec.Options.Artifacts)
 	}
-	if string(copied) != "quality-mod" {
-		t.Fatalf("expected copied mod payload, got %q", string(copied))
+	if !strings.Contains(spec.Options.Files["Mods/enabled.json"], "Quality") {
+		t.Fatalf("expected enabled.json in workload options, got %+v", spec.Options.Files)
 	}
-	runtimeMod, err := os.ReadFile(filepath.Join(dataDir, "Mods", "quality.tmod"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(runtimeMod) != "quality-mod" {
-		t.Fatalf("expected runtime mod payload, got %q", string(runtimeMod))
-	}
-	enabled, err := os.ReadFile(filepath.Join(dataDir, "Mods", "enabled.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(enabled), "Quality") {
-		t.Fatalf("expected enabled.json to include mod identity, got %s", string(enabled))
+	if _, err := os.Stat(dataDir); !os.IsNotExist(err) {
+		t.Fatalf("build workload spec must never touch host data dir: %s", dataDir)
 	}
 }
 

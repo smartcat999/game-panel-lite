@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
@@ -31,7 +30,7 @@ func (b *ProviderWorkloadBuilder) WithModPlanner(planner ModPlanner) *ProviderWo
 func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server domain.GameServer) (domain.WorkloadSpec, error) {
 	// Stop/delete operate on observed runtime identity and must remain available
 	// when an uploaded source or provider configuration is no longer usable.
-	if !server.IsLocal() && (server.Spec.DesiredState == domain.DesiredStopped || server.Spec.DesiredState == domain.DesiredDeleted) {
+	if server.Spec.DesiredState == domain.DesiredStopped || server.Spec.DesiredState == domain.DesiredDeleted {
 		return domain.WorkloadSpec{ServerID: server.ID, Name: server.Name}, nil
 	}
 	if b.providers == nil {
@@ -49,18 +48,7 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 		version = recommendedProviderVersion(gameProvider.Versions())
 	}
 	remoteMods := workload.Options{}
-	if server.IsLocal() {
-		if server.Spec.Runtime.DataDir != "" {
-			if err := os.MkdirAll(server.Spec.Runtime.DataDir, 0o755); err != nil {
-				return domain.WorkloadSpec{}, err
-			}
-		}
-		if b.mods != nil {
-			if err := b.mods.PlanMods(ctx, server); err != nil {
-				return domain.WorkloadSpec{}, err
-			}
-		}
-	} else if planner, ok := b.mods.(RemoteModPlanner); ok {
+	if planner, ok := b.mods.(RemoteModPlanner); ok {
 		var err error
 		remoteMods, err = planner.PlanRemoteMods(ctx, server)
 		if err != nil {

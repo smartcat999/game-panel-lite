@@ -109,7 +109,7 @@ func (c *Controller) RunOnce(ctx context.Context) {
 			if listenPort <= 0 {
 				listenPort = item.Spec.Network.Port
 			}
-			if item.Status.Phase == domain.PhaseRunning && !item.IsLocal() && listenPort > 0 {
+			if item.Status.Phase == domain.PhaseRunning && listenPort > 0 {
 				_ = c.gateway.RegisterForward(gateway.ForwardRule{
 					ID:         item.ID,
 					NodeID:     item.NodeID,
@@ -121,10 +121,6 @@ func (c *Controller) RunOnce(ctx context.Context) {
 			}
 		}
 
-		isRemote := !item.IsLocal()
-		if !isRemote && !c.reconciler.NeedsReconcile(item) {
-			continue
-		}
 		c.reconcileOne(ctx, item)
 	}
 }
@@ -134,37 +130,9 @@ func (c *Controller) reconcileOne(ctx context.Context, item domain.GameServer) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Remote workloads converge through durable desired assignments and worker
-	// observations. Lifecycle is never dispatched as an imperative node task.
-	if !item.IsLocal() {
-		c.reconcileRemote(ctx, item)
-		return
-	}
-
-	updated, lifecycleEvents, err := c.reconciler.ReconcileWithEvents(ctx, item)
-	if err != nil {
-		c.logger.Warn("server reconciliation failed", "server", item.ID, "error", err)
-		return
-	}
-	if updated.Status.Phase == domain.PhaseDeleted {
-		if deletingStore, ok := c.store.(deletingControllerStore); ok {
-			if err := cleanupOwnedResources(ctx, c.store, updated, c.dataRoot); err != nil {
-				c.logger.Warn("failed to clean owned server resources", "server", item.ID, "error", err)
-				return
-			}
-			if err := deletingStore.DeleteGameServer(ctx, updated.ID); err != nil {
-				c.logger.Warn("failed to delete reconciled server resource", "server", item.ID, "error", err)
-				return
-			}
-			c.recordReconcileEvents(ctx, item, updated, lifecycleEvents)
-			return
-		}
-	}
-	if err := c.store.SaveReconciledGameServer(ctx, item, updated); err != nil {
-		c.logger.Warn("failed to save reconciled server", "server", item.ID, "error", err)
-		return
-	}
-	c.recordReconcileEvents(ctx, item, updated, lifecycleEvents)
+	// All workloads converge declaratively through durable desired assignments
+	// and worker observations (kube-apiserver <-> kubelet architecture).
+	c.reconcileRemote(ctx, item)
 }
 
 func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer) {
@@ -174,6 +142,42 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	}
 	before := item
 	now := time.Now().UTC()
+
+	if item.NodeID == "" {
+		if item.Spec.DesiredState == domain.DesiredDeleted {
+			if deletingStore, deleteOK := c.store.(deletingControllerStore); deleteOK {
+				if err := cleanupOwnedResources(ctx, c.store, item, c.dataRoot); err != nil {
+					c.logger.Warn("failed to clean unassigned server resources", "server", item.ID, "error", err)
+					return
+				}
+				_ = assignments.DeleteWorkloadAssignment(ctx, item.ID)
+				if err := deletingStore.DeleteGameServer(ctx, item.ID); err != nil {
+					c.logger.Warn("failed to delete unassigned server record", "server", item.ID, "error", err)
+				}
+				c.recordReconcileEvents(ctx, before, item, nil)
+				return
+			}
+		}
+		if item.Spec.DesiredState == domain.DesiredStopped {
+			if item.Status.Phase != domain.PhaseStopped || item.Status.ActualState != domain.ActualStopped {
+				item.Status.Phase = domain.PhaseStopped
+				item.Status.ActualState = domain.ActualStopped
+				item.Status.ObservedGeneration = item.Spec.Generation
+				item.Status.AppliedGeneration = item.Spec.Generation
+				item.Status.LastReconcileAt = now
+				_ = c.store.SaveReconciledGameServer(ctx, before, item)
+			}
+			return
+		}
+		if item.Status.Phase != domain.PhasePending {
+			item.Status.Phase = domain.PhasePending
+			item.Status.ActualState = domain.ActualUnknown
+			item.Status.LastReconcileAt = now
+			_ = c.store.SaveReconciledGameServer(ctx, before, item)
+		}
+		return
+	}
+
 	current, currentErr := assignments.GetWorkloadAssignmentByServer(ctx, item.ID)
 	assignmentUID := current.UID
 	assignmentID := current.ID

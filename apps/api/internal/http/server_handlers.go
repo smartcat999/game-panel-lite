@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -154,14 +153,6 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	server.UpdatedAt = time.Now()
 
-	// If only resources changed and local container is running, attempt dynamic in-place update (e.g. docker update)
-	if resourcesOnly && server.IsLocal() && server.Status.Phase == domain.PhaseRunning && server.Status.RuntimeID != "" && h.runtime != nil {
-		if err := h.runtime.UpdateWorkloadResources(r.Context(), server.Status.RuntimeID, server.Spec.Resources); err == nil {
-			server.Status.AppliedGeneration = server.Spec.Generation
-			server.Status.ObservedGeneration = server.Spec.Generation
-		}
-	}
-
 	if server.OrganizationID != "" {
 		err = h.store.SaveAllocatedGameServer(r.Context(), allocationActor(r), before, server)
 	} else {
@@ -260,16 +251,6 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	id := uuid.NewString()
 	dataDir := filepath.Join(h.cfg.DataDir, "instances", id)
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	persisted := false
-	defer func() {
-		if !persisted {
-			_ = os.Remove(dataDir)
-		}
-	}()
 	hostPort, err := h.resolveHostPort(r.Context(), payload.HostPort, "")
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -322,7 +303,6 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeAllocationError(w, err)
 		return
 	}
-	persisted = true
 	h.recordActivity(r.Context(), server.ID, "server.created", fmt.Sprintf("Created server %s", server.Name), activityServerPayload(server))
 	writeJSON(w, http.StatusCreated, server)
 }
@@ -443,31 +423,22 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server must be running to send commands")
 		return
 	}
-	if server.NodeID != "" && server.NodeID != "node-local" {
-		task := domain.NodeTask{
-			ID:        uuid.NewString(),
-			NodeID:    server.NodeID,
-			ServerID:  server.ID,
-			Action:    domain.NodeTaskAction("exec_command"),
-			Payload:   command,
-			Status:    domain.TaskPending,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		}
-		if err := h.store.CreateNodeTask(r.Context(), &task); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to dispatch command task: "+err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
-		return
+	nodeID := server.NodeID
+	if nodeID == "" {
+		nodeID = "node-local"
 	}
-	server, err = h.requireResourceRuntimeAttached(r.Context(), server)
-	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
-		return
+	task := domain.NodeTask{
+		ID:        uuid.NewString(),
+		NodeID:    nodeID,
+		ServerID:  server.ID,
+		Action:    domain.NodeTaskAction("exec_command"),
+		Payload:   command,
+		Status:    domain.TaskPending,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
-	if err := h.runtime.SendCommandWorkload(r.Context(), server.Status.RuntimeID, command); err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+	if err := h.store.CreateNodeTask(r.Context(), &task); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to dispatch command task: "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})

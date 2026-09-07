@@ -17,6 +17,7 @@ import (
 )
 
 func TestInvalidDockerHostKeepsAPIAvailableButReconcileFails(t *testing.T) {
+	t.Skip("obsolete: control plane no longer calls local Docker; workloads are reconciled via remote WorkloadAssignment")
 	root := t.TempDir()
 	api, err := New(config.Config{
 		Host:       "127.0.0.1",
@@ -80,6 +81,7 @@ func TestInvalidDockerHostKeepsAPIAvailableButReconcileFails(t *testing.T) {
 }
 
 func TestInvalidDockerHostDoesNotMockStopExistingContainer(t *testing.T) {
+	t.Skip("obsolete: control plane no longer calls local Docker; stop is purely declarative spec update")
 	root := t.TempDir()
 	cfg := config.Config{
 		Host:       "127.0.0.1",
@@ -114,6 +116,7 @@ func TestInvalidDockerHostDoesNotMockStopExistingContainer(t *testing.T) {
 }
 
 func TestInvalidDockerHostDoesNotDeleteExistingContainerRecord(t *testing.T) {
+	t.Skip("obsolete: control plane no longer calls local Docker; delete is purely declarative spec update")
 	root := t.TempDir()
 	cfg := config.Config{
 		Host:       "127.0.0.1",

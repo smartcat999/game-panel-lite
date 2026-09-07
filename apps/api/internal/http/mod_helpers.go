@@ -182,9 +182,6 @@ func (h *Handler) ensureModDependency(ctx context.Context, server domain.GameSer
 		if err != nil {
 			return domain.ModFile{}, false, err
 		}
-		if err := h.materializeModForRuntime(ctx, assigned, server); err != nil {
-			return domain.ModFile{}, false, err
-		}
 		return assigned, created, nil
 	}
 	recommended, ok := modcatalog.RecommendedModByProviderAndModName(server.ProviderKey, dependencyName)
@@ -365,33 +362,6 @@ func hydrateModGameMetadata(item *domain.ModFile) {
 	}
 }
 
-func (h *Handler) materializeModForRuntime(ctx context.Context, item domain.ModFile, server domain.GameServer) error {
-	if item.Source == "workshop" {
-		return nil
-	}
-	source, err := modsvc.NewService(h.cfg.DataDir, h.modRuntime.StoredFileName).Open(item)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-	dataDir, err := serverDataDir(server)
-	if err != nil {
-		return err
-	}
-	return h.modRuntime.Install(ctx, server.ProviderKey, item.FileName, dataDir, source)
-}
-
-func (h *Handler) removeRuntimeMod(ctx context.Context, item domain.ModFile, server domain.GameServer) error {
-	dataDir, err := serverDataDir(server)
-	if err != nil {
-		return err
-	}
-	return h.modRuntime.Remove(ctx, server.ProviderKey, item.FileName, dataDir)
-}
-
-func (h *Handler) syncRuntimeEnabledMods(ctx context.Context, server domain.GameServer) error {
-	return h.modRuntime.Sync(ctx, server)
-}
 
 func isTModPackage(fileName string) bool {
 	return strings.EqualFold(filepath.Ext(fileName), ".tmod")
@@ -435,9 +405,6 @@ func (h *Handler) markModDesired(ctx context.Context, server *domain.GameServer,
 }
 
 func (h *Handler) unmarkModDesired(ctx context.Context, server *domain.GameServer, modID string) error {
-	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		return nil
-	}
 	next := make([]string, 0, len(server.Spec.ModIDs))
 	for _, id := range server.Spec.ModIDs {
 		if id != modID {
@@ -459,9 +426,6 @@ func (h *Handler) unmarkModDesired(ctx context.Context, server *domain.GameServe
 }
 
 func (h *Handler) markModsDesired(ctx context.Context, server *domain.GameServer, modIDs []string) error {
-	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		return nil
-	}
 	next := uniqueNonEmptyStrings(append(server.Spec.ModIDs, modIDs...))
 	server.Spec.ModIDs = next
 	if server.ProviderKey == domain.ProviderDST {
@@ -634,23 +598,17 @@ func (h *Handler) visibleServerMods(ctx context.Context, server domain.GameServe
 	if err != nil {
 		return nil, err
 	}
-	runtimeEnabled, err := readRuntimeEnabledMods(server)
-	if err != nil {
-		h.logger.Warn("failed to read runtime enabled mods", "server", server.ID, "error", err)
-		return visible, nil
+	desiredSet := make(map[string]struct{}, len(server.Spec.ModIDs))
+	for _, id := range server.Spec.ModIDs {
+		desiredSet[id] = struct{}{}
 	}
 	for index := range visible {
 		visible[index].GameKey = server.GameKey
 		visible[index].ProviderKey = server.ProviderKey
 		present := runtimeModPresent(server, visible[index])
 		visible[index].RuntimePresent = &present
-		if runtimeEnabled == nil {
-			continue
-		}
-		enabled := false
-		if _, ok := runtimeEnabled[modcatalog.Identity(visible[index])]; ok {
-			enabled = true
-		}
+		_, isDesired := desiredSet[visible[index].ID]
+		enabled := visible[index].Enabled || isDesired
 		visible[index].RuntimeEnabled = &enabled
 	}
 	return visible, nil
@@ -762,53 +720,14 @@ func (h *Handler) resolvePendingDesiredMods(ctx context.Context, server domain.G
 }
 
 func runtimeModPresent(server domain.GameServer, item domain.ModFile) bool {
-	dataDir := strings.TrimSpace(server.Spec.Runtime.DataDir)
-	if server.ProviderKey != domain.ProviderTerrariaTModLoader || dataDir == "" {
-		return true
+	if cond, ok := workload.FindCondition(server.Status.Conditions, workload.ConditionArtifactsReady); ok {
+		return cond.Status == workload.ConditionStatusTrue
 	}
-	if !server.IsLocal() {
-		if cond, ok := workload.FindCondition(server.Status.Conditions, workload.ConditionArtifactsReady); ok {
-			return cond.Status == workload.ConditionStatusTrue
-		}
-		return server.Status.ActualState == domain.ActualRunning && server.Status.AppliedGeneration >= server.Spec.Generation
-	}
-	candidates := []string{filepath.Join(dataDir, "Mods", item.FileName)}
-	if identity := modcatalog.Identity(item); identity != "" {
-		candidates = append(candidates, filepath.Join(dataDir, "Mods", identity+".tmod"))
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return true
-		}
-	}
-	return false
+	return server.Status.ActualState == domain.ActualRunning && server.Status.AppliedGeneration >= server.Spec.Generation
 }
 
 func readRuntimeEnabledMods(server domain.GameServer) (map[string]struct{}, error) {
-	dataDir := strings.TrimSpace(server.Spec.Runtime.DataDir)
-	if server.ProviderKey != domain.ProviderTerrariaTModLoader || dataDir == "" {
-		return nil, nil
-	}
-	path := filepath.Join(dataDir, "Mods", "enabled.json")
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var values []string
-	if err := json.Unmarshal(content, &values); err != nil {
-		return nil, err
-	}
-	result := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			result[value] = struct{}{}
-		}
-	}
-	return result, nil
+	return nil, nil
 }
 
 func (h *Handler) migrateLegacyWorkshopInstall(ctx context.Context, item domain.ModFile, path string) ([]domain.ModFile, error) {

@@ -89,17 +89,7 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if server.ProviderKey == domain.ProviderTerrariaTModLoader {
-		if err := h.materializeModForRuntime(r.Context(), item, server); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
 	if err := h.markModDesired(r.Context(), &server, item.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -108,11 +98,8 @@ func (h *Handler) uploadMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if len(dependencies) > 0 {
-		if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+	for _, dep := range dependencies {
+		_ = h.markModDesired(r.Context(), &server, dep.ID)
 	}
 	h.recordActivity(r.Context(), server.ID, "mod.uploaded", fmt.Sprintf("Uploaded mod %s to %s", item.FileName, server.Name), activityModPayload(item, &server))
 	status := http.StatusOK
@@ -180,10 +167,6 @@ func (h *Handler) importWorkshopMods(w http.ResponseWriter, r *http.Request) {
 	}
 	items = append(items, dependencies...)
 	if err := h.markModsDesired(r.Context(), &server, modIDs(items)); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -373,10 +356,6 @@ func (h *Handler) updateMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
 	h.recordActivity(r.Context(), server.ID, "mod.updated", fmt.Sprintf("Updated mod %s", item.FileName), activityModPayload(item, &server))
 	writeJSON(w, http.StatusOK, item)
 }
@@ -422,10 +401,6 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if item.Source != "workshop" {
-		if err := h.removeRuntimeMod(r.Context(), item, server); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
 		if err := h.removeCachedMod(item); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -436,10 +411,6 @@ func (h *Handler) deleteMod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.unmarkModDesired(r.Context(), &server, item.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := h.syncRuntimeEnabledMods(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -697,24 +668,17 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
 		dependencies, err := h.ensureModDependencies(r.Context(), targetServer, []domain.ModFile{assigned})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if len(dependencies) > 0 {
-			if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
 		if err := h.markModDesired(r.Context(), &targetServer, assigned.ID); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		for _, dep := range dependencies {
+			_ = h.markModDesired(r.Context(), &targetServer, dep.ID)
 		}
 		if !created {
 			h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name), activityModPayload(assigned, &targetServer))
@@ -735,17 +699,7 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if targetServer.ProviderKey == domain.ProviderTerrariaTModLoader {
-		if err := h.materializeModForRuntime(r.Context(), assigned, targetServer); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
 	if err := h.markModDesired(r.Context(), &targetServer, assigned.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -754,11 +708,8 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if len(dependencies) > 0 {
-		if err := h.syncRuntimeEnabledMods(r.Context(), targetServer); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+	for _, dep := range dependencies {
+		_ = h.markModDesired(r.Context(), &targetServer, dep.ID)
 	}
 	if !created {
 		h.recordActivity(r.Context(), targetServer.ID, "mod.assigned", fmt.Sprintf("Updated assigned mod %s for %s", item.FileName, targetServer.Name), activityModPayload(assigned, &targetServer))

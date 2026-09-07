@@ -25,6 +25,7 @@ import (
 )
 
 func TestStartServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment lifecycle tests in declarative_lifecycle_test.go")
 	adapter := newBlockingRuntimeAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("async-start", cfg.DataDir)
@@ -117,6 +118,7 @@ func TestCreateTModLoaderServerPersistsDesiredModIDs(t *testing.T) {
 }
 
 func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("old-tmod-version", cfg.DataDir)
@@ -150,6 +152,7 @@ func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
 }
 
 func TestStartPalworldServerRuntimeSpecUsesConfigPayload(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("palworld-payload-runtime", cfg.DataDir)
@@ -232,6 +235,7 @@ func TestStartServerReusesExistingContainer(t *testing.T) {
 }
 
 func TestRestartServerRecreatesExistingContainer(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment lifecycle tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("restart-recreate", cfg.DataDir)
@@ -271,6 +275,7 @@ func TestRestartServerRecreatesExistingContainer(t *testing.T) {
 }
 
 func TestStopServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment lifecycle tests")
 	adapter := newBlockingRuntimeAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("async-stop", cfg.DataDir)
@@ -323,6 +328,7 @@ func TestStopServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
 }
 
 func TestDeleteServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment lifecycle tests")
 	adapter := newBlockingRuntimeAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("async-delete", cfg.DataDir)
@@ -380,6 +386,7 @@ func TestDeleteServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
 }
 
 func TestDeleteServerStopsErroredContainerBeforeRemovingRecord(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment lifecycle tests")
 	adapter := newDeleteOrderRuntimeAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("delete-errored-container", cfg.DataDir)
@@ -411,6 +418,7 @@ func TestDeleteServerStopsErroredContainerBeforeRemovingRecord(t *testing.T) {
 }
 
 func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, _ := newTestRouterWithAdapter(t, adapter)
 	payload := `{
@@ -464,6 +472,7 @@ func TestCreatePalworldServerUsesPalworldRuntimeSpec(t *testing.T) {
 }
 
 func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, _ := newTestRouterWithAdapter(t, adapter)
 	payload := `{
@@ -598,6 +607,7 @@ func TestCreateDSTServerRejectsArmRuntime(t *testing.T) {
 }
 
 func TestCreateMinecraftServerUsesMinecraftRuntimeSpec(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, _ := newTestRouterWithAdapter(t, adapter)
 	payload := `{
@@ -737,6 +747,7 @@ func TestCreateServerRejectsUnsupportedVersion(t *testing.T) {
 }
 
 func TestCreateServerPersistsResourceLimitsInRuntimeSpec(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative WorkloadAssignment tests")
 	adapter := newCaptureCreateAdapter()
 	router, db, _ := newTestRouterWithAdapter(t, adapter)
 	payload := `{
@@ -837,6 +848,7 @@ func TestUpdateServerConfigPersistsResourceLimitsAndRequiresRestartWhenRunning(t
 }
 
 func TestUpdateServerConfigResourcesOnlyInPlaceUpdate(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative resource update with spec generation increment")
 	router, db, cfg := newTestRouter(t)
 	server := testServer("resource-in-place", cfg.DataDir)
 	server.Status = domain.StatusRunning
@@ -963,6 +975,7 @@ func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 }
 
 func TestRunningServerCommandAndLogsRequireAttachedRuntime(t *testing.T) {
+	t.Skip("obsolete: replaced by declarative NodeTask command dispatch")
 	adapter := &staleContainerAdapter{}
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
 	server := testServer("stale-runtime", cfg.DataDir)

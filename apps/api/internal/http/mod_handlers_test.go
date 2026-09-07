@@ -59,12 +59,12 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	if mod.Title != "ExampleMod" || mod.ModVersion != "1.2.3" || mod.TModVersion != "2026.3.3.0" {
 		t.Fatalf("expected parsed tmod metadata, got %+v", mod)
 	}
-	runtimeMod, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "example.tmod"))
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(runtimeMod, modBytes) {
-		t.Fatalf("expected uploaded mod copied into runtime data dir")
+	if !slices.Contains(updatedServer.Spec.ModIDs, mod.ID) {
+		t.Fatalf("expected server Spec.ModIDs to contain uploaded mod %s, got %+v", mod.ID, updatedServer.Spec.ModIDs)
 	}
 
 	list := httptest.NewRecorder()
@@ -82,31 +82,18 @@ func TestTModLoaderModUploadListAndDeleteEndpoints(t *testing.T) {
 	if mods[0].RuntimeEnabled == nil || !*mods[0].RuntimeEnabled {
 		t.Fatalf("expected listed mod to be runtime enabled, got %+v", mods[0])
 	}
-	if err := os.WriteFile(filepath.Join(server.DataDir, "Mods", "enabled.json"), []byte("[]\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	relist := httptest.NewRecorder()
-	router.ServeHTTP(relist, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/tmod/mods", nil))
-	if relist.Code != stdhttp.StatusOK {
-		t.Fatalf("expected mod relist 200, got %d: %s", relist.Code, relist.Body.String())
-	}
-	if err := json.Unmarshal(relist.Body.Bytes(), &mods); err != nil {
-		t.Fatal(err)
-	}
-	if len(mods) != 1 || mods[0].RuntimeEnabled == nil || *mods[0].RuntimeEnabled {
-		t.Fatalf("expected configured mod to be runtime disabled after enabled.json changed, got %+v", mods)
-	}
 
 	remove := httptest.NewRecorder()
 	router.ServeHTTP(remove, httptest.NewRequest(stdhttp.MethodDelete, "/api/servers/tmod/mods/"+mod.ID, nil))
 	if remove.Code != stdhttp.StatusOK {
 		t.Fatalf("expected mod delete 200, got %d: %s", remove.Code, remove.Body.String())
 	}
-	if _, err := os.Stat(filepath.Join(cfg.DataDir, "mods", "tmod", "example.tmod")); !os.IsNotExist(err) {
-		t.Fatalf("expected mod file deleted, stat err=%v", err)
+	afterDelete, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(server.DataDir, "Mods", "example.tmod")); !os.IsNotExist(err) {
-		t.Fatalf("expected runtime mod file deleted, stat err=%v", err)
+	if slices.Contains(afterDelete.Spec.ModIDs, mod.ID) {
+		t.Fatalf("expected server Spec.ModIDs to remove mod %s after delete, got %+v", mod.ID, afterDelete.Spec.ModIDs)
 	}
 }
 
@@ -367,16 +354,12 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	if persisted.Enabled {
 		t.Fatalf("expected persisted disabled mod, got %+v", persisted)
 	}
-	runtimeEnabled, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "enabled.json"))
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var enabledMods []string
-	if err := json.Unmarshal(runtimeEnabled, &enabledMods); err != nil {
-		t.Fatalf("expected runtime enabled.json to be JSON list, got %q: %v", string(runtimeEnabled), err)
-	}
-	if !reflect.DeepEqual(enabledMods, []string{"other"}) {
-		t.Fatalf("expected runtime enabled.json to contain only the enabled tmod package names, got %v", enabledMods)
+	if slices.Contains(updatedServer.Spec.ModIDs, mod.ID) {
+		t.Fatalf("expected disabled mod removed from Spec.ModIDs, got %+v", updatedServer.Spec.ModIDs)
 	}
 }
 
@@ -482,13 +465,12 @@ func TestTModLoaderWorkshopImportWritesInstallFile(t *testing.T) {
 	if items[0].Source != "workshop" || items[0].WorkshopID == "" || items[0].FileName == "install.txt" {
 		t.Fatalf("expected workshop mod record, got %+v", items[0])
 	}
-	expected := "2563309347\n2824688072\n2908170107\n"
-	runtimeInstall, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "install.txt"))
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(runtimeInstall) != expected {
-		t.Fatalf("expected runtime install.txt %q, got %q", expected, string(runtimeInstall))
+	if len(updatedServer.Spec.ModIDs) != 3 {
+		t.Fatalf("expected 3 workshop mod IDs in Spec.ModIDs, got %+v", updatedServer.Spec.ModIDs)
 	}
 	list := httptest.NewRecorder()
 	router.ServeHTTP(list, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/tmod/mods", nil))
@@ -1044,12 +1026,12 @@ func TestAssignModRefreshesExistingServerModCache(t *testing.T) {
 	if string(cached) != "library-version" {
 		t.Fatalf("expected server mod cache to be refreshed from library, got %q", string(cached))
 	}
-	runtimeCached, err := os.ReadFile(runtimeModPath)
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(runtimeCached) != "library-version" {
-		t.Fatalf("expected runtime mod mount cache to be refreshed from library, got %q", string(runtimeCached))
+	if len(updatedServer.Spec.ModIDs) == 0 {
+		t.Fatalf("expected server Spec.ModIDs to contain assigned mod")
 	}
 }
 
@@ -1236,12 +1218,12 @@ func TestAssignModIsIdempotentForSameServerFile(t *testing.T) {
 	if len(mods) != 1 {
 		t.Fatalf("expected one server mod record after repeated assign, got %+v", mods)
 	}
-	runtimeMod, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "example.tmod"))
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(runtimeMod) != "mod-v1" {
-		t.Fatalf("expected assigned mod copied into runtime data dir, got %q", string(runtimeMod))
+	if !slices.Contains(updatedServer.Spec.ModIDs, secondAssigned.ID) {
+		t.Fatalf("expected server Spec.ModIDs to contain assigned mod ID %s, got %+v", secondAssigned.ID, updatedServer.Spec.ModIDs)
 	}
 }
 
@@ -1288,19 +1270,12 @@ func TestAssignModCopiesKnownDependencies(t *testing.T) {
 	if len(mods) != 2 {
 		t.Fatalf("expected assigned mod and dependency, got %+v", mods)
 	}
-	for _, fileName := range []string{"MagicStorage.tmod", "SerousCommonLib.tmod"} {
-		if _, err := os.Stat(filepath.Join(server.DataDir, "Mods", fileName)); err != nil {
-			t.Fatalf("expected runtime mod %s to be copied: %v", fileName, err)
-		}
-	}
-	enabled, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "enabled.json"))
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"MagicStorage", "SerousCommonLib"} {
-		if !strings.Contains(string(enabled), name) {
-			t.Fatalf("expected enabled.json to contain %s, got %s", name, enabled)
-		}
+	if len(updatedServer.Spec.ModIDs) != 2 {
+		t.Fatalf("expected 2 mod IDs (mod and dependency) in Spec.ModIDs, got %+v", updatedServer.Spec.ModIDs)
 	}
 }
 
@@ -1330,18 +1305,6 @@ func TestAssignWorkshopModRejectsArmRuntime(t *testing.T) {
 }
 
 func TestRuntimeModPresentUsesWorkshopInternalModName(t *testing.T) {
-	dataDir := t.TempDir()
-	modsDir := filepath.Join(dataDir, "Mods")
-	if err := os.MkdirAll(modsDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(modsDir, "miningcracks_take_on_luiafk.tmod"), []byte("mod"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	server := domain.GameServer{
-		ProviderKey: domain.ProviderTerrariaTModLoader,
-		Spec:        domain.ServerSpec{Runtime: domain.ServerRuntimeSpec{DataDir: dataDir}},
-	}
 	item := domain.ModFile{
 		ProviderKey: domain.ProviderTerrariaTModLoader,
 		Source:      "workshop",
@@ -1352,8 +1315,29 @@ func TestRuntimeModPresentUsesWorkshopInternalModName(t *testing.T) {
 	if identity := modcatalog.Identity(item); identity != "miningcracks_take_on_luiafk" {
 		t.Fatalf("expected workshop internal mod name, got %q", identity)
 	}
-	if !runtimeModPresent(server, item) {
-		t.Fatal("expected runtime mod file to be detected by its internal mod name")
+
+	serverNotReady := domain.GameServer{
+		ProviderKey: domain.ProviderTerrariaTModLoader,
+		Spec:        domain.ServerSpec{Generation: 2},
+		Status: domain.ServerRuntimeStatus{
+			AppliedGeneration: 1,
+			ActualState:       domain.ActualRunning,
+		},
+	}
+	if runtimeModPresent(serverNotReady, item) {
+		t.Fatal("expected runtime mod not present when generation not converged")
+	}
+
+	serverReady := domain.GameServer{
+		ProviderKey: domain.ProviderTerrariaTModLoader,
+		Spec:        domain.ServerSpec{Generation: 2},
+		Status: domain.ServerRuntimeStatus{
+			AppliedGeneration: 2,
+			ActualState:       domain.ActualRunning,
+		},
+	}
+	if !runtimeModPresent(serverReady, item) {
+		t.Fatal("expected runtime mod present when generation converged")
 	}
 }
 
@@ -1389,12 +1373,12 @@ func TestAssignGlobalWorkshopModWritesServerInstallFile(t *testing.T) {
 	if assigned.Source != "workshop" || assigned.WorkshopID != "2619954303" || assigned.FileName == "install.txt" {
 		t.Fatalf("expected assigned workshop record, got %+v", assigned)
 	}
-	runtimeInstall, err := os.ReadFile(filepath.Join(server.DataDir, "Mods", "install.txt"))
+	updatedServer, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(runtimeInstall) != "2619954303\n" {
-		t.Fatalf("expected runtime install.txt to contain workshop id, got %q", string(runtimeInstall))
+	if !slices.Contains(updatedServer.Spec.ModIDs, assigned.ID) {
+		t.Fatalf("expected server Spec.ModIDs to contain assigned workshop mod %s, got %+v", assigned.ID, updatedServer.Spec.ModIDs)
 	}
 }
 
