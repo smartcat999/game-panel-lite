@@ -279,7 +279,7 @@ func (s *Service) Events(ctx context.Context, serverID string, limit int, severi
 	var events []domain.ActivityEvent
 	var err error
 	if serverID != "" {
-		events, err = s.store.ListActivityByInstance(ctx, serverID, limit)
+		events, err = s.store.ListCurrentInstanceActivity(ctx, serverID, limit)
 	} else {
 		events, err = s.store.ListActivity(ctx, limit)
 	}

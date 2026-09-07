@@ -67,7 +67,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := migratePostgres(ctx, baselineDB, postgresMigrations()[:1]); err != nil {
 		t.Fatal(err)
 	}
-	if err := baselineDB.Exec("INSERT INTO game_servers (id, organization_id) VALUES ('legacy-world-owner','legacy-org'); INSERT INTO worlds (id, instance_id) VALUES ('legacy-world','legacy-world-owner')").Error; err != nil {
+	if err := baselineDB.Exec("INSERT INTO game_servers (id, organization_id) VALUES ('legacy-world-owner','legacy-org'); INSERT INTO worlds (id, instance_id) VALUES ('legacy-world','legacy-world-owner'); INSERT INTO activity_events (id, instance_id) VALUES ('legacy-event','legacy-world-owner')").Error; err != nil {
 		t.Fatal(err)
 	}
 	baselinePool, _ := baselineDB.DB()
@@ -94,6 +94,11 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	var legacyEvent domain.ActivityEvent
+	if err := db.db.First(&legacyEvent, "id = ?", "legacy-event").Error; err != nil || legacyEvent.OrganizationID != "legacy-org" {
+		t.Fatalf("activity ownership migration: %+v %v", legacyEvent, err)
+	}
+
 	legacyWorld, err := db.GetWorld(ctx, "legacy-world")
 	if err != nil || legacyWorld.OrganizationID != "legacy-org" {
 		t.Fatalf("world ownership migration: %+v %v", legacyWorld, err)
@@ -179,6 +184,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := db.GetGameServer(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("not found: %v", err)
 	}
+	testTenantActivity(t, db)
 	testCredentialRotation(t, db)
 	testConcurrentCredentialRotation(t, db)
 	testWorldOwnershipQueries(t, db)

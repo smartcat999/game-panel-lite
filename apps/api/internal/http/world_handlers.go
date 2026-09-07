@@ -95,7 +95,7 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item = h.hydrateWorldResource(r.Context(), item)
-	h.recordActivity(r.Context(), instanceID, "world.imported", fmt.Sprintf("Imported world %s", item.Name), activityWorldPayload(item, nil))
+	h.recordOwnedActivity(r.Context(), item.OrganizationID, instanceID, "world.imported", fmt.Sprintf("Imported world %s", item.Name), activityWorldPayload(item, nil))
 	status := http.StatusOK
 	if created {
 		status = http.StatusCreated
@@ -448,7 +448,7 @@ func (h *Handler) deleteWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	h.recordActivity(r.Context(), item.ActiveInstanceID, "world.deleted", fmt.Sprintf("Deleted world %s", item.Name), activityWorldPayload(item, nil))
+	h.recordOwnedActivity(r.Context(), item.OrganizationID, item.ActiveInstanceID, "world.deleted", fmt.Sprintf("Deleted world %s", item.Name), activityWorldPayload(item, nil))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 

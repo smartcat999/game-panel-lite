@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/buildinfo"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
@@ -102,7 +103,13 @@ func (h *Handler) observabilityPrometheusText(ctx context.Context) (string, erro
 }
 
 func (h *Handler) listActivity(w http.ResponseWriter, r *http.Request) {
-	events, err := h.store.ListActivity(r.Context(), 50)
+	list := h.store.ListActivity
+	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+		list = func(ctx context.Context, limit int) ([]domain.ActivityEvent, error) {
+			return h.store.ListUserActivity(ctx, account.ID, "", limit)
+		}
+	}
+	events, err := list(r.Context(), 50)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -307,6 +307,7 @@ func (c *Controller) recordReconcileEvents(ctx context.Context, before domain.Ga
 	events := reconciliationLifecycleActivityEvents(after, lifecycleEvents, time.Now(), operationID)
 	events = append(events, reconciliationActivityEvents(before, after, time.Now(), lifecycleEvents, operationID)...)
 	for _, event := range events {
+		event.OrganizationID = after.OrganizationID
 		if event.CreatedAt.IsZero() {
 			event.CreatedAt = time.Now().UTC()
 		}

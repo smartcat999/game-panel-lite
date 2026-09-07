@@ -337,12 +337,17 @@ func isGameServerBusyForModMutation(server domain.GameServer) bool {
 }
 
 func (h *Handler) recordActivity(ctx context.Context, instanceID, eventType, message string, payload ...map[string]any) {
+	h.recordOwnedActivity(ctx, "", instanceID, eventType, message, payload...)
+}
+
+func (h *Handler) recordOwnedActivity(ctx context.Context, organizationID, instanceID, eventType, message string, payload ...map[string]any) {
 	event := domain.ActivityEvent{
-		ID:         uuid.NewString(),
-		InstanceID: instanceID,
-		Type:       eventType,
-		Message:    message,
-		CreatedAt:  time.Now(),
+		OrganizationID: organizationID,
+		ID:             uuid.NewString(),
+		InstanceID:     instanceID,
+		Type:           eventType,
+		Message:        message,
+		CreatedAt:      time.Now(),
 	}
 	if len(payload) > 0 {
 		event.Payload = payload[0]

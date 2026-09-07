@@ -31,3 +31,7 @@ This verifies separation of DDL privileges, not tenant isolation. RLS, per-tenan
 Migration 002 adds persistent world organization ownership and copies the current source instance organization for historical attached worlds. Unassigned/unowned legacy records remain platform-only until explicitly adopted. New private unassigned uploads use `tenant-worlds/<organization>/unassigned`; existing assigned and legacy file paths are unchanged. SQLite initialization performs the same backfill for blank ownership, and never replaces an existing owner. Back up before upgrading; this does not implement old-binary rolling compatibility or a downgrade.
 
 Moving an instance between organizations still requires a separate ownership/file-transfer procedure; changing its organization field alone is not a supported tenant migration.
+
+## Activity ownership migration
+
+Migration 003 persists activity organization ownership, backfilling historical events whose source instance still exists. Unowned platform events and events whose source was already deleted require explicit adoption if they should become tenant-visible; no owner is guessed from a message or payload. New instance events capture the source organization, and private world-library import/delete events explicitly carry world ownership. SQLite startup similarly backfills only blank ownership. New owned history remains queryable through membership after instance deletion.

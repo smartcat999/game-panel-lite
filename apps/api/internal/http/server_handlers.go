@@ -634,7 +634,13 @@ func (h *Handler) serverRuntimeStats(ctx context.Context, server domain.GameServ
 }
 
 func (h *Handler) serverWatchEvents(ctx context.Context, server domain.GameServer) []serverWatchEvent {
-	events, err := h.store.ListActivityByInstance(ctx, server.ID, 50)
+	list := h.store.ListActivityByInstance
+	if account, ok := accountFromContext(ctx); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+		list = func(ctx context.Context, instanceID string, limit int) ([]domain.ActivityEvent, error) {
+			return h.store.ListUserActivity(ctx, account.ID, instanceID, limit)
+		}
+	}
+	events, err := list(ctx, server.ID, 50)
 	if err != nil {
 		h.logger.Warn("failed to list server watch events", "server", server.ID, "error", err)
 		return []serverWatchEvent{}

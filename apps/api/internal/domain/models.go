@@ -314,13 +314,14 @@ type ModPack struct {
 }
 
 type ActivityEvent struct {
-	ID          string         `json:"id" gorm:"primaryKey"`
-	InstanceID  string         `json:"instanceId,omitempty" gorm:"index"`
-	Type        string         `json:"type"`
-	Message     string         `json:"message"`
-	PayloadJSON string         `json:"-" gorm:"column:payload_json"`
-	Payload     map[string]any `json:"payload,omitempty" gorm:"-"`
-	CreatedAt   time.Time      `json:"createdAt"`
+	OrganizationID string         `json:"organizationId,omitempty" gorm:"index;not null;default:''"`
+	ID             string         `json:"id" gorm:"primaryKey"`
+	InstanceID     string         `json:"instanceId,omitempty" gorm:"index"`
+	Type           string         `json:"type"`
+	Message        string         `json:"message"`
+	PayloadJSON    string         `json:"-" gorm:"column:payload_json"`
+	Payload        map[string]any `json:"payload,omitempty" gorm:"-"`
+	CreatedAt      time.Time      `json:"createdAt"`
 }
 
 type GameUpdateJob struct {

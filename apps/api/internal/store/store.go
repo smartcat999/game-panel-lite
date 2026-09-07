@@ -62,6 +62,13 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
+	if err := db.Exec("UPDATE activity_events SET organization_id = (SELECT organization_id FROM game_servers WHERE game_servers.id = activity_events.instance_id) WHERE (organization_id = '' OR organization_id IS NULL) AND instance_id IN (SELECT id FROM game_servers WHERE organization_id IS NOT NULL)").Error; err != nil {
+		pool, _ := db.DB()
+		if pool != nil {
+			_ = pool.Close()
+		}
+		return nil, err
+	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 
@@ -654,6 +661,16 @@ func (s *Store) DeleteModPack(ctx context.Context, id string) error {
 }
 
 func (s *Store) CreateActivity(ctx context.Context, event *domain.ActivityEvent) error {
+	if event != nil && event.OrganizationID == "" && event.InstanceID != "" {
+		var source domain.GameServer
+		err := s.db.WithContext(ctx).Select("organization_id").Where("id = ?", event.InstanceID).Take(&source).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil {
+			event.OrganizationID = source.OrganizationID
+		}
+	}
 	if event != nil && len(event.Payload) > 0 {
 		payload, err := json.Marshal(event.Payload)
 		if err != nil {

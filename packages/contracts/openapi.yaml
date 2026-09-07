@@ -349,6 +349,7 @@ paths:
   /api/activity:
     get:
       summary: List recent activity events
+      description: Customer history is filtered by persisted workspace ownership before the result limit. Revoked members cannot read it; global and unowned legacy events remain platform-only.
       responses:
         "200":
           description: Recent activity events
@@ -1456,6 +1457,9 @@ components:
       type: object
       required: [id, type, message, createdAt]
       properties:
+        organizationId:
+          type: string
+          description: Persisted workspace ownership; absent for platform or unowned legacy events.
         id:
           type: string
         instanceId:
