@@ -37,20 +37,12 @@ func (s *Store) validatePublishedArtifacts(ctx context.Context, target domain.Ga
 // node. Desired-state changes alone do not prove that files are no longer used.
 // Caller holds the same workspace lock as artifact publication.
 func (s *Store) artifactReferences(ctx context.Context, orgID, modID string) error {
-	var assignments []domain.WorkloadAssignment
-	err := s.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).
-		Joins("JOIN game_servers ON game_servers.id = workload_assignments.server_id").
-		Where("game_servers.organization_id = ?", orgID).
-		Select("workload_assignments.spec").Find(&assignments).Error
-	if err != nil {
+	var count int64
+	if err := s.db.WithContext(ctx).Model(&artifactReference{}).Where("organization_id = ? AND artifact_id = ?", orgID, modID).Count(&count).Error; err != nil {
 		return err
 	}
-	for _, assignment := range assignments {
-		for _, ref := range assignment.Spec.Options.Artifacts {
-			if ref.ID == modID {
-				return ErrInvalidModLibrary
-			}
-		}
+	if count > 0 {
+		return ErrInvalidModLibrary
 	}
 	return nil
 }

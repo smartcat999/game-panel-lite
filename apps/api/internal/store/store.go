@@ -70,6 +70,13 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
+	if err := migrateSQLiteArtifactReferences(db); err != nil {
+		pool, _ := db.DB()
+		if pool != nil {
+			_ = pool.Close()
+		}
+		return nil, err
+	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 
@@ -1127,7 +1134,16 @@ func (s *Store) ListWorkloadAssignmentsByNode(ctx context.Context, nodeID string
 }
 
 func (s *Store) DeleteWorkloadAssignment(ctx context.Context, serverID string) error {
-	return s.db.WithContext(ctx).Where("server_id = ?", serverID).Delete(&domain.WorkloadAssignment{}).Error
+	return s.Transaction(ctx, func(tx *Store) error {
+		if err := tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).Where("server_id = ?", serverID).UpdateColumn("updated_at", gorm.Expr("updated_at")).Error; err != nil {
+			return err
+		}
+		ids := tx.db.Model(&domain.WorkloadAssignment{}).Select("id").Where("server_id = ?", serverID)
+		if err := tx.db.WithContext(ctx).Where("assignment_id IN (?)", ids).Delete(&artifactReference{}).Error; err != nil {
+			return err
+		}
+		return tx.db.WithContext(ctx).Where("server_id = ?", serverID).Delete(&domain.WorkloadAssignment{}).Error
+	})
 }
 
 func (s *Store) UpsertWorkloadObservation(ctx context.Context, observation *domain.WorkloadObservation) error {

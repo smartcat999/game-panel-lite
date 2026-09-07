@@ -70,6 +70,12 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := baselineDB.Exec("INSERT INTO game_servers (id, organization_id) VALUES ('legacy-world-owner','legacy-org'); INSERT INTO worlds (id, instance_id) VALUES ('legacy-world','legacy-world-owner'); INSERT INTO activity_events (id, instance_id) VALUES ('legacy-event','legacy-world-owner'); INSERT INTO mod_files (id, instance_id) VALUES ('legacy-mod-migration','unassigned'); INSERT INTO mod_packs (id) VALUES ('legacy-pack-migration')").Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := migratePostgres(ctx, baselineDB, postgresMigrations()[:5]); err != nil {
+		t.Fatal(err)
+	}
+	if err := baselineDB.Exec(`INSERT INTO mod_files(id,organization_id) VALUES ('upgrade-artifact','upgrade-owner'); INSERT INTO workload_assignments(id,uid,server_id,spec) VALUES ('upgrade-assignment','upgrade-uid','upgrade-server','{"options":{"artifacts":[{"id":"upgrade-artifact"},{"id":"upgrade-artifact"}]}}')`).Error; err != nil {
+		t.Fatal(err)
+	}
 	baselinePool, _ := baselineDB.DB()
 	baselinePool.Close()
 	var starters sync.WaitGroup
@@ -208,6 +214,17 @@ func TestPostgresIntegration(t *testing.T) {
 	testModInstallationIntent(t, db)
 	testNodeArtifactAuthorization(t, db)
 	testArtifactReferenceLifecycle(t, db)
+	var referenceCount int64
+	if err := db.db.Model(&artifactReference{}).Where("assignment_id = ? AND artifact_id = ? AND organization_id = ?", "upgrade-assignment", "upgrade-artifact", "upgrade-owner").Count(&referenceCount).Error; err != nil || referenceCount != 1 {
+		t.Fatalf("PostgreSQL artifact backfill: %d %v", referenceCount, err)
+	}
+	if err := db.DeleteWorkloadAssignment(context.Background(), "upgrade-server"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.artifactReferences(context.Background(), "upgrade-owner", "upgrade-artifact"); err != nil {
+		t.Fatal(err)
+	}
+
 	testPlayerObservations(t, db)
 	testServerLifecycleWrites(t, db)
 	testAssignmentPublication(t, db)

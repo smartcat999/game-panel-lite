@@ -70,6 +70,9 @@ func (s *Store) PublishWorkloadAssignment(ctx context.Context, before domain.Gam
 				return ErrReconciliationSuperseded
 			}
 		}
-		return tx.upsertWorkloadAssignment(ctx, assignment)
+		if err := tx.upsertWorkloadAssignment(ctx, assignment); err != nil {
+			return err
+		}
+		return tx.replaceArtifactReferences(ctx, before.OrganizationID, *assignment)
 	})
 }
