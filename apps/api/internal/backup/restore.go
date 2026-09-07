@@ -13,6 +13,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrCommit identifies failure of the caller's configuration/persistence step.
+var ErrCommit = errors.New("restored configuration commit failed")
+
+// RestoreHooks keeps originals available until the caller commits restored state.
+// The caller must leave its state unchanged when Commit returns an error.
+type RestoreHooks struct {
+	Validate func(Metadata) error
+	Commit   func() error
+}
+
 type restoredFile struct {
 	name, staged, original string
 	published              bool
@@ -21,7 +31,7 @@ type restoredFile struct {
 // restoreFiles preserves original files until all archive reads and CRC checks
 // finish. Callers must stop the game and serialize mutations. Rollback handles
 // returned errors, not process crashes or concurrent external filesystem writes.
-func restoreFiles(root *os.Root, files []*zip.File) error {
+func restoreFiles(root *os.Root, files []*zip.File, commit func() error) error {
 	names := map[string]bool{}
 	var entries []*zip.File
 	for _, file := range files {
@@ -120,6 +130,11 @@ func restoreFiles(root *os.Root, files []*zip.File) error {
 			return fail(err)
 		}
 		change.published = true
+	}
+	if commit != nil {
+		if err := commit(); err != nil {
+			return fail(fmt.Errorf("%w: %w", ErrCommit, err))
+		}
 	}
 	return nil
 }

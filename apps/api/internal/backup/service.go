@@ -143,12 +143,13 @@ func (s *Service) Path(instanceID string, fileName string) (string, error) {
 }
 
 func (s *Service) Restore(instanceID string, fileName string, targetDir string) error {
-	return s.RestoreChecked(instanceID, fileName, targetDir, nil)
+	return s.RestoreChecked(instanceID, fileName, targetDir, RestoreHooks{})
 }
 
 // RestoreChecked validates archive metadata before creating or modifying target
-// files. Extraction is staged and attempts rollback on publication failure.
-func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir string, check func(Metadata) error) error {
+// files. Extraction is staged and rolls back on publication or commit failure.
+// Commit must only return success after its own persistence succeeds.
+func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir string, hooks RestoreHooks) error {
 	backupPath, err := s.Path(instanceID, fileName)
 	if err != nil {
 		return err
@@ -162,8 +163,8 @@ func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir s
 	if err != nil {
 		return err
 	}
-	if check != nil {
-		if err := check(metadata); err != nil {
+	if hooks.Validate != nil {
+		if err := hooks.Validate(metadata); err != nil {
 			return err
 		}
 	}
@@ -179,5 +180,5 @@ func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir s
 		return err
 	}
 	defer root.Close()
-	return restoreFiles(root, reader.File)
+	return restoreFiles(root, reader.File, hooks.Commit)
 }

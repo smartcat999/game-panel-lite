@@ -50,7 +50,7 @@ func TestRestoreValidatesEntireArchiveBeforeReplacingFiles(t *testing.T) {
 	}
 	defer root.Close()
 	files := restoreFixture(t, []string{"world", "later"}, []string{"replacement", "unique corrupt payload"}, true)
-	if err := restoreFiles(root, files); err == nil {
+	if err := restoreFiles(root, files, nil); err == nil {
 		t.Fatal("corrupt archive accepted")
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "world"))
@@ -77,7 +77,7 @@ func TestRestoreRollsBackPublishedFilesOnLaterConflict(t *testing.T) {
 	}
 	defer root.Close()
 	files := restoreFixture(t, []string{"world", "new-file", "blocked"}, []string{"replacement", "new", "conflict"}, false)
-	if err := restoreFiles(root, files); err == nil {
+	if err := restoreFiles(root, files, nil); err == nil {
 		t.Fatal("target directory accepted as file")
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "world"))
@@ -101,10 +101,34 @@ func TestRestoreRejectsDuplicatePathsBeforeMutation(t *testing.T) {
 	}
 	defer root.Close()
 	files := restoreFixture(t, []string{"world", "./world"}, []string{"one", "two"}, false)
-	if err := restoreFiles(root, files); err == nil {
+	if err := restoreFiles(root, files, nil); err == nil {
 		t.Fatal("duplicate normalized paths accepted")
 	}
 	if _, err := root.Stat("world"); !os.IsNotExist(err) {
 		t.Fatalf("target modified: %v", err)
+	}
+}
+
+func TestRestoreCommitSeesNewFilesAndRunsOnce(t *testing.T) {
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	files := restoreFixture(t, []string{"world"}, []string{"restored"}, false)
+	calls := 0
+	err = restoreFiles(root, files, func() error {
+		calls++
+		data, err := root.ReadFile("world")
+		if err != nil {
+			return err
+		}
+		if string(data) != "restored" {
+			t.Fatalf("commit saw %q", data)
+		}
+		return nil
+	})
+	if err != nil || calls != 1 {
+		t.Fatalf("commit calls=%d err=%v", calls, err)
 	}
 }

@@ -22,19 +22,19 @@ func TestArchiveMetadataRoundTripAndPreflight(t *testing.T) {
 	}
 	target := filepath.Join(t.TempDir(), "target")
 	rejected := errors.New("incompatible archive")
-	err = service.RestoreChecked("instance", filepath.Base(path), target, func(got Metadata) error {
+	err = service.RestoreChecked("instance", filepath.Base(path), target, RestoreHooks{Validate: func(got Metadata) error {
 		if got != metadata {
 			t.Fatalf("metadata=%+v", got)
 		}
 		return rejected
-	})
+	}})
 	if !errors.Is(err, rejected) {
 		t.Fatalf("rejection=%v", err)
 	}
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
 		t.Fatalf("preflight created target: %v", err)
 	}
-	if err := service.RestoreChecked("instance", filepath.Base(path), target, func(Metadata) error { return nil }); err != nil {
+	if err := service.RestoreChecked("instance", filepath.Base(path), target, RestoreHooks{Validate: func(Metadata) error { return nil }}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(target, "world"))

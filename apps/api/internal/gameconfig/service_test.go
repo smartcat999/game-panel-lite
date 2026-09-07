@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
@@ -176,5 +177,50 @@ func TestBackupCompatibilityUsesSourceVersion(t *testing.T) {
 		if err := service.CheckBackup(server, tc.source); (err == nil) != tc.wantOK {
 			t.Fatalf("source=%+v err=%v", tc.source, err)
 		}
+	}
+}
+
+func TestRestorePersistenceFailureRollsBackPublishedFiles(t *testing.T) {
+	store := &configStore{err: errors.New("database write rejected")}
+	service := testService(t, store)
+	server := configServer(t)
+	before, _ := json.Marshal(server)
+	target := server.Spec.Runtime.DataDir
+	if err := os.WriteFile(filepath.Join(target, "serverconfig.txt"), []byte("worldname=Original\n"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "serverconfig.txt"), []byte("worldname=Restored\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "new-world"), []byte("restored-world"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	backups := backupsvc.NewService(t.TempDir())
+	path, _, err := backups.Create(server.ID, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = backups.RestoreChecked(server.ID, filepath.Base(path), target, backupsvc.RestoreHooks{Commit: func() error { return service.Restore(context.Background(), &server) }})
+	if !errors.Is(err, store.err) || !errors.Is(err, backupsvc.ErrCommit) {
+		t.Fatalf("commit error=%v", err)
+	}
+	if store.calls != 1 {
+		t.Fatalf("persistence calls=%d", store.calls)
+	}
+	after, _ := json.Marshal(server)
+	if string(before) != string(after) {
+		t.Fatal("resource changed after failed commit")
+	}
+	contents, err := os.ReadFile(filepath.Join(target, "serverconfig.txt"))
+	if err != nil || string(contents) != "worldname=Original\n" {
+		t.Fatalf("config file not restored: %q %v", contents, err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "new-world")); !os.IsNotExist(err) {
+		t.Fatalf("new world remains: %v", err)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("staging remains: %v %v", entries, err)
 	}
 }

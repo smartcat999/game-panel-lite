@@ -148,14 +148,12 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := backupsvc.NewService(h.cfg.DataDir).RestoreChecked(item.InstanceID, item.FileName, dataDir, func(metadata backupsvc.Metadata) error {
-		return h.gameConfig.CheckBackup(resource, domain.Backup{ProviderKey: domain.ProviderKey(metadata.ProviderKey), ConfigVersion: metadata.ConfigVersion})
-	}); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.syncRestoredGameServerConfig(r.Context(), &resource); err != nil {
-		writeError(w, statusCodeForRuntimeError(err), err.Error())
+	if err := h.restoreBackupFiles(r.Context(), &resource, item, dataDir); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, backupsvc.ErrCommit) {
+			status = statusCodeForRuntimeError(err)
+		}
+		writeError(w, status, err.Error())
 		return
 	}
 	h.recordActivity(r.Context(), resource.ID, "backup.restored", fmt.Sprintf("Restored backup %s for %s", item.FileName, resource.Name), activityBackupPayload(item, &resource))
@@ -309,14 +307,12 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := backupsvc.NewService(h.cfg.DataDir).RestoreChecked(item.InstanceID, item.FileName, dataDir, func(metadata backupsvc.Metadata) error {
-		return h.gameConfig.CheckBackup(resource, domain.Backup{ProviderKey: domain.ProviderKey(metadata.ProviderKey), ConfigVersion: metadata.ConfigVersion})
-	}); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := h.syncRestoredGameServerConfig(r.Context(), &resource); err != nil {
-		writeError(w, statusCodeForRuntimeError(err), err.Error())
+	if err := h.restoreBackupFiles(r.Context(), &resource, item, dataDir); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, backupsvc.ErrCommit) {
+			status = statusCodeForRuntimeError(err)
+		}
+		writeError(w, status, err.Error())
 		return
 	}
 	saveName := h.saveDisplayName(resource.ProviderKey)
@@ -385,4 +381,13 @@ func snapshotConfigVersion(server domain.GameServer) int {
 
 func archiveMetadata(server domain.GameServer) backupsvc.Metadata {
 	return backupsvc.Metadata{FormatVersion: 1, GameKey: string(server.GameKey), ProviderKey: string(server.ProviderKey), ConfigVersion: snapshotConfigVersion(server)}
+}
+
+func (h *Handler) restoreBackupFiles(ctx context.Context, resource *domain.GameServer, item domain.Backup, dataDir string) error {
+	return backupsvc.NewService(h.cfg.DataDir).RestoreChecked(item.InstanceID, item.FileName, dataDir, backupsvc.RestoreHooks{
+		Validate: func(metadata backupsvc.Metadata) error {
+			return h.gameConfig.CheckBackup(*resource, domain.Backup{ProviderKey: domain.ProviderKey(metadata.ProviderKey), ConfigVersion: metadata.ConfigVersion})
+		},
+		Commit: func() error { return h.syncRestoredGameServerConfig(ctx, resource) },
+	})
 }

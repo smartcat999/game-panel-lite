@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Kept backup originals until the caller finishes restored configuration parsing/persistence. RestoreHooks separates metadata validation from the final commit, and both HTTP restore paths use the commit hook. Returned commit failures roll back published files and retain the existing runtime error status mapping.
+- Added an integration regression through the real configuration parser and a rejecting store: in-memory spec stays unchanged, original config files return, newly restored files disappear and staging is cleaned up. Successful commit sees the published files and runs once.
+- This handles reported errors while the process is alive. Ambiguous database commit outcomes, process/power loss and distributed recovery still require durable coordination; it is not a cross-resource ACID transaction. Validation passed: gofmt, full Go tests, vet and backup/gameconfig/HTTP race regression. No frontend source or API schema changed.
+
 - Changed ZIP restore from streaming overwrite to complete staging before publication. All entry reads/CRC checks finish before replacing existing files; duplicate normalized paths and symlink entries are rejected. Publication retains originals and rolls back modified/new files on returned errors.
 - Added tests for a corrupted later ZIP entry preserving original files, rollback after a later target-directory conflict, original permission restoration and staging cleanup. Failed rollback retains recovery files and reports their relative location.
 - This is file rollback within a live process, not a durable crash-recovery transaction. Newly created empty directories may remain after failure; later configuration/database errors are not rolled back by this file operation. Disk capacity policy and startup recovery still need implementation. Validation passed: gofmt, full Go tests, vet and backup/HTTP race regression. No frontend code or wire contract changed.
