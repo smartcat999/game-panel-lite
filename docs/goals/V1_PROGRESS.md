@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Changed ZIP restore from streaming overwrite to complete staging before publication. All entry reads/CRC checks finish before replacing existing files; duplicate normalized paths and symlink entries are rejected. Publication retains originals and rolls back modified/new files on returned errors.
+- Added tests for a corrupted later ZIP entry preserving original files, rollback after a later target-directory conflict, original permission restoration and staging cleanup. Failed rollback retains recovery files and reports their relative location.
+- This is file rollback within a live process, not a durable crash-recovery transaction. Newly created empty directories may remain after failure; later configuration/database errors are not rolled back by this file operation. Disk capacity policy and startup recovery still need implementation. Validation passed: gofmt, full Go tests, vet and backup/HTTP race regression. No frontend code or wire contract changed.
+
 - New production backups embed .gamepanel-backup.json with archive format, source game/provider and configuration versions. All manual/snapshot/pre-update/pre-regeneration creators pass metadata. Restore checks bounded metadata before destination creation, rejects malformed/duplicate/unsupported metadata and skips the metadata entry during extraction.
 - Added root-confined restore writes to prevent existing target symlinks escaping the game directory. Tests cover metadata round trips, callback rejection before target creation, malformed/duplicate/oversized metadata, no metadata extraction and symlink escape. HTTP verifies embedded compatibility even when the database record appears compatible.
 - Legacy ZIPs without metadata retain format-1 semantics. Archive metadata is not authentication; full extraction rollback, standalone import workflows and signed integrity remain pending. Validation passed: gofmt, full Go tests, vet, and backup/gameconfig/HTTP race regression including the embedded-version endpoint test. No frontend code or response schema changed.

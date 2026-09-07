@@ -147,7 +147,7 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 }
 
 // RestoreChecked validates archive metadata before creating or modifying target
-// files. Extraction is root-confined but is not a multi-file transaction.
+// files. Extraction is staged and attempts rollback on publication failure.
 func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir string, check func(Metadata) error) error {
 	backupPath, err := s.Path(instanceID, fileName)
 	if err != nil {
@@ -179,47 +179,5 @@ func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir s
 		return err
 	}
 	defer root.Close()
-	for _, file := range reader.File {
-		if file.Name == metadataPath {
-			continue
-		}
-		if file.FileInfo().IsDir() {
-			continue
-		}
-		if strings.Contains(file.Name, "..") || filepath.IsAbs(file.Name) {
-			return fmt.Errorf("backup contains unsafe path")
-		}
-		target, err := filepath.Abs(filepath.Join(cleanTarget, file.Name))
-		if err != nil {
-			return err
-		}
-		if target != cleanTarget && !strings.HasPrefix(target, cleanTarget+string(filepath.Separator)) {
-			return fmt.Errorf("backup contains unsafe path")
-		}
-		if err := root.MkdirAll(filepath.Dir(file.Name), 0o755); err != nil {
-			return err
-		}
-		in, err := file.Open()
-		if err != nil {
-			return err
-		}
-		out, err := root.OpenFile(file.Name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-		if err != nil {
-			_ = in.Close()
-			return err
-		}
-		_, copyErr := io.Copy(out, in)
-		closeInErr := in.Close()
-		closeOutErr := out.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		if closeInErr != nil {
-			return closeInErr
-		}
-		if closeOutErr != nil {
-			return closeOutErr
-		}
-	}
-	return nil
+	return restoreFiles(root, reader.File)
 }
