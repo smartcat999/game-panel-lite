@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -115,20 +116,34 @@ func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) er
 		return err
 	}
 	instanceDir := filepath.Join(a.dataDir, assignment.ServerID)
-	binds, err := prepareFiles(instanceDir, assignment.Spec.Options)
-	if err != nil {
-		return err
-	}
-	host := &container.HostConfig{
-		Binds: binds, PortBindings: bindings,
-		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-		Resources:     container.Resources{NanoCPUs: int64(assignment.Spec.Resources.CPULimitCores * 1e9), Memory: int64(assignment.Spec.Resources.MemoryLimitMB) * 1024 * 1024},
-	}
-	_, err = a.client.ContainerCreate(ctx, &container.Config{
-		Image: assignment.Spec.Image, Env: assignment.Spec.Options.Env, Cmd: assignment.Spec.Options.Cmd,
-		OpenStdin: true, AttachStdin: true, ExposedPorts: ports,
-		Labels: map[string]string{labelManaged: "true", labelServer: assignment.ServerID, labelNode: assignment.NodeID, labelUID: assignment.UID, labelGeneration: strconv.Itoa(assignment.Generation)},
-	}, host, nil, nil, name)
+	_, err = prepareFilesAndCommit(instanceDir, assignment.Spec.Options, func(binds []string) error {
+		host := &container.HostConfig{
+			Binds: binds, PortBindings: bindings,
+			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+			Resources:     container.Resources{NanoCPUs: int64(assignment.Spec.Resources.CPULimitCores * 1e9), Memory: int64(assignment.Spec.Resources.MemoryLimitMB) * 1024 * 1024},
+		}
+		_, createErr := a.client.ContainerCreate(ctx, &container.Config{
+			Image: assignment.Spec.Image, Env: assignment.Spec.Options.Env, Cmd: assignment.Spec.Options.Cmd,
+			OpenStdin: true, AttachStdin: true, ExposedPorts: ports,
+			Labels: map[string]string{labelManaged: "true", labelServer: assignment.ServerID, labelNode: assignment.NodeID, labelUID: assignment.UID, labelGeneration: strconv.Itoa(assignment.Generation)},
+		}, host, nil, nil, name)
+		if createErr == nil {
+			return nil
+		}
+		verifyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		observed, inspectErr := a.Inspect(verifyCtx, assignment.ServerID)
+		if inspectErr != nil {
+			return errors.Join(errCreationUncertain, createErr, inspectErr)
+		}
+		if !observed.Exists {
+			return createErr
+		}
+		if observed.Managed && observed.ServerID == assignment.ServerID && observed.NodeID == assignment.NodeID && observed.UID == assignment.UID && observed.Generation == assignment.Generation {
+			return nil
+		}
+		return errors.Join(errCreationUncertain, createErr)
+	})
 	return err
 }
 func (a *Adapter) Start(ctx context.Context, observed worker.State) error {

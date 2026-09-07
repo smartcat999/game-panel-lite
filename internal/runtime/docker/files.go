@@ -2,43 +2,51 @@ package docker
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
+type plannedMount struct{ source, target string }
+
 func prepareFiles(dir string, options workload.Options) ([]string, error) {
-	if err := os.MkdirAll(dir, 0777); err != nil {
-		return nil, err
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-	defer root.Close()
+	return prepareFilesAndCommit(dir, options, nil)
+}
+
+// The caller holds the per-instance creation lock. Commit runs only after all
+// files and mounts are prepared; a definite failure restores prior files.
+func prepareFilesAndCommit(dir string, options workload.Options, commit func([]string) error) (binds []string, err error) {
+	names := make([]string, 0, len(options.Files))
+	contents := map[string]string{}
 	for name, content := range options.Files {
-		if err := root.MkdirAll(filepath.Dir(name), 0777); err != nil {
-			return nil, err
+		clean := filepath.Clean(name)
+		if !filepath.IsLocal(name) || clean == "." || strings.Contains(name, "\\") || strings.HasPrefix(clean, ".gamepanel-prepare-") {
+			return nil, fmt.Errorf("invalid configuration path %q", name)
 		}
-		file, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-		if err != nil {
-			return nil, err
+		if _, exists := contents[clean]; exists {
+			return nil, fmt.Errorf("duplicate configuration path %q", clean)
 		}
-		_, err = file.WriteString(content)
-		if closeErr := file.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
+		names = append(names, clean)
+		contents[clean] = content
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		for parent := filepath.Dir(name); parent != "."; parent = filepath.Dir(parent) {
+			if _, exists := contents[parent]; exists {
+				return nil, fmt.Errorf("configuration path conflicts with file %q", parent)
+			}
 		}
 	}
 	mounts := options.DataMounts
 	if len(mounts) == 0 {
 		mounts = []string{"/data"}
 	}
-	binds := make([]string, 0, len(mounts))
+	planned := make([]plannedMount, 0, len(mounts))
+	targets := map[string]bool{}
 	for _, mount := range mounts {
 		relative, target := ".", strings.TrimSpace(mount)
 		if source, destination, ok := strings.Cut(mount, ":"); ok {
@@ -48,35 +56,83 @@ func prepareFiles(dir string, options workload.Options) ([]string, error) {
 			return nil, fmt.Errorf("invalid data mount target %q", target)
 		}
 		clean := filepath.Clean(relative)
-		if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		if !filepath.IsLocal(relative) || strings.Contains(relative, "\\") || strings.HasPrefix(clean, ".gamepanel-prepare-") {
 			return nil, fmt.Errorf("invalid data mount source %q", relative)
 		}
-		if err := rejectSymlink(root, clean); err != nil {
+		target = filepath.Clean(target)
+		if targets[target] {
+			return nil, fmt.Errorf("duplicate data mount target %q", target)
+		}
+		targets[target] = true
+		planned = append(planned, plannedMount{clean, target})
+	}
+	if err := os.MkdirAll(dir, 0777); err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	entries, err := fs.ReadDir(root.FS(), ".")
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".gamepanel-prepare-") {
+			return nil, fmt.Errorf("configuration recovery must be resolved before retry: %s", entry.Name())
+		}
+	}
+
+	for _, name := range names {
+		if err := rejectSymlink(root, name); err != nil {
 			return nil, err
 		}
-		if _, err := root.Stat(clean); os.IsNotExist(err) {
-			if filepath.Ext(clean) != "" {
-				if err := root.MkdirAll(filepath.Dir(clean), 0777); err != nil {
+	}
+	for _, mount := range planned {
+		if err := rejectSymlink(root, mount.source); err != nil {
+			return nil, err
+		}
+	}
+	tx, err := newFileTransaction(root)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = tx.finish(err) }()
+	for _, name := range names {
+		if err := tx.stageFile(name, contents[name]); err != nil {
+			return nil, err
+		}
+	}
+	for i := range tx.files {
+		if err := tx.install(i); err != nil {
+			return nil, err
+		}
+	}
+	for _, mount := range planned {
+		if _, err := root.Stat(mount.source); os.IsNotExist(err) {
+			if filepath.Ext(mount.source) != "" {
+				if err := tx.stageFile(mount.source, ""); err != nil {
 					return nil, err
 				}
-				file, err := root.OpenFile(clean, os.O_CREATE|os.O_WRONLY, 0666)
-				if err != nil {
+				if err := tx.install(len(tx.files) - 1); err != nil {
 					return nil, err
 				}
-				if err := file.Close(); err != nil {
-					return nil, err
-				}
-			} else if err := root.MkdirAll(clean, 0777); err != nil {
+			} else if err := tx.mkdir(mount.source); err != nil {
 				return nil, err
 			}
 		} else if err != nil {
 			return nil, err
 		}
-		binds = append(binds, filepath.Join(dir, clean)+":"+target)
+		binds = append(binds, filepath.Join(dir, mount.source)+":"+mount.target)
 	}
-	// Retain existing worker file permissions for images with non-root users.
-	if err := normalizePermissions(dir); err != nil {
+	if err := tx.normalizePermissions(); err != nil {
 		return nil, err
+	}
+	if commit != nil {
+		if err := commit(binds); err != nil {
+			return nil, err
+		}
 	}
 	return binds, nil
 }
@@ -96,18 +152,4 @@ func rejectSymlink(root *os.Root, path string) error {
 		}
 	}
 	return nil
-}
-func normalizePermissions(root string) error {
-	return filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-		if entry.IsDir() {
-			return os.Chmod(path, 0777)
-		}
-		return os.Chmod(path, 0666)
-	})
 }
