@@ -91,10 +91,17 @@ func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) er
 	if err != nil {
 		return err
 	}
-	instanceDir := filepath.Join(a.dataDir, assignment.ServerID)
-	binds, err := prepareFiles(instanceDir, assignment.Spec.Options)
+	unlock, err := lockInstanceCreation(ctx, a.dataDir, assignment.ServerID)
 	if err != nil {
 		return err
+	}
+	defer unlock()
+	existing, err := a.Inspect(ctx, assignment.ServerID)
+	if err != nil {
+		return err
+	}
+	if existing.Exists {
+		return fmt.Errorf("instance container already exists; observe before creating")
 	}
 	stream, err := a.client.ImagePull(ctx, assignment.Spec.Image, types.ImagePullOptions{})
 	if err != nil {
@@ -102,6 +109,14 @@ func (a *Adapter) Create(ctx context.Context, assignment workload.Assignment) er
 	}
 	defer stream.Close()
 	if err := consumePull(stream); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	instanceDir := filepath.Join(a.dataDir, assignment.ServerID)
+	binds, err := prepareFiles(instanceDir, assignment.Spec.Options)
+	if err != nil {
 		return err
 	}
 	host := &container.HostConfig{

@@ -3,13 +3,16 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -36,6 +39,9 @@ func TestCreatePreservesNetworkResourcesAndOwnership(t *testing.T) {
 	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/json"):
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"message":"missing"}`)
 		case strings.HasSuffix(r.URL.Path, "/images/create"):
 			io.WriteString(w, `{"status":"ready"}`)
 		case strings.HasSuffix(r.URL.Path, "/containers/create"):
@@ -77,6 +83,11 @@ func TestCreatePreservesNetworkResourcesAndOwnership(t *testing.T) {
 }
 func TestPullFailurePreventsContainerCreation(t *testing.T) {
 	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/json") {
+			w.WriteHeader(http.StatusNotFound)
+			io.WriteString(w, `{"message":"missing"}`)
+			return
+		}
 		if !strings.HasSuffix(r.URL.Path, "/images/create") {
 			t.Fatalf("unexpected create after failed pull: %s", r.URL.Path)
 		}
@@ -166,5 +177,80 @@ func TestMutationsAddressOnlyTheObservedContainerID(t *testing.T) {
 	}
 	if calls != 3 {
 		t.Fatal("invalid target reached Docker")
+	}
+}
+
+func TestCompetingCreateCannotRewriteInstanceFiles(t *testing.T) {
+	pullStarted := make(chan struct{})
+	releasePull := make(chan struct{})
+	var exists atomic.Bool
+	var creates atomic.Int32
+	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/json"):
+			if exists.Load() {
+				io.WriteString(w, `{"Id":"`+strings.Repeat("c", 64)+`"}`)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				io.WriteString(w, `{"message":"missing"}`)
+			}
+		case strings.HasSuffix(r.URL.Path, "/images/create"):
+			close(pullStarted)
+			<-releasePull
+			io.WriteString(w, `{"status":"ready"}`)
+		case strings.HasSuffix(r.URL.Path, "/containers/create"):
+			creates.Add(1)
+			exists.Store(true)
+			w.WriteHeader(http.StatusCreated)
+			io.WriteString(w, `{"Id":"`+strings.Repeat("c", 64)+`"}`)
+		default:
+			t.Errorf("unexpected request: %s", r.URL.Path)
+			w.WriteHeader(500)
+		}
+	})
+	file := filepath.Join(adapter.dataDir, "server", "settings.ini")
+	if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("initial"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	first := workload.Assignment{ServerID: "server", Spec: workload.Spec{Image: "example:1", Options: workload.Options{Files: map[string]string{"settings.ini": "first"}}}}
+	result := make(chan error, 1)
+	go func() { result <- adapter.Create(context.Background(), first) }()
+	<-pullStarted
+	// Always release the fake pull, including when an assertion fails.
+	released := false
+	defer func() {
+		if !released {
+			close(releasePull)
+			<-result
+		}
+	}()
+	second := &Adapter{client: adapter.client, dataDir: adapter.dataDir}
+	competing := first
+	competing.Spec.Options.Files = map[string]string{"settings.ini": "second"}
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	err := second.Create(ctx, competing)
+	cancel()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("competing create did not wait: %v", err)
+	}
+	content, err := os.ReadFile(file)
+	if err != nil || string(content) != "initial" {
+		t.Fatalf("files changed before pull completed: %q %v", content, err)
+	}
+	close(releasePull)
+	released = true
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Create(context.Background(), competing); err == nil {
+		t.Fatal("accepted create over existing container")
+	}
+	content, err = os.ReadFile(file)
+	if err != nil || string(content) != "first" || creates.Load() != 1 {
+		t.Fatalf("duplicate create changed files: %q count=%d err=%v", content, creates.Load(), err)
 	}
 }

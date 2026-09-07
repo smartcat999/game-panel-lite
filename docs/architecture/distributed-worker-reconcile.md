@@ -51,3 +51,11 @@ Worker 的 Start/Stop/Remove 接口接收 Inspect 返回的 State，Docker Adapt
 所有期望状态均拒绝其他 assignment UID、其他节点/实例以及更高 generation 的容器。同 UID 的旧 generation 仍可被当前任务替换。创建后的检查及最终观察也验证身份，避免把竞争者创建的容器启动或报告为自己的实例。遇到残留的其他 UID 容器将返回错误，需显式完成旧任务清理和接管协议，不能自动删除它。
 
 验证包括替换发生在 Inspect 与 mutation 之间、创建后发现竞争容器、完整 ID 的 Docker HTTP 请求，以及真实一次性 Alpine 容器的启动/控制台/停止/删除。此保护不能阻止旧进程操作仍存在的旧容器，也不保护创建前的共享配置文件写入。执行租约、节点失联停机和文件写入 fencing 仍未完成。
+
+## 同节点创建互斥
+
+Docker Create 在 `.creation-locks/<server-id>.lock` 上持有操作系统排他文件锁，取得锁后再次 Inspect；只要同名容器存在，就拒绝 Create，不改配置。镜像拉取完成并确认上下文仍有效后才准备文件。锁覆盖检查、拉取、文件准备和 ContainerCreate，多个 Agent 进程共享同一数据目录时不能交错执行同一实例的创建。不同实例使用不同锁；等待支持上下文取消。
+
+锁文件不在释放时删除，避免等待者继续锁旧 inode、后来者锁新 inode 而失去互斥。锁文件因此会留存，清理需在 Agent 停止且确认无使用者后进行；尚未实现在线锁文件回收。Linux/macOS/BSD 使用 flock，Windows 使用 LockFileEx，其他平台拒绝此创建路径。已验证 macOS 独立子进程互斥、双 Adapter 竞争与真实 Docker 生命周期；Linux Agent 交叉编译通过。Windows 整体 Agent 仍因既有 syscall.Statfs 调用不可编译，本批只检查 Windows Runtime 包的编译；不能宣称 Windows Agent 已可发布，也不能用交叉编译替代对应平台运行验证。
+
+部署要求相关 Agent 使用同一数据目录及可靠文件锁语义。不共享目录、绕过该接口的程序、外部 Docker 管理员以及不保证锁语义的网络文件系统不在保护范围内。旧版本 Agent 不会持锁，须先停止旧进程再启动新版本；此改造不等于跨节点执行租约。配置准备自身中途失败的回滚、其他文件写入路径及跨节点 fencing 仍待完成。
