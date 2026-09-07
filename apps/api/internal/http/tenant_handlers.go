@@ -24,7 +24,6 @@ type addMemberRequest struct {
 }
 
 func (h *Handler) listOrganizations(w http.ResponseWriter, r *http.Request) {
-	_, _ = h.store.EnsureDefaultOrganization(r.Context())
 	orgs, err := h.store.ListOrganizations(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list organizations: "+err.Error())

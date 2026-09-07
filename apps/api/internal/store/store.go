@@ -783,60 +783,8 @@ func hydrateActivityPayload(event *domain.ActivityEvent) {
 	}
 }
 
-func (s *Store) EnsureDefaultOrganization(ctx context.Context) (*domain.Organization, error) {
-	var count int64
-	if err := s.db.WithContext(ctx).Model(&domain.Organization{}).Count(&count).Error; err != nil {
-		return nil, err
-	}
-	if count > 0 {
-		var first domain.Organization
-		if err := s.db.WithContext(ctx).First(&first).Error; err != nil {
-			return nil, err
-		}
-		return &first, nil
-	}
-
-	defaultOrg := domain.Organization{
-		ID:        "default-org",
-		Name:      "Default Workspace",
-		Slug:      "default",
-		Plan:      "pro",
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}
-	if err := s.db.WithContext(ctx).Create(&defaultOrg).Error; err != nil {
-		return nil, err
-	}
-
-	defaultQuota := domain.TenantQuota{
-		OrganizationID: defaultOrg.ID,
-		MaxServers:     10,
-		MaxCPUCores:    16.0,
-		MaxMemoryMB:    32768,
-		MaxStorageGB:   100,
-	}
-	_ = s.db.WithContext(ctx).Create(&defaultQuota).Error
-
-	var admin domain.AdminAccount
-	if err := s.db.WithContext(ctx).First(&admin).Error; err == nil {
-		member := domain.OrganizationMember{
-			ID:             "default-member-" + admin.ID,
-			OrganizationID: defaultOrg.ID,
-			UserID:         admin.ID,
-			Role:           domain.RoleOwner,
-			CreatedAt:      time.Now().UTC(),
-		}
-		_ = s.db.WithContext(ctx).Create(&member).Error
-	}
-
-	// Update existing unassigned servers to default organization
-	_ = s.db.WithContext(ctx).Model(&domain.GameServer{}).Where("organization_id = '' OR organization_id IS NULL").Update("organization_id", defaultOrg.ID).Error
-
-	return &defaultOrg, nil
-}
-
 func (s *Store) ListOrganizations(ctx context.Context) ([]domain.Organization, error) {
-	var orgs []domain.Organization
+	orgs := []domain.Organization{}
 	if err := s.db.WithContext(ctx).Order("created_at asc").Find(&orgs).Error; err != nil {
 		return nil, err
 	}

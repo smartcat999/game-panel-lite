@@ -17,7 +17,8 @@ import (
 
 type playerRuntime struct {
 	runtime.MockAdapter
-	logs string
+	logs   string
+	onLogs func()
 }
 
 func (r *playerRuntime) Check(context.Context) runtime.DockerStatus {
@@ -25,6 +26,9 @@ func (r *playerRuntime) Check(context.Context) runtime.DockerStatus {
 }
 
 func (r *playerRuntime) LogSnapshotWorkload(context.Context, string) (io.ReadCloser, error) {
+	if r.onLogs != nil {
+		r.onLogs()
+	}
 	return io.NopCloser(strings.NewReader(r.logs)), nil
 }
 
@@ -66,6 +70,16 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtimeAdapter := &playerRuntime{logs: "Server started\n: yyds (192.168.215.1:32643)\n\n1个玩家已连接。\n"}
+
+	runtimeAdapter.onLogs = func() {
+		current := server
+		current.Name = "Updated while logs were read"
+		current.Spec.Generation++
+		current.Spec.Resources.MemoryLimitMB = 4096
+		if err := db.SaveGameServer(context.Background(), &current); err != nil {
+			t.Fatal(err)
+		}
+	}
 	syncer := NewSyncer(
 		db,
 		mustRegistry(t, terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider()),
@@ -80,6 +94,10 @@ func TestRunOnceUpdatesRunningServerPlayerCount(t *testing.T) {
 	updated, err := db.GetGameServer(context.Background(), server.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if updated.Name != "Updated while logs were read" || updated.Spec.Generation != 2 || updated.Spec.Resources.MemoryLimitMB != 4096 {
+		t.Fatalf("player sync overwrote current intent: %+v", updated)
 	}
 	if updated.Status.PlayersOnline != 1 {
 		t.Fatalf("expected player count to update to 1, got %+v", updated)

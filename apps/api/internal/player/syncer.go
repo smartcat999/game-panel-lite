@@ -10,17 +10,21 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
 
+type PlayerStore interface {
+	ListGameServers(context.Context) ([]domain.GameServer, error)
+	SavePlayerCount(context.Context, domain.GameServer, int) error
+}
+
 type Syncer struct {
-	store     *store.Store
+	store     PlayerStore
 	providers *provider.Registry
 	runtime   runtime.WorkloadIOAdapter
 	logger    *slog.Logger
 }
 
-func NewSyncer(store *store.Store, providers *provider.Registry, runtime runtime.WorkloadIOAdapter, _ config.Config) *Syncer {
+func NewSyncer(store PlayerStore, providers *provider.Registry, runtime runtime.WorkloadIOAdapter, _ config.Config) *Syncer {
 	return &Syncer{
 		store:     store,
 		providers: providers,
@@ -62,9 +66,7 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 	for _, server := range servers {
 		if server.Status.Phase != domain.PhaseRunning {
 			if server.Status.PlayersOnline != 0 {
-				server.Status.PlayersOnline = 0
-				server.UpdatedAt = time.Now()
-				if err := s.store.SaveGameServer(ctx, &server); err != nil {
+				if err := s.store.SavePlayerCount(ctx, server, 0); err != nil {
 					return err
 				}
 			}
@@ -98,9 +100,7 @@ func (s *Syncer) RunOnce(ctx context.Context) error {
 			continue
 		}
 		if *nextCount != server.Status.PlayersOnline {
-			server.Status.PlayersOnline = *nextCount
-			server.UpdatedAt = time.Now()
-			if err := s.store.SaveGameServer(ctx, &server); err != nil {
+			if err := s.store.SavePlayerCount(ctx, server, *nextCount); err != nil {
 				return err
 			}
 		}
