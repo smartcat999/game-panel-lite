@@ -32,6 +32,7 @@ import (
 )
 
 type App struct {
+	database  *store.Store
 	router    http.Handler
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -41,10 +42,16 @@ type App struct {
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
-	db, err := store.Open(cfg.DBPath)
+	db, err := store.OpenConfigured(cfg.DBPath, cfg.DatabaseURL, cfg.DBMaxConnections)
 	if err != nil {
 		return nil, err
 	}
+	initialized := false
+	defer func() {
+		if !initialized {
+			_ = db.Close()
+		}
+	}()
 	providerCatalog, err := runtimecatalog.Load(cfg.ProviderCatalogPath)
 	if err != nil {
 		logger.Warn("using built-in provider runtime catalog", "error", err)
@@ -105,7 +112,8 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	handler.Register(router)
-	return &App{router: router, ctx: appCtx, cancel: cancel, handler: handler, logger: logger}, nil
+	initialized = true
+	return &App{database: db, router: router, ctx: appCtx, cancel: cancel, handler: handler, logger: logger}, nil
 }
 
 func (a *App) Routes() http.Handler {
@@ -130,6 +138,9 @@ func (a *App) Close() {
 			if err := a.handler.WaitForGameUpdates(ctx); err != nil && a.logger != nil {
 				a.logger.Warn("timed out waiting for game update workers", "error", err)
 			}
+		}
+		if a.database != nil {
+			_ = a.database.Close()
 		}
 	})
 }

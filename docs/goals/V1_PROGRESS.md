@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Added optional PostgreSQL persistence selected by GAMEPANEL_DATABASE_URL, retaining default SQLite. Added a bounded per-process pool, redacted connection errors and database cleanup on failed initialization/application close. Isolated SQLite rowid ordering behind the persistence dialect; PostgreSQL uses deterministic ID ties.
+- Added the official GORM PostgreSQL driver and synchronized vendored dependencies. A real disposable PostgreSQL 16 instance passed schema initialization, JSON/config-version round trip, transaction rollback, activity/job ordering and not-found tests in a unique schema that was removed afterward. Added equivalent CI service/test coverage; remote CI has not run.
+- PostgreSQL schema initialization still uses AutoMigrate. Explicit migrations, RLS, SQLite data transfer and multi-replica coordination remain unfinished. See architecture/postgresql.md for deployment/test configuration and limits. Validation passed: gofmt, full Go tests, vet, Store/App race tests, real PostgreSQL integration, frontend typecheck/build, tracked-source lint and CI YAML parsing. Disposable database container removed. Existing unrelated worktree-wide lint failures remain unchanged.
+
 - Kept backup originals until the caller finishes restored configuration parsing/persistence. RestoreHooks separates metadata validation from the final commit, and both HTTP restore paths use the commit hook. Returned commit failures roll back published files and retain the existing runtime error status mapping.
 - Added an integration regression through the real configuration parser and a rejecting store: in-memory spec stays unchanged, original config files return, newly restored files disappear and staging is cleaned up. Successful commit sees the published files and runs once.
 - This handles reported errors while the process is alive. Ambiguous database commit outcomes, process/power loss and distributed recovery still require durable coordination; it is not a cross-resource ACID transaction. Validation passed: gofmt, full Go tests, vet and backup/gameconfig/HTTP race regression. No frontend source or API schema changed.

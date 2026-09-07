@@ -8,6 +8,19 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: gamepanel_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -33,3 +46,8 @@ jobs:
         env:
           GAMEPANEL_TEST_DOCKER_HOST: unix:///var/run/docker.sock
         run: go test -count=1 -run TestDockerIntegration -v ./internal/runtime/docker
+
+      - name: Test PostgreSQL persistence in an isolated schema
+        env:
+          GAMEPANEL_TEST_POSTGRES_URL: postgres://postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/gamepanel_test?sslmode=disable
+        run: go test -count=1 -run TestPostgresIntegration -v ./apps/api/internal/store

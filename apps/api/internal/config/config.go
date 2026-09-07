@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -10,6 +11,8 @@ type Config struct {
 	Host                   string
 	Port                   string
 	DataDir                string
+	DatabaseURL            string
+	DBMaxConnections       int
 	DBPath                 string
 	DockerHost             string
 	PublicHost             string
@@ -42,7 +45,13 @@ func Load() Config {
 			updateInterval = parsed
 		}
 	}
+	maxConnections, _ := strconv.Atoi(value("GAMEPANEL_DB_MAX_CONNECTIONS", "20"))
+	if maxConnections <= 0 {
+		maxConnections = 20
+	}
 	return Config{
+		DatabaseURL:            value("GAMEPANEL_DATABASE_URL", ""),
+		DBMaxConnections:       maxConnections,
 		Host:                   value("GAMEPANEL_HOST", "0.0.0.0"),
 		Port:                   value("GAMEPANEL_PORT", "4000"),
 		DataDir:                value("GAMEPANEL_DATA_DIR", "./data"),

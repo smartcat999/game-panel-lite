@@ -44,7 +44,15 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	return initialize(db)
+}
+
+func initialize(db *gorm.DB) (*Store, error) {
 	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}, &domain.Organization{}, &domain.OrganizationMember{}, &domain.TenantQuota{}, &domain.ComputeNode{}, &domain.NodeTask{}, &domain.WorkloadAssignment{}, &domain.WorkloadObservation{}); err != nil {
+		sqlDB, _ := db.DB()
+		if sqlDB != nil {
+			_ = sqlDB.Close()
+		}
 		return nil, err
 	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
@@ -257,7 +265,7 @@ func (s *Store) GetLatestGameUpdateJobByInstance(ctx context.Context, instanceID
 	var job domain.GameUpdateJob
 	err := s.db.WithContext(ctx).
 		Where("instance_id = ?", instanceID).
-		Order("created_at desc, rowid desc").
+		Order(s.creationOrder(true)).
 		First(&job).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return job, ErrNotFound
@@ -269,7 +277,7 @@ func (s *Store) GetLatestGameUpdateCheckByProvider(ctx context.Context, provider
 	var job domain.GameUpdateJob
 	err := s.db.WithContext(ctx).
 		Where("provider_key = ? AND operation = ?", providerKey, domain.GameUpdateOperationCheck).
-		Order("created_at desc, rowid desc").
+		Order(s.creationOrder(true)).
 		First(&job).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return job, ErrNotFound
@@ -281,7 +289,7 @@ func (s *Store) GetActiveGameUpdateJobByInstance(ctx context.Context, instanceID
 	var job domain.GameUpdateJob
 	err := s.db.WithContext(ctx).
 		Where("instance_id = ? AND status IN ?", instanceID, []domain.GameUpdateJobStatus{domain.GameUpdateJobQueued, domain.GameUpdateJobRunning}).
-		Order("created_at desc, rowid desc").
+		Order(s.creationOrder(true)).
 		First(&job).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return job, ErrNotFound
@@ -293,7 +301,7 @@ func (s *Store) ListActiveGameUpdateJobs(ctx context.Context) ([]domain.GameUpda
 	var jobs []domain.GameUpdateJob
 	err := s.db.WithContext(ctx).
 		Where("status IN ?", []domain.GameUpdateJobStatus{domain.GameUpdateJobQueued, domain.GameUpdateJobRunning}).
-		Order("created_at asc, rowid asc").
+		Order(s.creationOrder(false)).
 		Find(&jobs).Error
 	return jobs, err
 }
@@ -308,7 +316,7 @@ func (s *Store) SaveWorldRegenerationJob(ctx context.Context, job *domain.WorldR
 
 func (s *Store) GetLatestWorldRegenerationJobByInstance(ctx context.Context, instanceID string) (domain.WorldRegenerationJob, error) {
 	var job domain.WorldRegenerationJob
-	err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc, rowid desc").First(&job).Error
+	err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order(s.creationOrder(true)).First(&job).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return job, ErrNotFound
 	}
@@ -319,7 +327,7 @@ func (s *Store) GetActiveWorldRegenerationJobByInstance(ctx context.Context, ins
 	var job domain.WorldRegenerationJob
 	err := s.db.WithContext(ctx).
 		Where("instance_id = ? AND status IN ?", instanceID, []domain.WorldRegenerationJobStatus{domain.WorldRegenerationJobQueued, domain.WorldRegenerationJobRunning}).
-		Order("created_at desc, rowid desc").First(&job).Error
+		Order(s.creationOrder(true)).First(&job).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return job, ErrNotFound
 	}
@@ -330,7 +338,7 @@ func (s *Store) ListActiveWorldRegenerationJobs(ctx context.Context) ([]domain.W
 	var jobs []domain.WorldRegenerationJob
 	err := s.db.WithContext(ctx).
 		Where("status IN ?", []domain.WorldRegenerationJobStatus{domain.WorldRegenerationJobQueued, domain.WorldRegenerationJobRunning}).
-		Order("created_at asc, rowid asc").Find(&jobs).Error
+		Order(s.creationOrder(false)).Find(&jobs).Error
 	return jobs, err
 }
 
@@ -688,7 +696,7 @@ func (s *Store) ListActivity(ctx context.Context, limit int) ([]domain.ActivityE
 		limit = 50
 	}
 	var events []domain.ActivityEvent
-	if err := s.db.WithContext(ctx).Order("created_at desc, rowid desc").Limit(limit).Find(&events).Error; err != nil {
+	if err := s.db.WithContext(ctx).Order(s.creationOrder(true)).Limit(limit).Find(&events).Error; err != nil {
 		return nil, err
 	}
 	for index := range events {
@@ -702,7 +710,7 @@ func (s *Store) ListActivityByInstance(ctx context.Context, instanceID string, l
 		limit = 50
 	}
 	var events []domain.ActivityEvent
-	if err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order("created_at desc, rowid desc").Limit(limit).Find(&events).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("instance_id = ?", instanceID).Order(s.creationOrder(true)).Limit(limit).Find(&events).Error; err != nil {
 		return nil, err
 	}
 	for index := range events {
