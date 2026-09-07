@@ -58,7 +58,7 @@ func (h *Handler) importWorld(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "server not found")
 			return
 		}
-		if !h.worldTargetAllowed(w, r, server, "") {
+		if !h.serverTransferAllowed(w, r, server, "") {
 			return
 		}
 		organizationID = server.OrganizationID
@@ -191,7 +191,7 @@ func (h *Handler) assignWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if !h.worldTargetAllowed(w, r, resource, item.OrganizationID) {
+	if !h.serverTransferAllowed(w, r, resource, item.OrganizationID) {
 		return
 	}
 	if h.gameUpdateLocked(r.Context(), resource.ID) {

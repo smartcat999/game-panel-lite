@@ -941,6 +941,7 @@ paths:
   /api/mods/{id}/assign:
     post:
       summary: Copy a global mod library item to a tModLoader server
+      description: Customers need target workspace write permission. Instance-owned sources require source membership and the same workspace; legacy library ownership is not yet tenant-scoped.
       responses:
         "200":
           description: Updated existing assigned mod file record

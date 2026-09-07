@@ -589,6 +589,13 @@ func (h *Handler) assignMod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	sourceOrg, ok := h.modTransferSource(w, r, item)
+	if !ok {
+		return
+	}
+	if !h.serverTransferAllowed(w, r, targetServer, sourceOrg) {
+		return
+	}
 	hydrateModMetadata(&item)
 	if item.ProviderKey != targetServer.ProviderKey {
 		writeError(w, http.StatusBadRequest, "mod provider does not match target server")

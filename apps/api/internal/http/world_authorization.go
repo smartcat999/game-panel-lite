@@ -35,24 +35,3 @@ func (h *Handler) worldForRequest(w http.ResponseWriter, r *http.Request, id str
 	}
 	return item, true
 }
-
-func (h *Handler) worldTargetAllowed(w http.ResponseWriter, r *http.Request, server domain.GameServer, sourceOrg string) bool {
-	account, ok := accountFromContext(r.Context())
-	if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
-		return true
-	}
-	if server.OrganizationID == "" {
-		writeError(w, http.StatusNotFound, "server not found")
-		return false
-	}
-	_, status, err := h.creationOrganization(r, server.OrganizationID)
-	if err != nil {
-		writeError(w, status, err.Error())
-		return false
-	}
-	if sourceOrg != "" && sourceOrg != server.OrganizationID {
-		writeError(w, http.StatusForbidden, "world and target must belong to the same workspace")
-		return false
-	}
-	return true
-}
