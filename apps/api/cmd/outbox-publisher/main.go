@@ -18,6 +18,7 @@ import (
 
 func main() {
 	region := flag.String("region", "", "region whose events to publish")
+	stream := flag.String("stream", "revisions", "event stream: revisions or backup-requests; use separate queues")
 	queue := flag.String("queue", "", "dedicated durable quorum queue")
 	deadLetterQueue := flag.String("dead-letter-queue", "", "dedicated durable parking queue")
 	deliveryLimit := flag.Int("delivery-limit", 20, "failed deliveries before parking the message")
@@ -31,13 +32,16 @@ func main() {
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, *region, *queue, *deadLetterQueue, *deliveryLimit, *batch, *timeout, *lease, *retry, *poll, *maxPayload, *connections); err != nil {
+	if err := run(ctx, *stream, *region, *queue, *deadLetterQueue, *deliveryLimit, *batch, *timeout, *lease, *retry, *poll, *maxPayload, *connections); err != nil {
 		slog.Error("outbox publisher stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, region, queue, deadLetterQueue string, deliveryLimit, batch int, timeout, lease, retry, poll time.Duration, maxPayload, connections int) error {
+func run(ctx context.Context, stream, region, queue, deadLetterQueue string, deliveryLimit, batch int, timeout, lease, retry, poll time.Duration, maxPayload, connections int) error {
+	if stream != "revisions" && stream != "backup-requests" {
+		return fmt.Errorf("unsupported outbox stream")
+	}
 	if os.Getenv("GAMEPANEL_DATABASE_URL") == "" || poll < time.Millisecond || connections < 1 {
 		return fmt.Errorf("database endpoint, positive pool size and poll interval are required")
 	}
@@ -51,7 +55,11 @@ func run(ctx context.Context, region, queue, deadLetterQueue string, deliveryLim
 		return err
 	}
 	defer db.Close()
-	dispatcher := delivery.Dispatcher{Outbox: db, Publisher: publisher, RegionID: region, Batch: batch, Lease: lease, PublishTimeout: timeout, RetryDelay: retry}
+	var outbox delivery.Outbox = db
+	if stream == "backup-requests" {
+		outbox = db.BackupRequestOutbox()
+	}
+	dispatcher := delivery.Dispatcher{Outbox: outbox, Publisher: publisher, RegionID: region, Batch: batch, Lease: lease, PublishTimeout: timeout, RetryDelay: retry}
 	if err := dispatcher.Validate(); err != nil {
 		return err
 	}

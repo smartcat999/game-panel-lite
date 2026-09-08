@@ -50,6 +50,13 @@
 - SQLite／真实 PostgreSQL 覆盖 8 个并发相同请求唯一、授权与跨租户拒绝、命令身份、队列分离及 Outbox 故障时 Operation／任务回滚。修正旧版本升级夹具以移除新增表，历史迁移不变。独立快照全量 Go／架构、vet、Store＋backup PostgreSQL race 通过，日志 `/tmp/gamepanel-global-backup-all.log`、`/tmp/gamepanel-global-backup-vet.log`、`/tmp/gamepanel-global-backup-integration.log`。
 - 这完成控制面持久受理边界，尚未开放公共 HTTP；专用 Outbox 发布、Region 备份 Inbox、执行绑定与结果回传去重仍待接通。用户侧完整 OSS 备份仍未完成。所有业务查询为单表，其他草稿保留。
 
+### 2026-09-09 备份请求发布到区域 broker
+
+- `outbox-publisher` 增加明确的 `backup-requests` 流，默认保持 revisions；备份专用 Outbox 通过相同 Dispatcher／RabbitMQ Publisher 执行有界领取、发布确认和持久重试。表名仅由 Store 的私有固定映射选择，外部不能传任意表名。部署必须为两类流使用独立队列与消费者。
+- 抽取两类 Outbox 共用的 SQL 领取实现，新增 SQLite 先取得写锁再读取候选的处理；8 路并发测试暴露并修复 deferred read-to-write 升级锁竞争，PostgreSQL 仍为 SKIP LOCKED。过期令牌不能确认，未确认发布延迟重试，已确认备份不再领取且不修改配置通知记录。
+- SQLite／真实 PostgreSQL／RabbitMQ 验证备份命令进入专用队列及完整事件身份。独立快照全量 Go／架构、vet、Store＋RabbitMQ 的真实服务 race 回归通过；日志 `/tmp/gamepanel-backup-dispatch-all.log`、`/tmp/gamepanel-backup-dispatch-vet.log`、`/tmp/gamepanel-backup-dispatch-integration.log`。
+- 本批未更改历史迁移或前端。Broker 已确认不等于 Region 已接收落库；Region 备份 Inbox、执行与控制面回传仍未接通，继续作为核心工作。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 

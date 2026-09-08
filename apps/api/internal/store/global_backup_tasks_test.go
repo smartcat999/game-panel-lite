@@ -122,4 +122,5 @@ func testGlobalBackupTasks(t *testing.T, db *Store, created instances.IntentResu
 	if err := db.db.Table("global_backup_tasks").Where("organization_id = ?", request.OrganizationID).Count(&count).Error; err != nil || count != 1 {
 		t.Fatal("failed transaction left backup task")
 	}
+	testBackupRequestDelivery(t, db, event)
 }
