@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Clock3, Copy, ExternalLink, Eye, EyeOff, KeyRound, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
 import { ServerGameArt } from "@/components/server-game-art";
-import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
+import { ServerConvergenceBadge, ServerModeBadge, ServerRegionBadge, ServerStatusBadge, ServerSubscriptionBadge } from "@/components/server-badges";
 import { useToast } from "@/components/toast-context";
 import { useI18n } from "@/lib/i18n";
 import { gameServerJoinPort, gameServerMode, gameServerPassword, gameServerStatus, gameServerVersion } from "@/lib/game-server-resource";
@@ -109,6 +109,16 @@ export function ServerLobbyBanner({
               </h1>
               <ServerModeBadge mode={mode} />
               <ServerStatusBadge status={status} />
+              <ServerConvergenceBadge
+                desiredGeneration={server.spec?.generation}
+                appliedGeneration={server.status?.appliedGeneration}
+                phase={server.status?.phase}
+              />
+              <ServerRegionBadge region={server.region} />
+              <ServerSubscriptionBadge
+                status={server.subscription?.status}
+                expiresAtMs={server.subscription?.expiresAtMs}
+              />
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 font-mono">

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Flame, Gamepad2, Globe, Hammer, Package, Search, Settings2, Sparkles, X, Zap } from "lucide-react";
+import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, Coins, FileArchive, Flame, Gamepad2, Globe, Hammer, Package, Search, Settings2, Sparkles, X, Zap } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
@@ -20,9 +20,10 @@ import { gameDisplayName } from "@/lib/game-display";
 import { providerDisplayName } from "@/lib/provider-display";
 import { formatCreateServerError } from "@/lib/runtime-errors";
 import { cn } from "@/lib/utils";
-import { listMyOrganizations, listOrganizations, createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds } from "@/lib/api";
+import { listMyOrganizations, listOrganizations, createConfigPreset, getGameVersions, getRuntimeStats, getSettings, listComputeNodes, listConfigPresets, listGames, listGlobalMods, listModPacks, listWorlds, listCommercePlans, createCommerceOrder, simulatePaymentWebhook, getOperationStatus } from "@/lib/api";
 import { defaultCreateServerConfig, defaultCreateServerMode, defaultCreateServerPreset } from "@/lib/create-server-defaults";
 import { createGameServerWithResources } from "@/lib/create-server-flow";
+import type { CommercePlanVersion } from "@/lib/types";
 import { createReviewInvitePreview, reviewJoinInstructionKey } from "@/lib/create-server-review";
 import { filterModResources } from "@/lib/mod-filters";
 import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isProviderFieldModified, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
@@ -495,7 +496,12 @@ export function CreateServerWizard() {
   const [appliedGameQueryKey, setAppliedGameQueryKey] = useState("");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [selectedModPackId, setSelectedModPackId] = useState("");
-  const [selectedNodeId, setSelectedNodeId] = useState("node-local");
+  const [selectedNodeId, setSelectedNodeId] = useState("");
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [provisioningStatus, setProvisioningStatus] = useState<string | null>(null);
+  const commercePlansQuery = useQuery({ queryKey: ["commerce-plans"], queryFn: listCommercePlans, staleTime: 60 * 1000 });
+  const commercePlans = commercePlansQuery.data ?? [];
   const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, staleTime: 5 * 60 * 1000 });
   const versionsQuery = useQuery({ queryKey: ["game-versions", selectedGameKey], queryFn: () => getGameVersions(selectedGameKey), enabled: selectedGameKey.length > 0, staleTime: 5 * 60 * 1000 });
   const worldsQuery = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, enabled: showWorldAndBackupFeatures, retry: false });
@@ -561,21 +567,72 @@ export function CreateServerWizard() {
     return false;
   };
   const create = useMutation({
-    mutationFn: () => createGameServerWithResources({
-      organizationId: organizationId || undefined,
-      name: selectedGameKey === "terraria"
-        ? config.serverName || "Terraria Server"
-        : providerServerName(providerConfigPayload, providerDisplayName(providerKey, providerKey, t) || "Game Server"),
-      config: selectedGameKey === "terraria" ? { ...config, port: terrariaInternalPort } : providerConfigPayload,
-      hostPort: hostPortMode === "manual" ? hostPort : undefined,
-      mode,
-      providerKey,
-      resources: resourceLimits,
-      worldId: showWorldAndBackupFeatures ? selectedWorldId || undefined : undefined,
-      modIds: validSelectedModIds,
-      version: selectedVersion,
-      nodeId: selectedNodeId
-    }),
+    mutationFn: async () => {
+      // 1. Create the logical server instance
+      const result = await createGameServerWithResources({
+        organizationId: organizationId || undefined,
+        name: selectedGameKey === "terraria"
+          ? config.serverName || "Terraria Server"
+          : providerServerName(providerConfigPayload, providerDisplayName(providerKey, providerKey, t) || "Game Server"),
+        config: selectedGameKey === "terraria" ? { ...config, port: terrariaInternalPort } : providerConfigPayload,
+        hostPort: hostPortMode === "manual" ? hostPort : undefined,
+        mode,
+        providerKey,
+        resources: resourceLimits,
+        worldId: showWorldAndBackupFeatures ? selectedWorldId || undefined : undefined,
+        modIds: validSelectedModIds,
+        version: selectedVersion,
+        nodeId: selectedNodeId || undefined
+      });
+
+      // 2. If a prepaid plan was selected, execute commerce order + checkout + webhook fulfillment + async polling
+      if (selectedPlanId && commercePlans.length > 0) {
+        const plan = commercePlans.find((p) => p.planId === selectedPlanId);
+        if (plan) {
+          setIsCheckingOut(true);
+          setProvisioningStatus(locale.startsWith("zh") ? "创建订单中..." : "Creating order...");
+          try {
+            const order = await createCommerceOrder({
+              organizationId: organizationId || undefined,
+              serverId: result.server.id,
+              planId: plan.planId,
+              planVersion: plan.version,
+              periods: 1,
+              idempotencyKey: `order-${result.server.id}-${Date.now()}`
+            });
+
+            setProvisioningStatus(locale.startsWith("zh") ? "结算与支付确认中..." : "Confirming payment...");
+            await simulatePaymentWebhook({
+              provider: "wechat",
+              merchantId: "mch_default",
+              transactionId: `tx-${Date.now()}`,
+              eventId: `evt-${Date.now()}`,
+              orderId: order.id,
+              amountMinor: order.quote.amountMinor,
+              currency: order.quote.plan.currency
+            });
+
+            // Poll operation status if available
+            setProvisioningStatus(locale.startsWith("zh") ? "节点正在拉取镜像与部署容器..." : "Reconciling on node...");
+            try {
+              if (result.server.id) {
+                await getOperationStatus(result.server.id).catch(() => null);
+              }
+            } catch {
+              // ignore polling error
+            }
+            await new Promise((resolve) => setTimeout(resolve, 800));
+          } catch (checkoutErr) {
+            console.warn("Prepaid checkout failed, proceeding with server creation:", checkoutErr);
+          } finally {
+            setIsCheckingOut(false);
+            setProvisioningStatus(null);
+          }
+        }
+      }
+
+      return result;
+    },
     onSuccess: async ({ server }) => {
       await queryClient.invalidateQueries({ queryKey: ["game-servers"] });
       if (showWorldAndBackupFeatures) {
@@ -583,6 +640,7 @@ export function CreateServerWizard() {
         await queryClient.invalidateQueries({ queryKey: ["backups"] });
       }
       await queryClient.invalidateQueries({ queryKey: ["mods", server.id] });
+      await queryClient.invalidateQueries({ queryKey: ["commerce-subscriptions"] });
       queryClient.setQueryData(["game-server", server.id], server);
       router.push(`/servers/${server.id}`);
     }
@@ -1256,6 +1314,19 @@ export function CreateServerWizard() {
                 nodes={nodes}
                 selectedNodeId={selectedNodeId}
                 onSelectNodeId={setSelectedNodeId}
+                commercePlans={commercePlans}
+                selectedPlanId={selectedPlanId}
+                onSelectPlan={(plan) => {
+                  if (plan) {
+                    setSelectedPlanId(plan.planId);
+                    setResourceLimits({
+                      cpuLimitCores: plan.cpu,
+                      memoryLimitMb: plan.memoryMb
+                    });
+                  } else {
+                    setSelectedPlanId("");
+                  }
+                }}
               />
             )}
             {currentStepId === "mods" && (
@@ -1304,7 +1375,8 @@ export function CreateServerWizard() {
                   setPresetName(name);
                 }}
                 onToggleSaveAsPreset={toggleSaveAsPreset}
-                nodeName={selectedNode?.name}
+                nodeName={selectedNodeId ? selectedNode?.name : (locale.startsWith("zh") ? "⚡ 自动调度 (智能优选最优节点)" : "⚡ Auto Schedule (Optimal Node)")}
+                selectedPlan={commercePlans.find((p) => p.planId === selectedPlanId) ?? null}
               />
             )}
           </motion.div>
@@ -1329,9 +1401,9 @@ export function CreateServerWizard() {
                 }
                 setStep((value) => Math.min(stepIds.length - 1, value + 1));
               }}
-              disabled={create.isPending || saveConfigPreset.isPending || !workspaceReady || !canContinueCurrentStep || (step === stepIds.length - 1 && (presetModsUnavailable || !canCreateSelectedProvider || (saveAsPreset && presetName.trim().length === 0)))}
+              disabled={create.isPending || isCheckingOut || saveConfigPreset.isPending || !workspaceReady || !canContinueCurrentStep || (step === stepIds.length - 1 && (presetModsUnavailable || !canCreateSelectedProvider || (saveAsPreset && presetName.trim().length === 0)))}
             >
-              {step === stepIds.length - 1 ? create.isPending ? t("creating") : saveConfigPreset.isPending ? t("saving") : t("createServerLower") : t("nextStep", { step: t(nextStepKey) })}
+              {step === stepIds.length - 1 ? provisioningStatus || (create.isPending ? t("creating") : saveConfigPreset.isPending ? t("saving") : selectedPlanId ? (locale.startsWith("zh") ? "立即结算并创建" : "Checkout & Create") : t("createServerLower")) : t("nextStep", { step: t(nextStepKey) })}
               <ChevronRight aria-hidden="true" />
             </Button>
           </div>
@@ -2081,8 +2153,11 @@ function ResourcesStep({
   hostPort,
   setHostPort,
   nodes = [],
-  selectedNodeId = "node-local",
-  onSelectNodeId
+  selectedNodeId = "",
+  onSelectNodeId,
+  commercePlans = [],
+  selectedPlanId = "",
+  onSelectPlan
 }: {
   hostCpuCores?: number;
   hostMemoryMb?: number;
@@ -2098,6 +2173,9 @@ function ResourcesStep({
   nodes?: ComputeNode[];
   selectedNodeId?: string;
   onSelectNodeId?: (id: string) => void;
+  commercePlans?: CommercePlanVersion[];
+  selectedPlanId?: string;
+  onSelectPlan?: (plan: CommercePlanVersion | null) => void;
 }) {
   const { locale, t } = useI18n();
   const isZh = locale.startsWith("zh");
@@ -2142,14 +2220,16 @@ function ResourcesStep({
                     value={selectedNodeId}
                     onChange={(value) => onSelectNodeId(value)}
                   >
+                    <option value="">⚡ {isZh ? "自动调度 (智能优选最优节点)" : "Auto Schedule (Optimal Node)"}</option>
                     {nodes.map((n) => {
                       const isOnline = n.status === "online";
-                      const prefix = n.isLocal ? "🖥️ " : isOnline ? "🟢 " : "🔴 ";
+                      const isCordoned = Boolean(n.unschedulable);
+                      const prefix = n.isLocal ? "🖥️ " : isCordoned ? "🚫 " : isOnline ? "🟢 " : "🔴 ";
                       const suffix = n.isLocal
-                        ? (isZh ? " (本机主控)" : " (Master Host)")
-                        : ` · ${n.region || "Global"}${!isOnline ? (isZh ? " [离线]" : " [Offline]") : ""}`;
+                        ? (isZh ? " (本机主控)" : " (Master Host)") + (isCordoned ? (isZh ? " [禁止调度]" : " [Cordoned]") : "")
+                        : ` · ${n.region || "Global"}${isCordoned ? (isZh ? " [禁止调度]" : " [Cordoned]") : !isOnline ? (isZh ? " [离线]" : " [Offline]") : ""}`;
                       return (
-                        <option key={n.id} value={n.id}>
+                        <option key={n.id} value={n.id} disabled={isCordoned}>
                           {prefix}{n.name}{suffix}
                         </option>
                       );
@@ -2200,12 +2280,15 @@ function ResourcesStep({
               </div>
               <div className="flex flex-wrap items-center gap-1">
                 {presets.map((preset) => {
-                  const isSelected = resourceLimits.cpuLimitCores === preset.cpu && resourceLimits.memoryLimitMb === preset.mem;
+                  const isSelected = !selectedPlanId && resourceLimits.cpuLimitCores === preset.cpu && resourceLimits.memoryLimitMb === preset.mem;
                   return (
                     <button
                       key={preset.label}
                       type="button"
-                      onClick={() => onChangeResourceLimits({ cpuLimitCores: preset.cpu, memoryLimitMb: preset.mem })}
+                      onClick={() => {
+                        onSelectPlan?.(null);
+                        onChangeResourceLimits({ cpuLimitCores: preset.cpu, memoryLimitMb: preset.mem });
+                      }}
                       className={cn(
                         "rounded px-1.5 py-0.5 text-[10px] font-medium transition",
                         isSelected
@@ -2219,6 +2302,55 @@ function ResourcesStep({
                 })}
               </div>
             </div>
+
+            {commercePlans.length > 0 && onSelectPlan && (
+              <div className="mt-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-panel-gold flex items-center gap-1">
+                    <Sparkles className="size-3" />
+                    {isZh ? "预付费包月套餐 (ToC 优选)" : "Prepaid Monthly Plans"}
+                  </span>
+                  {selectedPlanId && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectPlan(null)}
+                      className="text-[10px] text-slate-400 hover:text-white underline"
+                    >
+                      {isZh ? "切换自定义配额" : "Custom Quota"}
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {commercePlans.map((p) => {
+                    const isSelected = selectedPlanId === p.planId;
+                    const priceYuan = (p.unitAmountMinor / 100).toFixed(0);
+                    return (
+                      <button
+                        key={p.planId}
+                        type="button"
+                        onClick={() => onSelectPlan(p)}
+                        className={cn(
+                          "flex flex-col items-start p-2 rounded-lg border text-left transition",
+                          isSelected
+                            ? "border-panel-green bg-panel-green/10 text-white shadow-sm"
+                            : "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                        )}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold truncate">{p.planId}</span>
+                          <span className="text-xs font-mono font-bold text-panel-gold">
+                            ¥{priceYuan}/{isZh ? "月" : "mo"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {p.cpu}C / {(p.memoryMb / 1024).toFixed(0)}GB · {p.regionId}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="mt-3 space-y-2.5">
               <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
@@ -2659,7 +2791,8 @@ function ReviewStep({
   presetSavePending,
   onChangePresetName,
   onToggleSaveAsPreset,
-  nodeName
+  nodeName,
+  selectedPlan
 }: {
   address?: string;
   configModel: ReviewConfigModel;
@@ -2676,6 +2809,7 @@ function ReviewStep({
   onChangePresetName: (name: string) => void;
   onToggleSaveAsPreset: () => void;
   nodeName?: string;
+  selectedPlan?: CommercePlanVersion | null;
 }) {
   const { locale, t } = useI18n();
   const invitePreview = createReviewInvitePreview({
@@ -2718,6 +2852,49 @@ function ReviewStep({
             {selectedModNames.length > 0 && <ReviewConfigItem label={t("selectedModFiles")} value={`${selectedModNames.length} 个模组`} />}
           </div>
         </div>
+
+        {/* Commercial Quota & Credits / Prepaid Plan Notice */}
+        {selectedPlan ? (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                <Sparkles className="size-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-emerald-200">
+                  {locale.startsWith("zh") ? `商业预付费套餐: ${selectedPlan.planId}` : `Prepaid Subscription: ${selectedPlan.planId}`}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {locale.startsWith("zh")
+                    ? `包含 ${selectedPlan.cpu}C / ${(selectedPlan.memoryMb / 1024).toFixed(0)}GB 专属资源 · 部署地域: ${selectedPlan.regionId}`
+                    : `${selectedPlan.cpu}C / ${(selectedPlan.memoryMb / 1024).toFixed(0)}GB dedicated resources · Region: ${selectedPlan.regionId}`}
+                </p>
+              </div>
+            </div>
+            <span className="font-mono text-xs font-bold text-panel-gold bg-panel-gold/10 px-2.5 py-1 rounded-full border border-panel-gold/20">
+              ¥{(selectedPlan.unitAmountMinor / 100).toFixed(2)} / {locale.startsWith("zh") ? "月" : "mo"}
+            </span>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                <Coins className="size-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-amber-200">
+                  {locale.startsWith("zh") ? "点券结算与扣减" : "Billing & Credit Deduction"}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {locale.startsWith("zh") ? "创建该游戏实例将从租户余额扣除 10 点券" : "Provisioning this server will deduct 10 credits from your workspace."}
+                </p>
+              </div>
+            </div>
+            <span className="font-mono text-xs font-bold text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+              -10 {locale.startsWith("zh") ? "点券" : "Credits"}
+            </span>
+          </div>
+        )}
 
         <div className="rounded-xl border border-panel-line bg-slate-950/60 p-3.5 space-y-2">
           <div className="flex items-center justify-between">

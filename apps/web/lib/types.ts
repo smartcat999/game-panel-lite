@@ -227,6 +227,12 @@ export type GameServerResource = {
   id: string;
   name: string;
   nodeId?: string;
+  region?: string;
+  subscription?: {
+    status?: string;
+    expiresAtMs?: number;
+    planId?: string;
+  };
   gameKey: GameKey;
   providerKey: ProviderKey;
   spec: ServerResourceSpec;
@@ -483,6 +489,7 @@ export type ComputeNode = {
   osInfo?: string;
   pingLatencyMs?: number;
   runningCount: number;
+  unschedulable?: boolean;
   lastHeartbeat?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -495,3 +502,106 @@ export type NodeJoinCommand = {
   dockerCommand: string;
   shellCommand: string;
 };
+
+export type DrainMigrationResult = {
+  serverId: string;
+  serverName: string;
+  targetNodeId?: string;
+  success: boolean;
+  error?: string;
+};
+
+export type DrainNodeResponse = {
+  nodeId: string;
+  totalServers: number;
+  migratedCount: number;
+  failedCount: number;
+  details: DrainMigrationResult[];
+};
+
+export type CreditTransaction = {
+  id: string;
+  organizationId: string;
+  amount: number;
+  balanceAfter: number;
+  type: string;
+  description: string;
+  createdBy?: string;
+  createdAt: string;
+};
+
+export type UserCreditsResponse = {
+  organizationId: string;
+  organizationName: string;
+  credits: number;
+  transactions: CreditTransaction[];
+};
+
+export type OAuthProviderStatus = {
+  github: boolean;
+  google: boolean;
+};
+
+export type RegionInfo = {
+  id: string;
+  name: string;
+  nameEn: string;
+  flag: string;
+  available: boolean;
+  nodeCount: number;
+};
+
+export type CommercePlanVersion = {
+  planId: string;
+  version: number;
+  providerKey: string;
+  regionId: string;
+  cpu: number;
+  memoryMb: number;
+  storageBytes: number;
+  currency: string;
+  unitAmountMinor: number;
+  periodSeconds: number;
+};
+
+export type CommerceOrder = {
+  id: string;
+  organizationId: string;
+  serverId: string;
+  revisionId: string;
+  placementEpoch: number;
+  status: "pending" | "paid" | "cancelled" | "expired";
+  quote: {
+    plan: CommercePlanVersion;
+    periods: number;
+    amountMinor: number;
+  };
+  createdAtMs: number;
+  expiresAtMs: number;
+};
+
+export type CommerceSubscription = {
+  id: string;
+  organizationId: string;
+  serverId: string;
+  orderId: string;
+  paymentId: string;
+  status: "pending_activation" | "active" | "cancelled";
+  quote: {
+    plan: CommercePlanVersion;
+    periods: number;
+    amountMinor: number;
+  };
+  createdAtMs: number;
+};
+
+export type ServerOperation = {
+  id: string;
+  organizationId: string;
+  serverId: string;
+  kind: string;
+  status: "pending" | "succeeded" | "failed";
+  createdAt: string;
+};
+
+

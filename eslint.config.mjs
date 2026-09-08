@@ -12,7 +12,10 @@ export default [
       "**/node_modules/**",
       "**/generated/**",
       "**/next-env.d.ts",
-      "pnpm-lock.yaml"
+      "pnpm-lock.yaml",
+      "tmp/**",
+      "scripts/**",
+      "apps/demo-video/build/**"
     ]
   },
   js.configs.recommended,

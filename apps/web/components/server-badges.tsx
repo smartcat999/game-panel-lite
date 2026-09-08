@@ -139,3 +139,113 @@ function providerLabelKey(server: { mode?: ServerMode; providerKey?: ProviderKey
   if (providerKey === "minecraft") return "providerNameMinecraft";
   return undefined;
 }
+
+export function ServerConvergenceBadge({
+  desiredGeneration = 1,
+  appliedGeneration = 0,
+  phase
+}: {
+  desiredGeneration?: number;
+  appliedGeneration?: number;
+  phase?: string;
+}) {
+  const { locale } = useI18n();
+  const isZh = locale.startsWith("zh");
+
+  if (phase === "failed" || phase === "deleting" || phase === "deleted") {
+    return null;
+  }
+
+  const isConverging = desiredGeneration > appliedGeneration;
+
+  if (isConverging) {
+    return (
+      <span
+        title={
+          isZh
+            ? `控制面最新配置 (Gen ${desiredGeneration}) 正在同步至节点守护进程 (已应用 Gen ${appliedGeneration})`
+            : `Desired Gen ${desiredGeneration} is reconciling to node (Applied Gen ${appliedGeneration})`
+        }
+        className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-400 motion-safe:animate-pulse"
+      >
+        <span className="size-1.5 rounded-full bg-sky-400" />
+        <span>{isZh ? `⚡ 配置收敛中 (v${appliedGeneration} → v${desiredGeneration})` : `⚡ Reconciling (v${appliedGeneration} → v${desiredGeneration})`}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      title={
+        isZh
+          ? `节点运行时与控制面规格已达成最终一致 (Gen ${appliedGeneration})`
+          : `Node runtime has converged to desired generation (Gen ${appliedGeneration})`
+      }
+      className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/60 px-2 py-0.5 text-[11px] font-mono text-slate-400"
+    >
+      <span className="size-1.5 rounded-full bg-emerald-400/80" />
+      <span>v{appliedGeneration || desiredGeneration}</span>
+    </span>
+  );
+}
+
+export function ServerRegionBadge({ region }: { region?: string }) {
+  if (!region) return null;
+  return (
+    <span
+      title={`Deployment Region: ${region}`}
+      className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 px-2.5 py-0.5 text-xs font-mono text-slate-300"
+    >
+      <span>🌐</span>
+      <span>{region}</span>
+    </span>
+  );
+}
+
+export function ServerSubscriptionBadge({
+  status,
+  expiresAtMs
+}: {
+  status?: string;
+  expiresAtMs?: number;
+}) {
+  const { locale } = useI18n();
+  const isZh = locale.startsWith("zh");
+
+  if (!status) return null;
+
+  const isExpired = expiresAtMs ? expiresAtMs <= Date.now() : false;
+  const expirationDate = expiresAtMs ? new Date(expiresAtMs).toLocaleDateString() : null;
+
+  if (status === "active" && !isExpired) {
+    return (
+      <span
+        title={expirationDate ? (isZh ? `订阅有效期至: ${expirationDate}` : `Valid until: ${expirationDate}`) : undefined}
+        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400"
+      >
+        <span className="size-1.5 rounded-full bg-emerald-400" />
+        <span>{isZh ? (expirationDate ? `包月生效中 (至 ${expirationDate})` : "包月生效中") : (expirationDate ? `Prepaid (until ${expirationDate})` : "Prepaid Active")}</span>
+      </span>
+    );
+  }
+
+  if (isExpired || status === "expired") {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-400"
+      >
+        <span className="size-1.5 rounded-full bg-amber-400" />
+        <span>{isZh ? "订阅已到期" : "Subscription Expired"}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/80 px-2.5 py-0.5 text-xs font-medium text-slate-300"
+    >
+      <span className="size-1.5 rounded-full bg-slate-400" />
+      <span>{status}</span>
+    </span>
+  );
+}

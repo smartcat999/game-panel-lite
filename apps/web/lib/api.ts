@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, AuthBootstrap, Backup, ComputeNode, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -397,6 +397,7 @@ export type GameServerListParams = {
   game?: string;
   provider?: string;
   status?: string;
+  region?: string;
   sort?: "name" | "status" | "createdAt" | "updatedAt";
   direction?: "asc" | "desc";
 };
@@ -420,6 +421,7 @@ export async function listGameServersPage(params: GameServerListParams = {}): Pr
   if (params.game && params.game !== "all") query.set("game", params.game);
   if (params.provider && params.provider !== "all") query.set("provider", params.provider);
   if (params.status && params.status !== "all") query.set("status", params.status);
+  if (params.region && params.region !== "all") query.set("region", params.region);
   const response = await apiFetch(`${API_BASE}/api/servers?${query.toString()}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Unable to load servers");
   const payload = (await response.json()) as Omit<GameServerPage, "items"> & { items: ApiServer[] };
@@ -902,6 +904,20 @@ export async function gameServerAction(id: string, action: "start" | "stop" | "r
   }
   if (action === "delete") {
     return null;
+  }
+  const server = (await response.json()) as ApiServer;
+  return gameServerResourceFromApi(server);
+}
+
+export async function migrateGameServer(id: string, targetNodeId?: string): Promise<GameServerResource> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/migrate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetNodeId: targetNodeId?.trim() || undefined })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to migrate server");
   }
   const server = (await response.json()) as ApiServer;
   return gameServerResourceFromApi(server);
@@ -1587,6 +1603,7 @@ export type Organization = {
   name: string;
   slug: string;
   plan: string;
+  credits?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -1651,8 +1668,13 @@ export async function createOrganization(payload: { name: string; slug?: string;
   return readPayload<Organization>(response, "Unable to create organization");
 }
 
-export async function listComputeNodes(): Promise<ComputeNode[]> {
-  const response = await apiFetch(`${API_BASE}/api/nodes`, { cache: "no-store" });
+export async function listComputeNodes(regionOrContext?: string | unknown): Promise<ComputeNode[]> {
+  const region = typeof regionOrContext === "string" ? regionOrContext : undefined;
+  const url = new URL(`${API_BASE}/api/nodes`);
+  if (region && region !== "all") {
+    url.searchParams.set("region", region);
+  }
+  const response = await apiFetch(url.toString(), { cache: "no-store" });
   return readPayload<ComputeNode[]>(response, "Unable to load compute nodes");
 }
 
@@ -1716,6 +1738,7 @@ export async function updateComputeNode(id: string, payload: {
   publicIp?: string;
   host?: string;
   port?: number;
+  unschedulable?: boolean;
 }): Promise<ComputeNode> {
   const response = await apiFetch(`${API_BASE}/api/nodes/${id}`, {
     method: "PATCH",
@@ -1723,6 +1746,23 @@ export async function updateComputeNode(id: string, payload: {
     body: JSON.stringify(payload)
   });
   return readPayload<ComputeNode>(response, "Unable to update compute node");
+}
+
+export async function cordonComputeNode(id: string, unschedulable: boolean): Promise<ComputeNode> {
+  const endpoint = unschedulable ? "cordon" : "uncordon";
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/${endpoint}`, {
+    method: "POST"
+  });
+  return readPayload<ComputeNode>(response, `Unable to ${endpoint} compute node`);
+}
+
+export async function drainComputeNode(id: string, targetNodeId?: string): Promise<DrainNodeResponse> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/drain`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(targetNodeId ? { targetNodeId } : {})
+  });
+  return readPayload<DrainNodeResponse>(response, "Unable to drain compute node");
 }
 
 export async function deleteComputeNode(id: string): Promise<void> {
@@ -1802,3 +1842,112 @@ export async function requestModInstallation(serverId: string, modId: string, ge
   }
   return { serverId, state: "requested", generation: payload.generation, modIds: payload.modIds };
 }
+
+// ---------------------------------------------------------------------------
+// Credits & Billing APIs
+// ---------------------------------------------------------------------------
+
+export async function getUserCredits(organizationId?: string): Promise<UserCreditsResponse> {
+  const url = new URL(`${API_BASE}/api/user/credits`);
+  if (organizationId) {
+    url.searchParams.set("organizationId", organizationId);
+  }
+  const response = await apiFetch(url.toString(), { cache: "no-store" });
+  return readPayload<UserCreditsResponse>(response, "Unable to load credits");
+}
+
+export async function getOrganizationCredits(organizationId: string): Promise<UserCreditsResponse> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${encodeURIComponent(organizationId)}/credits`, { cache: "no-store" });
+  return readPayload<UserCreditsResponse>(response, "Unable to load organization credits");
+}
+
+export async function adminTopUpCredits(organizationId: string, amount: number, description?: string): Promise<CreditTransaction> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${encodeURIComponent(organizationId)}/topup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount, description: description || "Admin top-up" }),
+  });
+  return readPayload<CreditTransaction>(response, "Unable to top up credits");
+}
+
+// ---------------------------------------------------------------------------
+// OAuth APIs
+// ---------------------------------------------------------------------------
+
+export async function getOAuthProviders(): Promise<OAuthProviderStatus> {
+  const response = await apiFetch(`${API_BASE}/api/auth/oauth/providers`, { cache: "no-store" }, false);
+  return readPayload<OAuthProviderStatus>(response, "Unable to check OAuth providers");
+}
+
+// ---------------------------------------------------------------------------
+// Regions Catalog API
+// ---------------------------------------------------------------------------
+
+export async function listRegions(): Promise<RegionInfo[]> {
+  const response = await apiFetch(`${API_BASE}/api/regions`, { cache: "no-store" });
+  return readPayload<RegionInfo[]>(response, "Unable to load regions");
+}
+
+// ---------------------------------------------------------------------------
+// Commerce & Subscriptions API
+// ---------------------------------------------------------------------------
+
+export async function listCommercePlans(): Promise<CommercePlanVersion[]> {
+  const response = await apiFetch(`${API_BASE}/api/commerce/plans`, { cache: "no-store" }, false);
+  return readPayload<CommercePlanVersion[]>(response, "Unable to load plans");
+}
+
+export async function createCommerceOrder(req: {
+  organizationId?: string;
+  serverId: string;
+  planId: string;
+  planVersion: number;
+  periods?: number;
+  idempotencyKey?: string;
+}): Promise<CommerceOrder> {
+  const response = await apiFetch(`${API_BASE}/api/commerce/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  return readPayload<CommerceOrder>(response, "Unable to create order");
+}
+
+export async function cancelCommerceOrder(orderId: string): Promise<CommerceOrder> {
+  const response = await apiFetch(`${API_BASE}/api/commerce/orders/${encodeURIComponent(orderId)}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return readPayload<CommerceOrder>(response, "Unable to cancel order");
+}
+
+export async function listCommerceSubscriptions(organizationId?: string): Promise<CommerceSubscription[]> {
+  const url = new URL(`${API_BASE}/api/commerce/subscriptions`);
+  if (organizationId) url.searchParams.set("organizationId", organizationId);
+  const response = await apiFetch(url.toString(), { cache: "no-store" });
+  return readPayload<CommerceSubscription[]>(response, "Unable to load subscriptions");
+}
+
+export async function simulatePaymentWebhook(req: {
+  provider: string;
+  merchantId: string;
+  transactionId: string;
+  eventId: string;
+  orderId: string;
+  amountMinor: number;
+  currency: string;
+}): Promise<{ success: boolean }> {
+  const response = await apiFetch(`${API_BASE}/api/commerce/payments/webhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  }, false);
+  return readPayload<{ success: boolean }>(response, "Payment callback failed");
+}
+
+export async function getOperationStatus(operationId: string): Promise<ServerOperation> {
+  const response = await apiFetch(`${API_BASE}/api/operations/${encodeURIComponent(operationId)}`, { cache: "no-store" });
+  return readPayload<ServerOperation>(response, "Unable to load operation status");
+}
+
+
