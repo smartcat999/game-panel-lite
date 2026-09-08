@@ -375,3 +375,10 @@
 - RevisionSnapshot 增加已发布资产清单，区域客户端及持久化入口验证其与修订引用一一对应；拒绝遗漏、多余、重复、错版本、错租户、非法摘要与负大小。真实 PostgreSQL／mTLS 组合验证元数据随受保护配置跨接口并持久化到独立区域库；测试发布元数据不是内容上传或文件交付证明。
 - 独立快照全量 Go（含架构门禁）／vet，以及 SQLite＋PostgreSQL、区域契约、mTLS 客户端与区域获取组合 race 全部通过。日志 `/tmp/gamepanel-asset-manifest-index-all.log`、`/tmp/gamepanel-asset-manifest-index-vet.log`、`/tmp/gamepanel-asset-manifest-index-integration.log`。未修改历史迁移、前端或无关草稿。
 - 有资产引用却缺少清单的历史快照必须授权补取，尚未实现已保存任务批量补取工具；新执行链路前需协调升级。区域副本内容验证、实际分发、有限期执行授权及其余六阶段目标继续推进，完整 Goal 不变。
+
+### 2026-09-08 历史资产清单补取工具
+
+- 新增 region-repair-manifests 受信运维入口，默认预览，显式 apply 才将身份有效但整份资产清单缺失的 revision_fetched 任务重新排队。按 Operation ID 有界分页、单表事务锁定，不使用 JOIN；保留原事件、任务、尝试次数和旧快照，由正常 mTLS 获取成功后替换。
+- 报告游标、候选与异常任务 ID，不输出配置。已物化／拒绝／等待中任务不改写；错误身份、损坏或超过 4 MiB 的快照只报告，不自动修复。错误租户／修订代数不能通过补取资格检查。支持从已报告游标继续和重复运行；结束后需从头预览覆盖并发新增记录。
+- 真实 PostgreSQL 验证预览不写、两个并发修复者合计只重置两个任务、重复无重置、原快照及计数保留、异常记录和其他生命周期不变、重新领取后仍拒绝旧不完整快照且接受完整清单。独立快照全量 Go／架构／vet、Store＋regional＋区域获取组合 race 和补充契约 race 通过。日志 `/tmp/gamepanel-manifest-repair-index-all.log`、`/tmp/gamepanel-manifest-repair-index-vet.log`、`/tmp/gamepanel-manifest-repair-index-integration.log`、`/tmp/gamepanel-manifest-repair-index-contract.log`。
+- CLI 已在专用临时 PostgreSQL 实际执行迁移和默认预览，返回 applied=false、scanned=0，证据 `/tmp/gamepanel-manifest-repair-cli-preview.log`；这项 CLI 探针不冒充生产历史数据升级验收。重新排队不等于授权补取完成，更不代表运行已停止。未改历史迁移、前端或无关草稿；完整六阶段 Goal 保持进行中。

@@ -110,4 +110,5 @@ func testRegionalRevisionTasks(t *testing.T, db *RegionalStore, dsn string) {
 	if claim, err := db.ClaimRevision(ctx, time.Minute); err != nil || claim != nil {
 		t.Fatalf("completed task reset: %v", err)
 	}
+	testRegionalManifestRepair(t, db)
 }

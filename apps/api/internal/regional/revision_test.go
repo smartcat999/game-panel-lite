@@ -17,6 +17,20 @@ func TestRevisionManifestValidation(t *testing.T) {
 	if err := base.ValidateFor(event); err != nil {
 		t.Fatal(err)
 	}
+	legacy := base
+	legacy.Assets = nil
+	if !legacy.NeedsAssetManifest(event) {
+		t.Fatal("legacy snapshot was not eligible for authorized refetch")
+	}
+	wrongEvent := event
+	wrongEvent.OrganizationID = "foreign"
+	if legacy.NeedsAssetManifest(wrongEvent) {
+		t.Fatal("repair accepted a mismatched tenant notification")
+	}
+	legacy.Revision.SpecGeneration++
+	if legacy.NeedsAssetManifest(event) {
+		t.Fatal("repair accepted a mismatched revision generation")
+	}
 	for name, mutate := range map[string]func(*RevisionSnapshot){
 		"missing":        func(s *RevisionSnapshot) { s.Assets = nil },
 		"extra":          func(s *RevisionSnapshot) { s.Assets = append(s.Assets, first) },

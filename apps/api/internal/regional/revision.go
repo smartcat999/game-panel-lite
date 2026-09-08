@@ -23,12 +23,29 @@ type RevisionSnapshot struct {
 
 // ValidateFor checks snapshot identity and monotonic versions, not execution authority.
 func (s RevisionSnapshot) ValidateFor(event instances.RevisionAvailable) error {
+	if err := s.validateIdentity(event); err != nil {
+		return err
+	}
+	return s.validateManifest(event)
+}
+
+// NeedsAssetManifest identifies a legacy snapshot eligible for authorized
+// refetch. It is not permission to execute or to synthesize missing metadata.
+func (s RevisionSnapshot) NeedsAssetManifest(event instances.RevisionAvailable) bool {
+	return s.validateIdentity(event) == nil && len(s.Revision.Specification.Assets) > 0 && len(s.Assets) == 0
+}
+
+func (s RevisionSnapshot) validateIdentity(event instances.RevisionAvailable) error {
 	if event.Validate() != nil || s.Event != event || s.Revision.ID != event.RevisionID ||
 		s.Revision.ServerID != event.ServerID || s.Revision.SpecGeneration != event.SpecGeneration ||
 		s.CurrentSpecGeneration < event.SpecGeneration || s.IntentVersion < 1 ||
 		(s.DesiredState != "running" && s.DesiredState != "stopped") || s.Revision.Specification.Validate() != nil {
 		return errors.New("revision snapshot does not match notification")
 	}
+	return nil
+}
+
+func (s RevisionSnapshot) validateManifest(event instances.RevisionAvailable) error {
 	if len(s.Assets) != len(s.Revision.Specification.Assets) {
 		return errors.New("revision asset manifest is incomplete")
 	}
