@@ -46,3 +46,13 @@ go run ./apps/api/cmd/region-repair-manifests -region east -batch-size 20 -apply
 全局控制面现提供 `POST /internal/region/assets/resolve?assetId=…&version=…`，请求正文为原 RevisionAvailable 事件。服务身份从已验证的 mTLS URI SAN 映射取得，不能由 Header 或参数指定；事件 Region 必须匹配身份。只接受单一 assetId／version 参数、有界 JSON 正文和无重复字段的事件。响应设置 no-store，仅包含经 Store 校验的 PublishedVersion；不可用、身份不符、输入错误和内部失败分别返回对应 HTTP 错误，不回显数据库细节。
 
 `controlclient.ResolveAsset` 使用现有受信 HTTPS origin、客户端证书和 CA、超时、无代理及禁止重定向策略，并限制响应体大小。客户端复核租户、资产 ID、版本、摘要／大小格式，拒绝错误身份、未知字段、尾随 JSON 和超限响应，不返回部分元数据。global-control 同时挂载修订与资产解析路由；此 API 仍不是文件下载服务或传输票据服务。
+
+## 源副本目录
+
+PostgreSQL 019／SQLite 版本 7 新增 global_asset_replicas，绑定稳定副本 ID、精确资产版本、源 Region、StorageID、可用性及观测版本。StorageID 是区域存储资源标识，不是 URL 或宿主机路径；区域端点解析仍须来自受信部署配置。一个资产版本在同一 Region／StorageID 只能登记一个副本身份。
+
+RegisterAssetReplica 是受信运维目录入口，要求区域与资产版本已存在，注册默认不可用，不创建存储、不检查文件。相同身份重复注册保留当前可用性和观测版本，不能重绑已有 ID。SetAssetReplicaAvailable 要求调用方传入经认证的源 Region 和预期观测版本，以单表 CAS 更新，跨 Region 或过期观测拒绝；调用方还必须持有经过验证的本地观测，当前未实现区域回报认证与文件状态对账入口。不能以一个 bool 视作已完成真实文件校验。
+
+ListRegionalAssetSources 在每次调用的只读快照内重新核对目标 Region、原事件、租户、Placement 和修订引用，再按精确资产版本、available 与 ID 游标分页。每页 1–100 条，SQL 全部单表，返回源 Region 可以不同于目标 Region。未被修订引用的资产、旧部署 epoch 或无权 Region 不能列出源目录。下架源不出现在后续查询结果中，但先前查询不构成可复用的下载授权。
+
+目录目前仅有受信 Store 接口，尚未接入对外源查询 API、区域副本注册回报、端点／存储卷身份验证、有界传输票据或实际复制；assets_prepared 也尚未自动注册副本。下一步需将物理校验结果和可访问存储身份绑定，再发布可用观测。目录可用性不是实时健康或数据持久性的承诺，不能用它证明跨 Region 迁移或灾备完成。

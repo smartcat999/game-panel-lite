@@ -419,3 +419,10 @@
 - 真实 mTLS 验证正常往返、Header 伪造、其他 Region、重复参数／事件、超大输入、不可用与后端错误隔离；客户端验证错租户／资产／版本、超限、尾随 JSON 和重定向拒绝。PostgreSQL＋mTLS 组合直接调用真实 Store 权限解析，验证有效资产和不存在版本，并保留原修订获取回归。
 - 独立快照全量 Go／架构／vet 与接口、客户端、真实 PostgreSQL 区域组合 race 通过，日志 `/tmp/gamepanel-asset-api-index-all.log`、`/tmp/gamepanel-asset-api-index-vet.log`、`/tmp/gamepanel-asset-api-index-integration.log`。未改生产 SQL、历史迁移、前端或无关草稿。
 - 该 API 只提供当前时点的访问校验，源副本绑定、有界传输授权、实际下载及资产 Worker 生产入口仍需接入；不以可跨进程解析元数据代替真实文件交付验收。完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 源副本目录与版本化可用性
+
+- PostgreSQL 019／SQLite 版本 7 新增副本目录，绑定精确资产版本、源 Region、StorageID、可用性和观测版本。同一区域存储上的同一资产版本只有一个副本身份；注册默认不可用，重复登记不覆盖观测状态，不能重绑已有 ID。StorageID 是受信存储身份，不是客户端 URL 或主机路径。
+- 可用性更新要求源 Region 匹配和版本 CAS；授权来源查询在每页只读快照内复核目标 Region、租户、事件、Placement 及精确修订引用，随后按版本／可用性／ID 游标单表读取，每页最多 100 条。无 JOIN，不在控制面保存物理文件路径。
+- SQLite／PostgreSQL 验证注册默认关闭、重复状态保留、存储位置唯一、缺失资产版本拒绝、跨 Region／旧观测拒绝、稳定分页、下架过滤及旧 Placement 拒绝。PostgreSQL 额外验证两个同版本观测只有一个成功。独立全量 Go／架构／vet、Store＋assets＋真实 PostgreSQL/mTLS 区域组合 race 通过，日志 `/tmp/gamepanel-replicas-index-all.log`、`/tmp/gamepanel-replicas-index-vet.log`、`/tmp/gamepanel-replicas-index-integration.log`。
+- 历史迁移未改；旧 SQLite 升级夹具补齐新副本表清理，其他草稿与前端保留。目录尚未接入区域文件验证回报、真实存储身份、外部来源查询、传输票据或复制流程；可用观测不能当作实时健康或持久性证明。完整六阶段 Goal 保持进行中。

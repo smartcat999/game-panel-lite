@@ -55,6 +55,7 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 		t.Fatal("asset manifest not resolved")
 	}
 	reference := instances.AssetVersion{AssetID: asset.AssetID, Version: asset.Version}
+	testAssetReplicas(t, db, event, reference)
 	resolved, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference)
 	if err != nil || resolved != asset {
 		t.Fatalf("exact asset authorization: %+v %v", resolved, err)
@@ -163,6 +164,9 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	}
 	if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
 		t.Fatal("old placement epoch retained asset authorization")
+	}
+	if sources, err := db.ListRegionalAssetSources(ctx, "source-east", event, reference, "", 10); !errors.Is(err, ErrNotFound) || sources != nil {
+		t.Fatal("old placement retained source access")
 	}
 	if err := db.db.Table("server_placements").Where("server_id = ?", created.Server.ID).Updates(map[string]any{"placement_epoch": 1, "region_id": "source-west"}).Error; err != nil {
 		t.Fatal(err)

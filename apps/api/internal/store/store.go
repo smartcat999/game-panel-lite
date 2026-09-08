@@ -112,6 +112,13 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
+	if err := migrateSQLiteAssetReplicas(db); err != nil {
+		pool, _ := db.DB()
+		if pool != nil {
+			_ = pool.Close()
+		}
+		return nil, err
+	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 
