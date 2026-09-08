@@ -396,3 +396,11 @@
 - 源接口携带原通知与精确资产版本，要求重新验证当前访问权限；已有本地文件不绕过源授权。部分文件成功不会把整批标为成功，也不改变任务／意图／执行状态；已验证文件保留供重试及后续 GC。生产网络来源尚未实现，测试源明确为夹具。
 - 真实文件 Adapter 组合验证中途摘要失败、重试成功、缓存存在时授权拒绝仍失败、数量／字节／Region／缺失清单在 I/O 前拒绝、整数溢出防护和超时解除阻塞。独立快照全量 Go／架构／vet 与 regional＋assetfiles race 通过，日志 `/tmp/gamepanel-asset-preparer-index-all.log`、`/tmp/gamepanel-asset-preparer-index-vet.log`、`/tmp/gamepanel-asset-preparer-index-race.log`。
 - 本批无 SQL 或 MQ 改动，未重跑外部集成；其他草稿保留。持久准备任务、下载服务授权实现、副本目录、区域总配额及执行授权仍待接入；批次限制不作为生产容量验收，完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 持久资产准备领取与恢复
+
+- 区域迁移 003 增加独立资产租约、重试时间、计数与 assets_prepared 状态及索引，历史迁移不变。ClaimAssets 单表 SKIP LOCKED 领取，锁内校验事件／Region／完整快照并使用数据库时间；坏记录持久延后避免占据队首，准备期间不持有数据库事务。
+- AssetWorker 组合真实文件准备与持久任务。完成／重试按 token、事件、完整快照及数据库当前时间复核，过期或被替换的领取不能完成。修订重新获取清空资产 token 和时间，保留独立尝试计数。assets_prepared 不等于节点副本就绪、部署或运行授权。
+- 真实 PostgreSQL＋文件 Adapter 测试覆盖并发唯一领取、过期拒绝、重连恢复、修改快照拒绝、重试延迟、源失败后重试成功、事件重放不重置完成状态及坏快照冷却。补充测试验证修订补取后旧资产 token 失效，修订／资产计数分别保持 2／5。源为明确夹具，不冒充生产下载授权。
+- 独立快照全量 Go／架构／vet、Store＋regional＋mTLS 区域获取 race 及补充 PostgreSQL race 通过，日志 `/tmp/gamepanel-asset-tasks-index-all.log`、`/tmp/gamepanel-asset-tasks-index-vet.log`、`/tmp/gamepanel-asset-tasks-index-integration.log`、`/tmp/gamepanel-asset-tasks-index-refetch.log`。无 JOIN，其他草稿和前端保留。
+- 生产内容源、独立资产 Worker 入口、副本／存储卷身份、容量预留、跨主机可用性与有限期执行授权仍需完成；多个不共享目录不能被当作同一可用副本。未以数据库重连替代进程强杀验收，完整六阶段 Goal 保持进行中。

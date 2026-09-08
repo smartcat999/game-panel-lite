@@ -102,6 +102,9 @@ func (s *RegionalStore) finishRevision(ctx context.Context, claim regional.Revis
 		if snapshot != "" {
 			values["snapshot"] = snapshot
 			values["status"] = "revision_fetched"
+			values["asset_lease_token"] = ""
+			values["asset_lease_until_ms"] = 0
+			values["asset_next_attempt_ms"] = 0
 		}
 		return tx.Table("regional_revision_tasks").Where("operation_id = ?", event.OperationID).Updates(values).Error
 	})
