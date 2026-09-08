@@ -82,7 +82,12 @@ func run(ctx context.Context, address, certificateFile, keyFile, caFile, identit
 	if err != nil {
 		return err
 	}
+	entitlements, err := controlapi.NewEntitlementHandler(db, identities, maxBytes)
+	if err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
+	mux.Handle("/internal/region/entitlements/", entitlements)
 	mux.Handle("/internal/region/backups/", backups)
 	mux.Handle("/", handler)
 	server := &http.Server{Addr: address, TLSConfig: tlsConfig, Handler: http.TimeoutHandler(mux, timeout, "request timed out"), ReadHeaderTimeout: timeout, ReadTimeout: timeout, WriteTimeout: timeout, IdleTimeout: time.Minute}

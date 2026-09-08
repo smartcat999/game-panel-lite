@@ -287,6 +287,14 @@
 - 最终隔离快照验证已完成：真实 PostgreSQL 迁移、并发版本竞争（同版本两次更新仅一次成功）、审计失败回滚、规格不足、尚未生效、撤销、过期授予拒绝，以及恢复权益不覆盖用户停服意图均通过。SQLite 顺序验证版本冲突；默认事务并发升级写锁仍可能返回锁冲突。
 - 隔离快照全量 Go（含架构）、vet、真实 PG／SQLite race 检查通过，日志 `/tmp/gamepanel-entitlements-isolated-all.log`、`/tmp/gamepanel-entitlements-isolated-vet.log`、`/tmp/gamepanel-entitlements-isolated-integration.log`。新增全局迁移 022、SQLite 迁移 10；原迁移未修改。未纳入已有计费／OAuth／前端草稿。Node 授权和支付驱动权益仍待实现，六阶段目标保持进行中。
 
+### Region 读取全局权益
+
+- 在既有 `global-control` 入口增加 `POST /internal/region/entitlements/resolve?intentVersion=<正整数>`，请求体复用严格版本通知契约；Region 身份只来自 mTLS 证书。存储适配复核当前全局意图、配置和归属，接口不提供运维修改入口。
+- Region 客户端复用现有 TLS、超时和响应大小配置，每次请求全局，不缓存、不跟随重定向；校验返回权益的租户、实例、有效结构与 active 状态。记录中的时间戳属于策略数据，客户端返回不代表执行租约或容器授权。
+- 真实 mTLS Handler 测试覆盖伪造身份、错 Region、非法查询／消息、超限、不可用及错误脱敏；HTTPS 客户端测试覆盖错误映射、响应结构、大小限制和每次实际请求。该测试范围尚未包含真实 Store 到 Agent 的整条授权交付链路。
+- 隔离快照全量 Go（含架构）、vet、接口／客户端 race 检查通过；日志 `/tmp/gamepanel-entitlement-api-all.log`、`/tmp/gamepanel-entitlement-api-vet.log`、`/tmp/gamepanel-entitlement-api-race.log`。架构规则仅为控制接口与客户端增加纯权益模型依赖，继续禁止具体 Store／Runtime。
+- 本批不增加数据库迁移或独立服务；执行许可与 Node 任务下发仍待实现。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
