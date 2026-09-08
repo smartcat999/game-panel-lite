@@ -44,8 +44,14 @@ type Specification struct {
 }
 
 func (s Specification) Validate() error {
+	if !identifier(s.Configuration.KeyID) || len(s.Configuration.Ciphertext) == 0 {
+		return ErrInvalidIntent
+	}
+	return s.ValidateMetadata()
+}
+
+func (s Specification) ValidateMetadata() error {
 	if !identifier(s.ProviderKey) || !identifier(s.GameVersion) || s.ConfigSchemaVersion < 1 ||
-		!identifier(s.Configuration.KeyID) || len(s.Configuration.Ciphertext) == 0 ||
 		s.Resources.CPU <= 0 || math.IsNaN(s.Resources.CPU) || math.IsInf(s.Resources.CPU, 0) || s.Resources.MemoryMB <= 0 {
 		return ErrInvalidIntent
 	}
@@ -68,10 +74,17 @@ type CreateRequest struct {
 }
 
 func (r CreateRequest) Validate() error {
+	if err := r.ValidateMetadata(); err != nil {
+		return err
+	}
+	return r.Specification.Validate()
+}
+
+func (r CreateRequest) ValidateMetadata() error {
 	if !identifier(r.OrganizationID) || !identifier(r.Name) || !identifier(r.RegionID) || !identifier(r.IdempotencyKey) {
 		return ErrInvalidIntent
 	}
-	return r.Specification.Validate()
+	return r.Specification.ValidateMetadata()
 }
 
 type ReviseRequest struct {

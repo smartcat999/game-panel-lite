@@ -312,3 +312,10 @@
 - 活动密钥加密新内容，保留密钥读取历史密文；初始化复制密钥状态，支持并发调用。标准库每密钥最多 `2^32` 次加密的跨进程计数／轮换约束须由后续密钥管理落实，未宣称已具备生产 KMS 能力。
 - 定向 race 覆盖往返、逐字节篡改、身份及 keyId 替换、随机输出、密钥状态复制、轮换和并发。独立快照全量 Go（含架构检查）／vet／相关 race 全部通过，日志 `/tmp/gamepanel-protection-index-all.log`、`/tmp/gamepanel-protection-index-vet.log`、`/tmp/gamepanel-protection-index-race.log`。本批未改数据库／MQ 路径，未重跑外部集成；未提交密钥或明文配置。
 - 已确认现有 Store 用密文做幂等摘要且在事务内分配 ID，不能直接接上随机加密。后续需调整受信写入用例与稳定幂等摘要版本；当前 Adapter 尚未用于业务修订，旧不透明测试载荷不是已加密证据。没有新增 SQL，其他草稿保留。
+
+### 2026-09-08 受保护创建事务与版本化幂等摘要
+
+- 新增 `CreateEncryptedGlobalServer`，共享原创建的成员锁、配额及事务持久化路径，调用方单独提供规范化配置字节和消费接口实现。新操作分配实例／修订 ID 后才认证加密，重放不再次加密；加密失败不写实例或 Operation。
+- `Fingerprinter` 使用独立外部 HMAC-SHA256 密钥，摘要携带 h1 版本和 keyId，按原记录密钥验证重放，支持保留旧密钥的轮换。旧 64 位摘要继续由旧入口使用，不隐式升级或混用；业务配置不写入请求摘要或 Outbox。
+- SQLite／PostgreSQL race 已验证真实密文落库并解密、随机加密下重放身份稳定、摘要换钥、不同配置冲突、无权重试拒绝、加密失败无残留及敏感字节不落明文。独立快照全量 Go（含架构检查）／vet／SQLite 与 PostgreSQL race 全部通过，日志 `/tmp/gamepanel-encrypted-create-index-all.log`、`/tmp/gamepanel-encrypted-create-index-vet.log`、`/tmp/gamepanel-encrypted-create-index-pg.log`。专用临时容器与快照清理，未提交密钥。
+- 这是内部受信创建边界，公共应用用例、Provider／资产／Region 校验及配置更新路径尚未切换。有限期授权与区域解密继续推进；未新增 JOIN，其他草稿保留。

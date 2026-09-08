@@ -84,19 +84,23 @@ func (s *Store) CreateGlobalServer(ctx context.Context, actor string, request in
 		return instances.IntentResult{}, err
 	}
 	hash := fmt.Sprintf("%x", sha256.Sum256(encoded))
-	specification, err := instances.EncodeSpecification(request.Specification)
-	if err != nil {
-		return instances.IntentResult{}, err
-	}
+	return s.createGlobalServer(ctx, actor, request, hash, func(existing string) (bool, error) { return existing == hash, nil }, nil)
+}
+
+func (s *Store) createGlobalServer(ctx context.Context, actor string, request instances.CreateRequest, hash string, matches func(string) (bool, error), seal func(instances.Server) (instances.ProtectedConfiguration, error)) (instances.IntentResult, error) {
 	var result instances.IntentResult
-	err = s.Transaction(ctx, func(tx *Store) error {
+	err := s.Transaction(ctx, func(tx *Store) error {
 		if err := tx.lockWorkspaceWriter(ctx, request.OrganizationID, actor); err != nil {
 			return err
 		}
 		var existing globalOperationRow
 		err := tx.db.WithContext(ctx).Table("server_operations").Where("organization_id = ? AND kind = ? AND idempotency_key = ?", request.OrganizationID, "create", request.IdempotencyKey).Take(&existing).Error
 		if err == nil {
-			if existing.RequestHash != hash {
+			matched, matchErr := matches(existing.RequestHash)
+			if matchErr != nil {
+				return matchErr
+			}
+			if !matched {
 				return instances.ErrIdempotencyConflict
 			}
 			result, err = tx.readGlobalIntent(ctx, existing)
@@ -120,6 +124,17 @@ func (s *Store) CreateGlobalServer(ctx context.Context, actor string, request in
 		}
 		now := time.Now().UTC()
 		server := instances.Server{ID: allocation.ID, OrganizationID: request.OrganizationID, Name: request.Name, CurrentRevisionID: uuid.NewString(), SpecGeneration: 1, DesiredState: "running", IntentVersion: 1, CreatedAt: now}
+		if seal != nil {
+			configuration, err := seal(server)
+			if err != nil {
+				return err
+			}
+			request.Specification.Configuration = configuration
+		}
+		specification, err := instances.EncodeSpecification(request.Specification)
+		if err != nil {
+			return err
+		}
 		revision := globalRevisionRow{ID: server.CurrentRevisionID, ServerID: server.ID, SpecGeneration: 1, Specification: string(specification), CPU: request.Specification.Resources.CPU, MemoryMB: request.Specification.Resources.MemoryMB, CreatedAt: now}
 		placement := instances.Placement{ServerID: server.ID, RegionID: request.RegionID, PlacementEpoch: 1}
 		operation := globalOperationRow{ID: uuid.NewString(), OrganizationID: request.OrganizationID, ServerID: server.ID, RevisionID: revision.ID, Kind: "create", Status: "pending", IdempotencyKey: request.IdempotencyKey, RequestHash: hash, CreatedAt: now}

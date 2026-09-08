@@ -242,6 +242,7 @@ func testGlobalInstanceIntents(t *testing.T, db *Store) {
 	if err != nil || otherResult.Server.ID == created.Server.ID || otherResult.Operation.ID == created.Operation.ID {
 		t.Fatalf("idempotency escaped tenant scope: %v", err)
 	}
+	testEncryptedGlobalCreate(t, db)
 }
 
 func TestSQLiteGlobalInstanceMigrationRollback(t *testing.T) {
