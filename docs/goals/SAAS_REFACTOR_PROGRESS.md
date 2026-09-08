@@ -79,6 +79,13 @@
 - 独立暂存快照全量 Go（含架构）、vet、backupingress／backup race 通过，日志 `/tmp/gamepanel-result-ingress-all.log`、`/tmp/gamepanel-result-ingress-vet.log`、`/tmp/gamepanel-result-ingress-race.log`。覆盖错误来源／信封、跨租户回执、对象或摘要冲突、嵌套歧义、存储失败传播及重试。无 SQL 或 MQ Adapter 改动，本批未重跑外部服务。
 - ResultInbox 的真实全局事务实现及消费者入口仍待接入；需关联原任务、去重并原子保存资产与状态，保留取消／失败终态。Node 授权与一致快照执行仍未完成。未将校验入口作为备份闭环验收，完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 全局备份结果原子登记
+
+- 按简化结构新增一张结果表，同时保存操作级去重与对象回执；全局迁移 021／SQLite 版本 9，历史迁移不变。RecordBackupResult 在任务锁内核对来源、原请求事件、租户、实例、Placement epoch 与操作修订，拒绝冲突重放。
+- 复用已有资产登记，结果回执、精确摘要元数据、任务和 Operation 成功状态同事务提交；取消／失败任务收到迟到结果只记 discarded，不复活任务、不发布资产。任务锁先于 Operation 锁，无 JOIN，不增加工作流框架或服务层。
+- 独立快照全量 Go（含架构）及 vet 通过，日志 `/tmp/gamepanel-global-results-all.log`、`/tmp/gamepanel-global-results-vet.log`。真实 PostgreSQL 与 SQLite race 通过，最终日志 `/tmp/gamepanel-global-results-final-race.log`；覆盖 8 路并发、重复／冲突结果、身份错误、结果写入故障后资产和状态回滚、精确回执及摘要保存、取消／失败终态保留。
+- 修正测试夹具复用 GORM 非空主键导致额外过滤的问题；旧 SQLite 升级夹具补充新表清理。只选择本批迁移初始化代码暂存，保留积分／OAuth 等无关草稿。生产结果消费者、用户备份 API、Node 授权和一致快照执行尚未接通，六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

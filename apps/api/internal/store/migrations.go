@@ -75,6 +75,9 @@ var assetReplicasSQL string
 //go:embed migrations/020_global_backup_tasks.sql
 var globalBackupTasksSQL string
 
+//go:embed migrations/021_global_backup_results.sql
+var globalBackupResultsSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -106,6 +109,7 @@ func postgresMigrations() []sqlMigration {
 		{18, "global_assets", globalAssetsSQL + "\n" + globalAssetGuardsSQL},
 		{19, "asset_replicas", assetReplicasSQL},
 		{20, "global_backup_tasks", globalBackupTasksSQL},
+		{21, "global_backup_results", globalBackupResultsSQL},
 	}
 }
 

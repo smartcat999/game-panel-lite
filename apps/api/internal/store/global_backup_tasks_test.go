@@ -123,4 +123,5 @@ func testGlobalBackupTasks(t *testing.T, db *Store, created instances.IntentResu
 		t.Fatal("failed transaction left backup task")
 	}
 	testBackupRequestDelivery(t, db, event)
+	testGlobalBackupResults(t, db, event)
 }

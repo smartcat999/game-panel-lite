@@ -48,7 +48,7 @@ go run ./apps/api/cmd/outbox-publisher -stream backup-results \
 
 区域迁移 004 增加 `regional_archive_uploads` 和 `regional_backup_result_outbox`。上传计划绑定控制面 OperationID／请求事件、Region、实例、Deployment、Node、Placement epoch、准备好的 SnapshotID、对象键及精确资产摘要。控制面操作与存储对象绑定均有唯一约束；重放只能接受完全相同计划，不能更换节点、快照或归属。此登记接口仅供已完成授权与快照准备的受信协调器调用；目前尚未由控制面下发链路驱动。
 
-Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。结果 Outbox 已接入确认发布；控制面结果 Inbox 和用户任务状态更新仍待实现。全部业务 SQL 为单表查询，无 JOIN。
+Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。结果 Outbox 已接入确认发布；全局 `RecordBackupResult` 已实现结果去重及任务／资产原子更新，生产消费者接线仍待完成。全部业务 SQL 为单表查询，无 JOIN。
 
 已存在本地 ZIP 归档、兼容性检查、暂存解压和返回错误时的回滚。新增 `backup.RestoreArchiveChecked(io.ReaderAt, size, target, hooks)`，让经过验证的对象存储下载文件复用同一恢复实现；调用方持有并关闭源文件。本地文件名入口委托给此入口，不引入 SDK 或数据库依赖。
 
@@ -78,3 +78,9 @@ GAMEPANEL_TEST_MINIO=1 go test -race ./apps/api/internal/s3archive -run TestMinI
 2026-09-08 本地验证通过，拉取的镜像摘要为 `sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e`。测试覆盖真实 ZIP 归档上传、条件写入冲突、后端返回版本、同键新增版本后读取旧版本、下载至本地并校验 SHA-256、元数据检查与文件恢复，以及不存在版本、错误凭证和服务端错误摘要拒绝。
 
 归档内容为测试文件，未启动真实游戏，因此不证明运行中游戏快照一致性。它也不证明备份任务、租户 API、上传结果未知的对账、跨主机网络、断电持久性、HA 或容量要求；这些仍需各自验收。默认 `go test ./...` 跳过该 Docker 测试，必须显式设置测试开关才能得到实际对象服务证据。
+
+## 控制面结果事务
+
+全局迁移 021／SQLite 版本 9 仅增加 `global_backup_results` 一张表，以 OperationID 唯一保存回执并去重。接收事务锁定原任务，核对可信来源 Region、原请求事件、租户、实例、Placement epoch 及操作所属修订；相同操作的相同结果可重放，内容冲突拒绝。该校验关联原请求，不重新授予节点执行权限。
+
+成功结果复用资产登记，在同一事务发布精确资产元数据、更新任务与 Operation，并保存完整对象回执。取消／失败任务的迟到结果记为 discarded，保留终态且不发布资产；对象的后续清理仍需保留策略。后续取消实现应与接收事务采用相同的任务→Operation 加锁顺序。Region 必须先完成授权和一致快照验证；全局受信接收不代替 Node 执行证明。当前尚未将真实结果消费者和用户 API 接入这一事务。
