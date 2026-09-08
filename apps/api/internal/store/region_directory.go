@@ -36,6 +36,27 @@ func (s *Store) GetRegion(ctx context.Context, id string) (regions.Entry, error)
 	return entry, err
 }
 
+// checkRegionCreate must run within the intent transaction. Shared row locks
+// allow concurrent creates while serializing against an operator's close.
+func (s *Store) checkRegionCreate(ctx context.Context, id string) error {
+	var entry regions.Entry
+	query := s.db.WithContext(ctx).Table("global_regions").Where("id = ?", id)
+	if s.db.Dialector.Name() == "postgres" {
+		query = query.Clauses(clause.Locking{Strength: "SHARE"})
+	}
+	err := query.Take(&entry).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return regions.ErrRegionUnavailable
+	}
+	if err != nil {
+		return err
+	}
+	if !entry.AcceptingCreates {
+		return regions.ErrRegionUnavailable
+	}
+	return nil
+}
+
 // ListRegions uses a stable ID cursor and never reads nodes or regional metrics.
 func (s *Store) ListRegions(ctx context.Context, after string, limit int) ([]regions.Entry, error) {
 	if limit < 1 || limit > 100 {

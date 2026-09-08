@@ -7,10 +7,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/regions"
 )
 
 type countingSealer struct {
@@ -30,6 +32,12 @@ func (s *countingSealer) Seal(ctx context.Context, b instances.ConfigurationBind
 func testEncryptedGlobalCreate(t *testing.T, db *Store) {
 	t.Helper()
 	ctx := context.Background()
+	if _, err := db.RegisterRegion(ctx, "east", "East"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetRegionAcceptingCreates(ctx, "east", 1, true); err != nil {
+		t.Fatal(err)
+	}
 	key := func() []byte {
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
@@ -126,5 +134,86 @@ func testEncryptedGlobalCreate(t *testing.T, db *Store) {
 	missing.IdempotencyKey = "never-created"
 	if _, found, err := writer.ReplayCreate(ctx, "encrypted-owner", missing, plaintext); err != nil || found {
 		t.Fatalf("missing replay: %v", err)
+	}
+	if err := db.SetRegionAcceptingCreates(ctx, "east", 2, false); err != nil {
+		t.Fatal(err)
+	}
+	if replay, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", request, plaintext, sealer, f); err != nil || replay.Operation.ID != created.Operation.ID {
+		t.Fatalf("closed region blocked existing operation: %v", err)
+	}
+	for _, region := range []string{"east", "not-registered"} {
+		fresh := request
+		fresh.RegionID = region
+		fresh.IdempotencyKey = "rejected-" + region
+		if _, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", fresh, plaintext, sealer, f); !errors.Is(err, regions.ErrRegionUnavailable) {
+			t.Fatalf("unavailable region accepted: %v", err)
+		}
+	}
+	if db.db.Dialector.Name() == "postgres" {
+		testRegionCloseDuringCreate(t, db, request, plaintext, p, f)
+	}
+}
+
+type blockingRegionSealer struct {
+	inner            ConfigurationSealer
+	entered, release chan struct{}
+}
+
+func (s blockingRegionSealer) Seal(ctx context.Context, b instances.ConfigurationBinding, p []byte) (instances.ProtectedConfiguration, error) {
+	close(s.entered)
+	select {
+	case <-s.release:
+		return s.inner.Seal(ctx, b, p)
+	case <-ctx.Done():
+		return instances.ProtectedConfiguration{}, ctx.Err()
+	}
+}
+
+func testRegionCloseDuringCreate(t *testing.T, db *Store, request instances.CreateRequest, plaintext []byte, p ConfigurationSealer, f RequestFingerprinter) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := db.RegisterRegion(ctx, "race-region", "Race Region"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetRegionAcceptingCreates(ctx, "race-region", 1, true); err != nil {
+		t.Fatal(err)
+	}
+	request.RegionID = "race-region"
+	request.IdempotencyKey = "race-region-create"
+	blocking := blockingRegionSealer{inner: p, entered: make(chan struct{}), release: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() {
+		_, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", request, plaintext, blocking, f)
+		done <- err
+	}()
+	select {
+	case <-blocking.entered:
+	case err := <-done:
+		t.Fatalf("create failed before region lock: %v", err)
+	case <-ctx.Done():
+		t.Fatal("create did not reach encryption")
+	}
+	closeCtx, stop := context.WithTimeout(ctx, 150*time.Millisecond)
+	err := db.SetRegionAcceptingCreates(closeCtx, "race-region", 2, false)
+	stop()
+	close(blocking.release)
+	if err == nil || !errors.Is(closeCtx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("expected region close to wait for admitted transaction: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("create did not finish")
+	}
+	if err := db.SetRegionAcceptingCreates(ctx, "race-region", 2, false); err != nil {
+		t.Fatalf("close after commit: %v", err)
+	}
+	request.IdempotencyKey = "after-region-close"
+	if _, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", request, plaintext, p, f); !errors.Is(err, regions.ErrRegionUnavailable) {
+		t.Fatalf("post-close creation accepted: %v", err)
 	}
 }

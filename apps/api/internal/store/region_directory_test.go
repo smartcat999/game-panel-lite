@@ -28,7 +28,7 @@ func testRegionDirectory(t *testing.T, db *Store) {
 	if err != nil || len(first) != 2 || first[0].ID != "catalog-a" || first[1].ID != "catalog-b" {
 		t.Fatalf("first page: %+v %v", first, err)
 	}
-	second, err := db.ListRegions(ctx, first[1].ID, 2)
+	second, err := db.ListRegions(ctx, first[1].ID, 1)
 	if err != nil || len(second) != 1 || second[0].ID != "catalog-c" {
 		t.Fatalf("second page: %+v %v", second, err)
 	}

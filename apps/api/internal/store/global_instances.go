@@ -84,10 +84,10 @@ func (s *Store) CreateGlobalServer(ctx context.Context, actor string, request in
 		return instances.IntentResult{}, err
 	}
 	hash := fmt.Sprintf("%x", sha256.Sum256(encoded))
-	return s.createGlobalServer(ctx, actor, request, hash, func(existing string) (bool, error) { return existing == hash, nil }, nil)
+	return s.createGlobalServer(ctx, actor, request, hash, func(existing string) (bool, error) { return existing == hash, nil }, nil, false)
 }
 
-func (s *Store) createGlobalServer(ctx context.Context, actor string, request instances.CreateRequest, hash string, matches func(string) (bool, error), seal func(instances.Server) (instances.ProtectedConfiguration, error)) (instances.IntentResult, error) {
+func (s *Store) createGlobalServer(ctx context.Context, actor string, request instances.CreateRequest, hash string, matches func(string) (bool, error), seal func(instances.Server) (instances.ProtectedConfiguration, error), registeredRegion bool) (instances.IntentResult, error) {
 	var result instances.IntentResult
 	err := s.Transaction(ctx, func(tx *Store) error {
 		if err := tx.lockWorkspaceWriter(ctx, request.OrganizationID, actor); err != nil {
@@ -108,6 +108,11 @@ func (s *Store) createGlobalServer(ctx context.Context, actor string, request in
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
+		}
+		if registeredRegion {
+			if err := tx.checkRegionCreate(ctx, request.RegionID); err != nil {
+				return err
+			}
 		}
 		quota, err := tx.GetTenantQuota(ctx, request.OrganizationID)
 		if err != nil {

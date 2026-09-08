@@ -8,6 +8,7 @@ import (
 
 var ErrInvalidRegion = errors.New("invalid region directory entry")
 var ErrRegionConflict = errors.New("region directory entry already exists or changed")
+var ErrRegionUnavailable = errors.New("region is not accepting new instances")
 
 type Entry struct {
 	ID               string `json:"id"`

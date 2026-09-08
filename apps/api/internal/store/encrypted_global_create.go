@@ -38,7 +38,7 @@ func (s *Store) CreateEncryptedGlobalServer(ctx context.Context, actor string, r
 	}
 	return s.createGlobalServer(ctx, actor, request, hash, func(existing string) (bool, error) { return fingerprinter.Matches(existing, encoded) }, func(server instances.Server) (instances.ProtectedConfiguration, error) {
 		return sealer.Seal(ctx, instances.ConfigurationBinding{OrganizationID: server.OrganizationID, ServerID: server.ID, RevisionID: server.CurrentRevisionID, SpecGeneration: server.SpecGeneration, ProviderKey: request.Specification.ProviderKey, ConfigSchemaVersion: request.Specification.ConfigSchemaVersion}, plaintext)
-	})
+	}, true)
 }
 
 func encodeProtectedCreate(request instances.CreateRequest, plaintext []byte) ([]byte, error) {

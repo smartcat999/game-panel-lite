@@ -354,3 +354,10 @@
 - 更新采用版本 CAS，分页按 ID 游标有界读取，SQL 均为单表。SQLite 测试覆盖重复注册、稳定分页、过期更新拒绝、关闭及重复迁移保留状态；PostgreSQL 同时验证同版本并发只有一个成功。独立全量 Go（含架构检查）／vet／SQLite 及真实全局＋区域 PostgreSQL race 全部通过。独立日志 `/tmp/gamepanel-region-directory-index-all-fixed.log`、`/tmp/gamepanel-region-directory-index-vet.log`、`/tmp/gamepanel-region-directory-index-integration.log`；专用容器与快照清理。
 - 首次独立全量检查发现旧制品升级夹具删除全部 SQLite 迁移记录但遗漏新目录表；已补齐夹具的旧 schema 恢复，生产迁移仍严格拒绝未登记却已存在的表，不用 IF NOT EXISTS 掩盖不一致。
 - 目录仍为受信内部 Store 接口，运维入口、目录权限／审计、Region／资产事务准入及历史区域登记还需继续接入。关闭目录不代表已有实例停止或资源可释放。其他草稿保留，详情见 [目录说明](../architecture/global-region-directory.md)。
+
+### 2026-09-08 受保护创建的 Region 事务准入
+
+- 新受保护创建在权限／幂等重放之后，按 ID 单表检查已登记区域的创建开放状态，再继续配额、加密及实例／Operation／Outbox 原子写入。PostgreSQL 共享行锁与目录关闭 UPDATE 串行化，SQLite 复用已有写事务；没有新增 JOIN 或关联子查询。
+- SQLite／PostgreSQL 验证未登记或已关闭区域拒绝新操作、已关闭区域的旧操作仍可授权重放。真实 PostgreSQL 阻塞加密夹具验证目录关闭等待在途事务、提交后关闭成功及关闭后的创建拒绝。首次检查的超时错误断言受驱动合并错误影响，已改为核对上下文超时后通过。
+- 独立快照的根模块全量 Go（含架构门禁）／vet、API 全量 Go／vet、SQLite＋PostgreSQL＋mTLS 区域组合 race 均通过。证据日志 `/tmp/gamepanel-region-admission-index-root-all.log`、`/tmp/gamepanel-region-admission-index-root-vet.log`、`/tmp/gamepanel-region-admission-index-integration-fixed.log`；未更改前端或历史迁移。
+- 旧不透明 CreateGlobalServer 仍为内部兼容路径，不可直接作为新公共创建入口。资产授权、修订／扩容准入、目录运维入口、HTTP 接入、有限期执行授权及完整六阶段验收仍待完成；禁止 JOIN 不代表数据库性能已经通过容量验收。其他草稿保留。

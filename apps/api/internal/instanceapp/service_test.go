@@ -42,6 +42,12 @@ func TestApplicationWritesValidatedEncryptedIntents(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	if _, err := db.RegisterRegion(ctx, "east", "East"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetRegionAcceptingCreates(ctx, "east", 1, true); err != nil {
+		t.Fatal(err)
+	}
 	org := domain.Organization{ID: "tenant", Slug: "tenant"}
 	if err := db.CreateOrganization(ctx, &org, "owner"); err != nil {
 		t.Fatal(err)

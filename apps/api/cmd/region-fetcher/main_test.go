@@ -86,6 +86,12 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer global.Close()
+	if _, err := global.RegisterRegion(ctx, "east", "East"); err != nil {
+		t.Fatal(err)
+	}
+	if err := global.SetRegionAcceptingCreates(ctx, "east", 1, true); err != nil {
+		t.Fatal(err)
+	}
 	region, err := store.OpenRegionalPostgres(regionDSN, "east", 2)
 	if err != nil {
 		t.Fatal(err)
