@@ -144,4 +144,5 @@ func testCapturedPayments(t *testing.T, db *Store, original commerce.Order) {
 	if err := db.db.Table("global_server_entitlements").Where("server_id = ?", original.ServerID).Count(&count).Error; err != nil || count != 0 {
 		t.Fatal("capture bypassed subscription fulfillment")
 	}
+	testPaidSubscriptions(t, db, original)
 }
