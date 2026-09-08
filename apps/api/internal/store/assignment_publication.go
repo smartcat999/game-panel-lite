@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"gorm.io/gorm"
 )
 
@@ -14,6 +15,11 @@ import (
 func (s *Store) PublishWorkloadAssignment(ctx context.Context, before domain.GameServer, assignment *domain.WorkloadAssignment) error {
 	if assignment.ServerID != before.ID || assignment.NodeID != before.NodeID || assignment.Generation != before.Spec.Generation || assignment.DesiredState != before.Spec.DesiredState || assignment.UID == "" {
 		return ErrReconciliationSuperseded
+	}
+	if assignment.DesiredState == domain.DesiredRunning {
+		if _, err := workload.ResolvePortBindings(assignment.Spec.Network); err != nil {
+			return err
+		}
 	}
 	spec, err := json.Marshal(before.Spec)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 func writeDataFile(dataDir string, name string, content string) error {
@@ -159,45 +160,15 @@ func dataBindPaths(dataDir string, mount string) (string, string, error) {
 	return hostAbs, containerPath, nil
 }
 
-func natPortMap(containerPort int, hostPort int, protocol string) nat.PortMap {
-	p := nat.Port(fmt.Sprintf("%d/%s", containerPort, normalizePortProtocol(protocol)))
-	return nat.PortMap{p: []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", hostPort)}}}
-}
-
-func natPortSet(containerPort int, protocol string) nat.PortSet {
-	return nat.PortSet{nat.Port(fmt.Sprintf("%d/%s", containerPort, normalizePortProtocol(protocol))): struct{}{}}
-}
-
-func natPortMaps(spec runtime.ContainerSpec) nat.PortMap {
-	ports := natPortMap(spec.Port, spec.HostPort, spec.Options.PortProtocol)
-	for _, port := range spec.AdditionalPorts {
-		protocol := port.Protocol
-		if strings.TrimSpace(protocol) == "" {
-			protocol = spec.Options.PortProtocol
-		}
-		p := nat.Port(fmt.Sprintf("%d/%s", port.Port, normalizePortProtocol(protocol)))
-		ports[p] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port.HostPort)}}
+func natPortMaps(spec runtime.ContainerSpec) (nat.PortMap, error) {
+	resolved, err := workload.ResolvePortBindings(runtime.WorkloadSpecFromContainer(spec).Network)
+	if err != nil {
+		return nil, err
 	}
-	return ports
-}
-
-func natPortSets(spec runtime.ContainerSpec) nat.PortSet {
-	ports := natPortSet(spec.Port, spec.Options.PortProtocol)
-	for _, port := range spec.AdditionalPorts {
-		protocol := port.Protocol
-		if strings.TrimSpace(protocol) == "" {
-			protocol = spec.Options.PortProtocol
-		}
-		ports[nat.Port(fmt.Sprintf("%d/%s", port.Port, normalizePortProtocol(protocol)))] = struct{}{}
+	ports := nat.PortMap{}
+	for _, item := range resolved {
+		port := nat.Port(fmt.Sprintf("%d/%s", item.Port, item.Protocol))
+		ports[port] = append(ports[port], nat.PortBinding{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", item.HostPort)})
 	}
-	return ports
-}
-
-func normalizePortProtocol(protocol string) string {
-	switch strings.ToLower(strings.TrimSpace(protocol)) {
-	case "udp":
-		return "udp"
-	default:
-		return "tcp"
-	}
+	return ports, nil
 }

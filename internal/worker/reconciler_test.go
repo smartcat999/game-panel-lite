@@ -306,3 +306,22 @@ func TestArtifactsObservationFailure(t *testing.T) {
 		t.Fatalf("expected art2 failed with checksum mismatch, got %+v", observation.Artifacts[1])
 	}
 }
+
+func TestInvalidNetworkCannotRemoveExistingContainer(t *testing.T) {
+	a := assignment()
+	a.Spec.Network = workload.Network{Port: 7777, AdditionalPorts: []workload.Port{{Port: 8888, HostPort: 7777}}}
+	r := &memoryRuntime{state: State{Exists: true, Running: true, Managed: true, ID: "old-runtime", UID: a.UID, NodeID: a.NodeID, ServerID: a.ServerID, Generation: 1}}
+	observation := Reconcile(context.Background(), a, r)
+	if !strings.Contains(observation.LastError, workload.ErrInvalidNetwork.Error()) || len(r.calls) != 0 || !r.state.Running {
+		t.Fatalf("invalid network mutated runtime: %+v calls=%v state=%+v", observation, r.calls, r.state)
+	}
+	// A broken network spec must not prevent authenticated stop/delete cleanup.
+	a.DesiredState = "stopped"
+	if observation := Reconcile(context.Background(), a, r); observation.LastError != "" || r.state.Running {
+		t.Fatalf("invalid network blocked stop: %+v", observation)
+	}
+	a.DesiredState = "deleted"
+	if observation := Reconcile(context.Background(), a, r); observation.LastError != "" || r.state.Exists {
+		t.Fatalf("invalid network blocked deletion: %+v", observation)
+	}
+}

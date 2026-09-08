@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
@@ -48,6 +49,14 @@ func (a *Adapter) Check(ctx context.Context) runtime.DockerStatus {
 }
 
 func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpec) (string, error) {
+	portBindings, err := natPortMaps(spec)
+	if err != nil {
+		return "", err
+	}
+	exposedPorts := nat.PortSet{}
+	for port := range portBindings {
+		exposedPorts[port] = struct{}{}
+	}
 	containerName := "gamepanel-" + spec.InstanceID
 	if err := a.removeContainerByNameIfExists(ctx, containerName); err != nil {
 		return "", err
@@ -75,12 +84,13 @@ func (a *Adapter) createContainer(ctx context.Context, spec runtime.ContainerSpe
 		return "", err
 	}
 	hostConfig := defaultHostConfig(spec, binds)
+	hostConfig.PortBindings = portBindings
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image:        spec.Image,
 		User:         "0:0",
 		Env:          spec.Options.Env,
 		Cmd:          spec.Options.Cmd,
-		ExposedPorts: natPortSets(spec),
+		ExposedPorts: exposedPorts,
 		OpenStdin:    true,
 		AttachStdin:  true,
 		Labels: map[string]string{
@@ -173,7 +183,6 @@ func (a *Adapter) inspectContainerState(ctx context.Context, containerID string)
 func defaultHostConfig(spec runtime.ContainerSpec, binds []string) *container.HostConfig {
 	hostConfig := &container.HostConfig{
 		Binds:         binds,
-		PortBindings:  natPortMaps(spec),
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		SecurityOpt:   []string{"no-new-privileges:true"},
 		CapDrop:       []string{"SYS_ADMIN", "NET_ADMIN", "SYS_RAWIO", "SYS_MODULE", "SYS_PTRACE", "SYS_BOOT"},
@@ -198,4 +207,3 @@ func (a *Adapter) UpdateWorkloadResources(ctx context.Context, runtimeID string,
 	_, err := a.client.ContainerUpdate(ctx, runtimeID, updateConfig)
 	return err
 }
-

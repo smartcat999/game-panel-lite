@@ -276,3 +276,16 @@ func TestInfoReportsDaemonArchitecture(t *testing.T) {
 		t.Fatalf("daemon info=%+v err=%v", info, err)
 	}
 }
+
+func TestNetworkBindingsResolveDuplicatesAndRejectConflicts(t *testing.T) {
+	_, bindings, err := networkBindings(workload.Network{Port: 7777, AdditionalPorts: []workload.Port{{Port: 7777, HostPort: 40000}, {Port: 7777, HostPort: 40000}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bindings["7777/tcp"]; len(got) != 2 || got[0].HostPort != "7777" || got[1].HostPort != "40000" {
+		t.Fatalf("lost or duplicate bindings: %+v", bindings)
+	}
+	if _, _, err := networkBindings(workload.Network{Port: 7777, AdditionalPorts: []workload.Port{{Port: 8888, HostPort: 7777}}}); !errors.Is(err, workload.ErrInvalidNetwork) {
+		t.Fatalf("conflicting host binding accepted: %v", err)
+	}
+}

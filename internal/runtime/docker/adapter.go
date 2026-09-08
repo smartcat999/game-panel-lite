@@ -287,20 +287,11 @@ func consumePull(reader io.Reader) error {
 func networkBindings(network workload.Network) (nat.PortSet, nat.PortMap, error) {
 	ports := nat.PortSet{}
 	bindings := nat.PortMap{}
-	items := append([]workload.Port(nil), network.AdditionalPorts...)
-	if network.Port != 0 {
-		items = append(items, workload.Port{Port: network.Port, HostPort: network.HostPort, Protocol: network.Protocol})
+	items, err := workload.ResolvePortBindings(network)
+	if err != nil {
+		return nil, nil, err
 	}
 	for _, item := range items {
-		if item.HostPort == 0 {
-			item.HostPort = item.Port
-		}
-		if item.Protocol == "" {
-			item.Protocol = "tcp"
-		}
-		if item.Port < 1 || item.Port > 65535 || item.HostPort < 1 || item.HostPort > 65535 || (item.Protocol != "tcp" && item.Protocol != "udp") {
-			return nil, nil, fmt.Errorf("invalid workload port")
-		}
 		port, err := nat.NewPort(item.Protocol, strconv.Itoa(item.Port))
 		if err != nil {
 			return nil, nil, err

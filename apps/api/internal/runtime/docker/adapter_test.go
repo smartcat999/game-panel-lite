@@ -1,7 +1,9 @@
 package docker
 
 import (
+	"context"
 	"errors"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -79,22 +81,28 @@ func TestPrepareDataMountsRejectsEscapingHostSubPath(t *testing.T) {
 	}
 }
 
-func TestNatPortSetExposesContainerPort(t *testing.T) {
-	ports := natPortSet(7777, "")
+func TestNatPortMapDefaultsToTCP(t *testing.T) {
+	ports, err := natPortMaps(runtime.ContainerSpec{Port: 7777})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := ports["7777/tcp"]; !ok {
 		t.Fatalf("expected exposed 7777/tcp port, got %v", ports)
 	}
 }
 
-func TestNatPortSetSupportsUdp(t *testing.T) {
-	ports := natPortSet(8211, "udp")
+func TestNatPortMapSupportsUDP(t *testing.T) {
+	ports, err := natPortMaps(runtime.ContainerSpec{Port: 8211, Options: runtime.ContainerOptions{PortProtocol: "udp"}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := ports["8211/udp"]; !ok {
 		t.Fatalf("expected exposed 8211/udp port, got %v", ports)
 	}
 }
 
 func TestNatPortMapsIncludesAdditionalUdpPort(t *testing.T) {
-	ports := natPortMaps(runtime.ContainerSpec{
+	ports, err := natPortMaps(runtime.ContainerSpec{
 		Port:     10999,
 		HostPort: 10999,
 		Options:  runtime.ContainerOptions{PortProtocol: "udp"},
@@ -102,6 +110,9 @@ func TestNatPortMapsIncludesAdditionalUdpPort(t *testing.T) {
 			{Port: 11000, HostPort: 11000, Protocol: "udp"},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := ports["10999/udp"]; len(got) != 1 || got[0].HostPort != "10999" {
 		t.Fatalf("expected Master UDP mapping, got %v", got)
 	}
@@ -306,5 +317,21 @@ func TestDefaultHostConfigSecurityAndResources(t *testing.T) {
 	}
 	if hostConfig.RestartPolicy.Name != "unless-stopped" {
 		t.Fatalf("restart policy mismatch: %s", hostConfig.RestartPolicy.Name)
+	}
+}
+
+func TestNatPortMapsPreservesAllBindingsAndDefaults(t *testing.T) {
+	ports, err := natPortMaps(runtime.ContainerSpec{Port: 7777, AdditionalPorts: []runtime.ContainerPort{{Port: 7777, HostPort: 40000}, {Port: 7777, HostPort: 40000}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := ports["7777/tcp"]
+	if len(bindings) != 2 || bindings[0].HostPort != "7777" || bindings[1].HostPort != "40000" {
+		t.Fatalf("lost or duplicated binding: %+v", ports)
+	}
+	adapter := &Adapter{}
+	_, err = adapter.CreateWorkload(context.Background(), domain.WorkloadSpec{Network: domain.WorkloadNetwork{Port: 7777, HostPort: -1}})
+	if err == nil {
+		t.Fatal("invalid network reached Docker operations")
 	}
 }

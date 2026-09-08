@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 func TestAssignmentPublication(t *testing.T) {
@@ -28,6 +29,14 @@ func testAssignmentPublication(t *testing.T, db *Store) {
 	}
 	assignmentFor := func(i int) domain.WorkloadAssignment {
 		return domain.WorkloadAssignment{ID: fmt.Sprintf("publication-%d", i), UID: fmt.Sprintf("publication-uid-%d", i), ServerID: before.ID, NodeID: before.NodeID, Generation: 1, DesiredState: domain.DesiredRunning, Spec: domain.WorkloadSpec{ServerID: before.ID, Image: "image:v1"}}
+	}
+	invalid := assignmentFor(99)
+	invalid.Spec.Network = domain.WorkloadNetwork{Port: 7777, AdditionalPorts: []domain.WorkloadPort{{Port: 8888, HostPort: 7777}}}
+	if err := db.PublishWorkloadAssignment(ctx, before, &invalid); !errors.Is(err, workload.ErrInvalidNetwork) {
+		t.Fatalf("invalid network published: %v", err)
+	}
+	if _, err := db.GetWorkloadAssignmentByServer(ctx, before.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("invalid network left assignment: %v", err)
 	}
 	var wg sync.WaitGroup
 	results := make(chan error, 8)

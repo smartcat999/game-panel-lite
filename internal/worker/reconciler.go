@@ -59,6 +59,12 @@ func Reconcile(ctx context.Context, assignment workload.Assignment, runtime Runt
 		observation.LastError = "workload server ID does not match assignment"
 		return observation
 	}
+	if assignment.DesiredState == "running" {
+		if _, err := workload.ResolvePortBindings(assignment.Spec.Network); err != nil {
+			observation.LastError = err.Error()
+			return observation
+		}
+	}
 	if assignment.DesiredState == "running" && len(assignment.Spec.Options.Artifacts) > 0 {
 		if err := workload.ValidateArtifacts(assignment.Spec.Options); err != nil {
 			observation.LastError = err.Error()
