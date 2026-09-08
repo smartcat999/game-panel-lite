@@ -74,34 +74,15 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 	if err := workload.ValidateArtifacts(workload.Options{Files: files, Artifacts: remoteMods.Artifacts}); err != nil {
 		return domain.WorkloadSpec{}, err
 	}
-	hostPort := server.Spec.Network.HostPort
-	if hostPort == 0 {
-		hostPort = runtimeConfig.Port
-	}
-	if runtimeConfig.Port < 0 || runtimeConfig.Port > 65535 || hostPort < 0 || hostPort > 65535 {
-		return domain.WorkloadSpec{}, workload.ErrInvalidNetwork
-	}
-	additionalPorts := make([]domain.WorkloadPort, 0, len(runtimeConfig.AdditionalPorts))
-	for _, port := range runtimeConfig.AdditionalPorts {
-		if port < 1 || port > 65535 || runtimeConfig.Port < 1 {
-			return domain.WorkloadSpec{}, workload.ErrInvalidNetwork
-		}
-		additionalPorts = append(additionalPorts, domain.WorkloadPort{
-			Port:     port,
-			HostPort: hostPort + (port - runtimeConfig.Port),
-			Protocol: runtimeConfig.Protocol,
-		})
+	network, err := provider.RuntimeNetwork(runtimeConfig, server.Spec.Network.HostPort)
+	if err != nil {
+		return domain.WorkloadSpec{}, err
 	}
 	spec := domain.WorkloadSpec{
 		ServerID: server.ID,
 		Name:     server.Name,
 		Image:    gameProvider.ImageFor(version),
-		Network: domain.WorkloadNetwork{
-			Port:            runtimeConfig.Port,
-			HostPort:        hostPort,
-			Protocol:        runtimeConfig.Protocol,
-			AdditionalPorts: additionalPorts,
-		},
+		Network:  network,
 		Resources: domain.WorkloadResources{
 			CPULimitCores: server.Spec.Resources.CPULimitCores,
 			MemoryLimitMB: server.Spec.Resources.MemoryLimitMB,

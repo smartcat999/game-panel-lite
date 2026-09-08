@@ -213,6 +213,13 @@
 - 最终独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store race 通过；首轮共享 workload 端口规则 race 通过。验证附加端口冲突、TCP／UDP和跨节点隔离、四次业务查询预算、候选后端口被抢占、并发绑定唯一、写入故障时计算资源回滚，以及丢失端口记录的重放拒绝。日志 `/tmp/gamepanel-regional-ports-final-all.log`、`/tmp/gamepanel-regional-ports-final-vet.log`、`/tmp/gamepanel-regional-ports-final-integration.log`、`/tmp/gamepanel-regional-ports-integration.log`。
 - 无 JOIN，不修改历史迁移，无前端改动；端口选择权限／范围、受信渲染与执行授权、宿主外部占用处理和安全释放接线仍未完成。
 
+### 全局配置版本生成区域端口计划
+
+- `gameconfig.RegionalNetworkRenderer` 校验区域快照身份及已知当前配置代数，以不可变租户／实例／版本绑定解密，复用 LogicalNormalizer 严格校验游戏版本及 schema，再调用现有 ResourceRuntimeProvider。调度结果只返回网络，不返回密码、环境变量或文件；清除可变明文字节缓冲，但不声称 Go 字符串可安全擦除。
+- 运行构建与区域计划共用 `provider.RuntimeNetwork`，完整映射主端口和附加端口。修复附加端口偏移到 0 后被解释为默认容器端口的问题，越界直接拒绝。未引入新的服务、插件框架或 SQL。
+- 真实 Vanilla／tModLoader Provider 与原运行构建器比较端口结果；覆盖租户／版本绑定错误、旧配置快照、未知游戏版本、schema／密钥错误、取消以及附加端口上下溢出。独立暂存快照全量 Go（含架构）、vet 及相关包 race 均通过，验证记录：`/tmp/gamepanel-render-all.log`、`/tmp/gamepanel-render-vet.log`、`/tmp/gamepanel-render-race.log`。
+- 该转换尚未接入自动调度循环；调用方仍须取得当前授权、选择授权端口并事务预留。解密或端口计划不是运行许可，也不是节点端口可用性证明。下一步继续接区域部署协调器和授权任务，尚不具备用户创建到 Node 执行的完整验收证据。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
