@@ -115,6 +115,7 @@ func TestRevisionAPIWithMutualTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer remote.Close()
+	testAssetAPI(t, auth, server.TLS, pool, issue("spiffe://test/region/east", true, false), issue("spiffe://test/region/west", true, false))
 	if snapshot, err := remote.GetRevision(context.Background(), event); err != nil || snapshot.Event != event {
 		t.Fatalf("regional client round trip: %v", err)
 	}

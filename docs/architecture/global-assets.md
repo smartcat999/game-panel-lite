@@ -42,3 +42,7 @@ go run ./apps/api/cmd/region-repair-manifests -region east -batch-size 20 -apply
 接口只解析被请求的资产目录项，不重新读取所有引用的目录内容，仍使用单表查询，不引入 JOIN 或跨业务表关联子查询。旧 Region、旧 Placement epoch、伪造事件、删除实例和旧兼容写入产生的越权引用均拒绝，失败返回空元数据。
 
 返回值是当前读取时点通过校验的元数据，不是可缓存复用的下载令牌、文件地址或执行授权。尚未接入外部下载接口；后续必须将经认证的服务身份、源副本和有界传输授权绑定，不能把客户端自报 Region 或此前一次成功解析当作永久访问权。目录内容不经全局控制面转发，实际文件仍由区域存储交付。
+
+全局控制面现提供 `POST /internal/region/assets/resolve?assetId=…&version=…`，请求正文为原 RevisionAvailable 事件。服务身份从已验证的 mTLS URI SAN 映射取得，不能由 Header 或参数指定；事件 Region 必须匹配身份。只接受单一 assetId／version 参数、有界 JSON 正文和无重复字段的事件。响应设置 no-store，仅包含经 Store 校验的 PublishedVersion；不可用、身份不符、输入错误和内部失败分别返回对应 HTTP 错误，不回显数据库细节。
+
+`controlclient.ResolveAsset` 使用现有受信 HTTPS origin、客户端证书和 CA、超时、无代理及禁止重定向策略，并限制响应体大小。客户端复核租户、资产 ID、版本、摘要／大小格式，拒绝错误身份、未知字段、尾随 JSON 和超限响应，不返回部分元数据。global-control 同时挂载修订与资产解析路由；此 API 仍不是文件下载服务或传输票据服务。

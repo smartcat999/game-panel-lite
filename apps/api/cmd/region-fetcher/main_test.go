@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -26,6 +27,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlapi"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlclient"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
@@ -156,7 +158,7 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := controlapi.NewRevisionHandler(global, identities, 65536)
+	handler, err := controlapi.NewHandler(global, identities, 65536)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,6 +250,17 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	}
 	if len(saved.Assets) != 1 || saved.Assets[0] != asset {
 		t.Fatal("asset manifest lost across mTLS and regional persistence")
+	}
+	client, err := controlclient.New(controlclient.Options{Endpoint: server.URL, RegionID: "east", Certificate: clientCert, ServerCAs: pool, Timeout: time.Second, MaxResponseBytes: 65536})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if got, err := client.ResolveAsset(ctx, event, instances.AssetVersion{AssetID: asset.AssetID, Version: asset.Version}); err != nil || got != asset {
+		t.Fatalf("real asset resolution: %v", err)
+	}
+	if got, err := client.ResolveAsset(ctx, event, instances.AssetVersion{AssetID: asset.AssetID, Version: "absent"}); !errors.Is(err, regional.ErrRevisionUnavailable) || got.AssetID != "" {
+		t.Fatal("missing asset version resolved")
 	}
 	opened, err := protector.Open(ctx, instances.ConfigurationBinding{OrganizationID: event.OrganizationID, ServerID: event.ServerID, RevisionID: event.RevisionID, SpecGeneration: event.SpecGeneration, ProviderKey: saved.Revision.Specification.ProviderKey, ConfigSchemaVersion: saved.Revision.Specification.ConfigSchemaVersion}, saved.Revision.Specification.Configuration)
 	if err != nil || !bytes.Equal(opened, plaintext) || strings.Contains(snapshot, "test-through-mtls") {

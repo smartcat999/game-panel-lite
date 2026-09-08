@@ -411,3 +411,11 @@
 - 单资产访问仅读取所请求的目录项，不重复解析全部引用目录；SQL 保持单表，无 JOIN。失败返回空元数据；返回值不包含配置、文件路径或可复用下载票据，不能用一次成功解析代表永久访问权。
 - SQLite／PostgreSQL 测试覆盖精确元数据、同租户未引用拒绝、伪造事件、错 Region、跨组织旧引用、缺失版本、历史资产版本保留、旧 Placement／Region 和删除实例拒绝。独立全量 Go／架构／vet 与 Store＋真实 PostgreSQL／mTLS 区域获取 race 通过，日志 `/tmp/gamepanel-asset-authorization-index-all.log`、`/tmp/gamepanel-asset-authorization-index-vet.log`、`/tmp/gamepanel-asset-authorization-index-integration.log`。
 - 这是受信内部权限读取边界，生产下载 API、源副本绑定和有界传输授权仍需实现；内容不经全局控制面转发。未改历史迁移、前端或无关草稿，完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 mTLS 资产解析 API 与区域客户端
+
+- global-control 同时挂载修订和指定资产解析路由。资产接口从已验证服务证书映射 Region，复用严格事件解码，拒绝重复／多余参数、重复事件字段、超大输入和 Region 不匹配。响应 no-store，只返回授权元数据，错误不泄露后端细节。
+- 新增 controlclient.ResolveAsset，复用受信 HTTPS origin、客户端证书／CA、超时、无代理及禁止重定向策略，限制响应体并复核租户、ID、版本、摘要和大小。错误响应、尾随内容及错误身份返回空结果，不生成下载票据或文件地址。
+- 真实 mTLS 验证正常往返、Header 伪造、其他 Region、重复参数／事件、超大输入、不可用与后端错误隔离；客户端验证错租户／资产／版本、超限、尾随 JSON 和重定向拒绝。PostgreSQL＋mTLS 组合直接调用真实 Store 权限解析，验证有效资产和不存在版本，并保留原修订获取回归。
+- 独立快照全量 Go／架构／vet 与接口、客户端、真实 PostgreSQL 区域组合 race 通过，日志 `/tmp/gamepanel-asset-api-index-all.log`、`/tmp/gamepanel-asset-api-index-vet.log`、`/tmp/gamepanel-asset-api-index-integration.log`。未改生产 SQL、历史迁移、前端或无关草稿。
+- 该 API 只提供当前时点的访问校验，源副本绑定、有界传输授权、实际下载及资产 Worker 生产入口仍需接入；不以可跨进程解析元数据代替真实文件交付验收。完整六阶段 Goal 保持进行中。

@@ -74,7 +74,7 @@ func run(ctx context.Context, address, certificateFile, keyFile, caFile, identit
 		return err
 	}
 	defer db.Close()
-	handler, err := controlapi.NewRevisionHandler(db, identities, maxBytes)
+	handler, err := controlapi.NewHandler(db, identities, maxBytes)
 	if err != nil {
 		return err
 	}
