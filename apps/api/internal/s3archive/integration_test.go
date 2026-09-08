@@ -249,9 +249,6 @@ type archiveWorkerTask struct {
 	failCompletion bool
 }
 
-func (t *archiveWorkerTask) PrepareArchiveUpload(context.Context, backup.UploadPlan) error {
-	return nil
-}
 func (t *archiveWorkerTask) ClaimArchiveUpload(context.Context, time.Duration) (*backup.UploadClaim, error) {
 	return t.claim, nil
 }

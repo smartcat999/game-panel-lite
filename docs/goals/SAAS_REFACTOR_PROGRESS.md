@@ -156,6 +156,14 @@
 - 独立暂存区全量 Go 测试（含架构检查）、vet、Agent／archive／Docker Runtime race 通过。日志 `/tmp/gamepanel-agent-snapshot-all.log`、`/tmp/gamepanel-agent-snapshot-vet.log`、`/tmp/gamepanel-agent-snapshot-race.log`。新增测试使用 Runtime 夹具；未声称完整 Node 备份或真实游戏验收。
 - 沿用现有模块，无新增服务、SQL 或前端修改；后续仍需接通区域授权、Agent 任务领取与归档交付。
 
+### 区域备份准备任务领取（已实现，Node 执行接线待做）
+
+- 区域迁移 007 在现有备份请求表增加领取令牌、数据库时间期限、重试时间与次数。SKIP LOCKED 单条领取；损坏命令隔离为 rejected，避免阻塞其他请求。领取不授予 Node 执行权限。
+- PrepareArchiveUpload 首次提交必须关联完整原始请求及有效准备领取，锁后以数据库时间检查过期；请求状态和上传计划原子提交。完全相同的已提交计划允许响应丢失后的重放，完成后的请求不能被准备重试重新入队。
+- UploadTasks 移除上传 Worker 不使用的准备方法，由 PreparationTasks 持有领取、重试和计划提交；复用原表及上传事务，不增加服务。所有查询无 JOIN，历史迁移文件未修改。
+- 最终隔离快照全量 Go（含架构）、vet、Store／区域上传入口／backup 的真实 PostgreSQL race 通过：`/tmp/gamepanel-preparation-final-all.log`、`/tmp/gamepanel-preparation-final-vet.log`、`/tmp/gamepanel-preparation-final-integration.log`。覆盖并发唯一、旧令牌／错区域／篡改请求、重开 Store、延后重试、过期计划回滚及故障注入。首轮临时库密码配置与既有无密码测试角色不匹配，重建本机测试库后通过。
+- 区域 Deployment／Node 授权来源、准备协调器、Agent 任务接口及归档交付仍未接通；本批不能作为完整备份或进程强杀验收。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

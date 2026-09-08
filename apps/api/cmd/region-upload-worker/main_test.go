@@ -69,7 +69,11 @@ func TestRegionalUploadEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := backup.UploadPlan{ID: "upload", OperationID: request.OperationID, RequestEventID: request.EventID, RegionID: "east", ServerID: "server", DeploymentID: "deployment", NodeID: "node", SnapshotID: "snapshot", PlacementEpoch: 1, StorageID: "storage", ObjectKey: "object", Asset: version}
-	if err := db.PrepareArchiveUpload(ctx, plan); err != nil {
+	preparation, err := db.ClaimBackupPreparation(ctx, time.Minute)
+	if err != nil || preparation == nil {
+		t.Fatalf("claim preparation: %v", err)
+	}
+	if err := db.PrepareArchiveUpload(ctx, *preparation, plan); err != nil {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()

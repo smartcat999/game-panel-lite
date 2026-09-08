@@ -23,7 +23,6 @@ type uploadTasks struct {
 	completeErr          error
 }
 
-func (t *uploadTasks) PrepareArchiveUpload(context.Context, backup.UploadPlan) error { return nil }
 func (t *uploadTasks) ClaimArchiveUpload(context.Context, time.Duration) (*backup.UploadClaim, error) {
 	return t.claim, nil
 }

@@ -23,7 +23,7 @@ var _ backup.UploadTasks = (*RegionalStore)(nil)
 
 // PrepareArchiveUpload persists transport identity before network I/O. Only a
 // trusted coordinator may call it after authorizing and preparing the snapshot.
-func (s *RegionalStore) PrepareArchiveUpload(ctx context.Context, plan backup.UploadPlan) error {
+func (s *RegionalStore) PrepareArchiveUpload(ctx context.Context, claim backup.PreparationClaim, plan backup.UploadPlan) error {
 	if plan.Validate() != nil || plan.RegionID != s.regionID {
 		return backup.ErrUploadPlan
 	}
@@ -47,9 +47,14 @@ func (s *RegionalStore) PrepareArchiveUpload(ctx context.Context, plan backup.Up
 		if json.Unmarshal([]byte(stored.Plan), &original) != nil || original != plan || stored.StorageID != plan.StorageID || stored.ObjectKey != plan.ObjectKey || stored.OperationID != plan.OperationID || stored.RequestEventID != plan.RequestEventID {
 			return backup.ErrUploadPlan
 		}
-		status, err := lockArchiveRequest(tx, plan)
+		requestRow, err := lockArchiveRequest(tx, plan)
 		if err != nil {
 			return err
+		}
+		status := requestRow.Status
+		request, err := requestRow.request(s.regionID)
+		if err != nil || request != claim.Request || claim.Token == "" {
+			return backup.ErrPreparationClaimLost
 		}
 		if stored.Status == "uploaded" && status == "uploaded" {
 			return nil
@@ -57,26 +62,32 @@ func (s *RegionalStore) PrepareArchiveUpload(ctx context.Context, plan backup.Up
 		if stored.Status != "pending" || (status != "awaiting_authority" && status != "preparing") {
 			return backup.ErrUploadPlan
 		}
-		return tx.Table("regional_backup_requests").Where("operation_id = ?", plan.OperationID).Update("status", "preparing").Error
+		if status == "preparing" {
+			return nil
+		} // Exact persisted plan replay after a lost response.
+		if err := checkBackupPreparation(tx, s.regionID, requestRow, claim); err != nil {
+			return err
+		}
+		return tx.Table("regional_backup_requests").Where("operation_id = ?", plan.OperationID).Updates(map[string]any{"status": "preparing", "lease_token": "", "lease_until_ms": 0}).Error
 	})
 }
 
 // Correlate the persisted command; this is bookkeeping, not execution authority.
 // All upload mutations lock upload before request to keep the lock order stable.
-func lockArchiveRequest(tx *gorm.DB, plan backup.UploadPlan) (string, error) {
-	var row struct{ BackupID, EventID, Payload, Status string }
+func lockArchiveRequest(tx *gorm.DB, plan backup.UploadPlan) (backupPreparationRow, error) {
+	var row backupPreparationRow
 	err := tx.Table("regional_backup_requests").Where("operation_id = ?", plan.OperationID).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", backup.ErrUploadPlan
+		return backupPreparationRow{}, backup.ErrUploadPlan
 	}
 	if err != nil {
-		return "", err
+		return backupPreparationRow{}, err
 	}
 	var request backup.Requested
 	if json.Unmarshal([]byte(row.Payload), &request) != nil || request.Validate() != nil || request.BackupID != row.BackupID || request.EventID != row.EventID || request.OperationID != plan.OperationID || request.EventID != plan.RequestEventID || request.RegionID != plan.RegionID || request.ServerID != plan.ServerID || request.OrganizationID != plan.Asset.OrganizationID || request.PlacementEpoch != plan.PlacementEpoch {
-		return "", backup.ErrUploadPlan
+		return backupPreparationRow{}, backup.ErrUploadPlan
 	}
-	return row.Status, nil
+	return row, nil
 }
 
 func (s *RegionalStore) ClaimArchiveUpload(ctx context.Context, lease time.Duration) (*backup.UploadClaim, error) {
@@ -158,11 +169,11 @@ func (s *RegionalStore) finishArchiveUpload(ctx context.Context, claim backup.Up
 			return backup.ErrUploadClaimLost
 		}
 		if receipt != "" {
-			status, err := lockArchiveRequest(tx, original)
+			requestRow, err := lockArchiveRequest(tx, original)
 			if err != nil {
 				return err
 			}
-			if status != "preparing" {
+			if requestRow.Status != "preparing" {
 				return backup.ErrUploadPlan
 			}
 		}

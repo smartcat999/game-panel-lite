@@ -16,8 +16,9 @@ import (
 func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	t.Helper()
 	ctx := context.Background()
+	var preparation backup.PreparationClaim
 	plan := backup.UploadPlan{ID: "upload", OperationID: "global-operation", RequestEventID: "global-event", RegionID: "upload-test", ServerID: "server", DeploymentID: "deployment", NodeID: "node", SnapshotID: "snapshot", PlacementEpoch: 1, StorageID: "store", ObjectKey: "object", Asset: assets.PublishedVersion{OrganizationID: "tenant", AssetID: "backup", Version: "one", SHA256: strings.Repeat("a", 64), SizeBytes: 10}}
-	if !errors.Is(db.PrepareArchiveUpload(ctx, plan), backup.ErrUploadPlan) {
+	if !errors.Is(db.PrepareArchiveUpload(ctx, preparation, plan), backup.ErrUploadPlan) {
 		t.Fatal("upload without request accepted")
 	}
 	var missing int64
@@ -28,6 +29,11 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.RecordBackupRequest(ctx, request); err != nil {
 		t.Fatal(err)
 	}
+	claimedPreparation, claimErr := db.ClaimBackupPreparation(ctx, time.Minute)
+	if claimErr != nil || claimedPreparation == nil {
+		t.Fatalf("claim preparation: %v", claimErr)
+	}
+	preparation = *claimedPreparation
 	for _, mutate := range []func(*backup.UploadPlan){
 		func(p *backup.UploadPlan) { p.ServerID = "other-server" },
 		func(p *backup.UploadPlan) { p.Asset.OrganizationID = "other-tenant" },
@@ -36,7 +42,7 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	} {
 		changed := plan
 		mutate(&changed)
-		if !errors.Is(db.PrepareArchiveUpload(ctx, changed), backup.ErrUploadPlan) {
+		if !errors.Is(db.PrepareArchiveUpload(ctx, preparation, changed), backup.ErrUploadPlan) {
 			t.Fatal("request mismatch accepted")
 		}
 	}
@@ -46,7 +52,7 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Table("regional_backup_requests").Where("operation_id = ?", request.OperationID).Update("status", "rejected").Error; err != nil {
 		t.Fatal(err)
 	}
-	if !errors.Is(db.PrepareArchiveUpload(ctx, plan), backup.ErrUploadPlan) {
+	if !errors.Is(db.PrepareArchiveUpload(ctx, preparation, plan), backup.ErrUploadPlan) {
 		t.Fatal("rejected request accepted")
 	}
 	// Restore the fixture before trusted preparation; this is not an auth test.
@@ -54,7 +60,7 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		if err := db.PrepareArchiveUpload(ctx, plan); err != nil {
+		if err := db.PrepareArchiveUpload(ctx, preparation, plan); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -67,7 +73,7 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	} {
 		changed := plan
 		mutate(&changed)
-		if !errors.Is(db.PrepareArchiveUpload(ctx, changed), backup.ErrUploadPlan) {
+		if !errors.Is(db.PrepareArchiveUpload(ctx, preparation, changed), backup.ErrUploadPlan) {
 			t.Fatal("conflicting plan accepted")
 		}
 	}
@@ -166,7 +172,7 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.CompleteArchiveUpload(ctx, *third, receipt); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.PrepareArchiveUpload(ctx, plan); err != nil {
+	if err := db.PrepareArchiveUpload(ctx, preparation, plan); err != nil {
 		t.Fatal(err)
 	}
 	if c, err := db.ClaimArchiveUpload(ctx, time.Minute); c != nil || err != nil {
@@ -206,7 +212,12 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.RecordBackupRequest(ctx, request); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.PrepareArchiveUpload(ctx, invalid); err != nil {
+	claimedPreparation, claimErr = db.ClaimBackupPreparation(ctx, time.Minute)
+	if claimErr != nil || claimedPreparation == nil {
+		t.Fatalf("claim preparation: %v", claimErr)
+	}
+	preparation = *claimedPreparation
+	if err := db.PrepareArchiveUpload(ctx, preparation, invalid); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.db.Table("regional_archive_uploads").Where("id = ?", invalid.ID).Update("plan", "{}").Error; err != nil {

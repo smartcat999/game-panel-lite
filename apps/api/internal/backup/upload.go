@@ -50,7 +50,6 @@ type UploadClaim struct {
 }
 
 type UploadTasks interface {
-	PrepareArchiveUpload(context.Context, UploadPlan) error
 	ClaimArchiveUpload(context.Context, time.Duration) (*UploadClaim, error)
 	CompleteArchiveUpload(context.Context, UploadClaim, StoredArchive) error
 	RetryArchiveUpload(context.Context, UploadClaim, time.Duration) error
