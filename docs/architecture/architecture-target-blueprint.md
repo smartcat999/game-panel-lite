@@ -230,3 +230,13 @@ go run ./apps/api/cmd/region-control -region east -listen 127.0.0.1:8444 \
 架构从实际 Docker daemon Info 获取并规范化，不以 Agent 所在宿主机架构代替。首次探测失败时不伪造就绪心跳；已获得架构后探测失败报告 runtimeReady=false。这里 runtimeReady 仅说明 Docker 观察可用，不证明区域任务执行能力、容量空闲或运行授权有效。
 
 NodeSession／NodeHeartbeat 的线协议已放入共享 internal/workload，API 保留类型别名兼容；Agent 不导入 API internal。已用实际 Agent 二进制、Docker 只读 Info、mTLS Region 控制入口和本机 PostgreSQL 验证心跳落库，仍缺多主机、区域任务执行及真实游戏负载验收。
+
+## 区域 CPU／内存预留（2026-09-09）
+
+区域迁移 011 新增 regional_allocations，绑定部署、租户、Placement epoch、配置及意图版本、节点配置版本和会话。ReserveRegionalCapacity 仅供受信区域协调器在确认归属与节点选择权限后使用；不是用户可直接调用的节点指定 API，也不签发执行授权。
+
+首次预留按区域版本任务→Deployment→Node 的顺序加锁，核对已准备资产、当前期望运行状态、节点调度开关、配置版本、运行架构及会话。心跳新鲜度使用调用方给定的有界窗口和锁后数据库时间检查。按单个节点聚合仍占用容量的预留，复用 scheduling.CheckCapacity 进行 CPU／内存准入；全部预留写入者必须持有同一 Node 锁，避免并发超卖。
+
+同部署的活动预留有唯一约束，完全相同请求返回原记录，改变节点或绑定版本会冲突。重放只是取回记录，不重签权限。节点离线、心跳过期或会话更换不会自动释放现有预留；释放须在后续生命周期流程取得停止／隔离证据后实现。
+
+当前仍缺端口预留、授权节点候选选择、执行授权、区域任务派发和安全释放接线。本批不向实际 Agent 下发工作负载，也不把 CPU／内存预留当成完整调度成功；现有待授权 Deployment 状态继续保留。

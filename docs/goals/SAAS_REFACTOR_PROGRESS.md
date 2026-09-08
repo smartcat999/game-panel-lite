@@ -192,6 +192,13 @@
 - 独立快照全量 Go（含架构）、vet、相关 race 通过。实际构建 Agent，并用真实 Docker 只读 Info＋mTLS region-control＋临时 PostgreSQL 验证其心跳落库。日志 `/tmp/gamepanel-agent-region-all.log`、`/tmp/gamepanel-agent-region-vet.log`、`/tmp/gamepanel-agent-region-integration.log`；实际 Agent 证据在 TestRegionalNodeControl，未创建游戏容器，也未以协议夹具代替该段实机验证。
 - 无新增 SQL、无前端改动。区域任务客户端、节点资源预留、调度授权和真实游戏执行仍待接入，总 Goal 不以心跳闭环完成。
 
+### 区域 CPU／内存事务预留
+
+- 区域迁移 011 保存绑定部署／配置／意图／节点版本／会话的容量预留。单部署活动记录唯一，按 Node 锁串行进行容量准入，复用已有 scheduling.CheckCapacity；关联信息逐表查询，节点预留使用单表聚合，无 JOIN。
+- 首次预留核对资产准备、期望运行、节点调度开关、配置版本和新鲜心跳。重复请求返回同一记录，不能静默换节点；过期节点不会使现有占用自动释放。持久化故障不产生部分预留。
+- 独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store／共享容量规则 race 通过。验证八个并发部署仅两个取得容量、重复请求身份保持、旧版本／错租户／错区域／过期心跳／未就绪拒绝、持久化故障回滚，以及重开 Store 和节点离线后占用仍保留。日志 `/tmp/gamepanel-regional-capacity-all.log`、`/tmp/gamepanel-regional-capacity-vet.log`、`/tmp/gamepanel-regional-capacity-integration.log`。
+- 接口仍只供受信区域协调器使用；候选选择、节点范围授权、端口、执行任务和有证据的资源释放待接入。未修改历史迁移与前端，不宣称完整调度已经实现。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
