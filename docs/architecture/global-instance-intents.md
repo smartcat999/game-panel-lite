@@ -12,7 +12,7 @@
 | `server_revisions` | 不可变规格、Provider／游戏版本、配置 schema、受保护配置、版本化资产引用 | 数据库触发器禁止 UPDATE／DELETE；每实例 generation 唯一 |
 | `server_placements` | 目标 Region、placementEpoch | 修改配置不会修改区域或 epoch |
 | `server_operations` | 操作身份、租户、目标实例／修订、幂等键及请求摘要 | 幂等范围为组织＋操作类型＋键；同键不同参数拒绝 |
-| `server_outbox` | 操作的持久交付记录及目标区域 | 与实例／修订事务提交；每操作唯一记录；尚无发布器 |
+| `server_outbox` | 操作的持久交付记录及目标区域 | 与实例／修订事务提交；每操作唯一记录；已补充分发租约与发布状态，实际 MQ 尚未接入 |
 
 配置修订不包含区域任务 generation、执行租约、运行路径、Env／Cmd 或实际容器状态。规格中的资产引用必须给出版本；这只校验引用形状，资产存在、内容摘要和租户授权仍需应用用例及资产模块验证。
 
@@ -40,4 +40,4 @@ PostgreSQL 显式迁移 015 创建上述表及不可变触发器；SQLite 使用
 
 SQLite／PostgreSQL 测试覆盖并发重复创建、同键改参数、创建末步失败回滚、数据库级修订不可变、修订末步失败回滚、同版本竞争、原版本保留、跨租户拒绝、新旧配额共同限制，以及 schema 重放。SQLite 另覆盖建表失败回滚；当前证据不代表跨主机部署或真实开服。
 
-下一步接入应用用例和受保护配置、全局 API 操作查询、Region 注册及严格节点授权，再实现区域 Deployment／Inbox／持久任务和实际 MQ 交付。现有旧 API、Controller 和 Worker 尚未消费这些新记录。
+后续已增加 [Outbox 分发基础](outbox-publication.md)。仍需接入应用用例和受保护配置、全局 API 操作查询、Region 注册及严格节点授权、区域 Deployment／Inbox／持久任务和实际 MQ 交付。现有旧 API、Controller 和 Worker 尚未消费这些新记录。

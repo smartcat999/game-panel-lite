@@ -68,6 +68,9 @@ func forbiddenImport(file, imported string) string {
 	if under("instances") && (strings.Contains(imported, ".") || imported == "net/http" || strings.HasPrefix(imported, "database/") || imported == "os") {
 		return "global instance models must not depend on legacy domain, persistence or runtime"
 	}
+	if under("delivery") && (strings.Contains(imported, ".") || imported == "net/http" || strings.HasPrefix(imported, "database/") || imported == "os") {
+		return "delivery orchestration must depend on consumer-owned interfaces, not persistence or broker adapters"
+	}
 	if under("scheduling") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "placement rules must be independent of domain persistence, transport and runtime adapters"
 	}

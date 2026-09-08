@@ -229,3 +229,11 @@
 - 新增 501 个不同实例归属的跨批次测试，同时验证重复回填与原归属保留。首次夹具向非空组织字段写 NULL，按真实约束修正为未归属空串；孤儿继续保持未归属。
 - 工作区及最终独立索引快照的全量 Go（含架构门禁）、vet、真实 PostgreSQL `TestPostgresIntegration -race` 全部通过。独立日志 `/tmp/gamepanel-owner-region-index-all.log`、`/tmp/gamepanel-owner-region-index-vet.log`、`/tmp/gamepanel-owner-region-index-pg.log`。新批次测试覆盖 SQLite，PostgreSQL 集成验证既有升级数据、并发／重复迁移及校验和拒绝。
 - Store 生产 Go 源码扫描无显式 JOIN 或跨表过滤子查询；历史 SQL 的替代执行需继续由生成 SQL 门禁保护。无 JOIN 不等于性能验收，执行计划和高流量测量仍属未完成工作。其他商业、调度、界面草稿和媒体文件保留。
+
+### 2026-09-08 全局 Outbox 持久领取与分发用例
+
+- PostgreSQL 016／SQLite 版本 4 增加分发令牌、数据库时间租约、重试时间、尝试次数和发布确认时间，保留原事件 ID 与业务事务。按 Region 有界领取，无 JOIN；PostgreSQL 使用 SKIP LOCKED，SQLite 冲突按事务失败返回。
+- 新增标准库依赖的 `delivery` 用例及接口边界，Broker I/O 不持有数据库事务。发布确认后才更新分发状态，业务 Operation 仍 pending；失败／确认丢失／租约过期后以同一事件 ID 重发，旧令牌不能回写。
+- SQLite 与 PostgreSQL 共用测试覆盖有效租约排他、到期恢复、旧令牌拒绝、重试间隔、区域隔离、确认丢失重复和发布状态与业务状态分离。PostgreSQL 另覆盖四方并发领取；首次该夹具因默认资源配额不足失败，改为显式配置测试租户配额后通过。
+- 工作区及最终独立提交快照全量 Go（含架构依赖门禁）／vet 与真实 PostgreSQL race 全部通过。独立日志 `/tmp/gamepanel-outbox-index-all.log`、`/tmp/gamepanel-outbox-index-vet.log`、`/tmp/gamepanel-outbox-index-pg.log`。前端未变更。
+- [分发说明](../architecture/outbox-publication.md) 列明当前只完成持久分发基础：实际 MQ Adapter、连接监督、退避／死信、Region Inbox 与持久任务原子写入、对账和独立部署均未完成。已核对 RabbitMQ 官方路由确认与 Go 客户端 I/O 取消语义，后续 Adapter 需满足这些契约，不能用替身 Publisher 冒充 MQ 验收。
