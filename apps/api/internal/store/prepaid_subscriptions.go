@@ -280,6 +280,28 @@ func (s *Store) ClaimPendingFulfillment(ctx context.Context, limit int) ([]strin
 	return ids, err
 }
 
+// ListOrganizationSubscriptions lists all service subscriptions for a given tenant organization.
+func (s *Store) ListOrganizationSubscriptions(ctx context.Context, organizationID string) ([]commerce.Subscription, error) {
+	if organizationID == "" {
+		return nil, commerce.ErrSubscriptionUnavailable
+	}
+	var subscriptions []commerce.Subscription
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var rows []subscriptionRow
+		if err := tx.db.Table("service_subscriptions").Where("organization_id = ?", organizationID).Order("created_at_ms DESC").Find(&rows).Error; err != nil {
+			return err
+		}
+		for _, r := range rows {
+			sub, err := r.subscription()
+			if err == nil {
+				subscriptions = append(subscriptions, sub)
+			}
+		}
+		return nil
+	})
+	return subscriptions, err
+}
+
 func migrateSQLitePrepaidSubscriptions(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		var count int64

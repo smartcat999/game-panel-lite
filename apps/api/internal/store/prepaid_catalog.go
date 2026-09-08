@@ -118,6 +118,29 @@ func (s *Store) QuoteListedPrepaidPlan(ctx context.Context, planID string, versi
 	return quote, nil
 }
 
+// ListAvailablePrepaidPlans returns all currently enabled prepaid plans.
+func (s *Store) ListAvailablePrepaidPlans(ctx context.Context) ([]commerce.PlanVersion, error) {
+	var plans []commerce.PlanVersion
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var sales []prepaidSaleRow
+		if err := tx.db.Table("prepaid_plan_sales").Where("enabled = ?", true).Find(&sales).Error; err != nil {
+			return err
+		}
+		for _, sale := range sales {
+			var row prepaidPlanRow
+			if err := tx.db.Table("prepaid_plan_versions").Where("plan_id = ? AND version = ?", sale.PlanID, sale.PlanVersion).Take(&row).Error; err != nil {
+				continue
+			}
+			var plan commerce.PlanVersion
+			if json.Unmarshal([]byte(row.Terms), &plan) == nil && plan.PlanID == sale.PlanID && plan.Version == sale.PlanVersion {
+				plans = append(plans, plan)
+			}
+		}
+		return nil
+	})
+	return plans, err
+}
+
 func migrateSQLitePrepaidCatalog(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		var count int64

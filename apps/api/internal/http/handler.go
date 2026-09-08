@@ -22,6 +22,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/scheduler"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/systemupdate"
 	workshopsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/workshop"
@@ -33,6 +34,7 @@ type Handler struct {
 	modDelivery    *modlibrary.Delivery
 	modRuntime     *modruntime.Service
 	gameConfig     *gameconfig.Service
+	scheduler      *scheduler.Scheduler
 	ctx            context.Context
 	cfg            config.Config
 	logger         *slog.Logger
@@ -109,7 +111,18 @@ func NewHandler(
 	}
 	handler.observability = observability.NewCachedService(observability.NewService(store, adapter), handler.runtimeStatusAvailable, 5*time.Second)
 	handler.systemUpdate = systemupdate.New(cfg.ReleaseManifestURL, cfg.UpdaterURL, cfg.UpdaterToken, 8*time.Second)
+	if store != nil {
+		handler.scheduler = scheduler.New(store, providers)
+		if dockerMonitor != nil {
+			handler.scheduler.WithLocalArchitecture(dockerMonitor.Architecture)
+		}
+	}
 	return handler
+}
+
+func (h *Handler) WithScheduler(sched *scheduler.Scheduler) *Handler {
+	h.scheduler = sched
+	return h
 }
 
 func (h *Handler) Start(ctx context.Context) {
@@ -151,6 +164,10 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/auth/register", h.register)
 	r.Post("/api/auth/login", h.login)
 	r.Post("/api/auth/logout", h.logout)
+	r.Get("/api/auth/oauth/providers", h.getOAuthProviders)
+	r.Get("/api/auth/oauth/{provider}/authorize", h.oauthAuthorize)
+	r.Get("/api/auth/oauth/{provider}/callback", h.oauthCallback)
+	r.Get("/api/regions", h.listRegions)
 	r.Get("/metrics", h.prometheusMetrics)
 	r.Get("/api/observability/prometheus", h.observabilityPrometheus)
 	r.Get("/api/public/servers/{token}", h.getPublicServerShare)
@@ -165,6 +182,8 @@ func (h *Handler) Register(r chi.Router) {
 	r.Get("/api/agent/tunnel/poll", h.pollAgentTunnel)
 	r.Get("/api/agent/tunnel/connect", h.connectAgentTunnel)
 	r.Post("/api/agent/servers/{id}/logs", h.agentUploadLogs)
+	r.Get("/api/commerce/plans", h.listCommercePlans)
+	r.Post("/api/commerce/payments/webhook", h.handlePaymentWebhook)
 
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireAuth)
@@ -174,6 +193,10 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requirePermission(domain.PermissionModManage, "mod management permission required")).Post("/api/auth/me/mods/upload", h.uploadMyLibraryMod)
 		r.Get("/api/auth/me/organizations", h.listMyOrganizations)
 		r.Get("/api/auth/me/organizations/{id}", h.getMyOrganization)
+		r.Get("/api/user/credits", h.getUserCredits)
+		r.Get("/api/commerce/subscriptions", h.listCommerceSubscriptions)
+		r.Post("/api/commerce/orders", h.createCommerceOrder)
+		r.Post("/api/commerce/orders/{id}/cancel", h.cancelCommerceOrder)
 		r.Post("/api/auth/password", h.changePassword)
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAdmin)
@@ -192,6 +215,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireAdmin).Delete("/api/organizations/{id}/members/{userId}", h.removeOrganizationMember)
 		r.With(h.requireAdmin).Get("/api/organizations/{id}/usage", h.getOrganizationUsage)
 		r.With(h.requireAdmin).Put("/api/organizations/{id}/quota", h.updateOrganizationQuota)
+		r.With(h.requireAdmin).Get("/api/organizations/{id}/credits", h.getOrganizationCredits)
+		r.With(h.requireAdmin).Post("/api/organizations/{id}/topup", h.adminTopUpCredits)
 		r.Get("/api/nodes", h.listNodes)
 		r.With(h.requireAdmin).Post("/api/nodes", h.createNode)
 		r.Get("/api/nodes/{id}", h.getNode)
@@ -201,6 +226,9 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireAdmin).Get("/api/nodes/{id}/join-command", h.getNodeJoinCommand)
 		r.With(h.requireAdmin).Post("/api/nodes/{id}/ping", h.pingNode)
 		r.With(h.requireAdmin).Delete("/api/nodes/{id}", h.deleteNode)
+		r.With(h.requireAdmin).Post("/api/nodes/{id}/cordon", h.cordonNode)
+		r.With(h.requireAdmin).Post("/api/nodes/{id}/uncordon", h.uncordonNode)
+		r.With(h.requireAdmin).Post("/api/nodes/{id}/drain", h.drainNode)
 		r.Get("/api/version", h.version)
 		r.Get("/api/system/update", h.getSystemUpdate)
 		r.With(h.requireAdmin).Post("/api/system/update/check", h.checkSystemUpdate)
@@ -242,6 +270,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/start", h.startServer)
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/stop", h.stopServer)
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/restart", h.restartServer)
+		r.With(h.requireServerAccess, h.requirePermission(domain.PermissionServerConfigure, "member role required")).Post("/api/servers/{id}/migrate", h.migrateServer)
 		r.With(h.requireServerAccess).Get("/api/servers/{id}/game-update", h.getGameUpdate)
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/game-update/check", h.checkGameUpdate)
 		r.With(h.requireServerAccess).Post("/api/servers/{id}/game-update/apply", h.applyGameUpdate)
@@ -341,6 +370,9 @@ func isGameServerLockedForMutation(server domain.GameServer) bool {
 }
 
 func isGameServerBusyForModMutation(server domain.GameServer) bool {
+	if server.Status.Phase == domain.PhasePending && (server.Spec.DesiredState != domain.DesiredRunning || server.Status.RuntimeID == "") {
+		return false
+	}
 	switch server.Status.Phase {
 	case domain.PhasePending, domain.PhaseReconciling, domain.PhaseDeleting:
 		return true
