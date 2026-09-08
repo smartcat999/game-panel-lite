@@ -84,6 +84,13 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
+	if err := migrateSQLiteGlobalInstances(db); err != nil {
+		pool, _ := db.DB()
+		if pool != nil {
+			_ = pool.Close()
+		}
+		return nil, err
+	}
 	return &Store{db: db, activitySubscribers: map[uint64]activitySubscriber{}}, nil
 }
 
@@ -911,6 +918,11 @@ func (s *Store) GetTenantUsage(ctx context.Context, orgID string) (domain.Tenant
 	if err := s.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&servers).Error; err != nil {
 		return domain.TenantUsage{Quota: quota}, err
 	}
+	logical, err := s.globalReservedResources(ctx, orgID)
+	if err != nil {
+		return domain.TenantUsage{Quota: quota}, err
+	}
+	servers = append(servers, logical...)
 
 	running := 0
 	var usedCpu float64

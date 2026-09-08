@@ -178,3 +178,13 @@
 - 工作区全量 Go、vet 和 PostgreSQL race 通过。独立命令行在临时库上验证：空库退出 0，含未归属实例退出 2，并输出机器可读报告。报告位于 `/tmp/gamepanel-regional-audit-cli-clean.json` 和 `/tmp/gamepanel-regional-audit-cli-issues.json`。
 - [迁移说明](../architecture/regional-data-migration.md) 明确权限、报告含义与后续回填／资产验证／切换门槛。全局实例、不可变修订、Placement、区域 Deployment 和实际导入仍待实现；本批不等于模型拆分或独立 Region 验收完成。
 - 独立提交快照的 `go test ./...`、`go vet ./...`、`TestPostgresIntegration` 和 `TestPostgresRegionalMigrationAuditReadOnly` race 测试全部通过；日志 `/tmp/gamepanel-regional-audit-index-all.log`、`/tmp/gamepanel-regional-audit-index-vet.log`、`/tmp/gamepanel-regional-audit-index-pg.log`。未变更前端，保留其他草稿及用户媒体文件。
+
+### 2026-09-08 全局实例模型与事务意图
+
+- 新增标准库依赖的 `instances` 模块，分离逻辑身份、不可变配置修订、Region Placement、Operation 及交付事件身份；模型不包含实际 NodeID、容器、宿主机路径或运行观察。
+- PostgreSQL 015／SQLite 版本 3 新建逻辑表及修订不可变触发器。创建原子写入实例、修订、归属、操作和 Outbox；修订更新追加版本并 CAS 推进指针，不修改区域 epoch、用户期望状态或 intentVersion。
+- 幂等范围为组织＋操作类型＋键；同键不同参数拒绝。组织与成员权限在事务中重查，空 actor 无管理员绕过。过渡期新旧实例共用租户锁、配额准入和用量统计，未知修订资源拒绝准入。
+- 测试覆盖 8 个并发重复创建、Outbox 失败整体回滚、修订末步失败回滚、数据库 UPDATE／DELETE／SQLite REPLACE 拒绝、同版本 8 方竞争仅一个成功、原版本保留、旧创建重放不回滚当前指针、新旧配额共用、跨租户拒绝和 SQLite 迁移失败回滚。
+- 工作区全量 Go／vet 通过，真实 PostgreSQL race 验证通过；随后新增的跨租户与 SQLite 回滚用例专项通过。最终独立快照验证结果另行登记，不能以先前快照代替。
+- [模型与事务说明](../architecture/global-instance-intents.md) 明确暂未接入 HTTP、MQ 发布器、Region 接收端及实际配置保护器。新表尚在同一数据库，不迁移旧实例；全局应用用例、区域 Deployment、Inbox、实际交付与数据导入继续待实现。
+- 最终独立索引快照的全量 Go（含架构依赖门禁）、vet、真实 PostgreSQL `TestPostgresIntegration`／`TestPostgresRegionalMigrationAuditReadOnly -race` 全部通过，覆盖本批最终测试。日志 `/tmp/gamepanel-global-model-index-all.log`、`/tmp/gamepanel-global-model-index-vet.log`、`/tmp/gamepanel-global-model-index-pg.log`。本轮未修改前端；其他草稿和用户文件未纳入提交。

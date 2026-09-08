@@ -119,6 +119,7 @@ func TestPostgresIntegration(t *testing.T) {
 	}
 	testNodeSchedulingMigration(t, db)
 	testRegionalMigrationAudit(t, db)
+	testGlobalInstanceIntents(t, db)
 	if err := MigratePostgres(ctx, parsed.String()); err != nil {
 		t.Fatal(err)
 	}

@@ -51,6 +51,12 @@ var nodeRuntimeArchitectureSQL string
 //go:embed migrations/014_node_port_reservations.sql
 var nodePortReservationsSQL string
 
+//go:embed migrations/015_global_instance_intents.sql
+var globalInstanceSchemaSQL string
+
+//go:embed migrations/global_instance_revision_guards.sql
+var globalInstanceRevisionGuardsSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -76,6 +82,7 @@ func postgresMigrations() []sqlMigration {
 		{12, "oauth_table_name", oauthTableNameSQL},
 		{13, "node_runtime_architecture", nodeRuntimeArchitectureSQL},
 		{14, "node_port_reservations", nodePortReservationsSQL},
+		{15, "global_instance_intents", globalInstanceSchemaSQL + "\n" + globalInstanceRevisionGuardsSQL},
 	}
 }
 

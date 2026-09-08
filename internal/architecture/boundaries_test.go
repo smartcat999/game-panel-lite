@@ -65,6 +65,9 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("instances") && (strings.Contains(imported, ".") || imported == "net/http" || strings.HasPrefix(imported, "database/") || imported == "os") {
+		return "global instance models must not depend on legacy domain, persistence or runtime"
+	}
 	if under("scheduling") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "placement rules must be independent of domain persistence, transport and runtime adapters"
 	}
@@ -111,6 +114,9 @@ func TestImportRules(t *testing.T) {
 		file, imported string
 		forbidden      bool
 	}{
+		{"apps/api/internal/instances/models.go", "encoding/json", false},
+		{"apps/api/internal/instances/models.go", api + "domain", true},
+		{"apps/api/internal/instances/models.go", "gorm.io/gorm", true},
 		{"apps/api/internal/scheduling/capacity.go", "math", false},
 		{"apps/api/internal/scheduling/capacity.go", api + "store", true},
 		{"apps/api/internal/scheduling/capacity.go", "net/http", true},

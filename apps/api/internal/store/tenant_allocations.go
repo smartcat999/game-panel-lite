@@ -64,6 +64,11 @@ func (s *Store) checkAllocation(ctx context.Context, quota domain.TenantQuota, r
 	if err := s.db.WithContext(ctx).Where("organization_id = ?", quota.OrganizationID).Find(&instances).Error; err != nil {
 		return err
 	}
+	logical, err := s.globalReservedResources(ctx, quota.OrganizationID)
+	if err != nil {
+		return err
+	}
+	instances = append(instances, logical...)
 	count, cpu, memory := 0, 0.0, int64(0)
 	for _, instance := range instances {
 		if replacement != nil && instance.ID == replacement.ID {
@@ -75,6 +80,9 @@ func (s *Store) checkAllocation(ctx context.Context, quota domain.TenantQuota, r
 		}
 		count++
 		cpu += instance.Spec.Resources.CPULimitCores
+		if int64(instance.Spec.Resources.MemoryLimitMB) > int64(quota.MaxMemoryMB)-memory {
+			return ErrQuotaExceeded
+		}
 		memory += int64(instance.Spec.Resources.MemoryLimitMB)
 	}
 	if replacement != nil {
@@ -83,6 +91,9 @@ func (s *Store) checkAllocation(ctx context.Context, quota domain.TenantQuota, r
 		}
 		count++
 		cpu += replacement.Spec.Resources.CPULimitCores
+		if int64(replacement.Spec.Resources.MemoryLimitMB) > int64(quota.MaxMemoryMB)-memory {
+			return ErrQuotaExceeded
+		}
 		memory += int64(replacement.Spec.Resources.MemoryLimitMB)
 	}
 	if count > quota.MaxServers || cpu > quota.MaxCPUCores || memory > int64(quota.MaxMemoryMB) {
