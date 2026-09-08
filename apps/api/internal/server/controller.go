@@ -33,19 +33,29 @@ type assignmentControllerStore interface {
 	GetWorkloadObservation(context.Context, string) (domain.WorkloadObservation, error)
 }
 
+type pendingPlacementStore interface {
+	AssignPendingGameServer(context.Context, domain.GameServer, domain.GameServer) error
+}
+
 type nodeStatusControllerStore interface {
 	GetComputeNode(context.Context, string) (domain.ComputeNode, error)
 }
 
+type NodeScheduler interface {
+	Schedule(context.Context, domain.GameServer) (domain.ComputeNode, error)
+}
+
 type Controller struct {
-	store      ControllerStore
-	reconciler *Reconciler
-	gateway    *gateway.StreamGateway
-	logger     *slog.Logger
-	interval   time.Duration
-	dataRoot   string
-	locksMu    sync.Mutex
-	locks      map[string]*sync.Mutex
+	store           ControllerStore
+	reconciler      *Reconciler
+	gateway         *gateway.StreamGateway
+	logger          *slog.Logger
+	interval        time.Duration
+	dataRoot        string
+	scheduler       NodeScheduler
+	recoveryTimeout time.Duration
+	locksMu         sync.Mutex
+	locks           map[string]*sync.Mutex
 }
 
 func NewController(store ControllerStore, reconciler *Reconciler, logger *slog.Logger) *Controller {
@@ -56,12 +66,25 @@ func NewController(store ControllerStore, reconciler *Reconciler, logger *slog.L
 		logger = slog.Default()
 	}
 	return &Controller{
-		store:      store,
-		reconciler: reconciler,
-		logger:     logger,
-		interval:   3 * time.Second,
-		locks:      map[string]*sync.Mutex{},
+		store:           store,
+		reconciler:      reconciler,
+		logger:          logger,
+		interval:        3 * time.Second,
+		recoveryTimeout: 2 * time.Minute,
+		locks:           map[string]*sync.Mutex{},
 	}
+}
+
+func (c *Controller) WithScheduler(sched NodeScheduler) *Controller {
+	c.scheduler = sched
+	return c
+}
+
+func (c *Controller) WithRecoveryTimeout(timeout time.Duration) *Controller {
+	if timeout > 0 {
+		c.recoveryTimeout = timeout
+	}
+	return c
 }
 
 func (c *Controller) WithDataRoot(dataRoot string) *Controller {
@@ -169,13 +192,57 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 			}
 			return
 		}
-		if item.Status.Phase != domain.PhasePending {
-			item.Status.Phase = domain.PhasePending
-			item.Status.ActualState = domain.ActualUnknown
-			item.Status.LastReconcileAt = now
-			_ = c.store.SaveReconciledGameServer(ctx, before, item)
+		if item.Spec.DesiredState == domain.DesiredRunning && c.scheduler != nil {
+			chosenNode, err := c.scheduler.Schedule(ctx, item)
+			if err == nil {
+				item.NodeID = chosenNode.ID
+				item.Spec.Generation++
+				item.Status.Phase = domain.PhasePending
+				item.Status.ActualState = domain.ActualUnknown
+				item.Status.LastReconcileAt = now
+				item.Status.Conditions = upsertServerCondition(item.Status.Conditions, domain.ServerCondition{
+					Type:               "Scheduled",
+					Status:             "True",
+					Reason:             "NodeAssigned",
+					Message:            "assigned to node " + chosenNode.Name,
+					ObservedGeneration: item.Spec.Generation,
+					LastTransitionAt:   now,
+				})
+				placement, supported := c.store.(pendingPlacementStore)
+				if !supported {
+					c.logger.Error("store does not support atomic initial placement", "server", item.ID)
+					return
+				}
+				if err := placement.AssignPendingGameServer(ctx, before, item); err != nil {
+					c.logger.Warn("initial node allocation was not committed", "server", item.ID, "node", item.NodeID, "error", err)
+					return
+				}
+				c.recordReconcileEvents(ctx, before, item, nil)
+				before = item
+			} else {
+				item.Status.Conditions = upsertServerCondition(item.Status.Conditions, domain.ServerCondition{
+					Type:               "Scheduled",
+					Status:             "False",
+					Reason:             "Unschedulable",
+					Message:            err.Error(),
+					ObservedGeneration: item.Spec.Generation,
+					LastTransitionAt:   now,
+				})
+				item.Status.Phase = domain.PhasePending
+				item.Status.ActualState = domain.ActualUnknown
+				item.Status.LastReconcileAt = now
+				_ = c.store.SaveReconciledGameServer(ctx, before, item)
+				return
+			}
+		} else {
+			if item.Status.Phase != domain.PhasePending {
+				item.Status.Phase = domain.PhasePending
+				item.Status.ActualState = domain.ActualUnknown
+				item.Status.LastReconcileAt = now
+				_ = c.store.SaveReconciledGameServer(ctx, before, item)
+			}
+			return
 		}
-		return
 	}
 
 	current, currentErr := assignments.GetWorkloadAssignmentByServer(ctx, item.ID)
@@ -220,7 +287,26 @@ func (c *Controller) reconcileRemote(ctx context.Context, item domain.GameServer
 	}
 	if nodes, nodeOK := c.store.(nodeStatusControllerStore); nodeOK {
 		node, err := nodes.GetComputeNode(ctx, assignment.NodeID)
-		if err != nil || node.Status == "offline" || node.LastHeartbeat.IsZero() || now.Sub(node.LastHeartbeat) > 45*time.Second {
+		isOffline := err != nil || node.Status == "offline" || node.LastHeartbeat.IsZero() || now.Sub(node.LastHeartbeat) > 45*time.Second
+		if isOffline {
+			staleDuration := 46 * time.Second
+			if !node.LastHeartbeat.IsZero() {
+				staleDuration = now.Sub(node.LastHeartbeat)
+			}
+			if item.Spec.DesiredState == domain.DesiredRunning && staleDuration >= c.recoveryTimeout {
+				// A missing heartbeat does not prove the old game process has
+				// stopped. Preserve its placement and assignment until fencing
+				// and a recoverable world checkpoint have been established.
+				item.Status.Conditions = upsertServerCondition(item.Status.Conditions, domain.ServerCondition{
+					Type:               "RecoveryReady",
+					Status:             "False",
+					Reason:             "FencingAndCheckpointRequired",
+					Message:            "source node is unreachable; recovery requires confirmed source isolation and a recoverable world checkpoint",
+					ObservedGeneration: item.Spec.Generation,
+					LastTransitionAt:   now,
+				})
+			}
+
 			item.Status.ActualState = domain.ActualUnknown
 			item.Status.LastReconcileAt = now
 			item.Status.Conditions = upsertServerCondition(item.Status.Conditions, domain.ServerCondition{
