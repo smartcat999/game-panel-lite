@@ -169,3 +169,12 @@
 - 工作区 `go test ./...`、`go vet ./...`、真实 PostgreSQL `TestPostgresIntegration -race` 通过，日志为 `/tmp/gamepanel-capacity-all.log`、`/tmp/gamepanel-capacity-vet.log`、`/tmp/gamepanel-capacity-pg.log`。独立容量核心快照全量 Go 与 vet 通过，日志为 `/tmp/gamepanel-capacity-index-all.log`、`/tmp/gamepanel-capacity-index-vet.log`。
 - 本批独立提交仅含容量核心、Store 接入及依赖门禁；Scheduler、HTTP、商业和界面草稿仍未整体提交。附加端口候选查询、严格区域/节点授权和停止后计算容量释放尚未完成。
 - 独立快照真实 PostgreSQL `TestPostgresIntegration -race` 随后通过，日志 `/tmp/gamepanel-capacity-index-pg.log`；验证范围包括 Store 事务准入，并不包含尚未提交的 Scheduler 接线。
+
+### 2026-09-08 区域拆库的只读归属预检
+
+- 审查确认旧 `GameServer` 仍混合逻辑配置、NodeID 和运行状态，空 NodeID 又兼有旧本地实例与未调度实例的歧义；部分区域查询把空值当作香港。迁移不能直接沿用这些默认值。
+- 新增 `regional-migration-audit` 命令和 Store 一致快照审计。报告实例/节点/任务数量、可解析的租户与区域归属，以及空区域、孤儿引用、历史任务与当前 NodeID 不一致等问题；不自动修复，也不把实际分配转成用户严格绑定要求。
+- PostgreSQL 使用只读 REPEATABLE READ，仅读取归属列。真实 PostgreSQL 测试验证列级 SELECT 账号可完成审计，而写入和读取节点令牌均被数据库拒绝；SQLite/PG 共用用例验证歧义报告、确定排序、重复读取不改源数据，以及非法配置 JSON 不被读取或输出。
+- 工作区全量 Go、vet 和 PostgreSQL race 通过。独立命令行在临时库上验证：空库退出 0，含未归属实例退出 2，并输出机器可读报告。报告位于 `/tmp/gamepanel-regional-audit-cli-clean.json` 和 `/tmp/gamepanel-regional-audit-cli-issues.json`。
+- [迁移说明](../architecture/regional-data-migration.md) 明确权限、报告含义与后续回填／资产验证／切换门槛。全局实例、不可变修订、Placement、区域 Deployment 和实际导入仍待实现；本批不等于模型拆分或独立 Region 验收完成。
+- 独立提交快照的 `go test ./...`、`go vet ./...`、`TestPostgresIntegration` 和 `TestPostgresRegionalMigrationAuditReadOnly` race 测试全部通过；日志 `/tmp/gamepanel-regional-audit-index-all.log`、`/tmp/gamepanel-regional-audit-index-vet.log`、`/tmp/gamepanel-regional-audit-index-pg.log`。未变更前端，保留其他草稿及用户媒体文件。
