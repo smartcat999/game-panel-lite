@@ -56,12 +56,23 @@ func (s *Store) ResolveArtifactForNode(ctx context.Context, nodeID, uid string, 
 	if target.OrganizationID == "" || target.NodeID != nodeID || target.Spec.Generation != generation || target.Spec.DesiredState != domain.DesiredRunning {
 		return item, ref, ErrNotFound
 	}
-	err = s.db.WithContext(ctx).Where("id = ? AND instance_id = ? AND organization_id = ? AND provider_key = ? AND source = ? AND EXISTS (SELECT 1 FROM organizations WHERE organizations.id = mod_files.organization_id)", artifactID, "unassigned", target.OrganizationID, target.ProviderKey, "upload").Take(&item).Error
+	err = s.db.WithContext(ctx).Where("id = ? AND instance_id = ? AND organization_id = ? AND provider_key = ? AND source = ?", artifactID, "unassigned", target.OrganizationID, target.ProviderKey, "upload").Take(&item).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return item, ref, ErrNotFound
 	}
 	if err != nil {
 		return item, ref, err
+	}
+	// Resolve the exact owner by ID without a cross-table predicate. Keep the
+	// later assignment and lease checks fresh, rather than freezing revocation
+	// state in a transaction snapshot for the entire authorization sequence.
+	var owner struct{ ID string }
+	err = s.db.WithContext(ctx).Table("organizations").Select("id").Where("id = ?", item.OrganizationID).Take(&owner).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return domain.ModFile{}, ref, ErrNotFound
+	}
+	if err != nil {
+		return domain.ModFile{}, ref, err
 	}
 	if item.Revision != ref.Revision || item.ContentHash != ref.SHA256 || item.SizeBytes != ref.SizeBytes {
 		return domain.ModFile{}, ref, ErrInvalidModLibrary

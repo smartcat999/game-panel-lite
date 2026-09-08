@@ -53,13 +53,14 @@ func migrateSQLiteArtifactReferences(db *gorm.DB) error {
 		for _, statement := range []string{
 			`CREATE TABLE workload_artifact_references (assignment_id text NOT NULL REFERENCES workload_assignments(id) ON DELETE CASCADE, artifact_id text NOT NULL, organization_id text NOT NULL, PRIMARY KEY(assignment_id,artifact_id))`,
 			`CREATE INDEX idx_workload_artifact_references_owner_source ON workload_artifact_references(organization_id,artifact_id)`,
-			`INSERT INTO workload_artifact_references(assignment_id,artifact_id,organization_id) SELECT DISTINCT a.id,json_extract(artifact.value,'$.id'),m.organization_id FROM workload_assignments a JOIN json_each(COALESCE(NULLIF(a.spec,''),'{}'),'$.options.artifacts') artifact JOIN mod_files m ON m.id=json_extract(artifact.value,'$.id') WHERE m.organization_id <> ''`,
-			`INSERT INTO gamepanel_sqlite_migrations(version) VALUES (1)`,
 		} {
 			if err := tx.Exec(statement).Error; err != nil {
 				return err
 			}
 		}
-		return nil
+		if err := backfillArtifactReferences(tx); err != nil {
+			return err
+		}
+		return tx.Exec("INSERT INTO gamepanel_sqlite_migrations(version) VALUES (1)").Error
 	})
 }

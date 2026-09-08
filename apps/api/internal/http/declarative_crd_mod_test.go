@@ -16,6 +16,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	serverctrl "github.com/smartcat999/game-panel-lite/apps/api/internal/server"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
@@ -274,7 +275,9 @@ func TestDeclarativeModDeletePureCRD(t *testing.T) {
 }
 
 func TestDeclarativeModReconciliationToAssignment(t *testing.T) {
-	_, db, cfg := newTestRouter(t)
+	// This test advances its own controller explicitly; a background controller
+	// must not overwrite the observation between the two RunOnce calls.
+	_, db, cfg := newTestRouterFixture(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, true, false)
 	ctx := context.Background()
 	setupDeclarativeFixtures(t, db, "org-1", "edge-worker-node-1")
 

@@ -205,3 +205,11 @@
 - 首次全量回归暴露自动版本检查测试在最后一次活动写入前清理数据库，随后空 logger 崩溃。测试清理改为释放适配器阻塞并等待已有 Worker；该用例连续 10 次及全量 Go／vet 重跑通过，未放宽生产状态判断。
 - 本批仍未清理节点制品授权、关联删除、区域过滤草稿及历史迁移执行路径；六阶段 Goal 不变。最终独立快照验证结果待登记。
 - 最终独立索引快照的全量 Go、vet、真实 PostgreSQL `TestPostgresIntegration -race` 均通过，包含新增分页／备份／NULL 归属测试。日志 `/tmp/gamepanel-idqueries-index-all.log`、`/tmp/gamepanel-idqueries-index-vet.log`、`/tmp/gamepanel-idqueries-index-pg.log`。其他草稿及用户媒体文件未纳入提交。
+
+### 2026-09-08 制品授权、引用删除与 SQLite 回填
+
+- 节点制品授权改为独立读取组织 ID，保留执行前新鲜租约和版本复核；新增组织删除后拒绝读取测试。
+- 任务与引用删除改为事务内锁定并物化 ID 后分批删除；注入删除失败验证引用回滚，验证重复删除及无关任务保留，SQLite 和 PostgreSQL 共用用例。
+- SQLite 制品引用迁移按任务 ID 分页、批量读取制品归属，在 Go 中组合并去重；非法清单回滚，不输出清单内容。PostgreSQL 历史脚本尚未替换。
+- 全量测试暴露手动调谐测试同时启动后台控制器的竞争，改用已有无后台夹具；连续 10 次与全量回归通过。
+- 工作区及独立暂存快照的全量 Go（含架构门禁）、vet、真实 PostgreSQL `TestPostgresIntegration -race` 全部通过。独立日志 `/tmp/gamepanel-artifact-ids-index-all.log`、`/tmp/gamepanel-artifact-ids-index-vet.log`、`/tmp/gamepanel-artifact-ids-index-pg.log`。前端未变更；其他草稿未纳入本批。

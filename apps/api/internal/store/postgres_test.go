@@ -261,6 +261,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testLeasedObservations(t, db)
 	testNodeArtifactAuthorization(t, db)
 	testArtifactReferenceLifecycle(t, db)
+	testAssignmentReferenceDeletion(t, db)
 	var referenceCount int64
 	if err := db.db.Model(&artifactReference{}).Where("assignment_id = ? AND artifact_id = ? AND organization_id = ?", "upgrade-assignment", "upgrade-artifact", "upgrade-owner").Count(&referenceCount).Error; err != nil || referenceCount != 1 {
 		t.Fatalf("PostgreSQL artifact backfill: %d %v", referenceCount, err)

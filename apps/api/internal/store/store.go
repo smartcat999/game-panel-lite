@@ -1169,14 +1169,29 @@ func (s *Store) ListWorkloadAssignmentsByNode(ctx context.Context, nodeID string
 
 func (s *Store) DeleteWorkloadAssignment(ctx context.Context, serverID string) error {
 	return s.Transaction(ctx, func(tx *Store) error {
-		if err := tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).Where("server_id = ?", serverID).UpdateColumn("updated_at", gorm.Expr("updated_at")).Error; err != nil {
+		locked := tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).Where("server_id = ?", serverID).UpdateColumn("updated_at", gorm.Expr("updated_at"))
+		if locked.Error != nil {
+			return locked.Error
+		}
+		if locked.RowsAffected == 0 {
+			return nil
+		}
+		var ids []string
+		if err := tx.db.WithContext(ctx).Model(&domain.WorkloadAssignment{}).Where("server_id = ?", serverID).Pluck("id", &ids).Error; err != nil {
 			return err
 		}
-		ids := tx.db.Model(&domain.WorkloadAssignment{}).Select("id").Where("server_id = ?", serverID)
-		if err := tx.db.WithContext(ctx).Where("assignment_id IN (?)", ids).Delete(&artifactReference{}).Error; err != nil {
-			return err
+		for start := 0; start < len(ids); start += idLookupBatchSize {
+			batch := ids[start:min(start+idLookupBatchSize, len(ids))]
+			if err := tx.db.WithContext(ctx).Where("assignment_id IN ?", batch).Delete(&artifactReference{}).Error; err != nil {
+				return err
+			}
+			// Delete only the IDs locked and read above. A concurrently published
+			// new assignment must not be swept up by a broader server predicate.
+			if err := tx.db.WithContext(ctx).Where("id IN ?", batch).Delete(&domain.WorkloadAssignment{}).Error; err != nil {
+				return err
+			}
 		}
-		return tx.db.WithContext(ctx).Where("server_id = ?", serverID).Delete(&domain.WorkloadAssignment{}).Error
+		return nil
 	})
 }
 

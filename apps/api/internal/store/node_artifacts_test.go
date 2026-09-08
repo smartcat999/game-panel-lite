@@ -58,12 +58,21 @@ func testNodeArtifactAuthorization(t *testing.T, db *Store) {
 	if err := resolve(target.NodeID, assignment.UID, 1, item.ID); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.db.Delete(&domain.Organization{}, "id = ?", org.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := resolve(target.NodeID, assignment.UID, 1, item.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("orphaned artifact owner authorized: %v", err)
+	}
+	if err := db.db.Create(&org).Error; err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
-		node, uid        string
-		generation       int
-		id, holder       string
-		fence            int64
-		expectedErr      error
+		node, uid   string
+		generation  int
+		id, holder  string
+		fence       int64
+		expectedErr error
 	}{
 		{"foreign", assignment.UID, 1, item.ID, leaseReq.HolderID, lease.Fence, ErrNotFound},
 		{target.NodeID, "missing", 1, item.ID, leaseReq.HolderID, lease.Fence, ErrNotFound},
