@@ -98,6 +98,12 @@ func (s *RegionalStore) finishAssets(ctx context.Context, claim regional.AssetCl
 		if !bytes.Equal(a, b) {
 			return regional.ErrAssetClaimLost
 		}
+		if delay == 0 {
+			if err := stageRegionalDeployment(tx, stored); err != nil {
+				return err
+			}
+		}
+		// Recheck after taking the deployment lock; waiting must not extend a lease.
 		now, err := outboxNow(tx)
 		if err != nil {
 			return err

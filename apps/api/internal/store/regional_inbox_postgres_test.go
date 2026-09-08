@@ -189,6 +189,8 @@ func TestPostgresRegionalInbox(t *testing.T) {
 	testRegionalAssetTasks(t, assetDB, assetURL)
 	uploadDB, uploadURL := openRegion("upload-test")
 	testRegionalArchiveUploads(t, uploadDB, uploadURL)
+	deploymentDB, _ := openRegion("deployment-test")
+	testRegionalDeployments(t, deploymentDB)
 	preparationDB, preparationURL := openRegion("preparation-test")
 	testRegionalBackupPreparation(t, preparationDB, preparationURL)
 	backupDB, _ := openRegion("backup-test")

@@ -169,3 +169,9 @@ Region 无容量时进入 WaitingForCapacity 或明确拒绝，不擅自跨 Regi
 
 - [AWS Transactional Outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)：同事务记录事件、重复处理与跨服务补偿。
 - [RabbitMQ Reliability](https://www.rabbitmq.com/docs/reliability)：发布确认、消费确认与故障重试责任。
+
+## 区域 Deployment 初始落地边界（2026-09-09）
+
+区域迁移 008 将 Deployment 从全局逻辑实例中独立出来。资产准备完成与待授权 Deployment 在同一事务提交；部署按 serverId＋placementEpoch 唯一，持有受保护配置快照的区域任务引用，不复制全局用户和账务数据。配置 generation 与用户意图版本分别检查，旧通知不回退现有期望配置，冲突通知不部分提交。
+
+当前这张表仅落地待授权部署身份与期望配置，未分配 Node、容量或端口，也未生成执行授权。不同 Placement epoch 可保存不同部署记录；将来调度必须验证当前归属及旧部署隔离条件，不能因存在新记录就允许双实例运行。区域调度、实际任务派发与观察状态回传仍未完成。

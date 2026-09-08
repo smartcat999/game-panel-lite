@@ -164,6 +164,13 @@
 - 最终隔离快照全量 Go（含架构）、vet、Store／区域上传入口／backup 的真实 PostgreSQL race 通过：`/tmp/gamepanel-preparation-final-all.log`、`/tmp/gamepanel-preparation-final-vet.log`、`/tmp/gamepanel-preparation-final-integration.log`。覆盖并发唯一、旧令牌／错区域／篡改请求、重开 Store、延后重试、过期计划回滚及故障注入。首轮临时库密码配置与既有无密码测试角色不匹配，重建本机测试库后通过。
 - 区域 Deployment／Node 授权来源、准备协调器、Agent 任务接口及归档交付仍未接通；本批不能作为完整备份或进程强杀验收。
 
+### 区域 Deployment 与资产准备原子交接
+
+- 区域迁移 008 新增独立 Deployment 表，以逻辑实例与 Placement epoch 唯一绑定，保存租户、期望配置版本、受保护快照所在操作、意图版本及待授权状态。区域身份继续由数据库单例约束；不复制全局用户表或旧 game_servers 整表。
+- CompleteAssets 在同一事务写入／更新待授权部署与资产完成状态，并在取得部署锁后重新检查任务租约。配置 generation 和 intent version 分别单调前进，重复通知保留部署 ID 与原配置来源；已知过期配置不新建部署，同版本冲突或租户冲突整体回滚。
+- 最终独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store race 通过；前一轮区域模块／region-fetcher race 也通过。日志 `/tmp/gamepanel-deployments-final-all.log`、`/tmp/gamepanel-deployments-final-vet.log`、`/tmp/gamepanel-deployments-final-integration.log`、`/tmp/gamepanel-deployments-integration.log`。验证并发唯一、乱序版本、租户／版本冲突、过期回滚、故障注入及现有 AssetWorker 实际文件准备后的部署交接。无前端修改，无 JOIN，历史迁移未变。
+- 尚无 Node 分配或执行权限，不能用待授权 Deployment、资产完成或 Placement epoch 作为运行授权／源隔离证据。调度、授权、Node 任务及全局结果投影仍待接通。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

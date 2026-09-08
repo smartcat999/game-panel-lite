@@ -143,6 +143,10 @@ func testRegionalAssetTasks(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Table("regional_revision_tasks").Where("operation_id = ?", e.OperationID).Take(&row).Error; err != nil || row.Status != "assets_prepared" || row.Attempts != 2 || row.AssetAttempts != 5 {
 		t.Fatalf("asset lifecycle counters: %+v %v", row, err)
 	}
+	var deployment regional.Deployment
+	if err := db.db.Table("regional_deployments").Where("server_id = ? AND placement_epoch = ?", e.ServerID, e.PlacementEpoch).Take(&deployment).Error; err != nil || deployment.ID == "" || deployment.RevisionOperationID != e.OperationID || deployment.RevisionID != e.RevisionID || deployment.Status != "awaiting_authority" {
+		t.Fatalf("prepared files did not stage deployment: %+v %v", deployment, err)
+	}
 	if err := db.RecordRevisionNotification(ctx, e); err != nil {
 		t.Fatal(err)
 	}
