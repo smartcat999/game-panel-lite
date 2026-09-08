@@ -107,6 +107,13 @@
 - 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-backup-check-all.log`、`/tmp/gamepanel-backup-check-vet.log`。真实 PostgreSQL Store 与真实 mTLS 接口 race 分别通过，日志 `/tmp/gamepanel-backup-check-integration.log`；覆盖任务／操作终态、配置与意图变化、Region／epoch 变化，以及 HTTP 身份和错误隔离。mTLS 接口测试使用检查器夹具，不冒充已接入 Node 的端到端执行验证。
 - 检查结果仅代表一个时点的意图有效，不是执行租约、停服证据或一致快照。区域客户端、有限期授权、Agent 快照任务仍待接入；保留其他草稿，六阶段 Goal 保持进行中。
 
+### 2026-09-09 区域备份检查客户端与真实往返
+
+- 在已有 controlclient 增加 CheckBackup，复用 mTLS、受信 origin、超时和禁止重定向的传输；本地拒绝错 Region／无效请求，每次发送原请求，不缓存成功。仅 204 通过，区分请求不可用、权限失败、通信错误，并保留调用方取消原因。无新表、框架或部署入口。
+- 客户端 HTTPS 测试覆盖状态映射、200 不能冒充 204、重定向不跟随、每次实际请求、错区域本地拒绝及超时取消。扩展现有 region-fetcher 集成：真实 PostgreSQL 全局备份受理后，经实际 mTLS Handler／Store 检查成功；篡改请求拒绝，服务不可用返回失败，恢复后重新检查，真实意图版本更新后旧请求不可用。
+- 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-backup-client-all.log`、`/tmp/gamepanel-backup-client-vet.log`；真实 PostgreSQL+mTLS、controlclient／controlapi race 通过，日志 `/tmp/gamepanel-backup-client-integration.log`。本批仅扩展控制客户端的明确契约依赖，保留其他草稿。
+- 备份协调器、有限期执行授权及 Node 一致快照尚未接入；实时检查不等同执行租约或离线授权。完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

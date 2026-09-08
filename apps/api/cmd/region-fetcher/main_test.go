@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlapi"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlclient"
@@ -76,7 +77,7 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 		u.RawQuery = q.Encode()
 		return u.String(), name
 	}
-	globalDSN, _ := newSchema()
+	globalDSN, globalSchema := newSchema()
 	regionDSN, schema := newSchema()
 	if err := store.MigratePostgres(ctx, globalDSN); err != nil {
 		t.Fatal(err)
@@ -162,13 +163,20 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	backupHandler, err := controlapi.NewBackupHandler(global, identities, 65536)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/internal/region/backups/", backupHandler)
+	mux.Handle("/", handler)
 	var available atomic.Bool
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !available.Load() {
 			http.Error(w, "temporarily unavailable", 503)
 			return
 		}
-		handler.ServeHTTP(w, r)
+		mux.ServeHTTP(w, r)
 	}))
 	server.TLS, err = serviceauth.ServerTLS(serverCert, pool)
 	if err != nil {
@@ -261,6 +269,32 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	}
 	if got, err := client.ResolveAsset(ctx, event, instances.AssetVersion{AssetID: asset.AssetID, Version: "absent"}); !errors.Is(err, regional.ErrRevisionUnavailable) || got.AssetID != "" {
 		t.Fatal("missing asset version resolved")
+	}
+	backupTask, err := global.RequestGlobalBackup(ctx, "owner", backup.Request{OrganizationID: org.ID, ServerID: event.ServerID, Scope: "world", IdempotencyKey: "backup-check"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.CheckBackup(ctx, backupTask.Request); err != nil {
+		t.Fatal("current backup rejected", err)
+	}
+	changedBackup := backupTask.Request
+	changedBackup.IntentVersion++
+	if !errors.Is(client.CheckBackup(ctx, changedBackup), backup.ErrRequestUnavailable) {
+		t.Fatal("forged backup accepted")
+	}
+	available.Store(false)
+	if !errors.Is(client.CheckBackup(ctx, backupTask.Request), controlclient.ErrRequestFailed) {
+		t.Fatal("cached backup check while global unavailable")
+	}
+	available.Store(true)
+	if err := client.CheckBackup(ctx, backupTask.Request); err != nil {
+		t.Fatal("recovered backup check failed", err)
+	}
+	if _, err := admin.ExecContext(ctx, "UPDATE "+globalSchema+".logical_servers SET intent_version=intent_version+1 WHERE id=$1", event.ServerID); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(client.CheckBackup(ctx, backupTask.Request), backup.ErrRequestUnavailable) {
+		t.Fatal("stale backup survived real intent change")
 	}
 	opened, err := protector.Open(ctx, instances.ConfigurationBinding{OrganizationID: event.OrganizationID, ServerID: event.ServerID, RevisionID: event.RevisionID, SpecGeneration: event.SpecGeneration, ProviderKey: saved.Revision.Specification.ProviderKey, ConfigSchemaVersion: saved.Revision.Specification.ConfigSchemaVersion}, saved.Revision.Specification.Configuration)
 	if err != nil || !bytes.Equal(opened, plaintext) || strings.Contains(snapshot, "test-through-mtls") {

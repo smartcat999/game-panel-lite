@@ -95,7 +95,7 @@ func forbiddenImport(file, imported string) string {
 	if under("serviceauth") && (strings.Contains(imported, ".") || strings.HasPrefix(imported, "database/") || imported == "os") {
 		return "service identity verification must not depend on persistence or process configuration"
 	}
-	if under("controlclient") && ((strings.Contains(imported, ".") && imported != api+"instances" && imported != api+"regional" && imported != api+"assets") || imported == "os" || strings.HasPrefix(imported, "database/")) {
+	if under("controlclient") && ((strings.Contains(imported, ".") && imported != api+"instances" && imported != api+"regional" && imported != api+"assets" && imported != api+"backup") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "regional control client must depend on wire models, not persistence, runtime or process configuration"
 	}
 	if under("controlapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"instances" && imported != api+"regional" && imported != api+"serviceauth" && imported != api+"assets" && imported != api+"backup" && imported != api+"backupingress" {
