@@ -213,3 +213,11 @@
 - SQLite 制品引用迁移按任务 ID 分页、批量读取制品归属，在 Go 中组合并去重；非法清单回滚，不输出清单内容。PostgreSQL 历史脚本尚未替换。
 - 全量测试暴露手动调谐测试同时启动后台控制器的竞争，改用已有无后台夹具；连续 10 次与全量回归通过。
 - 工作区及独立暂存快照的全量 Go（含架构门禁）、vet、真实 PostgreSQL `TestPostgresIntegration -race` 全部通过。独立日志 `/tmp/gamepanel-artifact-ids-index-all.log`、`/tmp/gamepanel-artifact-ids-index-vet.log`、`/tmp/gamepanel-artifact-ids-index-pg.log`。前端未变更；其他草稿未纳入本批。
+
+### 2026-09-08 端口回填与 PostgreSQL 兼容执行
+
+- SQLite 端口迁移使用按 ID 分页的 Go 回填，保留冲突和旧任务全部占用者；批量写入并由唯一键去重，不选择胜出者，也不释放资源。
+- PostgreSQL 006／014 匹配完整历史身份后采用等价 DDL 和 Go 回填；原 SQL 字节、历史校验和及迁移事务保持。重复／并发升级和篡改校验和拒绝由集成测试验证。
+- 新增 501 任务跨批次、重复附加端口、第二批非法端口整体回滚、NULL 占用者拒绝及重复执行用例。严格拒绝非法清单，不把无法解释的历史绑定转换成可用容量。
+- 初次工作区全量和 PG 运行受沙箱本地端口限制，获准使用临时端口后重跑通过。最终独立暂存快照全量 Go（含架构检查）、vet 和真实 PostgreSQL race 全部通过；日志 `/tmp/gamepanel-port-backfill-index-all.log`、`/tmp/gamepanel-port-backfill-index-vet.log`、`/tmp/gamepanel-port-backfill-index-pg.log`。
+- 归属回填、区域过滤和完整 SQL 门禁仍待收敛；不代表全部 SQL 或六阶段 Goal 完成。

@@ -150,3 +150,64 @@ func TestSQLiteNodePortUpgrade(t *testing.T) {
 		db.Close()
 	}
 }
+
+func TestSQLiteNodePortBackfillBatchesAndRollback(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "port-batches.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows := make([]domain.WorkloadAssignment, idLookupBatchSize+1)
+	for i := range rows {
+		rows[i] = domain.WorkloadAssignment{ID: fmt.Sprintf("batch-%04d", i), UID: fmt.Sprintf("batch-%04d", i), ServerID: fmt.Sprintf("server-%04d", i), NodeID: "shared-node"}
+	}
+	if err := db.db.CreateInBatches(rows, 100).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.db.Model(&domain.WorkloadAssignment{}).Where("node_id = ?", "shared-node").UpdateColumn("spec", `{"network":{"port":7777,"additionalPorts":[{"hostPort":8888},{"hostPort":8888}]}}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, sql := range []string{"DROP TABLE node_port_reservations", "DROP TABLE node_port_pools", "DELETE FROM gamepanel_sqlite_migrations WHERE version = 2"} {
+		if err := db.db.Exec(sql).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The invalid record is on the second page, after earlier writes occurred.
+	if err := db.db.Model(&domain.WorkloadAssignment{}).Where("id = ?", rows[len(rows)-1].ID).UpdateColumn("spec", `{"network":{"hostPort":65536}}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateSQLiteNodePorts(db.db); err == nil {
+		t.Fatal("invalid historical port accepted")
+	}
+	var applied int64
+	if err := db.db.Table("gamepanel_sqlite_migrations").Where("version = 2").Count(&applied).Error; err != nil || applied != 0 {
+		t.Fatalf("failed migration recorded success: %d %v", applied, err)
+	}
+	if db.db.Migrator().HasTable(&nodePortReservation{}) {
+		t.Fatal("failed migration retained partial schema")
+	}
+	if err := db.db.Model(&domain.WorkloadAssignment{}).Where("id = ?", rows[len(rows)-1].ID).UpdateColumn("spec", `{"network":{"port":7777,"additionalPorts":[{"hostPort":8888}]}}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.db.Model(&domain.WorkloadAssignment{}).Where("id = ?", rows[len(rows)-1].ID).UpdateColumn("server_id", nil).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateSQLiteNodePorts(db.db); err == nil {
+		t.Fatal("NULL port owner silently converted to empty string")
+	}
+	if err := db.db.Model(&domain.WorkloadAssignment{}).Where("id = ?", rows[len(rows)-1].ID).UpdateColumn("server_id", rows[len(rows)-1].ServerID).Error; err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := migrateSQLiteNodePorts(db.db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var count int64
+	if err := db.db.Model(&nodePortReservation{}).Count(&count).Error; err != nil || count != int64(2*len(rows)) {
+		t.Fatalf("lost historical owners or retained duplicates: %d %v", count, err)
+	}
+	if err := db.db.Model(&nodePortPool{}).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("pool backfill: %d %v", count, err)
+	}
+}

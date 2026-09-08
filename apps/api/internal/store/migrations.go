@@ -129,7 +129,7 @@ func migratePostgres(ctx context.Context, db *gorm.DB, migrations []sqlMigration
 				}
 				continue
 			}
-			if err := tx.Exec(migration.sql).Error; err != nil {
+			if err := executeMigration(tx, migration); err != nil {
 				return fmt.Errorf("apply migration %d (%s): %w", migration.version, migration.name, err)
 			}
 			if err := tx.Exec("INSERT INTO gamepanel_schema_migrations(version,name,checksum) VALUES (?,?,?)", migration.version, migration.name, checksum).Error; err != nil {
