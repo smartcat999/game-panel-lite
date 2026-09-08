@@ -99,6 +99,12 @@ var prepaidOrderGuardsSQL string
 //go:embed migrations/025_prepaid_order_cancellation.sql
 var prepaidOrderCancellationSQL string
 
+//go:embed migrations/026_prepaid_payments.sql
+var prepaidPaymentsSQL string
+
+//go:embed migrations/026_prepaid_payment_guards.sql
+var prepaidPaymentGuardsSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -135,6 +141,7 @@ func postgresMigrations() []sqlMigration {
 		{23, "prepaid_catalog", prepaidCatalogSQL + "\n" + prepaidCatalogGuardsSQL},
 		{24, "prepaid_orders", prepaidOrdersSQL + "\n" + prepaidOrderGuardsSQL},
 		{25, "prepaid_order_cancellation", prepaidOrderCancellationSQL},
+		{26, "prepaid_payments", prepaidPaymentsSQL + "\n" + prepaidPaymentGuardsSQL},
 	}
 }
 

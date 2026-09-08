@@ -129,4 +129,5 @@ func testPrepaidOrders(t *testing.T, db *Store) {
 		t.Fatal("unpaid order granted service")
 	}
 	testOrderCancellation(t, db, order)
+	testCapturedPayments(t, db, order)
 }

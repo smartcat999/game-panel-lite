@@ -333,6 +333,15 @@
 - 隔离快照全量 Go（含架构）、vet、真实 PostgreSQL／维护循环 race 均通过。日志 `/tmp/gamepanel-order-maintainer-all.log`、`/tmp/gamepanel-order-maintainer-vet.log`、`/tmp/gamepanel-order-maintainer-integration.log`，其中包含 actual order maintainer process 验证。运行说明见 [订单维护入口](../architecture/order-maintainer-running.md)。
 - 本批没有数据库迁移，也未部署进程。支付确认、支付／取消竞争、用户取消 API、订阅生效和生产积压验收仍未完成。
 
+### 内部收款确认与待交付登记
+
+- 全局迁移 026／SQLite 迁移 14 新增不可变收款记录、支付事件去重和待交付任务。可信支付适配器必须先验证签名、商户、运行环境及已捕获状态；当前仅实现其后的内部 Store 边界，没有公开 JSON 回调或真实支付渠道。
+- 商户／渠道／事件去重与交易去重分别保存；同交易不同通知返回原收款结果，身份相同但金额等内容冲突时拒绝。订单仍 pending、未过期、金额／币种和捕获时间匹配时，在同一事务中写收款、paid 状态和 pending 交付任务，不直接生成权益。
+- 已取消／已支付、过期、金额不符等已有订单到账保留 review 收款记录，不静默交付。过期 pending 订单同事务取消。未知订单暂返回不可用，后续渠道接收 Inbox 必须负责持久保存与对账；review 尚无退款执行器，不代表资金已退回。
+- SQLite 与真实 PostgreSQL 验证事件与交易重放、冲突事件、交易不能复用到另一订单、金额／期限不符进入 review、paid 无法取消、数据库历史不可改写、交付登记失败全部回滚，以及 PostgreSQL 支付／取消竞争只有一种终态。收款属于测试夹具，不是真实到账验收。
+- 交付任务尚未接上订阅、账本、权益或 MQ；免费套餐不走正金额收款入口，需要单独的零价下单完成流程。真实支付渠道、回调持久接收、退款和对账仍是未完成项。
+- 隔离快照全量 Go（含架构）、vet、真实 PostgreSQL／SQLite race 检查通过。日志 `/tmp/gamepanel-payments-all.log`、`/tmp/gamepanel-payments-vet.log`、`/tmp/gamepanel-payments-integration.log`。未 push、未接入外部支付、未发生真实扣款。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
