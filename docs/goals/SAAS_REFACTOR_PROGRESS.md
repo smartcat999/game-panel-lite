@@ -426,3 +426,10 @@
 - 可用性更新要求源 Region 匹配和版本 CAS；授权来源查询在每页只读快照内复核目标 Region、租户、事件、Placement 及精确修订引用，随后按版本／可用性／ID 游标单表读取，每页最多 100 条。无 JOIN，不在控制面保存物理文件路径。
 - SQLite／PostgreSQL 验证注册默认关闭、重复状态保留、存储位置唯一、缺失资产版本拒绝、跨 Region／旧观测拒绝、稳定分页、下架过滤及旧 Placement 拒绝。PostgreSQL 额外验证两个同版本观测只有一个成功。独立全量 Go／架构／vet、Store＋assets＋真实 PostgreSQL/mTLS 区域组合 race 通过，日志 `/tmp/gamepanel-replicas-index-all.log`、`/tmp/gamepanel-replicas-index-vet.log`、`/tmp/gamepanel-replicas-index-integration.log`。
 - 历史迁移未改；旧 SQLite 升级夹具补齐新副本表清理，其他草稿与前端保留。目录尚未接入区域文件验证回报、真实存储身份、外部来源查询、传输票据或复制流程；可用观测不能当作实时健康或持久性证明。完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 指定源副本与目标权限联合校验
+
+- 新增 AssetSourceSnapshot 与 ResolveRegionalAssetSource，在同一只读快照内核对目标 Region、原事件、当前 Placement、租户与精确修订引用，并要求指定副本 ID、资产版本、available 和观测版本全部匹配。返回原事件、不可变资产元数据及源 Region／StorageID，失败不返回部分结果。
+- 选择其他资产的副本、未知／旧观测、下架来源和旧部署归属均拒绝；副本下架后重新开放也不能复用旧版本，需要刷新来源目录。新增查询仍为单表，无 JOIN，不长时间持有数据库事务等待传输。
+- SQLite／PostgreSQL 测试覆盖正确跨 Region 来源、错误副本／资产绑定、错误目标、未知和过期观测、下架及重新开放、旧 Placement 拒绝；契约测试覆盖篡改身份、版本、可用性、存储标识与摘要。独立全量 Go／架构／vet、Store＋regional＋assets＋PostgreSQL/mTLS 组合 race 通过，日志 `/tmp/gamepanel-source-binding-index-all.log`、`/tmp/gamepanel-source-binding-index-vet.log`、`/tmp/gamepanel-source-binding-index-integration.log`。
+- 联合校验结果仅为传输授权签发输入，尚未签名或绑定有效期限，源服务不能信任客户端自带该对象。实际下载票据、源服务验证、区域文件回报和资产 Worker 入口仍需接入。未改历史迁移、前端或无关草稿，完整六阶段 Goal 保持进行中。

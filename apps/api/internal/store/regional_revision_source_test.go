@@ -168,6 +168,9 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	if sources, err := db.ListRegionalAssetSources(ctx, "source-east", event, reference, "", 10); !errors.Is(err, ErrNotFound) || sources != nil {
 		t.Fatal("old placement retained source access")
 	}
+	if selected, err := db.ResolveRegionalAssetSource(ctx, "source-east", event, reference, "replica-b", 2); !errors.Is(err, ErrNotFound) || selected.Replica.ID != "" {
+		t.Fatal("old placement selected source")
+	}
 	if err := db.db.Table("server_placements").Where("server_id = ?", created.Server.ID).Updates(map[string]any{"placement_epoch": 1, "region_id": "source-west"}).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -56,3 +56,7 @@ RegisterAssetReplica 是受信运维目录入口，要求区域与资产版本�
 ListRegionalAssetSources 在每次调用的只读快照内重新核对目标 Region、原事件、租户、Placement 和修订引用，再按精确资产版本、available 与 ID 游标分页。每页 1–100 条，SQL 全部单表，返回源 Region 可以不同于目标 Region。未被修订引用的资产、旧部署 epoch 或无权 Region 不能列出源目录。下架源不出现在后续查询结果中，但先前查询不构成可复用的下载授权。
 
 目录目前仅有受信 Store 接口，尚未接入对外源查询 API、区域副本注册回报、端点／存储卷身份验证、有界传输票据或实际复制；assets_prepared 也尚未自动注册副本。下一步需将物理校验结果和可访问存储身份绑定，再发布可用观测。目录可用性不是实时健康或数据持久性的承诺，不能用它证明跨 Region 迁移或灾备完成。
+
+`ResolveRegionalAssetSource` 在同一只读快照内联合校验目标 Region／事件／当前 Placement、精确修订引用、所属组织资产元数据，以及指定副本 ID、资产版本、available 和观测版本。返回 AssetSourceSnapshot，绑定原事件、不可变资产摘要与源 Region／StorageID。选择其他资产的副本、未知或过期观测、下架来源均拒绝；来源下架再恢复也不能复用旧观测版本，必须刷新目录。
+
+这一步为后续传输授权提供一致的签发输入，尚未签名、设置传输期限或授予下载权。源服务仍需验证针对自身存储和目标服务身份的有界授权，并校验本地文件；不能直接信任客户端携带的 AssetSourceSnapshot。全局不持有文件流、不为传输长时间持有数据库事务。

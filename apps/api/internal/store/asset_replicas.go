@@ -97,6 +97,42 @@ func (s *Store) ListRegionalAssetSources(ctx context.Context, targetRegion strin
 	return result, nil
 }
 
+// ResolveRegionalAssetSource pins the target's authorized reference to an exact
+// available replica observation in the same read snapshot. A stale directory
+// page must be refreshed even if a source has become available again.
+func (s *Store) ResolveRegionalAssetSource(ctx context.Context, targetRegion string, event instances.RevisionAvailable, ref instances.AssetVersion, replicaID string, replicaVersion int64) (regional.AssetSourceSnapshot, error) {
+	var result regional.AssetSourceSnapshot
+	err := s.withRegionalRevision(ctx, targetRegion, event, func(tx *Store, snapshot regional.RevisionSnapshot) error {
+		found := false
+		for _, candidate := range snapshot.Revision.Specification.Assets {
+			if candidate == ref {
+				found = true
+				break
+			}
+		}
+		if !found || replicaID == "" || replicaVersion < 1 {
+			return ErrNotFound
+		}
+		manifest, err := tx.resolveGlobalAssets(ctx, event.OrganizationID, []instances.AssetVersion{ref})
+		if err != nil {
+			return err
+		}
+		var replica assets.Replica
+		if err := tx.db.WithContext(ctx).Table("global_asset_replicas").Where("id = ? AND asset_id = ? AND asset_version = ? AND available = ? AND version = ?", replicaID, ref.AssetID, ref.Version, true, replicaVersion).Take(&replica).Error; err != nil {
+			return err
+		}
+		result = regional.AssetSourceSnapshot{Event: event, Asset: manifest[0], Replica: replica}
+		if result.ValidateFor(event, ref, replicaID, replicaVersion) != nil {
+			return ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return regional.AssetSourceSnapshot{}, err
+	}
+	return result, nil
+}
+
 func migrateSQLiteAssetReplicas(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		var count int64

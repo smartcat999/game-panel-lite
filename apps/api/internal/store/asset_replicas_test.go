@@ -71,6 +71,38 @@ func testAssetReplicas(t *testing.T, db *Store, event instances.RevisionAvailabl
 	if err != nil || len(next) != 1 || next[0].ID != second.ID {
 		t.Fatalf("source next page: %+v %v", next, err)
 	}
+	selected, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, second.ID, 2)
+	if err != nil || selected.ValidateFor(event, ref, second.ID, 2) != nil || selected.Replica.RegionID != second.RegionID || selected.Replica.StorageID != second.StorageID {
+		t.Fatalf("source binding: %+v %v", selected, err)
+	}
+	for _, selection := range []struct {
+		id      string
+		version int64
+	}{{"missing", 2}, {second.ID, 1}, {second.ID, 0}} {
+		if partial, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, selection.id, selection.version); !errors.Is(err, ErrNotFound) || partial.Asset.AssetID != "" {
+			t.Fatal("invalid replica observation selected")
+		}
+	}
+	otherAsset := selected.Asset
+	otherAsset.AssetID = "replica-other-asset"
+	if err := db.PublishAssetVersion(ctx, otherAsset); err != nil {
+		t.Fatal(err)
+	}
+	otherReplica := replica
+	otherReplica.ID = "replica-other"
+	otherReplica.AssetID = otherAsset.AssetID
+	if _, err := db.RegisterAssetReplica(ctx, otherReplica); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetAssetReplicaAvailable(ctx, otherReplica.RegionID, otherReplica.ID, 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if partial, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, otherReplica.ID, 2); !errors.Is(err, ErrNotFound) || partial.Asset.AssetID != "" {
+		t.Fatal("replica for different asset selected")
+	}
+	if partial, err := db.ResolveRegionalAssetSource(ctx, "wrong-region", event, ref, second.ID, 2); !errors.Is(err, ErrNotFound) || partial.Asset.AssetID != "" {
+		t.Fatal("wrong target selected source")
+	}
 	if rows, err := db.ListRegionalAssetSources(ctx, "wrong-region", event, ref, "", 10); !errors.Is(err, ErrNotFound) || rows != nil {
 		t.Fatal("source directory disclosed across regions")
 	}
@@ -113,5 +145,21 @@ func testAssetReplicas(t *testing.T, db *Store, event instances.RevisionAvailabl
 	}
 	if rows, err := db.ListRegionalAssetSources(ctx, event.RegionID, event, ref, "", 10); err != nil || len(rows) != 1 || rows[0].ID != second.ID {
 		t.Fatal("unavailable source still listed")
+	}
+	if partial, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, replica.ID, 2); !errors.Is(err, ErrNotFound) || partial.Replica.ID != "" {
+		t.Fatal("withdrawn source selected")
+	}
+	closedVersion := int64(3)
+	if db.db.Dialector.Name() == "postgres" {
+		closedVersion = 4
+	}
+	if err := db.SetAssetReplicaAvailable(ctx, replica.RegionID, replica.ID, closedVersion, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, replica.ID, 2); !errors.Is(err, ErrNotFound) {
+		t.Fatal("old source observation survived down/up cycle")
+	}
+	if _, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, replica.ID, closedVersion+1); err != nil {
+		t.Fatal(err)
 	}
 }

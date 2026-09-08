@@ -20,7 +20,21 @@ type Replica struct {
 }
 
 func (r Replica) ValidateRegistration() error {
-	if r.AssetID == "" || r.AssetVersion == "" || len(r.AssetID) > 128 || len(r.AssetVersion) > 128 || r.Available || r.Version != 0 {
+	if r.Available || r.Version != 0 {
+		return ErrInvalidVersion
+	}
+	return r.validateIdentity()
+}
+
+func (r Replica) Validate() error {
+	if r.Version < 1 {
+		return ErrInvalidVersion
+	}
+	return r.validateIdentity()
+}
+
+func (r Replica) validateIdentity() error {
+	if r.AssetID == "" || r.AssetVersion == "" || len(r.AssetID) > 128 || len(r.AssetVersion) > 128 {
 		return ErrInvalidVersion
 	}
 	for _, id := range []string{r.AssetID, r.AssetVersion} {
