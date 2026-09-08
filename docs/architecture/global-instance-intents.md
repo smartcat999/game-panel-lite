@@ -48,6 +48,14 @@ Terraria Vanilla／tModLoader 已实现该能力，保留世界、难度、玩�
 
 真实 Terraria 配置已经在组合测试中完成规范化、加密、全局持久化、mTLS 读取和区域落库；其他 Provider 尚未声明此能力时拒绝用于新全局配置路径。公共 API、Region／资产售卖准入及执行授权还未接入。
 
+## 应用编排边界
+
+`instanceapp.Service` 仅依赖自身定义的 Writer、Normalizer、Admission 接口和全局模型。创建／更新拒绝空 actor 和客户端自报密文，先校验元数据及准入，再取得 Provider 规范化配置字节，调用受保护 Writer。配置临时字节在调用返回后清除；Normalizer 必须返回独立切片，Writer 不能异步保留该明文缓冲区。
+
+`store.NewEncryptedIntentWriter` 在组合阶段绑定 Store、保护器与指纹器，HTTP 输入不能选择加密实现或密钥。数据库继续在事务内复核成员权限、配额和版本，不把应用层早期检查当作永久授权。
+
+Admission 没有默认放行实现，缺失依赖时构造失败。当前测试策略仅演示固定 Region／资产拒绝，不是生产授权；真实 Region 目录、资产版本权限和事务内一致性仍待实现。当前服务每次调用均做准入；正式接入还需区分已完成操作的重放与新操作的可售性检查，避免下架阻止原操作查询。Provider 默认值／规范化版本改变时的重放兼容也需遵循配置版本契约。公共 HTTP 入口尚未切换。
+
 ## 事务接口
 
 - `CreateGlobalServer`：校验结构、锁定组织及成员写权限、检查新旧实例总配额，原子写入实例／初始修订／Placement／Operation／Outbox。空 actor 不代表管理员，不允许绕过权限。

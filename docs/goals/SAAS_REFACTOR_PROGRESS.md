@@ -333,3 +333,10 @@
 - Terraria Vanilla／tModLoader 明确允许游戏用户配置字段，拒绝未知字段、null、非法值和配置行注入；全局配置不接收或保存端口／节点／宿主机路径。游戏规则位于 Provider，通用模块不硬编码游戏。
 - 定向 race 验证两种 Provider 的稳定字节、密码和玩家设置保留、执行字段与非法输入拒绝、未知版本／旧 schema 别名拒绝。区域获取组合测试切换为真实 Terraria 归一化配置，随后加密、全局写入、mTLS 获取及区域落库。工作区相关 race 与独立全量 Go（含架构检查）／vet／真实 Provider+PostgreSQL+mTLS 组合 race 全部通过。独立日志 `/tmp/gamepanel-logical-config-index-all.log`、`/tmp/gamepanel-logical-config-index-vet.log`、`/tmp/gamepanel-logical-config-index-integration.log`；专用测试容器与快照清理。
 - 公共应用用例、Region／资产准入、其他 Provider 的全局配置能力及有限期执行授权仍待实现；校验已声明游戏版本不等于制品摘要固定或真实游戏交付。未修改生产 SQL，其他草稿保留。
+
+### 2026-09-08 实例应用编排与受保护 Writer 组合
+
+- 新增 `instanceapp.Service`，通过消费接口编排准入、Provider 规范化、受保护创建／更新，不依赖数据库或 HTTP。拒绝客户端自报密文；临时规范化字节在同步写入后清除。架构门禁保护导入边界。
+- 新增 `EncryptedIntentWriter` 在组合阶段绑定真实 Store 与密钥实现；数据库原有权限、配额、版本事务复核继续保留。缺少 Writer／Normalizer／Admission 时不能构造应用服务，不提供默认准入放行。
+- 测试使用真实 Terraria Provider、AES/HMAC 与 SQLite，验证拒绝 Region／资产／客户端密文／非法配置、规范化后重试身份稳定、受保护更新及调用方输入不被清除。Admission 是明确的测试夹具，不是生产准入。工作区定向 race 与独立全量 Go（含架构检查）／vet／应用组合 race 全部通过，独立日志 `/tmp/gamepanel-instanceapp-index-all.log`、`/tmp/gamepanel-instanceapp-index-vet.log`、`/tmp/gamepanel-instanceapp-index-race.log`。本批未重跑外部 PostgreSQL/MQ，独立临时快照清理。
+- 真实 Region／资产准入及事务一致性尚未实现；正式 HTTP 接入前还需区分旧操作重放与新操作可售性检查。公共 API 未切换，完整六阶段 Goal 不变；本批无生产 SQL 改动，其他草稿保留。
