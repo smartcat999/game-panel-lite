@@ -26,7 +26,7 @@ func TestSQLiteArtifactReferenceUpgrade(t *testing.T) {
 	if err := db.db.Create(&assignment).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"global_entitlement_changes", "global_server_entitlements", "global_backup_results", "backup_request_outbox", "global_backup_tasks", "global_asset_replicas", "global_asset_versions", "global_assets", "global_regions", "server_outbox", "server_operations", "server_placements", "server_revisions", "logical_servers", "workload_artifact_references", "node_port_reservations", "node_port_pools", "gamepanel_sqlite_migrations"} {
+	for _, table := range []string{"prepaid_plan_sales", "prepaid_plan_versions", "global_entitlement_changes", "global_server_entitlements", "global_backup_results", "backup_request_outbox", "global_backup_tasks", "global_asset_replicas", "global_asset_versions", "global_assets", "global_regions", "server_outbox", "server_operations", "server_placements", "server_revisions", "logical_servers", "workload_artifact_references", "node_port_reservations", "node_port_pools", "gamepanel_sqlite_migrations"} {
 		if err := db.db.Exec("DROP TABLE " + table).Error; err != nil {
 			t.Fatal(err)
 		}

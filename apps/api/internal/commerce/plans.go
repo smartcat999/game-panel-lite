@@ -66,3 +66,8 @@ func QuotePrepaid(plan PlanVersion, periods int64) (Quote, error) {
 	}
 	return Quote{Plan: plan, Periods: periods, AmountMinor: plan.UnitAmountMinor * periods, DurationMS: plan.PeriodSeconds * 1000 * periods}, nil
 }
+
+var ErrPlanConflict = errors.New("published plan version has different terms")
+var ErrPlanUnavailable = errors.New("plan version is not available for sale")
+var ErrCatalogVersionConflict = errors.New("plan sale version changed")
+var ErrOperatorRequired = errors.New("platform administrator required for catalog changes")

@@ -84,6 +84,12 @@ var serverEntitlementsSQL string
 //go:embed migrations/022_server_entitlement_guards.sql
 var serverEntitlementGuardsSQL string
 
+//go:embed migrations/023_prepaid_catalog.sql
+var prepaidCatalogSQL string
+
+//go:embed migrations/023_prepaid_catalog_guards.sql
+var prepaidCatalogGuardsSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -117,6 +123,7 @@ func postgresMigrations() []sqlMigration {
 		{20, "global_backup_tasks", globalBackupTasksSQL},
 		{21, "global_backup_results", globalBackupResultsSQL},
 		{22, "server_entitlements", serverEntitlementsSQL + "\n" + serverEntitlementGuardsSQL},
+		{23, "prepaid_catalog", prepaidCatalogSQL + "\n" + prepaidCatalogGuardsSQL},
 	}
 }
 
