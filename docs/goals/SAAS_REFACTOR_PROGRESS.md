@@ -266,3 +266,11 @@
 - 真实 Broker 测试覆盖临时失败后确认、坏消息隔离、取消前已处理但未 ACK 的重投、显式拒绝／重投上限转入死信，以及旧拓扑消息保留。实际 Broker→区域 PostgreSQL 重复通知测试发送两个 ACK，仅生成一个 Inbox 和一个 `awaiting_revision` 任务。
 - 工作区及最终独立提交快照的全量 Go（含架构门禁）／vet、真实 MQ race 和全局＋区域 PostgreSQL／Broker 整合 race 全部通过。独立日志 `/tmp/gamepanel-consume-index-all.log`、`/tmp/gamepanel-consume-index-vet.log`、`/tmp/gamepanel-consume-index-rabbit.log`、`/tmp/gamepanel-consume-index-bridge.log`。测试只使用本机专用临时容器，前端与其他草稿未纳入本批。
 - 授权修订获取、Deployment 和执行任务、结果 Outbox、死信审计重放／告警、隔离队列不可用故障验证及跨主机容灾仍未完成；通知接收成功不能替代业务交付或六阶段验收。
+
+### 2026-09-08 全局修订的区域归属读取边界
+
+- 新增 `GetRegionalRevision` 内部只读 Adapter 与 `regional.RevisionSnapshot`。在一个快照中按 ID 读取并验证原始 Outbox、租户实例、当前 Region／epoch 和不可变修订，无 JOIN；失败不返回部分配置。
+- 快照同时携带历史修订及读取时最新 specGeneration／desiredState／intentVersion，避免延迟通知被当作当前配置或覆盖停止意图。该数据不是执行授权，也不证明已有不透明配置已正确加密。
+- SQLite／PostgreSQL 共用用例覆盖合法快照、错误或空服务区域、伪造事件／操作／租户／修订、延迟修订、更新后的停止意图、过期 epoch、区域迁移后的读取拒绝及删除后的拒绝。
+- 工作区及最终独立提交快照的全量 Go（含架构门禁）／vet 与真实 PostgreSQL race 全部通过，独立日志 `/tmp/gamepanel-revision-source-index-all.log`、`/tmp/gamepanel-revision-source-index-vet.log`、`/tmp/gamepanel-revision-source-index-pg.log`。前端和其他草稿未纳入本批。
+- 重新核对确认：区域服务身份认证、实际配置保护器、跨层远程读取、权益及有限期执行授权仍未实现，不能把调用方提供的区域字符串直接视为认证。下一步接入这些边界及区域任务 materializer；六阶段 Goal 不变。
