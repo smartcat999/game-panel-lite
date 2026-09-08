@@ -68,6 +68,9 @@ func forbiddenImport(file, imported string) string {
 		return "shared archive writer must use scoped filesystem and standard-library contracts only"
 	}
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("commerce") && (strings.Contains(imported, ".") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
+		return "commercial pricing rules must remain independent of transport, persistence and runtime"
+	}
 	if under("entitlements") && (strings.Contains(imported, ".") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
 		return "entitlements must use standard-library domain rules only"
 	}
