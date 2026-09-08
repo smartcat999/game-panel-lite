@@ -347,3 +347,10 @@
 - 应用服务规范化后先查重放，仅新操作执行 Region／资产准入。已持久化操作不被新操作下架规则阻止，但原 Operation 仍可能 pending；不把重放成功当成运行完成。后续写事务继续复核权限与幂等，早期查询不授予永久权限。
 - 真实 SQLite 应用测试覆盖创建／更新重放、下架后原操作返回、不同参数冲突、新操作仍拒绝、成员撤销后重放拒绝。Store 共用测试覆盖较新修订后的原操作读取、跨用户拒绝、摘要冲突与未命中。工作区 race 与独立全量 Go（含架构检查）／vet／SQLite+PostgreSQL 应用及重放 race 全部通过。独立日志 `/tmp/gamepanel-replay-admission-index-all.log`、`/tmp/gamepanel-replay-admission-index-vet.log`、`/tmp/gamepanel-replay-admission-index-integration.log`；专用临时数据库与快照清理。
 - 真实 Region／资产目录与事务内准入仍待实现，历史 Provider／schema 移除时的规范化兼容尚未解决；公共 API 未切换，六阶段 Goal 保持进行中。新增查询无 JOIN，其他草稿保留。
+
+### 2026-09-08 全局 Region 目录持久化
+
+- 新增独立 `regions.Entry` 与 global_regions 表，PostgreSQL 017／SQLite 版本 5；只管理区域 ID、名称、创建开放状态和版本，不推断节点、不创建资源／监控系统。注册默认关闭，不覆盖重复 ID。
+- 更新采用版本 CAS，分页按 ID 游标有界读取，SQL 均为单表。SQLite 测试覆盖重复注册、稳定分页、过期更新拒绝、关闭及重复迁移保留状态；PostgreSQL 同时验证同版本并发只有一个成功。独立全量 Go（含架构检查）／vet／SQLite 及真实全局＋区域 PostgreSQL race 全部通过。独立日志 `/tmp/gamepanel-region-directory-index-all-fixed.log`、`/tmp/gamepanel-region-directory-index-vet.log`、`/tmp/gamepanel-region-directory-index-integration.log`；专用容器与快照清理。
+- 首次独立全量检查发现旧制品升级夹具删除全部 SQLite 迁移记录但遗漏新目录表；已补齐夹具的旧 schema 恢复，生产迁移仍严格拒绝未登记却已存在的表，不用 IF NOT EXISTS 掩盖不一致。
+- 目录仍为受信内部 Store 接口，运维入口、目录权限／审计、Region／资产事务准入及历史区域登记还需继续接入。关闭目录不代表已有实例停止或资源可释放。其他草稿保留，详情见 [目录说明](../architecture/global-region-directory.md)。

@@ -243,6 +243,7 @@ func testGlobalInstanceIntents(t *testing.T, db *Store) {
 		t.Fatalf("idempotency escaped tenant scope: %v", err)
 	}
 	testEncryptedGlobalCreate(t, db)
+	testRegionDirectory(t, db)
 }
 
 func TestSQLiteGlobalInstanceMigrationRollback(t *testing.T) {
