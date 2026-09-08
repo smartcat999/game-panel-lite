@@ -48,7 +48,7 @@ go run ./apps/api/cmd/outbox-publisher -stream backup-results \
 
 区域迁移 004 增加 `regional_archive_uploads` 和 `regional_backup_result_outbox`。上传计划绑定控制面 OperationID／请求事件、Region、实例、Deployment、Node、Placement epoch、准备好的 SnapshotID、对象键及精确资产摘要。控制面操作与存储对象绑定均有唯一约束；重放只能接受完全相同计划，不能更换节点、快照或归属。此登记接口仅供已完成授权与快照准备的受信协调器调用；目前尚未由控制面下发链路驱动。
 
-Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。结果 Outbox 已接入确认发布；全局 `RecordBackupResult` 已实现结果去重及任务／资产原子更新，生产消费者接线仍待完成。全部业务 SQL 为单表查询，无 JOIN。
+Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。结果 Outbox 已接入确认发布；全局 `RecordBackupResult` 已实现结果去重及任务／资产原子更新，全局消费者已通过 `global-receiver` 接线。全部业务 SQL 为单表查询，无 JOIN。
 
 已存在本地 ZIP 归档、兼容性检查、暂存解压和返回错误时的回滚。新增 `backup.RestoreArchiveChecked(io.ReaderAt, size, target, hooks)`，让经过验证的对象存储下载文件复用同一恢复实现；调用方持有并关闭源文件。本地文件名入口委托给此入口，不引入 SDK 或数据库依赖。
 
@@ -83,4 +83,16 @@ GAMEPANEL_TEST_MINIO=1 go test -race ./apps/api/internal/s3archive -run TestMinI
 
 全局迁移 021／SQLite 版本 9 仅增加 `global_backup_results` 一张表，以 OperationID 唯一保存回执并去重。接收事务锁定原任务，核对可信来源 Region、原请求事件、租户、实例、Placement epoch 及操作所属修订；相同操作的相同结果可重放，内容冲突拒绝。该校验关联原请求，不重新授予节点执行权限。
 
-成功结果复用资产登记，在同一事务发布精确资产元数据、更新任务与 Operation，并保存完整对象回执。取消／失败任务的迟到结果记为 discarded，保留终态且不发布资产；对象的后续清理仍需保留策略。后续取消实现应与接收事务采用相同的任务→Operation 加锁顺序。Region 必须先完成授权和一致快照验证；全局受信接收不代替 Node 执行证明。当前尚未将真实结果消费者和用户 API 接入这一事务。
+成功结果复用资产登记，在同一事务发布精确资产元数据、更新任务与 Operation，并保存完整对象回执。取消／失败任务的迟到结果记为 discarded，保留终态且不发布资产；对象的后续清理仍需保留策略。后续取消实现应与接收事务采用相同的任务→Operation 加锁顺序。Region 必须先完成授权和一致快照验证；全局受信接收不代替 Node 执行证明。`global-receiver` 已将 RabbitMQ Consumer、ResultIngress 和此事务组合；用户 API 与 Node 执行仍待接线。
+
+### 全局结果消费者运行
+
+该进程属于全局控制面，与区域 receiver 使用不同数据库。`GAMEPANEL_DATABASE_URL` 指向全局 PostgreSQL，`GAMEPANEL_RABBITMQ_URL` 指向结果 broker；凭证由运行环境提供。队列必须专用于一个来源 Region，其写权限仅授予该 Region，消费端配置同一来源身份；不能让其他 Region 写入该队列。
+
+```sh
+go run ./apps/api/cmd/global-receiver -region east \
+  -queue gamepanel.control.east.backup-results \
+  -dead-letter-queue gamepanel.control.east.backup-results.dead
+```
+
+复用现有 Consumer 的单条未确认消息、事务超时、会话重连与错误重试。只有结果事务返回成功才发送 ACK；重复结果再次确认，身份或内容冲突拒绝并进入隔离队列。消费确认发送成功不等于 broker 已确认收到该 ACK，重连后的重复投递仍依赖数据库幂等。该入口不读取归档文件，不包含 Node 执行逻辑。

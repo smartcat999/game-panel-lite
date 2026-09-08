@@ -86,6 +86,13 @@
 - 独立快照全量 Go（含架构）及 vet 通过，日志 `/tmp/gamepanel-global-results-all.log`、`/tmp/gamepanel-global-results-vet.log`。真实 PostgreSQL 与 SQLite race 通过，最终日志 `/tmp/gamepanel-global-results-final-race.log`；覆盖 8 路并发、重复／冲突结果、身份错误、结果写入故障后资产和状态回滚、精确回执及摘要保存、取消／失败终态保留。
 - 修正测试夹具复用 GORM 非空主键导致额外过滤的问题；旧 SQLite 升级夹具补充新表清理。只选择本批迁移初始化代码暂存，保留积分／OAuth 等无关草稿。生产结果消费者、用户备份 API、Node 授权和一致快照执行尚未接通，六阶段 Goal 保持进行中。
 
+### 2026-09-09 全局备份结果 MQ 消费接线
+
+- 新增薄组合入口 global-receiver，直接复用 RabbitMQ Consumer、ResultIngress 和全局 Store；来源 Region 与专用队列由部署配置绑定，使用全局数据库，支持事务超时、会话重连和退出清理。未引入通用工作流框架或新的业务服务层。
+- 真实 broker 集成通过已持久受理的全局任务生成结果夹具，确认发布两次相同通知，并向真实结果事务注入首次写入失败。验证消费者重试、两次 ACK 写入、唯一 published 回执、任务 succeeded 和队列无残留。测试使用上传结果夹具，不冒充真实 Node 快照／OSS 上传的完整端到端证据。
+- 独立快照全量 Go（含新入口编译和架构）及 vet 通过，日志 `/tmp/gamepanel-global-receiver-all.log`、`/tmp/gamepanel-global-receiver-vet.log`；真实 PostgreSQL／RabbitMQ Store 与 MQ race 回归通过，日志 `/tmp/gamepanel-global-receiver-integration.log`。无 SQL 或历史迁移改动，其他草稿保留。
+- 已记录消费者运行与队列来源权限要求。用户备份 API、Region 当前执行授权、Node 一致快照和上传 Worker 接线仍需推进；六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

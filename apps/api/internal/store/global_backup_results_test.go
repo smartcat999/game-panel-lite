@@ -129,4 +129,5 @@ func testGlobalBackupResults(t *testing.T, db *Store, request backup.Requested) 
 			t.Fatal("discarded asset published")
 		}
 	}
+	testGlobalBackupBroker(t, db, event, request)
 }
