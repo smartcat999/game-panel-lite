@@ -115,6 +115,25 @@ go run ./apps/api/cmd/global-receiver -region east \
 
 `backup.UploadWorker` 组合已有 UploadTasks、ArchiveStore 与本地资产文件 Open 接口，每次领取一个上传任务。StorageID 必须与组合根注入的区域 OSS 适配器相符；不从任务读取 endpoint、凭证或主机路径。整个领取与传输受超时约束，任务租约须长于该超时。
 
-Worker 先调用 ResolveUpload 核验 OSS 中的完整对象，恢复丢失的回执；不能恢复时，打开按精确资产版本保存的不可变本地文件，通过条件上传写入。上传／恢复回执必须匹配原计划，失败持久延后；成功后调用原子完成事务。完成事务返回不确定错误时不宣称成功，后续重新领取可再次核验对象。该 Worker 不准备游戏快照、不执行启停、不签发 Node 授权，也尚未加入生产协调器入口。
+Worker 先调用 ResolveUpload 核验 OSS 中的完整对象，恢复丢失的回执；不能恢复时，打开按精确资产版本保存的不可变本地文件，通过条件上传写入。上传／恢复回执必须匹配原计划，失败持久延后；成功后调用原子完成事务。完成事务返回不确定错误时不宣称成功，后续重新领取可再次核验对象。该 Worker 不准备游戏快照、不执行启停、不签发 Node 授权，已由 region-upload-worker 组合入口运行；快照准备协调器仍未接通。
 
 真实 MinIO 验证覆盖 Worker 上传成功后模拟完成记录丢失，关闭本地文件适配器后仍恢复到有效后端版本回执。此用例的任务存储是明确夹具；数据库租约和 Outbox 原子性由 Store 测试覆盖，不能合称进程强杀或完整备份端到端验收。
+
+### 区域上传入口运行
+
+`region-upload-worker` 连接所属 Region 的 PostgreSQL，读取已准备的 assetfiles 归档目录，上传后原子保存请求状态、回执和结果 Outbox。结果 MQ 发布仍由现有 outbox-publisher 负责。凭证通过 `GAMEPANEL_S3_ACCESS_KEY_ID`、`GAMEPANEL_S3_SECRET_ACCESS_KEY`、可选 `GAMEPANEL_S3_SESSION_TOKEN` 注入，数据库使用 `GAMEPANEL_REGIONAL_DATABASE_URL`；命令参数中不传密钥。
+
+先对区域数据库执行已有迁移入口，再启动 Worker：
+
+```sh
+go run ./apps/api/cmd/region-migrate -region east
+go run ./apps/api/cmd/region-upload-worker -region east \
+  -archive-directory /srv/gamepanel/prepared-archives \
+  -storage-id east-archives -s3-endpoint https://oss.example.internal \
+  -s3-signing-region local -s3-bucket gamepanel-archives \
+  -s3-ca /run/secrets/oss-ca.pem
+```
+
+示例路径与域名仅为部署占位，需替换为实际配置。该目录必须由受信准备流程按 assetfiles 格式写入并保持不可变；目录存在不代表其他 Node 的归档已交付到这里。本入口当前面向区域内统一的目标 StorageID；不同后端不能用不同配置抢同一批上传任务，后续多目标存储需要按存储身份分配任务。任务超时必须大于传输超时且小于数据库租约，归档大小上限可配置。
+
+配置失败返回固定类别，任务失败日志只记录 Region／StorageID；退出信号取消当前任务和轮询并关闭数据库、文件目录及 HTTP 连接。真实 PostgreSQL＋TLS S3 协议夹具已验证入口到结果 Outbox 的组合；此前真实 MinIO 验证覆盖 S3 Adapter／Worker，本入口测试不将协议夹具冒充实际 OSS 部署。

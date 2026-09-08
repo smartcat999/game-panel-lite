@@ -121,6 +121,13 @@
 - 本地真实 assetfiles 与任务／OSS 夹具验证首次上传、完成失败后本地不可用仍恢复、错误回执／存储拒绝、超时及敏感后端错误隔离。真实 TLS MinIO 组合验证 Worker 写入后模拟完成记录丢失，关闭本地适配器后恢复有效版本回执；任务存储在此测试中仍为明确夹具，不能冒充进程强杀或完整业务链路。
 - 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-upload-worker-all.log`、`/tmp/gamepanel-upload-worker-vet.log`；backup／s3archive race 含真实 MinIO 通过，日志 `/tmp/gamepanel-upload-worker-integration.log`。生产上传 Worker 入口、授权协调器与 Node 一致快照仍需接通，完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 区域上传 Worker 组合入口
+
+- 新增 region-upload-worker 薄入口，组合区域 Store、已准备 assetfiles 目录和 S3 Adapter；凭证仅由环境变量注入，CA／endpoint／StorageID 由部署配置给出。明确传输、任务、租约时间关系、重试和轮询上限；退出取消任务并关闭资源，日志不输出驱动或 OSS 错误细节。
+- 真实 PostgreSQL＋TLS S3 协议夹具验证显式迁移、原请求登记、已准备归档读取、实际上传字节、原子 uploaded／结果 Outbox 和取消退出。首次测试漏掉区域迁移而失败，补齐测试初始化后通过；没有让业务入口自动迁移数据库。
+- 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-upload-entry-all.log`、`/tmp/gamepanel-upload-entry-vet.log`；修正后的入口／backup race 通过，日志 `/tmp/gamepanel-upload-entry-integration-fixed.log`。S3 服务在本批为协议夹具，真实 MinIO Adapter／Worker 证据沿用上一批，未冒充实际 OSS 部署。无 SQL 或历史迁移改动，其他草稿保留。
+- 文档说明显式迁移与运行、区域统一目标 StorageID、归档目录必须实际可访问；多个后端尚不能抢同批任务，跨 Node 归档交付不可由路径配置推定完成。授权协调器、Node 一致快照与归档准备链路仍待接入，完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
