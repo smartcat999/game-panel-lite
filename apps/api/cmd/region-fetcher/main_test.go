@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlapi"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -129,7 +130,11 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = global.CreateEncryptedGlobalServer(ctx, "owner", instances.CreateRequest{OrganizationID: org.ID, Name: "server", RegionID: "east", IdempotencyKey: "create", Specification: instances.Specification{ProviderKey: string(gameProvider.Key()), GameVersion: gameVersion, ConfigSchemaVersion: schemaVersion, Resources: instances.Resources{CPU: 1, MemoryMB: 256}}}, plaintext, protector, fingerprint)
+	asset := assets.PublishedVersion{AssetID: "world", OrganizationID: org.ID, Version: "v1", SHA256: strings.Repeat("a", 64), SizeBytes: 4}
+	if err := global.PublishAssetVersion(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	_, err = global.CreateEncryptedGlobalServer(ctx, "owner", instances.CreateRequest{OrganizationID: org.ID, Name: "server", RegionID: "east", IdempotencyKey: "create", Specification: instances.Specification{ProviderKey: string(gameProvider.Key()), GameVersion: gameVersion, ConfigSchemaVersion: schemaVersion, Resources: instances.Resources{CPU: 1, MemoryMB: 256}, Assets: []instances.AssetVersion{{AssetID: asset.AssetID, Version: asset.Version}}}}, plaintext, protector, fingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,6 +245,9 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	var saved regional.RevisionSnapshot
 	if err := json.Unmarshal([]byte(snapshot), &saved); err != nil || saved.ValidateFor(event) != nil {
 		t.Fatalf("invalid saved snapshot: %v", err)
+	}
+	if len(saved.Assets) != 1 || saved.Assets[0] != asset {
+		t.Fatal("asset manifest lost across mTLS and regional persistence")
 	}
 	opened, err := protector.Open(ctx, instances.ConfigurationBinding{OrganizationID: event.OrganizationID, ServerID: event.ServerID, RevisionID: event.RevisionID, SpecGeneration: event.SpecGeneration, ProviderKey: saved.Revision.Specification.ProviderKey, ConfigSchemaVersion: saved.Revision.Specification.ConfigSchemaVersion}, saved.Revision.Specification.Configuration)
 	if err != nil || !bytes.Equal(opened, plaintext) || strings.Contains(snapshot, "test-through-mtls") {

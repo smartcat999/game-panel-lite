@@ -15,11 +15,11 @@ var (
 )
 
 type PublishedVersion struct {
-	AssetID        string
-	OrganizationID string
-	Version        string
-	SHA256         string
-	SizeBytes      int64
+	AssetID        string `json:"assetId"`
+	OrganizationID string `json:"organizationId"`
+	Version        string `json:"version"`
+	SHA256         string `json:"sha256"`
+	SizeBytes      int64  `json:"sizeBytes"`
 }
 
 func (v PublishedVersion) Validate() error {

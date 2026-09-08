@@ -368,3 +368,10 @@
 - 受保护创建／配置更新在既有权限、幂等及事务边界内验证所属组织和精确资产版本，每 100 个引用分两次单表查询。真实 SQLite／PostgreSQL 测试对 101 个引用观察到四次查询，无 JOIN；同时覆盖缺失资产、缺失版本、跨组织引用拒绝，真实加密修订保留引用及不可变约束。目录登记是受信入口，尚未接入内容上传／校验或公共发布 API。
 - 独立快照全量 Go（含架构门禁）／vet，以及资产、Store、应用服务、PostgreSQL＋mTLS 区域组合 race 全部通过，日志 `/tmp/gamepanel-global-assets-index-all.log`、`/tmp/gamepanel-global-assets-index-vet.log`、`/tmp/gamepanel-global-assets-index-integration.log`。历史迁移未修改；旧 SQLite 升级夹具补齐新表清理，其他草稿与前端保留。
 - 资产副本、内容验证回报、共享／撤销、保留期 GC、有限期执行授权及公共入口仍需完成。查询次数证据只覆盖本批准入，不能作为全库 SQL 门禁或容量验收。完整六阶段 Goal 保持进行中，见 [资产目录边界](../architecture/global-assets.md)。
+
+### 2026-09-08 授权区域修订的精确资产清单
+
+- 区域修订读取在既有事件／实例／Placement 授权和只读快照内，按租户及精确版本解析资产元数据。复用有界单表批量查询，以映射保留引用顺序；失败不返回部分结果。历史修订保持原资产摘要，旧内部写入路径产生的跨组织或缺失引用也不能通过读取边界。
+- RevisionSnapshot 增加已发布资产清单，区域客户端及持久化入口验证其与修订引用一一对应；拒绝遗漏、多余、重复、错版本、错租户、非法摘要与负大小。真实 PostgreSQL／mTLS 组合验证元数据随受保护配置跨接口并持久化到独立区域库；测试发布元数据不是内容上传或文件交付证明。
+- 独立快照全量 Go（含架构门禁）／vet，以及 SQLite＋PostgreSQL、区域契约、mTLS 客户端与区域获取组合 race 全部通过。日志 `/tmp/gamepanel-asset-manifest-index-all.log`、`/tmp/gamepanel-asset-manifest-index-vet.log`、`/tmp/gamepanel-asset-manifest-index-integration.log`。未修改历史迁移、前端或无关草稿。
+- 有资产引用却缺少清单的历史快照必须授权补取，尚未实现已保存任务批量补取工具；新执行链路前需协调升级。区域副本内容验证、实际分发、有限期执行授权及其余六阶段目标继续推进，完整 Goal 不变。

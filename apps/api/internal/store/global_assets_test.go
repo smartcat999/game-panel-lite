@@ -70,6 +70,20 @@ func testGlobalAssets(t *testing.T, db *Store, owner string) []instances.AssetVe
 	if queries.Load() != 4 {
 		t.Fatalf("101 references should use four queries, got %d", queries.Load())
 	}
+	ordered := []instances.AssetVersion{refs[100], refs[0], refs[50]}
+	resolved, err := db.resolveGlobalAssets(ctx, owner, ordered)
+	if err != nil || len(resolved) != len(ordered) {
+		t.Fatalf("resolve metadata: %v", err)
+	}
+	for i, ref := range ordered {
+		if resolved[i].AssetID != ref.AssetID || resolved[i].Version != ref.Version {
+			t.Fatal("resolver changed reference order")
+		}
+	}
+	invalid := append(append([]instances.AssetVersion(nil), refs...), instances.AssetVersion{AssetID: "missing", Version: "v1"})
+	if partial, err := db.resolveGlobalAssets(ctx, owner, invalid); err == nil || partial != nil {
+		t.Fatal("failed batch returned partial metadata")
+	}
 	for _, statement := range []string{
 		"UPDATE global_assets SET organization_id = 'asset-other' WHERE id = 'asset-000'",
 		"DELETE FROM global_assets WHERE id = 'foreign-asset'",

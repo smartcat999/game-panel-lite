@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"gorm.io/gorm"
@@ -56,10 +57,15 @@ func (s *Store) GetRegionalRevision(ctx context.Context, authenticatedRegion str
 			return ErrNotFound
 		}
 		result = regional.RevisionSnapshot{Event: event, Revision: instances.Revision{ID: revision.ID, ServerID: server.ID, SpecGeneration: revision.SpecGeneration, Specification: specification, CreatedAt: revision.CreatedAt}, CurrentSpecGeneration: server.SpecGeneration, DesiredState: server.DesiredState, IntentVersion: server.IntentVersion}
+		manifest, err := tx.resolveGlobalAssets(ctx, server.OrganizationID, specification.Assets)
+		if err != nil {
+			return err
+		}
+		result.Assets = manifest
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, ErrNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, ErrNotFound) || errors.Is(err, assets.ErrUnavailable) {
 			err = errors.Join(ErrNotFound, regional.ErrRevisionUnavailable)
 		}
 		return regional.RevisionSnapshot{}, err

@@ -54,6 +54,14 @@ func (s *Store) PublishAssetVersion(ctx context.Context, v assets.PublishedVersi
 // versions cannot be changed or deleted, so authorization cannot race transfer.
 // Each batch uses two bounded single-table queries, independent of version count.
 func (s *Store) checkGlobalAssets(ctx context.Context, organization string, refs []instances.AssetVersion) error {
+	_, err := s.resolveGlobalAssets(ctx, organization, refs)
+	return err
+}
+
+// resolveGlobalAssets preserves reference order and returns no partial catalog
+// on failure. The caller supplies an intent transaction or a read snapshot.
+func (s *Store) resolveGlobalAssets(ctx context.Context, organization string, refs []instances.AssetVersion) ([]assets.PublishedVersion, error) {
+	var result []assets.PublishedVersion
 	const batchSize = 100
 	for start := 0; start < len(refs); start += batchSize {
 		end := min(start+batchSize, len(refs))
@@ -64,10 +72,10 @@ func (s *Store) checkGlobalAssets(ctx context.Context, organization string, refs
 		}
 		var identities []globalAssetRow
 		if err := s.db.WithContext(ctx).Table("global_assets").Where("organization_id = ? AND id IN ?", organization, ids).Find(&identities).Error; err != nil {
-			return err
+			return nil, err
 		}
 		if len(identities) != len(batch) {
-			return assets.ErrUnavailable
+			return nil, assets.ErrUnavailable
 		}
 		pairs := s.db.Where("asset_id = ? AND version = ?", batch[0].AssetID, batch[0].Version)
 		for _, ref := range batch[1:] {
@@ -75,13 +83,25 @@ func (s *Store) checkGlobalAssets(ctx context.Context, organization string, refs
 		}
 		var versions []globalAssetVersionRow
 		if err := s.db.WithContext(ctx).Table("global_asset_versions").Where(pairs).Find(&versions).Error; err != nil {
-			return err
+			return nil, err
 		}
 		if len(versions) != len(batch) {
-			return assets.ErrUnavailable
+			return nil, assets.ErrUnavailable
+		}
+		byReference := make(map[instances.AssetVersion]globalAssetVersionRow, len(versions))
+		for _, version := range versions {
+			byReference[instances.AssetVersion{AssetID: version.AssetID, Version: version.Version}] = version
+		}
+		for _, ref := range batch {
+			row, ok := byReference[ref]
+			version := assets.PublishedVersion{AssetID: row.AssetID, OrganizationID: organization, Version: row.Version, SHA256: row.SHA256, SizeBytes: row.SizeBytes}
+			if !ok || version.Validate() != nil {
+				return nil, assets.ErrUnavailable
+			}
+			result = append(result, version)
 		}
 	}
-	return nil
+	return result, nil
 }
 
 func migrateSQLiteGlobalAssets(db *gorm.DB) error {

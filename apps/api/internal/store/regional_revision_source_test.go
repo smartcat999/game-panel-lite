@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 )
@@ -28,6 +30,11 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 		t.Fatal(err)
 	}
 	request := instances.CreateRequest{OrganizationID: org.ID, Name: "source", RegionID: "source-east", IdempotencyKey: "source-create", Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Configuration: instances.ProtectedConfiguration{KeyID: "test-key", Ciphertext: []byte("opaque")}, Resources: instances.Resources{CPU: 1, MemoryMB: 128}}}
+	asset := assets.PublishedVersion{AssetID: "source-world", OrganizationID: org.ID, Version: "v1", SHA256: strings.Repeat("a", 64), SizeBytes: 4}
+	if err := db.PublishAssetVersion(ctx, asset); err != nil {
+		t.Fatal(err)
+	}
+	request.Specification.Assets = []instances.AssetVersion{{AssetID: asset.AssetID, Version: asset.Version}}
 	created, err := db.CreateGlobalServer(ctx, "revision-source-user", request)
 	if err != nil {
 		t.Fatal(err)
@@ -43,6 +50,9 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	snapshot, err := db.GetRegionalRevision(ctx, "source-east", event)
 	if err != nil || snapshot.Revision.ID != created.Revision.ID || snapshot.CurrentSpecGeneration != 1 || snapshot.IntentVersion != 1 || string(snapshot.Revision.Specification.Configuration.Ciphertext) != "opaque" {
 		t.Fatalf("revision snapshot mismatch: %+v %v", snapshot, err)
+	}
+	if len(snapshot.Assets) != 1 || snapshot.Assets[0] != asset || snapshot.ValidateFor(event) != nil {
+		t.Fatal("asset manifest not resolved")
 	}
 	for _, region := range []string{"", "source-west"} {
 		if _, err := db.GetRegionalRevision(ctx, region, event); !errors.Is(err, ErrNotFound) {
@@ -62,6 +72,13 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 			t.Fatalf("forged identity leaked revision: %+v %v", result, err)
 		}
 	}
+	newAsset := asset
+	newAsset.Version = "v2"
+	newAsset.SHA256 = strings.Repeat("b", 64)
+	if err := db.PublishAssetVersion(ctx, newAsset); err != nil {
+		t.Fatal(err)
+	}
+	request.Specification.Assets = []instances.AssetVersion{{AssetID: newAsset.AssetID, Version: newAsset.Version}}
 	revised, err := db.ReviseGlobalServer(ctx, "revision-source-user", instances.ReviseRequest{OrganizationID: org.ID, ServerID: created.Server.ID, ExpectedGeneration: 1, IdempotencyKey: "source-revise", Specification: request.Specification})
 	if err != nil {
 		t.Fatal(err)
@@ -69,6 +86,39 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	snapshot, err = db.GetRegionalRevision(ctx, "source-east", event)
 	if err != nil || snapshot.Revision.SpecGeneration != 1 || snapshot.CurrentSpecGeneration != revised.Server.SpecGeneration {
 		t.Fatalf("historical revision presented as current: %+v %v", snapshot, err)
+	}
+	if len(snapshot.Assets) != 1 || snapshot.Assets[0] != asset {
+		t.Fatal("historical manifest changed to latest asset version")
+	}
+	foreign := domain.Organization{ID: "source-foreign", Slug: "source-foreign"}
+	if err := db.CreateOrganization(ctx, &foreign, "source-foreign-user"); err != nil {
+		t.Fatal(err)
+	}
+	foreignAsset := asset
+	foreignAsset.AssetID = "source-foreign-asset"
+	foreignAsset.OrganizationID = foreign.ID
+	if err := db.PublishAssetVersion(ctx, foreignAsset); err != nil {
+		t.Fatal(err)
+	}
+	for i, ref := range []instances.AssetVersion{{AssetID: foreignAsset.AssetID, Version: "v1"}, {AssetID: asset.AssetID, Version: "missing"}} {
+		// The legacy internal writer does not authorize asset references. The
+		// regional read must independently reject them without a partial snapshot.
+		spec := request.Specification
+		spec.Assets = []instances.AssetVersion{ref}
+		bad, err := db.ReviseGlobalServer(ctx, "revision-source-user", instances.ReviseRequest{OrganizationID: org.ID, ServerID: created.Server.ID, ExpectedGeneration: 2 + int64(i), IdempotencyKey: ref.AssetID, Specification: spec})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.db.Table("server_outbox").Select("payload").Where("operation_id = ?", bad.Operation.ID).Take(&row).Error; err != nil {
+			t.Fatal(err)
+		}
+		var badEvent instances.RevisionAvailable
+		if err := json.Unmarshal([]byte(row.Payload), &badEvent); err != nil {
+			t.Fatal(err)
+		}
+		if partial, err := db.GetRegionalRevision(ctx, "source-east", badEvent); !errors.Is(err, ErrNotFound) || partial.Revision.ID != "" || len(partial.Assets) != 0 {
+			t.Fatalf("unauthorized asset leaked snapshot: %v", err)
+		}
 	}
 	if err := db.db.Table("logical_servers").Where("id = ?", created.Server.ID).Updates(map[string]any{"desired_state": "stopped", "intent_version": 2}).Error; err != nil {
 		t.Fatal(err)

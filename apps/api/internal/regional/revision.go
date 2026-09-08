@@ -3,6 +3,7 @@ package regional
 import (
 	"errors"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 )
 
@@ -17,6 +18,7 @@ type RevisionSnapshot struct {
 	CurrentSpecGeneration int64                       `json:"currentSpecGeneration"`
 	DesiredState          string                      `json:"desiredState"`
 	IntentVersion         int64                       `json:"intentVersion"`
+	Assets                []assets.PublishedVersion   `json:"assets,omitempty"`
 }
 
 // ValidateFor checks snapshot identity and monotonic versions, not execution authority.
@@ -26,6 +28,20 @@ func (s RevisionSnapshot) ValidateFor(event instances.RevisionAvailable) error {
 		s.CurrentSpecGeneration < event.SpecGeneration || s.IntentVersion < 1 ||
 		(s.DesiredState != "running" && s.DesiredState != "stopped") || s.Revision.Specification.Validate() != nil {
 		return errors.New("revision snapshot does not match notification")
+	}
+	if len(s.Assets) != len(s.Revision.Specification.Assets) {
+		return errors.New("revision asset manifest is incomplete")
+	}
+	byReference := make(map[instances.AssetVersion]bool, len(s.Revision.Specification.Assets))
+	for _, ref := range s.Revision.Specification.Assets {
+		byReference[ref] = true
+	}
+	for _, version := range s.Assets {
+		ref := instances.AssetVersion{AssetID: version.AssetID, Version: version.Version}
+		if version.Validate() != nil || version.OrganizationID != event.OrganizationID || !byReference[ref] {
+			return errors.New("revision asset manifest does not match references")
+		}
+		delete(byReference, ref)
 	}
 	return nil
 }
