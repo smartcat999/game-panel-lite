@@ -326,6 +326,13 @@
 - 自动维护进程／用户取消 API 尚未接入；支付确认也未实现，不能将已支付状态夹具当作支付回调或取消／支付竞态验收。
 - 隔离快照全量 Go（含架构）、vet、真实 PostgreSQL／SQLite race 检查通过。日志 `/tmp/gamepanel-order-cancel-all.log`、`/tmp/gamepanel-order-cancel-vet.log`、`/tmp/gamepanel-order-cancel-integration.log`。
 
+### 订单维护进程入口
+
+- 新增 `order-maintainer` 全局 PostgreSQL 组合入口，持续模式每批均等待固定间隔，支持 `-once` 单批执行。配置有界批次、事务超时、轮询间隔，复用 Store 的数据库时间／SKIP LOCKED 到期事务，不自动迁移，不输出 DSN 或底层数据库错误。
+- 超时／故障退避、单批成功与失败、取消退出由控制循环测试验证。真实二进制在独立 PostgreSQL schema 中运行，确认单批实际取消最早到期订单，后续批次只处理剩余记录；该数据为订单状态夹具，不是真实支付。
+- 隔离快照全量 Go（含架构）、vet、真实 PostgreSQL／维护循环 race 均通过。日志 `/tmp/gamepanel-order-maintainer-all.log`、`/tmp/gamepanel-order-maintainer-vet.log`、`/tmp/gamepanel-order-maintainer-integration.log`，其中包含 actual order maintainer process 验证。运行说明见 [订单维护入口](../architecture/order-maintainer-running.md)。
+- 本批没有数据库迁移，也未部署进程。支付确认、支付／取消竞争、用户取消 API、订阅生效和生产积压验收仍未完成。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

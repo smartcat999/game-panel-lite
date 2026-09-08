@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/commerce"
+	"gorm.io/driver/postgres"
 )
 
 func testOrderCancellation(t *testing.T, db *Store, order commerce.Order) {
@@ -60,8 +64,24 @@ func testOrderCancellation(t *testing.T, db *Store, order commerce.Order) {
 	if err != nil || expired.CancelReason != "expired" || expired.CancelledBy != "" {
 		t.Fatal("expired request reported user cancellation")
 	}
-	if count, err := db.ExpirePrepaidOrders(ctx, 1); err != nil || count != 1 {
-		t.Fatalf("batch bound: %d %v", count, err)
+	if binary := os.Getenv("GAMEPANEL_TEST_ORDER_MAINTAINER_BINARY"); binary != "" && db.db.Dialector.Name() == "postgres" {
+		t.Run("actual order maintainer process", func(t *testing.T) {
+			processCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			command := exec.CommandContext(processCtx, binary, "-once", "-batch-size", "1")
+			command.Env = append(os.Environ(), "GAMEPANEL_DATABASE_URL="+db.db.Dialector.(*postgres.Dialector).Config.DSN)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("maintainer process failed: %v %s", err, output)
+			}
+			var row prepaidOrderRow
+			if err := db.db.Table("prepaid_orders").Where("id = ?", "expiry-fixture-1").Take(&row).Error; err != nil || row.Status != "cancelled" || row.CancelReason != "expired" {
+				t.Fatalf("process did not expire first due order: %v", err)
+			}
+		})
+	} else {
+		if count, err := db.ExpirePrepaidOrders(ctx, 1); err != nil || count != 1 {
+			t.Fatalf("batch bound: %d %v", count, err)
+		}
 	}
 	if db.db.Dialector.Name() == "postgres" {
 		var wg sync.WaitGroup
