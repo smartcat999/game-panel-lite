@@ -14,6 +14,9 @@ import (
 //go:embed migrations/regional_001_ingress.sql
 var regionalIngressSQL string
 
+//go:embed migrations/regional_002_revision_fetch.sql
+var regionalRevisionFetchSQL string
+
 var ErrRegionMismatch = errors.New("regional database or event belongs to a different region")
 
 // RegionalStore exposes no global identity, billing or instance mutation APIs.
@@ -24,7 +27,7 @@ type RegionalStore struct {
 }
 
 func regionalMigrations() []sqlMigration {
-	return []sqlMigration{{1, "regional_ingress", regionalIngressSQL}}
+	return []sqlMigration{{1, "regional_ingress", regionalIngressSQL}, {2, "regional_revision_fetch", regionalRevisionFetchSQL}}
 }
 
 func validRegion(region string) bool { return region != "" && region == strings.TrimSpace(region) }

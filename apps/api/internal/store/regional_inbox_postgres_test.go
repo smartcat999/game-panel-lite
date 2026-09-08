@@ -183,4 +183,6 @@ func TestPostgresRegionalInbox(t *testing.T) {
 		t.Fatalf("notification granted execution: %+v %v", task, err)
 	}
 	testRegionalBrokerIngress(t, east)
+	fetchDB, fetchURL := openRegion("fetch-test")
+	testRegionalRevisionTasks(t, fetchDB, fetchURL)
 }

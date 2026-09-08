@@ -290,3 +290,11 @@
 - 真实 mTLS 覆盖客户端→现有控制面 Handler 往返；HTTPS 测试覆盖篡改修订、旧代数、非法状态、尾随／超大响应、404／403／503、重定向拒绝、超时与 context 取消。
 - 初次超时夹具因未消费请求体阻塞在测试服务 Close；对已确认的测试进程取 goroutine 堆栈定位后，修复读取与明确清理出口。修复后工作区相关 race 全部通过；独立提交快照全量 Go（含架构门禁）／vet／相关 race 全部通过，日志 `/tmp/gamepanel-controlclient-index-all.log`、`/tmp/gamepanel-controlclient-index-vet.log`、`/tmp/gamepanel-controlclient-index-race.log`。本批未改 SQL，未重跑外部 PostgreSQL／Broker 集成，前端及其他草稿未纳入提交。
 - 客户端尚未接入区域持久任务进程；任务领取／恢复、快照持久化、配置保护器和有限期执行授权继续推进。此批不代表两个完整 Region、游戏交付、生产证书生命周期或容量验收完成。
+
+### 2026-09-08 区域修订任务领取与持久快照
+
+- 区域迁移 002 增加数据库时间租约、唯一领取令牌、尝试次数、重试时间和快照；保留历史迁移字节。单表 SKIP LOCKED 领取，落库先锁任务再核对时间、令牌和完整事件。
+- 新增消费接口驱动的 `regional.Fetcher`，网络请求在事务外，失败延迟重试，成功原子保存快照和 `revision_fetched` 状态；该状态不授予执行权，也不覆盖全局最新配置或区域运行状态。
+- 专用真实 PostgreSQL race 验证 8 方并发唯一领取、租约到期、新连接重新领取、旧令牌拒绝、持久重试间隔、失败再成功、停止意图保留及重复通知不重置。独立快照全量 Go（含架构检查）／vet 与全局＋区域 PostgreSQL race 全部通过，日志 `/tmp/gamepanel-revision-tasks-index-all.log`、`/tmp/gamepanel-revision-tasks-index-vet.log`、`/tmp/gamepanel-revision-tasks-index-pg-fixed.log`。
+- 额外全局集成首次失败在旧夹具的无密码运行角色：临时数据库默认密码认证拒绝连接。确认服务端日志后，仅重建本批专用本机容器以匹配夹具认证条件，重跑通过；未修改项目生产认证配置。测试容器随后清理。
+- 独立 Fetcher 入口、配置保护器、授权有效期、Deployment／执行任务及结果回传仍待实现；本次不代表游戏交付、跨主机恢复或容量验收。其他草稿与前端未纳入本批。
