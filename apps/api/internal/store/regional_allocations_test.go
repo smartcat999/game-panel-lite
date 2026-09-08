@@ -163,6 +163,7 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Table("regional_allocations").Where("status = ?", "reserved").Count(&count).Error; err != nil || count != 3 {
 		t.Fatal("offline observation released capacity")
 	}
+	testRegionalCapacityCandidates(t, db, create("candidate"))
 	stopped := create("stopped")
 	stopped.NodeID = "node-b"
 	if err := db.db.Table("regional_deployments").Where("id = ?", stopped.DeploymentID).Update("desired_state", "stopped").Error; err != nil {

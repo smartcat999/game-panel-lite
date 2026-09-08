@@ -199,6 +199,13 @@
 - 独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store／共享容量规则 race 通过。验证八个并发部署仅两个取得容量、重复请求身份保持、旧版本／错租户／错区域／过期心跳／未就绪拒绝、持久化故障回滚，以及重开 Store 和节点离线后占用仍保留。日志 `/tmp/gamepanel-regional-capacity-all.log`、`/tmp/gamepanel-regional-capacity-vet.log`、`/tmp/gamepanel-regional-capacity-integration.log`。
 - 接口仍只供受信区域协调器使用；候选选择、节点范围授权、端口、执行任务和有证据的资源释放待接入。未修改历史迁移与前端，不宣称完整调度已经实现。
 
+### 区域有界节点候选与准入一致性
+
+- 新增区域候选查询，最多接收一页 200 个已授权 Node ID；严格指定节点必须在范围内且只查询该节点，不可用不回退。三次业务批量查询及数据库时间读取，在只读快照内由 Go 组合，无 JOIN 或逐节点查询。
+- 候选与实际预留共用心跳就绪／新鲜度规则和 scheduling.CheckCapacity。候选带配置版本与会话 epoch；候选之后被 cordon 的节点仍会在预留事务中拒绝，候选不构成授权或预留。
+- 最终独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store race 通过，首轮共享调度规则 race 通过。覆盖三次业务查询预算、范围外节点拒绝、指定节点不回退、缺失／未来心跳、已有占用、有效心跳下的架构／调度开关过滤和选择后 cordon 的事务拒绝。日志 `/tmp/gamepanel-regional-candidates-final-all.log`、`/tmp/gamepanel-regional-candidates-final-vet.log`、`/tmp/gamepanel-regional-candidates-final-integration.log`、`/tmp/gamepanel-regional-candidates-integration.log`。
+- 后续仍需协调器节点范围授权来源、跨页自动选择、端口与执行链路；本批没有新增迁移或前端改动，不把局部候选能力当作完整调度。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

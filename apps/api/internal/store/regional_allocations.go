@@ -110,7 +110,7 @@ func (s *RegionalStore) ReserveRegionalCapacity(ctx context.Context, request reg
 		if err != nil {
 			return err
 		}
-		if observed.LastSeenMS <= 0 || observed.LastSeenMS > now || now-observed.LastSeenMS > maxHeartbeatAge.Milliseconds() {
+		if !regionalNodeReady(node, observed, now, maxHeartbeatAge) {
 			return regional.ErrNodeUnavailable
 		}
 		allocation = regional.Allocation{ID: uuid.NewString(), CapacityRequest: request, CPU: resources.CPU, MemoryMB: resources.MemoryMB, Status: "reserved"}
