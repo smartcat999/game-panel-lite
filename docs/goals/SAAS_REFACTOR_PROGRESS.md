@@ -404,3 +404,10 @@
 - 真实 PostgreSQL＋文件 Adapter 测试覆盖并发唯一领取、过期拒绝、重连恢复、修改快照拒绝、重试延迟、源失败后重试成功、事件重放不重置完成状态及坏快照冷却。补充测试验证修订补取后旧资产 token 失效，修订／资产计数分别保持 2／5。源为明确夹具，不冒充生产下载授权。
 - 独立快照全量 Go／架构／vet、Store＋regional＋mTLS 区域获取 race 及补充 PostgreSQL race 通过，日志 `/tmp/gamepanel-asset-tasks-index-all.log`、`/tmp/gamepanel-asset-tasks-index-vet.log`、`/tmp/gamepanel-asset-tasks-index-integration.log`、`/tmp/gamepanel-asset-tasks-index-refetch.log`。无 JOIN，其他草稿和前端保留。
 - 生产内容源、独立资产 Worker 入口、副本／存储卷身份、容量预留、跨主机可用性与有限期执行授权仍需完成；多个不共享目录不能被当作同一可用副本。未以数据库重连替代进程强杀验收，完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 指定资产版本的区域访问校验
+
+- 新增 ResolveRegionalAsset，与修订获取共享同一只读快照内的 Region 服务身份、原 Outbox 事件、租户实例、当前 Placement／epoch 和不可变修订校验。请求的资产 ID／版本必须被该修订引用，再按租户和精确版本查询目录；同租户未引用资产、新版本借旧修订访问均拒绝。
+- 单资产访问仅读取所请求的目录项，不重复解析全部引用目录；SQL 保持单表，无 JOIN。失败返回空元数据；返回值不包含配置、文件路径或可复用下载票据，不能用一次成功解析代表永久访问权。
+- SQLite／PostgreSQL 测试覆盖精确元数据、同租户未引用拒绝、伪造事件、错 Region、跨组织旧引用、缺失版本、历史资产版本保留、旧 Placement／Region 和删除实例拒绝。独立全量 Go／架构／vet 与 Store＋真实 PostgreSQL／mTLS 区域获取 race 通过，日志 `/tmp/gamepanel-asset-authorization-index-all.log`、`/tmp/gamepanel-asset-authorization-index-vet.log`、`/tmp/gamepanel-asset-authorization-index-integration.log`。
+- 这是受信内部权限读取边界，生产下载 API、源副本绑定和有界传输授权仍需实现；内容不经全局控制面转发。未改历史迁移、前端或无关草稿，完整六阶段 Goal 保持进行中。

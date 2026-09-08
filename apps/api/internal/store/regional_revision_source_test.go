@@ -54,9 +54,25 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	if len(snapshot.Assets) != 1 || snapshot.Assets[0] != asset || snapshot.ValidateFor(event) != nil {
 		t.Fatal("asset manifest not resolved")
 	}
+	reference := instances.AssetVersion{AssetID: asset.AssetID, Version: asset.Version}
+	resolved, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference)
+	if err != nil || resolved != asset {
+		t.Fatalf("exact asset authorization: %+v %v", resolved, err)
+	}
+	unreferenced := asset
+	unreferenced.AssetID = "source-unreferenced"
+	if err := db.PublishAssetVersion(ctx, unreferenced); err != nil {
+		t.Fatal(err)
+	}
+	if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", event, instances.AssetVersion{AssetID: unreferenced.AssetID, Version: unreferenced.Version}); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+		t.Fatal("same-tenant unreferenced asset authorized")
+	}
 	for _, region := range []string{"", "source-west"} {
 		if _, err := db.GetRegionalRevision(ctx, region, event); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("unauthorized region read: %v", err)
+		}
+		if leaked, err := db.ResolveRegionalAsset(ctx, region, event, reference); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+			t.Fatal("wrong region authorized asset")
 		}
 	}
 	for _, mutate := range []func(*instances.RevisionAvailable){
@@ -70,6 +86,9 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 		mutate(&forged)
 		if result, err := db.GetRegionalRevision(ctx, "source-east", forged); !errors.Is(err, ErrNotFound) || result.Revision.ID != "" {
 			t.Fatalf("forged identity leaked revision: %+v %v", result, err)
+		}
+		if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", forged, reference); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+			t.Fatal("forged event authorized asset")
 		}
 	}
 	newAsset := asset
@@ -89,6 +108,12 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	}
 	if len(snapshot.Assets) != 1 || snapshot.Assets[0] != asset {
 		t.Fatal("historical manifest changed to latest asset version")
+	}
+	if resolved, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference); err != nil || resolved != asset {
+		t.Fatal("historical asset authorization changed version")
+	}
+	if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", event, instances.AssetVersion{AssetID: asset.AssetID, Version: "v2"}); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+		t.Fatal("new asset version authorized under old revision")
 	}
 	foreign := domain.Organization{ID: "source-foreign", Slug: "source-foreign"}
 	if err := db.CreateOrganization(ctx, &foreign, "source-foreign-user"); err != nil {
@@ -119,6 +144,9 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 		if partial, err := db.GetRegionalRevision(ctx, "source-east", badEvent); !errors.Is(err, ErrNotFound) || partial.Revision.ID != "" || len(partial.Assets) != 0 {
 			t.Fatalf("unauthorized asset leaked snapshot: %v", err)
 		}
+		if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", badEvent, ref); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+			t.Fatal("invalid legacy asset reference authorized")
+		}
 	}
 	if err := db.db.Table("logical_servers").Where("id = ?", created.Server.ID).Updates(map[string]any{"desired_state": "stopped", "intent_version": 2}).Error; err != nil {
 		t.Fatal(err)
@@ -133,11 +161,17 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	if _, err := db.GetRegionalRevision(ctx, "source-east", event); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expired placement read: %v", err)
 	}
+	if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+		t.Fatal("old placement epoch retained asset authorization")
+	}
 	if err := db.db.Table("server_placements").Where("server_id = ?", created.Server.ID).Updates(map[string]any{"placement_epoch": 1, "region_id": "source-west"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.GetRegionalRevision(ctx, "source-east", event); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("previous region retained access: %v", err)
+	}
+	if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+		t.Fatal("previous region retained asset authorization")
 	}
 	if err := db.db.Table("server_placements").Where("server_id = ?", created.Server.ID).UpdateColumn("region_id", "source-east").Error; err != nil {
 		t.Fatal(err)
@@ -147,5 +181,8 @@ func testRegionalRevisionSource(t *testing.T, db *Store) {
 	}
 	if _, err := db.GetRegionalRevision(ctx, "source-east", event); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("deleted server revision disclosed: %v", err)
+	}
+	if leaked, err := db.ResolveRegionalAsset(ctx, "source-east", event, reference); !errors.Is(err, ErrNotFound) || leaked.AssetID != "" {
+		t.Fatal("deleted server retained asset authorization")
 	}
 }
