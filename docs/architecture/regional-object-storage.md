@@ -4,6 +4,8 @@
 
 ## 资源归属与执行边界
 
+用户备份任务归控制面管理。控制面校验租户与实例并事务写入任务／Outbox，MQ 下发到 Region；Region Inbox 去重后生成内部执行任务。Region 将执行状态和结果 Outbox 同事务保存，MQ 回传，控制面去重并复核自身任务后更新用户状态及发布备份资产。这是双向异步链路，不能让控制面等待文件上传，也不能让 Region 的上传状态直接成为用户备份成功状态。
+
 - Global 管理租户、逻辑实例、资产版本、摘要和区域归属；不保存部署机绝对路径，不中转文件内容。
 - Region 管理 StorageID 对应的受信 endpoint、bucket、凭证引用与存储策略。StorageID 不等于 bucket；禁止用户指定 endpoint 或凭证。每个 Region 可以配置独立对象存储；是否共享底层集群是部署选择，不能因此取消区域权限与配额隔离。
 - Node 游戏进程使用本地数据目录。Provider 定义需要保存的文件，执行编排保证停服或提供经过验证的一致快照；不能边复制变化文件边宣称备份一致。挂载对象存储不作为默认运行方式。
@@ -20,6 +22,10 @@
 ETag 不作为全文件 SHA-256，分片上传时也不应假定它是全文件 MD5。适配器需明确验证所选自建服务支持的校验与版本语义，不能由“兼容 S3”推定全部 AWS 功能可用。参考 [S3 对象校验说明](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html)。
 
 ## 当前实现与下一步
+
+区域迁移 004 增加 `regional_archive_uploads` 和 `regional_backup_result_outbox`。上传计划绑定控制面 OperationID／请求事件、Region、实例、Deployment、Node、Placement epoch、准备好的 SnapshotID、对象键及精确资产摘要。控制面操作与存储对象绑定均有唯一约束；重放只能接受完全相同计划，不能更换节点、快照或归属。此登记接口仅供已完成授权与快照准备的受信协调器调用；目前尚未由控制面下发链路驱动。
+
+Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。当前 Outbox 只是持久结果，发布确认、MQ Adapter 接线和控制面结果 Inbox 仍待实现。全部业务 SQL 为单表查询，无 JOIN。
 
 已存在本地 ZIP 归档、兼容性检查、暂存解压和返回错误时的回滚。新增 `backup.RestoreArchiveChecked(io.ReaderAt, size, target, hooks)`，让经过验证的对象存储下载文件复用同一恢复实现；调用方持有并关闭源文件。本地文件名入口委托给此入口，不引入 SDK 或数据库依赖。
 

@@ -36,6 +36,13 @@
 - 独立快照全量 Go／架构、vet、真实 MinIO＋备份 race 通过。日志 `/tmp/gamepanel-s3-recovery-all.log`、`/tmp/gamepanel-s3-recovery-vet.log`、`/tmp/gamepanel-s3-recovery-race.log`。未新增 SQL 或修改前端。
 - 持久任务还需原子保存对象键、预期摘要与领取状态，并在对账后复核授权及 CAS 发布；当前只完成存储层恢复能力。区域 Deployment／节点执行绑定与用户备份入口接线仍未完成。
 
+### Region 上传任务与结果 Outbox
+
+- 按用户确认，备份任务归全局控制面，Region 维护内部执行任务并异步回传。新增区域迁移 004，保存控制面操作／下发事件、部署／节点／快照与对象身份；完全相同计划可重放，同操作或同对象键不能另建冲突记录。登记接口仅供受信协调器在授权并准备一致归档后调用。
+- 单表 SKIP LOCKED 领取，数据库时间和独立令牌约束完成／重试；比对完整计划，旧领取、错快照、跨租户回执均拒绝；损坏记录隔离。上传完成状态与 `backup.archive.uploaded` 结果 Outbox 同事务提交，仍不等于控制面备份发布。
+- 真实 PostgreSQL 覆盖 8 个并发领取唯一、过期拒绝、重开 Store 重新领取、持久重试、完成后重放不重置、错误记录隔离及 Outbox 故障回滚。独立快照全量 Go／架构、vet、Store＋backup＋S3 的 PostgreSQL／MinIO race 通过；日志 `/tmp/gamepanel-archive-jobs-all.log`、`/tmp/gamepanel-archive-jobs-vet.log`、`/tmp/gamepanel-archive-jobs-integration.log`。仅新增迁移，无 JOIN，历史迁移及其他草稿保留。
+- 本批尚未实现全局备份任务／下发事件接入、结果 Outbox 发布与确认、控制面结果 Inbox／状态更新、Node 快照授权和完整 Worker 接线。这些继续作为核心验收项，不能以区域上传表替代控制面用户任务。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
