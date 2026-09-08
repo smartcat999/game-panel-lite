@@ -18,7 +18,8 @@ type RequestFingerprinter interface {
 }
 
 // CreateEncryptedGlobalServer is an internal persistence boundary, not a public
-// tenant API. Callers must validate provider config, Region and asset access.
+// tenant API. Callers must validate provider config and product availability.
+// Registered Region and published asset ownership are rechecked transactionally.
 // Configuration bytes must already be canonicalized by the trusted use case.
 func (s *Store) CreateEncryptedGlobalServer(ctx context.Context, actor string, request instances.CreateRequest, plaintext []byte, sealer ConfigurationSealer, fingerprinter RequestFingerprinter) (instances.IntentResult, error) {
 	if actor == "" {

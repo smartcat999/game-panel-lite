@@ -9,7 +9,8 @@ import (
 
 // ReviseEncryptedGlobalServer appends an authenticated immutable configuration
 // after authorization, idempotency and generation checks. Callers must validate
-// and canonicalize provider configuration and authorize referenced resources.
+// and canonicalize provider configuration. Published asset ownership is checked
+// in the transaction; regional replica availability is not an execution grant.
 func (s *Store) ReviseEncryptedGlobalServer(ctx context.Context, actor string, request instances.ReviseRequest, plaintext []byte, sealer ConfigurationSealer, fingerprinter RequestFingerprinter) (instances.IntentResult, error) {
 	if actor == "" {
 		return instances.IntentResult{}, ErrWorkspaceWriteDenied

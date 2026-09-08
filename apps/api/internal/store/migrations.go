@@ -63,6 +63,12 @@ var outboxPublicationSQL string
 //go:embed migrations/017_region_directory.sql
 var regionDirectorySQL string
 
+//go:embed migrations/018_global_assets.sql
+var globalAssetsSQL string
+
+//go:embed migrations/global_asset_guards.sql
+var globalAssetGuardsSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -91,6 +97,7 @@ func postgresMigrations() []sqlMigration {
 		{15, "global_instance_intents", globalInstanceSchemaSQL + "\n" + globalInstanceRevisionGuardsSQL},
 		{16, "outbox_publication", outboxPublicationSQL},
 		{17, "region_directory", regionDirectorySQL},
+		{18, "global_assets", globalAssetsSQL + "\n" + globalAssetGuardsSQL},
 	}
 }
 

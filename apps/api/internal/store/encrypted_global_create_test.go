@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
+
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
@@ -66,6 +68,7 @@ func testEncryptedGlobalCreate(t *testing.T, db *Store) {
 		t.Fatal(err)
 	}
 	request := instances.CreateRequest{OrganizationID: org.ID, Name: "protected", RegionID: "east", IdempotencyKey: "encrypted-create", Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Resources: instances.Resources{CPU: 1, MemoryMB: 256}}}
+	request.Specification.Assets = testGlobalAssets(t, db, org.ID)
 	plaintext := []byte(`{"password":"must-never-be-stored-plain"}`)
 	sealer := &countingSealer{inner: p}
 	created, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", request, plaintext, sealer, f)
@@ -78,6 +81,18 @@ func testEncryptedGlobalCreate(t *testing.T, db *Store) {
 		t.Fatalf("stored encrypted revision: %v", err)
 	}
 	sealer.fail = true
+	for _, ref := range []instances.AssetVersion{{AssetID: "missing", Version: "v1"}, {AssetID: request.Specification.Assets[0].AssetID, Version: "missing"}, {AssetID: "foreign-asset", Version: "v1"}} {
+		invalid := request
+		invalid.IdempotencyKey = "invalid-asset"
+		invalid.Specification.Assets = []instances.AssetVersion{ref}
+		if _, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", invalid, plaintext, sealer, f); !errors.Is(err, assets.ErrUnavailable) {
+			t.Fatalf("unavailable create asset: %v", err)
+		}
+		revise := instances.ReviseRequest{OrganizationID: org.ID, ServerID: created.Server.ID, ExpectedGeneration: 1, IdempotencyKey: "invalid-asset", Specification: invalid.Specification}
+		if _, err := db.ReviseEncryptedGlobalServer(ctx, "encrypted-owner", revise, plaintext, sealer, f); !errors.Is(err, assets.ErrUnavailable) {
+			t.Fatalf("unavailable revise asset: %v", err)
+		}
+	}
 	replayed, err := db.CreateEncryptedGlobalServer(ctx, "encrypted-owner", request, plaintext, sealer, rotated)
 	if err != nil || replayed.Operation.ID != created.Operation.ID || sealer.calls != 1 {
 		t.Fatalf("retry resealed or lost identity: %v", err)

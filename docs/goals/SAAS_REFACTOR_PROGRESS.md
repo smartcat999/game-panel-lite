@@ -361,3 +361,10 @@
 - SQLite／PostgreSQL 验证未登记或已关闭区域拒绝新操作、已关闭区域的旧操作仍可授权重放。真实 PostgreSQL 阻塞加密夹具验证目录关闭等待在途事务、提交后关闭成功及关闭后的创建拒绝。首次检查的超时错误断言受驱动合并错误影响，已改为核对上下文超时后通过。
 - 独立快照的根模块全量 Go（含架构门禁）／vet、API 全量 Go／vet、SQLite＋PostgreSQL＋mTLS 区域组合 race 均通过。证据日志 `/tmp/gamepanel-region-admission-index-root-all.log`、`/tmp/gamepanel-region-admission-index-root-vet.log`、`/tmp/gamepanel-region-admission-index-integration-fixed.log`；未更改前端或历史迁移。
 - 旧不透明 CreateGlobalServer 仍为内部兼容路径，不可直接作为新公共创建入口。资产授权、修订／扩容准入、目录运维入口、HTTP 接入、有限期执行授权及完整六阶段验收仍待完成；禁止 JOIN 不代表数据库性能已经通过容量验收。其他草稿保留。
+
+### 2026-09-08 已发布资产目录与批量事务准入
+
+- 新增独立 assets 契约、全局资产身份及不可变版本目录，PostgreSQL 018／SQLite 版本 6。固定组织归属、版本摘要和大小；相同元数据重复发布安全，不同归属或内容不能覆盖。数据库禁止更新／删除，SQLite 另防止 REPLACE 更换内容。旧文件记录不自动冒充经过内容验证的全局版本。
+- 受保护创建／配置更新在既有权限、幂等及事务边界内验证所属组织和精确资产版本，每 100 个引用分两次单表查询。真实 SQLite／PostgreSQL 测试对 101 个引用观察到四次查询，无 JOIN；同时覆盖缺失资产、缺失版本、跨组织引用拒绝，真实加密修订保留引用及不可变约束。目录登记是受信入口，尚未接入内容上传／校验或公共发布 API。
+- 独立快照全量 Go（含架构门禁）／vet，以及资产、Store、应用服务、PostgreSQL＋mTLS 区域组合 race 全部通过，日志 `/tmp/gamepanel-global-assets-index-all.log`、`/tmp/gamepanel-global-assets-index-vet.log`、`/tmp/gamepanel-global-assets-index-integration.log`。历史迁移未修改；旧 SQLite 升级夹具补齐新表清理，其他草稿与前端保留。
+- 资产副本、内容验证回报、共享／撤销、保留期 GC、有限期执行授权及公共入口仍需完成。查询次数证据只覆盖本批准入，不能作为全库 SQL 门禁或容量验收。完整六阶段 Goal 保持进行中，见 [资产目录边界](../architecture/global-assets.md)。

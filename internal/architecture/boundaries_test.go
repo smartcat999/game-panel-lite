@@ -65,6 +65,9 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("assets") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "global asset contracts must not depend on regional storage or persistence adapters"
+	}
 	if under("regions") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "global region directory models must not depend on regional infrastructure or adapters"
 	}

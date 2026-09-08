@@ -63,6 +63,11 @@ func (s *Store) reviseGlobalServer(ctx context.Context, actor string, request in
 		if server.SpecGeneration != request.ExpectedGeneration || server.DesiredState == "deleted" {
 			return instances.ErrVersionConflict
 		}
+		if seal != nil {
+			if err := tx.checkGlobalAssets(ctx, request.OrganizationID, request.Specification.Assets); err != nil {
+				return err
+			}
+		}
 		quota, err := tx.GetTenantQuota(ctx, request.OrganizationID)
 		if err != nil {
 			return err

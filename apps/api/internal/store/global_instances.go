@@ -113,6 +113,9 @@ func (s *Store) createGlobalServer(ctx context.Context, actor string, request in
 			if err := tx.checkRegionCreate(ctx, request.RegionID); err != nil {
 				return err
 			}
+			if err := tx.checkGlobalAssets(ctx, request.OrganizationID, request.Specification.Assets); err != nil {
+				return err
+			}
 		}
 		quota, err := tx.GetTenantQuota(ctx, request.OrganizationID)
 		if err != nil {
