@@ -82,6 +82,10 @@ func newTestRouterWithAdapter(t *testing.T, adapter runtime.Adapter) (stdhttp.Ha
 }
 
 func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Adapter, seedInstallMarkers bool) (stdhttp.Handler, *store.Store, config.Config) {
+	return newTestRouterFixture(t, adapter, seedInstallMarkers, true)
+}
+
+func newTestRouterFixture(t *testing.T, adapter runtime.Adapter, seedInstallMarkers, startController bool) (stdhttp.Handler, *store.Store, config.Config) {
 	t.Helper()
 	root := t.TempDir()
 	cfg := config.Config{
@@ -121,6 +125,9 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 	}
 	router := chi.NewRouter()
 	handler.Register(router)
+	if !startController {
+		return router, db, cfg
+	}
 	controllerCtx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go serverctrl.NewController(

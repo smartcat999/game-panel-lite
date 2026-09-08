@@ -1097,3 +1097,7 @@ func ImageForVersion(version string) string {
 	}
 	return "smartcat99999/dst-server:" + version
 }
+
+func (Provider) NodeRequirements() domain.NodeRequirements {
+	return domain.NodeRequirements{Architectures: []string{"amd64"}}
+}

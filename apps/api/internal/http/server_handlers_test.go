@@ -880,7 +880,6 @@ func TestUpdateServerConfigResourcesOnlyInPlaceUpdate(t *testing.T) {
 	}
 }
 
-
 func TestDeleteServerRemovesOwnedResources(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("owned-resources", cfg.DataDir)
@@ -1118,7 +1117,8 @@ func TestListServersSkipsRuntimeInspectWhenDockerUnavailable(t *testing.T) {
 }
 
 func TestListServersSupportsPaginationFilteringAndSorting(t *testing.T) {
-	router, db, cfg := newTestRouter(t)
+	// Pagination verifies stored rows; the lifecycle controller must not rewrite the fixture.
+	router, db, cfg := newTestRouterFixture(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, true, false)
 	for index := 0; index < 25; index++ {
 		server := testServer(fmt.Sprintf("paged-%02d", index), cfg.DataDir)
 		server.Name = fmt.Sprintf("Server %02d", index)
