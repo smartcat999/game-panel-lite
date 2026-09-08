@@ -279,12 +279,13 @@
 - 真实 PG 覆盖节点任务绑定、重复登记、最终提交故障后任务插入回滚、旧领取失效、旧任务被替代且不可复活；实际调度进程验证预留完成时节点任务已同事务可见。独立快照全量 Go（含架构）、vet、真实 PG／调度进程 mTLS race 均通过。日志 `/tmp/gamepanel-node-tasks-all.log`、`/tmp/gamepanel-node-tasks-vet.log`、`/tmp/gamepanel-node-tasks-integration.log`。
 - 此处只建立可靠待授权任务，未取得商业权益或 Node 执行许可，也未下发／启动容器。后续必须在授权与交付前重新校验当前归属、节点会话和预留，不能把任务 ID、旧会话代数或 `awaiting_authority` 当作运行权限。
 
-### 全局运行权益（实现与初步验证，尚未提交）
+### 全局运行权益
 
 - 新增实例运行权益模型与存储适配：租户／实例绑定、CPU／内存额度、生效时间、状态、版本和运维来源。运维调整校验平台管理员身份，使用预期版本控制更新；幂等请求返回原审计回执，不覆盖当前权益。未增加服务层级或通用计费框架。
 - 当前权益与不可变变更记录同事务写入；区域读取同时复核全局配置、意图及归属。该读取仅是时间点策略检查，不是 Node 执行租约，尚未接入任务下发，也不表示支付订单已经实现。
 - SQLite 测试已验证无权益／非管理员拒绝、重复请求、请求参数冲突、版本冲突、暂停、错 Region／意图、历史重放不回退、审计不可修改及审计插入失败的整体回滚。当前工作区 `go test ./...`（含架构）和 `go vet ./...` 通过；日志 `/tmp/gamepanel-entitlements-focused.log`、`/tmp/gamepanel-entitlements-all.log`、`/tmp/gamepanel-entitlements-vet.log`。
-- 待补真实 PostgreSQL 迁移与并发验证、时间窗口和规格不足边界，再进行隔离快照复验及选择性提交。当前全量检查包含已有工作区草稿，不代表本批隔离提交已验证；六阶段目标保持进行中。
+- 最终隔离快照验证已完成：真实 PostgreSQL 迁移、并发版本竞争（同版本两次更新仅一次成功）、审计失败回滚、规格不足、尚未生效、撤销、过期授予拒绝，以及恢复权益不覆盖用户停服意图均通过。SQLite 顺序验证版本冲突；默认事务并发升级写锁仍可能返回锁冲突。
+- 隔离快照全量 Go（含架构）、vet、真实 PG／SQLite race 检查通过，日志 `/tmp/gamepanel-entitlements-isolated-all.log`、`/tmp/gamepanel-entitlements-isolated-vet.log`、`/tmp/gamepanel-entitlements-isolated-integration.log`。新增全局迁移 022、SQLite 迁移 10；原迁移未修改。未纳入已有计费／OAuth／前端草稿。Node 授权和支付驱动权益仍待实现，六阶段目标保持进行中。
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
