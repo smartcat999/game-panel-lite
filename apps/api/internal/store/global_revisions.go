@@ -28,19 +28,23 @@ func (s *Store) ReviseGlobalServer(ctx context.Context, actor string, request in
 		return instances.IntentResult{}, err
 	}
 	hash := fmt.Sprintf("%x", sha256.Sum256(encoded))
-	specification, err := instances.EncodeSpecification(request.Specification)
-	if err != nil {
-		return instances.IntentResult{}, err
-	}
+	return s.reviseGlobalServer(ctx, actor, request, hash, func(existing string) (bool, error) { return existing == hash, nil }, nil)
+}
+
+func (s *Store) reviseGlobalServer(ctx context.Context, actor string, request instances.ReviseRequest, hash string, matches func(string) (bool, error), seal func(instances.ConfigurationBinding) (instances.ProtectedConfiguration, error)) (instances.IntentResult, error) {
 	var result instances.IntentResult
-	err = s.Transaction(ctx, func(tx *Store) error {
+	err := s.Transaction(ctx, func(tx *Store) error {
 		if err := tx.lockWorkspaceWriter(ctx, request.OrganizationID, actor); err != nil {
 			return err
 		}
 		var operation globalOperationRow
 		err := tx.db.WithContext(ctx).Table("server_operations").Where("organization_id = ? AND kind = ? AND idempotency_key = ?", request.OrganizationID, "revise", request.IdempotencyKey).Take(&operation).Error
 		if err == nil {
-			if operation.RequestHash != hash {
+			matched, matchErr := matches(operation.RequestHash)
+			if matchErr != nil {
+				return matchErr
+			}
+			if !matched {
 				return instances.ErrIdempotencyConflict
 			}
 			result, err = tx.readGlobalIntent(ctx, operation)
@@ -75,7 +79,19 @@ func (s *Store) ReviseGlobalServer(ctx context.Context, actor string, request in
 			return err
 		}
 		now := time.Now().UTC()
-		revision := globalRevisionRow{ID: uuid.NewString(), ServerID: server.ID, SpecGeneration: server.SpecGeneration + 1, Specification: string(specification), CPU: request.Specification.Resources.CPU, MemoryMB: request.Specification.Resources.MemoryMB, CreatedAt: now}
+		revision := globalRevisionRow{ID: uuid.NewString(), ServerID: server.ID, SpecGeneration: server.SpecGeneration + 1, CPU: request.Specification.Resources.CPU, MemoryMB: request.Specification.Resources.MemoryMB, CreatedAt: now}
+		if seal != nil {
+			configuration, err := seal(instances.ConfigurationBinding{OrganizationID: server.OrganizationID, ServerID: server.ID, RevisionID: revision.ID, SpecGeneration: revision.SpecGeneration, ProviderKey: request.Specification.ProviderKey, ConfigSchemaVersion: request.Specification.ConfigSchemaVersion})
+			if err != nil {
+				return err
+			}
+			request.Specification.Configuration = configuration
+		}
+		specification, err := instances.EncodeSpecification(request.Specification)
+		if err != nil {
+			return err
+		}
+		revision.Specification = string(specification)
 		operation = globalOperationRow{ID: uuid.NewString(), OrganizationID: server.OrganizationID, ServerID: server.ID, RevisionID: revision.ID, Kind: "revise", Status: "pending", IdempotencyKey: request.IdempotencyKey, RequestHash: hash, CreatedAt: now}
 		if err := tx.db.WithContext(ctx).Table("server_revisions").Create(&revision).Error; err != nil {
 			return err

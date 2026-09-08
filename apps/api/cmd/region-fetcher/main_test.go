@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlapi"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
@@ -90,7 +92,24 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	if err := global.CreateOrganization(ctx, &org, "owner"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = global.CreateGlobalServer(ctx, "owner", instances.CreateRequest{OrganizationID: org.ID, Name: "server", RegionID: "east", IdempotencyKey: "create", Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Resources: instances.Resources{CPU: 1, MemoryMB: 256}, Configuration: instances.ProtectedConfiguration{KeyID: "test", Ciphertext: []byte("opaque")}}})
+	makeKey := func() []byte {
+		t.Helper()
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			t.Fatal(err)
+		}
+		return key
+	}
+	protector, err := configprotection.New("configuration", map[string][]byte{"configuration": makeKey()}, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprint, err := configprotection.NewFingerprinter("requests", map[string][]byte{"requests": makeKey()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plaintext := []byte(`{"password":"test-through-mtls"}`)
+	_, err = global.CreateEncryptedGlobalServer(ctx, "owner", instances.CreateRequest{OrganizationID: org.ID, Name: "server", RegionID: "east", IdempotencyKey: "create", Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Resources: instances.Resources{CPU: 1, MemoryMB: 256}}}, plaintext, protector, fingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,6 +220,10 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	var saved regional.RevisionSnapshot
 	if err := json.Unmarshal([]byte(snapshot), &saved); err != nil || saved.ValidateFor(event) != nil {
 		t.Fatalf("invalid saved snapshot: %v", err)
+	}
+	opened, err := protector.Open(ctx, instances.ConfigurationBinding{OrganizationID: event.OrganizationID, ServerID: event.ServerID, RevisionID: event.RevisionID, SpecGeneration: event.SpecGeneration, ProviderKey: saved.Revision.Specification.ProviderKey, ConfigSchemaVersion: saved.Revision.Specification.ConfigSchemaVersion}, saved.Revision.Specification.Configuration)
+	if err != nil || !bytes.Equal(opened, plaintext) || strings.Contains(snapshot, "test-through-mtls") {
+		t.Fatalf("encrypted snapshot roundtrip: %v", err)
 	}
 }
 

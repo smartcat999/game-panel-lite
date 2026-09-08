@@ -107,4 +107,5 @@ func testEncryptedGlobalCreate(t *testing.T, db *Store) {
 	if strings.Contains(row.Specification, "must-never") || strings.Contains(payload, "must-never") || strings.Contains(op.RequestHash, "must-never") || !strings.HasPrefix(op.RequestHash, "h1.") {
 		t.Fatal("plaintext or unversioned digest persisted")
 	}
+	testEncryptedGlobalRevision(t, db, created, request.Specification, p, f, rotated)
 }

@@ -96,10 +96,17 @@ type ReviseRequest struct {
 }
 
 func (r ReviseRequest) Validate() error {
+	if err := r.ValidateMetadata(); err != nil {
+		return err
+	}
+	return r.Specification.Validate()
+}
+
+func (r ReviseRequest) ValidateMetadata() error {
 	if !identifier(r.OrganizationID) || !identifier(r.ServerID) || !identifier(r.IdempotencyKey) || r.ExpectedGeneration < 1 || r.ExpectedGeneration == math.MaxInt64 {
 		return ErrInvalidIntent
 	}
-	return r.Specification.Validate()
+	return r.Specification.ValidateMetadata()
 }
 
 func identifier(value string) bool { return value != "" && value == strings.TrimSpace(value) }

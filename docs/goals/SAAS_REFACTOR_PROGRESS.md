@@ -319,3 +319,10 @@
 - `Fingerprinter` 使用独立外部 HMAC-SHA256 密钥，摘要携带 h1 版本和 keyId，按原记录密钥验证重放，支持保留旧密钥的轮换。旧 64 位摘要继续由旧入口使用，不隐式升级或混用；业务配置不写入请求摘要或 Outbox。
 - SQLite／PostgreSQL race 已验证真实密文落库并解密、随机加密下重放身份稳定、摘要换钥、不同配置冲突、无权重试拒绝、加密失败无残留及敏感字节不落明文。独立快照全量 Go（含架构检查）／vet／SQLite 与 PostgreSQL race 全部通过，日志 `/tmp/gamepanel-encrypted-create-index-all.log`、`/tmp/gamepanel-encrypted-create-index-vet.log`、`/tmp/gamepanel-encrypted-create-index-pg.log`。专用临时容器与快照清理，未提交密钥。
 - 这是内部受信创建边界，公共应用用例、Provider／资产／Region 校验及配置更新路径尚未切换。有限期授权与区域解密继续推进；未新增 JOIN，其他草稿保留。
+
+### 2026-09-08 受保护配置更新与真实密文跨层获取
+
+- 新增 `ReviseEncryptedGlobalServer`，共享原修订事务，权限／幂等／代数／配额检查后才为新修订加密。更新摘要显式包含 revise 类型，保留创建 h1 摘要兼容；只推进配置指针，不覆盖停止意图或部署归属。
+- SQLite race 覆盖更新密文解密、旧身份拒绝、摘要换钥重放不重新加密、不同配置冲突、无权重放、旧代数拒绝、加密失败不推进指针、较新更新后旧操作重放不回退。
+- 区域获取组合测试改用真实受保护创建；全局库密文经 mTLS 读取进入区域库，测试侧按原修订身份可解密且快照不含明文。密钥仅由测试创建，不是区域密钥分发／解密授权实现。工作区与独立快照的相关 SQLite／PostgreSQL／mTLS race，以及独立全量 Go（含架构检查）／vet 全部通过。独立日志 `/tmp/gamepanel-encrypted-revise-index-all.log`、`/tmp/gamepanel-encrypted-revise-index-vet.log`、`/tmp/gamepanel-encrypted-revise-index-integration.log`；专用临时数据库与快照清理。
+- 公共应用用例、Provider／资产／Region 准入、密钥生命周期、有限期执行授权及 Deployment／运行链路仍待完成。旧创建／修订 API 未切换，本批未新增生产 SQL，其他草稿保留。
