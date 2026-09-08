@@ -10,6 +10,8 @@ import (
 )
 
 type Writer interface {
+	ReplayCreate(context.Context, string, instances.CreateRequest, []byte) (instances.IntentResult, bool, error)
+	ReplayRevise(context.Context, string, instances.ReviseRequest, []byte) (instances.IntentResult, bool, error)
 	Create(context.Context, string, instances.CreateRequest, []byte) (instances.IntentResult, error)
 	Revise(context.Context, string, instances.ReviseRequest, []byte) (instances.IntentResult, error)
 }
@@ -50,14 +52,17 @@ func (s *Service) Create(ctx context.Context, actor string, request instances.Cr
 	if strings.TrimSpace(actor) == "" || request.ValidateMetadata() != nil || !emptyProtected(request.Specification) {
 		return instances.IntentResult{}, instances.ErrInvalidIntent
 	}
-	if err := s.admission.CheckCreate(ctx, actor, request); err != nil {
-		return instances.IntentResult{}, err
-	}
 	config, err := s.normalizer.Normalize(ctx, request.Specification.ProviderKey, request.Specification.GameVersion, request.Specification.ConfigSchemaVersion, raw)
 	if err != nil {
 		return instances.IntentResult{}, err
 	}
 	defer clear(config)
+	if result, found, err := s.writer.ReplayCreate(ctx, actor, request, config); err != nil || found {
+		return result, err
+	}
+	if err := s.admission.CheckCreate(ctx, actor, request); err != nil {
+		return instances.IntentResult{}, err
+	}
 	return s.writer.Create(ctx, actor, request, config)
 }
 
@@ -68,13 +73,16 @@ func (s *Service) Revise(ctx context.Context, actor string, request instances.Re
 	if strings.TrimSpace(actor) == "" || request.ValidateMetadata() != nil || !emptyProtected(request.Specification) {
 		return instances.IntentResult{}, instances.ErrInvalidIntent
 	}
-	if err := s.admission.CheckRevise(ctx, actor, request); err != nil {
-		return instances.IntentResult{}, err
-	}
 	config, err := s.normalizer.Normalize(ctx, request.Specification.ProviderKey, request.Specification.GameVersion, request.Specification.ConfigSchemaVersion, raw)
 	if err != nil {
 		return instances.IntentResult{}, err
 	}
 	defer clear(config)
+	if result, found, err := s.writer.ReplayRevise(ctx, actor, request, config); err != nil || found {
+		return result, err
+	}
+	if err := s.admission.CheckRevise(ctx, actor, request); err != nil {
+		return instances.IntentResult{}, err
+	}
 	return s.writer.Revise(ctx, actor, request, config)
 }

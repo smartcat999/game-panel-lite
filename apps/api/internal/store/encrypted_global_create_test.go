@@ -108,4 +108,23 @@ func testEncryptedGlobalCreate(t *testing.T, db *Store) {
 		t.Fatal("plaintext or unversioned digest persisted")
 	}
 	testEncryptedGlobalRevision(t, db, created, request.Specification, p, f, rotated)
+	writer, err := NewEncryptedIntentWriter(db, p, rotated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay, found, err := writer.ReplayCreate(ctx, "encrypted-owner", request, plaintext)
+	if err != nil || !found || replay.Operation.ID != created.Operation.ID || replay.Server.SpecGeneration != 3 {
+		t.Fatalf("authorized replay lookup: %v", err)
+	}
+	if _, _, err := writer.ReplayCreate(ctx, "intruder", request, plaintext); !errors.Is(err, ErrWorkspaceWriteDenied) {
+		t.Fatalf("unauthorized replay lookup: %v", err)
+	}
+	if _, _, err := writer.ReplayCreate(ctx, "encrypted-owner", request, []byte("changed")); !errors.Is(err, instances.ErrIdempotencyConflict) {
+		t.Fatalf("replay conflict: %v", err)
+	}
+	missing := request
+	missing.IdempotencyKey = "never-created"
+	if _, found, err := writer.ReplayCreate(ctx, "encrypted-owner", missing, plaintext); err != nil || found {
+		t.Fatalf("missing replay: %v", err)
+	}
 }

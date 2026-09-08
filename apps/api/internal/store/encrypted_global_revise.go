@@ -17,11 +17,7 @@ func (s *Store) ReviseEncryptedGlobalServer(ctx context.Context, actor string, r
 	if request.ValidateMetadata() != nil || request.Specification.Configuration.KeyID != "" || len(request.Specification.Configuration.Ciphertext) != 0 || len(plaintext) == 0 || sealer == nil || fingerprinter == nil {
 		return instances.IntentResult{}, instances.ErrInvalidIntent
 	}
-	encoded, err := json.Marshal(struct {
-		Kind          string
-		Request       instances.ReviseRequest
-		Configuration []byte
-	}{"revise", request, plaintext})
+	encoded, err := encodeProtectedRevise(request, plaintext)
 	if err != nil {
 		return instances.IntentResult{}, err
 	}
@@ -33,4 +29,12 @@ func (s *Store) ReviseEncryptedGlobalServer(ctx context.Context, actor string, r
 	return s.reviseGlobalServer(ctx, actor, request, hash, func(existing string) (bool, error) { return fingerprinter.Matches(existing, encoded) }, func(binding instances.ConfigurationBinding) (instances.ProtectedConfiguration, error) {
 		return sealer.Seal(ctx, binding, plaintext)
 	})
+}
+
+func encodeProtectedRevise(request instances.ReviseRequest, plaintext []byte) ([]byte, error) {
+	return json.Marshal(struct {
+		Kind          string
+		Request       instances.ReviseRequest
+		Configuration []byte
+	}{"revise", request, plaintext})
 }

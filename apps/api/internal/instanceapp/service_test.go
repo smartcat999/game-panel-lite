@@ -20,16 +20,16 @@ import (
 var errTestAdmission = errors.New("fixture admission denied")
 
 // A deliberately bounded fixture, not a production Region/asset authorizer.
-type fixtureAdmission struct{}
+type fixtureAdmission struct{ closed bool }
 
-func (fixtureAdmission) CheckCreate(_ context.Context, actor string, r instances.CreateRequest) error {
-	if actor != "owner" || r.RegionID != "east" || len(r.Specification.Assets) != 0 {
+func (f *fixtureAdmission) CheckCreate(_ context.Context, actor string, r instances.CreateRequest) error {
+	if f.closed || actor != "owner" || r.RegionID != "east" || len(r.Specification.Assets) != 0 {
 		return errTestAdmission
 	}
 	return nil
 }
-func (fixtureAdmission) CheckRevise(_ context.Context, actor string, r instances.ReviseRequest) error {
-	if actor != "owner" || len(r.Specification.Assets) != 0 {
+func (f *fixtureAdmission) CheckRevise(_ context.Context, actor string, r instances.ReviseRequest) error {
+	if f.closed || actor != "owner" || len(r.Specification.Assets) != 0 {
 		return errTestAdmission
 	}
 	return nil
@@ -74,7 +74,8 @@ func TestApplicationWritesValidatedEncryptedIntents(t *testing.T) {
 	if _, err := New(writer, normalizer, nil); err == nil {
 		t.Fatal("missing admission accepted")
 	}
-	service, err := New(writer, normalizer, fixtureAdmission{})
+	admission := &fixtureAdmission{}
+	service, err := New(writer, normalizer, admission)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,30 @@ func TestApplicationWritesValidatedEncryptedIntents(t *testing.T) {
 	if err != nil || !bytes.Contains(plaintext, []byte(`"maxPlayers":6`)) || bytes.Contains(plaintext, []byte(`"port"`)) {
 		t.Fatalf("normalized revision not stored: %v", err)
 	}
-	if _, err := service.Revise(ctx, "intruder", revise, []byte(`{}`)); !errors.Is(err, errTestAdmission) {
+	if _, err := service.Revise(ctx, "intruder", revise, []byte(`{}`)); !errors.Is(err, store.ErrWorkspaceWriteDenied) {
 		t.Fatal("revise gate bypass")
+	}
+	admission.closed = true
+	replayed, err = service.Create(ctx, "owner", request, raw)
+	if err != nil || replayed.Operation.ID != created.Operation.ID || replayed.Server.CurrentRevisionID != updated.Revision.ID {
+		t.Fatalf("closed admission blocked original create: %v", err)
+	}
+	replayed, err = service.Revise(ctx, "owner", revise, []byte(`{"maxPlayers":6}`))
+	if err != nil || replayed.Operation.ID != updated.Operation.ID {
+		t.Fatalf("closed admission blocked original revision: %v", err)
+	}
+	if _, err := service.Revise(ctx, "owner", revise, []byte(`{"maxPlayers":7}`)); !errors.Is(err, instances.ErrIdempotencyConflict) {
+		t.Fatalf("changed replay bypassed hash: %v", err)
+	}
+	fresh := request
+	fresh.IdempotencyKey = "new-after-close"
+	if _, err := service.Create(ctx, "owner", fresh, raw); !errors.Is(err, errTestAdmission) {
+		t.Fatalf("new operation bypassed closed admission: %v", err)
+	}
+	if err := db.RemoveOrganizationMember(ctx, org.ID, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Create(ctx, "owner", request, raw); !errors.Is(err, store.ErrWorkspaceWriteDenied) {
+		t.Fatalf("revoked member replayed operation: %v", err)
 	}
 }

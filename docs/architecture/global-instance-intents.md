@@ -50,11 +50,13 @@ Terraria Vanilla／tModLoader 已实现该能力，保留世界、难度、玩�
 
 ## 应用编排边界
 
-`instanceapp.Service` 仅依赖自身定义的 Writer、Normalizer、Admission 接口和全局模型。创建／更新拒绝空 actor 和客户端自报密文，先校验元数据及准入，再取得 Provider 规范化配置字节，调用受保护 Writer。配置临时字节在调用返回后清除；Normalizer 必须返回独立切片，Writer 不能异步保留该明文缓冲区。
+`instanceapp.Service` 仅依赖自身定义的 Writer、Normalizer、Admission 接口和全局模型。创建／更新拒绝空 actor 和客户端自报密文，先校验元数据并取得 Provider 规范化配置字节，再查询授权重放；没有原操作才进入新操作准入及受保护写入。配置临时字节在调用返回后清除；Normalizer 必须返回独立切片，Writer 不能异步保留该明文缓冲区。
 
 `store.NewEncryptedIntentWriter` 在组合阶段绑定 Store、保护器与指纹器，HTTP 输入不能选择加密实现或密钥。数据库继续在事务内复核成员权限、配额和版本，不把应用层早期检查当作永久授权。
 
-Admission 没有默认放行实现，缺失依赖时构造失败。当前测试策略仅演示固定 Region／资产拒绝，不是生产授权；真实 Region 目录、资产版本权限和事务内一致性仍待实现。当前服务每次调用均做准入；正式接入还需区分已完成操作的重放与新操作的可售性检查，避免下架阻止原操作查询。Provider 默认值／规范化版本改变时的重放兼容也需遵循配置版本契约。公共 HTTP 入口尚未切换。
+Admission 没有默认放行实现，缺失依赖时构造失败。当前测试策略仅演示固定 Region／资产拒绝，不是生产授权；真实 Region 目录、资产版本权限和事务内一致性仍待实现。Provider 默认值／规范化版本改变时的重放兼容仍需遵循配置版本契约，移除 Provider／历史 schema 解码能力会阻止配置规范化，不能以 Region 下架重放测试证明该情况已解决。公共 HTTP 入口尚未切换。
+
+`EncryptedIntentWriter.ReplayCreate/ReplayRevise` 在事务内先锁定并复核当前成员写权限，再按租户、操作类型与幂等键单表读取原操作、验证原摘要并读取原修订及当前指针。已持久化的原请求可在新操作准入关闭后返回，包括仍 pending 的 Operation；这不意味着业务任务已经运行完成。同键不同内容拒绝，成员权限撤销后也不能重放。找不到原操作的查询不授予写权限，随后实际写入仍重新检查成员、幂等、配额和版本，以吸收并发创建。
 
 ## 事务接口
 

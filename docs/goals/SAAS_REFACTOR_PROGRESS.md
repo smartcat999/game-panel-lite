@@ -340,3 +340,10 @@
 - 新增 `EncryptedIntentWriter` 在组合阶段绑定真实 Store 与密钥实现；数据库原有权限、配额、版本事务复核继续保留。缺少 Writer／Normalizer／Admission 时不能构造应用服务，不提供默认准入放行。
 - 测试使用真实 Terraria Provider、AES/HMAC 与 SQLite，验证拒绝 Region／资产／客户端密文／非法配置、规范化后重试身份稳定、受保护更新及调用方输入不被清除。Admission 是明确的测试夹具，不是生产准入。工作区定向 race 与独立全量 Go（含架构检查）／vet／应用组合 race 全部通过，独立日志 `/tmp/gamepanel-instanceapp-index-all.log`、`/tmp/gamepanel-instanceapp-index-vet.log`、`/tmp/gamepanel-instanceapp-index-race.log`。本批未重跑外部 PostgreSQL/MQ，独立临时快照清理。
 - 真实 Region／资产准入及事务一致性尚未实现；正式 HTTP 接入前还需区分旧操作重放与新操作可售性检查。公共 API 未切换，完整六阶段 Goal 不变；本批无生产 SQL 改动，其他草稿保留。
+
+### 2026-09-08 授权重放与新操作准入分离
+
+- Writer 增加授权重放查询，复用原创建／更新的摘要编码，保持历史 h1 字节兼容。事务内复核成员写权限，单表按租户／操作类型／幂等键读取并验证；同键不同参数拒绝，缺失原操作返回未命中。
+- 应用服务规范化后先查重放，仅新操作执行 Region／资产准入。已持久化操作不被新操作下架规则阻止，但原 Operation 仍可能 pending；不把重放成功当成运行完成。后续写事务继续复核权限与幂等，早期查询不授予永久权限。
+- 真实 SQLite 应用测试覆盖创建／更新重放、下架后原操作返回、不同参数冲突、新操作仍拒绝、成员撤销后重放拒绝。Store 共用测试覆盖较新修订后的原操作读取、跨用户拒绝、摘要冲突与未命中。工作区 race 与独立全量 Go（含架构检查）／vet／SQLite+PostgreSQL 应用及重放 race 全部通过。独立日志 `/tmp/gamepanel-replay-admission-index-all.log`、`/tmp/gamepanel-replay-admission-index-vet.log`、`/tmp/gamepanel-replay-admission-index-integration.log`；专用临时数据库与快照清理。
+- 真实 Region／资产目录与事务内准入仍待实现，历史 Provider／schema 移除时的规范化兼容尚未解决；公共 API 未切换，六阶段 Goal 保持进行中。新增查询无 JOIN，其他草稿保留。
