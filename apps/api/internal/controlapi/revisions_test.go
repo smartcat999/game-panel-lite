@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlclient"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/serviceauth"
@@ -89,7 +90,7 @@ func TestRevisionAPIWithMutualTLS(t *testing.T) {
 		if region != "east" || got != event {
 			return regional.RevisionSnapshot{}, regional.ErrRevisionUnavailable
 		}
-		return regional.RevisionSnapshot{Event: got, CurrentSpecGeneration: 1}, nil
+		return regional.RevisionSnapshot{Event: got, CurrentSpecGeneration: 1, IntentVersion: 1, DesiredState: "running", Revision: instances.Revision{ID: got.RevisionID, ServerID: got.ServerID, SpecGeneration: got.SpecGeneration, Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Configuration: instances.ProtectedConfiguration{KeyID: "test", Ciphertext: []byte("opaque")}, Resources: instances.Resources{CPU: 1, MemoryMB: 256}}}}, nil
 	}), auth, 1024)
 	if err != nil {
 		t.Fatal(err)
@@ -109,6 +110,14 @@ func TestRevisionAPIWithMutualTLS(t *testing.T) {
 	}
 	server.StartTLS()
 	defer server.Close()
+	remote, err := controlclient.New(controlclient.Options{Endpoint: server.URL, RegionID: "east", Certificate: issue("spiffe://test/region/east", true, false), ServerCAs: pool, Timeout: time.Second, MaxResponseBytes: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close()
+	if snapshot, err := remote.GetRevision(context.Background(), event); err != nil || snapshot.Event != event {
+		t.Fatalf("regional client round trip: %v", err)
+	}
 	body, _ := json.Marshal(event)
 	for _, test := range []struct {
 		name, identity   string

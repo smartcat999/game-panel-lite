@@ -2,6 +2,7 @@ package regional
 
 import (
 	"errors"
+
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 )
 
@@ -16,4 +17,15 @@ type RevisionSnapshot struct {
 	CurrentSpecGeneration int64                       `json:"currentSpecGeneration"`
 	DesiredState          string                      `json:"desiredState"`
 	IntentVersion         int64                       `json:"intentVersion"`
+}
+
+// ValidateFor checks snapshot identity and monotonic versions, not execution authority.
+func (s RevisionSnapshot) ValidateFor(event instances.RevisionAvailable) error {
+	if event.Validate() != nil || s.Event != event || s.Revision.ID != event.RevisionID ||
+		s.Revision.ServerID != event.ServerID || s.Revision.SpecGeneration != event.SpecGeneration ||
+		s.CurrentSpecGeneration < event.SpecGeneration || s.IntentVersion < 1 ||
+		(s.DesiredState != "running" && s.DesiredState != "stopped") || s.Revision.Specification.Validate() != nil {
+		return errors.New("revision snapshot does not match notification")
+	}
+	return nil
 }

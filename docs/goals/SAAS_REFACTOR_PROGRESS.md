@@ -282,3 +282,11 @@
 - 本批没有新增或改变 SQL 查询；Store 仅增加领域错误映射，保留原 NotFound 兼容。模块架构门禁限制服务身份和 HTTP 层对具体存储／运行时的依赖。数据库访问约束同步进入模块化方案。
 - 工作区与独立暂存快照的全量 Go（含架构门禁）／vet，以及真实本地 TLS、区域与 Store race 测试全部通过。独立日志 `/tmp/gamepanel-mtls-index-all.log`、`/tmp/gamepanel-mtls-index-vet.log`、`/tmp/gamepanel-mtls-index-race.log`。证书只在测试内存生成，没有提交真实凭证；本批尚未运行独立 CLI 与 PostgreSQL 的端到端连接测试。
 - Region 远程客户端、任务 materializer、配置保护器、权益与有限期授权仍待实现。六阶段 Goal 保持进行中，生产证书生命周期与跨主机交付不以本次本地测试替代。
+
+### 2026-09-08 区域修订 HTTPS 客户端与快照校验
+
+- 新增 `controlclient`，组合根注入固定 Region、HTTPS 地址、客户端证书／服务端 CA、超时及载荷上限。验证服务端证书和主机名，禁用重定向与环境代理，限制响应读取；不在任务错误中暴露 URL 或服务端错误正文。
+- `RevisionSnapshot.ValidateFor` 校验完整事件、实例／修订身份、代数、正意图版本、允许的期望状态及规格。历史配置与较新的停止意图可共存，读取失败不返回部分数据。没有新增 SQL，也没有把快照变成执行授权。
+- 真实 mTLS 覆盖客户端→现有控制面 Handler 往返；HTTPS 测试覆盖篡改修订、旧代数、非法状态、尾随／超大响应、404／403／503、重定向拒绝、超时与 context 取消。
+- 初次超时夹具因未消费请求体阻塞在测试服务 Close；对已确认的测试进程取 goroutine 堆栈定位后，修复读取与明确清理出口。修复后工作区相关 race 全部通过；独立提交快照全量 Go（含架构门禁）／vet／相关 race 全部通过，日志 `/tmp/gamepanel-controlclient-index-all.log`、`/tmp/gamepanel-controlclient-index-vet.log`、`/tmp/gamepanel-controlclient-index-race.log`。本批未改 SQL，未重跑外部 PostgreSQL／Broker 集成，前端及其他草稿未纳入提交。
+- 客户端尚未接入区域持久任务进程；任务领取／恢复、快照持久化、配置保护器和有限期执行授权继续推进。此批不代表两个完整 Region、游戏交付、生产证书生命周期或容量验收完成。
