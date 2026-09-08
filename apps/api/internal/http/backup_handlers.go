@@ -61,7 +61,7 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).Create(server.ID, dataDir)
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).CreateContext(r.Context(), server.ID, dataDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -218,7 +218,7 @@ func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).Create(server.ID, dataDir)
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).WithMetadata(archiveMetadata(server)).CreateContext(r.Context(), server.ID, dataDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

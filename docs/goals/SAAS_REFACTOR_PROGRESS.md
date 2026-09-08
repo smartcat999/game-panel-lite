@@ -128,6 +128,13 @@
 - 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-upload-entry-all.log`、`/tmp/gamepanel-upload-entry-vet.log`；修正后的入口／backup race 通过，日志 `/tmp/gamepanel-upload-entry-integration-fixed.log`。S3 服务在本批为协议夹具，真实 MinIO Adapter／Worker 证据沿用上一批，未冒充实际 OSS 部署。无 SQL 或历史迁移改动，其他草稿保留。
 - 文档说明显式迁移与运行、区域统一目标 StorageID、归档目录必须实际可访问；多个后端尚不能抢同批任务，跨 Node 归档交付不可由路径配置推定完成。授权协调器、Node 一致快照与归档准备链路仍待接入，完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 可取消归档读取与目录约束
+
+- 检查现有归档实现发现不接收 Context。本批新增 CreateContext／CreateSubtreeContext，旧接口兼容；目录遍历、分块读取与成功返回前检查取消，并在取消时关闭源文件。手动备份和存档快照 HTTP 调用传递请求 Context，不再因调用方已取消仍无条件继续复制。
+- 源文件通过 os.Root 读取，拒绝符号链接、非普通文件并复核实际打开文件类型；失败返回空路径并清理半成品。该保护要求调用方稳定源目录，尚不代表任务互斥、游戏停服或物理隔离。
+- 测试覆盖已取消调用不产生输出、复制中取消后不继续消费全部源、符号链接失败后清理半成品；原有归档内容、子树路径和恢复回归保留。独立快照全量 Go（含架构）、vet、backup／HTTP race 通过，日志 `/tmp/gamepanel-archive-context-all.log`、`/tmp/gamepanel-archive-context-vet.log`、`/tmp/gamepanel-archive-context-race.log`。
+- 无 SQL、迁移或前端变更，未重跑外部服务。归档取消仅为协作式保护；区域授权协调器、互斥 Node 快照、稳定归档交付与用户异步 API 仍未接通。保留其他草稿，完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

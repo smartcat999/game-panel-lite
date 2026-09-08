@@ -2,6 +2,7 @@ package backup
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -22,13 +23,27 @@ func NewService(dataDir string) *Service {
 }
 
 func (s *Service) Create(instanceID string, sourceDir string) (string, int64, error) {
-	return s.create(instanceID, sourceDir, sourceDir)
+	return s.CreateContext(context.Background(), instanceID, sourceDir)
+}
+
+// CreateContext archives a caller-stabilized directory. Cancellation bounds
+// cooperative file copying; the caller still owns execution authority and locks.
+func (s *Service) CreateContext(ctx context.Context, instanceID, sourceDir string) (string, int64, error) {
+	return s.create(ctx, instanceID, sourceDir, sourceDir)
 }
 
 // CreateSubtree archives only the requested subtree while preserving its path
 // relative to rootDir. This keeps save-only backups small and still allows the
 // regular Restore method to put every file back in its original location.
 func (s *Service) CreateSubtree(instanceID string, rootDir string, relativeSubtree string) (string, int64, error) {
+	return s.CreateSubtreeContext(context.Background(), instanceID, rootDir, relativeSubtree)
+}
+
+func (s *Service) CreateSubtreeContext(ctx context.Context, instanceID, rootDir, relativeSubtree string) (string, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return "", 0, err
+	}
+
 	cleanRoot, err := filepath.Abs(rootDir)
 	if err != nil {
 		return "", 0, err
@@ -59,10 +74,18 @@ func (s *Service) CreateSubtree(instanceID string, rootDir string, relativeSubtr
 	if err != nil || realRelative == ".." || filepath.IsAbs(realRelative) || strings.HasPrefix(realRelative, ".."+string(filepath.Separator)) {
 		return "", 0, fmt.Errorf("backup subtree resolves outside data directory")
 	}
-	return s.create(instanceID, cleanRoot, sourceDir)
+	return s.create(ctx, instanceID, cleanRoot, sourceDir)
 }
 
-func (s *Service) create(instanceID string, archiveRoot string, sourceDir string) (string, int64, error) {
+func (s *Service) create(ctx context.Context, instanceID string, archiveRoot string, sourceDir string) (string, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return "", 0, err
+	}
+	root, err := os.OpenRoot(archiveRoot)
+	if err != nil {
+		return "", 0, err
+	}
+	defer root.Close()
 	dir, err := safety.SafeJoin(s.dataDir, "backups", instanceID)
 	if err != nil {
 		return "", 0, err
@@ -90,8 +113,14 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		}
 	}
 	walkErr := filepath.WalkDir(sourceDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
 		}
 		if d.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("backup source contains a symbolic link")
@@ -103,16 +132,31 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		if filepath.ToSlash(rel) == metadataPath {
 			return fmt.Errorf("backup source uses reserved metadata filename")
 		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("backup source contains a non-regular file")
+		}
 		writer, err := zipper.Create(rel)
 		if err != nil {
 			return err
 		}
-		in, err := os.Open(path)
+		in, err := root.Open(rel)
 		if err != nil {
 			return err
 		}
 		defer in.Close()
-		_, err = io.Copy(writer, in)
+		info, err := in.Stat()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("backup source is not a regular file")
+		}
+		stop := context.AfterFunc(ctx, func() { _ = in.Close() })
+		defer stop()
+		_, err = io.Copy(writer, archiveContextReader{ctx: ctx, source: in})
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return err
 	})
 	closeErr := zipper.Close()
@@ -128,6 +172,9 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 	}
 	info, err := os.Stat(target)
 	if err != nil {
+		return "", 0, err
+	}
+	if err := ctx.Err(); err != nil {
 		return "", 0, err
 	}
 	completed = true
@@ -202,4 +249,17 @@ func RestoreArchiveChecked(source io.ReaderAt, size int64, targetDir string, hoo
 	}
 	defer root.Close()
 	return restoreFiles(root, reader.File, hooks.Commit)
+}
+
+// Keep io.Copy on its bounded read loop rather than an uncancellable WriterTo.
+type archiveContextReader struct {
+	ctx    context.Context
+	source io.Reader
+}
+
+func (r archiveContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.source.Read(p)
 }
