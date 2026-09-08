@@ -151,7 +151,7 @@ func forbiddenImport(file, imported string) string {
 		return "domain must not depend on transport, services or infrastructure"
 	}
 	if strings.HasPrefix(imported, api+"provider/") && imported != api+"provider/runtimecatalog" &&
-		!under("provider") && !under("app") {
+		!under("provider") && !under("app") && file != "apps/api/cmd/region-scheduler/main.go" {
 		return "concrete game providers belong in provider implementations or the composition root"
 	}
 	if under("runtime") && (strings.HasPrefix(imported, api+"provider") || strings.HasPrefix(imported, api+"http")) {
@@ -183,6 +183,8 @@ func TestImportRules(t *testing.T) {
 		{"apps/api/internal/modruntime/dependencies.go", api + "modcatalog", false},
 		{"apps/api/internal/modcatalog/metadata.go", api + "domain", false},
 		{"apps/api/internal/http/new.go", api + "provider/terraria", true},
+		{"apps/api/cmd/region-scheduler/main.go", api + "provider/terraria", false},
+		{"apps/api/cmd/region-scheduler/worker.go", api + "provider/terraria", true},
 		{"apps/agent/main.go", "github.com/smartcat999/game-panel-lite/internal/runtime/docker", false},
 		{"apps/agent/reconcile.go", "github.com/docker/docker/client", true},
 		{"internal/runtime/docker/adapter.go", "github.com/docker/docker/client", false},

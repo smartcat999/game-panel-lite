@@ -113,7 +113,8 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 		}
 		return key
 	}
-	protector, err := configprotection.New("configuration", map[string][]byte{"configuration": makeKey()}, 1024)
+	configurationKey := makeKey()
+	protector, err := configprotection.New("configuration", map[string][]byte{"configuration": configurationKey}, 1024)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,6 +290,10 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	available.Store(true)
 	if err := client.CheckBackup(ctx, backupTask.Request); err != nil {
 		t.Fatal("recovered backup check failed", err)
+	}
+	if binary := os.Getenv("GAMEPANEL_TEST_SCHEDULER_BINARY"); binary != "" {
+		schedulerDSN, schedulerSchema := newSchema()
+		testSchedulerProcess(t, ctx, binary, global, admin, schedulerDSN, schedulerSchema, o, configurationKey, protector, fingerprint, saved.Revision.Specification, plaintext, &available)
 	}
 	if _, err := admin.ExecContext(ctx, "UPDATE "+globalSchema+".logical_servers SET intent_version=intent_version+1 WHERE id=$1", event.ServerID); err != nil {
 		t.Fatal(err)

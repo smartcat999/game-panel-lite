@@ -57,7 +57,7 @@ func (s *RegionalStore) ConfigureRegionalNodeAccess(ctx context.Context, policy 
 
 // regionalNodeAccess optionally holds a policy SHARE lock through admission.
 // Policy writers never lock Nodes, keeping the admission lock order acyclic.
-func regionalNodeAccess(tx *gorm.DB, organization string, lock bool) (map[string]bool, error) {
+func readRegionalNodePolicy(tx *gorm.DB, organization string, lock bool) (regional.NodeAccessPolicy, error) {
 	var row regionalNodeAccessRow
 	query := tx.Table("regional_node_access").Where("organization_id = ?", organization)
 	if lock {
@@ -65,18 +65,32 @@ func regionalNodeAccess(tx *gorm.DB, organization string, lock bool) (map[string
 	}
 	err := query.Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, regional.ErrNodeAccessDenied
+		return regional.NodeAccessPolicy{}, regional.ErrNodeAccessDenied
 	}
 	if err != nil {
-		return nil, err
+		return regional.NodeAccessPolicy{}, err
 	}
 	policy := regional.NodeAccessPolicy{OrganizationID: row.OrganizationID, Enabled: row.Enabled, Version: row.Version}
 	if json.Unmarshal([]byte(row.NodeIDs), &policy.NodeIDs) != nil || policy.Validate() != nil || !policy.Enabled {
-		return nil, regional.ErrNodeAccessDenied
+		return regional.NodeAccessPolicy{}, regional.ErrNodeAccessDenied
+	}
+	return policy, nil
+}
+
+func regionalNodeAccess(tx *gorm.DB, organization string, lock bool) (map[string]bool, error) {
+	policy, err := readRegionalNodePolicy(tx, organization, lock)
+	if err != nil {
+		return nil, err
 	}
 	allowed := make(map[string]bool, len(policy.NodeIDs))
 	for _, id := range policy.NodeIDs {
 		allowed[id] = true
 	}
 	return allowed, nil
+}
+
+// RegionalNodeAccessPolicy returns the current enabled operator policy. Admission
+// still rechecks it under lock; a read is not a durable permission grant.
+func (s *RegionalStore) RegionalNodeAccessPolicy(ctx context.Context, organization string) (regional.NodeAccessPolicy, error) {
+	return readRegionalNodePolicy(s.db.WithContext(ctx), organization, false)
 }

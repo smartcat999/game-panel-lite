@@ -257,6 +257,13 @@
 - 真实 PostgreSQL 与 Terraria Provider 验证同一节点两个实例的资源预留使用不同主机端口、重复请求恢复原端口、范围排除旧端口时拒绝、批量方案跳过主／附加端口冲突且查询次数不增加；共享函数验证输入不变及上下界。独立快照全量 Go（含架构）、vet、真实 PG／workload race 均通过。日志 `/tmp/gamepanel-port-window-all.log`、`/tmp/gamepanel-port-window-vet.log`、`/tmp/gamepanel-port-window-integration.log`。
 - 本批未启动真实游戏容器，也未验证宿主机外部程序占用端口。范围仍由受信协调配置提供，跨窗口遍历、完整进程入口、商业权益及 Node 执行授权继续待实现。没有新增 SQL 迁移或服务层级。
 
+### 区域调度进程实际运行
+
+- 新增 `region-scheduler` 组合入口，接入区域数据库、全局 mTLS 客户端、私有配置密钥、Provider catalog、租户节点策略、架构约束与端口窗口。单次调度和退避复用已有模块；配置不合法或指定 catalog 不存在时拒绝启动。架构检查仅允许该 `main.go` 注册具体 Provider，其他业务文件继续禁止直接依赖具体游戏。
+- 密钥文件有界读取、严格字段与尾部检查、AES-256 校验，原始字节缓冲清除；错误与运行日志不输出 DSN、密钥或游戏配置。现有节点策略新增只读适配供组合入口使用，实际准入仍在事务中锁定复核。
+- 真实二进制在独立区域 schema 运行，通过全局真实 Handler／mTLS 读取配置；测试先返回 503 并观察持久退避，再恢复接口并验证节点及端口预留和 SIGINT 正常退出。节点心跳为夹具，实例无外部资产，未运行真实游戏。证据 `/tmp/gamepanel-scheduler-entry-integration.log` 含 actual regional scheduler process 记录；相关 keyring、PG race 回归同时执行。
+- 运行方法及副本一致配置要求见 [区域调度入口](../architecture/regional-scheduler-running.md)。独立快照全量 Go（含架构）、vet、真实进程 mTLS／PG race 均通过；全量／静态检查记录 `/tmp/gamepanel-scheduler-entry-all.log`、`/tmp/gamepanel-scheduler-entry-vet.log`。Node 执行任务与授权、商业权益和用户级指定节点权限仍待实现，不能把 `reserved` 当作用户开服成功。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
