@@ -212,4 +212,3 @@ func (s *Store) GetServerOperation(ctx context.Context, organizationID, operatio
 	}
 	return op, nil
 }
-

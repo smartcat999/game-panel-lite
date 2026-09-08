@@ -41,4 +41,3 @@ func (c *RuntimeAdapterClient) UpdateResources(ctx context.Context, runtimeID st
 	}
 	return ErrUpdateNotSupported
 }
-

@@ -156,4 +156,3 @@ func (s *SwitchableAdapter) UpdateWorkloadResources(ctx context.Context, runtime
 	}
 	return fmt.Errorf("runtime adapter does not support dynamic resource updates")
 }
-

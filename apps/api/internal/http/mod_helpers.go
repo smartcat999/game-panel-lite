@@ -362,7 +362,6 @@ func hydrateModGameMetadata(item *domain.ModFile) {
 	}
 }
 
-
 func isTModPackage(fileName string) bool {
 	return strings.EqualFold(filepath.Ext(fileName), ".tmod")
 }

@@ -249,4 +249,3 @@ func (h *Handler) getOperationStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeError(w, http.StatusNotFound, "operation not found")
 }
-

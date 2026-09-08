@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -80,6 +81,20 @@ func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list compute nodes: "+err.Error())
 		return
 	}
+	regionFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("region")))
+	if regionFilter != "" && regionFilter != "all" {
+		filtered := make([]domain.ComputeNode, 0, len(nodes))
+		for _, n := range nodes {
+			reg := strings.ToLower(strings.TrimSpace(n.Region))
+			if reg == "" {
+				reg = "hk"
+			}
+			if reg == regionFilter {
+				filtered = append(filtered, n)
+			}
+		}
+		nodes = filtered
+	}
 	writeJSON(w, http.StatusOK, nodes)
 }
 
@@ -143,11 +158,12 @@ func (h *Handler) createNode(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateNodeRequest struct {
-	Name     *string `json:"name"`
-	Region   *string `json:"region"`
-	PublicIP *string `json:"publicIp"`
-	Host     *string `json:"host"`
-	Port     *int    `json:"port"`
+	Name          *string `json:"name"`
+	Region        *string `json:"region"`
+	PublicIP      *string `json:"publicIp"`
+	Host          *string `json:"host"`
+	Port          *int    `json:"port"`
+	Unschedulable *bool   `json:"unschedulable"`
 }
 
 func (h *Handler) updateNode(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +194,9 @@ func (h *Handler) updateNode(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Port != nil && *req.Port > 0 {
 		patch.Port = req.Port
+	}
+	if req.Unschedulable != nil {
+		patch.Unschedulable = req.Unschedulable
 	}
 
 	node, err := h.store.UpdateNodeConfiguration(r.Context(), id, patch)
@@ -782,4 +801,214 @@ func writeNodeReportError(w http.ResponseWriter, err error) {
 		return
 	}
 	writeError(w, http.StatusInternalServerError, "failed to persist node report")
+}
+
+func (h *Handler) cordonNode(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	t := true
+	node, err := h.store.UpdateNodeConfiguration(r.Context(), id, store.NodeConfigurationPatch{
+		Unschedulable: &t,
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "node not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to cordon node: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, node)
+}
+
+func (h *Handler) uncordonNode(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	f := false
+	node, err := h.store.UpdateNodeConfiguration(r.Context(), id, store.NodeConfigurationPatch{
+		Unschedulable: &f,
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "node not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to uncordon node: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, node)
+}
+
+type drainNodeRequest struct {
+	TargetNodeID string `json:"targetNodeId,omitempty"`
+}
+
+type drainMigrationResult struct {
+	ServerID     string `json:"serverId"`
+	ServerName   string `json:"serverName"`
+	TargetNodeID string `json:"targetNodeId,omitempty"`
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
+}
+
+type drainNodeResponse struct {
+	NodeID        string                 `json:"nodeId"`
+	TotalServers  int                    `json:"totalServers"`
+	MigratedCount int                    `json:"migratedCount"`
+	FailedCount   int                    `json:"failedCount"`
+	Details       []drainMigrationResult `json:"details"`
+}
+
+func (h *Handler) drainNode(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	node, err := h.store.GetComputeNode(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "node not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get node: "+err.Error())
+		return
+	}
+
+	// 1. Cordon the node first so no new instances land on it during drain
+	t := true
+	if !node.Unschedulable {
+		_, err := h.store.UpdateNodeConfiguration(r.Context(), id, store.NodeConfigurationPatch{
+			Unschedulable: &t,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to cordon node: "+err.Error())
+			return
+		}
+	}
+
+	var req drainNodeRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	targetNodeID := strings.TrimSpace(req.TargetNodeID)
+
+	servers, err := h.store.ListGameServers(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list servers: "+err.Error())
+		return
+	}
+
+	var nodeServers []domain.GameServer
+	for _, s := range servers {
+		if (id == "node-local" && (s.NodeID == "" || s.NodeID == "node-local")) || s.NodeID == id {
+			nodeServers = append(nodeServers, s)
+		}
+	}
+
+	resp := drainNodeResponse{
+		NodeID:        id,
+		TotalServers:  len(nodeServers),
+		MigratedCount: 0,
+		FailedCount:   0,
+		Details:       make([]drainMigrationResult, 0, len(nodeServers)),
+	}
+
+	for _, s := range nodeServers {
+		res := h.drainSingleServer(r.Context(), s, targetNodeID, id)
+		resp.Details = append(resp.Details, res)
+		if res.Success {
+			resp.MigratedCount++
+		} else {
+			resp.FailedCount++
+		}
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) drainSingleServer(ctx context.Context, server domain.GameServer, preferredTargetNodeID, sourceNodeID string) drainMigrationResult {
+	unlock := h.lockServerMutation(server.ID)
+	defer unlock()
+
+	targetID := preferredTargetNodeID
+	if targetID != "" {
+		if targetID == sourceNodeID {
+			return drainMigrationResult{
+				ServerID:   server.ID,
+				ServerName: server.Name,
+				Success:    false,
+				Error:      "target node cannot be the node being drained",
+			}
+		}
+		if h.scheduler != nil {
+			if err := h.scheduler.ValidateNode(ctx, targetID, server); err != nil {
+				return drainMigrationResult{
+					ServerID:   server.ID,
+					ServerName: server.Name,
+					Success:    false,
+					Error:      fmt.Sprintf("target node %q invalid: %v", targetID, err),
+				}
+			}
+		}
+	} else {
+		if h.scheduler == nil {
+			return drainMigrationResult{
+				ServerID:   server.ID,
+				ServerName: server.Name,
+				Success:    false,
+				Error:      "scheduler not configured",
+			}
+		}
+		chosen, err := h.scheduler.Schedule(ctx, server)
+		if err != nil {
+			return drainMigrationResult{
+				ServerID:   server.ID,
+				ServerName: server.Name,
+				Success:    false,
+				Error:      fmt.Sprintf("no schedulable candidate found: %v", err),
+			}
+		}
+		if chosen.ID == sourceNodeID {
+			return drainMigrationResult{
+				ServerID:   server.ID,
+				ServerName: server.Name,
+				Success:    false,
+				Error:      "scheduler selected the node being drained",
+			}
+		}
+		targetID = chosen.ID
+	}
+
+	oldNodeID := server.NodeID
+	if oldNodeID == "" {
+		oldNodeID = "node-local"
+	}
+	before := server
+	now := time.Now().UTC()
+	server.NodeID = targetID
+	server.Spec.Generation++
+	server.Status.Phase = domain.PhasePending
+	server.Status.ActualState = domain.ActualUnknown
+	server.Status.LastTransitionAt = now
+	server.Status.Conditions = workload.SetCondition(server.Status.Conditions, domain.ServerCondition{
+		Type:               "Scheduled",
+		Status:             "True",
+		Reason:             "NodeDrainMigrated",
+		Message:            fmt.Sprintf("drained from node %s; migrated to node %s", oldNodeID, targetID),
+		ObservedGeneration: server.Spec.Generation,
+		LastTransitionAt:   now,
+	})
+
+	if err := h.store.MigrateGameServer(ctx, before, server); err != nil {
+		return drainMigrationResult{
+			ServerID:   server.ID,
+			ServerName: server.Name,
+			Success:    false,
+			Error:      fmt.Sprintf("failed to save migrated server: %v", err),
+		}
+	}
+
+	h.recordActivity(ctx, server.ID, "server.drain.migrated", fmt.Sprintf("Node drain migrated server %s from %s to %s", server.Name, oldNodeID, targetID), activityServerPayload(server))
+
+	return drainMigrationResult{
+		ServerID:     server.ID,
+		ServerName:   server.Name,
+		TargetNodeID: targetID,
+		Success:      true,
+	}
 }

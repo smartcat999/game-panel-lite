@@ -49,7 +49,7 @@ func Open(path string) (*Store, error) {
 }
 
 func initialize(db *gorm.DB) (*Store, error) {
-	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}, &domain.Organization{}, &domain.OrganizationMember{}, &domain.TenantQuota{}, &domain.ComputeNode{}, &domain.NodeTask{}, &domain.WorkloadAssignment{}, &domain.WorkloadObservation{}, &ExecutionLease{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}, &domain.Organization{}, &domain.OrganizationMember{}, &domain.TenantQuota{}, &domain.ComputeNode{}, &domain.NodeTask{}, &domain.WorkloadAssignment{}, &domain.WorkloadObservation{}, &ExecutionLease{}, &domain.CreditTransaction{}, &domain.OAuthIdentity{}); err != nil {
 		sqlDB, _ := db.DB()
 		if sqlDB != nil {
 			_ = sqlDB.Close()
@@ -937,6 +937,9 @@ func (s *Store) GetOrganization(ctx context.Context, id string) (domain.Organiza
 
 func (s *Store) CreateOrganization(ctx context.Context, org *domain.Organization, ownerUserID string) error {
 	return s.Transaction(ctx, func(tx *Store) error {
+		if org.Credits == 0 {
+			org.Credits = 100 // Default 100 credits for newly created organizations
+		}
 		if err := tx.db.WithContext(ctx).Create(org).Error; err != nil {
 			return err
 		}

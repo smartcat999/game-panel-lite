@@ -19,7 +19,10 @@ import {
   AlertCircle,
   AlertTriangle,
   Pencil,
-  Settings2
+  Settings2,
+  Ban,
+  ArrowRightLeft,
+  Loader2
 } from "lucide-react";
 import {
   listComputeNodes,
@@ -27,10 +30,12 @@ import {
   updateComputeNode,
   deleteComputeNode,
   pingComputeNode,
-  getNodeJoinCommand
+  getNodeJoinCommand,
+  cordonComputeNode,
+  drainComputeNode
 } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
-import type { ComputeNode, NodeJoinCommand } from "@/lib/types";
+import type { ComputeNode, NodeJoinCommand, DrainNodeResponse } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
@@ -49,6 +54,12 @@ export function NodeManagement() {
   const [joinCommandData, setJoinCommandData] = useState<NodeJoinCommand | null>(null);
   const [isJoinLoading, setIsJoinLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Drain state
+  const [drainingNode, setDrainingNode] = useState<ComputeNode | null>(null);
+  const [drainTargetNodeId, setDrainTargetNodeId] = useState<string>("");
+  const [drainResult, setDrainResult] = useState<DrainNodeResponse | null>(null);
+  const [drainError, setDrainError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -110,6 +121,27 @@ export function NodeManagement() {
     mutationFn: pingComputeNode,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["compute-nodes"] });
+    }
+  });
+
+  const cordonMutation = useMutation({
+    mutationFn: ({ id, unschedulable }: { id: string; unschedulable: boolean }) =>
+      cordonComputeNode(id, unschedulable),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["compute-nodes"] });
+    }
+  });
+
+  const drainMutation = useMutation({
+    mutationFn: ({ id, targetNodeId }: { id: string; targetNodeId?: string }) =>
+      drainComputeNode(id, targetNodeId),
+    onSuccess: async (data: DrainNodeResponse) => {
+      await queryClient.invalidateQueries({ queryKey: ["compute-nodes"] });
+      await queryClient.invalidateQueries({ queryKey: ["game-servers"] });
+      setDrainResult(data);
+    },
+    onError: (err: Error) => {
+      setDrainError(err.message || "Failed to drain node");
     }
   });
 
@@ -218,13 +250,29 @@ export function NodeManagement() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className={cn(
                         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold",
                         isOnline ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
                       )}>
                         <span className={cn("size-1.5 rounded-full", isOnline ? "bg-emerald-400 animate-pulse" : "bg-rose-400")} />
                         {isOnline ? (node.pingLatencyMs ? `${node.pingLatencyMs}ms` : (isZh ? "在线" : "Online")) : (isZh ? "离线" : "Offline")}
+                      </span>
+                      <span className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.2 text-[9px] font-bold",
+                        node.unschedulable ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" : "bg-slate-800/80 text-slate-400"
+                      )}>
+                        {node.unschedulable ? (
+                          <>
+                            <Ban className="size-2.5" />
+                            <span>{isZh ? "禁止调度" : "Cordoned"}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="size-2.5 text-emerald-400" />
+                            <span>{isZh ? "可调度" : "Schedulable"}</span>
+                          </>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -319,8 +367,39 @@ export function NodeManagement() {
                       className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-900 hover:text-white transition"
                     >
                       <Activity className="size-3 text-panel-green" />
-                      <span>{isZh ? "刷新状态" : "Refresh status"}</span>
+                      <span>{isZh ? "刷新" : "Ping"}</span>
                     </button>
+                    {canManageNodes && (
+                      <button
+                        type="button"
+                        onClick={() => cordonMutation.mutate({ id: node.id, unschedulable: !node.unschedulable })}
+                        disabled={cordonMutation.isPending}
+                        title={node.unschedulable ? (isZh ? "恢复节点调度" : "Uncordon node") : (isZh ? "暂停节点调度 (Cordon)" : "Cordon node")}
+                        className={cn(
+                          "flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition",
+                          node.unschedulable ? "text-amber-400 hover:bg-amber-950/40 hover:text-amber-300" : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                        )}
+                      >
+                        <Ban className={cn("size-3", node.unschedulable ? "text-amber-400" : "text-slate-400")} />
+                        <span>{node.unschedulable ? (isZh ? "解封" : "Uncordon") : (isZh ? "隔离" : "Cordon")}</span>
+                      </button>
+                    )}
+                    {canManageNodes && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDrainingNode(node);
+                          setDrainTargetNodeId("");
+                          setDrainResult(null);
+                          setDrainError(null);
+                        }}
+                        title={isZh ? "安全排空并迁移实例 (Node Drain)" : "Safely drain and migrate instances"}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-900 hover:text-sky-400 transition"
+                      >
+                        <ArrowRightLeft className="size-3 text-sky-400" />
+                        <span>{isZh ? "排空" : "Drain"}</span>
+                      </button>
+                    )}
                   </div>
 
                   {!node.isLocal && canManageNodes && (
@@ -698,6 +777,176 @@ export function NodeManagement() {
                   : isZh ? "确认移除节点" : "Confirm Remove"}
               </Button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Drain Node Modal via createPortal */}
+      {mounted && drainingNode && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !drainMutation.isPending) {
+              setDrainingNode(null);
+              setDrainResult(null);
+            }
+          }}
+        >
+          <div className="relative w-full max-w-lg rounded-2xl border border-sky-950/80 bg-[#0e1422] p-6 shadow-2xl shadow-black/90 space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-slate-800/80 pb-3.5">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400">
+                <ArrowRightLeft className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white tracking-wide">
+                  {isZh ? "节点安全排空与实例迁移 (Node Drain)" : "Safe Node Drain & Evacuation"}
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {drainingNode.name}
+                  {drainingNode.region ? ` (${drainingNode.region})` : ""}
+                  {" · "}
+                  {isZh ? `当前承载 ${drainingNode.runningCount} 个服务` : `${drainingNode.runningCount} active servers`}
+                </p>
+              </div>
+            </div>
+
+            {/* Content */}
+            {!drainResult ? (
+              <div className="space-y-3.5 text-xs text-slate-300">
+                <div className="rounded-xl border border-sky-900/40 bg-sky-950/20 p-3.5 leading-relaxed space-y-2">
+                  <p className="font-semibold text-sky-200">
+                    {isZh
+                      ? `即将排空节点 "${drainingNode.name}"。`
+                      : `You are about to drain node "${drainingNode.name}".`}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {isZh
+                      ? "排空过程将自动将目标节点标记为「禁止调度 (Cordoned)」，规避新的工作负载分配，并将其上承载的游戏服务器安全漂移迁移至其他健康计算节点。"
+                      : "Draining automatically sets this node to 'Cordoned' (unschedulable) and safely migrates all running servers to other healthy nodes in the cluster."}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-slate-400">
+                    {isZh ? "目标迁移节点（默认由调度器按资源自动分配）" : "Target Node (Default: auto-scheduling)"}
+                  </label>
+                  <select
+                    value={drainTargetNodeId}
+                    onChange={(e) => setDrainTargetNodeId(e.target.value)}
+                    disabled={drainMutation.isPending}
+                    className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white outline-none focus:border-panel-green"
+                  >
+                    <option value="">
+                      {isZh ? "✨ 智能集群均衡调度 (Kube-Scheduler 自动调度)" : "✨ Auto-Schedule (Kube-Scheduler Balanced)"}
+                    </option>
+                    {nodes
+                      .filter((n) => n.id !== drainingNode.id && !n.unschedulable && n.status === "online")
+                      .map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {n.name} ({n.region || "Global"} · {n.cpuCores}核 {(n.memoryTotalMb / 1024).toFixed(0)}G)
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {drainError && (
+                  <div className="rounded-lg border border-rose-900/50 bg-rose-950/20 p-2.5 text-[11px] text-rose-400 flex items-center gap-1.5">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    <span>{drainError}</span>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2.5 border-t border-slate-800/80 pt-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={drainMutation.isPending}
+                    onClick={() => {
+                      setDrainingNode(null);
+                      setDrainResult(null);
+                    }}
+                    className="h-9 px-4 text-xs font-medium"
+                  >
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={drainMutation.isPending}
+                    onClick={() => drainMutation.mutate({ id: drainingNode.id, targetNodeId: drainTargetNodeId || undefined })}
+                    className="h-9 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-950/50 flex items-center gap-1.5"
+                  >
+                    {drainMutation.isPending ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        <span>{isZh ? "正在排空与迁移..." : "Draining..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowRightLeft className="size-3.5" />
+                        <span>{isZh ? "开始安全排空" : "Start Safe Drain"}</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Results View */
+              <div className="space-y-3.5 text-xs">
+                <div className={cn(
+                  "rounded-xl border p-3.5 space-y-1.5",
+                  drainResult.failedCount === 0
+                    ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-300"
+                    : "border-amber-900/40 bg-amber-950/20 text-amber-300"
+                )}>
+                  <p className="font-bold">
+                    {isZh
+                      ? `排空完成：已扫描 ${drainResult.totalServers} 个实例，成功迁移 ${drainResult.migratedCount} 个${drainResult.failedCount > 0 ? `，失败 ${drainResult.failedCount} 个` : ""}`
+                      : `Drain complete: ${drainResult.migratedCount} / ${drainResult.totalServers} migrated successfully.`}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {isZh
+                      ? "目标节点已标记为「禁止调度」，防止后续新实例分配。"
+                      : "The node has been cordoned to prevent new workload assignments."}
+                  </p>
+                </div>
+
+                {drainResult.details && drainResult.details.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2 font-mono text-[11px]">
+                    {drainResult.details.map((d) => (
+                      <div key={d.serverId} className="flex items-center justify-between py-1 border-b border-slate-900 last:border-0">
+                        <div className="flex items-center gap-1.5 truncate">
+                          {d.success ? (
+                            <Check className="size-3 text-emerald-400 shrink-0" />
+                          ) : (
+                            <AlertCircle className="size-3 text-rose-400 shrink-0" />
+                          )}
+                          <span className="text-white truncate">{d.serverName}</span>
+                        </div>
+                        <span className={cn("text-[10px] shrink-0", d.success ? "text-emerald-400" : "text-rose-400")}>
+                          {d.success ? (isZh ? `已迁移 → ${d.targetNodeId}` : `Migrated → ${d.targetNodeId}`) : d.error}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end border-t border-slate-800/80 pt-3">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setDrainingNode(null);
+                      setDrainResult(null);
+                    }}
+                    className="h-9 px-4 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs"
+                  >
+                    {t("close")}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body

@@ -71,4 +71,3 @@ func (m *MockAdapter) SendCommandWorkload(context.Context, string, string) error
 func (m *MockAdapter) UpdateWorkloadResources(context.Context, string, domain.ServerResources) error {
 	return nil
 }
-

@@ -380,8 +380,40 @@ type Organization struct {
 	Name      string    `json:"name"`
 	Slug      string    `json:"slug" gorm:"uniqueIndex"`
 	Plan      string    `json:"plan"`
+	Credits   int64     `json:"credits" gorm:"default:0"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type CreditTransaction struct {
+	ID             string    `json:"id" gorm:"primaryKey"`
+	OrganizationID string    `json:"organizationId" gorm:"index"`
+	Amount         int64     `json:"amount"` // positive for top-up, negative for deduction
+	BalanceAfter   int64     `json:"balanceAfter"`
+	Type           string    `json:"type"` // "topup", "server_create", "server_renew", "refund"
+	Description    string    `json:"description"`
+	CreatedBy      string    `json:"createdBy,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type OAuthIdentity struct {
+	ID             string    `json:"id" gorm:"primaryKey"`
+	UserID         string    `json:"userId" gorm:"index"`
+	Provider       string    `json:"provider" gorm:"index:idx_provider_user,unique"`
+	ProviderUserID string    `json:"providerUserId" gorm:"index:idx_provider_user,unique"`
+	Email          string    `json:"email"`
+	Name           string    `json:"name"`
+	AvatarURL      string    `json:"avatarUrl"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type RegionInfo struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	NameEn    string `json:"nameEn"`
+	Flag      string `json:"flag"`
+	Available bool   `json:"available"`
+	NodeCount int    `json:"nodeCount,omitempty"`
 }
 
 type OrganizationMember struct {

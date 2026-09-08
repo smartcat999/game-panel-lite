@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Coins,
   Eye,
   KeyRound,
   Shield,
@@ -16,8 +17,10 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast-context";
 import { Button, Input } from "@/components/ui";
 import {
+  adminTopUpCredits,
   createUser,
   deleteUser,
+  listOrganizations,
   listUsers,
   resetUserPassword,
   updateRegistrationSetting,
@@ -45,6 +48,11 @@ export function UserManagement() {
 
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserAccount | null>(null);
 
+  const [topUpOrgId, setTopUpOrgId] = useState<string>("");
+  const [topUpAmount, setTopUpAmount] = useState<number>(100);
+  const [topUpDesc, setTopUpDesc] = useState<string>("");
+  const [topUpOpen, setTopUpOpen] = useState(false);
+
   const authQuery = useAuthBootstrap();
 
   const usersQuery = useQuery({
@@ -52,9 +60,31 @@ export function UserManagement() {
     queryFn: listUsers
   });
 
+  const orgsQuery = useQuery({
+    queryKey: ["admin-organizations"],
+    queryFn: listOrganizations,
+  });
+
   const currentUser = authQuery.data?.account;
   const allowRegistration = authQuery.data?.allowRegistration ?? false;
   const users = usersQuery.data ?? [];
+  const orgs = orgsQuery.data ?? [];
+
+  const topUpMutation = useMutation({
+    mutationFn: () => adminTopUpCredits(topUpOrgId, topUpAmount, topUpDesc || "Admin manual top-up"),
+    onSuccess: async (tx) => {
+      toast.success(
+        isZh ? "额度充值成功" : "Credits added successfully",
+        isZh ? `已充值 ${tx.amount} 点券，当前可用余额: ${tx.balanceAfter}` : `Added ${tx.amount} credits. New balance: ${tx.balanceAfter}`
+      );
+      setTopUpOpen(false);
+      await orgsQuery.refetch();
+      await queryClient.invalidateQueries({ queryKey: ["user-credits"] });
+    },
+    onError: (err) => {
+      toast.error(isZh ? "充值失败" : "Top-up failed", err instanceof Error ? err.message : "");
+    }
+  });
 
   const regMutation = useMutation({
     mutationFn: (allowed: boolean) => updateRegistrationSetting(allowed),
@@ -237,14 +267,31 @@ export function UserManagement() {
           </div>
 
           {canManageTeam && (
-            <Button
-              type="button"
-              onClick={() => setIsAddOpen(true)}
-              className="gap-2 shrink-0 h-9 px-4 text-xs font-bold"
-            >
-              <UserPlus className="size-3.5" />
-              <span>{isZh ? "添加新成员" : "Add Member"}</span>
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (orgs.length > 0 && orgs[0]) {
+                    setTopUpOrgId(orgs[0].id);
+                  }
+                  setTopUpOpen(true);
+                }}
+                className="gap-2 h-9 px-3.5 text-xs font-bold border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+              >
+                <Coins className="size-3.5 text-amber-400" />
+                <span>{isZh ? "额度充值" : "Top Up Quota"}</span>
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => setIsAddOpen(true)}
+                className="gap-2 h-9 px-4 text-xs font-bold"
+              >
+                <UserPlus className="size-3.5" />
+                <span>{isZh ? "添加新成员" : "Add Member"}</span>
+              </Button>
+            </div>
           )}
         </div>
 
@@ -516,6 +563,110 @@ export function UserManagement() {
         onConfirm={() => pendingDeleteUser && deleteMutation.mutate(pendingDeleteUser.id)}
         onCancel={() => setPendingDeleteUser(null)}
       />
+
+      {/* Top-Up Credits Modal */}
+      {topUpOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                  <Coins className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    {isZh ? "租户额度手动充值" : "Top Up Workspace Credits"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {isZh ? "由超级管理员向租户账户直充可用额度" : "Manual quota injection by administrator"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTopUpOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!topUpOrgId || topUpAmount <= 0) return;
+                topUpMutation.mutate();
+              }}
+              className="mt-4 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {isZh ? "目标租户空间" : "Target Organization"}
+                </label>
+                <select
+                  value={topUpOrgId}
+                  onChange={(e) => setTopUpOrgId(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-200 focus:border-panel-green focus:outline-none"
+                  required
+                >
+                  {orgs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} ({isZh ? "当前结余: " : "Bal: "}{o.credits ?? 0} {isZh ? "点券" : "pts"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {isZh ? "充值点券数量" : "Credits Amount"}
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100000}
+                  step={10}
+                  value={topUpAmount}
+                  onChange={(e) => setTopUpAmount(Number(e.target.value))}
+                  required
+                  className="w-full h-10 bg-slate-950 border-slate-800 focus:border-panel-green text-xs rounded-xl px-3 font-mono font-bold text-amber-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {isZh ? "操作说明 / 备注" : "Description / Reason"}
+                </label>
+                <Input
+                  type="text"
+                  value={topUpDesc}
+                  onChange={(e) => setTopUpDesc(e.target.value)}
+                  placeholder={isZh ? "例如：管理员后台手动充值 / 新用户扶持" : "e.g., Manual administrative top-up"}
+                  className="w-full h-10 bg-slate-950 border-slate-800 focus:border-panel-green text-xs rounded-xl px-3"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800/80">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setTopUpOpen(false)}
+                  className="h-9 px-4 text-xs font-medium text-slate-400 hover:text-white"
+                >
+                  {isZh ? "取消" : "Cancel"}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={topUpMutation.isPending || !topUpOrgId || topUpAmount <= 0}
+                  className="h-9 px-5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950"
+                >
+                  {topUpMutation.isPending ? (isZh ? "正在充值..." : "Processing...") : (isZh ? "确认充值" : "Confirm Top-Up")}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

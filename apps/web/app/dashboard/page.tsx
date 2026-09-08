@@ -30,6 +30,7 @@ import { isWorldOrBackupEventType } from "@/lib/feature-flags";
 import { gameServerStatus } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { getObservabilityMetrics, getSettings, listActivity, listBackups, listComputeNodes, listGameServers, listWorlds } from "@/lib/api";
+import { useCurrentRegion } from "@/components/region-switcher";
 import { usePermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import type { GameServerResource } from "@/lib/types";
@@ -70,8 +71,24 @@ export default function DashboardPage() {
   });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 5 * 60 * 1000 });
 
-  const servers = serversQuery.data ?? [];
-  const nodes = nodesQuery.data ?? [];
+  const { region } = useCurrentRegion();
+
+  const allServers = serversQuery.data ?? [];
+  const allNodes = nodesQuery.data ?? [];
+
+  // Filter servers & nodes by active cloud region
+  const nodes = region === "all"
+    ? allNodes
+    : allNodes.filter((n) => {
+        const reg = (n.region || "hk").toLowerCase();
+        return reg === region.toLowerCase();
+      });
+
+  const nodeIdsInRegion = new Set(nodes.map((n) => n.id));
+  const servers = region === "all"
+    ? allServers
+    : allServers.filter((s) => nodeIdsInRegion.has(s.nodeId || "node-local"));
+
   const activity = (activityQuery.data ?? []).filter((event) => !isWorldOrBackupEventType(event.type));
   const backups = backupsQuery.data ?? [];
   const worlds = worldsQuery.data ?? [];

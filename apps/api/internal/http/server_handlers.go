@@ -20,6 +20,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	serverctrl "github.com/smartcat999/game-panel-lite/apps/api/internal/server"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +46,7 @@ func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 			Status:      r.URL.Query().Get("status"),
 			Sort:        r.URL.Query().Get("sort"),
 			Direction:   r.URL.Query().Get("direction"),
+			Region:      r.URL.Query().Get("region"),
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -130,7 +132,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		server.Spec.Network.Port = summary.Port
 	}
 	if payload.HostPort != nil {
-		hostPort, err := h.resolveHostPort(r.Context(), *payload.HostPort, server.ID)
+		hostPort, err := h.resolveHostPort(r.Context(), *payload.HostPort, server.ID, server.NodeID)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -199,10 +201,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, err.Error())
 		return
 	}
-	nodeID := payload.NodeID
-	if strings.TrimSpace(nodeID) == "" {
-		nodeID = "node-local"
-	}
+	nodeID := strings.TrimSpace(payload.NodeID)
 	gameProvider, ok := h.provider.Get(payload.ProviderKey)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "unknown provider")
@@ -251,7 +250,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	}
 	id := uuid.NewString()
 	dataDir := filepath.Join(h.cfg.DataDir, "instances", id)
-	hostPort, err := h.resolveHostPort(r.Context(), payload.HostPort, "")
+	hostPort, err := h.resolveHostPort(r.Context(), payload.HostPort, "", nodeID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -294,8 +293,61 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+	if h.scheduler != nil {
+		if nodeID != "" {
+			if err := h.scheduler.ValidateNode(r.Context(), nodeID, server); err != nil {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid target node %q: %v", nodeID, err))
+				return
+			}
+			server.Status.Conditions = workload.SetCondition(server.Status.Conditions, domain.ServerCondition{
+				Type:               "Scheduled",
+				Status:             "True",
+				Reason:             "NodeAssigned",
+				Message:            "assigned to node " + nodeID,
+				ObservedGeneration: server.Spec.Generation,
+				LastTransitionAt:   now,
+			})
+		} else {
+			chosenNode, err := h.scheduler.Schedule(r.Context(), server)
+			if err == nil {
+				server.NodeID = chosenNode.ID
+				server.Status.Conditions = workload.SetCondition(server.Status.Conditions, domain.ServerCondition{
+					Type:               "Scheduled",
+					Status:             "True",
+					Reason:             "NodeAssigned",
+					Message:            "assigned to node " + chosenNode.Name,
+					ObservedGeneration: server.Spec.Generation,
+					LastTransitionAt:   now,
+				})
+			} else {
+				server.NodeID = ""
+				server.Status.Conditions = workload.SetCondition(server.Status.Conditions, domain.ServerCondition{
+					Type:               "Scheduled",
+					Status:             "False",
+					Reason:             "Unschedulable",
+					Message:            err.Error(),
+					ObservedGeneration: server.Spec.Generation,
+					LastTransitionAt:   now,
+				})
+			}
+		}
+	} else if server.NodeID == "" {
+		server.NodeID = "node-local"
+	}
 	if server.OrganizationID != "" {
-		err = h.store.CreateAllocatedGameServer(r.Context(), allocationActor(r), &server)
+		// Deduct 10 credits for creating a server instance
+		cost := int64(10)
+		operatorID := allocationActor(r)
+		if operatorID == "" {
+			if account, ok := accountFromContext(r.Context()); ok {
+				operatorID = account.ID
+			}
+		}
+		err = h.store.CreateChargedGameServer(r.Context(), allocationActor(r), operatorID, &server, cost)
+		if errors.Is(err, store.ErrInsufficientCredits) {
+			writeError(w, http.StatusPaymentRequired, "账户额度不足 (需要 10 点券)，请联系管理员充值")
+			return
+		}
 	} else {
 		err = h.store.CreateGameServer(r.Context(), &server)
 	}
@@ -1047,4 +1099,78 @@ func writeLifecycleError(w http.ResponseWriter, err error) {
 		return
 	}
 	writeAllocationError(w, err)
+}
+
+func (h *Handler) migrateServer(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+
+	server, err := h.store.GetGameServer(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if server.Status.Phase == domain.PhaseRunning || server.Status.Phase == domain.PhaseReconciling {
+		writeError(w, http.StatusConflict, "server must be stopped before migration")
+		return
+	}
+
+	var payload struct {
+		TargetNodeID string `json:"targetNodeId,omitempty"`
+	}
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+	}
+
+	targetNodeID := strings.TrimSpace(payload.TargetNodeID)
+	if targetNodeID != "" {
+		if h.scheduler != nil {
+			if err := h.scheduler.ValidateNode(r.Context(), targetNodeID, server); err != nil {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid target node %q: %v", targetNodeID, err))
+				return
+			}
+		}
+	} else {
+		if h.scheduler == nil {
+			writeError(w, http.StatusInternalServerError, "scheduler not configured")
+			return
+		}
+		chosen, err := h.scheduler.Schedule(r.Context(), server)
+		if err != nil {
+			writeError(w, http.StatusConflict, fmt.Sprintf("cannot auto-schedule migration: %v", err))
+			return
+		}
+		targetNodeID = chosen.ID
+	}
+
+	if targetNodeID == server.NodeID {
+		writeError(w, http.StatusBadRequest, "server is already assigned to the target node")
+		return
+	}
+
+	oldNodeID := server.NodeID
+	before := server
+	now := time.Now().UTC()
+	server.NodeID = targetNodeID
+	server.Spec.Generation++
+	server.Status.Phase = domain.PhasePending
+	server.Status.ActualState = domain.ActualUnknown
+	server.Status.LastTransitionAt = now
+	server.Status.Conditions = workload.SetCondition(server.Status.Conditions, domain.ServerCondition{
+		Type:               "Scheduled",
+		Status:             "True",
+		Reason:             "NodeMigrated",
+		Message:            fmt.Sprintf("migrated from %s to %s", oldNodeID, targetNodeID),
+		ObservedGeneration: server.Spec.Generation,
+		LastTransitionAt:   now,
+	})
+
+	if err := h.store.MigrateGameServer(r.Context(), before, server); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save migrated server: %v", err))
+		return
+	}
+
+	h.recordActivity(r.Context(), server.ID, "server.migrated", fmt.Sprintf("Migrated server %s from %s to %s", server.Name, oldNodeID, targetNodeID), activityServerPayload(server))
+	writeJSON(w, http.StatusOK, server)
 }

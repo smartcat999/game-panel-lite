@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, ArrowRightLeft, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { MigrateNodeDialog } from "@/components/migrate-node-dialog";
 import { GameUpdateCard } from "@/components/game-update-card";
 import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
@@ -52,6 +53,7 @@ import {
   restoreBackup,
   sendServerCommand,
   gameServerAction,
+  migrateGameServer,
   setModEnabled,
   saveModConfig,
   serverLogsUrl,
@@ -197,6 +199,7 @@ export default function ServerDetailPage() {
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(canManageShares && serverResource), retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, enabled: Boolean(serverResource), retry: false, staleTime: 30_000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
+  const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 30_000 });
   const joinInfoQuery = useQuery({
     queryKey: ["server-join-info", id],
     queryFn: () => getServerJoinInfo(id),
@@ -221,6 +224,7 @@ export default function ServerDetailPage() {
   const [pendingModPackInstall, setPendingModPackInstall] = useState<ModPack | null>(null);
   const [pendingConfigRestart, setPendingConfigRestart] = useState(false);
   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+  const [migrateDialogOpen, setMigrateDialogOpen] = useState(false);
   const serverEventsQuery = useQuery({
     queryKey: ["server-monitoring-events", id],
     queryFn: () => getServerMonitoringEvents(id, 50),
@@ -358,6 +362,18 @@ export default function ServerDetailPage() {
       await client.invalidateQueries({ queryKey: ["game-servers"] });
     },
     onError: (error) => showError(formatActionError(error, t("actionWorking")))
+  });
+  const migrateMutation = useMutation({
+    mutationFn: (targetNodeId?: string) => migrateGameServer(id, targetNodeId),
+    onSuccess: async (updatedServer) => {
+      showSuccess(isZh ? "服务器已成功重新调度迁移" : "Server successfully rescheduled");
+      setMigrateDialogOpen(false);
+      setServerResourceCache(updatedServer);
+      await client.invalidateQueries({ queryKey: ["game-server", id] });
+      await client.invalidateQueries({ queryKey: ["game-servers"] });
+      await client.invalidateQueries({ queryKey: ["compute-nodes"] });
+    },
+    onError: (error) => showError(formatActionError(error, isZh ? "跨节点迁移失败" : "Failed to migrate server"))
   });
   const configRestart = useMutation({
     mutationFn: () => gameServerAction(id, "restart"),
@@ -815,6 +831,7 @@ export default function ServerDetailPage() {
               events={visibleServerEvents}
               eventsLoading={serverEventsQuery.isLoading}
               runtimeError={runtimeErrorMessage}
+              onOpenMigrate={() => setMigrateDialogOpen(true)}
             />
           )}
           {activeTab === "console" && (
@@ -1114,6 +1131,14 @@ export default function ServerDetailPage() {
         onCancel={() => setPendingModDelete(null)}
         onConfirm={() => pendingModDelete && modDelete.mutate(pendingModDelete.id)}
       />
+      <MigrateNodeDialog
+        open={migrateDialogOpen}
+        server={serverResource}
+        nodes={nodesQuery.data ?? []}
+        busy={migrateMutation.isPending}
+        onCancel={() => setMigrateDialogOpen(false)}
+        onMigrate={(targetNodeId) => migrateMutation.mutate(targetNodeId)}
+      />
     </>
   );
 }
@@ -1122,14 +1147,18 @@ function OverviewTab({
   events,
   eventsLoading,
   resource,
-  runtimeError
+  runtimeError,
+  onOpenMigrate
 }: {
   events: MonitoringEvent[];
   eventsLoading: boolean;
   resource: GameServerResource;
   runtimeError: string;
+  onOpenMigrate?: () => void;
 }) {
-  const { canEditSettings, canManageNodes } = usePermissions();
+  const { canEditSettings, canManageNodes, isViewer } = usePermissions();
+  const { locale } = useI18n();
+  const isZh = locale.startsWith("zh");
   const nodesQuery = useQuery({ queryKey: ["compute-nodes"], queryFn: listComputeNodes, retry: false, staleTime: 60000 });
   const nodeInfo = nodesQuery.data?.find((n) => n.id === resource.nodeId);
   const isWorker = Boolean(resource.nodeId && resource.nodeId !== "node-local");
@@ -1139,30 +1168,48 @@ function OverviewTab({
 
   const hostPort = resource.spec.network?.hostPort ?? 0;
   const internalPort = resource.spec.network?.port ?? 0;
+  const conditions = resource.status?.conditions ?? [];
+
   return (
     <div className="space-y-6">
       {/* Compute Node Topology Card */}
       <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
               <Plug className="size-3.5" />
             </span>
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">部署计算节点与拓扑</h2>
-              <p className="text-[11px] text-slate-500">实例容器所在的物理/云端主机及连接路由模式</p>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                {isZh ? "部署计算节点与拓扑" : "Deployment Node & Topology"}
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                {isZh ? "实例容器所在的物理/云端主机及连接路由模式" : "Compute host and network routing topology"}
+              </p>
             </div>
           </div>
-          {canManageNodes && canEditSettings ? (
-            <Link href="/settings" className="text-xs text-panel-green hover:underline flex items-center gap-1">
-              管理集群节点 <ExternalLink className="size-3" />
-            </Link>
-          ) : null}
+          <div className="flex items-center gap-3">
+            {!isViewer && onOpenMigrate && (
+              <button
+                type="button"
+                onClick={onOpenMigrate}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold text-slate-200 shadow-sm transition hover:border-panel-green/50 hover:bg-slate-800 hover:text-white active:scale-95"
+              >
+                <ArrowRightLeft className="size-3 text-panel-green" />
+                <span>{isZh ? "跨节点迁移" : "Migrate Node"}</span>
+              </button>
+            )}
+            {canManageNodes && canEditSettings ? (
+              <Link href="/settings" className="text-xs text-panel-green hover:underline flex items-center gap-1">
+                {isZh ? "管理集群节点" : "Manage Nodes"} <ExternalLink className="size-3" />
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
-            <span className="text-[11px] text-slate-500 block">部署计算节点</span>
+            <span className="text-[11px] text-slate-500 block">{isZh ? "部署计算节点" : "Compute Node"}</span>
             <div className="mt-1 flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-sm font-semibold text-slate-200">
@@ -1172,35 +1219,93 @@ function OverviewTab({
                     <span className="text-[11px] text-slate-500 font-mono">({resource.nodeId?.slice(0, 13)})</span>
                   </span>
                 ) : (
-                  "主控本机 (Local Daemon)"
+                  isZh ? "主控本机 (Local Daemon)" : "Master Host (Local Daemon)"
                 )}
               </span>
             </div>
           </div>
 
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
-            <span className="text-[11px] text-slate-500 block">流量连接路由</span>
+            <span className="text-[11px] text-slate-500 block">{isZh ? "流量连接路由" : "Traffic Route"}</span>
             <div className="mt-1 flex items-center gap-1.5">
               <span className="text-sm font-semibold text-slate-200">
-                {resource.nodeId && resource.nodeId !== "node-local" ? "Gateway 网关流代理中转" : "主控直连出口"}
+                {resource.nodeId && resource.nodeId !== "node-local"
+                  ? (isZh ? "Gateway 网关流代理中转" : "Gateway Stream Proxy")
+                  : (isZh ? "主控直连出口" : "Direct Host Egress")}
               </span>
             </div>
           </div>
 
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
-            <span className="text-[11px] text-slate-500 block">容器内部端口</span>
+            <span className="text-[11px] text-slate-500 block">{isZh ? "容器内部端口" : "Container Port"}</span>
             <span className="mt-1 text-sm font-mono font-semibold text-slate-200 block">
               {internalPort || 7777} / {resource.spec.network?.protocol || "tcp"}
             </span>
           </div>
 
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
-            <span className="text-[11px] text-slate-500 block">对外服务端口</span>
+            <span className="text-[11px] text-slate-500 block">{isZh ? "对外服务端口" : "External Host Port"}</span>
             <span className="mt-1 text-sm font-mono font-semibold text-panel-green block">
               {hostPort || internalPort || 7777}
             </span>
           </div>
         </div>
+
+        {/* Declarative Status Conditions Inspector */}
+        {conditions.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-800/80">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                {isZh ? "调谐与调度 Conditions 状态看板" : "Reconciler & Scheduler Conditions"}
+              </span>
+              <span className="text-[10px] font-mono text-slate-500">
+                Observed Gen: {resource.status?.observedGeneration ?? 0} · Applied Gen: {resource.status?.appliedGeneration ?? 0}
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {conditions.map((cond) => {
+                const isTrue = cond.status === "True";
+                const isUnknown = cond.status === "Unknown";
+                const badgeColor = isTrue
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : isUnknown
+                    ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                    : "border-rose-500/30 bg-rose-500/10 text-rose-400";
+                const dotColor = isTrue
+                  ? "bg-emerald-400"
+                  : isUnknown
+                    ? "bg-amber-400 animate-pulse"
+                    : "bg-rose-400";
+
+                return (
+                  <div
+                    key={cond.type}
+                    className="flex flex-col justify-between rounded-lg border border-slate-800/90 bg-slate-900/50 p-2.5 text-xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-slate-200">{cond.type}</span>
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badgeColor}`}>
+                        <span className={`size-1.5 rounded-full ${dotColor}`} />
+                        <span>{cond.status}</span>
+                      </span>
+                    </div>
+                    {cond.reason && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-400">
+                        <span className="font-medium text-slate-500">{isZh ? "原因:" : "Reason:"}</span>
+                        <span className="font-mono text-slate-300">{cond.reason}</span>
+                      </div>
+                    )}
+                    {cond.message && (
+                      <p className="mt-1 text-[11px] text-slate-400 truncate" title={cond.message}>
+                        {cond.message}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <ActivityLatestOperation events={events} loading={eventsLoading} runtimeError={runtimeError} />

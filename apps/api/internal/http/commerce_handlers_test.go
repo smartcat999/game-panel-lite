@@ -196,4 +196,3 @@ func TestCommerceHTTPFlow(t *testing.T) {
 		t.Fatalf("expected operation %s, got: %v", res.Operation.ID, rec.Body.String())
 	}
 }
-

@@ -27,6 +27,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	dockerruntime "github.com/smartcat999/game-panel-lite/apps/api/internal/runtime/docker"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/scheduler"
 	serverctrl "github.com/smartcat999/game-panel-lite/apps/api/internal/server"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
 )
@@ -91,6 +92,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		streamGateway.Close()
 	}()
 
+	sched := scheduler.New(db, registry).WithLocalArchitecture(dockerMonitor.Architecture)
 	go serverctrl.NewController(
 		db,
 		serverctrl.NewRuntimeReconciler(
@@ -98,13 +100,13 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 			serverctrl.NewRuntimeAdapterClient(switchableRuntime),
 		).WithImageLoader(serverctrl.NewRuntimeImageLoader(cfg.DataDir, switchableRuntime)),
 		logger,
-	).WithDataRoot(cfg.DataDir).WithGateway(streamGateway).Start(appCtx)
+	).WithDataRoot(cfg.DataDir).WithGateway(streamGateway).WithScheduler(sched).Start(appCtx)
 
 	dockerFactory := func(host string) (runtime.Adapter, error) {
 		return dockerruntime.NewAdapter(host)
 	}
 	apiMetrics := metrics.NewRegistry()
-	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway, gameconfig.NewService(registry, db, domain.ProviderTerrariaVanilla), modruntime.NewService(registry, db))
+	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway, gameconfig.NewService(registry, db, domain.ProviderTerrariaVanilla), modruntime.NewService(registry, db)).WithScheduler(sched)
 	handler.Start(appCtx)
 
 	router := chi.NewRouter()

@@ -21,6 +21,8 @@ import { TopNav } from "@/components/top-nav";
 import { AppsDrawer } from "@/components/apps-drawer";
 import { ClusterStatusPill } from "@/components/cluster-status-pill";
 import { ClusterFleetPopover } from "@/components/cluster-fleet-popover";
+import { RegionSwitcher } from "@/components/region-switcher";
+import { CreditsBadge } from "@/components/credits-badge";
 import { PermissionDenied } from "@/components/permission-denied";
 import { useAuthBootstrap } from "@/lib/auth-session";
 import { usePermissions } from "@/lib/permissions";
@@ -167,10 +169,16 @@ function AppChrome({ children }: { children: ReactNode }) {
 
             {/* Cluster Fleet Interactive Popover Hub */}
             <ClusterFleetPopover />
+
+            {/* Global Multi-Region Switcher */}
+            <RegionSwitcher />
           </div>
 
-          {/* Right: Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}
+          {/* Right: Credits Badge + Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Account Credits & Top-Up Balance */}
+            <CreditsBadge />
+
             {/* Main Icon Navigation (Positioned on the right) */}
             <TopNav />
 

@@ -9,15 +9,17 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 )
 
-func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string) (int, error) {
+func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string, nodeID string) (int, error) {
 	servers, err := h.store.ListGameServers(ctx)
 	if err != nil {
 		return 0, err
 	}
 	used := map[int]bool{}
 	for _, s := range servers {
-		if s.ID != excludeInstanceID && s.Spec.Network.HostPort > 0 {
-			used[s.Spec.Network.HostPort] = true
+		if s.ID != excludeInstanceID && s.Spec.Network.HostPort > 0 && s.Spec.DesiredState != domain.DesiredDeleted {
+			if nodeID == "" || s.NodeID == nodeID {
+				used[s.Spec.Network.HostPort] = true
+			}
 		}
 	}
 	port := 7777
@@ -107,26 +109,37 @@ func defaultJoinInfo(server domain.GameServer) domain.ServerJoinInfo {
 	}
 }
 
-func (h *Handler) resolveHostPort(ctx context.Context, requested int, excludeInstanceID string) (int, error) {
+func (h *Handler) resolveHostPort(ctx context.Context, requested int, excludeInstanceID string, nodeID string) (int, error) {
 	if requested == 0 {
-		return h.allocateHostPort(ctx, excludeInstanceID)
+		return h.allocateHostPort(ctx, excludeInstanceID, nodeID)
 	}
 	if requested < 1024 || requested > 65535 {
 		return 0, fmt.Errorf("external port must be between 1024 and 65535")
 	}
-	if err := h.ensureHostPortAvailable(ctx, requested, excludeInstanceID); err != nil {
+	if err := h.ensureHostPortAvailable(ctx, requested, excludeInstanceID, nodeID); err != nil {
 		return 0, err
 	}
 	return requested, nil
 }
 
-func (h *Handler) ensureHostPortAvailable(ctx context.Context, hostPort int, excludeInstanceID string) error {
+func (h *Handler) ensureHostPortAvailable(ctx context.Context, hostPort int, excludeInstanceID string, nodeID string) error {
 	servers, err := h.store.ListGameServers(ctx)
 	if err != nil {
 		return err
 	}
+	if nodeID != "" {
+		for _, server := range servers {
+			if server.ID != excludeInstanceID && server.NodeID == nodeID && server.Spec.Network.HostPort == hostPort && server.Spec.DesiredState != domain.DesiredDeleted {
+				return fmt.Errorf("external port %d is already used on node %s", hostPort, nodeID)
+			}
+		}
+		return nil
+	}
+	if h.scheduler != nil {
+		return nil
+	}
 	for _, server := range servers {
-		if server.ID != excludeInstanceID && server.Spec.Network.HostPort == hostPort {
+		if server.ID != excludeInstanceID && server.Spec.Network.HostPort == hostPort && server.Spec.DesiredState != domain.DesiredDeleted {
 			return fmt.Errorf("external port %d is already used", hostPort)
 		}
 	}

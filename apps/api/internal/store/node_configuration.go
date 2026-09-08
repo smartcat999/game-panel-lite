@@ -11,11 +11,12 @@ import (
 // NodeConfigurationPatch contains only administrator-owned configuration.
 // Nil leaves a field unchanged; a pointer to an empty string clears it.
 type NodeConfigurationPatch struct {
-	Name     *string
-	Region   *string
-	PublicIP *string
-	Host     *string
-	Port     *int
+	Name          *string
+	Region        *string
+	PublicIP      *string
+	Host          *string
+	Port          *int
+	Unschedulable *bool
 }
 
 func (s *Store) UpdateNodeConfiguration(ctx context.Context, id string, patch NodeConfigurationPatch) (domain.ComputeNode, error) {
@@ -27,6 +28,9 @@ func (s *Store) UpdateNodeConfiguration(ctx context.Context, id string, patch No
 	}
 	if patch.Port != nil {
 		updates["port"] = *patch.Port
+	}
+	if patch.Unschedulable != nil {
+		updates["unschedulable"] = *patch.Unschedulable
 	}
 	if len(updates) == 0 {
 		return s.GetComputeNode(ctx, id)

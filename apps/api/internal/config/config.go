@@ -29,6 +29,10 @@ type Config struct {
 	SystemUpdateInterval   time.Duration
 	UpdaterURL             string
 	UpdaterToken           string
+	GithubClientID         string
+	GithubClientSecret     string
+	GoogleClientID         string
+	GoogleClientSecret     string
 }
 
 func Load() Config {
@@ -76,6 +80,10 @@ func Load() Config {
 		SystemUpdateInterval:   updateInterval,
 		UpdaterURL:             value("GAMEPANEL_UPDATER_URL", ""),
 		UpdaterToken:           value("GAMEPANEL_UPDATER_TOKEN", ""),
+		GithubClientID:         value("GITHUB_CLIENT_ID", value("GAMEPANEL_GITHUB_CLIENT_ID", "")),
+		GithubClientSecret:     value("GITHUB_CLIENT_SECRET", value("GAMEPANEL_GITHUB_CLIENT_SECRET", "")),
+		GoogleClientID:         value("GOOGLE_CLIENT_ID", value("GAMEPANEL_GOOGLE_CLIENT_ID", "")),
+		GoogleClientSecret:     value("GOOGLE_CLIENT_SECRET", value("GAMEPANEL_GOOGLE_CLIENT_SECRET", "")),
 	}
 }
 

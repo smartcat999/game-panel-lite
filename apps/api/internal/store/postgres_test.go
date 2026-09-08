@@ -255,6 +255,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testNodePortReservations(t, db)
 	testNodePortRelease(t, db)
 	testPendingPlacement(t, db)
+	testCreditConsistency(t, db)
 	testTenantPresets(t, db)
 	testTenantModLibrary(t, db)
 	testModSources(t, db)

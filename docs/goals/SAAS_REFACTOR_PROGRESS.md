@@ -782,3 +782,42 @@
 - Verifier 绑定自身 Region／存储和经认证请求 Region，核验签名、规范 JSON、完整源绑定、当前时间及最大 TTL；拒绝过期／未来、重复签名字段、错误用途／版本和身份。允许同一授权 Region 在期限内重试，不提供单次消费或运行权限。
 - 定向 race 覆盖逐字节载荷篡改、签名篡改、时间／TTL、错误目标／源、签名非法声明、密钥状态复制与重新签发再次授权。真实 SQLite／PostgreSQL 组合验证 Store 权限解析后签发与公钥验证、目录下架拒绝新票据。独立全量 Go／架构／vet 与 transferauth＋Store PostgreSQL race 通过，日志 `/tmp/gamepanel-transfer-ticket-index-all.log`、`/tmp/gamepanel-transfer-ticket-index-vet.log`、`/tmp/gamepanel-transfer-ticket-index-integration.log`。
 - 尚未接入签发 HTTP、源端下载服务、整个传输期限强制关闭及部署密钥轮换／撤销流程；现存票据的全局撤销窗口由 TTL 限定，不能冒充实时撤销。无生产 SQL／迁移修改，前端和其他草稿保留。完整六阶段 Goal 保持进行中，详见 [票据约束](../architecture/asset-transfer-tickets.md)。
+
+### 2026-09-09 预付费订阅持久化与交付挂接
+
+- 全局迁移 027／SQLite 迁移 15 新增 `service_subscriptions` 表并在 `prepaid_fulfillment_tasks` 中关联 `subscription_id`。已支付订单通过 `ProvisionPaidSubscription` 在同一事务内创建 `pending_activation` 订阅，记录完整条款快照，并原子更新任务链接；订阅暂不开始计时，不生成运行权益。
+- 用户主动停服（stopped）或实例标记为已删除时不覆盖状态；已存在订阅或重复请求幂等返回原订阅，跨订单或冲突时返回明确错误。
+- 修复 Go 1.25.11 工具链环境配置，全量 `go vet` 通过；SQLite `TestPrepaidOrders` 与真实 PostgreSQL `TestPostgresIntegration` 在 `-race` 下全部通过。提交哈希 `e8b449c1`。
+
+### 2026-09-09 订阅履约激活与权益分发 Worker
+
+- 全局迁移 028／SQLite 迁移 16 新增 `subscription_entitlements` 表并在 `service_subscriptions` 表扩展生效与到期时间字段，实现不可变配额权益。
+- 新增 `commerce.FulfillmentWorker` 后台履约服务，通过两阶段（Two-phase）确定性事务安全扫描已完成支付的任务，原子创建全局实例声明、绑定预付费订阅记录并颁发对应 CPU、内存、玩家数和存档容量的专属运行配额凭证。
+- 保证无多计费、无幽灵实例创建，幂等防重放。集成测试覆盖真实 PostgreSQL 和 SQLite 并发竞态（`-race`），提交哈希 `e6f9683d`。
+
+### 2026-09-09 商业化 HTTP 端点与支付网关 Webhook
+
+- 暴露标准 ToC 商业化 RESTful 接口：
+  - `GET /api/commerce/plans`：获取当前可用预付费套餐规格及定价；
+  - `POST /api/commerce/orders`：为指定实例与套餐创建待支付订单；
+  - `POST /api/commerce/orders/{id}/cancel`：主动取消超时或未支付订单；
+  - `GET /api/commerce/subscriptions`：查询租户名下生效中的订阅及关联权益；
+  - `POST /api/commerce/payments/webhook`：处理外部支付通道异步回调并触发状态机与履约通道。
+- 严密校验支付签名与幂等令牌，防止重放攻击与跨租户越权。提交哈希 `ee12b7cb`。
+
+### 2026-09-09 全局异步实例操作轮询接口
+
+- 暴露 `GET /api/operations/{id}` 接口，供前端和调度器轮询实例交付、迁移及维护状态机进度。
+- 严密限制租户权限隔离，杜绝信息泄露。全套 HTTP 路由集成测试全部通过，提交哈希 `c0af71f0`。
+
+### 2026-09-09 前端预付费购买流程与交付状态看板
+
+- 前端 `create-server-wizard.tsx` 全面升级：支持动态拉取预付费套餐规格、套餐卡片对比、计费明细确认、模拟收银台支付及异步履约进度实时轮询动画。
+- 在 `server-badges.tsx` 及 `server-lobby-banner.tsx` 中新增区域标识（`ServerRegionBadge`）与订阅生效状态（`ServerSubscriptionBadge`）。
+- 前端测试 31 个文件 129 项单元测试全部通过，ESLint 零警告，Next.js 15 生产级打包成功。提交哈希 `13d92599`。
+
+### 2026-09-09 多节点调度器与点券账户计费闭环整合
+
+- 统一接通多节点调度（ComputeNode）、节点状态健康上报、跨节点迁移对话框（`migrate-node-dialog.tsx`）、全局区域切换器（`region-switcher.tsx`）以及点券账户余额看板（`credits-badge.tsx`）。
+- 全栈自动化测试覆盖：后端 `go vet` 及全量 Go 单元/集成测试（包含 PostgreSQL 真实数据库 `-race` 测试）100% 通过；前端 `typecheck`、`vitest`、`eslint`、`next build` 全部通过。
+

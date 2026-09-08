@@ -152,4 +152,3 @@ func testPaidSubscriptions(t *testing.T, db *Store, original commerce.Order) {
 		// Because it was already completed, it recovers the receipt, but let's test a non-completed order
 	}
 }
-
