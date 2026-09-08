@@ -389,3 +389,10 @@
 - 源流读取／关闭错误、长度或摘要不符及取消均拒绝发布，取消关闭源流解除阻塞并清理本次临时文件。并发同版本写入安全；失败替换保留原文件。Open 重新校验普通文件内容，拒绝损坏和符号链接，返回只读句柄；不支持外部进程并发原地修改私有存储。
 - 真实临时文件系统 race 覆盖并发、失败清理、取消、半成品不可读、原文件保留、身份隔离、损坏／符号链接、配置上限、空内容和关闭后重新打开。独立快照全量 Go／架构／vet 与定向 race 通过，日志 `/tmp/gamepanel-regional-files-index-all.log`、`/tmp/gamepanel-regional-files-index-vet.log`、`/tmp/gamepanel-regional-files-index-race.log`。本批无数据库／MQ 改动，未重跑外部集成；前端及其他草稿保留。
 - 尚需接入源授权、区域任务、副本目录、总容量／背压、崩溃残留回收和 GC；文件存储成功不等于可执行。未以文件重开测试冒充进程强杀／断电或跨主机交付验收，详见 [区域资产文件](../architecture/regional-asset-files.md)。完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 修订资产准备编排与批次限制
+
+- 新增 regional.AssetPreparer，通过消费接口组合内容源与真实文件存储。整份快照、目标 Region、文件数量、单文件及总字节限制在 I/O 前校验；扣减剩余额度避免总量溢出。每批统一截止时间，逐项获取和校验发布，最多一个活动源流。
+- 源接口携带原通知与精确资产版本，要求重新验证当前访问权限；已有本地文件不绕过源授权。部分文件成功不会把整批标为成功，也不改变任务／意图／执行状态；已验证文件保留供重试及后续 GC。生产网络来源尚未实现，测试源明确为夹具。
+- 真实文件 Adapter 组合验证中途摘要失败、重试成功、缓存存在时授权拒绝仍失败、数量／字节／Region／缺失清单在 I/O 前拒绝、整数溢出防护和超时解除阻塞。独立快照全量 Go／架构／vet 与 regional＋assetfiles race 通过，日志 `/tmp/gamepanel-asset-preparer-index-all.log`、`/tmp/gamepanel-asset-preparer-index-vet.log`、`/tmp/gamepanel-asset-preparer-index-race.log`。
+- 本批无 SQL 或 MQ 改动，未重跑外部集成；其他草稿保留。持久准备任务、下载服务授权实现、副本目录、区域总配额及执行授权仍待接入；批次限制不作为生产容量验收，完整六阶段 Goal 保持进行中。
