@@ -48,8 +48,24 @@ func (s *RegionalStore) RegionalCapacityCandidates(ctx context.Context, query re
 	}
 	candidates := make([]regional.Candidate, 0)
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		access, err := regionalNodeAccess(tx, query.OrganizationID, false)
+		if err != nil {
+			return err
+		}
+		if query.RequiredNodeID != "" && !access[query.RequiredNodeID] {
+			return regional.ErrNodeAccessDenied
+		}
+		scoped := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if access[id] {
+				scoped = append(scoped, id)
+			}
+		}
+		if len(scoped) == 0 {
+			return nil
+		}
 		var nodes []regional.Node
-		if err := tx.Table("regional_nodes").Where("id IN ? AND schedulable = ? AND architecture = ?", ids, true, query.Architecture).Order("id").Find(&nodes).Error; err != nil {
+		if err := tx.Table("regional_nodes").Where("id IN ? AND schedulable = ? AND architecture = ?", scoped, true, query.Architecture).Order("id").Find(&nodes).Error; err != nil {
 			return err
 		}
 		if len(nodes) == 0 {

@@ -17,6 +17,9 @@ import (
 
 func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	ctx := context.Background()
+	if _, err := db.ConfigureRegionalNodeAccess(ctx, regional.NodeAccessPolicy{OrganizationID: "tenant", Enabled: true, NodeIDs: []string{"node-a", "node-b", "quiet", "disabled", "arm", "port-node", "free-port-node"}}, 0); err != nil {
+		t.Fatal(err)
+	}
 	configure := func(id string) {
 		t.Helper()
 		if _, err := db.ConfigureRegionalNode(ctx, regional.NodeConfiguration{ID: id, Name: id, Architecture: "amd64", CPU: 2, MemoryMB: 256, Schedulable: true}, 0); err != nil {
@@ -175,4 +178,5 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 		t.Fatal("stopped intent reserved compute")
 	}
 	testRegionalPorts(t, db, create)
+	testRegionalNodeAccess(t, db, create)
 }

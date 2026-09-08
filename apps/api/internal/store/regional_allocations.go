@@ -83,6 +83,13 @@ func (s *RegionalStore) ReserveRegionalResources(ctx context.Context, request re
 		if event.OperationID != deployment.RevisionOperationID || event.OrganizationID != request.OrganizationID || event.RegionID != s.regionID || event.ServerID != request.ServerID || event.PlacementEpoch != request.PlacementEpoch || event.RevisionID != request.RevisionID || event.SpecGeneration != request.SpecGeneration {
 			return regional.ErrDeploymentConflict
 		}
+		access, err := regionalNodeAccess(tx, request.OrganizationID, true)
+		if err != nil {
+			return err
+		}
+		if !access[request.NodeID] {
+			return regional.ErrNodeAccessDenied
+		}
 		node, err := lockRegionalNode(tx, request.NodeID)
 		if err != nil {
 			return err

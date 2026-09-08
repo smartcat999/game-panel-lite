@@ -8,6 +8,7 @@ import (
 // CandidateQuery accepts one bounded page of already authorized Node IDs from
 // the regional coordinator. It does not derive tenant permissions from IDs.
 type CandidateQuery struct {
+	OrganizationID string
 	Network        workload.Network
 	RegionID       string
 	AllowedNodeIDs []string

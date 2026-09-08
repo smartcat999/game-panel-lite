@@ -34,12 +34,12 @@ func testRegionalCapacityCandidates(t *testing.T, db *RegionalStore, request reg
 			}
 		}
 	}
-	query := regional.CandidateQuery{RegionID: db.regionID, AllowedNodeIDs: []string{"node-a", "node-b", "quiet", "disabled", "arm"}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}}
+	query := regional.CandidateQuery{OrganizationID: "tenant", RegionID: db.regionID, AllowedNodeIDs: []string{"node-a", "node-b", "quiet", "disabled", "arm"}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}}
 	var queries atomic.Int64
 	callback := "test_regional_candidate_query_budget"
 	if err := db.db.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
 		switch tx.Statement.Table {
-		case "regional_nodes", "regional_node_sessions", "regional_allocations":
+		case "regional_node_access", "regional_nodes", "regional_node_sessions", "regional_allocations":
 			queries.Add(1)
 		}
 	}); err != nil {
@@ -50,7 +50,7 @@ func testRegionalCapacityCandidates(t *testing.T, db *RegionalStore, request reg
 	if err != nil || len(candidates) != 1 || candidates[0].NodeID != "node-b" || candidates[0].NodeVersion != 1 || candidates[0].SessionEpoch != 1 || candidates[0].RemainingCPU != 0 || candidates[0].RemainingMemoryMB != 0 {
 		t.Fatalf("invalid candidates: %+v %v", candidates, err)
 	}
-	if queries.Load() != 3 {
+	if queries.Load() != 4 {
 		t.Fatalf("candidate business query count: %d", queries.Load())
 	}
 	required := query

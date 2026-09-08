@@ -241,6 +241,14 @@
 - 新增测试覆盖当前状态通过到范围解析、上述所有拒绝路径、超时与有界请求；既有 PostgreSQL Worker 恢复夹具显式提供全局读取测试替身。独立快照全量 Go（含架构）、vet、相关拒绝路径／客户端／真实 PG race 均通过。日志 `/tmp/gamepanel-scheduling-intent-all.log`、`/tmp/gamepanel-scheduling-intent-vet.log`、`/tmp/gamepanel-scheduling-intent-integration.log`。
 - 当前全局接口仅校验配置／意图／部署归属，不提供商业权益或节点访问范围。本批不宣称补齐权限来源；时点复核也不是跨库原子承诺或有期限执行授权。当前商业权益、区域节点范围策略、进程入口和 Node 执行任务仍需继续实现。
 
+### 区域租户节点访问策略
+
+- 新增区域迁移 014 和 `NodeAccessPolicy`：区域运维按全局租户 ID 配置显式节点集合、启用状态和 CAS 版本。未配置／禁用默认拒绝新准入，空集合不允许任何节点；单条策略最多 200 个节点。不引入 Cell、节点池资源层级或通用权限引擎。
+- 候选查询要求 OrganizationID，按策略和请求范围取交集；越权严格指定节点直接拒绝。新增预留在 Deployment 锁内持有策略 SHARE 锁复核，再锁 Node 并执行原容量与端口准入，防止候选查询后策略撤销仍被接纳。查询仍为单表、有界 ID 与 Go 组合；候选业务查询预算调整为无端口 4 次／有端口 5 次。
+- `region-node-access` 私有运维 CLI 支持创建和完整替换，默认禁用，更新必须提供当前版本。真实数据库覆盖默认拒绝、过滤、严格指定、直接调用预留防绕过、旧版本更新拒绝、撤销后准入失败和原回执保留。实际 CLI 验证创建／禁用／旧版本拒绝，日志 `/tmp/gamepanel-node-access-cli.log`。
+- 迁移不会自动给既有租户开放节点；升级必须先配置必要策略再恢复新调度。撤销策略只限制新增预留，不证明旧实例停止、不自动释放容量，历史回执查询仍可恢复。商业权益、每次用户指定节点权限、端口范围选择及 Node 执行许可仍独立待接入。
+- 独立快照全量 Go（含架构）、vet、真实 PG race 及实际 CLI 验证均通过。验证日志：`/tmp/gamepanel-node-access-all.log`、`/tmp/gamepanel-node-access-vet.log`、`/tmp/gamepanel-node-access-integration.log`。未修改旧迁移、前端或其他草稿。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

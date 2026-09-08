@@ -19,6 +19,9 @@ import (
 func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 	t.Helper()
 	ctx := context.Background()
+	if _, err := db.ConfigureRegionalNodeAccess(ctx, regional.NodeAccessPolicy{OrganizationID: "tenant", Enabled: true, NodeIDs: []string{"schedule-a", "schedule-b"}}, 0); err != nil {
+		t.Fatal(err)
+	}
 	p := terraria.NewVanillaProvider()
 	registry, err := provider.NewRegistry(p)
 	if err != nil {

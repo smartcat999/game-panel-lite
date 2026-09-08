@@ -282,3 +282,11 @@ RegionalCapacityCandidates 接收协调器已授权的一页 Node ID（1–200 �
 持久调度 Worker 在解析区域节点范围之前，复用全局 RevisionSource 读取当前意图。必须匹配当前配置代数、意图版本、运行期望、事件身份和不可变配置内容；全局断连或不同版本时持久退避，已有资源不因该失败自动释放。调用受单次任务超时约束，不建立长期监听。
 
 这一步只证明读取时的全局意图及归属，不是权益、节点权限或有期限执行许可。后续仍需受信范围策略及 Node 执行授权；不能将一次复核视作全局与区域的原子事务。
+
+### 区域租户节点策略实现补充
+
+区域节点访问策略按全局 OrganizationID 保存显式节点集合、启用状态和 CAS 版本；未知或禁用租户默认拒绝新增准入。候选读取策略后与请求节点范围取交集，实际预留再持有策略 SHARE 锁复核。操作顺序为 Deployment → 节点策略 → Node；策略更新只锁自身，不反向锁 Node。业务 SQL 不含 JOIN，候选查询预算为无端口 4 次／有端口 5 次。
+
+迁移 014 后，运维需要在每个区域通过 `region-node-access` 明确配置所需租户节点集合，例如 `go run ./apps/api/cmd/region-node-access -region <region-id> -organization <organization-id> -nodes <node-a>,<node-b> -enabled`；数据库连接通过 `GAMEPANEL_REGIONAL_DATABASE_URL` 提供。输出包含策略版本，后续完整替换需 `-expected-version`，省略 `-enabled` 表示禁用。节点可先配置授权后加入，未加入或离线节点不会成为候选。
+
+该策略只管理区域节点访问，不是套餐权益、用户级指定节点权限或 Node 运行许可。原预留回执不因策略撤销被抹除，运行停止与容量释放继续要求独立证据。当前单条策略有界于 200 个节点，未验证大规模租户节点池管理。

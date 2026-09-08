@@ -78,7 +78,7 @@ func (s Scheduler) Schedule(ctx context.Context, deployment Deployment, snapshot
 		}
 		return s.Resources.ReserveRegionalResources(ctx, request, network, s.MaxHeartbeatAge)
 	}
-	candidates, err := s.Resources.RegionalCapacityCandidates(ctx, CandidateQuery{RegionID: event.RegionID, AllowedNodeIDs: scope.AllowedNodeIDs,
+	candidates, err := s.Resources.RegionalCapacityCandidates(ctx, CandidateQuery{OrganizationID: event.OrganizationID, RegionID: event.RegionID, AllowedNodeIDs: scope.AllowedNodeIDs,
 		RequiredNodeID: scope.RequiredNodeID, Architecture: scope.Architecture, Resources: snapshot.Revision.Specification.Resources, Network: network}, s.MaxHeartbeatAge)
 	if err != nil {
 		return Allocation{}, err

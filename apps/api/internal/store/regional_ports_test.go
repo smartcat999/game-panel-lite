@@ -63,12 +63,12 @@ func testRegionalPorts(t *testing.T, db *RegionalStore, create func(string) regi
 	if _, err := db.ReserveRegionalResources(ctx, blocked, invalid, time.Minute); !errors.Is(err, workload.ErrInvalidNetwork) {
 		t.Fatal("ambiguous host binding accepted")
 	}
-	query := regional.CandidateQuery{RegionID: db.regionID, AllowedNodeIDs: []string{"port-node", "free-port-node"}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}, Network: network}
+	query := regional.CandidateQuery{OrganizationID: "tenant", RegionID: db.regionID, AllowedNodeIDs: []string{"port-node", "free-port-node"}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}, Network: network}
 	var queries atomic.Int64
 	callback := "test_regional_ports_query_budget"
 	if err := db.db.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {
 		switch tx.Statement.Table {
-		case "regional_nodes", "regional_node_sessions", "regional_allocations", "regional_port_reservations":
+		case "regional_node_access", "regional_nodes", "regional_node_sessions", "regional_allocations", "regional_port_reservations":
 			queries.Add(1)
 		}
 	}); err != nil {
@@ -76,7 +76,7 @@ func testRegionalPorts(t *testing.T, db *RegionalStore, create func(string) regi
 	}
 	candidates, err := db.RegionalCapacityCandidates(ctx, query, time.Minute)
 	_ = db.db.Callback().Query().Remove(callback)
-	if err != nil || len(candidates) != 1 || candidates[0].NodeID != "free-port-node" || queries.Load() != 4 {
+	if err != nil || len(candidates) != 1 || candidates[0].NodeID != "free-port-node" || queries.Load() != 5 {
 		t.Fatalf("port candidates %+v queries=%d err=%v", candidates, queries.Load(), err)
 	}
 	query.RequiredNodeID = "port-node"
