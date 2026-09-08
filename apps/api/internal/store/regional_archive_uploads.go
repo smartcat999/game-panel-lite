@@ -37,7 +37,7 @@ func (s *RegionalStore) PrepareArchiveUpload(ctx context.Context, plan backup.Up
 			return err
 		}
 		var stored archiveUploadRow
-		if err := tx.Table("regional_archive_uploads").Where("id = ?", plan.ID).Take(&stored).Error; err != nil {
+		if err := tx.Table("regional_archive_uploads").Where("id = ?", plan.ID).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&stored).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return backup.ErrUploadPlan
 			}
@@ -47,8 +47,36 @@ func (s *RegionalStore) PrepareArchiveUpload(ctx context.Context, plan backup.Up
 		if json.Unmarshal([]byte(stored.Plan), &original) != nil || original != plan || stored.StorageID != plan.StorageID || stored.ObjectKey != plan.ObjectKey || stored.OperationID != plan.OperationID || stored.RequestEventID != plan.RequestEventID {
 			return backup.ErrUploadPlan
 		}
-		return nil
+		status, err := lockArchiveRequest(tx, plan)
+		if err != nil {
+			return err
+		}
+		if stored.Status == "uploaded" && status == "uploaded" {
+			return nil
+		}
+		if stored.Status != "pending" || (status != "awaiting_authority" && status != "preparing") {
+			return backup.ErrUploadPlan
+		}
+		return tx.Table("regional_backup_requests").Where("operation_id = ?", plan.OperationID).Update("status", "preparing").Error
 	})
+}
+
+// Correlate the persisted command; this is bookkeeping, not execution authority.
+// All upload mutations lock upload before request to keep the lock order stable.
+func lockArchiveRequest(tx *gorm.DB, plan backup.UploadPlan) (string, error) {
+	var row struct{ BackupID, EventID, Payload, Status string }
+	err := tx.Table("regional_backup_requests").Where("operation_id = ?", plan.OperationID).Clauses(clause.Locking{Strength: "UPDATE"}).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", backup.ErrUploadPlan
+	}
+	if err != nil {
+		return "", err
+	}
+	var request backup.Requested
+	if json.Unmarshal([]byte(row.Payload), &request) != nil || request.Validate() != nil || request.BackupID != row.BackupID || request.EventID != row.EventID || request.OperationID != plan.OperationID || request.EventID != plan.RequestEventID || request.RegionID != plan.RegionID || request.ServerID != plan.ServerID || request.OrganizationID != plan.Asset.OrganizationID || request.PlacementEpoch != plan.PlacementEpoch {
+		return "", backup.ErrUploadPlan
+	}
+	return row.Status, nil
 }
 
 func (s *RegionalStore) ClaimArchiveUpload(ctx context.Context, lease time.Duration) (*backup.UploadClaim, error) {
@@ -129,6 +157,15 @@ func (s *RegionalStore) finishArchiveUpload(ctx context.Context, claim backup.Up
 		if json.Unmarshal([]byte(row.Plan), &original) != nil || original != claim.Plan || row.StorageID != claim.Plan.StorageID || row.ObjectKey != claim.Plan.ObjectKey || row.OperationID != claim.Plan.OperationID || row.RequestEventID != claim.Plan.RequestEventID {
 			return backup.ErrUploadClaimLost
 		}
+		if receipt != "" {
+			status, err := lockArchiveRequest(tx, original)
+			if err != nil {
+				return err
+			}
+			if status != "preparing" {
+				return backup.ErrUploadPlan
+			}
+		}
 		now, err := outboxNow(tx)
 		if err != nil {
 			return err
@@ -138,6 +175,9 @@ func (s *RegionalStore) finishArchiveUpload(ctx context.Context, claim backup.Up
 		}
 		values := map[string]any{"lease_token": "", "lease_until_ms": 0, "next_attempt_ms": now + delay.Milliseconds()}
 		if receipt != "" {
+			if err := tx.Table("regional_backup_requests").Where("operation_id = ?", original.OperationID).Update("status", "uploaded").Error; err != nil {
+				return err
+			}
 			var archive backup.StoredArchive
 			if err := json.Unmarshal([]byte(receipt), &archive); err != nil {
 				return err

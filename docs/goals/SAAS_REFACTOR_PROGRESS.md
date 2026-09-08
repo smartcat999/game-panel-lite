@@ -93,6 +93,13 @@
 - 独立快照全量 Go（含新入口编译和架构）及 vet 通过，日志 `/tmp/gamepanel-global-receiver-all.log`、`/tmp/gamepanel-global-receiver-vet.log`；真实 PostgreSQL／RabbitMQ Store 与 MQ race 回归通过，日志 `/tmp/gamepanel-global-receiver-integration.log`。无 SQL 或历史迁移改动，其他草稿保留。
 - 已记录消费者运行与队列来源权限要求。用户备份 API、Region 当前执行授权、Node 一致快照和上传 Worker 接线仍需推进；六阶段 Goal 保持进行中。
 
+### 2026-09-09 区域备份请求关联上传生命周期
+
+- 复核发现上传持久记录尚未关联接收请求。本批直接在已有 Store 事务核对原请求事件、操作、租户、实例、Region 和 Placement epoch；无原请求、拒绝请求或内容冲突均回滚，不留下孤立上传。
+- 受信准备登记与请求 preparing 同事务；上传完成时请求 uploaded、回执及结果 Outbox 同事务。固定上传→请求锁顺序，并在全部取锁后读取数据库时间校验租约，避免等待请求锁后过期完成。重复完成计划保留终态，不新增表、模块或 SQL JOIN。
+- 真实 PostgreSQL race 验证缺失／冲突／拒绝请求、并发领取、失败回滚时请求仍为 preparing、成功后原子 uploaded、完成重放和坏任务隔离；日志 `/tmp/gamepanel-request-upload-integration.log`。独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-request-upload-all.log`、`/tmp/gamepanel-request-upload-vet.log`。未改 MQ 或历史迁移，其他草稿保留。
+- 调用点复核确认授权协调器和 Agent 备份快照任务尚未接入；本批关联与状态推进仅为持久记账，不能当作当前执行授权、游戏快照一致性或生产备份闭环证明。继续推进核心执行链路，六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
