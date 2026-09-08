@@ -154,11 +154,32 @@ func (s *Service) RestoreChecked(instanceID string, fileName string, targetDir s
 	if err != nil {
 		return err
 	}
-	reader, err := zip.OpenReader(backupPath)
+	file, err := os.Open(backupPath)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	return RestoreArchiveChecked(file, info.Size(), targetDir, hooks)
+}
+
+// RestoreArchiveChecked restores a caller-owned, seekable archive, including a
+// verified object-store download staged on local disk. The caller must authorize
+// the backup, verify its expected size and digest, stop the game, and serialize
+// mutations before calling. Archive metadata is compatibility, not authorization.
+// This function does not close source. It retains the local restore rollback
+// behavior; process-crash recovery and extraction quotas require orchestration.
+func RestoreArchiveChecked(source io.ReaderAt, size int64, targetDir string, hooks RestoreHooks) error {
+	if source == nil || size < 0 {
+		return fmt.Errorf("invalid backup archive source")
+	}
+	reader, err := zip.NewReader(source, size)
+	if err != nil {
+		return err
+	}
 	metadata, err := readMetadata(reader.File)
 	if err != nil {
 		return err
