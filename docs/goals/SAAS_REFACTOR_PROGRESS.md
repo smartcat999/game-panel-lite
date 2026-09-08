@@ -114,6 +114,13 @@
 - 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-backup-client-all.log`、`/tmp/gamepanel-backup-client-vet.log`；真实 PostgreSQL+mTLS、controlclient／controlapi race 通过，日志 `/tmp/gamepanel-backup-client-integration.log`。本批仅扩展控制客户端的明确契约依赖，保留其他草稿。
 - 备份协调器、有限期执行授权及 Node 一致快照尚未接入；实时检查不等同执行租约或离线授权。完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 不可变归档上传 Worker
+
+- 新增 UploadWorker，组合既有持久任务、OSS 与 assetfiles 的精确版本读取接口；先核验远端对象恢复回执，再按需打开本地不可变归档上传，复核计划与回执后调用完成事务。失败持久延后，完成记录不确定时不报告成功。StorageID 由组合根绑定适配器，任务不提供路径、URL 或凭证。
+- 提取 StoredArchive.ValidateFor 供结果事件与 Worker 共用，避免回执一致性规则重复。Worker 不执行游戏启停或快照生成，不把上传领取视为 Node 授权；未新增 SQL、框架或部署入口。
+- 本地真实 assetfiles 与任务／OSS 夹具验证首次上传、完成失败后本地不可用仍恢复、错误回执／存储拒绝、超时及敏感后端错误隔离。真实 TLS MinIO 组合验证 Worker 写入后模拟完成记录丢失，关闭本地适配器后恢复有效版本回执；任务存储在此测试中仍为明确夹具，不能冒充进程强杀或完整业务链路。
+- 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-upload-worker-all.log`、`/tmp/gamepanel-upload-worker-vet.log`；backup／s3archive race 含真实 MinIO 通过，日志 `/tmp/gamepanel-upload-worker-integration.log`。生产上传 Worker 入口、授权协调器与 Node 一致快照仍需接通，完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

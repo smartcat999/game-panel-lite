@@ -69,6 +69,7 @@ func TestMinIOArchiveIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	version := assets.PublishedVersion{OrganizationID: "tenant", AssetID: "backup", Version: "one", SizeBytes: size, SHA256: fmt.Sprintf("%x", sha256.Sum256(archive))}
+	testArchiveWorker(t, ctx, store, version, archive)
 	ref, err := store.Upload(ctx, "backup-one", version, bytes.NewReader(archive))
 	if err != nil || ref.ObjectVersion == "" || ref.ObjectVersion == "null" {
 		t.Fatalf("versioned upload: %+v %v", ref, err)
@@ -238,4 +239,58 @@ func startArchiveMinIO(t *testing.T, ctx context.Context) Options {
 	}
 	t.Logf("isolated S3 compatibility target: %s; TLS; versioning enabled by test", image)
 	return opts
+}
+
+// The task port is an explicit fixture here; PostgreSQL lease/Outbox behavior is
+// covered in store tests. This exercises actual local files, Worker and S3 I/O.
+type archiveWorkerTask struct {
+	claim          *backup.UploadClaim
+	receipt        backup.StoredArchive
+	failCompletion bool
+}
+
+func (t *archiveWorkerTask) PrepareArchiveUpload(context.Context, backup.UploadPlan) error {
+	return nil
+}
+func (t *archiveWorkerTask) ClaimArchiveUpload(context.Context, time.Duration) (*backup.UploadClaim, error) {
+	return t.claim, nil
+}
+func (t *archiveWorkerTask) RetryArchiveUpload(context.Context, backup.UploadClaim, time.Duration) error {
+	return nil
+}
+func (t *archiveWorkerTask) CompleteArchiveUpload(_ context.Context, _ backup.UploadClaim, r backup.StoredArchive) error {
+	if t.failCompletion {
+		return fmt.Errorf("injected lost completion")
+	}
+	t.receipt = r
+	t.claim = nil
+	return nil
+}
+
+func testArchiveWorker(t *testing.T, ctx context.Context, storage *Store, version assets.PublishedVersion, data []byte) {
+	t.Helper()
+	files, err := assetfiles.New(t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer files.Close()
+	if err := files.Put(ctx, version, io.NopCloser(bytes.NewReader(data))); err != nil {
+		t.Fatal(err)
+	}
+	plan := backup.UploadPlan{ID: "worker-upload", OperationID: "worker-operation", RequestEventID: "worker-request", RegionID: "east", ServerID: "server", DeploymentID: "deployment", NodeID: "node", SnapshotID: "snapshot", PlacementEpoch: 1, StorageID: storage.storageID, ObjectKey: "worker-archive", Asset: version}
+	task := &archiveWorkerTask{claim: &backup.UploadClaim{Token: "fixture", Plan: plan}, failCompletion: true}
+	worker := backup.UploadWorker{Tasks: task, Files: files, Archives: storage, StorageID: storage.storageID, Lease: time.Minute, Timeout: 20 * time.Second, RetryDelay: time.Second}
+	if ok, err := worker.RunOnce(ctx); ok || err == nil {
+		t.Fatal("completion failure ignored")
+	}
+	if err := files.Close(); err != nil {
+		t.Fatal(err)
+	}
+	task.failCompletion = false
+	if ok, err := worker.RunOnce(ctx); !ok || err != nil {
+		t.Fatal("S3 receipt recovery failed", err)
+	}
+	if task.receipt.ValidateFor(plan) != nil || task.receipt.ObjectVersion == "" {
+		t.Fatal("invalid recovered S3 receipt")
+	}
 }

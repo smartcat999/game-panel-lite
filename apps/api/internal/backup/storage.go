@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 )
@@ -26,4 +27,13 @@ type ArchiveStore interface {
 	// exact expected bytes. The key must belong exclusively to the authorized job.
 	ResolveUpload(context.Context, string, assets.PublishedVersion) (StoredArchive, error)
 	Open(context.Context, StoredArchive) (io.ReadCloser, error)
+}
+
+// ValidateFor binds a storage receipt to the prepared upload, including tenant,
+// bytes and object identity. It is not a check of physical storage durability.
+func (r StoredArchive) ValidateFor(plan UploadPlan) error {
+	if plan.Validate() != nil || r.StorageID != plan.StorageID || r.ObjectKey != plan.ObjectKey || r.Asset != plan.Asset || len(r.ObjectVersion) > 1024 || strings.ContainsAny(r.ObjectVersion, "\x00\r\n") {
+		return ErrUploadPlan
+	}
+	return nil
 }
