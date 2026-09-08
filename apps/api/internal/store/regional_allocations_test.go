@@ -175,4 +175,5 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 		t.Fatal("stopped intent reserved compute")
 	}
 	testRegionalPorts(t, db, create)
+	testRegionalScheduler(t, db)
 }
