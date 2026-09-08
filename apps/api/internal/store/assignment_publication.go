@@ -37,6 +37,9 @@ func (s *Store) PublishWorkloadAssignment(ctx context.Context, before domain.Gam
 				return err
 			}
 		}
+		if err := tx.lockNodePorts(ctx, assignment.NodeID); err != nil {
+			return err
+		}
 		locked := tx.db.WithContext(ctx).Model(&domain.GameServer{}).
 			Where("id = ? AND spec = ? AND COALESCE(node_id, '') = ? AND COALESCE(organization_id, '') = ?", before.ID, string(spec), before.NodeID, before.OrganizationID).
 			UpdateColumn("updated_at", gorm.Expr("updated_at"))
@@ -45,6 +48,19 @@ func (s *Store) PublishWorkloadAssignment(ctx context.Context, before domain.Gam
 		}
 		if locked.RowsAffected == 0 {
 			return ErrReconciliationSuperseded
+		}
+		if assignment.DesiredState == domain.DesiredRunning {
+			bindings, err := workload.ResolvePortBindings(assignment.Spec.Network)
+			if err != nil {
+				return err
+			}
+			ports := make([]int, 0, len(bindings))
+			for _, binding := range bindings {
+				ports = append(ports, binding.HostPort)
+			}
+			if err := tx.reserveNodePorts(ctx, assignment.NodeID, before.ID, ports); err != nil {
+				return err
+			}
 		}
 		current, err := tx.GetWorkloadAssignmentByServer(ctx, before.ID)
 		if err != nil && !errors.Is(err, ErrNotFound) {

@@ -28,6 +28,12 @@ func (s *Store) SaveAgentWorkloadObservation(ctx context.Context, request Execut
 		if locked.RowsAffected != 1 {
 			return ErrExecutionLeaseUnavailable
 		}
-		return tx.UpsertWorkloadObservation(ctx, observation)
+		if err := tx.UpsertWorkloadObservation(ctx, observation); err != nil {
+			return err
+		}
+		if assignment.DesiredState == domain.DesiredDeleted && observation.ActualState == domain.ActualMissing && observation.LastError == "" && observation.RuntimeID == "" {
+			return tx.db.WithContext(ctx).Where("node_id = ? AND server_id = ?", assignment.NodeID, assignment.ServerID).Delete(&nodePortReservation{}).Error
+		}
+		return nil
 	})
 }

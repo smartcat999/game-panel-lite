@@ -45,3 +45,9 @@ Migration 012 renames `oauth_identities` to `o_auth_identities`, matching the cu
 The PostgreSQL integration suite inserts an identity under migration 010 and verifies lookup/update after 012 using a runtime role without DDL privileges. It also verifies duplicate rejection and that the same remote subject may belong to different providers. This is database compatibility evidence, not a third-party OAuth login, account recovery, payment or credit-accounting acceptance test.
 
 Migration 013 adds `compute_nodes.runtime_architecture` with a non-null empty default. Existing rows stay unknown until an Agent reports the Docker daemon architecture. It is deliberately not backfilled from OSInfo: the Agent process and Docker daemon may have different architectures. Registration and heartbeat normalize recognized aliases; omitted or failed probes clear prior evidence. Repeated migration preserves subsequently reported values.
+
+### 014 节点端口预留
+
+`node_port_reservations` 持久化每个节点、端口、实例的占用，主端口和 Provider 附加端口均参与。数字端口保守地跨协议互斥。迁移回填现有实例与任务清单，保留历史冲突的所有占用者；主键包含实例 ID 是为保留历史证据，当前写入通过节点端口池锁串行检查冲突。
+
+升级必须停止旧写入进程后运行迁移；尚不支持新旧写入协议混跑。SQLite 使用一次性迁移版本 2 回填。替换或删除任务不会隐式释放端口；当前节点的受租约授权删除完成回报才释放该实例预留。迁移源节点和配置更新后的旧端口仍需可靠运行时证据才能回收。

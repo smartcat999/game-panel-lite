@@ -121,7 +121,7 @@ func (s *Store) changeExecutionLease(ctx context.Context, request ExecutionLease
 
 // Caller must hold a transaction for the entire protected write.
 func (tx *Store) lockExecutionAssignment(ctx context.Context, request ExecutionLeaseRequest) (domain.WorkloadAssignment, int64, error) {
-	// Lock order: node, instance, assignment, lease. Token rotation and deletion
+	// Lock order: node, port pool, instance, assignment, lease. Token rotation and deletion
 	// must serialize with authorization, not merely precede an HTTP handler.
 	locked := tx.db.WithContext(ctx).Model(&domain.ComputeNode{}).Where("id = ? AND token = ?", request.NodeID, request.NodeToken).UpdateColumn("updated_at", gorm.Expr("updated_at"))
 	if locked.Error != nil {
@@ -129,6 +129,9 @@ func (tx *Store) lockExecutionAssignment(ctx context.Context, request ExecutionL
 	}
 	if locked.RowsAffected != 1 {
 		return domain.WorkloadAssignment{}, 0, ErrExecutionLeaseUnavailable
+	}
+	if err := tx.lockNodePorts(ctx, request.NodeID); err != nil {
+		return domain.WorkloadAssignment{}, 0, err
 	}
 	assignment, err := tx.GetWorkloadAssignmentByUID(ctx, request.AssignmentUID)
 	if err != nil {

@@ -85,6 +85,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := baselineDB.Exec("INSERT INTO oauth_identities (id, user_id, provider, provider_user_id, email, name) VALUES ('legacy-oauth-link', 'legacy-oauth-user', 'test-provider', 'remote-subject', 'original@example.test', 'Original')").Error; err != nil {
 		t.Fatal(err)
 	}
+	seedLegacyNodePorts(t, baselineDB)
 	baselinePool, _ := baselineDB.DB()
 	baselinePool.Close()
 	var starters sync.WaitGroup
@@ -109,6 +110,13 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	verifyLegacyNodePorts(t, db)
+	if err := db.db.Exec("DELETE FROM game_servers WHERE id = ?", "legacy-port-a").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.db.Exec("DELETE FROM workload_assignments WHERE id = ?", "legacy-port-task").Error; err != nil {
+		t.Fatal(err)
+	}
 	testNodeSchedulingMigration(t, db)
 	if err := MigratePostgres(ctx, parsed.String()); err != nil {
 		t.Fatal(err)
@@ -236,6 +244,8 @@ func TestPostgresIntegration(t *testing.T) {
 	testReconciliationPersistence(t, db)
 	testTenantAllocations(t, db)
 	testNodeAllocations(t, db)
+	testNodePortReservations(t, db)
+	testNodePortRelease(t, db)
 	testPendingPlacement(t, db)
 	testTenantPresets(t, db)
 	testTenantModLibrary(t, db)

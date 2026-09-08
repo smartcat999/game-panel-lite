@@ -80,3 +80,9 @@ Lease acquisition now returns `observationToken` from inside the assignment/leas
 Container and host ports must be within 1–65535. A host port without a primary container port is invalid. Exact duplicate mappings collapse, multiple host ports may map to one container port, and a host/protocol pair cannot target two different container ports. TCP and UDP may use the same numeric port. Binding order is deterministic. Both adapters reject invalid networks before mutating Docker state. The Worker validates running intent before removing an existing container for replacement. Stop and delete requests remain possible even when the stored network spec is invalid.
 
 Provider additional-port offsets use the effective primary host port, including the container-port default when the host port is omitted. Offset overflow is rejected before assignment publication. This contract supplies a complete binding list for placement reservations; it does not itself reserve ports across instances or retire reservations after runtime changes.
+
+### 端口预留与删除回报
+
+端口解释由共享 workload 完成，Provider 提供游戏网络需求；持久化 Adapter 负责预留与任务写入的原子性，不在 HTTP 或 Agent 中维护第二份预留账本。任务发布持有端口池锁再锁实例；执行租约相关事务遵循节点 → 端口池 → 实例 → 任务 → 租约的顺序。
+
+主/附加端口跨代次及任务删除保留。只有当前任务要求删除，且当前有效租约持有者以当前状态令牌回报 ActualMissing、无错误、无 RuntimeID，才在同一事务释放当前节点的预留。过期持有者、过期状态令牌、失败删除或矛盾的运行时 ID 不释放。该回报依赖受信 Agent，不构成基础设施强 fencing；旧节点迁移、配置替换及孤儿预留自动回收尚待实现。

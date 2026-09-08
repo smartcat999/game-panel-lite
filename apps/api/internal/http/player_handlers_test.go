@@ -76,7 +76,8 @@ func TestPlayerManagementGatedByProviderCapability(t *testing.T) {
 
 func TestMinecraftWhitelistManagement(t *testing.T) {
 	adapter := newCommandCaptureAdapter()
-	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	// This checks commands against a fixed running instance, not reconciliation.
+	router, db, cfg := newTestRouterFixture(t, adapter, true, false)
 
 	minecraftServer := testServer("minecraft-whitelist", cfg.DataDir)
 	minecraftServer.GameKey = domain.GameMinecraft

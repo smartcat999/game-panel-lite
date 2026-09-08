@@ -37,6 +37,9 @@ func (s *Store) lockNodeAllocation(ctx context.Context, instance domain.GameServ
 	if !finiteResources(instance.Spec.Resources) || node.CPUCores <= 0 || node.MemoryTotalMB <= 0 {
 		return fmt.Errorf("%w: finite instance limits and known node capacity are required", ErrNodeAllocationUnavailable)
 	}
+	if err := s.lockNodePorts(ctx, instance.NodeID); err != nil {
+		return err
+	}
 	var assigned []domain.GameServer
 	if err := s.db.WithContext(ctx).Where("node_id = ? AND id <> ?", instance.NodeID, instance.ID).Find(&assigned).Error; err != nil {
 		return err
@@ -59,6 +62,13 @@ func (s *Store) lockNodeAllocation(ctx context.Context, instance domain.GameServ
 	}
 	if math.IsNaN(remainingCPU) || instance.Spec.Resources.CPULimitCores > remainingCPU || int64(instance.Spec.Resources.MemoryLimitMB) > remainingMemory {
 		return fmt.Errorf("%w: insufficient node capacity", ErrNodeAllocationUnavailable)
+	}
+	host := instance.Spec.Network.HostPort
+	if host == 0 {
+		host = instance.Spec.Network.Port
+	}
+	if host > 0 {
+		return s.reserveNodePorts(ctx, instance.NodeID, instance.ID, []int{host})
 	}
 	return nil
 }

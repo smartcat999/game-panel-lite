@@ -26,7 +26,7 @@ func TestSQLiteArtifactReferenceUpgrade(t *testing.T) {
 	if err := db.db.Create(&assignment).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"workload_artifact_references", "gamepanel_sqlite_migrations"} {
+	for _, table := range []string{"workload_artifact_references", "node_port_reservations", "node_port_pools", "gamepanel_sqlite_migrations"} {
 		if err := db.db.Exec("DROP TABLE " + table).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +75,7 @@ func TestSQLiteArtifactReferenceMigrationRollsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, table := range []string{"workload_artifact_references", "gamepanel_sqlite_migrations"} {
+	for _, table := range []string{"workload_artifact_references", "node_port_reservations", "node_port_pools", "gamepanel_sqlite_migrations"} {
 		if err := db.db.Exec("DROP TABLE " + table).Error; err != nil {
 			t.Fatal(err)
 		}
