@@ -246,3 +246,13 @@
 - 实际本机 RabbitMQ 4.3.5（rabbitmq:4-alpine，镜像 ID `sha256:abb0844d027dd92d80a3a3e9189a30b4b935356f30fc1ee3975482614ee86bd9`）race 测试覆盖持久消息内容与 ID、错误区域拒绝、连接复用、删除队列后无法路由的 ACK 拒绝、重新声明和断连恢复；本机黑洞端点验证握手超时。临时队列与 Broker 清理，不连接用户生产系统。
 - 工作区及最终独立暂存快照的全量 Go（含架构门禁）／vet 和实际 RabbitMQ race 全部通过。独立日志 `/tmp/gamepanel-rabbit-index-all.log`、`/tmp/gamepanel-rabbit-index-vet.log`、`/tmp/gamepanel-rabbit-index-integration.log`。第三方 vendor 原始文档自带两处空白格式提示，保留上游文件；本项目代码的 diff 空白检查通过。
 - Region Inbox／任务原子提交、消费确认、版本与授权检查、死信／对账、端到端进程重启、跨区域与多副本容灾、容量验收仍未完成。单节点 Broker 测试不替代这些目标。
+
+### 2026-09-08 独立区域库与通知 Inbox
+
+- 新增独立 `RegionalStore` 和区域迁移身份，区域 schema 只创建固定 Region、Inbox 与获取授权修订任务，不创建用户／全局实例表；普通打开只读校验，错误区域或全局 Store／迁移器不能接管。
+- `RecordRevisionNotification` 校验 schema／身份／正版本／Region，Inbox 与任务同事务写入。eventId 摘要去重与 operationId 语义去重并用；修改内容拒绝并回滚，不给已存在任务重置状态。
+- 任务状态为 `awaiting_revision`，只证明通知持久化，尚未授予执行权或接受部署。后续必须取得受保护修订并检查归属、版本、意图、权益和授权期限。详见 [区域 Inbox 说明](../architecture/regional-inbox.md)。
+- 真实 PostgreSQL 两个隔离 schema 验证 8 方重复去重、双重身份冲突、任务写入失败整体回滚、区域隔离、schema 混用拒绝和最小权限角色；收件角色可 INSERT／SELECT Inbox 与任务，不能修改区域身份。
+- 新增 `region-migrate` 入口。实际 CLI 在临时容器专用数据库上重复迁移成功，改绑另一区域退出失败，日志 `/tmp/gamepanel-region-cli.log`、`/tmp/gamepanel-region-cli-rejected.log`。
+- 工作区全量 Go／vet、区域 PostgreSQL race 通过；最终独立快照的全量 Go（含架构门禁）／vet 以及全局＋区域 PostgreSQL race 全部通过。独立日志 `/tmp/gamepanel-region-inbox-index-all.log`、`/tmp/gamepanel-region-inbox-index-vet.log`、`/tmp/gamepanel-region-inbox-index-pg.log`。临时数据库和角色均清理，其他草稿保留。
+- 尚未接入 Broker 消费循环／确认、授权修订获取、Deployment、任务租约与重试、死信／对账、结果 Outbox；两个测试 schema 不代表两个完整 Region 或跨主机容灾验收。总 Goal 继续进行。

@@ -149,6 +149,15 @@ type RevisionAvailable struct {
 	SpecGeneration int64  `json:"specGeneration"`
 }
 
+func (event RevisionAvailable) Validate() error {
+	if event.SchemaVersion != 1 || !identifier(event.EventID) || !identifier(event.OperationID) ||
+		!identifier(event.OrganizationID) || !identifier(event.ServerID) || !identifier(event.RevisionID) ||
+		!identifier(event.RegionID) || event.PlacementEpoch < 1 || event.SpecGeneration < 1 {
+		return ErrInvalidIntent
+	}
+	return nil
+}
+
 // EncodeSpecification takes a value snapshot, including slices held by
 // callers, before persistence starts. The stored revision is never updated.
 func EncodeSpecification(spec Specification) ([]byte, error) {
