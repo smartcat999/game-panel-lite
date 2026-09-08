@@ -141,7 +141,10 @@ func (s *RegionalStore) CompleteScheduling(ctx context.Context, claim regional.S
 		if err := checkRegionalPortReceipt(tx, receipt, allocation.Ports); err != nil {
 			return err
 		}
-		// Recheck database time after all reads before completing the claim.
+		if err := stageRegionalNodeTask(tx, receipt); err != nil {
+			return err
+		}
+		// Recheck database time after staging the task before completing the claim.
 		now, err := outboxNow(tx)
 		if err != nil {
 			return err

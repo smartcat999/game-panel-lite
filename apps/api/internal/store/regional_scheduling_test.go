@@ -91,6 +91,20 @@ func testSchedulingClaims(t *testing.T, db *RegionalStore, dsn string, scheduler
 	if err := db.RetryScheduling(ctx, a, time.Second); !errors.Is(err, regional.ErrSchedulingClaimLost) {
 		t.Fatal("old claimant retry", err)
 	}
+	// Force the final scheduling write to fail after the Node task insert.
+	if err := db.db.Exec("ALTER TABLE regional_deployments ADD CONSTRAINT test_completion_failure CHECK (scheduling_status <> 'reserved')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := reopened.CompleteScheduling(ctx, *recovered, first); err == nil {
+		t.Fatal("injected completion failure ignored")
+	}
+	var tasksAfterFailure int64
+	if err := db.db.Table("regional_node_tasks").Where("allocation_id = ?", first.ID).Count(&tasksAfterFailure).Error; err != nil || tasksAfterFailure != 0 {
+		t.Fatal("failed scheduling left node task", err)
+	}
+	if err := db.db.Exec("ALTER TABLE regional_deployments DROP CONSTRAINT test_completion_failure").Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := reopened.CompleteScheduling(ctx, *recovered, first); err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +137,22 @@ func testSchedulingClaims(t *testing.T, db *RegionalStore, dsn string, scheduler
 	if done, err := worker.RunOnce(ctx); done || err != nil {
 		t.Fatal("completed task reclaimed", err)
 	}
+	var nodeTasks []regional.NodeTask
+	if err := db.db.Table("regional_node_tasks").Order("id").Find(&nodeTasks).Error; err != nil || len(nodeTasks) != 2 {
+		t.Fatal("missing or duplicate node tasks", err)
+	}
+	for _, task := range nodeTasks {
+		expected := first
+		if task.AllocationID == second.ID {
+			expected = second
+		}
+		if task.ID != expected.ID || task.CapacityRequest != expected.CapacityRequest || task.Kind != "run" || task.Status != "awaiting_authority" {
+			t.Fatal("incorrect node task binding")
+		}
+	}
+	if err := db.db.Transaction(func(tx *gorm.DB) error { return stageRegionalNodeTask(tx, first) }); err != nil {
+		t.Fatal("duplicate staging changed task", err)
+	}
 	// New intent invalidates an old claim and queues only running deployments.
 	update := a.Snapshot
 	update.IntentVersion++
@@ -150,6 +180,13 @@ func testSchedulingClaims(t *testing.T, db *RegionalStore, dsn string, scheduler
 	}
 	if c, err := db.ClaimScheduling(ctx, time.Minute); c != nil || err != nil {
 		t.Fatal("stopped deployment claimed", err)
+	}
+	var obsolete regional.NodeTask
+	if err := db.db.Table("regional_node_tasks").Where("allocation_id = ?", first.ID).Take(&obsolete).Error; err != nil || obsolete.Status != "superseded" {
+		t.Fatal("old run task remains eligible", err)
+	}
+	if err := db.db.Transaction(func(tx *gorm.DB) error { return stageRegionalNodeTask(tx, first) }); !errors.Is(err, regional.ErrNodeTaskConflict) {
+		t.Fatal("superseded run task revived", err)
 	}
 	var count int64
 	if err := db.db.Table("regional_allocations").Where("deployment_id IN ?", []string{first.DeploymentID, second.DeploymentID}).Count(&count).Error; err != nil || count != 2 {

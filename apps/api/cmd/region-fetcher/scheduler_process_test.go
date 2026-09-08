@@ -133,12 +133,16 @@ func testSchedulerProcess(t *testing.T, ctx context.Context, binary string, glob
 	}
 	available.Store(true)
 	wait(func() bool { read(); return status == "reserved" })
-	var node, ports string
-	if err := admin.QueryRowContext(ctx, "SELECT node_id,ports FROM "+schema+".regional_allocations WHERE server_id=$1 AND status='reserved'", event.ServerID).Scan(&node, &ports); err != nil {
+	var node, ports, allocationID string
+	if err := admin.QueryRowContext(ctx, "SELECT id,node_id,ports FROM "+schema+".regional_allocations WHERE server_id=$1 AND status='reserved'", event.ServerID).Scan(&allocationID, &node, &ports); err != nil {
 		t.Fatal(err)
 	}
 	if node != "process-a" || !bytes.Contains([]byte(ports), []byte("32000")) {
 		t.Fatalf("invalid process reservation: %s %s", node, ports)
+	}
+	var taskID, taskStatus string
+	if err := admin.QueryRowContext(ctx, "SELECT id,status FROM "+schema+".regional_node_tasks WHERE allocation_id=$1", allocationID).Scan(&taskID, &taskStatus); err != nil || taskID != allocationID || taskStatus != "awaiting_authority" {
+		t.Fatal("node task not atomically staged", err)
 	}
 	if err := command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)

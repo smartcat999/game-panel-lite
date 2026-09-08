@@ -1,6 +1,6 @@
 # 运行区域调度进程
 
-`apps/api/cmd/region-scheduler` 组合现有持久任务、全局 Revision HTTPS 客户端、配置保护、Provider、租户节点策略及区域原子预留。它只完成资源预留，不签发 Node 执行任务。单个进程按一次一任务运行，空闲或失败后等待配置的轮询间隔。
+`apps/api/cmd/region-scheduler` 组合现有持久任务、全局 Revision HTTPS 客户端、配置保护、Provider、租户节点策略及区域原子预留。它完成资源预留并在同一事务登记待授权 Node 任务，不签发运行许可或下发可执行命令。单个进程按一次一任务运行，空闲或失败后等待配置的轮询间隔。
 
 ## 启动前
 
@@ -43,3 +43,5 @@ go run ./apps/api/cmd/region-scheduler \
 测试通过 `GAMEPANEL_TEST_SCHEDULER_BINARY` 指向独立构建的二进制，在真实 PostgreSQL 的独立全局／区域 schema 上启动实际进程，通过真实 mTLS 全局 Handler 验证不可用时退避、恢复后预留及正常退出。使用无外部资产的新实例，节点心跳是夹具；未证明真实 Agent、游戏容器、跨主机或多 Region 完整运行。
 
 当前入口读取区域运维节点策略；商业权益、用户级指定节点权限、Node 执行授权及任务下发仍未完成。全局意图读取不是跨库原子承诺。`scheduling_status=reserved` 不表示容器已创建、游戏已启动或用户操作已成功。
+
+迁移 015 会将原已预留且期望运行的部署重新排入调度恢复队列。恢复期间需要全局接口可用；原资源不会自动释放。调度完成时，`regional_node_tasks` 中应有对应的 `awaiting_authority` 元数据任务，这仍不是开服完成状态。

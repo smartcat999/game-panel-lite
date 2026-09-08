@@ -271,6 +271,14 @@
 - 当前有外部资产引用或 Provider 制品的实例明确返回需要资产装配，不静默丢弃存档／模组。无资产引用路径已通过真实 Vanilla／tModLoader Provider 与旧运行构建器配置内容比较，以及真实 PostgreSQL 预留到运行配置转换；覆盖错租户／Region／版本／规格／协议／缺失或多余端口、停服意图、资产引用和独立配置副本。
 - 独立快照全量 Go（含架构）、vet、Provider／真实 PG race 均通过。日志 `/tmp/gamepanel-regional-workload-all.log`、`/tmp/gamepanel-regional-workload-vet.log`、`/tmp/gamepanel-regional-workload-integration.log`。本批尚未把运行配置接到 Node API／Agent，不授予执行租约；资产装配、任务交付和真实容器仍是核心未完成项。没有新增 SQL 或服务层级。
 
+### 调度提交与持久节点任务
+
+- 新增区域迁移 015，节点任务只保存 Allocation／Deployment／租户／Region／Node、配置和意图版本等绑定元数据。每个不可变预留对应一个初始运行任务，初始状态固定 `awaiting_authority`，不含运行 Spec、密钥或密码，不可作为可执行 Assignment 下发。
+- `CompleteScheduling` 在同一事务中校验预留、登记节点任务、复核数据库时间并标记调度完成。重复登记必须完全一致；配置或意图推进时，在 Deployment 同一事务内将尚未授权旧任务标记 `superseded`，不会恢复旧任务或释放运行资源。
+- 迁移将旧的 `reserved + running` 部署重新标记待调度，复用全局复核／原回执恢复流程补建任务；不直接从历史标记合成可执行任务。测试从 014 实际升级到 015，确认运行标记可重新领取、停服标记未误入启动队列且没有自动创建任务。
+- 真实 PG 覆盖节点任务绑定、重复登记、最终提交故障后任务插入回滚、旧领取失效、旧任务被替代且不可复活；实际调度进程验证预留完成时节点任务已同事务可见。独立快照全量 Go（含架构）、vet、真实 PG／调度进程 mTLS race 均通过。日志 `/tmp/gamepanel-node-tasks-all.log`、`/tmp/gamepanel-node-tasks-vet.log`、`/tmp/gamepanel-node-tasks-integration.log`。
+- 此处只建立可靠待授权任务，未取得商业权益或 Node 执行许可，也未下发／启动容器。后续必须在授权与交付前重新校验当前归属、节点会话和预留，不能把任务 ID、旧会话代数或 `awaiting_authority` 当作运行权限。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
