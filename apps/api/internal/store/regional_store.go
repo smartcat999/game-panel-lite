@@ -35,6 +35,9 @@ var regionalBackupPreparationSQL string
 //go:embed migrations/regional_008_deployments.sql
 var regionalDeploymentsSQL string
 
+//go:embed migrations/regional_009_nodes.sql
+var regionalNodesSQL string
+
 var ErrRegionMismatch = errors.New("regional database or event belongs to a different region")
 
 // RegionalStore exposes no global identity, billing or instance mutation APIs.
@@ -45,7 +48,7 @@ type RegionalStore struct {
 }
 
 func regionalMigrations() []sqlMigration {
-	return []sqlMigration{{1, "regional_ingress", regionalIngressSQL}, {2, "regional_revision_fetch", regionalRevisionFetchSQL}, {3, "regional_asset_preparation", regionalAssetPreparationSQL}, {4, "regional_archive_uploads", regionalArchiveUploadsSQL}, {5, "regional_backup_ingress", regionalBackupIngressSQL}, {6, "regional_backup_result_publication", regionalBackupResultPublicationSQL}, {7, "regional_backup_preparation", regionalBackupPreparationSQL}, {8, "regional_deployments", regionalDeploymentsSQL}}
+	return []sqlMigration{{1, "regional_ingress", regionalIngressSQL}, {2, "regional_revision_fetch", regionalRevisionFetchSQL}, {3, "regional_asset_preparation", regionalAssetPreparationSQL}, {4, "regional_archive_uploads", regionalArchiveUploadsSQL}, {5, "regional_backup_ingress", regionalBackupIngressSQL}, {6, "regional_backup_result_publication", regionalBackupResultPublicationSQL}, {7, "regional_backup_preparation", regionalBackupPreparationSQL}, {8, "regional_deployments", regionalDeploymentsSQL}, {9, "regional_nodes", regionalNodesSQL}}
 }
 
 func validRegion(region string) bool { return region != "" && region == strings.TrimSpace(region) }

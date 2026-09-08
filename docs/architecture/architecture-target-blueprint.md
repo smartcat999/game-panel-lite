@@ -175,3 +175,20 @@ Region 无容量时进入 WaitingForCapacity 或明确拒绝，不擅自跨 Regi
 区域迁移 008 将 Deployment 从全局逻辑实例中独立出来。资产准备完成与待授权 Deployment 在同一事务提交；部署按 serverId＋placementEpoch 唯一，持有受保护配置快照的区域任务引用，不复制全局用户和账务数据。配置 generation 与用户意图版本分别检查，旧通知不回退现有期望配置，冲突通知不部分提交。
 
 当前这张表仅落地待授权部署身份与期望配置，未分配 Node、容量或端口，也未生成执行授权。不同 Placement epoch 可保存不同部署记录；将来调度必须验证当前归属及旧部署隔离条件，不能因存在新记录就允许双实例运行。区域调度、实际任务派发与观察状态回传仍未完成。
+
+## 区域节点配置入口（2026-09-09）
+
+区域迁移 009 新增 regional_nodes，保存运维确认的节点身份、名称、运行架构、CPU／内存容量上限、调度开关和配置版本。Region 由数据库身份绑定，配置接口不提供跨 Region 修改字段。此表只描述管理配置，不表示节点在线、容量空闲或具备执行授权；后续调度必须同时读取有效心跳及事务预留。
+
+运维使用有权限访问所属区域数据库的凭证，经 GAMEPANEL_REGIONAL_DATABASE_URL 注入；先迁移再配置：
+
+```sh
+go run ./apps/api/cmd/region-migrate -region east
+go run ./apps/api/cmd/region-node -region east -id node-a -name node-a \
+  -architecture amd64 -cpu 8 -memory-mb 16384
+go run ./apps/api/cmd/region-node -region east -list -limit 50
+```
+
+新建使用 expected-version=0。更新为完整配置替换，必须提交列表返回的版本及全部配置字段；例如确认节点可参与调度后，提交对应容量、架构和 `-expected-version 1 -schedulable`。不传 schedulable 时为 false，可用于关闭调度候选资格；关闭开关不会停止或删除已有工作负载。并发或过期更新返回版本冲突，重新查询后由运维决定是否重试，不能盲目覆盖。
+
+列表按节点 ID 排序，使用 `-after` 传入上一页末尾 ID，单页 1–200 条。此命令是区域运维入口，不向普通租户暴露宿主机清单。Agent 身份登记、心跳、节点池权限、容量预留及调度接线仍未完成；旧全局节点表和旧 Agent 路由尚未切换。

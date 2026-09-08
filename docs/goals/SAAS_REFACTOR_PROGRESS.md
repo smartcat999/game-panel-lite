@@ -171,6 +171,13 @@
 - 最终独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store race 通过；前一轮区域模块／region-fetcher race 也通过。日志 `/tmp/gamepanel-deployments-final-all.log`、`/tmp/gamepanel-deployments-final-vet.log`、`/tmp/gamepanel-deployments-final-integration.log`、`/tmp/gamepanel-deployments-integration.log`。验证并发唯一、乱序版本、租户／版本冲突、过期回滚、故障注入及现有 AssetWorker 实际文件准备后的部署交接。无前端修改，无 JOIN，历史迁移未变。
 - 尚无 Node 分配或执行权限，不能用待授权 Deployment、资产完成或 Placement epoch 作为运行授权／源隔离证据。调度、授权、Node 任务及全局结果投影仍待接通。
 
+### 区域节点配置与运维入口
+
+- 区域迁移 009 在独立区域库保存节点管理配置，含身份、名称、架构、CPU／内存容量上限、调度开关及版本。创建／更新使用唯一键与版本 CAS，并发修改不能覆盖旧观察；配置不代替心跳或资源预留。
+- 新增 region-node 组合入口，读取区域数据库环境变量，支持完整配置更新及有界 ID 游标分页；Region 不匹配在开库时拒绝。默认调度开关关闭，不自动迁移旧全局节点，也不把配置成功当成节点上线。
+- 独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store／regional race 通过；实际运行 region-migrate 和 region-node 验证创建、查询、更新、关闭调度开关、旧版本及错区域拒绝。日志 `/tmp/gamepanel-regional-nodes-all.log`、`/tmp/gamepanel-regional-nodes-vet.log`、`/tmp/gamepanel-regional-nodes-integration.log`，命令结果 `/tmp/gamepanel-regional-nodes-cli-{create,update,list}.json`。证据不包含节点上线或真实调度。
+- 无 JOIN，无历史迁移修改，无前端改动。后续继续接区域节点身份／心跳、调度事务及 Agent 执行授权。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
