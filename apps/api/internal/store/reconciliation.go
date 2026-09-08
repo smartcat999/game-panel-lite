@@ -36,3 +36,30 @@ func (s *Store) SaveReconciledGameServer(ctx context.Context, before, after doma
 	}
 	return nil
 }
+
+// MigrateGameServer atomically changes placement and retires the source
+// assignment. It does not prove source fencing or transfer world data.
+func (s *Store) MigrateGameServer(ctx context.Context, before, after domain.GameServer) error {
+	if before.ID != after.ID || before.OrganizationID != after.OrganizationID || after.NodeID == "" || after.NodeID == before.NodeID || after.Spec.Generation <= before.Spec.Generation {
+		return ErrReconciliationSuperseded
+	}
+	spec, err := json.Marshal(before.Spec)
+	if err != nil {
+		return err
+	}
+	return s.Transaction(ctx, func(tx *Store) error {
+		update := domain.GameServer{NodeID: after.NodeID, Spec: after.Spec, Status: after.Status, UpdatedAt: time.Now().UTC()}
+		// Acquire the instance before the assignment, matching publication and lease
+		// acquisition. The intent comparison prevents a stale migration winning.
+		result := tx.db.WithContext(ctx).Model(&domain.GameServer{}).
+			Where("id = ? AND spec = ? AND COALESCE(node_id, '') = ? AND COALESCE(organization_id, '') = ?", before.ID, string(spec), before.NodeID, before.OrganizationID).
+			Select("node_id", "spec", "status", "updated_at").Updates(&update)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrReconciliationSuperseded
+		}
+		return tx.DeleteWorkloadAssignment(ctx, before.ID)
+	})
+}
