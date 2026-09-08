@@ -135,6 +135,13 @@
 - 测试覆盖已取消调用不产生输出、复制中取消后不继续消费全部源、符号链接失败后清理半成品；原有归档内容、子树路径和恢复回归保留。独立快照全量 Go（含架构）、vet、backup／HTTP race 通过，日志 `/tmp/gamepanel-archive-context-all.log`、`/tmp/gamepanel-archive-context-vet.log`、`/tmp/gamepanel-archive-context-race.log`。
 - 无 SQL、迁移或前端变更，未重跑外部服务。归档取消仅为协作式保护；区域授权协调器、互斥 Node 快照、稳定归档交付与用户异步 API 仍未接通。保留其他草稿，完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 Runtime 停止数据读取与生命周期互斥
+
+- 复用共享 Docker Adapter 现有实例文件锁，新增 ReadStoppedData；锁内重新校验当前容器完整身份与明确停止状态，拒绝运行／重启／暂停／dead／缺失状态及未完成文件恢复。仅在回调内提供实例目录 fs.FS，完成后再次检查状态，不暴露宿主机路径。
+- 两个 Adapter 实例的协议测试验证读取期间 Start 等待同一把锁，回调成功或失败后释放；覆盖运行数据拒绝、缺失状态、旧 assignment、读取期间状态变化、父目录逃逸拒绝。现有 Runtime／Worker／Agent race 回归通过，日志 `/tmp/gamepanel-stopped-data-race.log`。
+- 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-stopped-data-all.log`、`/tmp/gamepanel-stopped-data-vet.log`。补充真实 Docker race 集成通过，日志 `/tmp/gamepanel-stopped-data-docker.log`：一次性 Alpine 容器运行中拒绝读取，停止后读取实际配置文件，结束删除容器；不以此代替真实游戏保存语义或跨主机验收。
+- 无新表、SQL、迁移或业务框架，其他草稿保留。该锁仅覆盖协作进程，不防外部宿主机／Docker 写入；调用方仍须持有有效执行授权，在回调内暂存并在成功返回后发布。Agent 快照任务、共享归档写入和区域授权协调器仍待接入，完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

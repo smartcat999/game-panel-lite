@@ -143,3 +143,13 @@ go run ./apps/api/cmd/region-upload-worker -region east \
 备份 Service 增加 CreateContext／CreateSubtreeContext，保留旧方法作为兼容入口。复制使用带 Context 检查的有界读循环，并在取消时关闭当前源文件；目录遍历及返回成功前复核取消状态，失败不返回归档路径并清理未完成文件。现有手动备份与存档快照 HTTP 入口已传递请求 Context。
 
 源文件通过已打开的数据根目录读取，拒绝遍历到的符号链接和非普通文件，并再次核对打开文件的类型。该保护不能代替调用方稳定源目录、互斥写操作或确认游戏已安全保存；Context 取消也是协作式停止，不能当作旧进程已被物理隔离的证据。后续 Node 快照任务应传入受执行期限约束的 Context。
+
+### Runtime 停止数据读取
+
+共享 Docker Adapter 的 ReadStoppedData 复用 Create／Start／Stop／Remove 已使用的实例文件锁，锁内重新读取当前容器，核对完整容器 ID、assignment UID、Node、实例及 generation。Docker 必须提供明确的 exited／created 状态，运行、重启、暂停、dead 或缺失状态均拒绝；未完成文件恢复事务也阻止读取。
+
+调用方只在回调内取得该实例目录的 fs.FS，不取得宿主机路径；完成回调后再次核对停止状态再返回。该能力供后续 Agent 快照操作调用，当前仍要求调用方持有有效执行授权，并只在回调内读取与暂存结果。失败时不得发布归档为成功。
+
+这是协作进程之间的生命周期互斥，不控制外部 Docker／宿主机写入者；停止状态也不证明游戏存档格式有效或曾完成正常存档。游戏保存／兼容性检查、授权协调器和共享归档写入接线仍待实现。本批协议测试验证两个 Adapter 实例之间的互斥，未用它替代真实跨主机或游戏进程验收。
+
+补充真实 Docker 验证：现有一次性 Alpine 工作负载运行时读取被拒绝，经 Runtime 停止后，受限文件系统读到实际挂载的 settings/test.ini，随后容器删除。该证据覆盖真实 Docker 状态和目录读取，未运行 Terraria 或验证游戏保存语义。

@@ -2,6 +2,8 @@ package docker
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"net"
 	"os"
 	"strconv"
@@ -90,9 +92,32 @@ func TestDockerIntegration(t *testing.T) {
 	if !found {
 		t.Fatal("console input was not delivered literally to stdin")
 	}
+	observed, err := adapter.Inspect(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.ReadStoppedData(ctx, observed, func(context.Context, fs.FS) error { t.Error("running data exposed"); return nil }); !errors.Is(err, ErrSnapshotUnavailable) {
+		t.Fatal("running snapshot accepted", err)
+	}
 	assignment.DesiredState = "stopped"
 	if got := worker.Reconcile(ctx, assignment, adapter); got.LastError != "" || got.ActualState != "stopped" {
 		t.Fatalf("stop: %+v", got)
+	}
+	observed, err = adapter.Inspect(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.ReadStoppedData(ctx, observed, func(_ context.Context, files fs.FS) error {
+		data, err := fs.ReadFile(files, "settings/test.ini")
+		if err != nil {
+			return err
+		}
+		if string(data) != "isolated" {
+			t.Error("stopped data changed")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal("stopped Docker data unavailable", err)
 	}
 	assignment.DesiredState = "deleted"
 	if got := worker.Reconcile(ctx, assignment, adapter); got.LastError != "" || got.ActualState != "missing" {
