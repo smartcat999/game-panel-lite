@@ -237,3 +237,12 @@
 - SQLite 与 PostgreSQL 共用测试覆盖有效租约排他、到期恢复、旧令牌拒绝、重试间隔、区域隔离、确认丢失重复和发布状态与业务状态分离。PostgreSQL 另覆盖四方并发领取；首次该夹具因默认资源配额不足失败，改为显式配置测试租户配额后通过。
 - 工作区及最终独立提交快照全量 Go（含架构依赖门禁）／vet 与真实 PostgreSQL race 全部通过。独立日志 `/tmp/gamepanel-outbox-index-all.log`、`/tmp/gamepanel-outbox-index-vet.log`、`/tmp/gamepanel-outbox-index-pg.log`。前端未变更。
 - [分发说明](../architecture/outbox-publication.md) 列明当前只完成持久分发基础：实际 MQ Adapter、连接监督、退避／死信、Region Inbox 与持久任务原子写入、对账和独立部署均未完成。已核对 RabbitMQ 官方路由确认与 Go 客户端 I/O 取消语义，后续 Adapter 需满足这些契约，不能用替身 Publisher 冒充 MQ 验收。
+
+### 2026-09-08 实际 RabbitMQ 发布适配器与独立入口
+
+- 新增 `messaging/rabbitmq`，使用官方 amqp091-go v1.10.0，并同步 vendor。每个实例绑定明确 Region／队列，持久 quorum 队列＋持久消息＋mandatory 返回检查＋发布确认；健康连接复用，失败／取消／确认不确定后关闭底层连接并重新建立。
+- 单适配器只有一个在途发布，避免返回消息和确认错配。超时覆盖拨号、握手、声明、写入及等待确认；context 回调关闭底层连接，结束后才允许复用状态，不仅依靠客户端 PublishWithContext。
+- 新增 `outbox-publisher` 独立进程，环境注入全局数据库与区域 Broker 凭证，显式 Region／队列，参数控制批次、租约、超时、载荷、重试／轮询和数据库连接数；信号取消停止分发，不等待游戏启动。应用用例继续只依赖消费接口，架构门禁限定 AMQP 客户端只能位于适配器。
+- 实际本机 RabbitMQ 4.3.5（rabbitmq:4-alpine，镜像 ID `sha256:abb0844d027dd92d80a3a3e9189a30b4b935356f30fc1ee3975482614ee86bd9`）race 测试覆盖持久消息内容与 ID、错误区域拒绝、连接复用、删除队列后无法路由的 ACK 拒绝、重新声明和断连恢复；本机黑洞端点验证握手超时。临时队列与 Broker 清理，不连接用户生产系统。
+- 工作区及最终独立暂存快照的全量 Go（含架构门禁）／vet 和实际 RabbitMQ race 全部通过。独立日志 `/tmp/gamepanel-rabbit-index-all.log`、`/tmp/gamepanel-rabbit-index-vet.log`、`/tmp/gamepanel-rabbit-index-integration.log`。第三方 vendor 原始文档自带两处空白格式提示，保留上游文件；本项目代码的 diff 空白检查通过。
+- Region Inbox／任务原子提交、消费确认、版本与授权检查、死信／对账、端到端进程重启、跨区域与多副本容灾、容量验收仍未完成。单节点 Broker 测试不替代这些目标。

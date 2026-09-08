@@ -35,13 +35,21 @@ type Dispatcher struct {
 	Lease, PublishTimeout, RetryDelay time.Duration
 }
 
-// RunOnce bounds work to one regional batch. Broker I/O never holds a database
-// transaction. The caller controls poll cadence, concurrency and shutdown.
-func (d Dispatcher) RunOnce(ctx context.Context) (int, error) {
+// Validate rejects settings that cannot fit the publication timeout budget.
+func (d Dispatcher) Validate() error {
 	if d.Outbox == nil || d.Publisher == nil || d.RegionID == "" || d.Batch < 1 || d.Batch > 100 ||
 		d.PublishTimeout <= 0 || d.Lease <= 0 || d.Lease > time.Hour || d.PublishTimeout >= d.Lease/time.Duration(d.Batch) ||
 		d.RetryDelay < time.Millisecond || d.RetryDelay > 24*time.Hour {
-		return 0, errors.New("invalid outbox dispatcher settings")
+		return errors.New("invalid outbox dispatcher settings")
+	}
+	return nil
+}
+
+// RunOnce bounds work to one regional batch. Broker I/O never holds a database
+// transaction. The caller controls poll cadence, concurrency and shutdown.
+func (d Dispatcher) RunOnce(ctx context.Context) (int, error) {
+	if err := d.Validate(); err != nil {
+		return 0, err
 	}
 	messages, err := d.Outbox.ClaimOutbox(ctx, d.RegionID, d.Batch, d.Lease)
 	if err != nil {

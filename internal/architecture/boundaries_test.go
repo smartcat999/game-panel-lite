@@ -93,6 +93,9 @@ func forbiddenImport(file, imported string) string {
 	if strings.HasPrefix(imported, "gorm.io/") && !under("store") {
 		return "GORM belongs to persistence adapters"
 	}
+	if imported == "github.com/rabbitmq/amqp091-go" && !under("messaging/rabbitmq") {
+		return "RabbitMQ client belongs to its messaging adapter"
+	}
 	if (file == "apps/api/internal/http/mod_config_handlers.go" || file == "apps/api/internal/http/mod_library_handlers.go") && (imported == "os" || imported == "path/filepath" || imported == api+"safety") {
 		return "mod configuration file operations belong to modruntime"
 	}
