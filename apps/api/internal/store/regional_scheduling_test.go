@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 )
 
@@ -18,6 +19,15 @@ type fixtureSchedulingScope struct {
 
 func (f fixtureSchedulingScope) SchedulingScope(context.Context, regional.RevisionSnapshot) (regional.SchedulingScope, error) {
 	return f.scope, f.err
+}
+
+type fixtureCurrentRevision struct {
+	snapshot regional.RevisionSnapshot
+	err      error
+}
+
+func (f fixtureCurrentRevision) GetRevision(context.Context, instances.RevisionAvailable) (regional.RevisionSnapshot, error) {
+	return f.snapshot, f.err
 }
 
 func testSchedulingClaims(t *testing.T, db *RegionalStore, dsn string, scheduler regional.Scheduler, scope regional.SchedulingScope, first, second regional.Allocation) {
@@ -94,7 +104,7 @@ func testSchedulingClaims(t *testing.T, db *RegionalStore, dsn string, scheduler
 		t.Fatal(err)
 	}
 	scheduler.Resources = reopened
-	worker := regional.SchedulingWorker{Tasks: reopened, Scheduler: scheduler, Scopes: fixtureSchedulingScope{scope: scope}, Lease: time.Minute, Timeout: 10 * time.Second, RetryDelay: time.Hour}
+	worker := regional.SchedulingWorker{Source: fixtureCurrentRevision{snapshot: b.Snapshot}, Tasks: reopened, Scheduler: scheduler, Scopes: fixtureSchedulingScope{scope: scope}, Lease: time.Minute, Timeout: 10 * time.Second, RetryDelay: time.Hour}
 	// Authorization failure persists retry without modifying the reservation.
 	worker.Scopes = fixtureSchedulingScope{err: errors.New("denied")}
 	if done, err := worker.RunOnce(ctx); done || err == nil {

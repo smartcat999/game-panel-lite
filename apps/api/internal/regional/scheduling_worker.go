@@ -3,6 +3,7 @@ package regional
 import (
 	"context"
 	"errors"
+	"reflect"
 	"time"
 )
 
@@ -24,6 +25,9 @@ type SchedulingTasks interface {
 // Scope resolution must verify current authorization; no node set is inferred
 // from inventory or from untrusted user input here.
 type SchedulingWorker struct {
+	// Source must be the authenticated global revision reader, never the local
+	// persisted snapshot. This check is current intent, not execution authority.
+	Source    RevisionSource
 	Tasks     SchedulingTasks
 	Scheduler Scheduler
 	Scopes    interface {
@@ -33,7 +37,7 @@ type SchedulingWorker struct {
 }
 
 func (w SchedulingWorker) RunOnce(ctx context.Context) (bool, error) {
-	if w.Tasks == nil || w.Scopes == nil || w.Timeout <= 0 || w.Lease <= w.Timeout || w.Lease > time.Hour || w.RetryDelay < time.Millisecond || w.RetryDelay > 24*time.Hour {
+	if w.Source == nil || w.Tasks == nil || w.Scopes == nil || w.Timeout <= 0 || w.Lease <= w.Timeout || w.Lease > time.Hour || w.RetryDelay < time.Millisecond || w.RetryDelay > 24*time.Hour {
 		return false, errors.New("invalid scheduling worker settings")
 	}
 	claim, err := w.Tasks.ClaimScheduling(ctx, w.Lease)
@@ -42,7 +46,16 @@ func (w SchedulingWorker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	workCtx, cancel := context.WithTimeout(ctx, w.Timeout)
 	defer cancel()
-	scope, err := w.Scopes.SchedulingScope(workCtx, claim.Snapshot)
+	current, err := w.Source.GetRevision(workCtx, claim.Snapshot.Event)
+	if err == nil && (current.ValidateFor(claim.Snapshot.Event) != nil || current.CurrentSpecGeneration != claim.Deployment.SpecGeneration ||
+		current.IntentVersion != claim.Deployment.IntentVersion || current.DesiredState != "running" ||
+		!reflect.DeepEqual(current.Revision.Specification, claim.Snapshot.Revision.Specification)) {
+		err = ErrDeploymentConflict
+	}
+	var scope SchedulingScope
+	if err == nil {
+		scope, err = w.Scopes.SchedulingScope(workCtx, claim.Snapshot)
+	}
 	var allocation Allocation
 	if err == nil {
 		allocation, err = w.Scheduler.Schedule(workCtx, claim.Deployment, claim.Snapshot, scope)

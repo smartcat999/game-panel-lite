@@ -234,6 +234,13 @@
 - 真实 PostgreSQL 测试覆盖 8 个并发领取、两个任务各唯一领取、过期拒绝、重开 Store 重新领取、错误回执拒绝、持久退避、范围解析失败、Worker 找回已存在预留、完成后不重复领取，以及新停服意图使旧令牌失效且不自动释放容量。独立快照全量 Go（含架构）、vet 和真实 PG race 均通过。证据日志 `/tmp/gamepanel-schedule-jobs-integration.log`；全量与静态检查日志 `/tmp/gamepanel-schedule-jobs-all.log`、`/tmp/gamepanel-schedule-jobs-vet.log`。
 - 独立进程启动与轮询入口、当前权益／授权范围来源及 Node 执行任务尚未接入。本批测试重开数据库连接验证持久状态恢复，不冒充实际进程崩溃、真实游戏运行或多主机验收。
 
+### 调度前复核全局当前意图
+
+- `SchedulingWorker` 必须注入现有 `RevisionSource`，通过已存在的全局 Revision HTTPS 接口重新读取当前状态，再进入区域范围解析和预留。复用原协议及客户端，没有增加授权服务或接口。禁止以区域持久快照充当该 Source。
+- 复核当前配置代数、意图版本、运行期望、事件归属及完整不可变 Specification；停服、消息延迟导致的新版本、不同租户／Placement、配置内容不一致或全局读取失败均进入持久重试，不触发后续范围解析／预留。读取使用本次 Worker 超时上下文。
+- 新增测试覆盖当前状态通过到范围解析、上述所有拒绝路径、超时与有界请求；既有 PostgreSQL Worker 恢复夹具显式提供全局读取测试替身。独立快照全量 Go（含架构）、vet、相关拒绝路径／客户端／真实 PG race 均通过。日志 `/tmp/gamepanel-scheduling-intent-all.log`、`/tmp/gamepanel-scheduling-intent-vet.log`、`/tmp/gamepanel-scheduling-intent-integration.log`。
+- 当前全局接口仅校验配置／意图／部署归属，不提供商业权益或节点访问范围。本批不宣称补齐权限来源；时点复核也不是跨库原子承诺或有期限执行授权。当前商业权益、区域节点范围策略、进程入口和 Node 执行任务仍需继续实现。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
