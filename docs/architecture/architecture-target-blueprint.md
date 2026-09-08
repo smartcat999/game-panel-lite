@@ -212,3 +212,21 @@ go run ./apps/api/cmd/region-control -region east -listen 127.0.0.1:8444 \
 - 区域迁移 010 的 regional_node_sessions 保存观察。旧 epoch、倒序 sequence、同序号冲突内容均拒绝；相同请求重试可成功确认，但不刷新 last_seen_ms。新观察使用区域数据库接收时间，不信任 Node 自报时间。
 
 会话只约束心跳写入，不是运行租约或物理隔离证明。旋转会话不会停止旧容器，也不会改变运维设置的容量、版本和调度开关。实际 Agent 尚未切换到这个入口，节点在线窗口、容量预留、任务授权和调度仍待接入；不能用本批会话替代这些条件。
+
+## Agent 区域观察模式（2026-09-09）
+
+设置 AGENT_REGION_URL 后，Agent 使用区域节点证书建立会话并发送心跳；不启动旧 MASTER_URL／PANEL_URL 的注册、协调、隧道、日志或控制台任务循环。区域连接失败不会回退到全局地址。区域模式当前只报告 Docker 观察，尚未具备区域工作负载任务执行能力，不能直接视为现有节点迁移完成。
+
+配置项：
+
+- AGENT_REGION_URL：不含路径、账号、查询或 fragment 的 HTTPS Region 地址。
+- AGENT_CLIENT_CERT、AGENT_CLIENT_KEY：该 Node 的客户端证书和私钥文件。
+- AGENT_REGION_CA：验证 Region 服务端证书的 CA 文件。
+- AGENT_HEARTBEAT_INTERVAL：默认 10s；AGENT_REGION_REQUEST_TIMEOUT：默认 5s，均须为正时长。
+- DOCKER_HOST、AGENT_INSTANCE_ROOT：沿用现有 Runtime 配置。心跳测试仅查询 Docker，不创建或修改容器。
+
+客户端使用 TLS 1.3、固定源地址、私有 CA 和客户端证书，不使用环境代理、不跟随重定向。会话响应有大小限制和严格结构检查。心跳序号按发送尝试递增，网络失败可留下序号间隔，但不会复用同序号发送不同内容；身份拒绝或会话被替换时退出，不自行重复登记争抢身份。
+
+架构从实际 Docker daemon Info 获取并规范化，不以 Agent 所在宿主机架构代替。首次探测失败时不伪造就绪心跳；已获得架构后探测失败报告 runtimeReady=false。这里 runtimeReady 仅说明 Docker 观察可用，不证明区域任务执行能力、容量空闲或运行授权有效。
+
+NodeSession／NodeHeartbeat 的线协议已放入共享 internal/workload，API 保留类型别名兼容；Agent 不导入 API internal。已用实际 Agent 二进制、Docker 只读 Info、mTLS Region 控制入口和本机 PostgreSQL 验证心跳落库，仍缺多主机、区域任务执行及真实游戏负载验收。

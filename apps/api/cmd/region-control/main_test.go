@@ -10,11 +10,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,6 +26,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 func TestRegionalNodeControl(t *testing.T) {
@@ -188,4 +191,52 @@ func TestRegionalNodeControl(t *testing.T) {
 	if err != nil || len(nodes) != 1 || nodes[0].NodeConfiguration != config || nodes[0].Version != 1 {
 		t.Fatal("node observation changed configuration")
 	}
+	binary, dockerHost := os.Getenv("GAMEPANEL_TEST_AGENT_BINARY"), os.Getenv("GAMEPANEL_TEST_DOCKER_HOST")
+	if binary == "" || dockerHost == "" {
+		return
+	}
+	architecture := workload.NormalizeArchitecture(os.Getenv("GAMEPANEL_TEST_NODE_ARCH"))
+	if architecture == "" {
+		t.Fatal("real Agent test requires GAMEPANEL_TEST_NODE_ARCH")
+	}
+	config.Architecture = architecture
+	if _, err := db.ConfigureRegionalNode(ctx, config, 1); err != nil {
+		t.Fatal(err)
+	}
+	agentCtx, stopAgent := context.WithCancel(ctx)
+	agent := exec.CommandContext(agentCtx, binary)
+	agent.Env = append(os.Environ(), "AGENT_REGION_URL=https://"+address, "AGENT_CLIENT_CERT="+clientCert, "AGENT_CLIENT_KEY="+clientKey, "AGENT_REGION_CA="+caPath, "AGENT_HEARTBEAT_INTERVAL=20ms", "AGENT_REGION_REQUEST_TIMEOUT=1s", "AGENT_INSTANCE_ROOT="+t.TempDir(), "DOCKER_HOST="+dockerHost)
+	agent.Stdout, agent.Stderr = io.Discard, io.Discard
+	if err := agent.Start(); err != nil {
+		stopAgent()
+		t.Fatal(err)
+	}
+	agentDone := make(chan error, 1)
+	go func() { agentDone <- agent.Wait() }()
+	defer func() {
+		stopAgent()
+		select {
+		case <-agentDone:
+		case <-time.After(3 * time.Second):
+			t.Error("real Agent did not stop")
+		}
+	}()
+	for {
+		if err := admin.QueryRowContext(ctx, "SELECT epoch,sequence,last_seen_ms,runtime_ready FROM "+schema+".regional_node_sessions WHERE node_id=$1", "node-a").Scan(&epoch, &sequence, &lastSeen, &ready); err != nil {
+			t.Fatal(err)
+		}
+		if epoch > session.Epoch && sequence > 0 && lastSeen > 0 && ready {
+			break
+		}
+		select {
+		case err := <-agentDone:
+			agentDone <- err
+			t.Fatalf("real Agent exited before heartbeat: %v", err)
+		case <-ctx.Done():
+			t.Fatal("real Agent heartbeat did not reach regional database")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	t.Log("actual Agent runtime observation reached Region over mTLS and persisted in PostgreSQL")
+
 }

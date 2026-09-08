@@ -185,6 +185,13 @@
 - 最终独立快照全量 Go（含架构）及 vet 通过；真实 PostgreSQL Store 与 mTLS HTTP 边界 race 通过，region-control 实际监听＋客户端证书＋心跳落库＋正常退出的组合 race 通过。日志 `/tmp/gamepanel-node-heartbeat-final-all.log`、`/tmp/gamepanel-node-heartbeat-final-vet.log`、`/tmp/gamepanel-node-heartbeat-integration.log`、`/tmp/gamepanel-node-heartbeat-entry.log`。测试使用临时证书和本机数据库，未运行实际 Agent 或游戏进程。
 - 会话不是运行授权或 fencing，实际 Agent 未切换新入口。后续仍需节点客户端、心跳新鲜度策略、区域容量预留和任务调度；无 JOIN，无历史迁移修改，无前端改动。
 
+### Agent 区域心跳客户端与真实组合验证
+
+- Agent 增加显式 AGENT_REGION_URL 模式，独立证书和 CA 配置，固定 HTTPS 源且禁止代理／重定向；区域模式不会启动旧全局控制循环。共享会话与心跳类型移到 internal/workload，API 使用别名保持协议一致，无 Agent→API internal 依赖。
+- 首次无法确认 Docker 架构时不伪造在线；后续探测失败报告未就绪。发送序号递增，临时网络失败继续上报；身份拒绝及会话替换退出，不自行抢回会话。区域模式当前仅观察，尚未执行区域任务。
+- 独立快照全量 Go（含架构）、vet、相关 race 通过。实际构建 Agent，并用真实 Docker 只读 Info＋mTLS region-control＋临时 PostgreSQL 验证其心跳落库。日志 `/tmp/gamepanel-agent-region-all.log`、`/tmp/gamepanel-agent-region-vet.log`、`/tmp/gamepanel-agent-region-integration.log`；实际 Agent 证据在 TestRegionalNodeControl，未创建游戏容器，也未以协议夹具代替该段实机验证。
+- 无新增 SQL、无前端改动。区域任务客户端、节点资源预留、调度授权和真实游戏执行仍待接入，总 Goal 不以心跳闭环完成。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

@@ -82,6 +82,20 @@ func main() {
 		instanceRoot = "/var/lib/gamepanel/instances"
 	}
 
+	if os.Getenv("AGENT_REGION_URL") != "" {
+		runtimeAdapter, err := docker.NewAdapter(dockerHost, instanceRoot)
+		if err != nil {
+			logger.Error("initialize regional runtime", "error", err)
+			os.Exit(1)
+		}
+		defer runtimeAdapter.Close()
+		if err := runRegionalAgentFromEnvironment(ctx, runtimeAdapter, logger); err != nil {
+			logger.Error("regional agent stopped", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	masterURL := os.Getenv("MASTER_URL")
 	if masterURL == "" {
 		masterURL = os.Getenv("PANEL_URL")
