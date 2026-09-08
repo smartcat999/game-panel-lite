@@ -7,10 +7,10 @@ import type {
 } from "./types";
 import { getApiBaseUrl } from "@/lib/api-base";
 
-const API_BASE = getApiBaseUrl();
-
 async function apiFetch<T>(path: string, fallback: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { cache: "no-store", credentials: "include" });
+  const base = getApiBaseUrl();
+  const url = base ? `${base}${path}` : path;
+  const response = await fetch(url, { cache: "no-store", credentials: "include" });
   const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) {
     throw new Error(payload.error ?? fallback);

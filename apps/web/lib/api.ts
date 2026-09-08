@@ -4,7 +4,12 @@ import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
 import type { ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
-const API_BASE = getApiBaseUrl();
+// In browser environments, API_BASE returns getApiBaseUrl() dynamically
+// so that template literals `${API_BASE}/api/...` evaluate at call time
+const API_BASE = "";
+function apiPath(path: string): string {
+  return `${getApiBaseUrl()}${path}`;
+}
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
 const CREATE_SERVER_TIMEOUT_MS = 20000;
 
@@ -31,8 +36,23 @@ async function fetchWithTimeout(
   }
 }
 
+function resolveUrl(input: RequestInfo | URL): RequestInfo | URL {
+  if (typeof input === "string") {
+    const base = getApiBaseUrl();
+    if (input.startsWith("http://localhost:4000") || input.startsWith("http://127.0.0.1:4000")) {
+      const pathname = input.replace(/^http:\/\/(localhost|127\.0\.0\.1):4000/, "");
+      return base ? `${base}${pathname}` : pathname;
+    }
+    if (base && input.startsWith("/")) {
+      return `${base}${input}`;
+    }
+  }
+  return input;
+}
+
 async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}, signalUnauthorized = true) {
-  const response = await fetch(input, { ...init, credentials: "include" });
+  const target = resolveUrl(input);
+  const response = await fetch(target, { ...init, credentials: "include" });
   if (signalUnauthorized && response.status === 401) notifySessionExpired();
   return response;
 }
