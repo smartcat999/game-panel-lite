@@ -65,6 +65,9 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("scheduling") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "placement rules must be independent of domain persistence, transport and runtime adapters"
+	}
 	if strings.HasPrefix(file, "internal/workload/") && (strings.Contains(imported, ".") || imported == "net/http") {
 		return "shared workload protocol must be infrastructure independent"
 	}
@@ -108,6 +111,10 @@ func TestImportRules(t *testing.T) {
 		file, imported string
 		forbidden      bool
 	}{
+		{"apps/api/internal/scheduling/capacity.go", "math", false},
+		{"apps/api/internal/scheduling/capacity.go", api + "store", true},
+		{"apps/api/internal/scheduling/capacity.go", "net/http", true},
+		{"apps/api/internal/scheduling/capacity.go", "database/sql", true},
 		{"apps/api/internal/http/mod_config_handlers.go", "os", true},
 		{"apps/api/internal/http/mod_config_handlers.go", api + "modruntime", false},
 		{"apps/api/internal/gameconfig/payload.go", api + "store", true},

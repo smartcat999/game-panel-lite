@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/scheduling"
 	"gorm.io/gorm"
 )
 
@@ -34,9 +34,6 @@ func (s *Store) lockNodeAllocation(ctx context.Context, instance domain.GameServ
 	if node.Unschedulable {
 		return fmt.Errorf("%w: target node is not accepting allocations", ErrNodeAllocationUnavailable)
 	}
-	if !finiteResources(instance.Spec.Resources) || node.CPUCores <= 0 || node.MemoryTotalMB <= 0 {
-		return fmt.Errorf("%w: finite instance limits and known node capacity are required", ErrNodeAllocationUnavailable)
-	}
 	if err := s.lockNodePorts(ctx, instance.NodeID); err != nil {
 		return err
 	}
@@ -44,24 +41,18 @@ func (s *Store) lockNodeAllocation(ctx context.Context, instance domain.GameServ
 	if err := s.db.WithContext(ctx).Where("node_id = ? AND id <> ?", instance.NodeID, instance.ID).Find(&assigned).Error; err != nil {
 		return err
 	}
-	remainingCPU, remainingMemory := float64(node.CPUCores), node.MemoryTotalMB
+	reserved := make([]scheduling.Resources, 0, len(assigned))
 	for _, other := range assigned {
-		if !finiteResources(other.Spec.Resources) {
-			return fmt.Errorf("%w: existing instance has unbounded resource limits", ErrNodeAllocationUnavailable)
-		}
-		remainingCPU -= other.Spec.Resources.CPULimitCores
-		// Subtract only after comparing to avoid overflowing aggregate memory sums.
-		memory := int64(other.Spec.Resources.MemoryLimitMB)
-		if memory > remainingMemory {
-			return fmt.Errorf("%w: node memory is already fully allocated", ErrNodeAllocationUnavailable)
-		}
-		remainingMemory -= memory
+		reserved = append(reserved, scheduling.Resources{CPU: other.Spec.Resources.CPULimitCores, MemoryMB: int64(other.Spec.Resources.MemoryLimitMB)})
 		if instance.Spec.Network.HostPort > 0 && other.Spec.Network.HostPort == instance.Spec.Network.HostPort {
 			return fmt.Errorf("%w: host port %d is reserved", ErrNodeAllocationUnavailable, instance.Spec.Network.HostPort)
 		}
 	}
-	if math.IsNaN(remainingCPU) || instance.Spec.Resources.CPULimitCores > remainingCPU || int64(instance.Spec.Resources.MemoryLimitMB) > remainingMemory {
-		return fmt.Errorf("%w: insufficient node capacity", ErrNodeAllocationUnavailable)
+	if _, err := scheduling.CheckCapacity(
+		scheduling.Resources{CPU: float64(node.CPUCores), MemoryMB: node.MemoryTotalMB},
+		scheduling.Resources{CPU: instance.Spec.Resources.CPULimitCores, MemoryMB: int64(instance.Spec.Resources.MemoryLimitMB)}, reserved,
+	); err != nil {
+		return fmt.Errorf("%w: %w", ErrNodeAllocationUnavailable, err)
 	}
 	host := instance.Spec.Network.HostPort
 	if host == 0 {

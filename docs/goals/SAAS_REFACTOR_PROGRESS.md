@@ -160,3 +160,12 @@
 - `64811a9f` 提交主/附加端口持久预留与删除确认释放。独立索引快照的 `go test ./...`、`go vet ./...` 和真实 PostgreSQL `TestPostgresIntegration -race` 通过，包含历史端口回填与受限运行账号验证。
 - 首次独立全量检查暴露 Minecraft 白名单测试固定运行态与后台协调器竞争；改用已有无协调器夹具后，该用例连续 10 次通过，全量重跑通过。未放宽生产状态检查。
 - 日志位于 `/tmp/gamepanel-port-index-tests.log`、`/tmp/gamepanel-port-index-vet.log`、`/tmp/gamepanel-port-index-pg.log`。同机双 Agent Docker 交付的此前证据仍只覆盖探针交付，本轮不冒充跨主机或真实游戏验证。
+
+### 2026-09-08 共享 CPU / 内存准入规则
+
+- 新增无数据库、HTTP、Runtime 依赖的 `scheduling.CheckCapacity`，供候选过滤与 Store 事务准入共用。事务锁及持久预留保持原有顺序；只有明确释放的资源才能从输入预留中移除。
+- 拒绝未知容量、无上限规格、NaN/Infinity 和超额申请；逐项比较后扣减，防止内存累加溢出。纯规则覆盖精确满配、剩余容量及非法资源；依赖门禁禁止引入持久化和传输适配器。
+- Scheduler 草稿补齐 CPU 校验、删除中占用及有效主端口回退检查。两个 HTTP 调度测试原先省略资源上限，补齐规格后通过；不放宽生产准入规则。
+- 工作区 `go test ./...`、`go vet ./...`、真实 PostgreSQL `TestPostgresIntegration -race` 通过，日志为 `/tmp/gamepanel-capacity-all.log`、`/tmp/gamepanel-capacity-vet.log`、`/tmp/gamepanel-capacity-pg.log`。独立容量核心快照全量 Go 与 vet 通过，日志为 `/tmp/gamepanel-capacity-index-all.log`、`/tmp/gamepanel-capacity-index-vet.log`。
+- 本批独立提交仅含容量核心、Store 接入及依赖门禁；Scheduler、HTTP、商业和界面草稿仍未整体提交。附加端口候选查询、严格区域/节点授权和停止后计算容量释放尚未完成。
+- 独立快照真实 PostgreSQL `TestPostgresIntegration -race` 随后通过，日志 `/tmp/gamepanel-capacity-index-pg.log`；验证范围包括 Store 事务准入，并不包含尚未提交的 Scheduler 接线。
