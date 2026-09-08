@@ -15,6 +15,13 @@
 - 独立暂存区快照执行 `go test ./...`（含架构检查）、`go vet ./...`、备份包 race 全部通过。补充独立归档成功恢复、兼容性拒绝、截断与配置提交失败回滚用例。日志：`/tmp/gamepanel-backup-source-all.log`、`/tmp/gamepanel-backup-source-vet.log`、`/tmp/gamepanel-backup-source-race.log`。
 - 本批未改 SQL／前端，无 OSS 集成成功声明；S3 适配器与持久任务接线、解压配额、崩溃恢复仍待实现。
 
+### S3 兼容备份存储适配器
+
+- 新增消费方 `backup.ArchiveStore` 与 `StoredArchive`，区分资产版本、StorageID、对象键和后端版本。`s3archive` 使用锁定并 vendor 的官方 AWS Go v2 S3 SDK，SDK 依赖由架构检查限制在适配器／组合根。
+- 显式 HTTPS endpoint、CA、签名区域、凭证提供器及有界单次 PUT；先校验归档大小与 SHA-256，条件写入防覆盖，精确版本读取，拒绝错误版本／大小与重定向，限制整个下载时长。读取流仍需消费方校验完整摘要后才可恢复；存储引用本身不是权限证明。
+- 独立快照全量 Go（含架构）、vet、S3／备份 race 通过，日志 `/tmp/gamepanel-s3-archive-all.log`、`/tmp/gamepanel-s3-archive-vet.log`、`/tmp/gamepanel-s3-archive-race.log`。真实 SDK 对接 TLS HTTP 协议夹具，验证正常上传读取、条件冲突、错误源摘要／长度、本地输入拒绝、响应版本／长度错误、重定向与阻塞流超时。未使用实际自建对象存储，不声称服务集成完成。
+- 第一方差异空白检查通过；vendor 中上游 CHANGELOG／LICENSE 等文件的末尾空行保留原样。无 SQL、前端或历史迁移改动，其他草稿保留。实际对象服务验证、持久上传发布／重试对账、同 Region 恢复接线及配额仍待完成。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 

@@ -65,6 +65,12 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if strings.HasPrefix(imported, "github.com/aws/") && !under("s3archive") && !strings.HasPrefix(file, "apps/api/cmd/") {
+		return "object storage SDK belongs in its adapter or composition root"
+	}
+	if under("s3archive") && ((strings.Contains(imported, ".") && !strings.HasPrefix(imported, "github.com/aws/") && imported != api+"assets" && imported != api+"backup") || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "S3 archive adapter must use backup contracts, not persistence or runtime"
+	}
 	if under("transferauth") && ((strings.Contains(imported, ".") && imported != api+"instances" && imported != api+"regional") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "transfer authorization must use source-resolution contracts and local keys, not concrete adapters"
 	}
