@@ -382,3 +382,10 @@
 - 报告游标、候选与异常任务 ID，不输出配置。已物化／拒绝／等待中任务不改写；错误身份、损坏或超过 4 MiB 的快照只报告，不自动修复。错误租户／修订代数不能通过补取资格检查。支持从已报告游标继续和重复运行；结束后需从头预览覆盖并发新增记录。
 - 真实 PostgreSQL 验证预览不写、两个并发修复者合计只重置两个任务、重复无重置、原快照及计数保留、异常记录和其他生命周期不变、重新领取后仍拒绝旧不完整快照且接受完整清单。独立快照全量 Go／架构／vet、Store＋regional＋区域获取组合 race 和补充契约 race 通过。日志 `/tmp/gamepanel-manifest-repair-index-all.log`、`/tmp/gamepanel-manifest-repair-index-vet.log`、`/tmp/gamepanel-manifest-repair-index-integration.log`、`/tmp/gamepanel-manifest-repair-index-contract.log`。
 - CLI 已在专用临时 PostgreSQL 实际执行迁移和默认预览，返回 applied=false、scanned=0，证据 `/tmp/gamepanel-manifest-repair-cli-preview.log`；这项 CLI 探针不冒充生产历史数据升级验收。重新排队不等于授权补取完成，更不代表运行已停止。未改历史迁移、前端或无关草稿；完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 区域文件内容校验与原子发布
+
+- 新增 assetfiles 本地 Adapter，接收已授权资产清单与源流，部署配置限定私有根目录；不依赖 Docker、HTTP 或数据库。以流式长度／SHA-256 校验写入私有临时文件，同步文件后原子重命名并同步目录，成功前不发布半成品。完整租户／资产／版本／摘要／大小参与文件定位。
+- 源流读取／关闭错误、长度或摘要不符及取消均拒绝发布，取消关闭源流解除阻塞并清理本次临时文件。并发同版本写入安全；失败替换保留原文件。Open 重新校验普通文件内容，拒绝损坏和符号链接，返回只读句柄；不支持外部进程并发原地修改私有存储。
+- 真实临时文件系统 race 覆盖并发、失败清理、取消、半成品不可读、原文件保留、身份隔离、损坏／符号链接、配置上限、空内容和关闭后重新打开。独立快照全量 Go／架构／vet 与定向 race 通过，日志 `/tmp/gamepanel-regional-files-index-all.log`、`/tmp/gamepanel-regional-files-index-vet.log`、`/tmp/gamepanel-regional-files-index-race.log`。本批无数据库／MQ 改动，未重跑外部集成；前端及其他草稿保留。
+- 尚需接入源授权、区域任务、副本目录、总容量／背压、崩溃残留回收和 GC；文件存储成功不等于可执行。未以文件重开测试冒充进程强杀／断电或跨主机交付验收，详见 [区域资产文件](../architecture/regional-asset-files.md)。完整六阶段 Goal 保持进行中。
