@@ -65,6 +65,12 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("serviceauth") && (strings.Contains(imported, ".") || strings.HasPrefix(imported, "database/") || imported == "os") {
+		return "service identity verification must not depend on persistence or process configuration"
+	}
+	if under("controlapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"instances" && imported != api+"regional" && imported != api+"serviceauth" {
+		return "control HTTP endpoints must use consumer-owned ports rather than concrete persistence or runtime"
+	}
 	if under("instances") && (strings.Contains(imported, ".") || imported == "net/http" || strings.HasPrefix(imported, "database/") || imported == "os") {
 		return "global instance models must not depend on legacy domain, persistence or runtime"
 	}

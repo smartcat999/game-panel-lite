@@ -56,8 +56,25 @@ RabbitMQ 4 默认重投上限可能在未配置死信时丢弃消息；至少一
 
 ## 全局修订读取边界
 
-`Store.GetRegionalRevision` 为后续服务端实现提供内部只读 Adapter。调用方传入的 authenticatedRegion 必须来自经过验证的服务身份，不能照抄租户或消息字段；当前尚未建立对应的跨层认证／HTTP 入口。
+`Store.GetRegionalRevision` 提供内部只读 Adapter。调用方传入的 authenticatedRegion 必须来自经过验证的服务身份，不能照抄租户或消息字段；`global-control` 入口通过 mTLS 证书 URI SAN 与运维提供的 Region 映射建立该身份。
 
 读取在同一快照中逐表按 ID 校验原始 Outbox 内容、实例租户、当前 Region／placementEpoch 和不可变修订。不存在的事件、篡改的身份、旧部署归属和已删除实例统一拒绝，失败不返回部分修订。读取不要求 Outbox 的发布标志已更新，避免发布确认丢失期间阻止合法重复通知处理。
 
-返回值包含通知对应的历史修订，以及读取时的最新 specGeneration、desiredState 和 intentVersion。延迟通知不能把旧配置伪装成当前版本，也不能把最新停止意图改回运行。该快照可能在返回后过时；它不是执行授权，不代替权益、配置密文验证、授权有效期或源部署隔离。区域 materializer、经过身份验证的远程获取接口及有限期授权仍待实现。
+返回值包含通知对应的历史修订，以及读取时的最新 specGeneration、desiredState 和 intentVersion。延迟通知不能把旧配置伪装成当前版本，也不能把最新停止意图改回运行。该快照可能在返回后过时；它不是执行授权，不代替权益、配置密文验证、授权有效期或源部署隔离。区域远程客户端、materializer 及有限期授权仍待实现。
+
+## 控制面 mTLS 修订接口
+
+`global-control` 是独立内部入口，通过已迁移的 `GAMEPANEL_DATABASE_URL` 连接全局库。运维提供服务端证书／私钥、区域客户端 CA 和 JSON 格式的 URI SAN → Region 映射文件；例如映射条目 `"spiffe://gamepanel.example/region/region-a": "region-a"`。该 URI 仅作为精确身份标识，当前没有 SPIFFE 自动签发或工作负载证明实现。
+
+```sh
+go run ./apps/api/cmd/global-control \
+  -certificate /run/secrets/control.crt -key /run/secrets/control.key \
+  -client-ca /run/secrets/region-ca.crt \
+  -region-identities /run/config/region-identities.json
+```
+
+默认监听 `127.0.0.1:8443`，通过 `-listen` 显式配置部署地址。TLS 最低 1.3，强制验证客户端证书链；叶证书必须恰有一个 URI SAN 且已登记。请求时再次检查已验证链的有效期，避免复用连接绕过证书到期。身份不接受请求头或自报 Region。信任根与映射启动时加载，撤销／轮换需要更新配置并重启实例关闭旧连接；证书签发、短期轮换及自动撤销仍需部署系统提供。
+
+`POST /internal/region/revisions/resolve` 接收 RevisionAvailable JSON，按证书归属调用只读查询。请求有大小和时间限制，拒绝未知／重复字段、尾随内容及跨区域请求；响应禁止缓存，数据库内部错误不返回给调用方。HTTP 成功只表示修订读取成功。配置保护器、Region 客户端、执行授权和任务推进尚未接入。
+
+测试使用内存临时 CA 和真实 TLS 连接，覆盖有效身份、过期／缺失证书、未登记身份、跨区域及请求头伪造，并检查载荷限制、重复字段和错误响应。此证据不代表生产证书生命周期或完整跨 Region 交付已经验收。

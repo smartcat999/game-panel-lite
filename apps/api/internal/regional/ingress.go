@@ -37,37 +37,47 @@ func (h Ingress) Handle(ctx context.Context, message Notification) error {
 	if err != nil || mediaType != "application/json" || len(message.Body) == 0 || len(message.Body) > h.MaxBytes {
 		return ErrInvalidNotification
 	}
-	// Reject duplicate keys, including casing aliases accepted by encoding/json.
-	keys := json.NewDecoder(bytes.NewReader(message.Body))
-	if token, err := keys.Token(); err != nil || token != json.Delim('{') {
+	event, err := DecodeRevisionNotification(message.Body)
+	if err != nil || event.RegionID != h.RegionID || event.EventID != message.ID {
 		return ErrInvalidNotification
+	}
+	return h.Inbox.RecordRevisionNotification(ctx, event)
+}
+
+// DecodeRevisionNotification applies the same event contract to broker and HTTP intake.
+// The caller must bound body size before decoding.
+func DecodeRevisionNotification(body []byte) (instances.RevisionAvailable, error) {
+	var event instances.RevisionAvailable
+	// Reject duplicate keys, including casing aliases accepted by encoding/json.
+	keys := json.NewDecoder(bytes.NewReader(body))
+	if token, err := keys.Token(); err != nil || token != json.Delim('{') {
+		return event, ErrInvalidNotification
 	}
 	seen := map[string]bool{}
 	for keys.More() {
 		token, err := keys.Token()
 		if err != nil {
-			return ErrInvalidNotification
+			return event, ErrInvalidNotification
 		}
 		key, ok := token.(string)
 		if !ok || seen[strings.ToLower(key)] {
-			return ErrInvalidNotification
+			return event, ErrInvalidNotification
 		}
 		seen[strings.ToLower(key)] = true
 		if err := keys.Decode(new(json.RawMessage)); err != nil {
-			return ErrInvalidNotification
+			return event, ErrInvalidNotification
 		}
 	}
-	decoder := json.NewDecoder(bytes.NewReader(message.Body))
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
-	var event instances.RevisionAvailable
 	if err := decoder.Decode(&event); err != nil {
-		return ErrInvalidNotification
+		return event, ErrInvalidNotification
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return ErrInvalidNotification
+		return event, ErrInvalidNotification
 	}
-	if event.Validate() != nil || event.RegionID != h.RegionID || event.EventID != message.ID {
-		return ErrInvalidNotification
+	if event.Validate() != nil {
+		return event, ErrInvalidNotification
 	}
-	return h.Inbox.RecordRevisionNotification(ctx, event)
+	return event, nil
 }

@@ -1,6 +1,11 @@
 package regional
 
-import "github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+import (
+	"errors"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+)
+
+var ErrRevisionUnavailable = errors.New("revision is not available to this region")
 
 // RevisionSnapshot is data, not an execution grant. CurrentSpecGeneration can
 // be newer than Revision.SpecGeneration after a delayed notification arrives.

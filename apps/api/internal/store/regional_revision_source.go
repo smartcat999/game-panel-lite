@@ -15,7 +15,7 @@ import (
 // Returning a revision neither authorizes execution nor proves ciphertext valid.
 func (s *Store) GetRegionalRevision(ctx context.Context, authenticatedRegion string, event instances.RevisionAvailable) (regional.RevisionSnapshot, error) {
 	if event.Validate() != nil || !validRegion(authenticatedRegion) || event.RegionID != authenticatedRegion {
-		return regional.RevisionSnapshot{}, ErrNotFound
+		return regional.RevisionSnapshot{}, errors.Join(ErrNotFound, regional.ErrRevisionUnavailable)
 	}
 	var result regional.RevisionSnapshot
 	err := s.readSnapshot(ctx, func(tx *Store) error {
@@ -59,8 +59,8 @@ func (s *Store) GetRegionalRevision(ctx context.Context, authenticatedRegion str
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			err = ErrNotFound
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, ErrNotFound) {
+			err = errors.Join(ErrNotFound, regional.ErrRevisionUnavailable)
 		}
 		return regional.RevisionSnapshot{}, err
 	}

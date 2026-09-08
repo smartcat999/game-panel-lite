@@ -274,3 +274,11 @@
 - SQLite／PostgreSQL 共用用例覆盖合法快照、错误或空服务区域、伪造事件／操作／租户／修订、延迟修订、更新后的停止意图、过期 epoch、区域迁移后的读取拒绝及删除后的拒绝。
 - 工作区及最终独立提交快照的全量 Go（含架构门禁）／vet 与真实 PostgreSQL race 全部通过，独立日志 `/tmp/gamepanel-revision-source-index-all.log`、`/tmp/gamepanel-revision-source-index-vet.log`、`/tmp/gamepanel-revision-source-index-pg.log`。前端和其他草稿未纳入本批。
 - 重新核对确认：区域服务身份认证、实际配置保护器、跨层远程读取、权益及有限期执行授权仍未实现，不能把调用方提供的区域字符串直接视为认证。下一步接入这些边界及区域任务 materializer；六阶段 Goal 不变。
+
+### 2026-09-08 控制面 mTLS 服务身份与修订 HTTP 入口
+
+- 新增 `serviceauth`，以经过 TLS 验证的唯一 URI SAN 和外部 allowlist 绑定 Region，拒绝自报请求头、未登记身份和过期链。配置入口提供证书／信任根，不把服务身份写死在业务代码；当前没有自动签发、热轮换或在线撤销。
+- 新增消费接口驱动的 `controlapi` 及 `global-control` 独立入口，强制 mTLS，以已有只读快照 Adapter 取得修订。HTTP 和 MQ 复用事件校验；限制请求体与处理时间，拒绝重复字段与跨区读取，错误响应不暴露数据库详情，成功仍不代表执行授权。
+- 本批没有新增或改变 SQL 查询；Store 仅增加领域错误映射，保留原 NotFound 兼容。模块架构门禁限制服务身份和 HTTP 层对具体存储／运行时的依赖。数据库访问约束同步进入模块化方案。
+- 工作区与独立暂存快照的全量 Go（含架构门禁）／vet，以及真实本地 TLS、区域与 Store race 测试全部通过。独立日志 `/tmp/gamepanel-mtls-index-all.log`、`/tmp/gamepanel-mtls-index-vet.log`、`/tmp/gamepanel-mtls-index-race.log`。证书只在测试内存生成，没有提交真实凭证；本批尚未运行独立 CLI 与 PostgreSQL 的端到端连接测试。
+- Region 远程客户端、任务 materializer、配置保护器、权益与有限期授权仍待实现。六阶段 Goal 保持进行中，生产证书生命周期与跨主机交付不以本次本地测试替代。
