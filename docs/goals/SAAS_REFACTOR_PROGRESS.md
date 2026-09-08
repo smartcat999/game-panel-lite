@@ -221,3 +221,11 @@
 - 新增 501 任务跨批次、重复附加端口、第二批非法端口整体回滚、NULL 占用者拒绝及重复执行用例。严格拒绝非法清单，不把无法解释的历史绑定转换成可用容量。
 - 初次工作区全量和 PG 运行受沙箱本地端口限制，获准使用临时端口后重跑通过。最终独立暂存快照全量 Go（含架构检查）、vet 和真实 PostgreSQL race 全部通过；日志 `/tmp/gamepanel-port-backfill-index-all.log`、`/tmp/gamepanel-port-backfill-index-vet.log`、`/tmp/gamepanel-port-backfill-index-pg.log`。
 - 归属回填、区域过滤和完整 SQL 门禁仍待收敛；不代表全部 SQL 或六阶段 Goal 完成。
+
+### 2026-09-08 归属回填与明确区域过滤
+
+- 世界／活动记录回填改为每页 500 个目标，批量查询实例 ID 与归属，单表 CASE 每批最多 256 行更新；已有归属不覆盖、孤儿不认领。SQLite 两类回填共用事务，PostgreSQL 002／003 采用同一逻辑且保留历史校验和。
+- 区域列表筛选物化节点 ID，空区域不再默认香港；管理员分页与计数也使用只读快照。新增测试检查明确区域、空节点集合和无筛选时历史数据保留。
+- 新增 501 个不同实例归属的跨批次测试，同时验证重复回填与原归属保留。首次夹具向非空组织字段写 NULL，按真实约束修正为未归属空串；孤儿继续保持未归属。
+- 工作区及最终独立索引快照的全量 Go（含架构门禁）、vet、真实 PostgreSQL `TestPostgresIntegration -race` 全部通过。独立日志 `/tmp/gamepanel-owner-region-index-all.log`、`/tmp/gamepanel-owner-region-index-vet.log`、`/tmp/gamepanel-owner-region-index-pg.log`。新批次测试覆盖 SQLite，PostgreSQL 集成验证既有升级数据、并发／重复迁移及校验和拒绝。
+- Store 生产 Go 源码扫描无显式 JOIN 或跨表过滤子查询；历史 SQL 的替代执行需继续由生成 SQL 门禁保护。无 JOIN 不等于性能验收，执行计划和高流量测量仍属未完成工作。其他商业、调度、界面草稿和媒体文件保留。

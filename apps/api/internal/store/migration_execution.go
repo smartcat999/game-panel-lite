@@ -6,6 +6,22 @@ import "gorm.io/gorm"
 // Only exact known scripts receive equivalent ID-based execution; modified or
 // synthetic migrations must still execute their supplied SQL and fail normally.
 func executeMigration(tx *gorm.DB, migration sqlMigration) error {
+	ownershipTable := ""
+	if migration.version == 2 && migration.name == "world_ownership" && migration.sql == worldOwnership {
+		ownershipTable = "worlds"
+	}
+	if migration.version == 3 && migration.name == "activity_ownership" && migration.sql == activityOwnership {
+		ownershipTable = "activity_events"
+	}
+	if ownershipTable != "" {
+		if err := tx.Exec("ALTER TABLE " + ownershipTable + " ADD COLUMN organization_id text NOT NULL DEFAULT ''").Error; err != nil {
+			return err
+		}
+		if err := backfillInstanceOwnership(tx, ownershipTable); err != nil {
+			return err
+		}
+		return tx.Exec("CREATE INDEX idx_" + ownershipTable + "_organization_id ON " + ownershipTable + " (organization_id)").Error
+	}
 	if migration.version == 6 && migration.name == "artifact_references" && migration.sql == artifactReferencesSQL {
 		if err := tx.Exec(`CREATE TABLE workload_artifact_references (
 assignment_id text NOT NULL REFERENCES workload_assignments(id) ON DELETE CASCADE,

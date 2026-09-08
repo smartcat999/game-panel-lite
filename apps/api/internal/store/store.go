@@ -56,14 +56,14 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
-	if err := db.Exec("UPDATE worlds SET organization_id = (SELECT organization_id FROM game_servers WHERE game_servers.id = worlds.instance_id) WHERE (organization_id = '' OR organization_id IS NULL) AND instance_id IN (SELECT id FROM game_servers WHERE organization_id IS NOT NULL)").Error; err != nil {
-		pool, _ := db.DB()
-		if pool != nil {
-			_ = pool.Close()
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		for _, table := range []string{"worlds", "activity_events"} {
+			if err := backfillInstanceOwnership(tx, table); err != nil {
+				return err
+			}
 		}
-		return nil, err
-	}
-	if err := db.Exec("UPDATE activity_events SET organization_id = (SELECT organization_id FROM game_servers WHERE game_servers.id = activity_events.instance_id) WHERE (organization_id = '' OR organization_id IS NULL) AND instance_id IN (SELECT id FROM game_servers WHERE organization_id IS NOT NULL)").Error; err != nil {
+		return nil
+	}); err != nil {
 		pool, _ := db.DB()
 		if pool != nil {
 			_ = pool.Close()
@@ -219,6 +219,7 @@ type GameServerListOptions struct {
 	Status      string
 	Sort        string
 	Direction   string
+	Region      string
 }
 
 type GameServerPage struct {
@@ -230,7 +231,13 @@ type GameServerPage struct {
 }
 
 func (s *Store) ListGameServersPage(ctx context.Context, options GameServerListOptions) (GameServerPage, error) {
-	return s.listGameServersPage(s.db.WithContext(ctx).Model(&domain.GameServer{}), options)
+	var result GameServerPage
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var err error
+		result, err = tx.listGameServersPage(tx.db.WithContext(ctx).Model(&domain.GameServer{}), options)
+		return err
+	})
+	return result, err
 }
 
 func (s *Store) listGameServersPage(query *gorm.DB, options GameServerListOptions) (GameServerPage, error) {
@@ -256,6 +263,13 @@ func (s *Store) listGameServersPage(query *gorm.DB, options GameServerListOption
 	}
 	if providerKey := strings.TrimSpace(options.ProviderKey); providerKey != "" && providerKey != "all" {
 		query = query.Where("provider_key = ?", providerKey)
+	}
+	if region := strings.ToLower(strings.TrimSpace(options.Region)); region != "" && region != "all" {
+		var nodeIDs []string
+		if err := s.db.WithContext(query.Statement.Context).Model(&domain.ComputeNode{}).Where("lower(region) = ?", region).Pluck("id", &nodeIDs).Error; err != nil {
+			return GameServerPage{}, err
+		}
+		query = s.whereIDs(query, "node_id", nodeIDs)
 	}
 	switch strings.TrimSpace(options.Status) {
 	case "running":
