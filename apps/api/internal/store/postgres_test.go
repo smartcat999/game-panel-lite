@@ -117,6 +117,10 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := db.db.Raw("SELECT unschedulable FROM compute_nodes WHERE id = ?", "legacy-scheduling-node").Scan(&retained).Error; err != nil || !retained {
 		t.Fatalf("repeat migration cleared drain state: %v", err)
 	}
+	var architecture string
+	if err := db.db.Raw("SELECT runtime_architecture FROM compute_nodes WHERE id = ?", "legacy-scheduling-node").Scan(&architecture).Error; err != nil || architecture != "arm64" {
+		t.Fatalf("repeat migration changed runtime architecture: %q %v", architecture, err)
+	}
 	if err := db.db.Exec("DELETE FROM compute_nodes WHERE id IN (?, ?)", "legacy-scheduling-node", "default-scheduling-node").Error; err != nil {
 		t.Fatal(err)
 	}

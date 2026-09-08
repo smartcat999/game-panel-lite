@@ -62,11 +62,11 @@ func TestRemoteInstallationUsesAdvertisedNodeCapabilities(t *testing.T) {
 	if w := request(endpoint, `{"modId":"remote-source","generation":1}`, true); w.Code != 409 {
 		t.Fatalf("unknown Agent accepted: %d %s", w.Code, w.Body.String())
 	}
-	if w := request("/api/agent/register", `{"token":"node-token","workloadCapabilities":["artifacts-v1","artifacts-v1","invented"]}`, false); w.Code != 200 {
+	if w := request("/api/agent/register", `{"token":"node-token","runtimeArchitecture":"aarch64","osInfo":"linux/amd64","workloadCapabilities":["artifacts-v1","artifacts-v1","invented"]}`, false); w.Code != 200 {
 		t.Fatal(w.Body.String())
 	}
 	stored, err := db.GetComputeNode(ctx, node.ID)
-	if err != nil || len(stored.WorkloadCapabilities) != 1 || stored.WorkloadCapabilities[0] != "artifacts-v1" {
+	if err != nil || stored.RuntimeArchitecture != "arm64" || len(stored.WorkloadCapabilities) != 1 || stored.WorkloadCapabilities[0] != "artifacts-v1" {
 		t.Fatalf("capability normalization: %+v %v", stored.WorkloadCapabilities, err)
 	}
 	if w := request(endpoint, `{"modId":"remote-source","generation":1}`, true); w.Code != 202 || !strings.Contains(w.Body.String(), `"state":"requested"`) {
@@ -78,6 +78,10 @@ func TestRemoteInstallationUsesAdvertisedNodeCapabilities(t *testing.T) {
 	}
 	if w := request("/api/agent/heartbeat", `{"token":"node-token"}`, false); w.Code != 200 {
 		t.Fatal(w.Body.String())
+	}
+	stored, err = db.GetComputeNode(ctx, node.ID)
+	if err != nil || stored.RuntimeArchitecture != "" {
+		t.Fatalf("legacy heartbeat retained runtime architecture: %+v %v", stored, err)
 	}
 	if w := request(endpoint, `{"modId":"remote-source","generation":2}`, true); w.Code != 409 {
 		t.Fatalf("downgraded Agent accepted: %d", w.Code)

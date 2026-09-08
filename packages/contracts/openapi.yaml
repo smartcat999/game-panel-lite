@@ -217,6 +217,9 @@ paths:
               required: [token]
               properties:
                 token: {type: string}
+                runtimeArchitecture:
+                  type: string
+                  description: Docker daemon architecture, independent of Agent OSInfo. Known aliases are normalized; omitted, empty, or unrecognized values clear prior architecture evidence.
                 workloadCapabilities:
                   type: array
                   items: {type: string}
@@ -241,6 +244,9 @@ paths:
               required: [token]
               properties:
                 token: {type: string}
+                runtimeArchitecture:
+                  type: string
+                  description: Docker daemon architecture, independent of Agent OSInfo. Known aliases are normalized; omitted, empty, or unrecognized values clear prior architecture evidence.
                 workloadCapabilities:
                   type: array
                   items: {type: string}

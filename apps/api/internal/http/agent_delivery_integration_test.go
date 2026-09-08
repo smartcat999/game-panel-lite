@@ -228,6 +228,14 @@ func TestAgentArtifactDeliveryIntegration(t *testing.T) {
 		if ready, err := db.RemoteArtifactsAvailable(ctx, n.node.ID); err != nil || !ready {
 			t.Fatalf("production Agent did not advertise ready capability: %v", err)
 		}
+		daemon, err := n.adapter.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reported, err := db.GetComputeNode(ctx, n.node.ID)
+		if err != nil || daemon.Architecture == "" || reported.RuntimeArchitecture != daemon.Architecture {
+			t.Fatalf("daemon architecture=%q reported=%q err=%v", daemon.Architecture, reported.RuntimeArchitecture, err)
+		}
 		other := nodes[0]
 		if other.node.ID == n.node.ID {
 			other = nodes[1]

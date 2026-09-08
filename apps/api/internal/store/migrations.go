@@ -45,6 +45,9 @@ var nodeSchedulingSQL string
 //go:embed migrations/012_oauth_table_name.sql
 var oauthTableNameSQL string
 
+//go:embed migrations/013_node_runtime_architecture.sql
+var nodeRuntimeArchitectureSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -68,6 +71,7 @@ func postgresMigrations() []sqlMigration {
 		{10, "credits_and_oauth", creditsAndOAuthSQL},
 		{11, "node_scheduling", nodeSchedulingSQL},
 		{12, "oauth_table_name", oauthTableNameSQL},
+		{13, "node_runtime_architecture", nodeRuntimeArchitectureSQL},
 	}
 }
 

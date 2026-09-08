@@ -21,7 +21,9 @@ type slowControlRuntime struct {
 	inspections                atomic.Int32
 }
 
-func (r *slowControlRuntime) Info(context.Context) (string, int, error) { return "test", 1, nil }
+func (r *slowControlRuntime) Info(context.Context) (workload.RuntimeInfo, error) {
+	return workload.RuntimeInfo{Version: "test", RunningContainers: 1}, nil
+}
 func (r *slowControlRuntime) Inspect(ctx context.Context, _ string) (worker.State, error) {
 	if r.inspections.Add(1) == 1 {
 		close(r.entered)

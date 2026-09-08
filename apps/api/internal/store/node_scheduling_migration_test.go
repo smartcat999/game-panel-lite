@@ -30,4 +30,17 @@ func testNodeSchedulingMigration(t *testing.T, db *Store) {
 	if err := db.db.Exec("UPDATE compute_nodes SET unschedulable = true WHERE id = ?", "legacy-scheduling-node").Error; err != nil {
 		t.Fatal(err)
 	}
+	for _, id := range []string{"legacy-scheduling-node", "default-scheduling-node"} {
+		var architecture string
+		if err := db.db.Raw("SELECT runtime_architecture FROM compute_nodes WHERE id = ?", id).Scan(&architecture).Error; err != nil || architecture != "" {
+			t.Fatalf("unexpected architecture backfill for %s: %q %v", id, architecture, err)
+		}
+	}
+	if err := db.db.Exec("UPDATE compute_nodes SET runtime_architecture = NULL WHERE id = ?", "legacy-scheduling-node").Error; err == nil {
+		t.Fatal("nullable runtime architecture accepted")
+	}
+	if err := db.db.Exec("UPDATE compute_nodes SET runtime_architecture = 'arm64' WHERE id = ?", "legacy-scheduling-node").Error; err != nil {
+		t.Fatal(err)
+	}
+
 }

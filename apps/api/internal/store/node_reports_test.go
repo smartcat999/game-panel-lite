@@ -34,6 +34,7 @@ func testAgentNodeReports(t *testing.T, db *Store) {
 			report.WorkloadCapabilities = []string{workload.ArtifactCapability}
 			report.CPUUsagePercent = 8
 			report.CPUCores = 4
+			report.RuntimeArchitecture = "arm64"
 			apply := db.SaveAgentHeartbeat
 			if kind == "registration" {
 				apply = db.SaveAgentRegistration
@@ -49,7 +50,7 @@ func testAgentNodeReports(t *testing.T, db *Store) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if current.Name != "new-name" || current.Host != "new-host" || current.PublicIP != "new-ip" || current.Token != before.Token || len(current.WorkloadCapabilities) != 1 {
+			if current.RuntimeArchitecture != "arm64" || current.Name != "new-name" || current.Host != "new-host" || current.PublicIP != "new-ip" || current.Token != before.Token || len(current.WorkloadCapabilities) != 1 {
 				t.Fatalf("report overwrote configuration: %+v", current)
 			}
 			if kind == "heartbeat" && (current.CPUCores != 2 || current.CPUUsagePercent != 8) || kind == "registration" && (current.CPUCores != 4 || current.CPUUsagePercent != 3) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 )
@@ -67,5 +68,22 @@ func TestDockerMonitorStatusReturnsCachedStatus(t *testing.T) {
 	_ = monitor.Status()
 	if checks := atomic.LoadInt32(&adapter.checks); checks != 1 {
 		t.Fatalf("expected cached status reads not to check Docker, got %d checks", checks)
+	}
+}
+
+func TestMonitorArchitectureRequiresFreshDaemonEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		status DockerStatus
+		want   string
+	}{
+		{DockerStatus{Available: true, Architecture: "x86_64", LastCheckedAt: time.Now()}, "amd64"},
+		{DockerStatus{Available: false, Architecture: "amd64", LastCheckedAt: time.Now()}, ""},
+		{DockerStatus{Available: true, Architecture: "amd64", LastCheckedAt: time.Now().Add(-time.Minute)}, ""},
+		{DockerStatus{Available: true, Architecture: "amd64"}, ""},
+	} {
+		m := &DockerMonitor{status: tc.status}
+		if got := m.Architecture(); got != tc.want {
+			t.Errorf("status=%+v got=%q want=%q", tc.status, got, tc.want)
+		}
 	}
 }

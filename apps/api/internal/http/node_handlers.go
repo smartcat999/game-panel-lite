@@ -44,6 +44,7 @@ type joinCommandResponse struct {
 }
 
 type agentRegisterRequest struct {
+	RuntimeArchitecture  string   `json:"runtimeArchitecture"`
 	WorkloadCapabilities []string `json:"workloadCapabilities"`
 	Token                string   `json:"token"`
 	CPUCores             int      `json:"cpuCores"`
@@ -56,6 +57,7 @@ type agentRegisterRequest struct {
 }
 
 type agentHeartbeatRequest struct {
+	RuntimeArchitecture  string   `json:"runtimeArchitecture"`
 	WorkloadCapabilities []string `json:"workloadCapabilities"`
 	Token                string   `json:"token"`
 	CPUUsagePercent      float64  `json:"cpuUsagePercent"`
@@ -279,6 +281,7 @@ func (h *Handler) agentRegister(w http.ResponseWriter, r *http.Request) {
 		node.PublicIP = req.PublicIP
 	}
 
+	node.RuntimeArchitecture = workload.NormalizeArchitecture(req.RuntimeArchitecture)
 	node.WorkloadCapabilities = knownWorkloadCapabilities(req.WorkloadCapabilities)
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()
@@ -334,6 +337,7 @@ func (h *Handler) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		node.PingLatencyMS = req.PingLatencyMS
 	}
 
+	node.RuntimeArchitecture = workload.NormalizeArchitecture(req.RuntimeArchitecture)
 	node.WorkloadCapabilities = knownWorkloadCapabilities(req.WorkloadCapabilities)
 	node.Status = "online"
 	node.LastHeartbeat = time.Now().UTC()

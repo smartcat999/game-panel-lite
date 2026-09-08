@@ -23,6 +23,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/internal/runtime/docker"
 	"github.com/smartcat999/game-panel-lite/internal/worker"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
 type agentRuntime interface {
@@ -30,7 +31,7 @@ type agentRuntime interface {
 	Console(context.Context, string, string) error
 	Containers(context.Context) ([]worker.Container, error)
 	Logs(context.Context, string) ([]string, error)
-	Info(context.Context) (string, int, error)
+	Info(context.Context) (workload.RuntimeInfo, error)
 }
 
 type AgentConfig struct {
@@ -43,6 +44,7 @@ type AgentConfig struct {
 }
 
 type RegisterPayload struct {
+	RuntimeArchitecture  string   `json:"runtimeArchitecture"`
 	WorkloadCapabilities []string `json:"workloadCapabilities"`
 	Token                string   `json:"token"`
 	CPUCores             int      `json:"cpuCores"`
@@ -55,6 +57,7 @@ type RegisterPayload struct {
 }
 
 type HeartbeatPayload struct {
+	RuntimeArchitecture  string   `json:"runtimeArchitecture"`
 	WorkloadCapabilities []string `json:"workloadCapabilities"`
 	Token                string   `json:"token"`
 	CPUUsagePercent      float64  `json:"cpuUsagePercent"`
@@ -137,15 +140,15 @@ func main() {
 	cores := runtime.NumCPU()
 	memTotalMB := getMemoryTotalMB()
 	diskTotalGB := getDiskTotalGB("/")
-	dockerVer, runningContainers := getDockerInfo(ctx, runtimeAdapter)
+	dockerInfo := getDockerInfo(ctx, runtimeAdapter)
 	osInfo := fmt.Sprintf("%s/%s (%s)", runtime.GOOS, runtime.GOARCH, getDistroName())
 
 	logger.Info("detected system specifications",
 		"cores", cores,
 		"memory_total_mb", memTotalMB,
 		"disk_total_gb", diskTotalGB,
-		"docker_version", dockerVer,
-		"running_containers", runningContainers,
+		"docker_version", dockerInfo.Version,
+		"running_containers", dockerInfo.RunningContainers,
 		"os_info", osInfo,
 	)
 
@@ -158,7 +161,8 @@ func main() {
 		CPUCores:             cores,
 		MemoryTotalMB:        memTotalMB,
 		DiskTotalGB:          diskTotalGB,
-		DockerVersion:        dockerVer,
+		DockerVersion:        dockerInfo.Version,
+		RuntimeArchitecture:  dockerInfo.Architecture,
 		AgentVersion:         AgentVersion,
 		OSInfo:               osInfo,
 		PublicIP:             cfg.PublicIP,
@@ -206,12 +210,13 @@ func main() {
 func reportAgentHeartbeat(ctx context.Context, client *http.Client, cfg AgentConfig, logger *slog.Logger, runtime agentRuntime) {
 	memUsedMB := getMemoryUsedMB()
 	diskUsedGB := getDiskUsedGB("/")
-	_, activeCount := getDockerInfo(ctx, runtime)
+	dockerInfo := getDockerInfo(ctx, runtime)
 	cpuPercent := getCPUUsagePercent()
 	payload := HeartbeatPayload{
 		WorkloadCapabilities: cfg.workloadCapabilities(),
 		Token:                cfg.Token, CPUUsagePercent: cpuPercent,
-		MemoryUsedMB: memUsedMB, DiskUsedGB: diskUsedGB, RunningCount: activeCount,
+		MemoryUsedMB: memUsedMB, DiskUsedGB: diskUsedGB, RunningCount: dockerInfo.RunningContainers,
+		RuntimeArchitecture: dockerInfo.Architecture,
 	}
 	start := time.Now()
 	if err := sendHeartbeat(ctx, client, cfg.MasterURL, payload); err != nil {
@@ -670,14 +675,15 @@ func getDistroName() string {
 	return "Linux"
 }
 
-func getDockerInfo(ctx context.Context, runtime agentRuntime) (string, int) {
+func getDockerInfo(ctx context.Context, runtime agentRuntime) workload.RuntimeInfo {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	version, count, err := runtime.Info(ctx)
+	info, err := runtime.Info(ctx)
 	if err != nil {
-		return "N/A", 0
+		return workload.RuntimeInfo{Version: "N/A"}
 	}
-	return version, count
+	info.Architecture = workload.NormalizeArchitecture(info.Architecture)
+	return info
 }
 
 func retryDelay(ctx context.Context, delay time.Duration) bool {

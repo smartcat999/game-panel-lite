@@ -262,3 +262,17 @@ func TestCompetingCreateCannotRewriteInstanceFiles(t *testing.T) {
 		t.Fatalf("duplicate create changed files: %q count=%d err=%v", content, creates.Load(), err)
 	}
 }
+
+func TestInfoReportsDaemonArchitecture(t *testing.T) {
+	adapter := testAdapter(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/info") {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"ServerVersion":"test-daemon","ContainersRunning":3,"Architecture":"aarch64"}`)
+	})
+	info, err := adapter.Info(context.Background())
+	if err != nil || info.Architecture != "arm64" || info.Version != "test-daemon" || info.RunningContainers != 3 {
+		t.Fatalf("daemon info=%+v err=%v", info, err)
+	}
+}

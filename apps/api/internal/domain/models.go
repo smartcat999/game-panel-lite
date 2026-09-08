@@ -409,6 +409,7 @@ type TenantUsage struct {
 }
 
 type ComputeNode struct {
+	RuntimeArchitecture  string    `json:"runtimeArchitecture,omitempty"`
 	WorkloadCapabilities []string  `json:"workloadCapabilities" gorm:"serializer:json;type:text"`
 	ID                   string    `json:"id" gorm:"primaryKey"`
 	Name                 string    `json:"name"`
@@ -487,21 +488,21 @@ type WorkloadAssignment struct {
 // WorkloadObservation is the worker's latest observation of real runtime state.
 // AssignmentUID fences stale reports from earlier placements of the same server.
 type WorkloadObservation struct {
-	ObservationToken         string            `json:"observationToken" gorm:"-"`
-	ID                       string            `json:"id" gorm:"primaryKey"`
-	AssignmentUID            string            `json:"assignmentUid" gorm:"uniqueIndex"`
-	ServerID                 string            `json:"serverId" gorm:"index"`
-	NodeID                   string            `json:"nodeId" gorm:"index"`
-	ObservedGeneration       int               `json:"observedGeneration"`
-	RuntimeID                string            `json:"runtimeId,omitempty"`
-	ActualState              ServerActualState `json:"actualState"`
+	ObservationToken         string                `json:"observationToken" gorm:"-"`
+	ID                       string                `json:"id" gorm:"primaryKey"`
+	AssignmentUID            string                `json:"assignmentUid" gorm:"uniqueIndex"`
+	ServerID                 string                `json:"serverId" gorm:"index"`
+	NodeID                   string                `json:"nodeId" gorm:"index"`
+	ObservedGeneration       int                   `json:"observedGeneration"`
+	RuntimeID                string                `json:"runtimeId,omitempty"`
+	ActualState              ServerActualState     `json:"actualState"`
 	Conditions               []ServerCondition     `json:"conditions,omitempty" gorm:"serializer:json"`
 	Artifacts                []ArtifactObservation `json:"artifacts,omitempty" gorm:"serializer:json"`
 	LastError                string                `json:"lastError,omitempty"`
-	ReconcileDurationSeconds float64           `json:"reconcileDurationSeconds" gorm:"-"`
-	ObservedAt               time.Time         `json:"observedAt"`
-	CreatedAt                time.Time         `json:"createdAt"`
-	UpdatedAt                time.Time         `json:"updatedAt"`
+	ReconcileDurationSeconds float64               `json:"reconcileDurationSeconds" gorm:"-"`
+	ObservedAt               time.Time             `json:"observedAt"`
+	CreatedAt                time.Time             `json:"createdAt"`
+	UpdatedAt                time.Time             `json:"updatedAt"`
 }
 
 type AdminAccount struct {

@@ -1410,8 +1410,8 @@ func TestGlobalModDeleteRejectsServerMod(t *testing.T) {
 }
 
 func TestServerModListReturnsPendingDesiredModsBeforeStartup(t *testing.T) {
-	router, db, cfg := newTestRouter(t)
-	_ = cfg
+	// Keep the fixture before startup while exercising pending desired mods.
+	router, db, _ := newTestRouterFixture(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, true, false)
 	server := domain.GameServer{
 		ID:          "dst-pending",
 		Name:        "dst-pending server",
@@ -1563,4 +1563,3 @@ func TestModPackResponseFiltersDeletedModIDs(t *testing.T) {
 	}
 	_ = cfg
 }
-

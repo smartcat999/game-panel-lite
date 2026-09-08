@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"sync"
 	"time"
 )
@@ -54,4 +55,14 @@ func (m *DockerMonitor) Start(ctx context.Context, interval time.Duration) {
 			m.Refresh(ctx)
 		}
 	}
+}
+
+// Architecture returns recent daemon evidence, never the control-plane host's
+// architecture. Unavailable or stale probes cannot authorize placement.
+func (m *DockerMonitor) Architecture() string {
+	status := m.Status()
+	if !status.Available || status.LastCheckedAt.IsZero() || time.Since(status.LastCheckedAt) > 30*time.Second {
+		return ""
+	}
+	return workload.NormalizeArchitecture(status.Architecture)
 }

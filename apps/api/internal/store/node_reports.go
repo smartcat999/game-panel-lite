@@ -25,7 +25,7 @@ func (s *Store) saveAgentNodeReport(ctx context.Context, before, after domain.Co
 	if before.ID == "" || before.Token == "" || after.ID != before.ID || after.Token != before.Token || after.LastHeartbeat.IsZero() {
 		return ErrReconciliationSuperseded
 	}
-	fields = append(fields, "status", "last_heartbeat", "workload_capabilities", "updated_at")
+	fields = append(fields, "runtime_architecture", "status", "last_heartbeat", "workload_capabilities", "updated_at")
 	result := s.db.WithContext(ctx).Model(&domain.ComputeNode{}).
 		Where("id = ? AND token = ? AND (last_heartbeat IS NULL OR last_heartbeat <= ?)", before.ID, before.Token, after.LastHeartbeat).
 		Select(fields).Updates(&after)

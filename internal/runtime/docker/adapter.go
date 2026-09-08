@@ -253,12 +253,12 @@ func (a *Adapter) Logs(ctx context.Context, id string) ([]string, error) {
 	}
 	return cleanLogLines(data), nil
 }
-func (a *Adapter) Info(ctx context.Context) (string, int, error) {
+func (a *Adapter) Info(ctx context.Context) (workload.RuntimeInfo, error) {
 	info, err := a.client.Info(ctx)
 	if err != nil {
-		return "", 0, err
+		return workload.RuntimeInfo{}, err
 	}
-	return info.ServerVersion, info.ContainersRunning, nil
+	return workload.RuntimeInfo{Version: info.ServerVersion, RunningContainers: info.ContainersRunning, Architecture: workload.NormalizeArchitecture(info.Architecture)}, nil
 }
 func consumePull(reader io.Reader) error {
 	decoder := json.NewDecoder(reader)
