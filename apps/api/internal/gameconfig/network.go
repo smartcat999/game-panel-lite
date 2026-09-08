@@ -11,23 +11,32 @@ import (
 	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
-// RegionalNetworkRenderer derives admission ports from an immutable revision.
+// RegionalRenderer derives admission and runtime configuration from one immutable revision.
 // The caller supplies an authorized snapshot and host port. Rendering neither
 // grants execution authority nor proves that a host port is available.
-type RegionalNetworkRenderer struct {
+type RegionalRenderer struct {
 	Normalizer     LogicalNormalizer
 	Configurations interface {
 		Open(context.Context, instances.ConfigurationBinding, instances.ProtectedConfiguration) ([]byte, error)
 	}
 }
 
-func (r RegionalNetworkRenderer) Render(ctx context.Context, snapshot regional.RevisionSnapshot, hostPort int) (workload.Network, error) {
-	if err := ctx.Err(); err != nil {
+// Render exposes only admission ports to the scheduler, never provider secrets.
+func (r RegionalRenderer) Render(ctx context.Context, snapshot regional.RevisionSnapshot, hostPort int) (workload.Network, error) {
+	config, _, err := r.providerConfiguration(ctx, snapshot)
+	if err != nil {
 		return workload.Network{}, err
+	}
+	return provider.RuntimeNetwork(config, hostPort)
+}
+
+func (r RegionalRenderer) providerConfiguration(ctx context.Context, snapshot regional.RevisionSnapshot) (domain.ProviderRuntimeConfig, string, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ProviderRuntimeConfig{}, "", err
 	}
 	if r.Configurations == nil || snapshot.ValidateFor(snapshot.Event) != nil ||
 		snapshot.CurrentSpecGeneration != snapshot.Revision.SpecGeneration {
-		return workload.Network{}, ErrInvalidLogicalConfiguration
+		return domain.ProviderRuntimeConfig{}, "", ErrInvalidLogicalConfiguration
 	}
 	revision := snapshot.Revision
 	spec := revision.Specification
@@ -39,24 +48,24 @@ func (r RegionalNetworkRenderer) Render(ctx context.Context, snapshot regional.R
 	raw, err := r.Configurations.Open(ctx, binding, spec.Configuration)
 	defer clear(raw)
 	if err != nil {
-		return workload.Network{}, ErrInvalidLogicalConfiguration
+		return domain.ProviderRuntimeConfig{}, "", ErrInvalidLogicalConfiguration
 	}
 	normalized, err := r.Normalizer.Normalize(ctx, spec.ProviderKey, spec.GameVersion, spec.ConfigSchemaVersion, raw)
 	if err != nil {
-		return workload.Network{}, err
+		return domain.ProviderRuntimeConfig{}, "", err
 	}
 	defer clear(normalized)
 	var config map[string]any
 	if json.Unmarshal(normalized, &config) != nil {
-		return workload.Network{}, ErrInvalidLogicalConfiguration
+		return domain.ProviderRuntimeConfig{}, "", ErrInvalidLogicalConfiguration
 	}
 	p, ok := r.Normalizer.Providers.Get(domain.ProviderKey(spec.ProviderKey))
 	if !ok {
-		return workload.Network{}, ErrInvalidLogicalConfiguration
+		return domain.ProviderRuntimeConfig{}, "", ErrInvalidLogicalConfiguration
 	}
 	runtimeProvider, ok := p.(provider.ResourceRuntimeProvider)
 	if !ok {
-		return workload.Network{}, ErrInvalidLogicalConfiguration
+		return domain.ProviderRuntimeConfig{}, "", ErrInvalidLogicalConfiguration
 	}
 	runtimeConfig, err := runtimeProvider.RuntimeConfigForResource(domain.GameServer{
 		ID: revision.ServerID, OrganizationID: snapshot.Event.OrganizationID,
@@ -64,11 +73,10 @@ func (r RegionalNetworkRenderer) Render(ctx context.Context, snapshot regional.R
 		Spec: domain.ServerSpec{Version: spec.GameVersion, ConfigVersion: spec.ConfigSchemaVersion, Config: config},
 	})
 	if err != nil {
-		return workload.Network{}, ErrInvalidLogicalConfiguration
+		return domain.ProviderRuntimeConfig{}, "", ErrInvalidLogicalConfiguration
 	}
 	if err := ctx.Err(); err != nil {
-		return workload.Network{}, err
+		return domain.ProviderRuntimeConfig{}, "", err
 	}
-	// Do not return secret-bearing provider files or environment to the scheduler.
-	return provider.RuntimeNetwork(runtimeConfig, hostPort)
+	return runtimeConfig, p.ImageFor(spec.GameVersion), nil
 }

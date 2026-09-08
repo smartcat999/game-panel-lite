@@ -3,7 +3,10 @@ package gameconfig_test
 import (
 	"bytes"
 	"context"
+	"errors"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
@@ -40,7 +43,7 @@ func TestRegionalNetworkMatchesRuntime(t *testing.T) {
 					ProviderKey: string(p.Key()), GameVersion: p.Versions()[0], ConfigSchemaVersion: binding.ConfigSchemaVersion, Configuration: protected, Resources: instances.Resources{CPU: 1, MemoryMB: 512},
 				},
 			}}
-			renderer := gameconfig.RegionalNetworkRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 4096}, Configurations: protector}
+			renderer := gameconfig.RegionalRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 4096}, Configurations: protector}
 			builder := server.NewProviderWorkloadBuilder(registry)
 			for _, host := range []int{0, 32000} {
 				network, err := renderer.Render(ctx, snapshot, host)
@@ -59,6 +62,7 @@ func TestRegionalNetworkMatchesRuntime(t *testing.T) {
 				if err != nil || !reflect.DeepEqual(got, want) || len(got) == 0 {
 					t.Fatalf("runtime/admission mismatch: %v %v %v", got, want, err)
 				}
+				assertRegionalWorkload(t, renderer, snapshot, got, actual)
 			}
 			cases := map[string]func(*regional.RevisionSnapshot){
 				"tenant":   func(s *regional.RevisionSnapshot) { s.Event.OrganizationID = "other" },
@@ -92,5 +96,65 @@ func TestRegionalNetworkMatchesRuntime(t *testing.T) {
 				t.Fatalf("cancellation: %v", err)
 			}
 		})
+	}
+}
+
+func assertRegionalWorkload(t *testing.T, renderer gameconfig.RegionalRenderer, snapshot regional.RevisionSnapshot, ports []workload.Port, expected workload.Spec) {
+	t.Helper()
+	allocation := regional.Allocation{ID: "allocation", CPU: 1, MemoryMB: 512, Status: "reserved", Ports: ports, CapacityRequest: regional.CapacityRequest{RegionID: snapshot.Event.RegionID, OrganizationID: snapshot.Event.OrganizationID, ServerID: snapshot.Event.ServerID, DeploymentID: "deployment", RevisionID: snapshot.Event.RevisionID, SpecGeneration: 1, PlacementEpoch: 1, IntentVersion: 1, NodeID: "node", NodeVersion: 1, SessionEpoch: 1}}
+	rendered, err := renderer.RenderWorkload(context.Background(), snapshot, allocation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualPorts, err := workload.ResolvePortBindings(rendered.Network)
+	if err != nil || !reflect.DeepEqual(actualPorts, ports) || rendered.Image != expected.Image || !reflect.DeepEqual(rendered.Options.Files, expected.Options.Files) || rendered.Resources.CPULimitCores != 1 || rendered.Resources.MemoryLimitMB != 512 || rendered.DataDir != "" {
+		t.Fatal("workload diverged from provider or reservation", err)
+	}
+	if !strings.Contains(rendered.Options.Files["serverconfig.txt"], "private") {
+		t.Fatal("runtime configuration lost password")
+	}
+	for name, mutate := range map[string]func(*regional.Allocation){
+		"tenant":        func(a *regional.Allocation) { a.OrganizationID = "other" },
+		"region":        func(a *regional.Allocation) { a.RegionID = "other" },
+		"revision":      func(a *regional.Allocation) { a.RevisionID = "other" },
+		"intent":        func(a *regional.Allocation) { a.IntentVersion++ },
+		"generation":    func(a *regional.Allocation) { a.SpecGeneration++ },
+		"placement":     func(a *regional.Allocation) { a.PlacementEpoch++ },
+		"cpu":           func(a *regional.Allocation) { a.CPU++ },
+		"memory":        func(a *regional.Allocation) { a.MemoryMB++ },
+		"released":      func(a *regional.Allocation) { a.Status = "released" },
+		"missing ports": func(a *regional.Allocation) { a.Ports = nil },
+		"extra ports": func(a *regional.Allocation) {
+			a.Ports = append(append([]workload.Port{}, a.Ports...), workload.Port{Port: 1, HostPort: 1, Protocol: "tcp"})
+		},
+		"protocol": func(a *regional.Allocation) {
+			a.Ports = append([]workload.Port{}, a.Ports...)
+			a.Ports[0].Protocol = "udp"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := allocation
+			mutate(&changed)
+			got, err := renderer.RenderWorkload(context.Background(), snapshot, changed)
+			if err == nil || !reflect.DeepEqual(got, workload.Spec{}) {
+				t.Fatal("invalid allocation produced secret workload")
+			}
+		})
+	}
+	withAssets := snapshot
+	withAssets.Revision.Specification.Assets = []instances.AssetVersion{{AssetID: "world", Version: "v1"}}
+	withAssets.Assets = []assets.PublishedVersion{{AssetID: "world", Version: "v1", OrganizationID: snapshot.Event.OrganizationID, SHA256: strings.Repeat("a", 64), SizeBytes: 4}}
+	if _, err := renderer.RenderWorkload(context.Background(), withAssets, allocation); !errors.Is(err, gameconfig.ErrRegionalAssetMaterializationRequired) {
+		t.Fatal("asset reference silently omitted", err)
+	}
+	stopped := snapshot
+	stopped.DesiredState = "stopped"
+	if _, err := renderer.RenderWorkload(context.Background(), stopped, allocation); err == nil {
+		t.Fatal("stopped intent rendered running workload")
+	}
+	rendered.Options.Files["serverconfig.txt"] = "changed"
+	again, err := renderer.RenderWorkload(context.Background(), snapshot, allocation)
+	if err != nil || again.Options.Files["serverconfig.txt"] != expected.Options.Files["serverconfig.txt"] {
+		t.Fatal("rendered config reused mutable state", err)
 	}
 }

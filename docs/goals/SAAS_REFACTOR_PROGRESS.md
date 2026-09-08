@@ -264,6 +264,13 @@
 - 真实二进制在独立区域 schema 运行，通过全局真实 Handler／mTLS 读取配置；测试先返回 503 并观察持久退避，再恢复接口并验证节点及端口预留和 SIGINT 正常退出。节点心跳为夹具，实例无外部资产，未运行真实游戏。证据 `/tmp/gamepanel-scheduler-entry-integration.log` 含 actual regional scheduler process 记录；相关 keyring、PG race 回归同时执行。
 - 运行方法及副本一致配置要求见 [区域调度入口](../architecture/regional-scheduler-running.md)。独立快照全量 Go（含架构）、vet、真实进程 mTLS／PG race 均通过；全量／静态检查记录 `/tmp/gamepanel-scheduler-entry-all.log`、`/tmp/gamepanel-scheduler-entry-vet.log`。Node 执行任务与授权、商业权益和用户级指定节点权限仍待实现，不能把 `reserved` 当作用户开服成功。
 
+### 预留绑定的区域运行配置
+
+- 将区域渲染器收敛为 `gameconfig.RegionalRenderer`，网络计划和完整运行配置复用同一个解密、严格版本校验与 ResourceRuntimeProvider 调用。`RenderWorkload` 从已验证预留回执生成共享 workload.Spec：镜像、游戏配置、资源限制和完整端口映射；不传入宿主机数据目录。
+- 校验租户／Region／实例／配置／归属代数／意图、预留状态、CPU／内存及完整端口集合。运行网络必须与已保存端口回执一致；任何不匹配返回空结果，不把包含游戏密码的配置交给调用方。返回内容仍需独立授权后才能交付 Node，未写入数据库或 MQ。
+- 当前有外部资产引用或 Provider 制品的实例明确返回需要资产装配，不静默丢弃存档／模组。无资产引用路径已通过真实 Vanilla／tModLoader Provider 与旧运行构建器配置内容比较，以及真实 PostgreSQL 预留到运行配置转换；覆盖错租户／Region／版本／规格／协议／缺失或多余端口、停服意图、资产引用和独立配置副本。
+- 独立快照全量 Go（含架构）、vet、Provider／真实 PG race 均通过。日志 `/tmp/gamepanel-regional-workload-all.log`、`/tmp/gamepanel-regional-workload-vet.log`、`/tmp/gamepanel-regional-workload-integration.log`。本批尚未把运行配置接到 Node API／Agent，不授予执行租约；资产装配、任务交付和真实容器仍是核心未完成项。没有新增 SQL 或服务层级。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

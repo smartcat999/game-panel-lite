@@ -31,7 +31,7 @@ func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scheduler := regional.Scheduler{Resources: db, Networks: gameconfig.RegionalNetworkRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 4096}, Configurations: protector}, MaxHeartbeatAge: time.Minute}
+	scheduler := regional.Scheduler{Resources: db, Networks: gameconfig.RegionalRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 4096}, Configurations: protector}, MaxHeartbeatAge: time.Minute}
 	for _, id := range []string{"schedule-a", "schedule-b"} {
 		cpu, memory := float64(1), int64(128)
 		if id == "schedule-b" {
@@ -86,6 +86,10 @@ func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 	allocation, err := scheduler.Schedule(ctx, deployment, snapshot, scope)
 	if err != nil || allocation.NodeID != "schedule-a" || len(allocation.Ports) != 1 || allocation.Ports[0].HostPort != 32000 {
 		t.Fatalf("schedule: %+v %v", allocation, err)
+	}
+	runtimeSpec, err := (gameconfig.RegionalRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 4096}, Configurations: protector}).RenderWorkload(ctx, snapshot, allocation)
+	if err != nil || runtimeSpec.Image == "" || runtimeSpec.Network.HostPort != allocation.Ports[0].HostPort || runtimeSpec.Resources.CPULimitCores != allocation.CPU {
+		t.Fatal("persisted reservation could not render workload", err)
 	}
 	// Its node is now full and subsequently offline. Retrying only recovers the
 	// same receipt; no new allocation or renewed execution authority is created.

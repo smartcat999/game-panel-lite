@@ -108,7 +108,7 @@ func run(ctx context.Context, o options) error {
 	if err != nil {
 		return errors.New("cannot initialize providers")
 	}
-	scheduler := regional.Scheduler{Resources: db, Networks: gameconfig.RegionalNetworkRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: o.maxConfigurationBytes}, Configurations: keys}, MaxHeartbeatAge: o.heartbeatAge}
+	scheduler := regional.Scheduler{Resources: db, Networks: gameconfig.RegionalRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: o.maxConfigurationBytes}, Configurations: keys}, MaxHeartbeatAge: o.heartbeatAge}
 	worker := regional.SchedulingWorker{Tasks: db, Source: source, Scheduler: scheduler, Scopes: schedulingScopes{db: db, registry: registry, architecture: o.architecture, firstPort: o.firstPort, lastPort: o.lastPort}, Lease: o.lease, Timeout: o.requestTimeout, RetryDelay: o.retry}
 	for ctx.Err() == nil {
 		workCtx, cancel := context.WithTimeout(ctx, o.taskTimeout)
