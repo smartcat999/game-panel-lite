@@ -71,6 +71,9 @@ func forbiddenImport(file, imported string) string {
 	if under("delivery") && (strings.Contains(imported, ".") || imported == "net/http" || strings.HasPrefix(imported, "database/") || imported == "os") {
 		return "delivery orchestration must depend on consumer-owned interfaces, not persistence or broker adapters"
 	}
+	if under("regional") && ((strings.Contains(imported, ".") && imported != api+"instances") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "regional intake must depend on message contracts and consumer-owned ports, not concrete adapters"
+	}
 	if under("scheduling") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "placement rules must be independent of domain persistence, transport and runtime adapters"
 	}

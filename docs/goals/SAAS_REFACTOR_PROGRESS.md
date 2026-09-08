@@ -256,3 +256,13 @@
 - 新增 `region-migrate` 入口。实际 CLI 在临时容器专用数据库上重复迁移成功，改绑另一区域退出失败，日志 `/tmp/gamepanel-region-cli.log`、`/tmp/gamepanel-region-cli-rejected.log`。
 - 工作区全量 Go／vet、区域 PostgreSQL race 通过；最终独立快照的全量 Go（含架构门禁）／vet 以及全局＋区域 PostgreSQL race 全部通过。独立日志 `/tmp/gamepanel-region-inbox-index-all.log`、`/tmp/gamepanel-region-inbox-index-vet.log`、`/tmp/gamepanel-region-inbox-index-pg.log`。临时数据库和角色均清理，其他草稿保留。
 - 尚未接入 Broker 消费循环／确认、授权修订获取、Deployment、任务租约与重试、死信／对账、结果 Outbox；两个测试 schema 不代表两个完整 Region 或跨主机容灾验收。总 Goal 继续进行。
+
+### 2026-09-08 区域消费确认与持久死信转移
+
+- 新增 `regional.Ingress`，以消费接口连接区域 Store；校验内容类型、大小、头／体事件 ID、Region、schema、正版本、未知／重复 JSON 字段及尾随内容。确定无效或身份冲突消息交给隔离队列，不创建部署；数据库错误保持重试。
+- 新增真实 RabbitMQ Consumer 和 `region-receiver` 独立入口，预取 1，区域事务成功后才手动 ACK。处理失败在当前未确认消息上限速重试；取消或断连导致 ACK 不确定时保留重投，由 Inbox 去重吸收。计数只表示 ACK 写出，不是 Broker 对 ACK 的确认。
+- 官方核查发现 quorum 队列默认重投上限后可无死信丢弃消息，因此同步补齐显式持久隔离队列、可配置 delivery-limit、reject-publish 和 at-least-once 死信策略。隔离队列不自动消费／过期，并禁用二次重投上限。发布端和接收端必须配置相同拓扑。
+- 新队列参数与旧队列不兼容时拒绝声明，保留旧队列及消息，不自动删除重建；已有部署需显式队列迁移。操作方式和官方依据见 [接收说明](../architecture/regional-inbox.md)。
+- 真实 Broker 测试覆盖临时失败后确认、坏消息隔离、取消前已处理但未 ACK 的重投、显式拒绝／重投上限转入死信，以及旧拓扑消息保留。实际 Broker→区域 PostgreSQL 重复通知测试发送两个 ACK，仅生成一个 Inbox 和一个 `awaiting_revision` 任务。
+- 工作区及最终独立提交快照的全量 Go（含架构门禁）／vet、真实 MQ race 和全局＋区域 PostgreSQL／Broker 整合 race 全部通过。独立日志 `/tmp/gamepanel-consume-index-all.log`、`/tmp/gamepanel-consume-index-vet.log`、`/tmp/gamepanel-consume-index-rabbit.log`、`/tmp/gamepanel-consume-index-bridge.log`。测试只使用本机专用临时容器，前端与其他草稿未纳入本批。
+- 授权修订获取、Deployment 和执行任务、结果 Outbox、死信审计重放／告警、隔离队列不可用故障验证及跨主机容灾仍未完成；通知接收成功不能替代业务交付或六阶段验收。

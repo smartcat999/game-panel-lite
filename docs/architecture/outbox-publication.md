@@ -1,6 +1,6 @@
 # 全局 Outbox 分发
 
-已增加可恢复的发布状态、分发用例、RabbitMQ 发布适配器及独立发布进程。Region Inbox 和区域持久任务尚未接入；发布确认不改变业务 Operation 的成功条件。
+已增加可恢复的发布状态、分发用例、RabbitMQ 发布适配器及独立发布进程。区域已接入通知 Inbox 和等待授权修订任务，参见 [接收端说明](regional-inbox.md)；发布确认不改变业务 Operation 的成功条件。
 
 `delivery` 定义自身消费的 `Outbox` 和 `Publisher` 接口，仅依赖标准库；Store 实现持久化接口，实际 Broker Adapter 由后续组合根注入。`Publisher.Publish` 只有在获得持久发布确认并确认可路由后才能返回 nil，超时属于不确定结果。
 
@@ -17,7 +17,7 @@ PostgreSQL 使用行锁和 SKIP LOCKED 支持同区域多个分发器；SQLite �
 
 完成／重试操作先锁定当前记录，再取数据库时间，防止使用等待锁之前的时间确认过期租约。旧令牌不能覆盖新的领取；发布成功但数据库确认失败仍可能重发，接收端必须按稳定 ID 幂等。
 
-当前 `RunOnce` 只处理有界批次；独立进程按配置间隔轮询，RabbitMQ 适配器重建失败连接。部署级进程监督、退避抖动、重试上限与死信审计、积压告警、Inbox／任务原子提交和对账尚待接入。固定重试间隔由配置传入，不将这一基础实现当作全部可靠交付验收。
+当前 `RunOnce` 只处理有界批次；独立进程按配置间隔轮询，RabbitMQ 适配器重建失败连接。已配置持久隔离队列和至少一次死信转移；部署级进程监督、退避抖动、死信审计重放、积压告警、授权部署接纳及对账尚待接入。固定重试间隔由配置传入，不将这一基础实现当作全部可靠交付验收。
 
 测试使用替身 Publisher 复现确认丢失，SQLite／PostgreSQL 验证持久状态与租约；PostgreSQL 另验证四方并发领取。替身测试不能证明 Broker 持久化或跨 Region 交付能力。
 
@@ -30,7 +30,7 @@ PostgreSQL 使用行锁和 SKIP LOCKED 支持同区域多个分发器；SQLite �
 先用现有迁移命令将全局 PostgreSQL 升级至匹配 schema。通过外部环境提供 `GAMEPANEL_DATABASE_URL` 与该区域的 `GAMEPANEL_RABBITMQ_URL`，凭证不写入仓库或命令行参数，然后运行：
 
 ```sh
-go run ./apps/api/cmd/outbox-publisher -region region-a -queue gamepanel.region-a.intents
+go run ./apps/api/cmd/outbox-publisher -region region-a -queue gamepanel.region-a.intents -dead-letter-queue gamepanel.region-a.parked
 ```
 
 Region 与队列名称须替换成已登记部署配置。可配置批次、发布超时、领取租约、重试间隔、轮询间隔、载荷上限及数据库连接数；SIGTERM／中断停止轮询并关闭连接。该进程仅读取全局 Outbox 并更新发布状态，不运行游戏或处理 Region 接纳。

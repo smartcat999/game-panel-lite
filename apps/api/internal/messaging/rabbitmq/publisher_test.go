@@ -27,7 +27,7 @@ func TestPublishCanceledHandshake(t *testing.T) {
 		}
 		close(accepted)
 	}()
-	p, err := NewPublisher(Options{URL: "amqp://guest:guest@" + listener.Addr().String() + "/", RegionID: "east", Queue: "test", Timeout: 100 * time.Millisecond, MaxPayloadBytes: 1024})
+	p, err := NewPublisher(Options{URL: "amqp://guest:guest@" + listener.Addr().String() + "/", RegionID: "east", Queue: "test", DeadLetterQueue: "test-dead", DeliveryLimit: 3, Timeout: 100 * time.Millisecond, MaxPayloadBytes: 1024})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestRabbitMQConfirmedPublication(t *testing.T) {
 		t.Skip("set GAMEPANEL_TEST_RABBITMQ_URL for a real broker")
 	}
 	queue := "gamepanel-test-" + uuid.NewString()
-	p, err := NewPublisher(Options{URL: endpoint, RegionID: "east", Queue: queue, Timeout: 5 * time.Second, MaxPayloadBytes: 1024})
+	p, err := NewPublisher(Options{URL: endpoint, RegionID: "east", Queue: queue, DeadLetterQueue: queue + ".dead", DeliveryLimit: 3, Timeout: 5 * time.Second, MaxPayloadBytes: 1024})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,6 +68,7 @@ func TestRabbitMQConfirmedPublication(t *testing.T) {
 	}
 	defer channel.Close()
 	defer func() { _, _ = channel.QueueDelete(queue, false, false, false) }()
+	defer func() { _, _ = channel.QueueDelete(queue+".dead", false, false, false) }()
 	message := delivery.Message{ID: "stable-event", RegionID: "east", Payload: `{"schemaVersion":1}`}
 	ctx := context.Background()
 	if err := p.Publish(ctx, message); err != nil {
@@ -133,5 +134,102 @@ func TestRabbitMQConfirmedPublication(t *testing.T) {
 	}
 	if err := p.Publish(ctx, message); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("closed publisher reused: %v", err)
+	}
+}
+
+func TestRabbitMQDeadLetters(t *testing.T) {
+	endpoint := os.Getenv("GAMEPANEL_TEST_RABBITMQ_URL")
+	if endpoint == "" {
+		t.Skip("set GAMEPANEL_TEST_RABBITMQ_URL for a real broker")
+	}
+	queue := "gamepanel-test-" + uuid.NewString()
+	options := Options{URL: endpoint, RegionID: "east", Queue: queue, DeadLetterQueue: queue + ".dead", DeliveryLimit: 3, Timeout: 5 * time.Second, MaxPayloadBytes: 1024}
+	p, err := NewPublisher(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	admin, err := amqp.Dial(endpoint)
+	if err != nil {
+		t.Fatal("connect test broker")
+	}
+	defer admin.Close()
+	ch, err := admin.Channel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ch.Close()
+	defer func() {
+		_, _ = ch.QueueDelete(queue, false, false, false)
+		_, _ = ch.QueueDelete(options.DeadLetterQueue, false, false, false)
+	}()
+	for _, reason := range []string{"rejected", "delivery_limit"} {
+		message := delivery.Message{ID: reason, RegionID: "east", Payload: `{"test":"retained"}`}
+		if err := p.Publish(context.Background(), message); err != nil {
+			t.Fatal(err)
+		}
+		var parked amqp.Delivery
+		found := false
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			item, ok, err := ch.Get(options.DeadLetterQueue, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok {
+				parked = item
+				found = true
+				break
+			}
+			item, ok, err = ch.Get(queue, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok {
+				if err := item.Reject(reason == "delivery_limit"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if !found || parked.MessageId != message.ID || string(parked.Body) != message.Payload {
+			t.Fatalf("dead letter lost for %s", reason)
+		}
+		deaths, ok := parked.Headers["x-death"].([]interface{})
+		if !ok || len(deaths) == 0 {
+			t.Fatal("missing dead letter history")
+		}
+		entry, ok := deaths[0].(amqp.Table)
+		if !ok || entry["reason"] != reason {
+			t.Fatalf("wrong dead letter cause: %+v", entry)
+		}
+		if err := parked.Ack(false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacy := queue + ".legacy"
+	defer func() { _, _ = ch.QueueDelete(legacy, false, false, false) }()
+	if _, err := ch.QueueDeclare(legacy, true, false, false, false, amqp.Table{"x-queue-type": "quorum"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ch.PublishWithContext(context.Background(), "", legacy, true, false, amqp.Publishing{MessageId: "legacy-retained", DeliveryMode: amqp.Persistent, Body: []byte("retained")}); err != nil {
+		t.Fatal(err)
+	}
+	legacyOptions := options
+	legacyOptions.Queue = legacy
+	upgraded, err := NewPublisher(legacyOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer upgraded.Close()
+	if err := upgraded.Publish(context.Background(), delivery.Message{ID: "new", RegionID: "east", Payload: "{}"}); err == nil {
+		t.Fatal("incompatible legacy topology silently adopted")
+	}
+	item, ok, err := ch.Get(legacy, false)
+	if err != nil || !ok || item.MessageId != "legacy-retained" {
+		t.Fatalf("legacy queue contents changed: %v %v", ok, err)
+	}
+	if err := item.Ack(false); err != nil {
+		t.Fatal(err)
 	}
 }

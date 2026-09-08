@@ -19,9 +19,10 @@ var (
 )
 
 type Options struct {
-	URL, RegionID, Queue string
-	Timeout              time.Duration
-	MaxPayloadBytes      int
+	URL, RegionID, Queue, DeadLetterQueue string
+	DeliveryLimit                         int
+	Timeout                               time.Duration
+	MaxPayloadBytes                       int
 }
 
 // Publisher owns its connection. One in-flight message per instance makes a
@@ -39,17 +40,25 @@ type Publisher struct {
 var _ delivery.Publisher = (*Publisher)(nil)
 
 func NewPublisher(options Options) (*Publisher, error) {
-	if options.URL == "" {
-		return nil, errors.New("RabbitMQ endpoint is required")
-	}
-	if _, err := amqp.ParseURI(options.URL); err != nil {
-		return nil, errors.New("invalid RabbitMQ endpoint")
-	}
-	if options.RegionID == "" || options.RegionID != strings.TrimSpace(options.RegionID) || options.Queue == "" || len(options.Queue) > 255 || options.Queue != strings.TrimSpace(options.Queue) || strings.HasPrefix(options.Queue, "amq.") ||
-		options.Timeout <= 0 || options.Timeout > time.Hour || options.MaxPayloadBytes < 1 {
-		return nil, errors.New("invalid RabbitMQ publisher options")
+	if err := options.Validate(); err != nil {
+		return nil, err
 	}
 	return &Publisher{options: options, gate: make(chan struct{}, 1)}, nil
+}
+
+func (options Options) Validate() error {
+	if options.URL == "" {
+		return errors.New("RabbitMQ endpoint is required")
+	}
+	if _, err := amqp.ParseURI(options.URL); err != nil {
+		return errors.New("invalid RabbitMQ endpoint")
+	}
+	if options.RegionID == "" || options.RegionID != strings.TrimSpace(options.RegionID) || options.Queue == "" || len(options.Queue) > 255 || options.Queue != strings.TrimSpace(options.Queue) || strings.HasPrefix(options.Queue, "amq.") ||
+		options.DeadLetterQueue == "" || len(options.DeadLetterQueue) > 255 || options.DeadLetterQueue != strings.TrimSpace(options.DeadLetterQueue) || strings.HasPrefix(options.DeadLetterQueue, "amq.") || options.DeadLetterQueue == options.Queue || options.DeliveryLimit < 1 || int64(options.DeliveryLimit) > 1<<31-1 ||
+		options.Timeout <= 0 || options.Timeout > time.Hour || options.MaxPayloadBytes < 1 {
+		return errors.New("invalid RabbitMQ connection and queue options")
+	}
+	return nil
 }
 
 func (p *Publisher) discard() {
@@ -139,7 +148,7 @@ func (p *Publisher) Publish(parent context.Context, message delivery.Message) (r
 		}
 		// A mismatching existing queue fails setup; do not silently fall back to
 		// a transient or classic queue. Broker policies remain operator-managed.
-		if _, err = p.channel.QueueDeclare(p.options.Queue, true, false, false, false, amqp.Table{"x-queue-type": "quorum"}); err != nil {
+		if err = declareTopology(p.channel, p.options); err != nil {
 			return ErrUnavailable
 		}
 		if err = p.channel.Confirm(false); err != nil {

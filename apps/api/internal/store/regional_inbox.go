@@ -4,15 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-var ErrNotificationConflict = errors.New("notification identity reused with different contents")
+var ErrNotificationConflict = regional.ErrNotificationConflict
 
 // RecordRevisionNotification saves a notification and a task to fetch its
 // authorized revision. It does NOT accept a deployment or grant execution.

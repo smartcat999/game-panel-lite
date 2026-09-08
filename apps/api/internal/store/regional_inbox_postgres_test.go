@@ -182,4 +182,5 @@ func TestPostgresRegionalInbox(t *testing.T) {
 	if err := east.db.Table("regional_revision_tasks").Where("operation_id = ?", event.OperationID).Take(&task).Error; err != nil || task.Status != "awaiting_revision" {
 		t.Fatalf("notification granted execution: %+v %v", task, err)
 	}
+	testRegionalBrokerIngress(t, east)
 }

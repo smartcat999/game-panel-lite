@@ -19,6 +19,8 @@ import (
 func main() {
 	region := flag.String("region", "", "region whose events to publish")
 	queue := flag.String("queue", "", "dedicated durable quorum queue")
+	deadLetterQueue := flag.String("dead-letter-queue", "", "dedicated durable parking queue")
+	deliveryLimit := flag.Int("delivery-limit", 20, "failed deliveries before parking the message")
 	batch := flag.Int("batch", 20, "maximum events per poll (1-100)")
 	timeout := flag.Duration("publish-timeout", 5*time.Second, "maximum I/O and confirmation time per event")
 	lease := flag.Duration("lease", 2*time.Minute, "database claim lease")
@@ -29,17 +31,17 @@ func main() {
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, *region, *queue, *batch, *timeout, *lease, *retry, *poll, *maxPayload, *connections); err != nil {
+	if err := run(ctx, *region, *queue, *deadLetterQueue, *deliveryLimit, *batch, *timeout, *lease, *retry, *poll, *maxPayload, *connections); err != nil {
 		slog.Error("outbox publisher stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, region, queue string, batch int, timeout, lease, retry, poll time.Duration, maxPayload, connections int) error {
+func run(ctx context.Context, region, queue, deadLetterQueue string, deliveryLimit, batch int, timeout, lease, retry, poll time.Duration, maxPayload, connections int) error {
 	if os.Getenv("GAMEPANEL_DATABASE_URL") == "" || poll < time.Millisecond || connections < 1 {
 		return fmt.Errorf("database endpoint, positive pool size and poll interval are required")
 	}
-	publisher, err := rabbitmq.NewPublisher(rabbitmq.Options{URL: os.Getenv("GAMEPANEL_RABBITMQ_URL"), RegionID: region, Queue: queue, Timeout: timeout, MaxPayloadBytes: maxPayload})
+	publisher, err := rabbitmq.NewPublisher(rabbitmq.Options{URL: os.Getenv("GAMEPANEL_RABBITMQ_URL"), RegionID: region, Queue: queue, DeadLetterQueue: deadLetterQueue, DeliveryLimit: deliveryLimit, Timeout: timeout, MaxPayloadBytes: maxPayload})
 	if err != nil {
 		return err
 	}
