@@ -42,8 +42,12 @@ func (s *RegionalStore) RegionalCapacityCandidates(ctx context.Context, query re
 		}
 		ids = []string{query.RequiredNodeID}
 	}
+	ports, err := regionalBindings(query.Network)
+	if err != nil {
+		return nil, err
+	}
 	candidates := make([]regional.Candidate, 0)
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var nodes []regional.Node
 		if err := tx.Table("regional_nodes").Where("id IN ? AND schedulable = ? AND architecture = ?", ids, true, query.Architecture).Order("id").Find(&nodes).Error; err != nil {
 			return err
@@ -75,13 +79,17 @@ func (s *RegionalStore) RegionalCapacityCandidates(ctx context.Context, query re
 		for _, used := range usage {
 			reserved[used.NodeID] = []scheduling.Resources{{CPU: used.CPU, MemoryMB: used.MemoryMB}}
 		}
+		conflicts, err := regionalPortConflicts(tx, selected, ports)
+		if err != nil {
+			return err
+		}
 		now, err := outboxNow(tx)
 		if err != nil {
 			return err
 		}
 		for _, node := range nodes {
 			observed := byNode[node.ID]
-			if !regionalNodeReady(node, observed, now, maxHeartbeatAge) {
+			if conflicts[node.ID] || !regionalNodeReady(node, observed, now, maxHeartbeatAge) {
 				continue
 			}
 			remaining, err := scheduling.CheckCapacity(scheduling.Resources{CPU: node.CPU, MemoryMB: node.MemoryMB}, needed, reserved[node.ID])

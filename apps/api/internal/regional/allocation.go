@@ -1,6 +1,11 @@
 package regional
 
-import "errors"
+import (
+	"errors"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
+)
+
+var ErrPortsUnavailable = errors.New("regional node ports unavailable")
 
 var ErrAllocationConflict = errors.New("regional allocation conflicts with existing reservation")
 
@@ -21,7 +26,8 @@ type CapacityRequest struct {
 }
 
 type Allocation struct {
-	ID string
+	ID    string
+	Ports []workload.Port
 	CapacityRequest
 	CPU      float64
 	MemoryMB int64

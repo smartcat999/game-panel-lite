@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -108,7 +109,7 @@ func testRegionalCapacityCandidates(t *testing.T, db *RegionalStore, request reg
 	request.NodeID = candidates[0].NodeID
 	request.NodeVersion = candidates[0].NodeVersion
 	request.SessionEpoch = candidates[0].SessionEpoch
-	if _, err := db.ReserveRegionalCapacity(ctx, request, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
+	if _, err := db.ReserveRegionalResources(ctx, request, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
 		t.Fatal("stale candidate admitted", err)
 	}
 	if got, err := db.RegionalCapacityCandidates(ctx, query, time.Minute); err != nil || len(got) != 0 {

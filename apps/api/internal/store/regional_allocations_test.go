@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -71,7 +73,7 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 		wg.Add(1)
 		go func(r regional.CapacityRequest) {
 			defer wg.Done()
-			a, err := db.ReserveRegionalCapacity(ctx, r, time.Minute)
+			a, err := db.ReserveRegionalResources(ctx, r, workload.Network{}, time.Minute)
 			results <- outcome{a, err}
 		}(r)
 	}
@@ -88,13 +90,13 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	if len(held) != 2 {
 		t.Fatalf("concurrent capacity reservations: %d", len(held))
 	}
-	replay, err := db.ReserveRegionalCapacity(ctx, held[0].CapacityRequest, time.Minute)
-	if err != nil || replay != held[0] {
+	replay, err := db.ReserveRegionalResources(ctx, held[0].CapacityRequest, workload.Network{}, time.Minute)
+	if err != nil || !reflect.DeepEqual(replay, held[0]) {
 		t.Fatal("reservation replay changed identity", err)
 	}
 	changed := held[0].CapacityRequest
 	changed.NodeID = "node-b"
-	if _, err := db.ReserveRegionalCapacity(ctx, changed, time.Minute); !errors.Is(err, regional.ErrAllocationConflict) {
+	if _, err := db.ReserveRegionalResources(ctx, changed, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrAllocationConflict) {
 		t.Fatal("existing deployment silently changed node")
 	}
 	request := create("pending")
@@ -102,32 +104,32 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	for _, change := range []func(*regional.CapacityRequest){func(r *regional.CapacityRequest) { r.OrganizationID = "other" }, func(r *regional.CapacityRequest) { r.SpecGeneration++ }, func(r *regional.CapacityRequest) { r.IntentVersion++ }, func(r *regional.CapacityRequest) { r.PlacementEpoch++ }} {
 		wrong := request
 		change(&wrong)
-		if _, err := db.ReserveRegionalCapacity(ctx, wrong, time.Minute); !errors.Is(err, regional.ErrDeploymentConflict) {
+		if _, err := db.ReserveRegionalResources(ctx, wrong, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrDeploymentConflict) {
 			t.Fatal("stale or foreign deployment accepted", err)
 		}
 	}
 	wrong := request
 	wrong.RegionID = "other"
-	if _, err := db.ReserveRegionalCapacity(ctx, wrong, time.Minute); !errors.Is(err, ErrRegionMismatch) {
+	if _, err := db.ReserveRegionalResources(ctx, wrong, workload.Network{}, time.Minute); !errors.Is(err, ErrRegionMismatch) {
 		t.Fatal("foreign region accepted")
 	}
 	for _, change := range []func(*regional.CapacityRequest){func(r *regional.CapacityRequest) { r.NodeVersion++ }, func(r *regional.CapacityRequest) { r.SessionEpoch++ }} {
 		wrong := request
 		change(&wrong)
-		if _, err := db.ReserveRegionalCapacity(ctx, wrong, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
+		if _, err := db.ReserveRegionalResources(ctx, wrong, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
 			t.Fatal("stale node observation accepted", err)
 		}
 	}
 	if err := db.db.Table("regional_node_sessions").Where("node_id = ?", "node-b").Update("last_seen_ms", 1).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ReserveRegionalCapacity(ctx, request, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
+	if _, err := db.ReserveRegionalResources(ctx, request, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
 		t.Fatal("stale heartbeat admitted", err)
 	}
 	if err := db.RecordRegionalNodeHeartbeat(ctx, "node-b", regional.NodeHeartbeat{SessionEpoch: 1, Sequence: 2, Architecture: "amd64", RuntimeReady: false}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ReserveRegionalCapacity(ctx, request, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
+	if _, err := db.ReserveRegionalResources(ctx, request, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrNodeUnavailable) {
 		t.Fatal("unready runtime admitted")
 	}
 	if err := db.RecordRegionalNodeHeartbeat(ctx, "node-b", regional.NodeHeartbeat{SessionEpoch: 1, Sequence: 3, Architecture: "amd64", RuntimeReady: true}); err != nil {
@@ -136,7 +138,7 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Exec("ALTER TABLE regional_allocations ADD CONSTRAINT test_allocation_failure CHECK(false) NOT VALID").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ReserveRegionalCapacity(ctx, request, time.Minute); err == nil {
+	if _, err := db.ReserveRegionalResources(ctx, request, workload.Network{}, time.Minute); err == nil {
 		t.Fatal("allocation persistence failure ignored")
 	}
 	var count int64
@@ -146,7 +148,7 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Exec("ALTER TABLE regional_allocations DROP CONSTRAINT test_allocation_failure").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ReserveRegionalCapacity(ctx, request, time.Minute); err != nil {
+	if _, err := db.ReserveRegionalResources(ctx, request, workload.Network{}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	reopened, err := OpenRegionalPostgres(dsn, db.regionID, 2)
@@ -157,7 +159,7 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Table("regional_node_sessions").Where("node_id = ?", "node-a").Update("last_seen_ms", 1).Error; err != nil {
 		t.Fatal(err)
 	}
-	if got, err := reopened.ReserveRegionalCapacity(ctx, held[0].CapacityRequest, time.Minute); err != nil || got != held[0] {
+	if got, err := reopened.ReserveRegionalResources(ctx, held[0].CapacityRequest, workload.Network{}, time.Minute); err != nil || !reflect.DeepEqual(got, held[0]) {
 		t.Fatal("receipt replay renewed or lost reservation")
 	}
 	if err := db.db.Table("regional_allocations").Where("status = ?", "reserved").Count(&count).Error; err != nil || count != 3 {
@@ -169,7 +171,8 @@ func testRegionalAllocations(t *testing.T, db *RegionalStore, dsn string) {
 	if err := db.db.Table("regional_deployments").Where("id = ?", stopped.DeploymentID).Update("desired_state", "stopped").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ReserveRegionalCapacity(ctx, stopped, time.Minute); !errors.Is(err, regional.ErrDeploymentConflict) {
+	if _, err := db.ReserveRegionalResources(ctx, stopped, workload.Network{}, time.Minute); !errors.Is(err, regional.ErrDeploymentConflict) {
 		t.Fatal("stopped intent reserved compute")
 	}
+	testRegionalPorts(t, db, create)
 }

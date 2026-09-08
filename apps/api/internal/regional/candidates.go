@@ -1,10 +1,14 @@
 package regional
 
-import "github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+import (
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
+)
 
 // CandidateQuery accepts one bounded page of already authorized Node IDs from
 // the regional coordinator. It does not derive tenant permissions from IDs.
 type CandidateQuery struct {
+	Network        workload.Network
 	RegionID       string
 	AllowedNodeIDs []string
 	RequiredNodeID string

@@ -206,6 +206,13 @@
 - 最终独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store race 通过，首轮共享调度规则 race 通过。覆盖三次业务查询预算、范围外节点拒绝、指定节点不回退、缺失／未来心跳、已有占用、有效心跳下的架构／调度开关过滤和选择后 cordon 的事务拒绝。日志 `/tmp/gamepanel-regional-candidates-final-all.log`、`/tmp/gamepanel-regional-candidates-final-vet.log`、`/tmp/gamepanel-regional-candidates-final-integration.log`、`/tmp/gamepanel-regional-candidates-integration.log`。
 - 后续仍需协调器节点范围授权来源、跨页自动选择、端口与执行链路；本批没有新增迁移或前端改动，不把局部候选能力当作完整调度。
 
+### 区域端口与计算资源原子预留
+
+- 迁移 012 增加 Allocation 完整端口集合与独立活动端口唯一约束。资源入口改为 ReserveRegionalResources，明确接收完整网络计划，复用共享 Runtime 端口解析规则；CPU／内存及所有绑定在同一事务提交或回滚。
+- 候选加入有界端口批量查询，有端口需求时四次业务读取；实际预留在 Node 锁内重查。相同网络规范化后可重放，改变网络或缺失端口占用记录会拒绝，不把旧空端口记录自动升级成完整游戏部署。
+- 最终独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store race 通过；首轮共享 workload 端口规则 race 通过。验证附加端口冲突、TCP／UDP和跨节点隔离、四次业务查询预算、候选后端口被抢占、并发绑定唯一、写入故障时计算资源回滚，以及丢失端口记录的重放拒绝。日志 `/tmp/gamepanel-regional-ports-final-all.log`、`/tmp/gamepanel-regional-ports-final-vet.log`、`/tmp/gamepanel-regional-ports-final-integration.log`、`/tmp/gamepanel-regional-ports-integration.log`。
+- 无 JOIN，不修改历史迁移，无前端改动；端口选择权限／范围、受信渲染与执行授权、宿主外部占用处理和安全释放接线仍未完成。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
