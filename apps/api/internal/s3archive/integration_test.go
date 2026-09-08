@@ -76,6 +76,17 @@ func TestMinIOArchiveIntegration(t *testing.T) {
 	if _, err := store.Upload(ctx, "backup-one", version, bytes.NewReader(archive)); err == nil {
 		t.Fatal("conditional upload overwrote existing object")
 	}
+	// Forget the upload result as a crashed publisher would. Reopen the adapter
+	// and recover only from the durable task key and expected archive manifest.
+	reopened, err := New(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	recovered, err := reopened.ResolveUpload(ctx, "backup-one", version)
+	if err != nil || recovered != ref {
+		t.Fatalf("lost receipt recovery: %+v %v", recovered, err)
+	}
 	// Simulate an administrative overwrite outside our create-only adapter. The
 	// recorded backend version must still retrieve the original immutable backup.
 	_, err = store.client.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(opts.Bucket), Key: aws.String(ref.ObjectKey), Body: strings.NewReader("replacement")})
@@ -83,6 +94,9 @@ func TestMinIOArchiveIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	stream, err := store.Open(ctx, ref)
+	if _, recoverErr := reopened.ResolveUpload(ctx, "backup-one", version); recoverErr == nil {
+		t.Fatal("recovery adopted a replacement object with different bytes")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -120,6 +120,41 @@ func (s *Store) Open(ctx context.Context, ref backup.StoredArchive) (io.ReadClos
 	return &body{ReadCloser: out.Body, cancel: cancel}, nil
 }
 
+// ResolveUpload reads the current object, verifies its entire content, and
+// returns the version from that same GET response. HEAD metadata or ETag alone
+// cannot establish that an ambiguous upload produced the expected archive.
+func (s *Store) ResolveUpload(ctx context.Context, key string, version assets.PublishedVersion) (backup.StoredArchive, error) {
+	if !validKey(key) || version.Validate() != nil || version.SizeBytes > s.maxBytes {
+		return backup.StoredArchive{}, ErrStorage
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		return backup.StoredArchive{}, ErrStorage
+	}
+	if out.Body == nil {
+		return backup.StoredArchive{}, ErrStorage
+	}
+	defer out.Body.Close()
+	backendVersion := aws.ToString(out.VersionId)
+	if out.ContentLength == nil || *out.ContentLength != version.SizeBytes || len(backendVersion) > 1024 || strings.ContainsAny(backendVersion, "\x00\r\n") {
+		return backup.StoredArchive{}, ErrStorage
+	}
+	hash := sha256.New()
+	reader := checkedReader{ctx, out.Body}
+	n, err := io.Copy(hash, io.LimitReader(reader, version.SizeBytes))
+	if err != nil || n != version.SizeBytes || hex.EncodeToString(hash.Sum(nil)) != version.SHA256 {
+		return backup.StoredArchive{}, ErrStorage
+	}
+	var extra [1]byte
+	nn, endErr := reader.Read(extra[:])
+	if nn != 0 || endErr != io.EOF || ctx.Err() != nil {
+		return backup.StoredArchive{}, ErrStorage
+	}
+	return backup.StoredArchive{StorageID: s.storageID, ObjectKey: key, ObjectVersion: backendVersion, Asset: version}, nil
+}
+
 type body struct {
 	io.ReadCloser
 	cancel context.CancelFunc

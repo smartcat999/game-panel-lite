@@ -22,5 +22,8 @@ type StoredArchive struct {
 // passing a staged archive to RestoreArchiveChecked. Close releases the stream.
 type ArchiveStore interface {
 	Upload(context.Context, string, assets.PublishedVersion, io.ReaderAt) (StoredArchive, error)
+	// ResolveUpload recovers a lost upload receipt only after verifying the
+	// exact expected bytes. The key must belong exclusively to the authorized job.
+	ResolveUpload(context.Context, string, assets.PublishedVersion) (StoredArchive, error)
 	Open(context.Context, StoredArchive) (io.ReadCloser, error)
 }

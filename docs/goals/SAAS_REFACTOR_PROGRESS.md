@@ -29,6 +29,13 @@
 - 独立快照全量 Go／架构、vet、包含真实 MinIO 的 S3／备份 race 全部通过。日志 `/tmp/gamepanel-s3-real-all.log`、`/tmp/gamepanel-s3-real-vet.log`、`/tmp/gamepanel-s3-real-race.log`，首次详细运行 `/tmp/gamepanel-s3-real-integration.log`。无业务 SQL 或前端变更。
 - 复核发现现有 `createBackup` 仍在 HTTP 内同步读取本地目录，`listBackups` 仍依赖本机 Stat；下一步需接持久备份记录和区域异步任务，不能仅注入 S3 Adapter 就宣称区域备份已完成。
 
+### 上传结果未知的内容对账
+
+- `ArchiveStore.ResolveUpload` 按任务专属对象键和预期资产摘要／大小执行完整 GET 校验，找回同一响应中的存储版本。缺失、不同内容、截断或超时不返回可发布引用。接口要求调用方提供已授权任务的专属键，不把引用视为权限或任务完成证明。
+- 真实 MinIO 测试在丢弃上传回执、重新打开适配器后找回相同版本；同键外部覆盖不同内容后对账拒绝，而已知旧版本仍可恢复。HTTP 异常测试覆盖相同长度错误内容、截断、阻塞超时和缺失，失败均返回空引用。
+- 独立快照全量 Go／架构、vet、真实 MinIO＋备份 race 通过。日志 `/tmp/gamepanel-s3-recovery-all.log`、`/tmp/gamepanel-s3-recovery-vet.log`、`/tmp/gamepanel-s3-recovery-race.log`。未新增 SQL 或修改前端。
+- 持久任务还需原子保存对象键、预期摘要与领取状态，并在对账后复核授权及 CAS 发布；当前只完成存储层恢复能力。区域 Deployment／节点执行绑定与用户备份入口接线仍未完成。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
