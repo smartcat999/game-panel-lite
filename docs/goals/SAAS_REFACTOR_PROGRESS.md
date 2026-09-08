@@ -227,6 +227,13 @@
 - 真实 PostgreSQL、AES 配置保护及 Terraria Provider 连通测试验证自动选择两个独立节点、指定不可用节点不回退、满载／离线后的原回执恢复、修改端口／节点冲突、租户绑定错误和唯一预留。独立快照全量 Go（含架构）、vet 和真实 PG race 均通过；日志 `/tmp/gamepanel-scheduler-all.log`、`/tmp/gamepanel-scheduler-vet.log`、`/tmp/gamepanel-scheduler-integration.log`，包含明确的实际协调器调用记录。无 JOIN、无历史迁移修改。
 - 本批仍是协调器模块接线，未启动持久调度循环，也未签发 Node 执行授权；授权范围来源、端口范围选择、部署任务领取及 Agent 执行接入继续待做。不能用本机数据库集成替代多 Region／多主机或真实游戏验收。
 
+### 持久区域调度任务
+
+- 新增区域迁移 013，在 Deployment 上记录调度状态、领取令牌、到期时间、重试时间和次数；复用原部署记录，没有另建通用任务框架。单表 SKIP LOCKED 领取后，以有界单表查询读取原配置快照，不使用 JOIN。配置／期望状态推进时重置调度任务并使旧令牌失效；已知过期配置快照拒绝领取。
+- `regional.SchedulingWorker` 串接受信范围解析、现有 Scheduler 和持久完成／退避。完成时复核领取版本、数据库时间、真实容量及完整端口回执；预留成功但任务提交失败时保留资源，后续领取恢复原回执。`reserved` 仅表示资源预留，不代表运行或执行授权。
+- 真实 PostgreSQL 测试覆盖 8 个并发领取、两个任务各唯一领取、过期拒绝、重开 Store 重新领取、错误回执拒绝、持久退避、范围解析失败、Worker 找回已存在预留、完成后不重复领取，以及新停服意图使旧令牌失效且不自动释放容量。独立快照全量 Go（含架构）、vet 和真实 PG race 均通过。证据日志 `/tmp/gamepanel-schedule-jobs-integration.log`；全量与静态检查日志 `/tmp/gamepanel-schedule-jobs-all.log`、`/tmp/gamepanel-schedule-jobs-vet.log`。
+- 独立进程启动与轮询入口、当前权益／授权范围来源及 Node 执行任务尚未接入。本批测试重开数据库连接验证持久状态恢复，不冒充实际进程崩溃、真实游戏运行或多主机验收。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

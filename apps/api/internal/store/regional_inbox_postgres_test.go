@@ -191,6 +191,8 @@ func TestPostgresRegionalInbox(t *testing.T) {
 	testRegionalArchiveUploads(t, uploadDB, uploadURL)
 	allocationDB, allocationURL := openRegion("allocation-test")
 	testRegionalAllocations(t, allocationDB, allocationURL)
+	schedulingDB, schedulingURL := openRegion("scheduling-test")
+	testRegionalScheduler(t, schedulingDB, schedulingURL)
 	nodeDB, nodeURL := openRegion("node-test")
 	testRegionalNodes(t, nodeDB, nodeURL)
 	deploymentDB, _ := openRegion("deployment-test")

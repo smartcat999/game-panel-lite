@@ -16,7 +16,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 )
 
-func testRegionalScheduler(t *testing.T, db *RegionalStore) {
+func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 	t.Helper()
 	ctx := context.Background()
 	p := terraria.NewVanillaProvider()
@@ -118,5 +118,6 @@ func testRegionalScheduler(t *testing.T, db *RegionalStore) {
 	if _, err := scheduler.Schedule(ctx, deployment, wrong, scope); !errors.Is(err, regional.ErrDeploymentConflict) {
 		t.Fatal("tenant mismatch accepted", err)
 	}
+	testSchedulingClaims(t, db, dsn, scheduler, scope, allocation, next)
 	t.Log("real Provider/protected revision -> regional scheduler -> PostgreSQL compute and port reservation/replay verified")
 }

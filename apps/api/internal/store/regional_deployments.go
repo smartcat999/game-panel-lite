@@ -41,5 +41,9 @@ func stageRegionalDeployment(tx *gorm.DB, snapshot regional.RevisionSnapshot) er
 	if len(values) == 0 {
 		return nil
 	}
+	values["scheduling_status"] = "pending"
+	values["scheduling_token"] = ""
+	values["scheduling_until_ms"] = 0
+	values["scheduling_next_ms"] = 0
 	return tx.Table("regional_deployments").Where("id = ?", current.ID).Updates(values).Error
 }
