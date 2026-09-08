@@ -23,6 +23,8 @@ ETag 不作为全文件 SHA-256，分片上传时也不应假定它是全文件 
 
 ## 当前实现与下一步
 
+全局迁移 020／SQLite 版本 8 增加 `global_backup_tasks` 与 `backup_request_outbox`。`RequestGlobalBackup` 在租户写权限锁内检查幂等键，对目标租户实例加锁后读取当前配置版本、意图版本和 Placement；原子创建 `server_operations(kind=backup)`、用户备份任务和专用下发 Outbox。相同请求返回原命令与当前任务状态，参数冲突拒绝。命令不包含 Node、主机路径或存储凭证，Region 负责后续执行绑定。普通配置通知仍使用原 `server_outbox`，避免备份命令被旧修订消费者错误处理。此入口目前是 Store 用例边界，公共 HTTP、专用消息发布及 Region 消费仍待接入。
+
 区域迁移 004 增加 `regional_archive_uploads` 和 `regional_backup_result_outbox`。上传计划绑定控制面 OperationID／请求事件、Region、实例、Deployment、Node、Placement epoch、准备好的 SnapshotID、对象键及精确资产摘要。控制面操作与存储对象绑定均有唯一约束；重放只能接受完全相同计划，不能更换节点、快照或归属。此登记接口仅供已完成授权与快照准备的受信协调器调用；目前尚未由控制面下发链路驱动。
 
 Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。当前 Outbox 只是持久结果，发布确认、MQ Adapter 接线和控制面结果 Inbox 仍待实现。全部业务 SQL 为单表查询，无 JOIN。

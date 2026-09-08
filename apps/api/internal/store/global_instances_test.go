@@ -128,6 +128,7 @@ func testGlobalInstanceIntents(t *testing.T, db *Store) {
 			t.Fatalf("%s partial create: %d %v", table, count, err)
 		}
 	}
+	testGlobalBackupTasks(t, db, created)
 	// Two independent edits from the same revision must not silently overwrite
 	// each other; the winning revision leaves the original immutable snapshot.
 	revise := instances.ReviseRequest{OrganizationID: org.ID, ServerID: created.Server.ID, ExpectedGeneration: 1, IdempotencyKey: "edit-1", Specification: request.Specification}

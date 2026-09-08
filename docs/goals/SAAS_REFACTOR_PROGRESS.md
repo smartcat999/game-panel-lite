@@ -43,6 +43,13 @@
 - 真实 PostgreSQL 覆盖 8 个并发领取唯一、过期拒绝、重开 Store 重新领取、持久重试、完成后重放不重置、错误记录隔离及 Outbox 故障回滚。独立快照全量 Go／架构、vet、Store＋backup＋S3 的 PostgreSQL／MinIO race 通过；日志 `/tmp/gamepanel-archive-jobs-all.log`、`/tmp/gamepanel-archive-jobs-vet.log`、`/tmp/gamepanel-archive-jobs-integration.log`。仅新增迁移，无 JOIN，历史迁移及其他草稿保留。
 - 本批尚未实现全局备份任务／下发事件接入、结果 Outbox 发布与确认、控制面结果 Inbox／状态更新、Node 快照授权和完整 Worker 接线。这些继续作为核心验收项，不能以区域上传表替代控制面用户任务。
 
+### 控制面备份请求事务
+
+- 全局迁移 020／SQLite 版本 8 新增用户备份任务及独立请求 Outbox。`RequestGlobalBackup` 在租户权限锁内校验幂等，对归属实例加锁并读取配置、意图及 Placement 版本，原子写入备份 Operation、任务和待下发命令。无需读取本机目录或等待区域执行。
+- 备份命令仅含全局身份、版本和实例／存档范围，不携带 Node 或路径；原配置通知 Outbox 不混入备份命令。相同请求重试返回原事件和任务当前状态，不重置运行中状态；跨租户、未知实例、非法范围及幂等参数变化拒绝。
+- SQLite／真实 PostgreSQL 覆盖 8 个并发相同请求唯一、授权与跨租户拒绝、命令身份、队列分离及 Outbox 故障时 Operation／任务回滚。修正旧版本升级夹具以移除新增表，历史迁移不变。独立快照全量 Go／架构、vet、Store＋backup PostgreSQL race 通过，日志 `/tmp/gamepanel-global-backup-all.log`、`/tmp/gamepanel-global-backup-vet.log`、`/tmp/gamepanel-global-backup-integration.log`。
+- 这完成控制面持久受理边界，尚未开放公共 HTTP；专用 Outbox 发布、Region 备份 Inbox、执行绑定与结果回传去重仍待接通。用户侧完整 OSS 备份仍未完成。所有业务查询为单表，其他草稿保留。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
