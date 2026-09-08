@@ -60,3 +60,5 @@ ListRegionalAssetSources 在每次调用的只读快照内重新核对目标 Reg
 `ResolveRegionalAssetSource` 在同一只读快照内联合校验目标 Region／事件／当前 Placement、精确修订引用、所属组织资产元数据，以及指定副本 ID、资产版本、available 和观测版本。返回 AssetSourceSnapshot，绑定原事件、不可变资产摘要与源 Region／StorageID。选择其他资产的副本、未知或过期观测、下架来源均拒绝；来源下架再恢复也不能复用旧观测版本，必须刷新目录。
 
 这一步为后续传输授权提供一致的签发输入，尚未签名、设置传输期限或授予下载权。源服务仍需验证针对自身存储和目标服务身份的有界授权，并校验本地文件；不能直接信任客户端携带的 AssetSourceSnapshot。全局不持有文件流、不为传输长时间持有数据库事务。
+
+后续签发模块已实现重新授权后的 Ed25519 短期票据及源端公钥验证，见 [传输票据](asset-transfer-tickets.md)。原 AssetSourceSnapshot 仍不具备票据效力；签发 HTTP、下载服务及整个传输期限的强制执行尚待接入。

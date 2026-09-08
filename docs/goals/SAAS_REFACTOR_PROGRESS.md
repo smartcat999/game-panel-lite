@@ -433,3 +433,10 @@
 - 选择其他资产的副本、未知／旧观测、下架来源和旧部署归属均拒绝；副本下架后重新开放也不能复用旧版本，需要刷新来源目录。新增查询仍为单表，无 JOIN，不长时间持有数据库事务等待传输。
 - SQLite／PostgreSQL 测试覆盖正确跨 Region 来源、错误副本／资产绑定、错误目标、未知和过期观测、下架及重新开放、旧 Placement 拒绝；契约测试覆盖篡改身份、版本、可用性、存储标识与摘要。独立全量 Go／架构／vet、Store＋regional＋assets＋PostgreSQL/mTLS 组合 race 通过，日志 `/tmp/gamepanel-source-binding-index-all.log`、`/tmp/gamepanel-source-binding-index-vet.log`、`/tmp/gamepanel-source-binding-index-integration.log`。
 - 联合校验结果仅为传输授权签发输入，尚未签名或绑定有效期限，源服务不能信任客户端自带该对象。实际下载票据、源服务验证、区域文件回报和资产 Worker 入口仍需接入。未改历史迁移、前端或无关草稿，完整六阶段 Goal 保持进行中。
+
+### 2026-09-08 短期签名传输票据与源端验证
+
+- 新增 transferauth，外部注入全局 Ed25519 私钥和源端公钥集合；构造时复制密钥状态。Issuer 每次调用真实源联合校验，签名绑定用途、版本、keyId、随机 ID、原事件、目标 Region、租户／资产摘要、源副本观测与 Region／StorageID。TTL 从查询开始计时，慢查询不延长授权。
+- Verifier 绑定自身 Region／存储和经认证请求 Region，核验签名、规范 JSON、完整源绑定、当前时间及最大 TTL；拒绝过期／未来、重复签名字段、错误用途／版本和身份。允许同一授权 Region 在期限内重试，不提供单次消费或运行权限。
+- 定向 race 覆盖逐字节载荷篡改、签名篡改、时间／TTL、错误目标／源、签名非法声明、密钥状态复制与重新签发再次授权。真实 SQLite／PostgreSQL 组合验证 Store 权限解析后签发与公钥验证、目录下架拒绝新票据。独立全量 Go／架构／vet 与 transferauth＋Store PostgreSQL race 通过，日志 `/tmp/gamepanel-transfer-ticket-index-all.log`、`/tmp/gamepanel-transfer-ticket-index-vet.log`、`/tmp/gamepanel-transfer-ticket-index-integration.log`。
+- 尚未接入签发 HTTP、源端下载服务、整个传输期限强制关闭及部署密钥轮换／撤销流程；现存票据的全局撤销窗口由 TTL 限定，不能冒充实时撤销。无生产 SQL／迁移修改，前端和其他草稿保留。完整六阶段 Goal 保持进行中，详见 [票据约束](../architecture/asset-transfer-tickets.md)。

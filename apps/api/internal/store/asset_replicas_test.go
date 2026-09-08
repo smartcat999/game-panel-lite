@@ -2,12 +2,16 @@ package store
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/assets"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/transferauth"
 )
 
 func testAssetReplicas(t *testing.T, db *Store, event instances.RevisionAvailable, ref instances.AssetVersion) {
@@ -74,6 +78,25 @@ func testAssetReplicas(t *testing.T, db *Store, event instances.RevisionAvailabl
 	selected, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, second.ID, 2)
 	if err != nil || selected.ValidateFor(event, ref, second.ID, 2) != nil || selected.Replica.RegionID != second.RegionID || selected.Replica.StorageID != second.StorageID {
 		t.Fatalf("source binding: %+v %v", selected, err)
+	}
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := transferauth.NewIssuer(transferauth.IssuerOptions{KeyID: "test", PrivateKey: private, Resolver: db, TTL: time.Minute, MaxTokenBytes: 16384, Now: time.Now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := transferauth.NewVerifier(transferauth.VerifierOptions{SourceRegion: second.RegionID, StorageID: second.StorageID, PublicKeys: map[string]ed25519.PublicKey{"test": public}, MaxTTL: time.Minute, MaxTokenBytes: 16384, Now: time.Now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket, err := issuer.Issue(ctx, event.RegionID, event, ref, second.ID, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grant, err := verifier.Verify(ctx, ticket, event.RegionID); err != nil || grant.Source != selected {
+		t.Fatalf("authorized source ticket: %v", err)
 	}
 	for _, selection := range []struct {
 		id      string
@@ -148,6 +171,9 @@ func testAssetReplicas(t *testing.T, db *Store, event instances.RevisionAvailabl
 	}
 	if partial, err := db.ResolveRegionalAssetSource(ctx, event.RegionID, event, ref, replica.ID, 2); !errors.Is(err, ErrNotFound) || partial.Replica.ID != "" {
 		t.Fatal("withdrawn source selected")
+	}
+	if ticket, err := issuer.Issue(ctx, event.RegionID, event, ref, replica.ID, 2); !errors.Is(err, ErrNotFound) || ticket != "" {
+		t.Fatal("withdrawn source received transfer ticket")
 	}
 	closedVersion := int64(3)
 	if db.db.Dialector.Name() == "postgres" {
