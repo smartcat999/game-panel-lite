@@ -15,32 +15,36 @@ var ErrInvalidModLibrary = errors.New("invalid workspace mod library resource or
 // These operations own workspace library metadata. Instance installation and
 // file publication are separate operations, never implied by a metadata commit.
 func (s *Store) userLibraryMods(ctx context.Context, userID string) *gorm.DB {
-	return s.db.WithContext(ctx).Model(&domain.ModFile{}).Where("instance_id = ? AND organization_id IN (?)", "unassigned", s.userOrganizations(ctx, userID).Select("organizations.id"))
+	return s.userOwnedQuery(ctx, userID, &domain.ModFile{}).Where("instance_id = ?", "unassigned")
 }
 func (s *Store) ListUserLibraryMods(ctx context.Context, userID string) ([]domain.ModFile, error) {
 	items := []domain.ModFile{}
-	err := s.userLibraryMods(ctx, userID).Order("created_at DESC, id ASC").Find(&items).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userLibraryMods(ctx, userID).Order("created_at DESC, id ASC").Find(&items).Error
+	})
 	return items, err
 }
 func (s *Store) GetUserLibraryMod(ctx context.Context, userID, id string) (domain.ModFile, error) {
 	var item domain.ModFile
-	err := s.userLibraryMods(ctx, userID).Where("id = ?", id).Take(&item).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error { return tx.userLibraryMods(ctx, userID).Where("id = ?", id).Take(&item).Error })
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = ErrNotFound
 	}
 	return item, err
 }
 func (s *Store) userModPacks(ctx context.Context, userID string) *gorm.DB {
-	return s.db.WithContext(ctx).Model(&domain.ModPack{}).Where("organization_id IN (?)", s.userOrganizations(ctx, userID).Select("organizations.id"))
+	return s.userOwnedQuery(ctx, userID, &domain.ModPack{})
 }
 func (s *Store) ListUserModPacks(ctx context.Context, userID string) ([]domain.ModPack, error) {
 	items := []domain.ModPack{}
-	err := s.userModPacks(ctx, userID).Order("created_at DESC, id ASC").Find(&items).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userModPacks(ctx, userID).Order("created_at DESC, id ASC").Find(&items).Error
+	})
 	return items, err
 }
 func (s *Store) GetUserModPack(ctx context.Context, userID, id string) (domain.ModPack, error) {
 	var item domain.ModPack
-	err := s.userModPacks(ctx, userID).Where("id = ?", id).Take(&item).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error { return tx.userModPacks(ctx, userID).Where("id = ?", id).Take(&item).Error })
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = ErrNotFound
 	}

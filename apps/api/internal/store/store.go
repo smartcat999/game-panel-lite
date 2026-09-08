@@ -910,6 +910,16 @@ func (s *Store) UpdateTenantQuota(ctx context.Context, quota domain.TenantQuota)
 }
 
 func (s *Store) GetTenantUsage(ctx context.Context, orgID string) (domain.TenantUsage, error) {
+	var result domain.TenantUsage
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var err error
+		result, err = tx.tenantUsageSnapshot(ctx, orgID)
+		return err
+	})
+	return result, err
+}
+
+func (s *Store) tenantUsageSnapshot(ctx context.Context, orgID string) (domain.TenantUsage, error) {
 	quota, err := s.GetTenantQuota(ctx, orgID)
 	if err != nil {
 		return domain.TenantUsage{}, err

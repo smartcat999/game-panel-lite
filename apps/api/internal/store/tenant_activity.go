@@ -12,12 +12,14 @@ func (s *Store) ListUserActivity(ctx context.Context, userID, instanceID string,
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := s.db.WithContext(ctx).Model(&domain.ActivityEvent{}).Where("organization_id IN (?)", s.userOrganizations(ctx, userID).Select("organizations.id"))
-	if instanceID != "" {
-		query = query.Where("instance_id = ?", instanceID)
-	}
 	events := []domain.ActivityEvent{}
-	err := query.Order(s.creationOrder(true)).Limit(limit).Find(&events).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		query := tx.userOwnedQuery(ctx, userID, &domain.ActivityEvent{})
+		if instanceID != "" {
+			query = query.Where("instance_id = ?", instanceID)
+		}
+		return query.Order(tx.creationOrder(true)).Limit(limit).Find(&events).Error
+	})
 	for i := range events {
 		hydrateActivityPayload(&events[i])
 	}

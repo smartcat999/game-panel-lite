@@ -27,9 +27,13 @@ func (s *Store) ListUserGameServersPage(ctx context.Context, userID string, opti
 
 func (s *Store) ServerMembershipRole(ctx context.Context, userID, serverID string) (domain.Role, error) {
 	var member domain.OrganizationMember
-	err := s.db.WithContext(ctx).Model(&domain.OrganizationMember{}).
-		Joins("JOIN game_servers ON game_servers.organization_id = organization_members.organization_id").
-		Select("organization_members.*").Where("game_servers.id = ? AND organization_members.user_id = ? AND organization_members.user_id <> ''", serverID, userID).Take(&member).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var server struct{ OrganizationID string }
+		if err := tx.db.WithContext(ctx).Table("game_servers").Select("organization_id").Where("id = ?", serverID).Take(&server).Error; err != nil {
+			return err
+		}
+		return tx.db.WithContext(ctx).Where("organization_id = ? AND user_id = ? AND user_id <> ''", server.OrganizationID, userID).Take(&member).Error
+	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", ErrNotFound
 	}

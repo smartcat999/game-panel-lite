@@ -188,3 +188,12 @@
 - 工作区全量 Go／vet 通过，真实 PostgreSQL race 验证通过；随后新增的跨租户与 SQLite 回滚用例专项通过。最终独立快照验证结果另行登记，不能以先前快照代替。
 - [模型与事务说明](../architecture/global-instance-intents.md) 明确暂未接入 HTTP、MQ 发布器、Region 接收端及实际配置保护器。新表尚在同一数据库，不迁移旧实例；全局应用用例、区域 Deployment、Inbox、实际交付与数据导入继续待实现。
 - 最终独立索引快照的全量 Go（含架构依赖门禁）、vet、真实 PostgreSQL `TestPostgresIntegration`／`TestPostgresRegionalMigrationAuditReadOnly -race` 全部通过，覆盖本批最终测试。日志 `/tmp/gamepanel-global-model-index-all.log`、`/tmp/gamepanel-global-model-index-vet.log`、`/tmp/gamepanel-global-model-index-pg.log`。本轮未修改前端；其他草稿和用户文件未纳入提交。
+
+### 2026-09-08 用户新增 SQL 约束
+
+- 用户要求所有 SQL 禁止连表 JOIN，采用 ID／批量查询和代码组合；已记录为 [SQL 访问边界](../architecture/sql-access-policy.md)，后续六阶段工作必须遵循。
+- 已替换三个在线 JOIN：全局配额的修订资源读取、实例成员角色、用户组织查询。批量关联验证 ID 与资源归属，缺失修订不释放配额；只读快照保持多次读取的一致性。全量 Go／vet 正在验证。
+- 历史迁移中的 JOIN 和关联子查询仍待替换，不能宣称所有 SQL 已符合。PostgreSQL 历史脚本有校验和，后续需保留升级兼容并替换实际执行路径，不能直接改旧脚本导致已有库启动失败。
+- 组织查询的旧辅助方法还被世界、预设、模组库和活动记录使用；首次编译发现这些调用方后，已同步改用物化组织 ID，并在外层只读快照中执行资源查询。随后全量 Go／vet 通过，日志 `/tmp/gamepanel-nojoin-all.log`、`/tmp/gamepanel-nojoin-vet.log`。这些旧列表的大组织集合分批分页还需继续优化，不能以现有小规模测试宣称容量验收。
+- 大组织集合改用单个 JSON ID 参数，避免超过数据库参数数量限制，并保持整体排序／LIMIT；不关联其他业务表。新增 501 个组织的测试检查跨批次完整性、全局最新记录截断和外部用户隔离。首次夹具遗漏成员主键，补齐唯一 ID 后重跑全量和 PostgreSQL；最终结果另行登记。
+- 最终工作区及独立索引快照的全量 Go、vet、真实 PostgreSQL `TestPostgresIntegration -race` 均通过，包含 501 组织用例。独立日志 `/tmp/gamepanel-nojoin-index-all.log`、`/tmp/gamepanel-nojoin-index-vet.log`、`/tmp/gamepanel-nojoin-index-pg.log`。目前在线 `.Joins` 调用清零，历史回填 JOIN 和其他关联子查询尚未清零，总 Goal 继续进行。

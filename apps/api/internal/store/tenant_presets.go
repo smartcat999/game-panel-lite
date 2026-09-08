@@ -9,11 +9,13 @@ import (
 )
 
 func (s *Store) userConfigPresets(ctx context.Context, userID string) *gorm.DB {
-	return s.db.WithContext(ctx).Model(&domain.ConfigPreset{}).Where("organization_id IN (?)", s.userOrganizations(ctx, userID).Select("organizations.id"))
+	return s.userOwnedQuery(ctx, userID, &domain.ConfigPreset{})
 }
 func (s *Store) ListUserConfigPresets(ctx context.Context, userID string) ([]domain.ConfigPreset, error) {
 	presets := []domain.ConfigPreset{}
-	err := s.userConfigPresets(ctx, userID).Order("created_at DESC, id ASC").Find(&presets).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userConfigPresets(ctx, userID).Order("created_at DESC, id ASC").Find(&presets).Error
+	})
 	for i := range presets {
 		hydratePresetConfigPayload(&presets[i])
 	}
@@ -21,7 +23,9 @@ func (s *Store) ListUserConfigPresets(ctx context.Context, userID string) ([]dom
 }
 func (s *Store) GetUserConfigPreset(ctx context.Context, userID, id string) (domain.ConfigPreset, error) {
 	var preset domain.ConfigPreset
-	err := s.userConfigPresets(ctx, userID).Where("id = ?", id).Take(&preset).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userConfigPresets(ctx, userID).Where("id = ?", id).Take(&preset).Error
+	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return preset, ErrNotFound
 	}

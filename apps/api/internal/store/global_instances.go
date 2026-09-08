@@ -31,26 +31,38 @@ type globalOperationRow struct {
 
 // During transition, logical reservations and legacy instances both consume
 // tenant quota. Missing revision pointers fail closed instead of disappearing
-// from a JOIN and making capacity available for another purchase.
+// from accounting and making capacity available for another purchase.
 func (s *Store) globalReservedResources(ctx context.Context, organizationID string) ([]domain.GameServer, error) {
-	var rows []struct {
-		ID       string
-		CPU      float64
-		MemoryMB int64
+	var servers []struct {
+		ID, CurrentRevisionID string
 	}
-	if err := s.db.WithContext(ctx).Table("logical_servers AS servers").
-		Select("servers.id, revisions.cpu, revisions.memory_mb").
-		Joins("LEFT JOIN server_revisions AS revisions ON revisions.id = servers.current_revision_id AND revisions.server_id = servers.id").
-		Where("servers.organization_id = ?", organizationID).Scan(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Table("logical_servers").Select("id,current_revision_id").
+		Where("organization_id = ?", organizationID).Scan(&servers).Error; err != nil {
 		return nil, err
 	}
-	result := make([]domain.GameServer, 0, len(rows))
-	for _, row := range rows {
-		resources := domain.ServerResources{CPULimitCores: row.CPU, MemoryLimitMB: int(row.MemoryMB)}
-		if int64(resources.MemoryLimitMB) != row.MemoryMB || !finiteResources(resources) {
-			return nil, ErrFiniteResourcesRequired
+	result := make([]domain.GameServer, 0, len(servers))
+	for start := 0; start < len(servers); start += idLookupBatchSize {
+		batch := servers[start:min(start+idLookupBatchSize, len(servers))]
+		ids := make([]string, 0, len(batch))
+		for _, server := range batch {
+			ids = append(ids, server.CurrentRevisionID)
 		}
-		result = append(result, domain.GameServer{ID: row.ID, Spec: domain.ServerSpec{Resources: resources}})
+		var revisions []globalRevisionRow
+		if err := s.db.WithContext(ctx).Table("server_revisions").Select("id,server_id,cpu,memory_mb").Where("id IN ?", ids).Find(&revisions).Error; err != nil {
+			return nil, err
+		}
+		byID := make(map[string]globalRevisionRow, len(revisions))
+		for _, revision := range revisions {
+			byID[revision.ID] = revision
+		}
+		for _, server := range batch {
+			revision, exists := byID[server.CurrentRevisionID]
+			resources := domain.ServerResources{CPULimitCores: revision.CPU, MemoryLimitMB: int(revision.MemoryMB)}
+			if !exists || revision.ServerID != server.ID || int64(resources.MemoryLimitMB) != revision.MemoryMB || !finiteResources(resources) {
+				return nil, ErrFiniteResourcesRequired
+			}
+			result = append(result, domain.GameServer{ID: server.ID, Spec: domain.ServerSpec{Resources: resources}})
+		}
 	}
 	return result, nil
 }
