@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/internal/archive"
 	"github.com/smartcat999/game-panel-lite/internal/worker"
 )
 
@@ -53,6 +56,14 @@ func TestStoppedDataUsesLifecycleLock(t *testing.T) {
 		}
 		if _, err := fs.ReadFile(files, "../outside"); err == nil {
 			t.Fatal("escaped instance directory")
+		}
+		var encoded bytes.Buffer
+		if err := archive.Write(ctx, &encoded, files, ".", nil); err != nil {
+			return err
+		}
+		reader, err := zip.NewReader(bytes.NewReader(encoded.Bytes()), int64(encoded.Len()))
+		if err != nil || len(reader.File) != 1 || reader.File[0].Name != "world" {
+			t.Fatal("stopped data not archived", err)
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Millisecond)
 		defer cancel()

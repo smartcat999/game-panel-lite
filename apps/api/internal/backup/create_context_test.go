@@ -1,36 +1,12 @@
 package backup
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
-
-type cancelArchiveWriter struct {
-	cancel  context.CancelFunc
-	written int
-}
-
-func (w *cancelArchiveWriter) Write(p []byte) (int, error) {
-	w.written += len(p)
-	w.cancel()
-	return len(p), nil
-}
-
-func TestArchiveCopyStopsAfterCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	data := bytes.Repeat([]byte("a"), 256<<10)
-	writer := &cancelArchiveWriter{cancel: cancel}
-	copied, err := io.Copy(writer, archiveContextReader{ctx: ctx, source: bytes.NewReader(data)})
-	if !errors.Is(err, context.Canceled) || copied <= 0 || copied >= int64(len(data)) || int64(writer.written) != copied {
-		t.Fatalf("copy continued after cancellation: %d %v", copied, err)
-	}
-}
 
 func TestCancelledArchiveDoesNotCreateOutput(t *testing.T) {
 	root := t.TempDir()
@@ -73,5 +49,18 @@ func TestArchiveSourceFailureRemovesPartialOutput(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(root, "backups", "server"))
 	if err != nil || len(entries) != 0 {
 		t.Fatal("failed archive left partial output")
+	}
+}
+
+func TestSubtreeRejectsInternalSymlinkRoot(t *testing.T) {
+	source := t.TempDir()
+	if err := os.Mkdir(filepath.Join(source, "worlds"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("worlds", filepath.Join(source, "alias")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if _, _, err := NewService(t.TempDir()).CreateSubtreeContext(context.Background(), "server", source, "alias"); err == nil {
+		t.Fatal("symlink subtree root accepted")
 	}
 }

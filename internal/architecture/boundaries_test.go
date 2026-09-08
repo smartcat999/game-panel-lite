@@ -64,6 +64,9 @@ func TestBackendImportBoundaries(t *testing.T) {
 }
 
 func forbiddenImport(file, imported string) string {
+	if strings.HasPrefix(file, "internal/archive/") && (strings.Contains(imported, ".") || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "shared archive writer must use scoped filesystem and standard-library contracts only"
+	}
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
 	if under("backupingress") && ((strings.Contains(imported, ".") && imported != api+"backup" && imported != api+"regional") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "backup ingress must depend on consumer-owned persistence ports and wire models"

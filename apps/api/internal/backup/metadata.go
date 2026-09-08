@@ -4,49 +4,21 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"fmt"
+	"github.com/smartcat999/game-panel-lite/internal/archive"
 	"io"
 )
 
-const metadataPath = ".gamepanel-backup.json"
-const maxMetadataBytes = 16 << 10
+const metadataPath = archive.MetadataPath
+const maxMetadataBytes = archive.MaxMetadataBytes
 
-// Metadata travels with the archive. It describes compatibility, not authenticity.
-type Metadata struct {
-	FormatVersion int    `json:"formatVersion"`
-	GameKey       string `json:"gameKey"`
-	ProviderKey   string `json:"providerKey"`
-	ConfigVersion int    `json:"configVersion"`
-}
+type Metadata = archive.Metadata
 
 // WithMetadata returns an independent service configured for archive creation.
 func (s *Service) WithMetadata(metadata Metadata) *Service {
 	return &Service{dataDir: s.dataDir, metadata: &metadata}
 }
 
-func validateMetadata(metadata Metadata) error {
-	if metadata.FormatVersion != 1 || metadata.ConfigVersion < 1 || metadata.ProviderKey == "" || metadata.GameKey == "" {
-		return fmt.Errorf("invalid or unsupported backup metadata")
-	}
-	return nil
-}
-func writeMetadata(writer *zip.Writer, metadata Metadata) error {
-	if err := validateMetadata(metadata); err != nil {
-		return err
-	}
-	payload, err := json.Marshal(metadata)
-	if err != nil {
-		return err
-	}
-	if len(payload) > maxMetadataBytes {
-		return fmt.Errorf("backup metadata exceeds size limit")
-	}
-	file, err := writer.Create(metadataPath)
-	if err != nil {
-		return err
-	}
-	_, err = file.Write(payload)
-	return err
-}
+func validateMetadata(metadata Metadata) error { return metadata.Validate() }
 func readMetadata(files []*zip.File) (Metadata, error) {
 	// Legacy archives have no source identity and use original configuration format.
 	metadata := Metadata{ConfigVersion: 1}

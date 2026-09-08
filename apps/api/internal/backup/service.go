@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/safety"
+	"github.com/smartcat999/game-panel-lite/internal/archive"
 )
 
 type Service struct {
@@ -62,6 +63,13 @@ func (s *Service) CreateSubtreeContext(ctx context.Context, instanceID, rootDir,
 	if sourceDir != cleanRoot && !strings.HasPrefix(sourceDir, cleanRoot+string(filepath.Separator)) {
 		return "", 0, fmt.Errorf("backup subtree escapes data directory")
 	}
+	entry, err := os.Lstat(sourceDir)
+	if err != nil {
+		return "", 0, err
+	}
+	if entry.Mode()&os.ModeSymlink != 0 {
+		return "", 0, fmt.Errorf("backup source contains a symbolic link")
+	}
 	realRoot, err := filepath.EvalSymlinks(cleanRoot)
 	if err != nil {
 		return "", 0, fmt.Errorf("resolve backup data directory: %w", err)
@@ -104,71 +112,18 @@ func (s *Service) create(ctx context.Context, instanceID string, archiveRoot str
 			_ = os.Remove(target)
 		}
 	}()
-	zipper := zip.NewWriter(out)
-	if s.metadata != nil {
-		if err := writeMetadata(zipper, *s.metadata); err != nil {
-			_ = zipper.Close()
-			_ = out.Close()
-			return "", 0, err
-		}
+	subtree, err := filepath.Rel(archiveRoot, sourceDir)
+	if err != nil {
+		_ = out.Close()
+		return "", 0, err
 	}
-	walkErr := filepath.WalkDir(sourceDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("backup source contains a symbolic link")
-		}
-		rel, err := filepath.Rel(archiveRoot, path)
-		if err != nil {
-			return err
-		}
-		if filepath.ToSlash(rel) == metadataPath {
-			return fmt.Errorf("backup source uses reserved metadata filename")
-		}
-		if !d.Type().IsRegular() {
-			return fmt.Errorf("backup source contains a non-regular file")
-		}
-		writer, err := zipper.Create(rel)
-		if err != nil {
-			return err
-		}
-		in, err := root.Open(rel)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		info, err := in.Stat()
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("backup source is not a regular file")
-		}
-		stop := context.AfterFunc(ctx, func() { _ = in.Close() })
-		defer stop()
-		_, err = io.Copy(writer, archiveContextReader{ctx: ctx, source: in})
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return err
-	})
-	closeErr := zipper.Close()
-	fileErr := out.Close()
-	if walkErr != nil {
-		return "", 0, walkErr
+	writeErr := archive.Write(ctx, out, root.FS(), filepath.ToSlash(subtree), s.metadata)
+	closeErr := out.Close()
+	if writeErr != nil {
+		return "", 0, writeErr
 	}
 	if closeErr != nil {
 		return "", 0, closeErr
-	}
-	if fileErr != nil {
-		return "", 0, fileErr
 	}
 	info, err := os.Stat(target)
 	if err != nil {
@@ -249,17 +204,4 @@ func RestoreArchiveChecked(source io.ReaderAt, size int64, targetDir string, hoo
 	}
 	defer root.Close()
 	return restoreFiles(root, reader.File, hooks.Commit)
-}
-
-// Keep io.Copy on its bounded read loop rather than an uncancellable WriterTo.
-type archiveContextReader struct {
-	ctx    context.Context
-	source io.Reader
-}
-
-func (r archiveContextReader) Read(p []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return r.source.Read(p)
 }

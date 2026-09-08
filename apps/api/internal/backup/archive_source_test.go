@@ -3,6 +3,7 @@ package backup
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -13,10 +14,14 @@ func TestRestoreArchiveFromIndependentSource(t *testing.T) {
 	var archive bytes.Buffer
 	w := zip.NewWriter(&archive)
 	metadata := Metadata{FormatVersion: 1, GameKey: "game", ProviderKey: "provider", ConfigVersion: 2}
-	if err := writeMetadata(w, metadata); err != nil {
+	entry, err := w.Create(metadataPath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := w.Create("worlds/save.dat")
+	if err := json.NewEncoder(entry).Encode(metadata); err != nil {
+		t.Fatal(err)
+	}
+	entry, err = w.Create("worlds/save.dat")
 	if err != nil {
 		t.Fatal(err)
 	}

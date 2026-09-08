@@ -142,6 +142,13 @@
 - 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-stopped-data-all.log`、`/tmp/gamepanel-stopped-data-vet.log`。补充真实 Docker race 集成通过，日志 `/tmp/gamepanel-stopped-data-docker.log`：一次性 Alpine 容器运行中拒绝读取，停止后读取实际配置文件，结束删除容器；不以此代替真实游戏保存语义或跨主机验收。
 - 无新表、SQL、迁移或业务框架，其他草稿保留。该锁仅覆盖协作进程，不防外部宿主机／Docker 写入；调用方仍须持有有效执行授权，在回调内暂存并在成功返回后发布。Agent 快照任务、共享归档写入和区域授权协调器仍待接入，完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 API／Agent 可共享的受限 ZIP 写入
+
+- 提取 internal/archive.Write，输入为 Context、输出流、fs.FS、子树和元数据，只依赖标准库；API Service 删除重复遍历／压缩逻辑并调用共享实现，保留落盘和失败清理。Metadata 改为共享类型别名，字段、版本、子树路径和恢复兼容性不变。
+- 迁移分块取消用例，新增共享写入的元数据／子树、非法路径、特殊文件、保留文件名、取消及运行时 fs.FS→ZIP 组合验证。复核 fs.WalkDir 对根路径的行为后，显式保留 API 子树根符号链接拒绝并补回归，未默默扩大读取范围。
+- 最终独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-shared-archive-final-all.log`、`/tmp/gamepanel-shared-archive-final-vet.log`；shared archive／Runtime／API backup／Agent race 通过 `/tmp/gamepanel-shared-archive-race.log`，子树修正后 backup race 通过 `/tmp/gamepanel-shared-archive-final-race.log`。无 SQL、迁移或前端改动，未重复外部服务测试。
+- Agent 可使用共享包而无需导入 API 内部代码，但实际快照任务、授权协调器、暂存与交付尚未接通；Runtime 组合仍为协议测试，不作为真实游戏一致性证据。保留其他草稿，完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
