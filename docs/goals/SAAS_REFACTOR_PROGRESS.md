@@ -65,6 +65,13 @@
 - 只新增迁移，无 JOIN，其他草稿和前端保留。尚未完成待执行请求的当前授权校验、Node 快照执行、上传任务接线及结果回传控制面；也未用此模块级集成替代用户侧完整备份验收。
 
 
+### 2026-09-09 Region 备份结果可靠发布
+
+- 新增区域迁移 006，为结果 Outbox 增加领取租约、持久重试与发布确认字段；历史迁移不变。复用有界领取与确认实现，来源 Region 固定绑定区域数据库身份，错误 Region 不能领取。
+- `outbox-publisher -stream backup-results` 使用区域数据库和控制面结果 broker，独立队列发布完整上传结果。Broker 确认后才记录发布完成；租约过期后的旧令牌不能确认，发布失败持久延后。区域 uploaded 与已发布事件均不等于全局用户任务成功。
+- 真实 PostgreSQL／RabbitMQ 验证并发唯一领取、过期拒绝、失败重试、完整结果信封及确认后不再领取。独立快照全量 Go（含架构）及 vet 通过，日志 `/tmp/gamepanel-backup-results-all.log`、`/tmp/gamepanel-backup-results-vet.log`。首次集成暴露旧死信测试夹具未等待发布确认的竞态，修复夹具后 Store／RabbitMQ race 通过，日志 `/tmp/gamepanel-backup-results-integration-fixed.log`，受影响包 vet 日志 `/tmp/gamepanel-backup-results-vet-fixed.log` 为空。
+- 无 JOIN，未改前端或无关草稿。控制面结果 Inbox／状态与资产元数据原子更新、当前执行授权、Node 一致快照和完整 Worker 接线仍待完成；未以消息发布测试替代用户侧备份闭环验收。完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

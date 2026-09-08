@@ -18,7 +18,7 @@ import (
 
 func main() {
 	region := flag.String("region", "", "region whose events to publish")
-	stream := flag.String("stream", "revisions", "event stream: revisions or backup-requests; use separate queues")
+	stream := flag.String("stream", "revisions", "event stream: revisions, backup-requests or backup-results; use separate queues")
 	queue := flag.String("queue", "", "dedicated durable quorum queue")
 	deadLetterQueue := flag.String("dead-letter-queue", "", "dedicated durable parking queue")
 	deliveryLimit := flag.Int("delivery-limit", 20, "failed deliveries before parking the message")
@@ -39,10 +39,14 @@ func main() {
 }
 
 func run(ctx context.Context, stream, region, queue, deadLetterQueue string, deliveryLimit, batch int, timeout, lease, retry, poll time.Duration, maxPayload, connections int) error {
-	if stream != "revisions" && stream != "backup-requests" {
+	if stream != "revisions" && stream != "backup-requests" && stream != "backup-results" {
 		return fmt.Errorf("unsupported outbox stream")
 	}
-	if os.Getenv("GAMEPANEL_DATABASE_URL") == "" || poll < time.Millisecond || connections < 1 {
+	databaseURL := os.Getenv("GAMEPANEL_DATABASE_URL")
+	if stream == "backup-results" {
+		databaseURL = os.Getenv("GAMEPANEL_REGIONAL_DATABASE_URL")
+	}
+	if databaseURL == "" || poll < time.Millisecond || connections < 1 {
 		return fmt.Errorf("database endpoint, positive pool size and poll interval are required")
 	}
 	publisher, err := rabbitmq.NewPublisher(rabbitmq.Options{URL: os.Getenv("GAMEPANEL_RABBITMQ_URL"), RegionID: region, Queue: queue, DeadLetterQueue: deadLetterQueue, DeliveryLimit: deliveryLimit, Timeout: timeout, MaxPayloadBytes: maxPayload})
@@ -50,14 +54,24 @@ func run(ctx context.Context, stream, region, queue, deadLetterQueue string, del
 		return err
 	}
 	defer publisher.Close()
-	db, err := store.OpenConfigured("", os.Getenv("GAMEPANEL_DATABASE_URL"), connections)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	var outbox delivery.Outbox = db
-	if stream == "backup-requests" {
-		outbox = db.BackupRequestOutbox()
+	var outbox delivery.Outbox
+	if stream == "backup-results" {
+		db, err := store.OpenRegionalPostgres(databaseURL, region, connections)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		outbox = db.BackupResultOutbox()
+	} else {
+		db, err := store.OpenConfigured("", databaseURL, connections)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		outbox = db
+		if stream == "backup-requests" {
+			outbox = db.BackupRequestOutbox()
+		}
 	}
 	dispatcher := delivery.Dispatcher{Outbox: outbox, Publisher: publisher, RegionID: region, Batch: batch, Lease: lease, PublishTimeout: timeout, RetryDelay: retry}
 	if err := dispatcher.Validate(); err != nil {

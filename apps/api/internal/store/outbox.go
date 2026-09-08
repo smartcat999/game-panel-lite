@@ -15,8 +15,13 @@ var _ delivery.Outbox = (*Store)(nil)
 
 // Table choices are private constants; callers cannot select arbitrary SQL tables.
 type sqlOutbox struct {
-	db    *gorm.DB
-	table string
+	db     *gorm.DB
+	table  string
+	region string // fixed identity for a Region-owned database; empty for global tables
+}
+
+func (s *RegionalStore) BackupResultOutbox() delivery.Outbox {
+	return &sqlOutbox{db: s.db, table: "regional_backup_result_outbox", region: s.regionID}
 }
 
 func (s *Store) BackupRequestOutbox() delivery.Outbox {
@@ -46,6 +51,9 @@ func outboxNow(db *gorm.DB) (int64, error) {
 }
 
 func (s *sqlOutbox) ClaimOutbox(ctx context.Context, region string, limit int, lease time.Duration) ([]delivery.Message, error) {
+	if s.region != "" && region != s.region {
+		return nil, ErrRegionMismatch
+	}
 	if region == "" || limit < 1 || limit > 100 || lease < time.Millisecond || lease > time.Hour {
 		return nil, errors.New("invalid outbox claim")
 	}
@@ -64,7 +72,12 @@ func (s *sqlOutbox) ClaimOutbox(ctx context.Context, region string, limit int, l
 			return err
 		}
 		var rows []delivery.Message
-		query := tx.Table(s.table).Select("id,region_id,payload,attempts").Where("region_id = ? AND published_at_ms = 0 AND next_attempt_ms <= ? AND lease_until_ms <= ?", region, now, now).Order("next_attempt_ms,created_at,id").Limit(limit)
+		query := tx.Table(s.table).Where("published_at_ms = 0 AND next_attempt_ms <= ? AND lease_until_ms <= ?", now, now).Order("next_attempt_ms,created_at,id").Limit(limit)
+		if s.region != "" {
+			query = query.Select("id,payload,attempts,? AS region_id", s.region)
+		} else {
+			query = query.Select("id,region_id,payload,attempts").Where("region_id = ?", region)
+		}
 		if tx.Dialector.Name() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"})
 		}

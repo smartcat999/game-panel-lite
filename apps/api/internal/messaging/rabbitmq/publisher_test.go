@@ -212,8 +212,20 @@ func TestRabbitMQDeadLetters(t *testing.T) {
 	if _, err := ch.QueueDeclare(legacy, true, false, false, false, amqp.Table{"x-queue-type": "quorum"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ch.PublishWithContext(context.Background(), "", legacy, true, false, amqp.Publishing{MessageId: "legacy-retained", DeliveryMode: amqp.Persistent, Body: []byte("retained")}); err != nil {
+	if err := ch.Confirm(false); err != nil {
 		t.Fatal(err)
+	}
+	seedCtx, cancelSeed := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelSeed()
+	confirmation, err := ch.PublishWithDeferredConfirmWithContext(seedCtx, "", legacy, true, false, amqp.Publishing{MessageId: "legacy-retained", DeliveryMode: amqp.Persistent, Body: []byte("retained")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confirmation == nil {
+		t.Fatal("legacy fixture publication not tracked")
+	}
+	if ok, err := confirmation.WaitContext(seedCtx); err != nil || !ok {
+		t.Fatalf("legacy fixture not confirmed: %v", err)
 	}
 	legacyOptions := options
 	legacyOptions.Queue = legacy

@@ -148,6 +148,7 @@ func testRegionalArchiveUploads(t *testing.T, db *RegionalStore, dsn string) {
 	if json.Unmarshal([]byte(result.Payload), &event) != nil || event.EventID == "" || event.SchemaVersion != 1 || event.Plan != plan || event.Receipt != receipt || result.OperationID != plan.OperationID || result.EventType != "backup.archive.uploaded" {
 		t.Fatalf("result event %+v", result)
 	}
+	testBackupResultDelivery(t, db, event)
 	invalid := plan
 	invalid.ID = "invalid"
 	invalid.OperationID = "invalid-operation"

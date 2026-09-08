@@ -29,6 +29,8 @@ ETag 不作为全文件 SHA-256，分片上传时也不应假定它是全文件 
 
 `region-receiver -stream backup-requests` 使用备份专用接收入口。入口限制消息大小及 JSON 类型，拒绝未知／重复字段、信封 ID 不匹配及目标 Region 不匹配。区域迁移 005 增加备份 Inbox 与待执行请求；消息事件和稳定操作身份分别去重，同一备份 ID 不能属于不同操作。Inbox 与请求原子保存，失败时不确认消费，冲突内容按不可重试通知处理。落库状态为 `awaiting_authority`，配置快照、执行授权、Node 快照一致性及后续上传绑定仍需协调器完成。
 
+区域迁移 006 为结果 Outbox 增加发布租约、重试、尝试计数和确认时间。`outbox-publisher -stream backup-results` 使用 `GAMEPANEL_REGIONAL_DATABASE_URL`，打开并验证 Region 数据库身份，再向 `GAMEPANEL_RABBITMQ_URL` 指定的控制面结果 broker 发布。此流的 `-region` 表示来源 Region；Outbox 适配器只能使用绑定身份，不接受其他 Region。来源身份由数据库配置提供，不通过业务表 JOIN 或信任结果 payload 获取。它复用发布确认与重试实现，不更新控制面用户任务。
+
 ```sh
 # 数据库和 broker 连接通过部署环境注入；队列名为示例。
 go run ./apps/api/cmd/outbox-publisher -stream backup-requests \
@@ -38,11 +40,15 @@ go run ./apps/api/cmd/outbox-publisher -stream backup-requests \
 go run ./apps/api/cmd/region-receiver -stream backup-requests \
   -region east -queue gamepanel.east.backup-requests \
   -dead-letter-queue gamepanel.east.backup-requests.dead
+# Region 发布结果；broker 凭证仅允许写入对应来源的控制面结果队列：
+go run ./apps/api/cmd/outbox-publisher -stream backup-results \
+  -region east -queue gamepanel.control.east.backup-results \
+  -dead-letter-queue gamepanel.control.east.backup-results.dead
 ```
 
 区域迁移 004 增加 `regional_archive_uploads` 和 `regional_backup_result_outbox`。上传计划绑定控制面 OperationID／请求事件、Region、实例、Deployment、Node、Placement epoch、准备好的 SnapshotID、对象键及精确资产摘要。控制面操作与存储对象绑定均有唯一约束；重放只能接受完全相同计划，不能更换节点、快照或归属。此登记接口仅供已完成授权与快照准备的受信协调器调用；目前尚未由控制面下发链路驱动。
 
-Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。当前 Outbox 只是持久结果，发布确认、MQ Adapter 接线和控制面结果 Inbox 仍待实现。全部业务 SQL 为单表查询，无 JOIN。
+Worker 领取使用数据库时间、单表 `FOR UPDATE SKIP LOCKED` 和独立领取令牌。完成／重试锁内复核原计划、令牌与未过期租约；损坏记录隔离，重试延迟持久保存。上传完成只转为 `uploaded` 并写入 `backup.archive.uploaded` 结果 Outbox，二者原子提交；Outbox 插入失败会回滚全部完成修改。结果 Outbox 已接入确认发布；控制面结果 Inbox 和用户任务状态更新仍待实现。全部业务 SQL 为单表查询，无 JOIN。
 
 已存在本地 ZIP 归档、兼容性检查、暂存解压和返回错误时的回滚。新增 `backup.RestoreArchiveChecked(io.ReaderAt, size, target, hooks)`，让经过验证的对象存储下载文件复用同一恢复实现；调用方持有并关闭源文件。本地文件名入口委托给此入口，不引入 SDK 或数据库依赖。
 
