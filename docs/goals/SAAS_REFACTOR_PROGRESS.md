@@ -178,6 +178,13 @@
 - 独立快照全量 Go（含架构）、vet、真实 PostgreSQL Store／regional race 通过；实际运行 region-migrate 和 region-node 验证创建、查询、更新、关闭调度开关、旧版本及错区域拒绝。日志 `/tmp/gamepanel-regional-nodes-all.log`、`/tmp/gamepanel-regional-nodes-vet.log`、`/tmp/gamepanel-regional-nodes-integration.log`，命令结果 `/tmp/gamepanel-regional-nodes-cli-{create,update,list}.json`。证据不包含节点上线或真实调度。
 - 无 JOIN，无历史迁移修改，无前端改动。后续继续接区域节点身份／心跳、调度事务及 Agent 执行授权。
 
+### 区域节点身份、会话与心跳入口
+
+- 新增迁移 010，在独立观察表保存区域签发的会话 epoch、心跳序号、运行架构、就绪标志和数据库接收时间。旧会话／倒序序号／同序号冲突拒绝；相同重试不延长在线时间；会话旋转清空旧新鲜度，不修改节点管理配置。
+- 新增 region-control 组合入口与 nodeapi 消费接口，复用 serviceauth 的实际证书链校验，独立 URI SAN→Node 白名单绑定固定 Region 数据库。身份不从请求体或 Header 获取，未知节点不能靠心跳自动登记；严格有界 JSON 输入，错误不返回数据库细节。
+- 最终独立快照全量 Go（含架构）及 vet 通过；真实 PostgreSQL Store 与 mTLS HTTP 边界 race 通过，region-control 实际监听＋客户端证书＋心跳落库＋正常退出的组合 race 通过。日志 `/tmp/gamepanel-node-heartbeat-final-all.log`、`/tmp/gamepanel-node-heartbeat-final-vet.log`、`/tmp/gamepanel-node-heartbeat-integration.log`、`/tmp/gamepanel-node-heartbeat-entry.log`。测试使用临时证书和本机数据库，未运行实际 Agent 或游戏进程。
+- 会话不是运行授权或 fencing，实际 Agent 未切换新入口。后续仍需节点客户端、心跳新鲜度策略、区域容量预留和任务调度；无 JOIN，无历史迁移修改，无前端改动。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

@@ -99,6 +99,7 @@ func testRegionalNodes(t *testing.T, db *RegionalStore, dsn string) {
 			t.Fatal("unbounded list accepted")
 		}
 	}
+	testRegionalNodeSessions(t, db)
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	if _, err := db.ConfigureRegionalNode(cancelled, config, 2); err == nil {

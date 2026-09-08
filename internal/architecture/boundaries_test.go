@@ -101,6 +101,9 @@ func forbiddenImport(file, imported string) string {
 	if under("controlclient") && ((strings.Contains(imported, ".") && imported != api+"instances" && imported != api+"regional" && imported != api+"assets" && imported != api+"backup") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "regional control client must depend on wire models, not persistence, runtime or process configuration"
 	}
+	if under("nodeapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"regional" && imported != api+"serviceauth" {
+		return "node API must depend on authenticated identity and consumer-owned ports, not persistence or runtime"
+	}
 	if under("controlapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"instances" && imported != api+"regional" && imported != api+"serviceauth" && imported != api+"assets" && imported != api+"backup" && imported != api+"backupingress" {
 		return "control HTTP endpoints must use consumer-owned ports rather than concrete persistence or runtime"
 	}

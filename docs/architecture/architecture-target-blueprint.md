@@ -192,3 +192,23 @@ go run ./apps/api/cmd/region-node -region east -list -limit 50
 新建使用 expected-version=0。更新为完整配置替换，必须提交列表返回的版本及全部配置字段；例如确认节点可参与调度后，提交对应容量、架构和 `-expected-version 1 -schedulable`。不传 schedulable 时为 false，可用于关闭调度候选资格；关闭开关不会停止或删除已有工作负载。并发或过期更新返回版本冲突，重新查询后由运维决定是否重试，不能盲目覆盖。
 
 列表按节点 ID 排序，使用 `-after` 传入上一页末尾 ID，单页 1–200 条。此命令是区域运维入口，不向普通租户暴露宿主机清单。Agent 身份登记、心跳、节点池权限、容量预留及调度接线仍未完成；旧全局节点表和旧 Agent 路由尚未切换。
+
+## 区域节点会话与心跳入口（2026-09-09）
+
+region-control 提供 mTLS 节点控制入口。节点证书 URI SAN 通过区域运维白名单映射到 Node ID，Region 固定绑定区域数据库；请求 Header、查询参数或 JSON 都不能指定另一个节点身份。该入口复用现有证书链与有效期复核，白名单和 CA 轮换需要更新配置并重启／关闭受影响连接。
+
+先通过 region-migrate 与 region-node 完成迁移、节点管理配置，再启动：
+
+```sh
+go run ./apps/api/cmd/region-control -region east -listen 127.0.0.1:8444 \
+  -certificate /run/secrets/region.crt -key /run/secrets/region.key \
+  -client-ca /run/secrets/node-ca.pem -node-identities /run/secrets/node-identities.json
+```
+
+数据库从 GAMEPANEL_REGIONAL_DATABASE_URL 注入。路径仅为部署示例；node-identities.json 示例为 `{"spiffe://gamepanel/east/nodes/node-a":"node-a"}`，必须使用实际签发的身份。
+
+- `POST /internal/node/session`：无请求体。验证证书和已配置节点后签发递增 epoch，返回 `{"epoch":1}`；同时清空该节点旧观察的新鲜度与运行就绪标志。
+- `POST /internal/node/heartbeat`：JSON 包含 sessionEpoch、递增 sequence、architecture 和 runtimeReady，成功返回 204。架构必须匹配运维配置，节点身份仍从证书得到。
+- 区域迁移 010 的 regional_node_sessions 保存观察。旧 epoch、倒序 sequence、同序号冲突内容均拒绝；相同请求重试可成功确认，但不刷新 last_seen_ms。新观察使用区域数据库接收时间，不信任 Node 自报时间。
+
+会话只约束心跳写入，不是运行租约或物理隔离证明。旋转会话不会停止旧容器，也不会改变运维设置的容量、版本和调度开关。实际 Agent 尚未切换到这个入口，节点在线窗口、容量预留、任务授权和调度仍待接入；不能用本批会话替代这些条件。

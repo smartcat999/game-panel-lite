@@ -34,6 +34,18 @@ func NewRegions(identities map[string]string) (*Regions, error) {
 }
 
 func (r *Regions) Authenticate(request *http.Request) (string, error) {
+	identity, err := verifiedIdentity(request)
+	if err != nil {
+		return "", err
+	}
+	region, ok := r.identities[identity]
+	if !ok {
+		return "", ErrUnauthenticated
+	}
+	return region, nil
+}
+
+func verifiedIdentity(request *http.Request) (string, error) {
 	if request.TLS == nil || len(request.TLS.VerifiedChains) == 0 || len(request.TLS.PeerCertificates) == 0 {
 		return "", ErrUnauthenticated
 	}
@@ -62,11 +74,7 @@ func (r *Regions) Authenticate(request *http.Request) (string, error) {
 	if !valid {
 		return "", ErrUnauthenticated
 	}
-	region, ok := r.identities[leaf.URIs[0].String()]
-	if !ok {
-		return "", ErrUnauthenticated
-	}
-	return region, nil
+	return leaf.URIs[0].String(), nil
 }
 
 func ServerTLS(certificate tls.Certificate, clientCAs *x509.CertPool) (*tls.Config, error) {
