@@ -364,7 +364,8 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 }
 
 func TestRunningTModLoaderServerAllowsModMutation(t *testing.T) {
-	router, db, cfg := newTestRouter(t)
+	// Test the running-state mutation policy without background lifecycle changes.
+	router, db, cfg := newTestRouterFixture(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, true, false)
 	server := testServer("tmod", cfg.DataDir)
 	server.ProviderKey = domain.ProviderTerrariaTModLoader
 	server.Status = domain.StatusRunning

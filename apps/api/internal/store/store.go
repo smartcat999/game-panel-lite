@@ -176,6 +176,11 @@ func (s *Store) SaveGameServer(ctx context.Context, server *domain.GameServer) e
 				return err
 			}
 		}
+		if current.NodeID != server.NodeID || current.Spec.Resources != server.Spec.Resources || current.Spec.Network != server.Spec.Network {
+			if err := tx.lockNodeAllocation(ctx, *server); err != nil {
+				return err
+			}
+		}
 		if err := tx.validateServerModReferences(ctx, *server); err != nil {
 			return err
 		}

@@ -109,6 +109,9 @@ func (s *Store) CreateAllocatedGameServer(ctx context.Context, userID string, in
 		if err := tx.checkAllocation(ctx, quota, instance); err != nil {
 			return err
 		}
+		if err := tx.lockNodeAllocation(ctx, *instance); err != nil {
+			return err
+		}
 		return tx.CreateGameServer(ctx, instance)
 	})
 }
@@ -130,6 +133,11 @@ func (s *Store) SaveAllocatedGameServer(ctx context.Context, userID string, befo
 		}
 		if err := tx.checkAllocation(ctx, quota, &after); err != nil {
 			return err
+		}
+		if before.Spec.Resources != after.Spec.Resources || before.Spec.Network != after.Spec.Network {
+			if err := tx.lockNodeAllocation(ctx, after); err != nil {
+				return err
+			}
 		}
 		return tx.saveServerIntent(ctx, before, after)
 	})

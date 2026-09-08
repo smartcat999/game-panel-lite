@@ -22,7 +22,13 @@ func TestPlacementTransaction(t *testing.T) {
 
 func testPlacementTransaction(t *testing.T, db *Store) {
 	ctx := context.Background()
-	before := domain.GameServer{ID: "placement-atomic", NodeID: "source", Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredStopped}}
+	for _, id := range []string{"target", "target-0", "target-1", "target-2", "target-3", "target-4", "target-5", "target-6", "target-7"} {
+		node := domain.ComputeNode{ID: id, CPUCores: 8, MemoryTotalMB: 8192}
+		if err := db.CreateComputeNode(ctx, &node); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := domain.GameServer{ID: "placement-atomic", NodeID: "source", Spec: domain.ServerSpec{Generation: 1, DesiredState: domain.DesiredStopped, Resources: domain.ServerResources{CPULimitCores: 1, MemoryLimitMB: 512}}}
 	if err := db.CreateGameServer(ctx, &before); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +50,12 @@ func testPlacementTransaction(t *testing.T, db *Store) {
 			t.Fatalf("source assignment lost: %+v err=%v", current, err)
 		}
 	}
+	tooLarge := after
+	tooLarge.Spec.Resources.CPULimitCores = 9
+	if err := db.MigrateGameServer(ctx, before, tooLarge); !errors.Is(err, ErrNodeAllocationUnavailable) {
+		t.Fatalf("migration overcommitted target: %v", err)
+	}
+	assertUnchanged()
 	stale := before
 	stale.Spec.Generation = 0
 	if err := db.MigrateGameServer(ctx, stale, after); !errors.Is(err, ErrReconciliationSuperseded) {

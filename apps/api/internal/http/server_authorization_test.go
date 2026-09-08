@@ -17,6 +17,10 @@ import (
 func TestServerRoutesEnforceTenantMembership(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	ctx := context.Background()
+	node := domain.ComputeNode{ID: "node-local", IsLocal: true, CPUCores: 8, MemoryTotalMB: 8192}
+	if err := db.CreateComputeNode(ctx, &node); err != nil {
+		t.Fatal(err)
+	}
 	for _, id := range []string{"tenant-a", "tenant-b"} {
 		account := domain.AdminAccount{ID: id, Username: id, Role: domain.RoleMember}
 		if err := db.CreateAdminAccount(ctx, &account); err != nil {

@@ -420,6 +420,7 @@ type ComputeNode struct {
 	Region               string    `json:"region"`
 	Status               string    `json:"status"`
 	IsLocal              bool      `json:"isLocal"`
+	Unschedulable        bool      `json:"unschedulable"`
 	CPUCores             int       `json:"cpuCores"`
 	CPUUsagePercent      float64   `json:"cpuUsagePercent"`
 	MemoryTotalMB        int64     `json:"memoryTotalMb"`

@@ -107,7 +107,7 @@ func allocationActor(r *http.Request) string {
 func writeAllocationError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	switch {
-	case errors.Is(err, store.ErrQuotaExceeded), errors.Is(err, store.ErrReconciliationSuperseded):
+	case errors.Is(err, store.ErrNodeAllocationUnavailable), errors.Is(err, store.ErrQuotaExceeded), errors.Is(err, store.ErrReconciliationSuperseded):
 		status = http.StatusConflict
 	case errors.Is(err, store.ErrFiniteResourcesRequired), errors.Is(err, store.ErrInvalidQuota), errors.Is(err, store.ErrInvalidModLibrary):
 		status = http.StatusBadRequest

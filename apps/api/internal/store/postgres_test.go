@@ -235,6 +235,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testTenantActivity(t, db)
 	testReconciliationPersistence(t, db)
 	testTenantAllocations(t, db)
+	testNodeAllocations(t, db)
 	testTenantPresets(t, db)
 	testTenantModLibrary(t, db)
 	testModSources(t, db)

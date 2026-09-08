@@ -36,6 +36,8 @@ func setupDeclarativeFixtures(t *testing.T, db *store.Store, orgID, nodeID strin
 		node := domain.ComputeNode{
 			ID:            nodeID,
 			Name:          "Edge Worker Node 1",
+			CPUCores:      4,
+			MemoryTotalMB: 8192,
 			Token:         "remote-token",
 			Status:        "online",
 			LastHeartbeat: time.Now().UTC(),

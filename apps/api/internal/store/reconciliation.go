@@ -48,6 +48,9 @@ func (s *Store) MigrateGameServer(ctx context.Context, before, after domain.Game
 		return err
 	}
 	return s.Transaction(ctx, func(tx *Store) error {
+		if err := tx.lockNodeAllocation(ctx, after); err != nil {
+			return err
+		}
 		update := domain.GameServer{NodeID: after.NodeID, Spec: after.Spec, Status: after.Status, UpdatedAt: time.Now().UTC()}
 		// Acquire the instance before the assignment, matching publication and lease
 		// acquisition. The intent comparison prevents a stale migration winning.
