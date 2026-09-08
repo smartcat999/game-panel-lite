@@ -78,7 +78,14 @@ func run(ctx context.Context, address, certificateFile, keyFile, caFile, identit
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: address, TLSConfig: tlsConfig, Handler: http.TimeoutHandler(handler, timeout, "request timed out"), ReadHeaderTimeout: timeout, ReadTimeout: timeout, WriteTimeout: timeout, IdleTimeout: time.Minute}
+	backups, err := controlapi.NewBackupHandler(db, identities, maxBytes)
+	if err != nil {
+		return err
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/internal/region/backups/", backups)
+	mux.Handle("/", handler)
+	server := &http.Server{Addr: address, TLSConfig: tlsConfig, Handler: http.TimeoutHandler(mux, timeout, "request timed out"), ReadHeaderTimeout: timeout, ReadTimeout: timeout, WriteTimeout: timeout, IdleTimeout: time.Minute}
 	finished := make(chan error, 1)
 	go func() { finished <- server.ListenAndServeTLS("", "") }()
 	select {

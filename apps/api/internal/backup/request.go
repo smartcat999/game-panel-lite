@@ -5,6 +5,9 @@ import (
 	"strings"
 )
 
+// ErrRequestUnavailable hides whether an old or foreign request exists.
+var ErrRequestUnavailable = errors.New("backup request unavailable")
+
 var ErrInvalidRequest = errors.New("invalid backup request")
 
 type Request struct {

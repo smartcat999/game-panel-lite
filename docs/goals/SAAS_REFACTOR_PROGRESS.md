@@ -100,6 +100,13 @@
 - 真实 PostgreSQL race 验证缺失／冲突／拒绝请求、并发领取、失败回滚时请求仍为 preparing、成功后原子 uploaded、完成重放和坏任务隔离；日志 `/tmp/gamepanel-request-upload-integration.log`。独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-request-upload-all.log`、`/tmp/gamepanel-request-upload-vet.log`。未改 MQ 或历史迁移，其他草稿保留。
 - 调用点复核确认授权协调器和 Agent 备份快照任务尚未接入；本批关联与状态推进仅为持久记账，不能当作当前执行授权、游戏快照一致性或生产备份闭环证明。继续推进核心执行链路，六阶段 Goal 保持进行中。
 
+### 2026-09-09 全局备份请求当前状态检查
+
+- 新增 CheckRegionalBackup，在同一只读快照核对可信 Region、完整原任务、Operation、当前实例修订／配置代数／意图版本及 Placement。已删除、结束、取消或归属变化的请求不可用；单表按 ID 读取，无 JOIN，无新表。
+- 在现有 global-control 挂载 mTLS POST /internal/region/backups/check，复用严格请求解码；拒绝伪造 Header、跨 Region、额外查询、重复字段、超限和错误媒体类型。成功仅 204／no-store，不返回配置或执行票据。依赖检查仅增加 controlapi 对备份契约和解码模块的明确允许。
+- 独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-backup-check-all.log`、`/tmp/gamepanel-backup-check-vet.log`。真实 PostgreSQL Store 与真实 mTLS 接口 race 分别通过，日志 `/tmp/gamepanel-backup-check-integration.log`；覆盖任务／操作终态、配置与意图变化、Region／epoch 变化，以及 HTTP 身份和错误隔离。mTLS 接口测试使用检查器夹具，不冒充已接入 Node 的端到端执行验证。
+- 检查结果仅代表一个时点的意图有效，不是执行租约、停服证据或一致快照。区域客户端、有限期授权、Agent 快照任务仍待接入；保留其他草稿，六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
