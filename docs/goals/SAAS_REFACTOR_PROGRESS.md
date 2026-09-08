@@ -22,6 +22,13 @@
 - 独立快照全量 Go（含架构）、vet、S3／备份 race 通过，日志 `/tmp/gamepanel-s3-archive-all.log`、`/tmp/gamepanel-s3-archive-vet.log`、`/tmp/gamepanel-s3-archive-race.log`。真实 SDK 对接 TLS HTTP 协议夹具，验证正常上传读取、条件冲突、错误源摘要／长度、本地输入拒绝、响应版本／长度错误、重定向与阻塞流超时。未使用实际自建对象存储，不声称服务集成完成。
 - 第一方差异空白检查通过；vendor 中上游 CHANGELOG／LICENSE 等文件的末尾空行保留原样。无 SQL、前端或历史迁移改动，其他草稿保留。实际对象服务验证、持久上传发布／重试对账、同 Region 恢复接线及配额仍待完成。
 
+### 真实本地对象服务与归档恢复验证
+
+- 新增显式开关启用的 Docker 集成测试，仅启动隔离的本机 TLS MinIO，自动生成临时证书和凭证、启用专用 bucket 版本并清理容器。真实 SDK 上传 ZIP 后，经本地摘要校验及备份兼容性检查恢复测试文件；验证条件上传冲突、同键新版本出现后仍能恢复指定旧版本、不存在版本、错误凭证与服务端摘要错误拒绝。
+- 固定测试镜像及摘要、运行方法、证据范围记录在区域对象存储方案。归档源是测试文件，不证明运行中游戏快照一致性；未验证跨主机、HA 或断电持久性，不代表用户备份 API 已切换。
+- 独立快照全量 Go／架构、vet、包含真实 MinIO 的 S3／备份 race 全部通过。日志 `/tmp/gamepanel-s3-real-all.log`、`/tmp/gamepanel-s3-real-vet.log`、`/tmp/gamepanel-s3-real-race.log`，首次详细运行 `/tmp/gamepanel-s3-real-integration.log`。无业务 SQL 或前端变更。
+- 复核发现现有 `createBackup` 仍在 HTTP 内同步读取本地目录，`listBackups` 仍依赖本机 Stat；下一步需接持久备份记录和区域异步任务，不能仅注入 S3 Adapter 就宣称区域备份已完成。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
