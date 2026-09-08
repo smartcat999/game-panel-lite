@@ -298,3 +298,10 @@
 - 专用真实 PostgreSQL race 验证 8 方并发唯一领取、租约到期、新连接重新领取、旧令牌拒绝、持久重试间隔、失败再成功、停止意图保留及重复通知不重置。独立快照全量 Go（含架构检查）／vet 与全局＋区域 PostgreSQL race 全部通过，日志 `/tmp/gamepanel-revision-tasks-index-all.log`、`/tmp/gamepanel-revision-tasks-index-vet.log`、`/tmp/gamepanel-revision-tasks-index-pg-fixed.log`。
 - 额外全局集成首次失败在旧夹具的无密码运行角色：临时数据库默认密码认证拒绝连接。确认服务端日志后，仅重建本批专用本机容器以匹配夹具认证条件，重跑通过；未修改项目生产认证配置。测试容器随后清理。
 - 独立 Fetcher 入口、配置保护器、授权有效期、Deployment／执行任务及结果回传仍待实现；本次不代表游戏交付、跨主机恢复或容量验收。其他草稿与前端未纳入本批。
+
+### 2026-09-08 独立区域获取入口与数据库／mTLS 组合验证
+
+- 新增 `region-fetcher`，从外部配置读取区域数据库、服务证书与控制面地址，组合真实 Store、HTTPS Client 和 Fetcher；单并发持续处理、无任务／失败限速等待，任务与 HTTP 超时小于租约，信号取消关闭连接。
+- 组合测试使用真实全局和区域 PostgreSQL schema，创建逻辑实例并取得 Outbox 通知，通过真实 mTLS 修订接口读取并保存快照。控制面先返回失败，确认持久重试时间后停止／重新启动循环，再验证成功落库和退出。
+- 通知在测试中直接进入 Inbox，未经过 MQ；重新启动的是入口运行循环，不是 OS 进程。配置仍为测试用不透明载荷，不能冒充已实现配置加密。工作区组合 race 与独立提交快照全量 Go（含架构检查）／vet／真实 PostgreSQL+mTLS 组合 race 全部通过，独立日志 `/tmp/gamepanel-fetcher-cli-index-all.log`、`/tmp/gamepanel-fetcher-cli-index-vet.log`、`/tmp/gamepanel-fetcher-cli-index-integration.log`。临时测试证书、schema 和专用容器清理。
+- 配置保护器、有限期执行授权、Deployment／调度／执行和结果回传继续推进。其他草稿与前端未纳入本批；总 Goal 不变。

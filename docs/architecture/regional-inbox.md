@@ -85,7 +85,7 @@ go run ./apps/api/cmd/global-control \
 
 `GetRevision` 先校验通知属于本 Region，再调用内部控制面接口。响应必须为有效 JSON 快照，事件和修订身份完全匹配；当前配置代数不得小于通知代数，意图版本必须为正，期望状态仅接收 running／stopped，规格须通过领域校验。允许历史修订与较新全局意图并存，不能将延迟通知当作最新启动指令。失败不返回部分配置，也不记录服务端错误正文或网络地址。
 
-404 映射为修订不可用，401／403 为访问拒绝，其余失败保留请求失败类别；这些错误不自动删除任务、释放资源或授权执行。真实 mTLS 测试已经覆盖客户端与实际控制面 Handler 的往返，错误响应与超时测试使用本地 HTTPS 服务；尚未将此客户端接入独立区域任务进程。
+404 映射为修订不可用，401／403 为访问拒绝，其余失败保留请求失败类别；这些错误不自动删除任务、释放资源或授权执行。真实 mTLS 测试已经覆盖客户端与实际控制面 Handler 的往返，错误响应与超时测试使用本地 HTTPS 服务；`region-fetcher` 已将此客户端与区域任务 Store 组合。
 
 ## 持久修订获取任务
 
@@ -95,4 +95,21 @@ go run ./apps/api/cmd/global-control \
 
 落库前锁定任务，重新核对令牌、完整事件和数据库时间；过期或被替换的令牌不能写入。快照与 `revision_fetched` 状态在同一次更新中保存，重复通知不重置状态。这里保存的是操作对应的读取快照，不覆盖任何全局配置指针或节点运行状态；后续授权时仍须复核最新意图与部署归属。
 
-获取任务角色在原收件权限之外需要 regional_revision_tasks 的 UPDATE 权限；迁移权限仍独立。查询及更新均为单表，不新增 JOIN。当前没有独立 Fetcher 组合入口、任务审计／隔离界面或执行授权，`revision_fetched` 不能被当成 materialized／running。
+获取任务角色在原收件权限之外需要 regional_revision_tasks 的 UPDATE 权限；迁移权限仍独立。查询及更新均为单表，不新增 JOIN。当前没有任务审计／隔离界面或执行授权，`revision_fetched` 不能被当成 materialized／running。
+
+## 独立获取入口
+
+先完成区域迁移，设置该区域的 `GAMEPANEL_REGIONAL_DATABASE_URL`，然后运行：
+
+```sh
+go run ./apps/api/cmd/region-fetcher -region region-a \
+  -control-endpoint https://control.example:8443 \
+  -certificate /run/secrets/region.crt -key /run/secrets/region.key \
+  -server-ca /run/secrets/control-ca.crt
+```
+
+证书 URI SAN 必须登记在控制面区域映射中。证书和数据库配置由组合入口读取，具体客户端／Store 注入 Fetcher。默认单并发逐任务处理，成功后立即取下一个，无任务或失败等待 poll-interval；多进程竞争由数据库 SKIP LOCKED 保护。
+
+request-timeout 必须小于 task-timeout，后者必须小于 lease。默认分别为 10 秒、20 秒和 1 分钟，任务超时覆盖领取、远程请求和保存；启动数据库校验仍使用 Store 自身的一分钟上限。失败重试时间持久化，进程日志不输出底层连接或响应错误详情。SIGINT／SIGTERM 取消工作并关闭连接；未保存任务通过租约恢复，不能据此释放游戏资源。
+
+组合测试使用独立全局／区域 PostgreSQL schema、真实逻辑实例／Outbox、真实 mTLS Handler 与客户端，确认控制面失败后的重试已落库，再停止并重新启动入口运行循环，验证快照保存和取消退出。测试直接将通知写入 Inbox，不包含 MQ；循环重启发生在测试进程内，尚未证明 OS 进程崩溃、多主机部署或完整游戏交付。
