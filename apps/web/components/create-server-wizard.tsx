@@ -582,7 +582,8 @@ export function CreateServerWizard() {
         worldId: showWorldAndBackupFeatures ? selectedWorldId || undefined : undefined,
         modIds: validSelectedModIds,
         version: selectedVersion,
-        nodeId: selectedNodeId || undefined
+        nodeId: selectedNodeId || undefined,
+        prepaidPlanId: selectedPlanId || undefined
       });
 
       // 2. If a prepaid plan was selected, execute commerce order + checkout + webhook fulfillment + async polling

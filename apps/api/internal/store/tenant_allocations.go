@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -68,7 +71,16 @@ func (s *Store) checkAllocation(ctx context.Context, quota domain.TenantQuota, r
 	if err != nil {
 		return err
 	}
-	instances = append(instances, logical...)
+	seen := make(map[string]bool, len(instances))
+	for _, inst := range instances {
+		seen[inst.ID] = true
+	}
+	for _, l := range logical {
+		if !seen[l.ID] {
+			seen[l.ID] = true
+			instances = append(instances, l)
+		}
+	}
 	count, cpu, memory := 0, 0.0, int64(0)
 	for _, instance := range instances {
 		if replacement != nil && instance.ID == replacement.ID {
@@ -123,7 +135,10 @@ func (s *Store) CreateAllocatedGameServer(ctx context.Context, userID string, in
 		if err := tx.lockNodeAllocation(ctx, *instance); err != nil {
 			return err
 		}
-		return tx.CreateGameServer(ctx, instance)
+		if err := tx.CreateGameServer(ctx, instance); err != nil {
+			return err
+		}
+		return tx.ensureLogicalServerSync(ctx, instance)
 	})
 }
 
@@ -172,3 +187,109 @@ func (s *Store) saveServerIntent(ctx context.Context, before, after domain.GameS
 	}
 	return nil
 }
+
+func (s *Store) ensureLogicalServerSync(ctx context.Context, instance *domain.GameServer) error {
+	if instance == nil || instance.ID == "" || instance.OrganizationID == "" {
+		return nil
+	}
+	var existing struct{ ID string }
+	err := s.db.WithContext(ctx).Table("logical_servers").Select("id").Where("id = ?", instance.ID).Take(&existing).Error
+	if err == nil {
+		return nil
+	}
+
+	now := instance.CreatedAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	revID := "rev-" + instance.ID
+
+	cpu := instance.Spec.Resources.CPULimitCores
+	if cpu <= 0 {
+		cpu = 2
+	}
+	mem := int64(instance.Spec.Resources.MemoryLimitMB)
+	if mem <= 0 {
+		mem = 4096
+	}
+
+	gameVer := instance.Spec.Version
+	if gameVer == "" {
+		gameVer = "default"
+	}
+
+	spec := instances.Specification{
+		ProviderKey:         string(instance.ProviderKey),
+		GameVersion:         gameVer,
+		ConfigSchemaVersion: 1,
+		Configuration:       instances.ProtectedConfiguration{KeyID: "plain", Ciphertext: []byte("{}")},
+		Resources: instances.Resources{
+			CPU:      cpu,
+			MemoryMB: mem,
+		},
+	}
+	specBytes, err := json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+
+	serverRow := struct {
+		ID                string
+		OrganizationID    string
+		Name              string
+		CurrentRevisionID string
+		SpecGeneration    int64
+		DesiredState      string
+		IntentVersion     int64
+		CreatedAt         time.Time
+	}{
+		ID:                instance.ID,
+		OrganizationID:    instance.OrganizationID,
+		Name:              instance.Name,
+		CurrentRevisionID: revID,
+		SpecGeneration:    1,
+		DesiredState:      "running",
+		IntentVersion:     1,
+		CreatedAt:         now,
+	}
+
+	revisionRow := struct {
+		ID             string
+		ServerID       string
+		SpecGeneration int64
+		Specification  string
+		CPU            float64
+		MemoryMB       int64
+		CreatedAt      time.Time
+	}{
+		ID:             revID,
+		ServerID:       instance.ID,
+		SpecGeneration: 1,
+		Specification:  string(specBytes),
+		CPU:            cpu,
+		MemoryMB:       mem,
+		CreatedAt:      now,
+	}
+
+	placementRow := struct {
+		ServerID       string
+		RegionID       string
+		PlacementEpoch int64
+	}{
+		ServerID:       instance.ID,
+		RegionID:       "default",
+		PlacementEpoch: 1,
+	}
+
+	if err := s.db.WithContext(ctx).Table("logical_servers").Clauses(clause.OnConflict{DoNothing: true}).Create(&serverRow).Error; err != nil {
+		return err
+	}
+	if err := s.db.WithContext(ctx).Table("server_revisions").Clauses(clause.OnConflict{DoNothing: true}).Create(&revisionRow).Error; err != nil {
+		return err
+	}
+	if err := s.db.WithContext(ctx).Table("server_placements").Clauses(clause.OnConflict{DoNothing: true}).Create(&placementRow).Error; err != nil {
+		return err
+	}
+	return nil
+}
+

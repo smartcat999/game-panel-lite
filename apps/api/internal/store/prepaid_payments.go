@@ -99,7 +99,7 @@ func (s *Store) RecordCapturedPayment(ctx context.Context, p commerce.CapturedPa
 				reason = "order_expired"
 			case p.AmountMinor != terms.Quote.AmountMinor || p.Currency != terms.Quote.Plan.Currency:
 				reason = "amount_mismatch"
-			case p.PaidAtMS < order.CreatedAtMS || p.PaidAtMS > now:
+			case p.PaidAtMS < order.CreatedAtMS || p.PaidAtMS > now+60000:
 				reason = "capture_time_mismatch"
 			}
 			disposition := "applied"

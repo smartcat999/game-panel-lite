@@ -50,6 +50,15 @@ func (h *Handler) listCommercePlans(w http.ResponseWriter, r *http.Request) {
 	if plans == nil {
 		plans = []commerce.PlanVersion{}
 	}
+	if providerKey := r.URL.Query().Get("providerKey"); providerKey != "" {
+		filtered := make([]commerce.PlanVersion, 0, len(plans))
+		for _, p := range plans {
+			if p.ProviderKey == providerKey {
+				filtered = append(filtered, p)
+			}
+		}
+		plans = filtered
+	}
 	writeJSON(w, http.StatusOK, plans)
 }
 

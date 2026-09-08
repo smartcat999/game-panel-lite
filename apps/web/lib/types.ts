@@ -575,6 +575,7 @@ export type CommerceOrder = {
     plan: CommercePlanVersion;
     periods: number;
     amountMinor: number;
+    durationMs?: number;
   };
   createdAtMs: number;
   expiresAtMs: number;
@@ -591,6 +592,7 @@ export type CommerceSubscription = {
     plan: CommercePlanVersion;
     periods: number;
     amountMinor: number;
+    durationMs?: number;
   };
   createdAtMs: number;
 };

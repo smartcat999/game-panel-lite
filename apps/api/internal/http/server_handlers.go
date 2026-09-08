@@ -191,6 +191,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		Version        string               `json:"version"`
 		Resources      resourceLimitPayload `json:"resources,omitempty"`
 		NodeID         string               `json:"nodeId,omitempty"`
+		PrepaidPlanID  string               `json:"prepaidPlanId,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -260,6 +261,14 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	cpuLimit := resources.CPULimitCores
+	if cpuLimit <= 0 {
+		cpuLimit = 2
+	}
+	memLimit := resources.MemoryLimitMB
+	if memLimit <= 0 {
+		memLimit = 4096
+	}
 	now := time.Now()
 	server := domain.GameServer{
 		ID:             id,
@@ -276,8 +285,8 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 			Config:        configPayload,
 			ModIDs:        modIDs,
 			Resources: domain.ServerResources{
-				CPULimitCores: resources.CPULimitCores,
-				MemoryLimitMB: resources.MemoryLimitMB,
+				CPULimitCores: cpuLimit,
+				MemoryLimitMB: memLimit,
 			},
 			Network: domain.ServerNetworkSpec{
 				Port:     summary.Port,
@@ -335,18 +344,22 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		server.NodeID = "node-local"
 	}
 	if server.OrganizationID != "" {
-		// Deduct 10 credits for creating a server instance
-		cost := int64(10)
-		operatorID := allocationActor(r)
-		if operatorID == "" {
-			if account, ok := accountFromContext(r.Context()); ok {
-				operatorID = account.ID
+		if payload.PrepaidPlanID != "" {
+			err = h.store.CreateAllocatedGameServer(r.Context(), allocationActor(r), &server)
+		} else {
+			// Deduct 10 credits for creating a server instance
+			cost := int64(10)
+			operatorID := allocationActor(r)
+			if operatorID == "" {
+				if account, ok := accountFromContext(r.Context()); ok {
+					operatorID = account.ID
+				}
 			}
-		}
-		err = h.store.CreateChargedGameServer(r.Context(), allocationActor(r), operatorID, &server, cost)
-		if errors.Is(err, store.ErrInsufficientCredits) {
-			writeError(w, http.StatusPaymentRequired, "账户额度不足 (需要 10 点券)，请联系管理员充值")
-			return
+			err = h.store.CreateChargedGameServer(r.Context(), allocationActor(r), operatorID, &server, cost)
+			if errors.Is(err, store.ErrInsufficientCredits) {
+				writeError(w, http.StatusPaymentRequired, "账户额度不足 (需要 10 点券)，请联系管理员充值")
+				return
+			}
 		}
 	} else {
 		err = h.store.CreateGameServer(r.Context(), &server)

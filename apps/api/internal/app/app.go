@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/commerce"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
@@ -84,6 +85,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	dockerMonitor := runtime.NewDockerMonitor(switchableRuntime)
 	dockerMonitor.Refresh(context.Background())
 	appCtx, cancel := context.WithCancel(context.Background())
+	_ = db.SeedDefaultPrepaidPlans(context.Background())
+	fulfillmentWorker := commerce.NewFulfillmentWorker(db, 50, 3*time.Second, logger)
+	go fulfillmentWorker.Start(appCtx)
 	go dockerMonitor.Start(appCtx, 10*time.Second)
 	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(appCtx, 30*time.Second)
 	streamGateway := gateway.NewStreamGateway(logger)

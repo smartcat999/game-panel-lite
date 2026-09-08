@@ -814,6 +814,7 @@ export async function createGameServer(input: {
   version?: string;
   resources?: ResourceLimits;
   nodeId?: string;
+  prepaidPlanId?: string;
 }): Promise<GameServerResource> {
   const response = await fetchWithTimeout(`${API_BASE}/api/servers`, {
     method: "POST",

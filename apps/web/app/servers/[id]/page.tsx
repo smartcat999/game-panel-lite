@@ -19,6 +19,7 @@ import { ServerTimeMachine } from "@/components/server-time-machine";
 import { ServerGameRules } from "@/components/server-game-rules";
 import { WorldMigrationHub } from "@/components/world-migration-hub";
 import { WorldRadarGrid } from "@/components/world-radar-grid";
+import { ServerSubscriptionCard } from "@/components/server-subscription-card";
 import { Button, Card, Input, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation } from "@/features/monitoring/components";
 import { getServerMonitoringEvents } from "@/features/monitoring/api";
@@ -1172,6 +1173,9 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* SaaS Prepaid Commercial Subscription & SLA Card */}
+      <ServerSubscriptionCard server={resource} isViewer={isViewer} />
+
       {/* Compute Node Topology Card */}
       <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -411,6 +411,9 @@ func (s *Store) getStoredGameServer(ctx context.Context, id string) (domain.Game
 }
 
 func (s *Store) DeleteGameServer(ctx context.Context, id string) error {
+	_ = s.db.WithContext(ctx).Table("server_placements").Where("server_id = ?", id).Delete(nil).Error
+	_ = s.db.WithContext(ctx).Table("server_revisions").Where("server_id = ?", id).Delete(nil).Error
+	_ = s.db.WithContext(ctx).Table("logical_servers").Where("id = ?", id).Delete(nil).Error
 	return s.db.WithContext(ctx).Delete(&domain.GameServer{}, "id = ?", id).Error
 }
 
@@ -1033,7 +1036,16 @@ func (s *Store) tenantUsageSnapshot(ctx context.Context, orgID string) (domain.T
 	if err != nil {
 		return domain.TenantUsage{Quota: quota}, err
 	}
-	servers = append(servers, logical...)
+	seen := make(map[string]bool, len(servers))
+	for _, srv := range servers {
+		seen[srv.ID] = true
+	}
+	for _, l := range logical {
+		if !seen[l.ID] {
+			seen[l.ID] = true
+			servers = append(servers, l)
+		}
+	}
 
 	running := 0
 	var usedCpu float64

@@ -21,6 +21,7 @@ import { gameServerStatus } from "@/lib/game-server-resource";
 import { useI18n } from "@/lib/i18n";
 import { usePermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import type { ComputeNode } from "@/lib/types";
 import { Button, Input } from "@/components/ui";
 import { TrafficTopology } from "@/components/traffic-topology";
 
@@ -82,14 +83,30 @@ export function ClusterFleetPopover() {
     }
   });
 
-  const nodes = nodesQuery.data ?? [];
+  const rawNodes = nodesQuery.data ?? [];
   const servers = serversQuery.data ?? [];
-  const onlineNodes = nodes.filter((n) => n.status === "online" || n.isLocal);
-  const runningServers = servers.filter((s) => gameServerStatus(s) === "running");
-
   const hostMetrics = metricsQuery.data?.host;
   const cpuPercent = hostMetrics ? Math.round(hostMetrics.totalCpuPercent) : 0;
   const memUsedGB = hostMetrics ? (hostMetrics.totalMemoryMb / 1024).toFixed(1) : "0";
+
+  // Fallback to local daemon node if backend has not registered any node yet
+  const nodes: ComputeNode[] = rawNodes.length > 0 ? rawNodes : [{
+    id: "node-local",
+    name: isZh ? "主控本机 (Local Daemon)" : "Local Host Daemon",
+    host: "127.0.0.1",
+    port: 4000,
+    publicIp: "127.0.0.1",
+    region: "Local",
+    status: "online",
+    isLocal: true,
+    cpuCores: hostMetrics?.cpuCores || 4,
+    memoryTotalMb: hostMetrics?.memoryLimitMb || hostMetrics?.totalMemoryMb || 16384,
+    memoryUsedMb: hostMetrics ? hostMetrics.totalMemoryMb : 1024,
+    runningCount: servers.filter((s) => gameServerStatus(s) === "running").length,
+  }];
+
+  const onlineNodes = nodes.filter((n) => n.status === "online" || n.isLocal);
+  const runningServers = servers.filter((s) => gameServerStatus(s) === "running");
 
   // Close popover on click outside
   useEffect(() => {
@@ -107,7 +124,7 @@ export function ClusterFleetPopover() {
   // 只要没有明确离线的节点，默认均为绿色健康
   const hasOfflineNode = nodes.length > 0 && onlineNodes.length < nodes.length;
   const isAllHealthy = !hasOfflineNode;
-  const totalNodeCount = Math.max(nodes.length, 1);
+  const totalNodeCount = nodes.length;
 
   return (
     <div ref={popoverRef} className="relative inline-flex items-center">

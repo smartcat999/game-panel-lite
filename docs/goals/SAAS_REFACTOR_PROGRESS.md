@@ -821,3 +821,12 @@
 - 统一接通多节点调度（ComputeNode）、节点状态健康上报、跨节点迁移对话框（`migrate-node-dialog.tsx`）、全局区域切换器（`region-switcher.tsx`）以及点券账户余额看板（`credits-badge.tsx`）。
 - 全栈自动化测试覆盖：后端 `go vet` 及全量 Go 单元/集成测试（包含 PostgreSQL 真实数据库 `-race` 测试）100% 通过；前端 `typecheck`、`vitest`、`eslint`、`next build` 全部通过。
 
+### 2026-09-09 ToC SaaS 商业化闭环与预付费续费生命周期完成
+
+- 默认商业套餐与地域种子自动初始化：实现 `SeedDefaultPrepaidPlans`，随服务启动自动发布并上架 7 档标准套餐（Terraria Vanilla 基础/进阶、tModLoader 专家/旗舰、Palworld、Minecraft、DST）。
+- 履约 Worker 守护运行：在应用启动时拉起 `commerce.FulfillmentWorker`，提供 3 秒轮询周期的确定性异步履约和权益发放。
+- 修复配额统计与双重扣减 Bug：创建 `game_servers` 自动同步创建 `logical_servers` 保证订单校验一致；修复 `checkAllocation` 与 `GetTenantUsage` 去重逻辑，修复服务器删除时的级联清理。
+- 创服与支付容差优化：支持指定套餐免点券创服，支付时间戳校验增加 60 秒时钟容差（解决时钟漂移导致支付落入 review 状态）。
+- 前端服务器续费与套餐卡片：新建 `server-subscription-card.tsx` 并挂载于服务器详情概览页，支持展示当前有效订阅、到期时间、剩余天数倒计时、续费弹窗（1/3/6/12 个月）与一键开通套餐弹窗。
+- 远端验证：在 `um773` (192.168.2.4:3005) 完成镜像构建与热更新部署，GET `/api/commerce/plans` 正常返回，Go 1.25 端到端测试 `TestCommerceEndToEndPrepaidLifecycle` 验证通过。
+

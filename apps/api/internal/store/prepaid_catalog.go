@@ -141,6 +141,146 @@ func (s *Store) ListAvailablePrepaidPlans(ctx context.Context) ([]commerce.PlanV
 	return plans, err
 }
 
+// SeedDefaultPrepaidPlans ensures a system catalog operator, default region, and baseline
+// commercial plans are published and enabled for sale.
+func (s *Store) SeedDefaultPrepaidPlans(ctx context.Context) error {
+	var admin domain.AdminAccount
+	err := s.db.WithContext(ctx).Table("admin_accounts").Where("role = ?", domain.RoleAdmin).First(&admin).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		admin = domain.AdminAccount{
+			ID:           "system-catalog-admin",
+			Username:     "system_admin",
+			Role:         domain.RoleAdmin,
+			PasswordHash: "$2a$10$defaultseedhashplaceholder",
+		}
+		if createErr := s.db.WithContext(ctx).Table("admin_accounts").Create(&admin).Error; createErr != nil {
+			return createErr
+		}
+	} else if err != nil {
+		return err
+	}
+
+	defaultRegion := struct {
+		ID               string
+		Name             string
+		AcceptingCreates bool
+		Version          int64
+	}{
+		ID:               "default",
+		Name:             "默认区域 (Default Region)",
+		AcceptingCreates: true,
+		Version:          1,
+	}
+	_ = s.db.WithContext(ctx).Table("global_regions").Clauses(clause.OnConflict{DoNothing: true}).Create(&defaultRegion).Error
+
+	defaultPlans := []commerce.PlanVersion{
+		{
+			PlanID:               "terraria-starter",
+			Version:              1,
+			ProviderKey:          "terraria-vanilla",
+			RegionID:             "default",
+			CPU:                  2,
+			MemoryMB:             4096,
+			StorageBytes:         20 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 5,
+			Currency:             "CNY",
+			UnitAmountMinor:      1900,
+			PeriodSeconds:        86400 * 30,
+		},
+		{
+			PlanID:               "terraria-pro",
+			Version:              1,
+			ProviderKey:          "terraria-vanilla",
+			RegionID:             "default",
+			CPU:                  4,
+			MemoryMB:             8192,
+			StorageBytes:         50 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 10,
+			Currency:             "CNY",
+			UnitAmountMinor:      3900,
+			PeriodSeconds:        86400 * 30,
+		},
+		{
+			PlanID:               "tmodloader-expert",
+			Version:              1,
+			ProviderKey:          "terraria-tmodloader",
+			RegionID:             "default",
+			CPU:                  4,
+			MemoryMB:             8192,
+			StorageBytes:         50 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 10,
+			Currency:             "CNY",
+			UnitAmountMinor:      4900,
+			PeriodSeconds:        86400 * 30,
+		},
+		{
+			PlanID:               "tmodloader-flagship",
+			Version:              1,
+			ProviderKey:          "terraria-tmodloader",
+			RegionID:             "default",
+			CPU:                  8,
+			MemoryMB:             16384,
+			StorageBytes:         100 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 20,
+			Currency:             "CNY",
+			UnitAmountMinor:      8900,
+			PeriodSeconds:        86400 * 30,
+		},
+		{
+			PlanID:               "palworld-standard",
+			Version:              1,
+			ProviderKey:          "palworld",
+			RegionID:             "default",
+			CPU:                  4,
+			MemoryMB:             16384,
+			StorageBytes:         80 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 10,
+			Currency:             "CNY",
+			UnitAmountMinor:      6900,
+			PeriodSeconds:        86400 * 30,
+		},
+		{
+			PlanID:               "minecraft-paper",
+			Version:              1,
+			ProviderKey:          "minecraft",
+			RegionID:             "default",
+			CPU:                  4,
+			MemoryMB:             8192,
+			StorageBytes:         50 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 10,
+			Currency:             "CNY",
+			UnitAmountMinor:      3900,
+			PeriodSeconds:        86400 * 30,
+		},
+		{
+			PlanID:               "dst-wilderness",
+			Version:              1,
+			ProviderKey:          "dst",
+			RegionID:             "default",
+			CPU:                  2,
+			MemoryMB:             4096,
+			StorageBytes:         30 * 1024 * 1024 * 1024,
+			BackupRetentionCount: 5,
+			Currency:             "CNY",
+			UnitAmountMinor:      2900,
+			PeriodSeconds:        86400 * 30,
+		},
+	}
+
+	for _, plan := range defaultPlans {
+		var existing prepaidPlanRow
+		if err := s.db.WithContext(ctx).Table("prepaid_plan_versions").Where("plan_id = ? AND version = ?", plan.PlanID, plan.Version).Take(&existing).Error; err == nil {
+			_ = s.db.WithContext(ctx).Table("prepaid_plan_sales").Where("plan_id = ? AND plan_version = ?", plan.PlanID, plan.Version).Update("enabled", true).Error
+			continue
+		}
+		if err := s.PublishPrepaidPlan(ctx, admin.ID, plan); err != nil && !errors.Is(err, commerce.ErrPlanConflict) {
+			continue
+		}
+		_ = s.SetPrepaidPlanSale(ctx, admin.ID, plan.PlanID, plan.Version, 1, true)
+	}
+	return nil
+}
+
 func migrateSQLitePrepaidCatalog(db *gorm.DB) error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		var count int64
