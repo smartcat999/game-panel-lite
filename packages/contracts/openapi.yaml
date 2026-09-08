@@ -284,6 +284,9 @@ paths:
                 type: object
                 required: [assignmentUid, serverId, nodeId, generation, holderId, fence, validForMs]
                 properties:
+                  observationToken:
+                    type: string
+                    description: Returned on acquisition, including an empty string when no report exists. Snapshot taken in the lease transaction; use it instead of the earlier polling token. Renewal does not replace the execution attempt's report token.
                   assignmentUid: {type: string}
                   serverId: {type: string}
                   nodeId: {type: string}

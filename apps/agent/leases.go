@@ -110,6 +110,9 @@ func reconcileLeasedAssignment(ctx context.Context, client *http.Client, cfg Age
 	if err != nil {
 		return workload.Observation{}, err
 	}
+	if grant.ObservationToken != nil {
+		a.ObservationToken = *grant.ObservationToken
+	}
 	// Start the local window before the HTTP request, never from receipt of a
 	// possibly delayed grant. Do not extend this deadline when renewing authority.
 	deadline := started.Add(time.Duration(grant.ValidForMS)*time.Millisecond - time.Second)

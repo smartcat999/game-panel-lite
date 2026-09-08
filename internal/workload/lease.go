@@ -12,12 +12,14 @@ type LeaseRequest struct {
 }
 
 type LeaseGrant struct {
-	AssignmentUID string `json:"assignmentUid"`
-	ServerID      string `json:"serverId"`
-	NodeID        string `json:"nodeId"`
-	Generation    int    `json:"generation"`
-	HolderID      string `json:"holderId"`
-	Fence         int64  `json:"fence"`
+	// Acquisition snapshot; nil means an older server omitted the field.
+	ObservationToken *string `json:"observationToken,omitempty"`
+	AssignmentUID    string  `json:"assignmentUid"`
+	ServerID         string  `json:"serverId"`
+	NodeID           string  `json:"nodeId"`
+	Generation       int     `json:"generation"`
+	HolderID         string  `json:"holderId"`
+	Fence            int64   `json:"fence"`
 	// ValidForMS is measured conservatively from the client's request start,
 	// including transport and lock waits, rather than from response receipt.
 	ValidForMS int64 `json:"validForMs"`

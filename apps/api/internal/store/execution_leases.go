@@ -16,13 +16,14 @@ var ErrExecutionLeaseUnavailable = errors.New("execution lease is held, expired,
 // ExecutionLease is retained across assignment replacement/deletion so its fence
 // cannot restart at one for an earlier server identity. It does not stop a runtime.
 type ExecutionLease struct {
-	ServerID      string `gorm:"primaryKey"`
-	AssignmentUID string
-	NodeID        string
-	Generation    int
-	HolderID      string
-	Fence         int64
-	ExpiresAtMS   int64
+	ObservationToken string `gorm:"-"`
+	ServerID         string `gorm:"primaryKey"`
+	AssignmentUID    string
+	NodeID           string
+	Generation       int
+	HolderID         string
+	Fence            int64
+	ExpiresAtMS      int64
 }
 
 func (ExecutionLease) TableName() string { return "workload_execution_leases" }
@@ -99,7 +100,21 @@ func (s *Store) changeExecutionLease(ctx context.Context, request ExecutionLease
 		if result.RowsAffected != 1 {
 			return ErrExecutionLeaseUnavailable
 		}
-		return tx.db.First(&lease, "server_id = ?", assignment.ServerID).Error
+		if err := tx.db.First(&lease, "server_id = ?", assignment.ServerID).Error; err != nil {
+			return err
+		}
+		if fence == 0 {
+			// Snapshot the report token while assignment and lease locks are held.
+			// A poll may have preceded the previous holder's final status write.
+			observation, err := tx.GetWorkloadObservation(ctx, assignment.UID)
+			if err != nil && !errors.Is(err, ErrNotFound) {
+				return err
+			}
+			if err == nil {
+				lease.ObservationToken = observation.ID
+			}
+		}
+		return nil
 	})
 	return lease, err
 }

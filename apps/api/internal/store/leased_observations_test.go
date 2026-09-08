@@ -45,6 +45,9 @@ func testLeasedObservations(t *testing.T, db *Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if lease.ObservationToken != "" {
+		t.Fatal("initial lease has a report token")
+	}
 	if err := db.SaveAgentWorkloadObservation(ctx, request, lease.Fence, &report); err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +74,10 @@ func testLeasedObservations(t *testing.T, db *Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if next.ObservationToken != current.ID {
+		t.Fatalf("acquisition missed latest report: %q want %q", next.ObservationToken, current.ID)
+	}
+	report.ObservationToken = next.ObservationToken
 	unavailable(db.SaveAgentWorkloadObservation(ctx, request, lease.Fence, &report))
 	if err := db.SaveAgentWorkloadObservation(ctx, request, next.Fence, &report); err != nil {
 		t.Fatal(err)

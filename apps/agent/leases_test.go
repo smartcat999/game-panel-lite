@@ -44,13 +44,13 @@ func (r *leaseTestRuntime) Start(context.Context, worker.State) error {
 func TestLeasedReconciliation(t *testing.T) {
 	for _, mode := range []string{"success", "report-rejected", "busy", "old-api", "transport-error", "renewal-rejected", "wrong-renewal-fence", "ambiguous-create", "wrong-grant", "expired-local-window"} {
 		t.Run(mode, func(t *testing.T) {
-			a := workload.Assignment{UID: "uid", ServerID: "server", NodeID: "node", Generation: 1, DesiredState: "running"}
+			a := workload.Assignment{ObservationToken: "stale-poll-token", UID: "uid", ServerID: "server", NodeID: "node", Generation: 1, DesiredState: "running"}
 			var actions []string
 			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				if r.URL.Path == "/api/agent/assignments/uid/status" {
 					actions = append(actions, "report")
 					var report workload.Observation
-					if err := json.NewDecoder(r.Body).Decode(&report); err != nil || report.LeaseHolderID == "" || report.LeaseFence != 1 {
+					if err := json.NewDecoder(r.Body).Decode(&report); err != nil || report.LeaseHolderID == "" || report.LeaseFence != 1 || report.ObservationToken != "acquired-token" {
 						t.Errorf("missing report lease: %+v %v", report, err)
 					}
 					status := 200
@@ -80,7 +80,11 @@ func TestLeasedReconciliation(t *testing.T) {
 				if request.Action == "release" {
 					status = 204
 				}
-				grant := workload.LeaseGrant{AssignmentUID: a.UID, ServerID: a.ServerID, NodeID: a.NodeID, Generation: a.Generation, HolderID: request.HolderID, Fence: 1, ValidForMS: 120000}
+				freshToken := "acquired-token"
+				if request.Action == "renew" {
+					freshToken = "ignored-renewal-token"
+				}
+				grant := workload.LeaseGrant{ObservationToken: &freshToken, AssignmentUID: a.UID, ServerID: a.ServerID, NodeID: a.NodeID, Generation: a.Generation, HolderID: request.HolderID, Fence: 1, ValidForMS: 120000}
 				if mode == "wrong-renewal-fence" && request.Action == "renew" {
 					grant.Fence++
 				}

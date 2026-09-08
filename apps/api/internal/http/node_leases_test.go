@@ -59,7 +59,7 @@ func TestAgentExecutionLeaseEndpoint(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &grant); err != nil {
 		t.Fatal(err)
 	}
-	if grant.AssignmentUID != assignment.UID || grant.ServerID != server.ID || grant.Fence != 1 || grant.ValidForMS != agentExecutionLeaseTTL.Milliseconds() || w.Header().Get("Cache-Control") != "no-store" {
+	if grant.ObservationToken == nil || *grant.ObservationToken != "" || grant.AssignmentUID != assignment.UID || grant.ServerID != server.ID || grant.Fence != 1 || grant.ValidForMS != agentExecutionLeaseTTL.Milliseconds() || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("invalid grant: %+v", grant)
 	}
 	request("lease-token", acquire, 409)

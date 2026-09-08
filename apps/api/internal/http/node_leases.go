@@ -60,5 +60,9 @@ func (h *Handler) changeAgentLease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, workload.LeaseGrant{AssignmentUID: lease.AssignmentUID, ServerID: lease.ServerID, NodeID: lease.NodeID, Generation: lease.Generation, HolderID: lease.HolderID, Fence: lease.Fence, ValidForMS: agentExecutionLeaseTTL.Milliseconds()})
+	var observationToken *string
+	if request.Action == "acquire" {
+		observationToken = &lease.ObservationToken
+	}
+	writeJSON(w, http.StatusOK, workload.LeaseGrant{ObservationToken: observationToken, AssignmentUID: lease.AssignmentUID, ServerID: lease.ServerID, NodeID: lease.NodeID, Generation: lease.Generation, HolderID: lease.HolderID, Fence: lease.Fence, ValidForMS: agentExecutionLeaseTTL.Milliseconds()})
 }
