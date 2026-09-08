@@ -182,4 +182,18 @@ func TestCommerceHTTPFlow(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &subs); err != nil || len(subs) != 1 || subs[0].Status != "active" {
 		t.Fatalf("expected 1 active subscription, got %v (%s)", subs, rec.Body.String())
 	}
+
+	// 7. Verify GET /api/operations/{id}
+	opHttpReq := httptest.NewRequest(http.MethodGet, "/api/operations/"+res.Operation.ID, nil)
+	opHttpReq.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, opHttpReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for operation, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var op instances.Operation
+	if err := json.Unmarshal(rec.Body.Bytes(), &op); err != nil || op.ID != res.Operation.ID {
+		t.Fatalf("expected operation %s, got: %v", res.Operation.ID, rec.Body.String())
+	}
 }
+

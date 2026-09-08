@@ -194,3 +194,22 @@ func (s *Store) readGlobalIntent(ctx context.Context, operation globalOperationR
 	result.Operation = instances.Operation{ID: operation.ID, OrganizationID: operation.OrganizationID, ServerID: operation.ServerID, Kind: operation.Kind, Status: operation.Status, CreatedAt: operation.CreatedAt}
 	return result, nil
 }
+
+// GetServerOperation retrieves an operation by ID within a tenant organization.
+func (s *Store) GetServerOperation(ctx context.Context, organizationID, operationID string) (instances.Operation, error) {
+	if organizationID == "" || operationID == "" {
+		return instances.Operation{}, ErrNotFound
+	}
+	var op instances.Operation
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.db.Table("server_operations").Where("id = ? AND organization_id = ?", operationID, organizationID).Take(&op).Error
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return instances.Operation{}, ErrNotFound
+		}
+		return instances.Operation{}, err
+	}
+	return op, nil
+}
+

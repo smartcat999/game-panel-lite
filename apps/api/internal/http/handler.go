@@ -195,6 +195,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/auth/me/organizations/{id}", h.getMyOrganization)
 		r.Get("/api/user/credits", h.getUserCredits)
 		r.Get("/api/commerce/subscriptions", h.listCommerceSubscriptions)
+		r.Get("/api/operations/{id}", h.getOperationStatus)
 		r.Post("/api/commerce/orders", h.createCommerceOrder)
 		r.Post("/api/commerce/orders/{id}/cancel", h.cancelCommerceOrder)
 		r.Post("/api/auth/password", h.changePassword)

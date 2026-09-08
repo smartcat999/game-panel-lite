@@ -222,3 +222,31 @@ func (h *Handler) handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
 		"receipt": receipt,
 	})
 }
+
+// GET /api/operations/{id}
+func (h *Handler) getOperationStatus(w http.ResponseWriter, r *http.Request) {
+	account, ok := accountFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	opID := chi.URLParam(r, "id")
+	if opID == "" {
+		writeError(w, http.StatusBadRequest, "operation id required")
+		return
+	}
+	orgs, err := h.store.ListUserOrganizations(r.Context(), account.ID)
+	if err != nil || len(orgs) == 0 {
+		writeError(w, http.StatusForbidden, "organization membership required")
+		return
+	}
+	for _, o := range orgs {
+		op, err := h.store.GetServerOperation(r.Context(), o.ID, opID)
+		if err == nil {
+			writeJSON(w, http.StatusOK, op)
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "operation not found")
+}
+
