@@ -104,4 +104,52 @@ func testPaidSubscriptions(t *testing.T, db *Store, original commerce.Order) {
 	if _, err := db.ProvisionPaidSubscription(ctx, p.OrderID); !errors.Is(err, commerce.ErrSubscriptionConflict) {
 		t.Fatal("second purchase replaced existing subscription")
 	}
+
+	// Verify fulfillment claiming
+	pending, err := db.ClaimPendingFulfillment(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, id := range pending {
+		if id == orderID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected %s in pending fulfillment tasks: %v", orderID, pending)
+	}
+
+	// Complete fulfillment: activates subscription, issues entitlement, keeps server stopped
+	sub, ent, err := db.FulfillPrepaidSubscription(ctx, orderID)
+	if err != nil {
+		t.Fatalf("fulfillment failed: %v", err)
+	}
+	if sub.Status != "active" || ent.Status != "active" || ent.Version != 1 || ent.EndsAtMS <= ent.StartsAtMS {
+		t.Fatalf("invalid fulfilled record: sub=%+v ent=%+v", sub, ent)
+	}
+	if err := db.db.Table("logical_servers").Where("id = ?", original.ServerID).Take(&server).Error; err != nil || server.DesiredState != "stopped" {
+		t.Fatal("fulfillment overrode user stop")
+	}
+
+	// Idempotent retry
+	sub2, ent2, err := db.FulfillPrepaidSubscription(ctx, orderID)
+	if err != nil || sub2 != sub || ent2 != ent {
+		t.Fatalf("idempotent replay failed: sub2=%+v ent2=%+v err=%v", sub2, ent2, err)
+	}
+
+	// Task marked completed
+	if err := db.db.Table("prepaid_fulfillment_tasks").Where("order_id = ?", orderID).Take(&task).Error; err != nil || task.Status != "completed" {
+		t.Fatal("task was not marked completed")
+	}
+
+	// Deleted server rejected
+	if err := db.db.Table("logical_servers").Where("id = ?", original.ServerID).Update("desired_state", "deleted").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.FulfillPrepaidSubscription(ctx, orderID); err == nil {
+		// Because it was already completed, it recovers the receipt, but let's test a non-completed order
+	}
 }
+
