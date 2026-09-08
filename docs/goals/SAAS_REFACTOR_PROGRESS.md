@@ -326,3 +326,10 @@
 - SQLite race 覆盖更新密文解密、旧身份拒绝、摘要换钥重放不重新加密、不同配置冲突、无权重放、旧代数拒绝、加密失败不推进指针、较新更新后旧操作重放不回退。
 - 区域获取组合测试改用真实受保护创建；全局库密文经 mTLS 读取进入区域库，测试侧按原修订身份可解密且快照不含明文。密钥仅由测试创建，不是区域密钥分发／解密授权实现。工作区与独立快照的相关 SQLite／PostgreSQL／mTLS race，以及独立全量 Go（含架构检查）／vet 全部通过。独立日志 `/tmp/gamepanel-encrypted-revise-index-all.log`、`/tmp/gamepanel-encrypted-revise-index-vet.log`、`/tmp/gamepanel-encrypted-revise-index-integration.log`；专用临时数据库与快照清理。
 - 公共应用用例、Provider／资产／Region 准入、密钥生命周期、有限期执行授权及 Deployment／运行链路仍待完成。旧创建／修订 API 未切换，本批未新增生产 SQL，其他草稿保留。
+
+### 2026-09-08 Provider 显式全局配置与稳定归一化
+
+- 新增 `LogicalConfigProvider` 可选能力和 `gameconfig.LogicalNormalizer`：使用只读 Registry，核对 Provider／已声明游戏版本／正 schema，限制载荷大小，拒绝非对象、重复字段、尾随内容和非法 UTF-8，输出稳定 JSON，不依赖 Store 或 Runtime。
+- Terraria Vanilla／tModLoader 明确允许游戏用户配置字段，拒绝未知字段、null、非法值和配置行注入；全局配置不接收或保存端口／节点／宿主机路径。游戏规则位于 Provider，通用模块不硬编码游戏。
+- 定向 race 验证两种 Provider 的稳定字节、密码和玩家设置保留、执行字段与非法输入拒绝、未知版本／旧 schema 别名拒绝。区域获取组合测试切换为真实 Terraria 归一化配置，随后加密、全局写入、mTLS 获取及区域落库。工作区相关 race 与独立全量 Go（含架构检查）／vet／真实 Provider+PostgreSQL+mTLS 组合 race 全部通过。独立日志 `/tmp/gamepanel-logical-config-index-all.log`、`/tmp/gamepanel-logical-config-index-vet.log`、`/tmp/gamepanel-logical-config-index-integration.log`；专用测试容器与快照清理。
+- 公共应用用例、Region／资产准入、其他 Provider 的全局配置能力及有限期执行授权仍待实现；校验已声明游戏版本不等于制品摘要固定或真实游戏交付。未修改生产 SQL，其他草稿保留。

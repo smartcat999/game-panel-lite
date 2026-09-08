@@ -38,6 +38,16 @@ Go 要求每个密钥最多加密 `2^32` 条消息以控制随机 nonce 碰撞�
 
 Outbox 仅包含 schemaVersion、eventId、operationId、organizationId、serverId、revisionId、regionId、placementEpoch 和 specGeneration；不包含配置文档。将来的接收方必须经过授权获取并持久化不可变修订，不能仅凭事件字段授权执行。全局断连期间尚未取得修订的事件不能被当作区域已接纳任务。
 
+## Provider 全局配置契约
+
+`gameconfig.LogicalNormalizer` 通过消费方的只读 Registry 接口取得 Provider，要求显式实现 `LogicalConfigProvider`，不能自动采用旧的运行配置归一化。检查已声明游戏版本和正配置 schema，限制输入／输出大小，拒绝非 UTF-8、非对象 JSON、重复字段与尾随内容；Provider 负责字段白名单和业务值校验。错误不会回显配置或 Provider 原始错误。输出为规范化 map 的稳定 JSON 编码，用于受保护创建／更新的指纹和加密。
+
+Terraria Vanilla／tModLoader 已实现该能力，保留世界、难度、玩家数、密码和种子等用户配置，拒绝未知字段、null 值、路径穿越和可能插入配置行的换行／NUL。全局输入不接受端口、NodeID、宿主机路径；Provider 默认的内部端口用于既有规则校验，但从输出中移除，实际端口仍由运行侧生成／分配。没有在通用模块内判断游戏名称。
+
+创建和更新均输入完整逻辑配置，省略字段使用对应 Provider 的版本化默认值，不从未授权的旧密文隐式合并。Provider 改变默认值或规范化语义时必须维护配置版本兼容，不能无声改变旧请求指纹。这里仅检查 Provider 声明的游戏版本，并不证明镜像／制品已固定内容摘要。
+
+真实 Terraria 配置已经在组合测试中完成规范化、加密、全局持久化、mTLS 读取和区域落库；其他 Provider 尚未声明此能力时拒绝用于新全局配置路径。公共 API、Region／资产售卖准入及执行授权还未接入。
+
 ## 事务接口
 
 - `CreateGlobalServer`：校验结构、锁定组织及成员写权限、检查新旧实例总配额，原子写入实例／初始修订／Placement／Operation／Outbox。空 actor 不代表管理员，不允许绕过权限。

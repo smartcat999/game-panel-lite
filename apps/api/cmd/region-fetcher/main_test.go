@@ -26,7 +26,10 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlapi"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/serviceauth"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -108,8 +111,19 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plaintext := []byte(`{"password":"test-through-mtls"}`)
-	_, err = global.CreateEncryptedGlobalServer(ctx, "owner", instances.CreateRequest{OrganizationID: org.ID, Name: "server", RegionID: "east", IdempotencyKey: "create", Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Resources: instances.Resources{CPU: 1, MemoryMB: 256}}}, plaintext, protector, fingerprint)
+	gameProvider := terraria.NewVanillaProvider()
+	registry, err := provider.NewRegistry(gameProvider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalizer := gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 1024}
+	gameVersion := gameProvider.Versions()[0]
+	schemaVersion := gameProvider.CatalogMetadata().ConfigVersion
+	plaintext, err := normalizer.Normalize(ctx, string(gameProvider.Key()), gameVersion, schemaVersion, []byte(`{"password":"test-through-mtls"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = global.CreateEncryptedGlobalServer(ctx, "owner", instances.CreateRequest{OrganizationID: org.ID, Name: "server", RegionID: "east", IdempotencyKey: "create", Specification: instances.Specification{ProviderKey: string(gameProvider.Key()), GameVersion: gameVersion, ConfigSchemaVersion: schemaVersion, Resources: instances.Resources{CPU: 1, MemoryMB: 256}}}, plaintext, protector, fingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}

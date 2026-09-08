@@ -62,6 +62,12 @@ type ConfigPayloadProvider interface {
 	ValidateConfigPayload(map[string]any) error
 }
 
+// LogicalConfigProvider explicitly separates global user configuration from
+// regional ports, paths and runtime assignments. Unknown fields must fail.
+type LogicalConfigProvider interface {
+	NormalizeLogicalConfig(map[string]any) (map[string]any, error)
+}
+
 type ConfigSummaryProvider interface {
 	ConfigSummary(map[string]any) (domain.ProviderConfigSummary, error)
 }
