@@ -16,7 +16,19 @@
 
 配置修订不包含区域任务 generation、执行租约、运行路径、Env／Cmd 或实际容器状态。规格中的资产引用必须给出版本；这只校验引用形状，资产存在、内容摘要和租户授权仍需应用用例及资产模块验证。
 
-`ProtectedConfiguration` 接收保护器生成的 keyId 和不透明密文。当前结构检查不能证明输入已正确加密，实际配置校验、保护器、密钥管理和区域解密授权仍待实现。不要把此内部接口直接暴露成允许客户端自称“已加密”的公共 API。
+`ProtectedConfiguration` 接收保护器生成的 keyId 和不透明密文。当前结构检查不能证明输入已正确加密；`configprotection` 已实现下述认证加密 Adapter，但尚未接入事务写入／区域执行用例。实际 Provider 配置校验、密钥管理和区域解密授权仍待实现。不要把此内部接口直接暴露成允许客户端自称“已加密”的公共 API。
+
+## 配置保护 Adapter 与接入约束
+
+`configprotection.New` 接收外部 AES-256 密钥集合、活动 keyId 和明文字节上限，初始化后不持有调用方可变密钥切片。Seal 使用活动密钥，Open 可使用保留的旧密钥，便于新修订换钥而旧修订继续可读。不存在默认密钥、落盘配置或网络密钥分发。
+
+使用 Go 标准库 `cipher.NewGCMWithRandomNonce`，密文首字节为格式版本 1，其后为标准库产生的随机 nonce、密文及认证标签。认证附加数据绑定用途、格式版本、keyId、租户、逻辑实例、修订 ID、specGeneration、Provider 和配置 schema；修改任一身份或密文都会拒绝，失败不返回部分明文。Region 不参与不可变修订身份绑定，因此迁移不会要求修改历史修订，但能否在目标 Region 解密仍需独立授权。
+
+Go 要求每个密钥最多加密 `2^32` 条消息以控制随机 nonce 碰撞风险。跨进程密钥使用计数、轮换、撤销、备份与托管密钥服务尚未实现；当前 Adapter 不声明生产密钥生命周期已经安全验收。[标准库契约](https://pkg.go.dev/crypto/cipher#NewGCMWithRandomNonce)
+
+当前 Store 的幂等摘要包含密文，而实例／修订 ID 在事务内生成，不能在原接口外简单随机加密后重试。后续应用写入用例必须先验证 Provider 配置与资产／区域授权，对规范化业务输入建立稳定且受保护的幂等摘要，在租户事务内核对原操作；仅新操作分配实例／修订 ID 并加密，重放返回已保存结果。不得用固定 nonce 或改写历史密文维持幂等。摘要密钥轮换和旧操作兼容也必须有明确持久化版本方案。
+
+目前测试证明加密往返、逐字节篡改拒绝、身份／keyId 替换拒绝、随机输出、密钥集合复制、旧密文换钥读取与并发安全；不能以此证明 Provider 输入已经合规、配置写入已受保护或 Region 已获执行权限。
 
 Outbox 仅包含 schemaVersion、eventId、operationId、organizationId、serverId、revisionId、regionId、placementEpoch 和 specGeneration；不包含配置文档。将来的接收方必须经过授权获取并持久化不可变修订，不能仅凭事件字段授权执行。全局断连期间尚未取得修订的事件不能被当作区域已接纳任务。
 

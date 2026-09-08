@@ -305,3 +305,10 @@
 - 组合测试使用真实全局和区域 PostgreSQL schema，创建逻辑实例并取得 Outbox 通知，通过真实 mTLS 修订接口读取并保存快照。控制面先返回失败，确认持久重试时间后停止／重新启动循环，再验证成功落库和退出。
 - 通知在测试中直接进入 Inbox，未经过 MQ；重新启动的是入口运行循环，不是 OS 进程。配置仍为测试用不透明载荷，不能冒充已实现配置加密。工作区组合 race 与独立提交快照全量 Go（含架构检查）／vet／真实 PostgreSQL+mTLS 组合 race 全部通过，独立日志 `/tmp/gamepanel-fetcher-cli-index-all.log`、`/tmp/gamepanel-fetcher-cli-index-vet.log`、`/tmp/gamepanel-fetcher-cli-index-integration.log`。临时测试证书、schema 和专用容器清理。
 - 配置保护器、有限期执行授权、Deployment／调度／执行和结果回传继续推进。其他草稿与前端未纳入本批；总 Goal 不变。
+
+### 2026-09-08 配置认证加密 Adapter 与身份绑定
+
+- 新增 `ConfigurationBinding` 与 `configprotection`，外部注入 AES-256 密钥，使用标准库随机 nonce GCM，绑定租户／实例／修订／代数／Provider／schema、用途和 keyId。密文版本、大小、身份与认证标签失败统一拒绝，不返回部分明文。
+- 活动密钥加密新内容，保留密钥读取历史密文；初始化复制密钥状态，支持并发调用。标准库每密钥最多 `2^32` 次加密的跨进程计数／轮换约束须由后续密钥管理落实，未宣称已具备生产 KMS 能力。
+- 定向 race 覆盖往返、逐字节篡改、身份及 keyId 替换、随机输出、密钥状态复制、轮换和并发。独立快照全量 Go（含架构检查）／vet／相关 race 全部通过，日志 `/tmp/gamepanel-protection-index-all.log`、`/tmp/gamepanel-protection-index-vet.log`、`/tmp/gamepanel-protection-index-race.log`。本批未改数据库／MQ 路径，未重跑外部集成；未提交密钥或明文配置。
+- 已确认现有 Store 用密文做幂等摘要且在事务内分配 ID，不能直接接上随机加密。后续需调整受信写入用例与稳定幂等摘要版本；当前 Adapter 尚未用于业务修订，旧不透明测试载荷不是已加密证据。没有新增 SQL，其他草稿保留。

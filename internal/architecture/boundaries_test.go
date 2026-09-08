@@ -65,6 +65,9 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("configprotection") && ((strings.Contains(imported, ".") && imported != api+"instances") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
+		return "configuration cryptography must depend on immutable identity contracts, not storage, transport or process secrets"
+	}
 	if under("serviceauth") && (strings.Contains(imported, ".") || strings.HasPrefix(imported, "database/") || imported == "os") {
 		return "service identity verification must not depend on persistence or process configuration"
 	}
