@@ -9,7 +9,7 @@ import (
 // the regional coordinator. It does not derive tenant permissions from IDs.
 type CandidateQuery struct {
 	OrganizationID string
-	Network        workload.Network
+	Networks       []workload.Network
 	RegionID       string
 	AllowedNodeIDs []string
 	RequiredNodeID string
@@ -20,6 +20,7 @@ type CandidateQuery struct {
 // Candidate is an observation, not a reservation. Admission must recheck its
 // node version and session after acquiring the appropriate transaction locks.
 type Candidate struct {
+	NetworkIndex      int
 	NodeID            string
 	NodeVersion       int64
 	SessionEpoch      int64

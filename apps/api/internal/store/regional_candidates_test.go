@@ -34,7 +34,7 @@ func testRegionalCapacityCandidates(t *testing.T, db *RegionalStore, request reg
 			}
 		}
 	}
-	query := regional.CandidateQuery{OrganizationID: "tenant", RegionID: db.regionID, AllowedNodeIDs: []string{"node-a", "node-b", "quiet", "disabled", "arm"}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}}
+	query := regional.CandidateQuery{Networks: []workload.Network{{}}, OrganizationID: "tenant", RegionID: db.regionID, AllowedNodeIDs: []string{"node-a", "node-b", "quiet", "disabled", "arm"}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}}
 	var queries atomic.Int64
 	callback := "test_regional_candidate_query_budget"
 	if err := db.db.Callback().Query().After("gorm:query").Register(callback, func(tx *gorm.DB) {

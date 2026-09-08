@@ -33,7 +33,11 @@ func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 	}
 	scheduler := regional.Scheduler{Resources: db, Networks: gameconfig.RegionalNetworkRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: 4096}, Configurations: protector}, MaxHeartbeatAge: time.Minute}
 	for _, id := range []string{"schedule-a", "schedule-b"} {
-		_, err := db.ConfigureRegionalNode(ctx, regional.NodeConfiguration{ID: id, Name: id, Architecture: "amd64", CPU: 1, MemoryMB: 128, Schedulable: true}, 0)
+		cpu, memory := float64(1), int64(128)
+		if id == "schedule-b" {
+			cpu, memory = 2, 256
+		}
+		_, err := db.ConfigureRegionalNode(ctx, regional.NodeConfiguration{ID: id, Name: id, Architecture: "amd64", CPU: cpu, MemoryMB: memory, Schedulable: true}, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -122,5 +126,28 @@ func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 		t.Fatal("tenant mismatch accepted", err)
 	}
 	testSchedulingClaims(t, db, dsn, scheduler, scope, allocation, next)
+	third, thirdSnapshot := create("schedule-server-c")
+	ranged := scope
+	ranged.MaxHostPort = scope.HostPort + 2
+	ranged.RequiredNodeID = "schedule-b"
+	selected, err := scheduler.Schedule(ctx, third, thirdSnapshot, ranged)
+	if err != nil || selected.NodeID != "schedule-b" || len(selected.Ports) != 1 || selected.Ports[0].HostPort != 32001 {
+		t.Fatalf("automatic port selection: %+v %v", selected, err)
+	}
+	recovered, err := scheduler.Schedule(ctx, third, thirdSnapshot, ranged)
+	if err != nil || !reflect.DeepEqual(recovered, selected) {
+		t.Fatal("range replay changed selected port", err)
+	}
+	excluded := ranged
+	excluded.HostPort = 32002
+	if _, err := scheduler.Schedule(ctx, third, thirdSnapshot, excluded); !errors.Is(err, regional.ErrAllocationConflict) {
+		t.Fatal("receipt escaped requested range", err)
+	}
+	invalidRange := ranged
+	invalidRange.MaxHostPort = invalidRange.HostPort + 64
+	if _, err := scheduler.Schedule(ctx, third, thirdSnapshot, invalidRange); err == nil {
+		t.Fatal("unbounded port range accepted")
+	}
+
 	t.Log("real Provider/protected revision -> regional scheduler -> PostgreSQL compute and port reservation/replay verified")
 }

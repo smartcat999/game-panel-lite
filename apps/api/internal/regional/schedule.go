@@ -2,6 +2,7 @@ package regional
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ type SchedulingScope struct {
 	RequiredNodeID string
 	Architecture   string
 	HostPort       int
+	MaxHostPort    int
 }
 
 // Scheduler composes rendering, candidate observation and atomic admission.
@@ -63,6 +65,21 @@ func (s Scheduler) Schedule(ctx context.Context, deployment Deployment, snapshot
 	if err != nil {
 		return Allocation{}, err
 	}
+	end := scope.MaxHostPort
+	if end == 0 {
+		end = scope.HostPort
+	}
+	if scope.HostPort < 0 || end > 65535 || end < scope.HostPort || end-scope.HostPort >= 64 || (scope.HostPort == 0 && end != 0) {
+		return Allocation{}, workload.ErrInvalidNetwork
+	}
+	networks := []workload.Network{network}
+	for port := scope.HostPort + 1; port <= end; port++ {
+		shifted, err := workload.OffsetHostPorts(network, port-scope.HostPort)
+		if err != nil {
+			return Allocation{}, err
+		}
+		networks = append(networks, shifted)
+	}
 	request := CapacityRequest{RegionID: event.RegionID, OrganizationID: event.OrganizationID, DeploymentID: deployment.ID,
 		ServerID: event.ServerID, PlacementEpoch: event.PlacementEpoch, RevisionID: event.RevisionID, SpecGeneration: event.SpecGeneration, IntentVersion: deployment.IntentVersion}
 	// Recover a prior receipt before capacity filtering: a full node may contain
@@ -76,10 +93,19 @@ func (s Scheduler) Schedule(ctx context.Context, deployment Deployment, snapshot
 		if !allowed[request.NodeID] || (scope.RequiredNodeID != "" && scope.RequiredNodeID != request.NodeID) || existing.CapacityRequest != request {
 			return Allocation{}, ErrAllocationConflict
 		}
-		return s.Resources.ReserveRegionalResources(ctx, request, network, s.MaxHeartbeatAge)
+		for _, plan := range networks {
+			ports, err := workload.ResolvePortBindings(plan)
+			if err != nil {
+				return Allocation{}, err
+			}
+			if slices.Equal(ports, existing.Ports) {
+				return s.Resources.ReserveRegionalResources(ctx, request, plan, s.MaxHeartbeatAge)
+			}
+		}
+		return Allocation{}, ErrAllocationConflict
 	}
 	candidates, err := s.Resources.RegionalCapacityCandidates(ctx, CandidateQuery{OrganizationID: event.OrganizationID, RegionID: event.RegionID, AllowedNodeIDs: scope.AllowedNodeIDs,
-		RequiredNodeID: scope.RequiredNodeID, Architecture: scope.Architecture, Resources: snapshot.Revision.Specification.Resources, Network: network}, s.MaxHeartbeatAge)
+		RequiredNodeID: scope.RequiredNodeID, Architecture: scope.Architecture, Resources: snapshot.Revision.Specification.Resources, Networks: networks}, s.MaxHeartbeatAge)
 	if err != nil {
 		return Allocation{}, err
 	}
@@ -89,9 +115,9 @@ func (s Scheduler) Schedule(ctx context.Context, deployment Deployment, snapshot
 	// Store returns stable node order. A stale candidate fails admission; the
 	// durable caller retries later, without silently overriding a pinned node.
 	candidate := candidates[0]
-	if !allowed[candidate.NodeID] || (scope.RequiredNodeID != "" && scope.RequiredNodeID != candidate.NodeID) {
+	if candidate.NetworkIndex < 0 || candidate.NetworkIndex >= len(networks) || !allowed[candidate.NodeID] || (scope.RequiredNodeID != "" && scope.RequiredNodeID != candidate.NodeID) {
 		return Allocation{}, ErrNodeUnavailable
 	}
 	request.NodeID, request.NodeVersion, request.SessionEpoch = candidate.NodeID, candidate.NodeVersion, candidate.SessionEpoch
-	return s.Resources.ReserveRegionalResources(ctx, request, network, s.MaxHeartbeatAge)
+	return s.Resources.ReserveRegionalResources(ctx, request, networks[candidate.NetworkIndex], s.MaxHeartbeatAge)
 }

@@ -26,3 +26,26 @@ func TestResolvePortBindings(t *testing.T) {
 		}
 	}
 }
+
+func TestOffsetHostPorts(t *testing.T) {
+	original := Network{Port: 7777, AdditionalPorts: []Port{{Port: 7778, Protocol: "udp"}}}
+	shifted, err := OffsetHostPorts(original, 24223)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ports, err := ResolvePortBindings(shifted)
+	if err != nil || len(ports) != 2 || ports[0].HostPort != 32000 || ports[0].Port != 7777 || ports[1].HostPort != 32001 || ports[1].Protocol != "udp" {
+		t.Fatalf("shifted bindings: %v %v", ports, err)
+	}
+	if original.HostPort != 0 || original.AdditionalPorts[0].HostPort != 0 {
+		t.Fatal("input mutated")
+	}
+	for _, offset := range []int{-7777, 65535, 65536, -65536} {
+		if _, err := OffsetHostPorts(original, offset); err == nil {
+			t.Fatalf("invalid offset %d", offset)
+		}
+	}
+	if _, err := OffsetHostPorts(Network{}, 1); err == nil {
+		t.Fatal("empty network shifted")
+	}
+}

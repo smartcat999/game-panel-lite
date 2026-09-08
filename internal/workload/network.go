@@ -52,3 +52,43 @@ func ResolvePortBindings(network Network) ([]Port, error) {
 	})
 	return resolved, nil
 }
+
+// OffsetHostPorts preserves container ports and protocols while shifting every
+// effective host binding by the same offset. It never mutates the input slice.
+func OffsetHostPorts(network Network, offset int) (Network, error) {
+	if offset < -65535 || offset > 65535 {
+		return Network{}, ErrInvalidNetwork
+	}
+	if _, err := ResolvePortBindings(network); err != nil {
+		return Network{}, err
+	}
+	shifted := network
+	shifted.AdditionalPorts = append([]Port(nil), network.AdditionalPorts...)
+	shift := func(port, host int) (int, error) {
+		if host == 0 {
+			host = port
+		}
+		host += offset
+		if host < 1 || host > 65535 {
+			return 0, ErrInvalidNetwork
+		}
+		return host, nil
+	}
+	var err error
+	if network.Port != 0 {
+		shifted.HostPort, err = shift(network.Port, network.HostPort)
+		if err != nil {
+			return Network{}, err
+		}
+	}
+	for i, port := range shifted.AdditionalPorts {
+		shifted.AdditionalPorts[i].HostPort, err = shift(port.Port, port.HostPort)
+		if err != nil {
+			return Network{}, err
+		}
+	}
+	if network.Port == 0 && len(network.AdditionalPorts) == 0 && offset != 0 {
+		return Network{}, ErrInvalidNetwork
+	}
+	return shifted, nil
+}

@@ -26,7 +26,7 @@ func testRegionalNodeAccess(t *testing.T, db *RegionalStore, create func(string)
 	if err := db.RecordRegionalNodeHeartbeat(ctx, node.ID, regional.NodeHeartbeat{SessionEpoch: session.Epoch, Sequence: 1, Architecture: "amd64", RuntimeReady: true}); err != nil {
 		t.Fatal(err)
 	}
-	query := regional.CandidateQuery{OrganizationID: "unknown", RegionID: db.regionID, AllowedNodeIDs: []string{node.ID}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}}
+	query := regional.CandidateQuery{Networks: []workload.Network{{}}, OrganizationID: "unknown", RegionID: db.regionID, AllowedNodeIDs: []string{node.ID}, Architecture: "amd64", Resources: instances.Resources{CPU: 1, MemoryMB: 128}}
 	if _, err := db.RegionalCapacityCandidates(ctx, query, time.Minute); !errors.Is(err, regional.ErrNodeAccessDenied) {
 		t.Fatal("unconfigured tenant admitted", err)
 	}

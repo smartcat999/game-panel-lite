@@ -8,6 +8,7 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/scheduling"
+	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"gorm.io/gorm"
 )
 
@@ -42,12 +43,21 @@ func (s *RegionalStore) RegionalCapacityCandidates(ctx context.Context, query re
 		}
 		ids = []string{query.RequiredNodeID}
 	}
-	ports, err := regionalBindings(query.Network)
-	if err != nil {
-		return nil, err
+	if len(query.Networks) < 1 || len(query.Networks) > 64 {
+		return nil, workload.ErrInvalidNetwork
+	}
+	plans := make([][]workload.Port, 0, len(query.Networks))
+	var ports []workload.Port
+	for _, network := range query.Networks {
+		bindings, err := regionalBindings(network)
+		if err != nil {
+			return nil, err
+		}
+		plans = append(plans, bindings)
+		ports = append(ports, bindings...)
 	}
 	candidates := make([]regional.Candidate, 0)
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		access, err := regionalNodeAccess(tx, query.OrganizationID, false)
 		if err != nil {
 			return err
@@ -95,7 +105,7 @@ func (s *RegionalStore) RegionalCapacityCandidates(ctx context.Context, query re
 		for _, used := range usage {
 			reserved[used.NodeID] = []scheduling.Resources{{CPU: used.CPU, MemoryMB: used.MemoryMB}}
 		}
-		conflicts, err := regionalPortConflicts(tx, selected, ports)
+		occupied, err := regionalReservedPorts(tx, selected, ports)
 		if err != nil {
 			return err
 		}
@@ -105,14 +115,31 @@ func (s *RegionalStore) RegionalCapacityCandidates(ctx context.Context, query re
 		}
 		for _, node := range nodes {
 			observed := byNode[node.ID]
-			if conflicts[node.ID] || !regionalNodeReady(node, observed, now, maxHeartbeatAge) {
+			if !regionalNodeReady(node, observed, now, maxHeartbeatAge) {
 				continue
 			}
 			remaining, err := scheduling.CheckCapacity(scheduling.Resources{CPU: node.CPU, MemoryMB: node.MemoryMB}, needed, reserved[node.ID])
 			if err != nil {
 				continue
 			}
-			candidates = append(candidates, regional.Candidate{NodeID: node.ID, NodeVersion: node.Version, SessionEpoch: observed.Epoch, RemainingCPU: remaining.CPU, RemainingMemoryMB: remaining.MemoryMB})
+			networkIndex := -1
+			for index, plan := range plans {
+				available := true
+				for _, port := range plan {
+					if occupied[node.ID][regionalPortKey{port.HostPort, port.Protocol}] {
+						available = false
+						break
+					}
+				}
+				if available {
+					networkIndex = index
+					break
+				}
+			}
+			if networkIndex < 0 {
+				continue
+			}
+			candidates = append(candidates, regional.Candidate{NetworkIndex: networkIndex, NodeID: node.ID, NodeVersion: node.Version, SessionEpoch: observed.Epoch, RemainingCPU: remaining.CPU, RemainingMemoryMB: remaining.MemoryMB})
 		}
 		return nil
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})

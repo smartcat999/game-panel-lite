@@ -51,17 +51,20 @@ func regionalBindings(network workload.Network) ([]workload.Port, error) {
 	return ports, nil
 }
 
-// Only requested host ports are read. The largest query covers one bounded
-// candidate page and at most 128 bindings, not every reservation in the region.
-func regionalPortConflicts(tx *gorm.DB, nodeIDs []string, ports []workload.Port) (map[string]bool, error) {
-	conflicts := map[string]bool{}
+// Read requested host ports once for a bounded candidate page and plan set.
+func regionalReservedPorts(tx *gorm.DB, nodeIDs []string, ports []workload.Port) (map[string]map[regionalPortKey]bool, error) {
+	reserved := map[string]map[regionalPortKey]bool{}
 	if len(ports) == 0 {
-		return conflicts, nil
+		return reserved, nil
 	}
-	hosts := make([]int, 0, len(ports))
+	hosts := []int{}
+	seenHosts := map[int]bool{}
 	wanted := make(map[regionalPortKey]bool, len(ports))
 	for _, port := range ports {
-		hosts = append(hosts, port.HostPort)
+		if !seenHosts[port.HostPort] {
+			hosts = append(hosts, port.HostPort)
+			seenHosts[port.HostPort] = true
+		}
 		wanted[regionalPortKey{port.HostPort, port.Protocol}] = true
 	}
 	var rows []regionalPortRow
@@ -69,9 +72,25 @@ func regionalPortConflicts(tx *gorm.DB, nodeIDs []string, ports []workload.Port)
 		return nil, err
 	}
 	for _, row := range rows {
-		if wanted[regionalPortKey{row.HostPort, row.Protocol}] {
-			conflicts[row.NodeID] = true
+		key := regionalPortKey{row.HostPort, row.Protocol}
+		if wanted[key] {
+			if reserved[row.NodeID] == nil {
+				reserved[row.NodeID] = map[regionalPortKey]bool{}
+			}
+			reserved[row.NodeID][key] = true
 		}
+	}
+	return reserved, nil
+}
+
+func regionalPortConflicts(tx *gorm.DB, nodeIDs []string, ports []workload.Port) (map[string]bool, error) {
+	reserved, err := regionalReservedPorts(tx, nodeIDs, ports)
+	if err != nil {
+		return nil, err
+	}
+	conflicts := map[string]bool{}
+	for node, bindings := range reserved {
+		conflicts[node] = len(bindings) > 0
 	}
 	return conflicts, nil
 }
