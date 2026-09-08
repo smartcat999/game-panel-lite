@@ -64,3 +64,15 @@ type ArchiveUploaded struct {
 	Plan          UploadPlan    `json:"plan"`
 	Receipt       StoredArchive `json:"receipt"`
 }
+
+// Validate checks internal consistency only. It does not authenticate the Region
+// or prove that this snapshot was authorized by a global backup request.
+func (e ArchiveUploaded) Validate() error {
+	if e.SchemaVersion != 1 || !backupID(e.EventID) || e.Plan.Validate() != nil {
+		return ErrUploadPlan
+	}
+	if e.Receipt.StorageID != e.Plan.StorageID || e.Receipt.ObjectKey != e.Plan.ObjectKey || e.Receipt.Asset != e.Plan.Asset || len(e.Receipt.ObjectVersion) > 1024 || strings.ContainsAny(e.Receipt.ObjectVersion, "\x00\r\n") {
+		return ErrUploadPlan
+	}
+	return nil
+}

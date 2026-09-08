@@ -72,6 +72,13 @@
 - 真实 PostgreSQL／RabbitMQ 验证并发唯一领取、过期拒绝、失败重试、完整结果信封及确认后不再领取。独立快照全量 Go（含架构）及 vet 通过，日志 `/tmp/gamepanel-backup-results-all.log`、`/tmp/gamepanel-backup-results-vet.log`。首次集成暴露旧死信测试夹具未等待发布确认的竞态，修复夹具后 Store／RabbitMQ race 通过，日志 `/tmp/gamepanel-backup-results-integration-fixed.log`，受影响包 vet 日志 `/tmp/gamepanel-backup-results-vet-fixed.log` 为空。
 - 无 JOIN，未改前端或无关草稿。控制面结果 Inbox／状态与资产元数据原子更新、当前执行授权、Node 一致快照和完整 Worker 接线仍待完成；未以消息发布测试替代用户侧备份闭环验收。完整六阶段 Goal 保持进行中。
 
+### 2026-09-09 控制面备份结果接收契约
+
+- 在备份消息入口模块新增 ResultIngress，由组合根提供可信来源 Region 和 ResultInbox；消息正文不能选择来源身份。校验信封 ID、来源 Region、版本、上传计划及存储回执的租户／摘要／对象一致性，持久化错误向上传播，不能提前确认消费。
+- 嵌套结果 JSON 拒绝各层重复字段（含大小写别名）、未知字段、数组、尾随内容和超限输入；归档结果 Validate 只证明内部一致，不代表节点执行授权或原任务匹配。
+- 独立暂存快照全量 Go（含架构）、vet、backupingress／backup race 通过，日志 `/tmp/gamepanel-result-ingress-all.log`、`/tmp/gamepanel-result-ingress-vet.log`、`/tmp/gamepanel-result-ingress-race.log`。覆盖错误来源／信封、跨租户回执、对象或摘要冲突、嵌套歧义、存储失败传播及重试。无 SQL 或 MQ Adapter 改动，本批未重跑外部服务。
+- ResultInbox 的真实全局事务实现及消费者入口仍待接入；需关联原任务、去重并原子保存资产与状态，保留取消／失败终态。Node 授权与一致快照执行仍未完成。未将校验入口作为备份闭环验收，完整六阶段 Goal 保持进行中。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
