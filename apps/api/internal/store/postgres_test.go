@@ -125,6 +125,7 @@ func TestPostgresIntegration(t *testing.T) {
 	testBulkOwnerQueries(t, db)
 	testServerEntitlements(t, db)
 	testPrepaidCatalog(t, db)
+	testPrepaidOrders(t, db)
 	if err := MigratePostgres(ctx, parsed.String()); err != nil {
 		t.Fatal(err)
 	}
