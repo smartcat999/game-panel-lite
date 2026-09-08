@@ -149,6 +149,13 @@
 - 最终独立快照全量 Go（含架构）、vet 通过，日志 `/tmp/gamepanel-shared-archive-final-all.log`、`/tmp/gamepanel-shared-archive-final-vet.log`；shared archive／Runtime／API backup／Agent race 通过 `/tmp/gamepanel-shared-archive-race.log`，子树修正后 backup race 通过 `/tmp/gamepanel-shared-archive-final-race.log`。无 SQL、迁移或前端改动，未重复外部服务测试。
 - Agent 可使用共享包而无需导入 API 内部代码，但实际快照任务、授权协调器、暂存与交付尚未接通；Runtime 组合仍为协议测试，不作为真实游戏一致性证据。保留其他草稿，完整六阶段 Goal 保持进行中。
 
+### Agent 停止快照暂存（已实现，任务接线未完成）
+
+- Agent 内部复用 Runtime.ReadStoppedData 和共享 archive.Write，在有截止时间的 Context 中生成私有临时 ZIP；限制压缩后大小，返回只读句柄、长度及 SHA-256，调用方关闭时删除文件。
+- 执行前、取得生命周期锁后及读取完成后调用任务授权检查；授权拒绝、运行状态变化、超限和取消均不返回成功归档并清理文件。检查回调必须绑定实际任务与部署，当前尚未接入真实授权来源，不能把此辅助函数当成执行授权。
+- 独立暂存区全量 Go 测试（含架构检查）、vet、Agent／archive／Docker Runtime race 通过。日志 `/tmp/gamepanel-agent-snapshot-all.log`、`/tmp/gamepanel-agent-snapshot-vet.log`、`/tmp/gamepanel-agent-snapshot-race.log`。新增测试使用 Runtime 夹具；未声称完整 Node 备份或真实游戏验收。
+- 沿用现有模块，无新增服务、SQL 或前端修改；后续仍需接通区域授权、Agent 任务领取与归档交付。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。
