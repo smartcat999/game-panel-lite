@@ -128,4 +128,5 @@ func testPrepaidOrders(t *testing.T, db *Store) {
 	if err := db.db.Table("global_server_entitlements").Where("server_id = ?", created.Server.ID).Count(&rights).Error; err != nil || rights != 0 {
 		t.Fatal("unpaid order granted service")
 	}
+	testOrderCancellation(t, db, order)
 }

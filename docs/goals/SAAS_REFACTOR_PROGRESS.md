@@ -318,6 +318,14 @@
 - 订单不构成库存预留，也未验证支付、订阅生效、超时取消或交付；后续支付处理需重新检查订单状态和期限，并明确处理配置变化、容量不足及补偿。
 - 隔离快照全量 Go（含架构）、vet、真实 PostgreSQL／SQLite race 检查通过。验证租户权限、原付款期限重放、请求冲突、下架拒绝新购、配置规格匹配、历史不可改写、并发请求同一订单，以及未付款不生成权益。日志 `/tmp/gamepanel-orders-all.log`、`/tmp/gamepanel-orders-vet.log`、`/tmp/gamepanel-orders-integration.log`。
 
+### 待支付订单取消与到期处理
+
+- 全局迁移 025／SQLite 迁移 13 增加取消原因、时间、操作者和待支付到期索引。租户写权限校验后锁定订单，主动取消只转换 pending；重复取消保留原结果，已过期订单记录 expired 原因，paid 不能通过取消接口退回。
+- 到期处理使用数据库时间，单事务每批 1–200 条，PostgreSQL 通过 SKIP LOCKED 分担并发工作。这里只结束待支付订单，不改写条款、不改变逻辑实例意图、不释放区域容量、不撤销服务权益。
+- SQLite 与真实 PostgreSQL 验证权限拒绝、取消幂等、原因与原条款保留、已支付订单不受影响、批次上限、重复处理无结果及 PostgreSQL 并发批次不重复计数。历史迁移未修改。
+- 自动维护进程／用户取消 API 尚未接入；支付确认也未实现，不能将已支付状态夹具当作支付回调或取消／支付竞态验收。
+- 隔离快照全量 Go（含架构）、vet、真实 PostgreSQL／SQLite race 检查通过。日志 `/tmp/gamepanel-order-cancel-all.log`、`/tmp/gamepanel-order-cancel-vet.log`、`/tmp/gamepanel-order-cancel-integration.log`。
+
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 
 目标：完成本任务方案中的所有改造。此清单记录当前证据，不以已通过的局部测试替代整体完成。总体状态：进行中。

@@ -16,6 +16,8 @@ import (
 )
 
 type prepaidOrderRow struct {
+	CancelReason, CancelledBy                string
+	CancelledAtMS                            int64
 	ID, OrganizationID, ServerID, RevisionID string
 	PlacementEpoch                           int64
 	Quote, Status                            string
@@ -32,7 +34,7 @@ func (r prepaidOrderRow) order() (commerce.Order, error) {
 	if err != nil || expected != quote {
 		return commerce.Order{}, commerce.ErrInvalidOrder
 	}
-	return commerce.Order{ID: r.ID, OrganizationID: r.OrganizationID, ServerID: r.ServerID, RevisionID: r.RevisionID, PlacementEpoch: r.PlacementEpoch, Quote: quote, Status: r.Status, CreatedAtMS: r.CreatedAtMS, ExpiresAtMS: r.ExpiresAtMS}, nil
+	return commerce.Order{CancelReason: r.CancelReason, CancelledAtMS: r.CancelledAtMS, CancelledBy: r.CancelledBy, ID: r.ID, OrganizationID: r.OrganizationID, ServerID: r.ServerID, RevisionID: r.RevisionID, PlacementEpoch: r.PlacementEpoch, Quote: quote, Status: r.Status, CreatedAtMS: r.CreatedAtMS, ExpiresAtMS: r.ExpiresAtMS}, nil
 }
 
 // CreatePrepaidOrder locks workspace, instance and sale eligibility in that order.
