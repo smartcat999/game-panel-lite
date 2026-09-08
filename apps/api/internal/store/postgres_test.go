@@ -76,6 +76,15 @@ func TestPostgresIntegration(t *testing.T) {
 	if err := baselineDB.Exec(`INSERT INTO mod_files(id,organization_id) VALUES ('upgrade-artifact','upgrade-owner'); INSERT INTO workload_assignments(id,uid,server_id,spec) VALUES ('upgrade-assignment','upgrade-uid','upgrade-server','{"options":{"artifacts":[{"id":"upgrade-artifact"},{"id":"upgrade-artifact"}]}}')`).Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := baselineDB.Exec("INSERT INTO compute_nodes (id, name, token, status) VALUES ('legacy-scheduling-node', 'preserved-name', 'preserved-token', 'offline')").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migratePostgres(ctx, baselineDB, postgresMigrations()[:10]); err != nil {
+		t.Fatal(err)
+	}
+	if err := baselineDB.Exec("INSERT INTO oauth_identities (id, user_id, provider, provider_user_id, email, name) VALUES ('legacy-oauth-link', 'legacy-oauth-user', 'test-provider', 'remote-subject', 'original@example.test', 'Original')").Error; err != nil {
+		t.Fatal(err)
+	}
 	baselinePool, _ := baselineDB.DB()
 	baselinePool.Close()
 	var starters sync.WaitGroup
@@ -100,6 +109,18 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	testNodeSchedulingMigration(t, db)
+	if err := MigratePostgres(ctx, parsed.String()); err != nil {
+		t.Fatal(err)
+	}
+	var retained bool
+	if err := db.db.Raw("SELECT unschedulable FROM compute_nodes WHERE id = ?", "legacy-scheduling-node").Scan(&retained).Error; err != nil || !retained {
+		t.Fatalf("repeat migration cleared drain state: %v", err)
+	}
+	if err := db.db.Exec("DELETE FROM compute_nodes WHERE id IN (?, ?)", "legacy-scheduling-node", "default-scheduling-node").Error; err != nil {
+		t.Fatal(err)
+	}
+
 	var legacyEvent domain.ActivityEvent
 	if err := db.db.First(&legacyEvent, "id = ?", "legacy-event").Error; err != nil || legacyEvent.OrganizationID != "legacy-org" {
 		t.Fatalf("activity ownership migration: %+v %v", legacyEvent, err)
@@ -144,6 +165,8 @@ func TestPostgresIntegration(t *testing.T) {
 		t.Fatalf("runtime role startup: %v", err)
 	}
 	defer runtimeDB.Close()
+	testOAuthTableMigration(t, runtimeDB)
+
 	if err := runtimeDB.db.Exec("CREATE TABLE forbidden_runtime_ddl (id integer)").Error; err == nil {
 		t.Fatal("runtime role can create tables")
 	}

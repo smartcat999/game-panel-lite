@@ -35,3 +35,11 @@ Moving an instance between organizations still requires a separate ownership/fil
 ## Activity ownership migration
 
 Migration 003 persists activity organization ownership, backfilling historical events whose source instance still exists. Unowned platform events and events whose source was already deleted require explicit adoption if they should become tenant-visible; no owner is guessed from a message or payload. New instance events capture the source organization, and private world-library import/delete events explicitly carry world ownership. SQLite startup similarly backfills only blank ownership. New owned history remains queryable through membership after instance deletion.
+
+## Scheduling and OAuth schema alignment
+
+Migration 010 introduces credit storage and the original OAuth identity table. Migration 011 adds `compute_nodes.unschedulable` as a non-null boolean defaulting to false. Existing node configuration is preserved; repeated migration does not reset an administrator's drain flag.
+
+Migration 012 renames `oauth_identities` to `o_auth_identities`, matching the current GORM `OAuthIdentity` naming convention and SQLite's existing table. It preserves linked accounts and the unique `(provider, provider_user_id)` index instead of copying or recreating rows. A conflicting pre-existing destination table causes migration to fail rather than merge identities speculatively. Apply migrations before starting the matching API binary; no reverse migration or mixed-version compatibility is supplied.
+
+The PostgreSQL integration suite inserts an identity under migration 010 and verifies lookup/update after 012 using a runtime role without DDL privileges. It also verifies duplicate rejection and that the same remote subject may belong to different providers. This is database compatibility evidence, not a third-party OAuth login, account recovery, payment or credit-accounting acceptance test.

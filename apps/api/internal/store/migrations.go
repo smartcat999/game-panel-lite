@@ -36,6 +36,15 @@ var executionLeasesSQL string
 //go:embed migrations/009_workload_observation_artifacts.sql
 var workloadObservationArtifactsSQL string
 
+//go:embed migrations/010_credits_and_oauth.sql
+var creditsAndOAuthSQL string
+
+//go:embed migrations/011_node_scheduling.sql
+var nodeSchedulingSQL string
+
+//go:embed migrations/012_oauth_table_name.sql
+var oauthTableNameSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -56,6 +65,9 @@ func postgresMigrations() []sqlMigration {
 		{7, "node_workload_capabilities", nodeWorkloadCapabilitiesSQL},
 		{8, "execution_leases", executionLeasesSQL},
 		{9, "workload_observation_artifacts", workloadObservationArtifactsSQL},
+		{10, "credits_and_oauth", creditsAndOAuthSQL},
+		{11, "node_scheduling", nodeSchedulingSQL},
+		{12, "oauth_table_name", oauthTableNameSQL},
 	}
 }
 
