@@ -9,26 +9,31 @@ import (
 )
 
 func (s *Store) userServers(ctx context.Context, userID string) *gorm.DB {
-	membership := s.db.Model(&domain.OrganizationMember{}).Select("1").
-		Where("organization_members.organization_id = game_servers.organization_id AND organization_members.user_id = ? AND organization_members.user_id <> ''", userID).
-		Where("organization_members.role IN ?", []domain.Role{domain.RoleOwner, domain.RoleAdmin, domain.RoleMember, domain.RoleViewer})
-	return s.db.WithContext(ctx).Model(&domain.GameServer{}).Where("EXISTS (?)", membership)
+	return s.userOwnedQuery(ctx, userID, &domain.GameServer{})
 }
 
 func (s *Store) ListUserGameServers(ctx context.Context, userID string) ([]domain.GameServer, error) {
 	servers := []domain.GameServer{}
-	err := s.userServers(ctx, userID).Order("created_at DESC, id ASC").Find(&servers).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userServers(ctx, userID).Order("created_at DESC, id ASC").Find(&servers).Error
+	})
 	return servers, err
 }
 
 func (s *Store) ListUserGameServersPage(ctx context.Context, userID string, options GameServerListOptions) (GameServerPage, error) {
-	return s.listGameServersPage(s.userServers(ctx, userID), options)
+	var page GameServerPage
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var err error
+		page, err = tx.listGameServersPage(tx.userServers(ctx, userID), options)
+		return err
+	})
+	return page, err
 }
 
 func (s *Store) ServerMembershipRole(ctx context.Context, userID, serverID string) (domain.Role, error) {
 	var member domain.OrganizationMember
 	err := s.readSnapshot(ctx, func(tx *Store) error {
-		var server struct{ OrganizationID string }
+		var server struct{ OrganizationID *string }
 		if err := tx.db.WithContext(ctx).Table("game_servers").Select("organization_id").Where("id = ?", serverID).Take(&server).Error; err != nil {
 			return err
 		}
@@ -42,7 +47,9 @@ func (s *Store) ServerMembershipRole(ctx context.Context, userID, serverID strin
 
 func (s *Store) GetUserGameServer(ctx context.Context, userID, id string) (domain.GameServer, error) {
 	var server domain.GameServer
-	err := s.userServers(ctx, userID).Where("id = ?", id).Take(&server).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userServers(ctx, userID).Where("id = ?", id).Take(&server).Error
+	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = ErrNotFound
 	}

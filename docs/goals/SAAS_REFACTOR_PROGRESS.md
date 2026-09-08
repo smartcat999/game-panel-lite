@@ -197,3 +197,11 @@
 - 组织查询的旧辅助方法还被世界、预设、模组库和活动记录使用；首次编译发现这些调用方后，已同步改用物化组织 ID，并在外层只读快照中执行资源查询。随后全量 Go／vet 通过，日志 `/tmp/gamepanel-nojoin-all.log`、`/tmp/gamepanel-nojoin-vet.log`。这些旧列表的大组织集合分批分页还需继续优化，不能以现有小规模测试宣称容量验收。
 - 大组织集合改用单个 JSON ID 参数，避免超过数据库参数数量限制，并保持整体排序／LIMIT；不关联其他业务表。新增 501 个组织的测试检查跨批次完整性、全局最新记录截断和外部用户隔离。首次夹具遗漏成员主键，补齐唯一 ID 后重跑全量和 PostgreSQL；最终结果另行登记。
 - 最终工作区及独立索引快照的全量 Go、vet、真实 PostgreSQL `TestPostgresIntegration -race` 均通过，包含 501 组织用例。独立日志 `/tmp/gamepanel-nojoin-index-all.log`、`/tmp/gamepanel-nojoin-index-vet.log`、`/tmp/gamepanel-nojoin-index-pg.log`。目前在线 `.Joins` 调用清零，历史回填 JOIN 和其他关联子查询尚未清零，总 Goal 继续进行。
+
+### 2026-09-08 实例与备份读取改用 ID 集合
+
+- 实例列表／分页／详情移除权限 EXISTS，备份移除实例关联子查询，当前实例活动先读取归属再查询历史；在同一只读快照内组合，保持过滤后排序和截断。
+- 复用安全列标识的 ID 集合过滤器；大集合用单个参数，501 组织测试新增实例第二页与备份归属断言。NULL 租户字段保留为空指针，避免误当作空字符串匹配。
+- 首次全量回归暴露自动版本检查测试在最后一次活动写入前清理数据库，随后空 logger 崩溃。测试清理改为释放适配器阻塞并等待已有 Worker；该用例连续 10 次及全量 Go／vet 重跑通过，未放宽生产状态判断。
+- 本批仍未清理节点制品授权、关联删除、区域过滤草稿及历史迁移执行路径；六阶段 Goal 不变。最终独立快照验证结果待登记。
+- 最终独立索引快照的全量 Go、vet、真实 PostgreSQL `TestPostgresIntegration -race` 均通过，包含新增分页／备份／NULL 归属测试。日志 `/tmp/gamepanel-idqueries-index-all.log`、`/tmp/gamepanel-idqueries-index-vet.log`、`/tmp/gamepanel-idqueries-index-pg.log`。其他草稿及用户媒体文件未纳入提交。

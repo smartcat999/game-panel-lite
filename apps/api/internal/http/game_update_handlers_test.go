@@ -174,8 +174,17 @@ func TestGameUpdateAutoCheckDefaultsOnAndCanBeDisabled(t *testing.T) {
 
 func TestAutomaticGameUpdateScanQueuesOneStaleProviderCheck(t *testing.T) {
 	adapter := newGameUpdateHTTPAdapter()
-	t.Cleanup(adapter.releaseCheck)
 	handler, db, _ := newGameUpdateUnitHandler(t, adapter)
+	// Terminal job state precedes the final activity write. Join the worker
+	// before the fixture removes its database, including on assertion failures.
+	t.Cleanup(func() {
+		adapter.releaseCheck()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := handler.WaitForGameUpdates(ctx); err != nil {
+			t.Errorf("wait for automatic update worker: %v", err)
+		}
+	})
 	handler.ctx = context.Background()
 	checkedAt := time.Now().UTC()
 	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{

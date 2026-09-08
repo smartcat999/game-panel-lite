@@ -25,13 +25,18 @@ func testBulkOwnerQueries(t *testing.T, db *Store) {
 	var organizations []domain.Organization
 	var memberships []domain.OrganizationMember
 	var events []domain.ActivityEvent
+	var servers []domain.GameServer
+	var backups []domain.Backup
 	for i := 0; i < idLookupBatchSize+1; i++ {
 		id := fmt.Sprintf("bulk-org-%04d", i)
 		organizations = append(organizations, domain.Organization{ID: id, Slug: id, CreatedAt: time.Unix(0, 0).UTC()})
 		memberships = append(memberships, domain.OrganizationMember{ID: id, OrganizationID: id, UserID: "bulk-reader", Role: domain.RoleViewer})
 		events = append(events, domain.ActivityEvent{ID: fmt.Sprintf("bulk-event-%04d", i), OrganizationID: id, CreatedAt: time.Unix(int64(i), 0).UTC()})
+		serverID := fmt.Sprintf("bulk-server-%04d", i)
+		servers = append(servers, domain.GameServer{ID: serverID, Name: serverID, OrganizationID: id, CreatedAt: time.Unix(int64(i), 0).UTC()})
+		backups = append(backups, domain.Backup{ID: fmt.Sprintf("bulk-backup-%04d", i), InstanceID: serverID, CreatedAt: time.Unix(int64(i), 0).UTC()})
 	}
-	for _, value := range []any{&organizations, &memberships, &events} {
+	for _, value := range []any{&organizations, &memberships, &events, &servers, &backups} {
 		if err := db.db.CreateInBatches(value, 100).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -47,5 +52,16 @@ func testBulkOwnerQueries(t *testing.T, db *Store) {
 	foreign, err := db.ListUserActivity(ctx, "foreign-reader", "", 2)
 	if err != nil || len(foreign) != 0 {
 		t.Fatalf("ID-set filter leaked another tenant: %+v %v", foreign, err)
+	}
+	page, err := db.ListUserGameServersPage(ctx, "bulk-reader", GameServerListOptions{Page: 2, PageSize: 20, Sort: "name", Direction: "asc"})
+	if err != nil || page.Total != int64(len(servers)) || len(page.Items) != 20 || page.Items[0].ID != servers[20].ID {
+		t.Fatalf("materialized IDs broke server pagination: %+v %v", page, err)
+	}
+	ownedBackups, err := db.ListUserBackups(ctx, "bulk-reader")
+	if err != nil || len(ownedBackups) != len(backups) || ownedBackups[0].ID != backups[len(backups)-1].ID {
+		t.Fatalf("materialized server IDs broke backup scope: count=%d err=%v", len(ownedBackups), err)
+	}
+	if _, err := db.GetUserBackup(ctx, "foreign-reader", backups[0].ID); err != ErrNotFound {
+		t.Fatalf("foreign backup read: %v", err)
 	}
 }

@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"gorm.io/gorm"
 )
 
 // ListUserActivity filters before limiting so foreign traffic cannot displace
@@ -33,9 +35,19 @@ func (s *Store) ListCurrentInstanceActivity(ctx context.Context, instanceID stri
 		limit = 50
 	}
 	events := []domain.ActivityEvent{}
-	err := s.db.WithContext(ctx).Model(&domain.ActivityEvent{}).Where("instance_id = ?", instanceID).
-		Where("organization_id = (?)", s.db.Model(&domain.GameServer{}).Select("organization_id").Where("id = ?", instanceID)).
-		Order(s.creationOrder(true)).Limit(limit).Find(&events).Error
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		var server struct{ OrganizationID *string }
+		err := tx.db.WithContext(ctx).Table("game_servers").Select("organization_id").Where("id = ?", instanceID).Take(&server).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return tx.db.WithContext(ctx).Model(&domain.ActivityEvent{}).
+			Where("instance_id = ? AND organization_id = ?", instanceID, server.OrganizationID).
+			Order(tx.creationOrder(true)).Limit(limit).Find(&events).Error
+	})
 	for i := range events {
 		hydrateActivityPayload(&events[i])
 	}

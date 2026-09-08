@@ -72,6 +72,20 @@ func testTenantActivity(t *testing.T, db *Store) {
 	if err != nil || len(events) != 0 {
 		t.Fatalf("empty principal activity: %d %v", len(events), err)
 	}
+	if err := db.db.Exec("INSERT INTO game_servers(id,organization_id) VALUES (?,NULL)", "activity-null-owner").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.db.Create(&domain.ActivityEvent{ID: "activity-null-history", InstanceID: "activity-null-owner", OrganizationID: ""}).Error; err != nil {
+		t.Fatal(err)
+	}
+	events, err = db.ListCurrentInstanceActivity(ctx, "activity-null-owner", 10)
+	if err != nil || len(events) != 0 {
+		t.Fatalf("NULL ownership became an empty-string grant: %d %v", len(events), err)
+	}
+	events, err = db.ListCurrentInstanceActivity(ctx, "activity-missing-instance", 10)
+	if err != nil || len(events) != 0 {
+		t.Fatalf("missing instance returned activity: %d %v", len(events), err)
+	}
 }
 
 func TestSQLiteBackfillsActivityOwnership(t *testing.T) {

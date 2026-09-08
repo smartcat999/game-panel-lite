@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // CreateAccountWithPersonalOrganization commits the account, workspace,
@@ -90,6 +91,12 @@ func (s *Store) userOwnedQuery(ctx context.Context, userID string, model any) *g
 	for _, organization := range organizations {
 		ids = append(ids, organization.ID)
 	}
+	return s.whereIDs(query, "organization_id", ids)
+}
+
+// The column is an SQL identifier, not an expression supplied by a client.
+func (s *Store) whereIDs(query *gorm.DB, column string, ids []string) *gorm.DB {
+	identifier := clause.Column{Name: column}
 	if len(ids) > idLookupBatchSize {
 		// A materialized ID set is a single parameter, without querying another
 		// table. Keeping one resource query preserves global ordering/limits.
@@ -99,9 +106,9 @@ func (s *Store) userOwnedQuery(ctx context.Context, userID string, model any) *g
 			return query
 		}
 		if s.db.Dialector.Name() == "postgres" {
-			return query.Where("organization_id IN (SELECT jsonb_array_elements_text(?::jsonb))", string(encoded))
+			return query.Where("? IN (SELECT jsonb_array_elements_text(?::jsonb))", identifier, string(encoded))
 		}
-		return query.Where("organization_id IN (SELECT value FROM json_each(?))", string(encoded))
+		return query.Where("? IN (SELECT value FROM json_each(?))", identifier, string(encoded))
 	}
-	return query.Where("organization_id IN ?", ids)
+	return query.Where("? IN ?", identifier, ids)
 }
