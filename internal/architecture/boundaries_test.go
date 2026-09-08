@@ -65,6 +65,9 @@ func TestBackendImportBoundaries(t *testing.T) {
 
 func forbiddenImport(file, imported string) string {
 	under := func(dir string) bool { return strings.HasPrefix(file, "apps/api/internal/"+dir+"/") }
+	if under("backupingress") && ((strings.Contains(imported, ".") && imported != api+"backup" && imported != api+"regional") || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "backup ingress must depend on consumer-owned persistence ports and wire models"
+	}
 	if strings.HasPrefix(imported, "github.com/aws/") && !under("s3archive") && !strings.HasPrefix(file, "apps/api/cmd/") {
 		return "object storage SDK belongs in its adapter or composition root"
 	}

@@ -57,6 +57,13 @@
 - SQLite／真实 PostgreSQL／RabbitMQ 验证备份命令进入专用队列及完整事件身份。独立快照全量 Go／架构、vet、Store＋RabbitMQ 的真实服务 race 回归通过；日志 `/tmp/gamepanel-backup-dispatch-all.log`、`/tmp/gamepanel-backup-dispatch-vet.log`、`/tmp/gamepanel-backup-dispatch-integration.log`。
 - 本批未更改历史迁移或前端。Broker 已确认不等于 Region 已接收落库；Region 备份 Inbox、执行与控制面回传仍未接通，继续作为核心工作。
 
+### 2026-09-09 Region 备份 Inbox 与消费确认
+
+- 新增备份专用消息入口和区域迁移 005；Region receiver 支持 `backup-requests` 流。入口限制体积和媒体类型，拒绝重复／未知字段、尾随内容、信封身份／目标区域不匹配及未知版本。持久接收后仍为 `awaiting_authority`，不能视为开始执行或已获得一致快照。
+- Inbox 事件身份与稳定操作身份分别去重，备份 ID 唯一归属操作；同操作新信封不重复建任务，冲突内容不残留 Inbox。事件收件与待执行请求原子提交，数据库失败时不确认消费，保留 broker 重试。
+- 真实 PostgreSQL 验证 8 路并发重复接收、操作／备份 ID 冲突、错误 Region、请求落库故障回滚与恢复。真实 RabbitMQ 双次投递得到两次 ACK、一个待执行请求，提交后队列不残留。独立快照全量 Go／架构、vet、Store／backupingress／RabbitMQ 真实服务 race 通过；日志 `/tmp/gamepanel-backup-ingress-all.log`、`/tmp/gamepanel-backup-ingress-vet.log`、`/tmp/gamepanel-backup-ingress-integration.log`。
+- 只新增迁移，无 JOIN，其他草稿和前端保留。尚未完成待执行请求的当前授权校验、Node 快照执行、上传任务接线及结果回传控制面；也未用此模块级集成替代用户侧完整备份验收。
+
 
 新总 Goal 的逐阶段验收要求见 [六阶段验收矩阵](SAAS_SIX_PHASE_ACCEPTANCE.md)，本文件继续保留局部实现与测试记录。
 

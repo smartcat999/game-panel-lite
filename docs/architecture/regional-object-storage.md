@@ -23,13 +23,19 @@ ETag 不作为全文件 SHA-256，分片上传时也不应假定它是全文件 
 
 ## 当前实现与下一步
 
-全局迁移 020／SQLite 版本 8 增加 `global_backup_tasks` 与 `backup_request_outbox`。`RequestGlobalBackup` 在租户写权限锁内检查幂等键，对目标租户实例加锁后读取当前配置版本、意图版本和 Placement；原子创建 `server_operations(kind=backup)`、用户备份任务和专用下发 Outbox。相同请求返回原命令与当前任务状态，参数冲突拒绝。命令不包含 Node、主机路径或存储凭证，Region 负责后续执行绑定。普通配置通知仍使用原 `server_outbox`，避免备份命令被旧修订消费者错误处理。此入口目前是 Store 用例边界，公共 HTTP 和 Region 消费仍待接入。
+全局迁移 020／SQLite 版本 8 增加 `global_backup_tasks` 与 `backup_request_outbox`。`RequestGlobalBackup` 在租户写权限锁内检查幂等键，对目标租户实例加锁后读取当前配置版本、意图版本和 Placement；原子创建 `server_operations(kind=backup)`、用户备份任务和专用下发 Outbox。相同请求返回原命令与当前任务状态，参数冲突拒绝。命令不包含 Node、主机路径或存储凭证，Region 负责后续执行绑定。普通配置通知仍使用原 `server_outbox`，避免备份命令被旧修订消费者错误处理。此入口目前是 Store 用例边界，公共 HTTP 仍待接入。
 
 `outbox-publisher -stream backup-requests` 选择专用备份 Outbox，默认 `-stream revisions` 保持原行为；queue 和 dead-letter-queue 必须配置为备份专用队列，不可连接现有修订消费者。两种流复用私有 SQL Outbox 实现与已确认 RabbitMQ Publisher；表名只在 Store 内固定选择，不接受外部 SQL 表名。备份发布确认、重试、过期领取和原流隔离均需验证，消息发送成功仍不代表 Region 已接收落库或完成执行。
+
+`region-receiver -stream backup-requests` 使用备份专用接收入口。入口限制消息大小及 JSON 类型，拒绝未知／重复字段、信封 ID 不匹配及目标 Region 不匹配。区域迁移 005 增加备份 Inbox 与待执行请求；消息事件和稳定操作身份分别去重，同一备份 ID 不能属于不同操作。Inbox 与请求原子保存，失败时不确认消费，冲突内容按不可重试通知处理。落库状态为 `awaiting_authority`，配置快照、执行授权、Node 快照一致性及后续上传绑定仍需协调器完成。
 
 ```sh
 # 数据库和 broker 连接通过部署环境注入；队列名为示例。
 go run ./apps/api/cmd/outbox-publisher -stream backup-requests \
+  -region east -queue gamepanel.east.backup-requests \
+  -dead-letter-queue gamepanel.east.backup-requests.dead
+# 在使用 east 独立数据库和 broker 凭证的 Region 进程中运行：
+go run ./apps/api/cmd/region-receiver -stream backup-requests \
   -region east -queue gamepanel.east.backup-requests \
   -dead-letter-queue gamepanel.east.backup-requests.dead
 ```

@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/backupingress"
+
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/messaging/rabbitmq"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -16,6 +18,7 @@ import (
 
 func main() {
 	region := flag.String("region", "", "region owning this receiver")
+	stream := flag.String("stream", "revisions", "event stream: revisions or backup-requests; use separate queues")
 	queue := flag.String("queue", "", "regional notification quorum queue")
 	dead := flag.String("dead-letter-queue", "", "dedicated durable parking queue")
 	limit := flag.Int("delivery-limit", 20, "failed broker deliveries before parking")
@@ -27,7 +30,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	options := rabbitmq.Options{URL: os.Getenv("GAMEPANEL_RABBITMQ_URL"), RegionID: *region, Queue: *queue, DeadLetterQueue: *dead, DeliveryLimit: *limit, Timeout: *timeout, MaxPayloadBytes: *maxBytes}
-	if err := options.Validate(); err != nil || *retry < time.Millisecond || *workTimeout <= 0 {
+	if err := options.Validate(); err != nil || *retry < time.Millisecond || *workTimeout <= 0 || (*stream != "revisions" && *stream != "backup-requests") {
 		slog.Error("invalid receiver configuration")
 		os.Exit(1)
 	}
@@ -37,7 +40,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
-	ingress := regional.Ingress{RegionID: *region, MaxBytes: *maxBytes, Inbox: db}
+	var ingress rabbitmq.Handler = regional.Ingress{RegionID: *region, MaxBytes: *maxBytes, Inbox: db}
+	if *stream == "backup-requests" {
+		ingress = backupingress.Ingress{RegionID: *region, MaxBytes: *maxBytes, Inbox: db}
+	}
 	consumer := rabbitmq.Consumer{Options: options, HandlerTimeout: *workTimeout, RetryDelay: *retry}
 	for ctx.Err() == nil {
 		acked, err := consumer.Run(ctx, ingress)
