@@ -102,7 +102,7 @@ export default function RegionOperationsPage() {
                 <tbody className="divide-y divide-slate-100">
                   {deploymentPage.deployments.map((deployment) => (
                     <tr key={deployment.id} className="text-slate-600">
-                      <td className="px-4 py-3"><Link href={`/servers/${encodeURIComponent(deployment.serverId)}`} className="font-mono text-[11px] font-medium text-emerald-700 hover:underline">{deployment.serverId}</Link><p className="mt-0.5 font-mono text-[10px] text-slate-400">{isZh ? `归属版本 ${deployment.placementEpoch}` : `Placement ${deployment.placementEpoch}`}</p></td>
+                      <td className="px-4 py-3"><Link href={`/platform/instances/${encodeURIComponent(deployment.serverId)}`} className="font-mono text-[11px] font-medium text-emerald-700 hover:underline">{deployment.serverId}</Link><p className="mt-0.5 font-mono text-[10px] text-slate-400">{isZh ? `归属版本 ${deployment.placementEpoch}` : `Placement ${deployment.placementEpoch}`}</p></td>
                       <td className="px-3 py-3 font-mono text-[11px]">{deployment.organizationId}</td>
                       <td className="px-3 py-3">{deployment.desiredState === "running" ? (isZh ? "运行" : "Running") : (isZh ? "停止" : "Stopped")}</td>
                       <td className="px-3 py-3">{deployment.schedulingStatus === "reserved" ? (isZh ? "已分配" : "Allocated") : deployment.schedulingStatus === "pending" ? (isZh ? "待调度" : "Pending") : (isZh ? "已拒绝" : "Rejected")}</td>

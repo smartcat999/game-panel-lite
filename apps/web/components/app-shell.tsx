@@ -12,10 +12,10 @@ import {
   Building2,
   Check,
   ChevronDown,
-  Globe2,
   LayoutDashboard,
   LogOut,
   MapPinned,
+  ShieldCheck,
   UsersRound,
   X
 } from "lucide-react";
@@ -45,6 +45,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const isZh = locale.startsWith("zh");
   const { platformRole } = usePermissions();
   const { scope, organizations, currentOrganization, selectPlatform, selectOrganization } = useConsoleContext();
+  const firstWorkspace = organizations[0];
   const account = useAuthBootstrap().data?.account;
   const queryClient = useQueryClient();
 
@@ -84,46 +85,38 @@ function AppChrome({ children }: { children: ReactNode }) {
 
             <div className="h-3.5 w-px bg-slate-200 shrink-0" />
 
-            <div className="relative">
-              <button
-                type="button"
-                aria-expanded={contextOpen}
-                onClick={() => setContextOpen((open) => !open)}
-                className="flex h-8 min-w-0 items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-left transition hover:bg-slate-100/90"
-              >
-                {scope.kind === "platform" ? <Globe2 className="size-3.5 text-slate-500" /> : <Building2 className="size-3.5 text-emerald-600" />}
+            {scope.kind === "platform" ? (
+              <div className="flex h-8 min-w-0 items-center gap-2 px-1">
+                <ShieldCheck className="size-3.5 text-slate-500" />
                 <span className="min-w-0">
-                  <span className="block max-w-36 truncate text-xs font-semibold leading-3.5 text-slate-800">
-                    {scope.kind === "platform" ? (isZh ? "平台管理" : "Platform") : currentOrganization?.name ?? (isZh ? "租户空间" : "Workspace")}
-                  </span>
-                  <span className="block text-[10px] font-normal leading-3 text-slate-400">
-                    {scope.kind === "platform"
-                      ? (isZh ? "全局控制台" : "Global console")
-                      : membershipLabel(currentOrganization?.membershipRole, isZh)}
-                  </span>
+                  <span className="block text-xs font-semibold leading-3.5 text-slate-800">{isZh ? "平台控制台" : "Platform console"}</span>
+                  <span className="block text-[10px] font-normal leading-3 text-slate-400">{isZh ? "运营与基础设施" : "Operations and infrastructure"}</span>
                 </span>
-                <ChevronDown className="size-3 text-slate-400" />
-              </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-expanded={contextOpen}
+                  onClick={() => setContextOpen((open) => !open)}
+                  className="flex h-8 min-w-0 items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-left transition hover:bg-slate-100/90"
+                >
+                  <Building2 className="size-3.5 text-emerald-600" />
+                  <span className="min-w-0">
+                    <span className="block max-w-36 truncate text-xs font-semibold leading-3.5 text-slate-800">
+                      {currentOrganization?.name ?? (isZh ? "租户空间" : "Workspace")}
+                    </span>
+                    <span className="block text-[10px] font-normal leading-3 text-slate-400">
+                      {membershipLabel(currentOrganization?.membershipRole, isZh)}
+                    </span>
+                  </span>
+                  <ChevronDown className="size-3 text-slate-400" />
+                </button>
 
-              {contextOpen ? (
+                {contextOpen ? (
                 <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-lg">
-                  {platformRole === "platform_admin" ? (
-                    <button
-                      type="button"
-                      onClick={() => { selectPlatform(); setContextOpen(false); router.push("/platform"); }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50"
-                    >
-                      <Globe2 className="size-4 text-slate-500" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-semibold text-slate-800">{isZh ? "平台管理" : "Platform"}</span>
-                        <span className="block text-[10px] text-slate-400">{isZh ? "租户、订单与基础设施" : "Tenants, orders, and infrastructure"}</span>
-                      </span>
-                      {scope.kind === "platform" ? <Check className="size-3.5 text-emerald-600" /> : null}
-                    </button>
-                  ) : null}
-
                   {organizations.length > 0 ? (
-                    <div className="mt-1 border-t border-slate-100 pt-1">
+                    <div>
                       <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                         {isZh ? "租户空间" : "Workspaces"}
                       </div>
@@ -147,8 +140,9 @@ function AppChrome({ children }: { children: ReactNode }) {
                     </div>
                   ) : null}
                 </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
           {/* RIGHT: UTILITIES & USER (ICON BUTTONS ONLY) */}
@@ -196,13 +190,33 @@ function AppChrome({ children }: { children: ReactNode }) {
                     <div className="text-slate-400 text-[10px] truncate">{platformRole === "platform_admin" ? (isZh ? "平台管理员账号" : "Platform administrator") : (isZh ? "平台用户账号" : "Platform user")}</div>
                   </div>
                   <Link
-                    href="/settings"
+                    href="/account/settings"
                     onClick={() => setProfileOpen(false)}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
                   >
                     <SettingsIcon className="size-3.5" />
                     <span>{isZh ? "账号设置" : "Account settings"}</span>
                   </Link>
+                  {platformRole === "platform_admin" && scope.kind !== "platform" ? (
+                    <button
+                      type="button"
+                      onClick={() => { selectPlatform(); setProfileOpen(false); router.push("/platform"); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      <span>{isZh ? "进入平台控制台" : "Open platform console"}</span>
+                    </button>
+                  ) : null}
+                  {scope.kind === "platform" && firstWorkspace ? (
+                    <button
+                      type="button"
+                      onClick={() => { selectOrganization(firstWorkspace.id); setProfileOpen(false); router.push("/servers"); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                    >
+                      <Building2 className="size-3.5" />
+                      <span>{isZh ? "返回租户控制台" : "Return to workspace"}</span>
+                    </button>
+                  ) : null}
                   <button
                     onClick={handleLogout}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 transition cursor-pointer"
@@ -223,7 +237,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               <MobileNavLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "概览" : "Overview"} />
               <MobileNavLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户" : "Tenants"} />
               <MobileNavLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域" : "Regions"} />
-              <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "全局实例" : "Global instances"} />
+              <MobileNavLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "平台实例" : "Platform instances"} />
             </>
           ) : (
             <>
@@ -306,7 +320,6 @@ function AppChrome({ children }: { children: ReactNode }) {
 }
 
 function membershipLabel(role: string | undefined, isZh: boolean) {
-  if (role === "platform_managed") return isZh ? "平台代管" : "Platform managed";
   if (role === "owner") return isZh ? "空间所有者" : "Workspace owner";
   if (role === "admin") return isZh ? "空间管理员" : "Workspace admin";
   if (role === "member") return isZh ? "成员" : "Member";
@@ -317,11 +330,11 @@ function membershipLabel(role: string | undefined, isZh: boolean) {
 function PlatformNavigation({ pathname, isZh }: { pathname: string; isZh: boolean }) {
   return (
     <div className="space-y-3.5">
-      <NavigationTitle>{isZh ? "平台管理" : "PLATFORM"}</NavigationTitle>
-      <NavigationGroup title={isZh ? "全局" : "GLOBAL"}>
+      <NavigationTitle>{isZh ? "平台控制台" : "PLATFORM CONSOLE"}</NavigationTitle>
+      <NavigationGroup title={isZh ? "业务控制面" : "BUSINESS CONTROL"}>
         <SidebarLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "平台概览" : "Platform overview"} />
         <SidebarLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户管理" : "Tenant management"} />
-        <SidebarLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "全局实例" : "Global instances"} />
+        <SidebarLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "平台实例" : "Platform instances"} />
       </NavigationGroup>
       <NavigationGroup title={isZh ? "基础设施" : "INFRASTRUCTURE"}>
         <SidebarLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域与节点" : "Regions and nodes"} />

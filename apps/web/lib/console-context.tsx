@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { listMyOrganizations, listOrganizations, type Organization } from "./api";
+import { listMyOrganizations, type Organization } from "./api";
 import { accountCacheKey, useAuthBootstrap } from "./auth-session";
 
 export type ConsoleScope =
@@ -10,7 +10,7 @@ export type ConsoleScope =
   | { kind: "organization"; organizationId: string };
 
 export type ConsoleOrganization = Organization & {
-  membershipRole: "owner" | "admin" | "member" | "viewer" | "platform_managed";
+  membershipRole: "owner" | "admin" | "member" | "viewer";
 };
 
 type ConsoleContextValue = {
@@ -35,14 +35,6 @@ export function ConsoleContextProvider({ children }: { children: ReactNode }) {
   const organizationsQuery = useQuery({
     queryKey: ["console-organizations", account?.id, account?.platformRole],
     queryFn: async (): Promise<ConsoleOrganization[]> => {
-      if (isPlatformAdmin) {
-        const [allOrganizations, memberships] = await Promise.all([listOrganizations(), listMyOrganizations()]);
-        const roles = new Map(memberships.map((membership) => [membership.id, membership.membershipRole]));
-        return allOrganizations.map((organization) => ({
-          ...organization,
-          membershipRole: roles.get(organization.id) ?? "platform_managed"
-        }));
-      }
       return listMyOrganizations();
     },
     enabled: Boolean(account),

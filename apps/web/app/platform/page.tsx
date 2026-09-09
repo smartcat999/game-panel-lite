@@ -23,7 +23,7 @@ export default function PlatformOverviewPage() {
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <OverviewLink href="/platform/organizations" icon={<Building2 className="size-4" />} title={isZh ? "租户管理" : "Tenant management"} description={isZh ? "组织、成员关系与资源归属" : "Organizations, memberships, and ownership"} />
-          <OverviewLink href="/servers" icon={<Server className="size-4" />} title={isZh ? "全局实例" : "Global instances"} description={isZh ? "逻辑实例与租户归属" : "Logical instances and tenant ownership"} />
+          <OverviewLink href="/platform/instances" icon={<Server className="size-4" />} title={isZh ? "平台实例" : "Platform instances"} description={isZh ? "逻辑实例、租户归属与部署位置" : "Logical instances, tenant ownership, and placement"} />
           <OverviewLink href="/platform/regions" icon={<MapPinned className="size-4" />} title={isZh ? "区域运维" : "Region operations"} description={isZh ? "区域目录、创建准入与状态摘要" : "Region directory, create admission, and status summaries"} />
         </div>
       </div>
