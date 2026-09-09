@@ -1,0 +1,20 @@
+CREATE TABLE global_region_statuses (
+ region_id text PRIMARY KEY REFERENCES global_regions(id),
+ sequence bigint NOT NULL CHECK(sequence > 0),
+ event_id text NOT NULL UNIQUE,
+ payload_hash text NOT NULL,
+ observed_at_ms bigint NOT NULL CHECK(observed_at_ms > 0),
+ node_total bigint NOT NULL CHECK(node_total >= 0),
+ node_online bigint NOT NULL CHECK(node_online >= 0),
+ node_schedulable bigint NOT NULL CHECK(node_schedulable >= 0),
+ cpu_total double precision NOT NULL CHECK(cpu_total >= 0 AND cpu_total < 'Infinity'::double precision),
+ cpu_reserved double precision NOT NULL CHECK(cpu_reserved >= 0 AND cpu_reserved < 'Infinity'::double precision),
+ memory_total_mb bigint NOT NULL CHECK(memory_total_mb >= 0),
+ memory_reserved_mb bigint NOT NULL CHECK(memory_reserved_mb >= 0),
+ deployment_total bigint NOT NULL CHECK(deployment_total >= 0),
+ deployment_pending bigint NOT NULL CHECK(deployment_pending >= 0),
+ deployment_reserved bigint NOT NULL CHECK(deployment_reserved >= 0),
+ deployment_rejected bigint NOT NULL CHECK(deployment_rejected >= 0),
+ task_awaiting_authority bigint NOT NULL CHECK(task_awaiting_authority >= 0),
+ received_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);

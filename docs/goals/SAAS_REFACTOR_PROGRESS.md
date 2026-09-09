@@ -4,8 +4,11 @@
 
 - 平台范围新增独立概览、租户管理、全局实例、区域与节点页面；租户范围只保留实例、世界与存档、模组和空间设置。切换平台／空间后进入各自默认页面，Region 详情使用独立选择器更新路由，不进入顶部账号／空间菜单。
 - `/api/regions` 已移除 Handler 内五城市常量和“空 Region 默认香港”逻辑，改为分页读取全局 `global_regions` 目录；Region 列表不再从旧节点推断区域或伪造节点计数。默认区域兼容名称由界面按账号语言显示，避免中英文混排。
-- Node 列表、详情和节点工作负载接口改为仅允许 `platform_admin`，普通租户账号不能枚举宿主机。平台 Region 详情当前读取旧单体 `compute_nodes` 兼容视图；独立 Region 数据库中的节点／Deployment／任务摘要上报接口仍未接通，因此不能把该页面视为多 Region 运维闭环验收。
-- 全量 `go test ./...`、`go vet ./...`、前端 129 项测试、lint、typecheck、production build 与 OpenAPI 契约通过。本地预览已验证平台概览、租户表、Region 表和 Region 详情的窄屏布局；API 与 Web 仅绑定 `127.0.0.1`。
+- Node 列表、详情和节点工作负载接口改为仅允许 `platform_admin`，普通租户账号不能枚举宿主机。旧单体 `compute_nodes` 兼容接口不再为平台 Region 详情提供数据。
+- Region 新增有序状态快照、区域迁移 016 和本地 Outbox，分别聚合节点配置／心跳、资源预留、Deployment 与待授权任务；全局新增 PostgreSQL 迁移 033／SQLite 版本 18、来源绑定的专用队列接收器和幂等最新投影。所有聚合与投影查询均为单表查询，不使用 JOIN；同序列冲突隔离，迟到旧序列不能覆盖新状态。
+- 平台 Region 详情只读全局投影，显示全局准入、区域观测时间、节点在线、容量预留、Deployment 和待授权任务；尚未收到状态时保持未知，不从目录或旧节点推断。节点配置、日志、告警和明细操作仍需接入授权 Region 运维 API，因此这一批完成全局摘要链路，不等于 Region 明细运维闭环。
+- 全量 `go test ./...`、`go vet ./...`、前端 129 项测试、lint、typecheck、production build 与 OpenAPI YAML 解析通过。定向 Store／HTTP／架构检查复跑通过；本地窄屏预览已验证“未收到状态”不会伪造节点或容量，API 与 Web 仅绑定 `127.0.0.1`。
+- 区域聚合与 Outbox 用例已接入现有 PostgreSQL 集成套件；本机本批未配置测试 PostgreSQL／RabbitMQ 地址，因此尚未取得真实数据库加消息队列的端到端运行证据，不能把编译和内存协议测试当成生产链路验收。
 
 ### 2026-09-09 控制台范围接入实例主链路
 

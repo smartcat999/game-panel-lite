@@ -21,7 +21,7 @@ export default function PlatformRegionsPage() {
         <div className="overflow-x-auto rounded-xl border bg-white micro-border subtle-elevation">
           <table className="min-w-[620px] w-full text-left text-xs">
             <thead className="border-b bg-slate-50/70 text-[10px] uppercase tracking-wider text-slate-400">
-              <tr><th className="px-4 py-2.5">{isZh ? "区域" : "Region"}</th><th className="px-4 py-2.5">{isZh ? "区域 ID" : "Region ID"}</th><th className="px-4 py-2.5">{isZh ? "创建准入" : "Create admission"}</th><th className="px-4 py-2.5 text-right">{isZh ? "查看" : "View"}</th></tr>
+              <tr><th className="px-4 py-2.5">{isZh ? "区域" : "Region"}</th><th className="px-4 py-2.5">{isZh ? "区域标识" : "Region ID"}</th><th className="px-4 py-2.5">{isZh ? "创建准入" : "Create admission"}</th><th className="px-4 py-2.5 text-right">{isZh ? "查看" : "View"}</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {(regions.data ?? []).map((region) => (

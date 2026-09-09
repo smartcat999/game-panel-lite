@@ -592,6 +592,18 @@ export type RegionDirectoryEntry = {
   version: number;
 };
 
+export type RegionStatusSnapshot = {
+  schemaVersion: number;
+  eventId: string;
+  regionId: string;
+  sequence: number;
+  observedAtMs: number;
+  nodes: { total: number; online: number; schedulable: number };
+  capacity: { cpuTotal: number; cpuReserved: number; memoryTotalMb: number; memoryReservedMb: number };
+  deployments: { total: number; pending: number; reserved: number; rejected: number };
+  tasks: { awaitingAuthority: number };
+};
+
 export type CommercePlanVersion = {
   planId: string;
   version: number;

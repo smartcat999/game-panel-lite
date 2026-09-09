@@ -95,6 +95,12 @@ func forbiddenImport(file, imported string) string {
 	if under("regions") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "global region directory models must not depend on regional infrastructure or adapters"
 	}
+	if under("regionstatus") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "Region status contracts must remain independent of transport and persistence"
+	}
+	if under("regionstatusingress") && ((strings.Contains(imported, ".") && imported != api+"regional" && imported != api+"regionstatus") || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "Region status ingress must depend on wire models and a consumer-owned projection port"
+	}
 	if under("instanceapp") && ((strings.Contains(imported, ".") && imported != api+"instances") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
 		return "instance application orchestration must depend on consumer-owned ports and intent contracts"
 	}

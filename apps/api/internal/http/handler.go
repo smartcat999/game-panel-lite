@@ -226,6 +226,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireAdmin).Get("/api/organizations/{id}/credits", h.getOrganizationCredits)
 		r.With(h.requireAdmin).Post("/api/organizations/{id}/topup", h.adminTopUpCredits)
 		r.With(h.requireAdmin).Get("/api/nodes", h.listNodes)
+		r.With(h.requireAdmin).Get("/api/regions/{id}/status", h.getRegionStatus)
 		r.With(h.requireAdmin).Post("/api/nodes", h.createNode)
 		r.With(h.requireAdmin).Get("/api/nodes/{id}", h.getNode)
 		r.With(h.requireAdmin).Get("/api/nodes/{id}/servers", h.listNodeServers)

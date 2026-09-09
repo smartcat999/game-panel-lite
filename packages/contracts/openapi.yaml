@@ -27,6 +27,27 @@ paths:
                 items:
                   $ref: "#/components/schemas/RegionDirectoryEntry"
         "400": {description: Invalid cursor or limit}
+  /api/regions/{id}/status:
+    get:
+      security:
+        - sessionCookie: []
+      summary: Read the latest asynchronous Region operations projection
+      description: Platform-admin view of a Region-owned summary. The request path never queries the regional database and the response contains no node credentials, logs, tenant configuration, or execution authority. A 204 response means the Region has not reported yet.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Latest accepted Region status snapshot.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RegionStatusSnapshot"}
+        "204": {description: Region exists but has not reported status}
+        "401": {description: Authentication required}
+        "403": {description: Platform administrator required}
+        "404": {description: Region not found}
   /api/games:
     get:
       summary: List the registered game and Provider catalog
@@ -1795,6 +1816,43 @@ components:
         name: {type: string}
         acceptingCreates: {type: boolean}
         version: {type: integer, format: int64, minimum: 1}
+    RegionStatusSnapshot:
+      type: object
+      required: [schemaVersion, eventId, regionId, sequence, observedAtMs, nodes, capacity, deployments, tasks]
+      properties:
+        schemaVersion: {type: integer, enum: [1]}
+        eventId: {type: string}
+        regionId: {type: string}
+        sequence: {type: integer, format: int64, minimum: 1}
+        observedAtMs: {type: integer, format: int64, minimum: 1}
+        nodes:
+          type: object
+          required: [total, online, schedulable]
+          properties:
+            total: {type: integer, format: int64, minimum: 0}
+            online: {type: integer, format: int64, minimum: 0}
+            schedulable: {type: integer, format: int64, minimum: 0}
+        capacity:
+          type: object
+          required: [cpuTotal, cpuReserved, memoryTotalMb, memoryReservedMb]
+          properties:
+            cpuTotal: {type: number, minimum: 0}
+            cpuReserved: {type: number, minimum: 0}
+            memoryTotalMb: {type: integer, format: int64, minimum: 0}
+            memoryReservedMb: {type: integer, format: int64, minimum: 0}
+        deployments:
+          type: object
+          required: [total, pending, reserved, rejected]
+          properties:
+            total: {type: integer, format: int64, minimum: 0}
+            pending: {type: integer, format: int64, minimum: 0}
+            reserved: {type: integer, format: int64, minimum: 0}
+            rejected: {type: integer, format: int64, minimum: 0}
+        tasks:
+          type: object
+          required: [awaitingAuthority]
+          properties:
+            awaitingAuthority: {type: integer, format: int64, minimum: 0}
     AccountPreferences:
       type: object
       required: [locale, theme]
