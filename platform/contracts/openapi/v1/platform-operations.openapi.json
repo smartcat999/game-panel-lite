@@ -1,0 +1,42 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "GamePanel Platform Region Operations API", "version": "1.0.0"},
+  "servers": [{"url": "/api"}],
+  "paths": {
+    "/v1/platform/regions": {
+      "get": {
+        "operationId": "listPlatformRegions",
+        "responses": {"200": {"description": "Platform Region list", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/PlatformRegion"}}}}}}
+      }
+    },
+    "/v1/platform/regions/{regionId}": {
+      "get": {
+        "operationId": "getPlatformRegion",
+        "parameters": [{"$ref": "#/components/parameters/RegionId"}],
+        "responses": {"200": {"description": "Platform Region", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlatformRegion"}}}}}
+      },
+      "patch": {
+        "operationId": "updatePlatformRegionOperations",
+        "parameters": [{"$ref": "#/components/parameters/RegionId"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateRegionOperations"}}}},
+        "responses": {"200": {"description": "Updated Platform Region", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlatformRegion"}}}}}
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "RegionId": {"name": "regionId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/RegionId"}}
+    },
+    "schemas": {
+      "RegionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
+      "PlatformRegion": {
+        "type": "object", "additionalProperties": false, "required": ["id", "code", "name", "operationalState"],
+        "properties": {"id": {"$ref": "#/components/schemas/RegionId"}, "code": {"type": "string"}, "name": {"type": "string"}, "operationalState": {"type": "string", "enum": ["active", "maintenance", "disabled"]}}
+      },
+      "UpdateRegionOperations": {
+        "type": "object", "additionalProperties": false, "required": ["operationalState", "reason"],
+        "properties": {"operationalState": {"type": "string", "enum": ["active", "maintenance", "disabled"]}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}
+      }
+    }
+  }
+}
