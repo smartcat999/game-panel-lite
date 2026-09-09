@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
@@ -25,11 +26,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useState } from "react";
 
 import { usePreferences } from "@/components/providers";
 import { Button } from "@/components/ui/button";
+import { controlPlane, type Workspace } from "@/lib/control-plane";
 import type { MessageKey } from "@/lib/messages";
+import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 
 type Area = "workspace" | "platform" | "region";
@@ -77,11 +81,43 @@ const areaCopy: Record<Area, { title: MessageKey; emptyTitle: MessageKey; emptyD
   region: { title: "region.title", emptyTitle: "region.emptyTitle", emptyDescription: "region.emptyDescription" },
 };
 
-export function AppShell({ area, scope }: { area: Area; scope?: string }) {
+export function AppShell({ area, scope, workspaceSlug = "northstar", children }: { area: Area; scope?: string; workspaceSlug?: string; children?: ReactNode }) {
   const { locale, setLocale, theme, setTheme, t } = usePreferences();
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const sessionQuery = useQuery({ queryKey: queryKeys.session, queryFn: controlPlane.session });
+  const workspacesQuery = useQuery({ queryKey: ["workspaces"], queryFn: controlPlane.workspaces, enabled: area === "workspace" });
+  const currentWorkspace = workspacesQuery.data?.find((item) => item.slug === workspaceSlug);
+  const selectWorkspace = useMutation({
+    mutationFn: (workspace: Workspace) => controlPlane.selectWorkspace(workspace.id).then(() => workspace),
+    onSuccess: (workspace) => {
+      if (currentWorkspace) {
+        queryClient.removeQueries({ queryKey: queryKeys.workspace(currentWorkspace.id) });
+      }
+      router.push(`/w/${workspace.slug}`);
+    },
+  });
   const copy = areaCopy[area];
-  const scopeName = area === "workspace" ? t("workspace.scope") : area === "platform" ? t("platform.scope") : scope ?? "region-local";
+  const workspaceName = currentWorkspace?.name ?? (workspaceSlug === "ember" ? "Ember Realms" : t("workspace.scope"));
+  const scopeName = area === "workspace" ? workspaceName : area === "platform" ? t("platform.scope") : scope ?? "region-local";
+
+  const navHref = (item: NavItem, index: number) => {
+    if (area === "workspace" && item.label === "workspace.nav.members") {
+      return `/w/${workspaceSlug}/members`;
+    }
+    if (area === "workspace" && index === 0) {
+      return `/w/${workspaceSlug}`;
+    }
+    if (area === "platform" && index === 0) {
+      return "/platform";
+    }
+    if (area === "region" && index === 0) {
+      return `/platform/regions/${scope ?? "region-local"}`;
+    }
+    return `#${item.label.replaceAll(".", "-")}`;
+  };
 
   const sidebar = (
     <>
@@ -96,12 +132,14 @@ export function AppShell({ area, scope }: { area: Area; scope?: string }) {
       <nav className="primary-nav" aria-label={t(copy.title)}>
         {navigation[area].map((item, index) => {
           const Icon = item.icon;
+          const href = navHref(item, index);
+          const active = pathname === href;
           return (
             <Link
-              className={cn("nav-item", index === 0 && "nav-item-active")}
-              href={`#${item.label.replaceAll(".", "-")}`}
+              className={cn("nav-item", active && "nav-item-active")}
+              href={href}
               key={item.label}
-              aria-current={index === 0 ? "page" : undefined}
+              aria-current={active ? "page" : undefined}
               onClick={() => setNavigationOpen(false)}
             >
               <Icon aria-hidden="true" size={17} strokeWidth={1.8} />
@@ -153,10 +191,19 @@ export function AppShell({ area, scope }: { area: Area; scope?: string }) {
               <Menu size={19} aria-hidden="true" />
             </Button>
             {area === "workspace" ? (
-              <button className="scope-switcher" type="button">
-                <span><small>{t("workspace.scopeLabel")}</small>{scopeName}</span>
-                <ChevronDown size={15} aria-hidden="true" />
-              </button>
+              <details className="scope-menu">
+                <summary className="scope-switcher">
+                  <span><small>{t("workspace.scopeLabel")}</small>{scopeName}</span>
+                  <ChevronDown size={15} aria-hidden="true" />
+                </summary>
+                <div className="scope-menu-content">
+                  {workspacesQuery.data?.map((workspace) => (
+                    <button disabled={selectWorkspace.isPending} key={workspace.id} onClick={() => selectWorkspace.mutate(workspace)} type="button">
+                      {workspace.name}
+                    </button>
+                  ))}
+                </div>
+              </details>
             ) : area === "region" ? (
               <button className="scope-switcher" type="button">
                 <span><small>{t("region.scopeLabel")}</small>{scopeName}</span>
@@ -173,8 +220,8 @@ export function AppShell({ area, scope }: { area: Area; scope?: string }) {
             <label className="compact-control">
               <span>{t("common.locale")}</span>
               <select value={locale} onChange={(event) => setLocale(event.target.value as "en" | "zh-CN")}>
-                <option value="en">EN</option>
-                <option value="zh-CN">中文</option>
+                <option value="en">{t("locale.english")}</option>
+                <option value="zh-CN">{t("locale.chinese")}</option>
               </select>
             </label>
             <label className="compact-control theme-control">
@@ -185,9 +232,13 @@ export function AppShell({ area, scope }: { area: Area; scope?: string }) {
                 <option value="dark">{t("theme.dark")}</option>
               </select>
             </label>
-            <Button variant="quiet" size="icon" aria-label={t("common.account")}>
-              <UserRound size={18} aria-hidden="true" />
-            </Button>
+            <details className="user-menu">
+              <summary aria-label={t("common.account")}><UserRound size={18} aria-hidden="true" /></summary>
+              <div className="user-menu-content">
+                <Link href="/account">{t("common.account")}</Link>
+                {sessionQuery.data?.platformOperator ? <Link href="/platform">{t("platform.title")}</Link> : null}
+              </div>
+            </details>
           </div>
         </header>
 
@@ -199,13 +250,15 @@ export function AppShell({ area, scope }: { area: Area; scope?: string }) {
             </div>
             <span className="scope-id">{scopeName}</span>
           </div>
-          <section className="empty-state" aria-labelledby="empty-state-title">
-            <div className="empty-glyph" aria-hidden="true"><Database size={24} strokeWidth={1.6} /></div>
-            <div>
-              <h2 id="empty-state-title">{t(copy.emptyTitle)}</h2>
-              <p>{t(copy.emptyDescription)}</p>
-            </div>
-          </section>
+          {children ?? (
+            <section className="empty-state" aria-labelledby="empty-state-title">
+              <div className="empty-glyph" aria-hidden="true"><Database size={24} strokeWidth={1.6} /></div>
+              <div>
+                <h2 id="empty-state-title">{t(copy.emptyTitle)}</h2>
+                <p>{t(copy.emptyDescription)}</p>
+              </div>
+            </section>
+          )}
         </main>
       </div>
     </div>

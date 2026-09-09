@@ -27,6 +27,19 @@
         "responses": {"204": {"description": "Workspace selected"}}
       }
     },
+    "/v1/workspaces": {
+      "get": {
+        "operationId": "listWorkspaces",
+        "responses": {"200": {"description": "Workspaces for the current User", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Workspace"}}}}}}
+      }
+    },
+    "/v1/workspaces/{workspaceId}/members": {
+      "get": {
+        "operationId": "listWorkspaceMembers",
+        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
+        "responses": {"200": {"description": "Workspace members", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceMember"}}}}}}
+      }
+    },
     "/v1/instances": {
       "post": {
         "operationId": "createLogicalInstance",
@@ -59,8 +72,8 @@
       "LogicalInstanceId": {"type": "string", "pattern": "^lin_[A-Za-z0-9]+$"},
       "RegionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
       "Session": {
-        "type": "object", "additionalProperties": false, "required": ["userId", "workspaceIds", "platformOperator"],
-        "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "workspaceIds": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceId"}}, "platformOperator": {"type": "boolean"}}
+        "type": "object", "additionalProperties": false, "required": ["userId", "workspaceIds", "selectedWorkspaceId", "platformOperator"],
+        "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "workspaceIds": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceId"}}, "selectedWorkspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "platformOperator": {"type": "boolean"}}
       },
       "UserPreferences": {
         "type": "object", "additionalProperties": false, "required": ["locale", "theme", "timeZone"],
@@ -73,6 +86,14 @@
       "WorkspaceSelection": {
         "type": "object", "additionalProperties": false, "required": ["workspaceId"],
         "properties": {"workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}}
+      },
+      "Workspace": {
+        "type": "object", "additionalProperties": false, "required": ["id", "slug", "name"],
+        "properties": {"id": {"$ref": "#/components/schemas/WorkspaceId"}, "slug": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "name": {"type": "string", "minLength": 1}}
+      },
+      "WorkspaceMember": {
+        "type": "object", "additionalProperties": false, "required": ["membershipId", "user", "role"],
+        "properties": {"membershipId": {"type": "string", "pattern": "^mem_[A-Za-z0-9_]+$"}, "user": {"type": "object", "additionalProperties": false, "required": ["id", "displayName", "email"], "properties": {"id": {"$ref": "#/components/schemas/UserId"}, "displayName": {"type": "string"}, "email": {"type": "string", "format": "email"}}}, "role": {"type": "string", "enum": ["owner", "administrator", "operator", "billing", "viewer"]}}
       },
       "CreateLogicalInstance": {
         "type": "object", "additionalProperties": false, "required": ["workspaceId", "regionId", "name", "gameKey", "gameVersion", "configuration"],

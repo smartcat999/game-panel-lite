@@ -46,13 +46,15 @@ func TestContractDocumentsParse(t *testing.T) {
 func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 	expected := map[string]map[string]string{
 		"control-plane.openapi.json": {
-			"GET /v1/session":                       "getSession",
-			"GET /v1/user-preferences":              "getUserPreferences",
-			"PATCH /v1/user-preferences":            "updateUserPreferences",
-			"POST /v1/workspace-selection":          "selectWorkspace",
-			"POST /v1/instances":                    "createLogicalInstance",
-			"GET /v1/instances/{logicalInstanceId}": "getLogicalInstance",
-			"GET /v1/regions":                       "listRegions",
+			"GET /v1/session":                          "getSession",
+			"GET /v1/user-preferences":                 "getUserPreferences",
+			"PATCH /v1/user-preferences":               "updateUserPreferences",
+			"POST /v1/workspace-selection":             "selectWorkspace",
+			"GET /v1/workspaces":                       "listWorkspaces",
+			"GET /v1/workspaces/{workspaceId}/members": "listWorkspaceMembers",
+			"POST /v1/instances":                       "createLogicalInstance",
+			"GET /v1/instances/{logicalInstanceId}":    "getLogicalInstance",
+			"GET /v1/regions":                          "listRegions",
 		},
 		"platform-operations.openapi.json": {
 			"GET /v1/platform/regions":              "listPlatformRegions",

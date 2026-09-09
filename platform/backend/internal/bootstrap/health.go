@@ -9,8 +9,9 @@ import (
 )
 
 type HealthServer struct {
-	Name string
-	Addr string
+	Name       string
+	Addr       string
+	AppHandler http.Handler
 }
 
 func (s HealthServer) Run() error {
@@ -18,6 +19,9 @@ func (s HealthServer) Run() error {
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("GET /health/live", s.health)
 	mux.HandleFunc("GET /health/ready", s.health)
+	if s.AppHandler != nil {
+		mux.Handle("/", s.AppHandler)
+	}
 
 	server := &http.Server{
 		Addr:              s.Addr,

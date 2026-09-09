@@ -3,6 +3,9 @@ package v1
 import "time"
 
 type WorkspaceID string
+type UserID string
+type IdentityID string
+type MembershipID string
 type LogicalInstanceID string
 type RegionID string
 type RegionalDeploymentID string
