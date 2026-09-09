@@ -18,7 +18,7 @@ export default function PlatformInstancesPage() {
   return (
     <PlatformAccessGuard>
       <div className="space-y-3">
-        <ConsolePageHeader title={isZh ? "平台实例" : "Platform instances"} />
+        <ConsolePageHeader title={isZh ? "交付追踪" : "Delivery tracking"} />
         <section className="overflow-hidden rounded-xl border bg-white micro-border subtle-elevation">
           <div className="border-b border-slate-100 px-4 py-3">
             <h2 className="text-xs font-semibold text-slate-800">{isZh ? "逻辑实例与部署归属" : "Logical instances and placement"}</h2>

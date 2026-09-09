@@ -27,7 +27,7 @@ import { usePermissions } from "@/lib/permissions";
 import { useAuthBootstrap } from "@/lib/auth-session";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import { consoleSurfaceForPathname } from "@/lib/console-routing";
+import { consoleSurfaceForPathname, platformAreaForPathname } from "@/lib/console-routing";
 import { useTenantContext } from "@/lib/tenant-context";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -47,6 +47,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const { platformRole } = usePermissions();
   const consoleSurface = consoleSurfaceForPathname(pathname);
   const isPlatformConsole = consoleSurface === "platform";
+  const platformArea = platformAreaForPathname(pathname);
   const isTenantConsole = consoleSurface === "tenant";
   const isAccountSurface = consoleSurface === "account";
   const { organizations, currentOrganization, selectOrganization } = useTenantContext();
@@ -93,8 +94,12 @@ function AppChrome({ children }: { children: ReactNode }) {
               <div className="flex h-8 min-w-0 items-center gap-2 px-1">
                 <ShieldCheck className="size-3.5 text-slate-500" />
                 <span className="min-w-0">
-                  <span className="block text-xs font-semibold leading-3.5 text-slate-800">{isZh ? "平台控制台" : "Platform console"}</span>
-                  <span className="block text-[10px] font-normal leading-3 text-slate-400">{isZh ? "运营与基础设施" : "Operations and infrastructure"}</span>
+                  <span className="block text-xs font-semibold leading-3.5 text-slate-800">{isZh ? "平台管理中心" : "Platform administration"}</span>
+                  <span className="block text-[10px] font-normal leading-3 text-slate-400">
+                    {platformArea === "infrastructure"
+                      ? (isZh ? "基础设施运维" : "Infrastructure operations")
+                      : (isZh ? "业务控制面" : "Business control plane")}
+                  </span>
                 </span>
               </div>
             ) : isAccountSurface ? (
@@ -248,8 +253,8 @@ function AppChrome({ children }: { children: ReactNode }) {
             <>
               <MobileNavLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "概览" : "Overview"} />
               <MobileNavLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户" : "Tenants"} />
-              <MobileNavLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域" : "Regions"} />
-              <MobileNavLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "平台实例" : "Platform instances"} />
+              <MobileNavLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "交付追踪" : "Delivery"} />
+              <MobileNavLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域运维" : "Region operations"} />
             </>
           ) : isAccountSurface ? (
             <MobileNavLink active href="/account/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "账号设置" : "Account settings"} />
@@ -346,14 +351,14 @@ function membershipLabel(role: string | undefined, isZh: boolean) {
 function PlatformNavigation({ pathname, isZh }: { pathname: string; isZh: boolean }) {
   return (
     <div className="space-y-3.5">
-      <NavigationTitle>{isZh ? "平台控制台" : "PLATFORM CONSOLE"}</NavigationTitle>
+      <NavigationTitle>{isZh ? "平台管理中心" : "PLATFORM ADMINISTRATION"}</NavigationTitle>
       <NavigationGroup title={isZh ? "业务控制面" : "BUSINESS CONTROL"}>
         <SidebarLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "平台概览" : "Platform overview"} />
         <SidebarLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户管理" : "Tenant management"} />
-        <SidebarLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "平台实例" : "Platform instances"} />
+        <SidebarLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "交付追踪" : "Delivery tracking"} />
       </NavigationGroup>
       <NavigationGroup title={isZh ? "基础设施" : "INFRASTRUCTURE"}>
-        <SidebarLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域与节点" : "Regions and nodes"} />
+        <SidebarLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域运维" : "Region operations"} />
       </NavigationGroup>
     </div>
   );

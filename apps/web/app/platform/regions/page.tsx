@@ -17,7 +17,7 @@ export default function PlatformRegionsPage() {
   return (
     <PlatformAccessGuard>
       <div className="space-y-3">
-        <ConsolePageHeader title={isZh ? "区域与节点" : "Regions and nodes"} />
+        <ConsolePageHeader title={isZh ? "区域基础设施" : "Regional infrastructure"} />
         <div className="overflow-x-auto rounded-xl border bg-white micro-border subtle-elevation">
           <table className="min-w-[620px] w-full text-left text-xs">
             <thead className="border-b bg-slate-50/70 text-[10px] uppercase tracking-wider text-slate-400">
@@ -29,7 +29,7 @@ export default function PlatformRegionsPage() {
                   <td className="px-4 py-3 font-semibold text-slate-800">{regionDisplayName(region, locale)}</td>
                   <td className="px-4 py-3 font-mono text-[11px] text-slate-500">{region.id}</td>
                   <td className="px-4 py-3 text-slate-600">{region.acceptingCreates ? (isZh ? "开放" : "Open") : (isZh ? "关闭" : "Closed")}</td>
-                  <td className="px-4 py-3 text-right"><Link href={`/platform/regions/${encodeURIComponent(region.id)}`} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:text-emerald-800">{isZh ? "区域运维" : "Region operations"}<ArrowRight className="size-3" /></Link></td>
+                  <td className="px-4 py-3 text-right"><Link href={`/platform/regions/${encodeURIComponent(region.id)}`} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:text-emerald-800">{isZh ? "进入运维" : "Open operations"}<ArrowRight className="size-3" /></Link></td>
                 </tr>
               ))}
             </tbody>
