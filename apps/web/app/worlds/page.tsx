@@ -92,7 +92,7 @@ export default function WorldsPage() {
                 <tr key={world.id || world.name} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3 pl-4 pr-3 font-mono font-bold text-slate-900">{world.name}</td>
                   <td className="py-3 px-3 text-slate-500 font-mono">{world.size || "12.4 MB"}</td>
-                  <td className="py-3 px-3 text-slate-600 font-mono">{world.server || world.instanceId || "Default"}</td>
+                  <td className="py-3 px-3 text-slate-600 font-mono">{world.server || world.instanceId || (isZh ? "默认实例" : "Default")}</td>
                   <td className="py-3 pr-4 pl-3 text-right">
                     <Button variant="secondary" className="h-7 px-2.5 text-xs">
                       <Download className="size-3" />

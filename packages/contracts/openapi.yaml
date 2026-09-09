@@ -780,7 +780,8 @@ paths:
                 $ref: "#/components/schemas/AppSettings"
   /api/settings/locale:
     put:
-      summary: Update persisted UI language
+      deprecated: true
+      summary: Update the legacy platform default language
       requestBody:
         required: true
         content:
@@ -804,6 +805,38 @@ paths:
                   locale:
                     type: string
                     enum: [zh, en]
+  /api/account/preferences:
+    get:
+      security:
+        - sessionCookie: []
+      summary: Read the current account's interface preferences
+      responses:
+        "200":
+          description: Account-bound language and theme
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountPreferences"
+        "401": {description: Authentication required}
+    put:
+      security:
+        - sessionCookie: []
+      summary: Replace the current account's interface preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountPreferences"
+      responses:
+        "200":
+          description: Saved account preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountPreferences"
+        "400": {description: Unsupported locale or theme}
+        "401": {description: Authentication required}
   /api/activity:
     get:
       summary: List recent activity events
@@ -1726,6 +1759,16 @@ components:
       in: cookie
       name: gamepanel_session
   schemas:
+    AccountPreferences:
+      type: object
+      required: [locale, theme]
+      properties:
+        locale:
+          type: string
+          enum: [zh, en]
+        theme:
+          type: string
+          enum: [light, dark, system]
     ConfigPresetInput:
       type: object
       required: [name, providerKey]

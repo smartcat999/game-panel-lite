@@ -15,10 +15,12 @@ import {
   X
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { logoutAdmin } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
+import { useAuthBootstrap } from "@/lib/auth-session";
+import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -32,12 +34,20 @@ export function AppShell({ children }: { children: ReactNode }) {
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { locale, setLocale } = useI18n();
+  const { setTheme } = useTheme();
   const isZh = locale.startsWith("zh");
   const { role } = usePermissions();
+  const account = useAuthBootstrap().data?.account;
   const queryClient = useQueryClient();
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    if (!account?.preferences) return;
+    setLocale(account.preferences.locale);
+    setTheme(account.preferences.theme);
+  }, [account?.preferences?.locale, account?.preferences?.theme, setLocale, setTheme]);
 
   const handleLogout = async () => {
     try {
@@ -50,7 +60,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 antialiased font-sans p-3 md:p-5">
+    <div className="min-h-screen bg-[var(--app-bg)] text-slate-800 antialiased font-sans p-3 md:p-5">
       <div className="max-w-6xl mx-auto space-y-3">
         {/* ULTRA-CLEAN TOP NAVBAR */}
         <header className="h-12 bg-white border micro-border rounded-xl px-3.5 flex items-center justify-between subtle-elevation select-none">
@@ -67,9 +77,9 @@ function AppChrome({ children }: { children: ReactNode }) {
 
             <div className="h-7 px-2 rounded-md border border-slate-200/80 bg-slate-50/70 hover:bg-slate-100/90 cursor-pointer transition flex items-center gap-1.5 text-xs font-semibold text-slate-800">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              <span>Geek Guild</span>
+              <span>GamePanel Cloud</span>
               <span className="text-[9px] font-mono text-emerald-700 bg-emerald-100/60 border border-emerald-300/40 px-1 py-0.2 rounded font-semibold ml-0.5">
-                {role === "admin" ? "Pro" : "Member"}
+                {role === "admin" ? (isZh ? "管理员" : "Admin") : (isZh ? "成员" : "Member")}
               </span>
               <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
             </div>
@@ -97,15 +107,6 @@ function AppChrome({ children }: { children: ReactNode }) {
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 absolute top-1.5 right-1.5 ring-2 ring-white" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
-              title={locale === "zh" ? "Switch to English" : "切换至中文"}
-              className="h-7 px-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center font-mono text-[11px] font-semibold transition cursor-pointer"
-            >
-              {locale === "zh" ? "EN" : "中"}
-            </button>
-
             <div className="h-3.5 w-px bg-slate-200 mx-1 shrink-0" />
 
             <div className="relative">
@@ -115,19 +116,27 @@ function AppChrome({ children }: { children: ReactNode }) {
                 className="h-7 flex items-center gap-1.5 px-1 rounded-md hover:bg-slate-100 cursor-pointer transition"
               >
                 <div className="w-5 h-5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-semibold flex items-center justify-center text-[9px] font-mono shrink-0">
-                  {role === "admin" ? "AD" : "DM"}
+                  {(account?.username ?? "GP").slice(0, 2).toUpperCase()}
                 </div>
                 <span className="text-xs font-medium text-slate-700 truncate max-w-[70px]">
-                  {role === "admin" ? "Alex M." : "David M."}
+                  {account?.username ?? (isZh ? "当前用户" : "Current user")}
                 </span>
               </button>
 
               {profileOpen && (
                 <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-lg z-50 animate-in fade-in zoom-in-95 duration-100 space-y-1">
                   <div className="px-2.5 py-1.5 border-b border-slate-100 text-[11px]">
-                    <div className="font-bold text-slate-900">{role === "admin" ? "Alex M. (Admin)" : "David M. (Member)"}</div>
-                    <div className="text-slate-400 font-mono text-[10px] truncate">gamepanel@localhost</div>
+                    <div className="font-bold text-slate-900">{account?.username ?? (isZh ? "当前用户" : "Current user")}</div>
+                    <div className="text-slate-400 text-[10px] truncate">{role === "admin" ? (isZh ? "管理员账号" : "Administrator account") : (isZh ? "成员账号" : "Member account")}</div>
                   </div>
+                  <Link
+                    href="/settings"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+                  >
+                    <SettingsIcon className="size-3.5" />
+                    <span>{isZh ? "账号设置" : "Account settings"}</span>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 transition cursor-pointer"
@@ -143,7 +152,7 @@ function AppChrome({ children }: { children: ReactNode }) {
 
         {/* MAIN WORKSPACE LAYOUT: SIDEBAR + CONTENT */}
         <nav className="flex gap-1 overflow-x-auto rounded-xl border bg-white p-1.5 micro-border subtle-elevation md:hidden">
-          <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label="Instances" />
+          <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "实例" : "Instances"} />
           <MobileNavLink active={pathname.startsWith("/worlds")} href="/worlds" icon={<Archive className="size-3.5" />} label={isZh ? "存档" : "Saves"} />
           <MobileNavLink active={pathname.startsWith("/mods")} href="/mods" icon={<Box className="size-3.5" />} label={isZh ? "模组" : "Mods"} />
           <MobileNavLink active={pathname.startsWith("/settings")} href="/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "设置" : "Settings"} />
@@ -156,13 +165,13 @@ function AppChrome({ children }: { children: ReactNode }) {
               {/* Workspace Title Strip */}
               <div className="px-1 border-b micro-border pb-2">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                  COLLABORATOR
+                  {isZh ? "工作空间" : "WORKSPACE"}
                 </span>
               </div>
 
               {/* GROUP 2: COMPUTE */}
               <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">COMPUTE</div>
+                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{isZh ? "计算" : "COMPUTE"}</div>
                 <Link
                   href="/servers"
                   className={cn(
@@ -173,13 +182,13 @@ function AppChrome({ children }: { children: ReactNode }) {
                   )}
                 >
                   <ServerIcon className="w-3.5 h-3.5 text-slate-800 shrink-0" />
-                  <span className="truncate">Instances</span>
+                  <span className="truncate">{isZh ? "实例" : "Instances"}</span>
                 </Link>
               </div>
 
               {/* GROUP 3: STORAGE */}
               <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">STORAGE</div>
+                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{isZh ? "存储" : "STORAGE"}</div>
                 <Link
                   href="/worlds"
                   className={cn(
@@ -190,7 +199,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                   )}
                 >
                   <Archive className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Worlds & Saves</span>
+                  <span className="truncate">{isZh ? "世界与存档" : "Worlds & saves"}</span>
                 </Link>
                 <Link
                   href="/mods"
@@ -202,13 +211,13 @@ function AppChrome({ children }: { children: ReactNode }) {
                   )}
                 >
                   <Box className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Mod Workshop</span>
+                  <span className="truncate">{isZh ? "模组工坊" : "Mod workshop"}</span>
                 </Link>
               </div>
 
               {/* GROUP 4: OBSERVABILITY */}
               <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">OBSERVABILITY</div>
+                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{isZh ? "运维" : "OPERATIONS"}</div>
                 <Link
                   href="/settings"
                   className={cn(
@@ -219,7 +228,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                   )}
                 >
                   <SettingsIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Settings</span>
+                  <span className="truncate">{isZh ? "设置" : "Settings"}</span>
                 </Link>
                 <button
                   type="button"
@@ -227,7 +236,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                   className="w-full h-7 flex items-center gap-2 px-2 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium transition cursor-pointer"
                 >
                   <AlertTriangle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Incidents & Alerts</span>
+                  <span className="truncate">{isZh ? "事件与告警" : "Incidents & alerts"}</span>
                   <span className="ml-auto w-1.5 h-1.5 rounded-full bg-amber-500" />
                 </button>
               </div>

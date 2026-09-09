@@ -5,7 +5,14 @@
 :root {
   color-scheme: light;
   background: #f8fafc;
+  --app-bg: #f8fafc;
   scrollbar-gutter: stable;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: #0b1018;
+  --app-bg: #0b1018;
 }
 
 html {
@@ -15,9 +22,92 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background: #f8fafc;
+  background: var(--app-bg);
   color: #1e293b;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html[data-theme="dark"] body {
+  color: #e2e8f0;
+}
+
+html[data-theme="dark"] .bg-white {
+  background-color: #111827 !important;
+}
+
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-50\/70,
+html[data-theme="dark"] .bg-slate-50\/40 {
+  background-color: rgba(30, 41, 59, 0.72) !important;
+}
+
+html[data-theme="dark"] .bg-slate-100,
+html[data-theme="dark"] .bg-slate-100\/90 {
+  background-color: #1e293b !important;
+}
+
+html[data-theme="dark"] .text-slate-950,
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+html[data-theme="dark"] .border-slate-50,
+html[data-theme="dark"] .border-slate-100,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-200\/80,
+html[data-theme="dark"] .micro-border {
+  border-color: rgba(71, 85, 105, 0.7) !important;
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #64748b;
+}
+
+html[data-theme="dark"] .subtle-elevation {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22), 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="dark"] .bg-emerald-50,
+html[data-theme="dark"] .bg-emerald-50\/40 {
+  background-color: rgba(6, 78, 59, 0.48) !important;
+}
+
+html[data-theme="dark"] .text-emerald-800,
+html[data-theme="dark"] .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+html[data-theme="dark"] .bg-purple-50 {
+  background-color: rgba(88, 28, 135, 0.42) !important;
+}
+
+html[data-theme="dark"] .text-purple-700 {
+  color: #d8b4fe !important;
+}
+
+html[data-theme="dark"] .bg-rose-50,
+html[data-theme="dark"] .bg-rose-50\/40 {
+  background-color: rgba(127, 29, 29, 0.38) !important;
 }
 
 * {

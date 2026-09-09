@@ -7,6 +7,7 @@ import { sessionExpiredEvent } from "@/lib/session-events";
 import type { AuthBootstrap } from "@/lib/types";
 import { I18nProvider } from "@/lib/i18n";
 import { PerspectiveProvider } from "@/lib/perspective-context";
+import { ThemeProvider } from "@/lib/theme";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [client] = useState(() => new QueryClient());
@@ -28,9 +29,11 @@ export function Providers({ children }: { children: ReactNode }) {
     <AuthQueryProvider client={client}>
       <QueryClientProvider client={client}>
         <I18nProvider>
-          <PerspectiveProvider>
-            {children}
-          </PerspectiveProvider>
+          <ThemeProvider>
+            <PerspectiveProvider>
+              {children}
+            </PerspectiveProvider>
+          </ThemeProvider>
         </I18nProvider>
       </QueryClientProvider>
     </AuthQueryProvider>

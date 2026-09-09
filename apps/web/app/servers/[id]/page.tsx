@@ -442,7 +442,7 @@ export default function ServerDetailPage() {
                 type="text"
                 value={paramSearch}
                 onChange={(e) => setParamSearch(e.target.value)}
-                placeholder={isZh ? "快速筛选参数... (如 port, password, motd, seed)" : "Filter parameters... (e.g. port, motd, seed)"}
+                placeholder={isZh ? "按名称快速筛选参数…" : "Filter parameters by name…"}
                 className="h-8 w-full rounded-lg border border-slate-200/80 bg-slate-50/50 pl-8 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:outline-none transition shadow-2xs"
               />
               {paramSearch && (
@@ -485,7 +485,7 @@ export default function ServerDetailPage() {
                     ) : (
                       <Save className="size-3.5" />
                     )}
-                    <span>{isZh ? "✔ 保存并热应用" : "Save Changes"}</span>
+                    <span>{isZh ? "保存并应用" : "Save changes"}</span>
                   </button>
                 </>
               )}
@@ -534,7 +534,7 @@ export default function ServerDetailPage() {
             {((!paramSearch && activeCategory === "general") || (Boolean(paramSearch) && generalMatches > 0)) && (
               <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-3">
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {isZh ? "01 基础与常规 (Server Identity & Settings)" : "01 General Settings"}
+                  {isZh ? "01 基础与常规" : "01 General settings"}
                 </h3>
 
                 <div className="space-y-3 text-xs divide-y divide-slate-100">
@@ -542,7 +542,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "服务器房间名 (Server Name)" : "Server Name"}
+                          {isZh ? "服务器房间名" : "Server name"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "在游戏大厅与直连列表展示的服务器名称" : "Display name shown in multiplayer lobbies"}
@@ -561,7 +561,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "欢迎广播语 (MOTD Greeting)" : "MOTD Greeting"}
+                          {isZh ? "欢迎广播语" : "Welcome message"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "玩家进入服务器时在聊天栏弹出的系统欢迎公告" : "Message broadcast to players upon joining"}
@@ -580,10 +580,10 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "最大玩家人数 (Max Players)" : "Max Players"}
+                          {isZh ? "最大玩家人数" : "Maximum players"}
                         </label>
                         <p className="text-[11px] text-slate-400">
-                          {isZh ? "允许同时在线的最高玩家数量 (推荐 8-16)" : "Maximum concurrent players allowed"}
+                          {isZh ? "允许同时在线的最高玩家数量，建议设置为 8 至 16。" : "Maximum concurrent players allowed"}
                         </p>
                       </div>
                       <input
@@ -601,7 +601,7 @@ export default function ServerDetailPage() {
                     <div className="flex items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "自动暂停 (Auto Pause)" : "Auto Pause"}
+                          {isZh ? "自动暂停" : "Automatic pause"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "当服务器在线人数为 0 时冻结世界时间流逝与怪物生成" : "Freeze world simulation when no players are connected"}
@@ -623,7 +623,7 @@ export default function ServerDetailPage() {
             {((!paramSearch && activeCategory === "world") || (Boolean(paramSearch) && worldMatches > 0)) && (
               <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-3">
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {isZh ? "02 世界与地图 (World & Seeds)" : "02 World & Seeds"}
+                  {isZh ? "02 世界与地图" : "02 World and seeds"}
                 </h3>
 
                 <div className="space-y-3 text-xs divide-y divide-slate-100">
@@ -631,7 +631,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "存档文件名 (World File Name)" : "World File Name"}
+                          {isZh ? "存档文件名" : "World file name"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "服务器启动时读取的 .wld 存档文件名称" : "The .wld world file name to load"}
@@ -650,7 +650,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "自定义世界种子 (Custom Seed)" : "Custom Seed"}
+                          {isZh ? "自定义世界种子" : "Custom seed"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "如 getfixedboi, zenith, celebrationmk10 等特殊种子" : "Custom world seed or secret seeds"}
@@ -670,7 +670,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "世界难度 (World Difficulty)" : "World Difficulty"}
+                          {isZh ? "世界难度" : "World difficulty"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "经典、专家、大师或旅行模式" : "Gameplay difficulty tier"}
@@ -681,10 +681,10 @@ export default function ServerDetailPage() {
                         onChange={(e) => setDifficulty(e.target.value)}
                         className="h-8 sm:w-48 rounded-lg border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
                       >
-                        <option value="classic">{isZh ? "经典 (Classic)" : "Classic"}</option>
-                        <option value="expert">{isZh ? "专家 (Expert)" : "Expert"}</option>
-                        <option value="master">{isZh ? "大师 (Master)" : "Master"}</option>
-                        <option value="journey">{isZh ? "旅行 (Journey)" : "Journey"}</option>
+                        <option value="classic">{isZh ? "经典" : "Classic"}</option>
+                        <option value="expert">{isZh ? "专家" : "Expert"}</option>
+                        <option value="master">{isZh ? "大师" : "Master"}</option>
+                        <option value="journey">{isZh ? "旅行" : "Journey"}</option>
                       </select>
                     </div>
                   )}
@@ -693,7 +693,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "世界尺寸 (World Size)" : "World Size"}
+                          {isZh ? "世界尺寸" : "World size"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "仅在新生成世界时生效" : "World map boundaries"}
@@ -704,9 +704,9 @@ export default function ServerDetailPage() {
                         onChange={(e) => setWorldSize(e.target.value)}
                         className="h-8 sm:w-48 rounded-lg border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
                       >
-                        <option value="small">{isZh ? "小世界 (Small)" : "Small"}</option>
-                        <option value="medium">{isZh ? "中等世界 (Medium)" : "Medium"}</option>
-                        <option value="large">{isZh ? "大世界 (Large)" : "Large"}</option>
+                        <option value="small">{isZh ? "小世界" : "Small"}</option>
+                        <option value="medium">{isZh ? "中等世界" : "Medium"}</option>
+                        <option value="large">{isZh ? "大世界" : "Large"}</option>
                       </select>
                     </div>
                   )}
@@ -718,7 +718,7 @@ export default function ServerDetailPage() {
             {((!paramSearch && activeCategory === "network") || (Boolean(paramSearch) && networkMatches > 0)) && (
               <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-3">
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {isZh ? "03 网络与连接 (Network & Ports)" : "03 Network & Ports"}
+                  {isZh ? "03 网络与连接" : "03 Network and ports"}
                 </h3>
 
                 <div className="space-y-3 text-xs divide-y divide-slate-100">
@@ -726,7 +726,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "服务端直连端口 (Server Port)" : "Server Port"}
+                          {isZh ? "服务端直连端口" : "Server port"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "Terraria 默认端口为 7777，修改后需重新分配容器映射" : "Default Terraria port is 7777"}
@@ -747,7 +747,7 @@ export default function ServerDetailPage() {
                     <div className="flex items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "UPnP 自动端口映射 (UPnP Forwarding)" : "UPnP Forwarding"}
+                          {isZh ? "自动端口映射" : "UPnP forwarding"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "允许服务器尝试向局域网网关注册端口转发规则" : "Attempt automatic router port forwarding"}
@@ -766,7 +766,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "网络调度优先级 (Network Priority)" : "Network Priority"}
+                          {isZh ? "网络调度优先级" : "Network priority"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "优化高延迟环境下的同步包发送频率" : "Packet transmission priority buffer"}
@@ -777,8 +777,8 @@ export default function ServerDetailPage() {
                         onChange={(e) => setPriority(e.target.value)}
                         className="h-8 sm:w-48 rounded-lg border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
                       >
-                        <option value="0">{isZh ? "标准 (Normal 0)" : "Normal (0)"}</option>
-                        <option value="1">{isZh ? "高吞吐量 (High 1)" : "High (1)"}</option>
+                        <option value="0">{isZh ? "标准" : "Normal"}</option>
+                        <option value="1">{isZh ? "高吞吐量" : "High throughput"}</option>
                       </select>
                     </div>
                   )}
@@ -790,7 +790,7 @@ export default function ServerDetailPage() {
             {((!paramSearch && activeCategory === "security") || (Boolean(paramSearch) && securityMatches > 0)) && (
               <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-3">
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {isZh ? "04 安全与权限 (Security & Auth)" : "04 Security & Auth"}
+                  {isZh ? "04 安全与权限" : "04 Security and access"}
                 </h3>
 
                 <div className="space-y-3 text-xs divide-y divide-slate-100">
@@ -798,7 +798,7 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "房间连接密码 (Server Password)" : "Server Password"}
+                          {isZh ? "房间连接密码" : "Server password"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "留空则代表公开无密码服务器" : "Leave empty to allow public access"}
@@ -827,7 +827,7 @@ export default function ServerDetailPage() {
                     <div className="flex items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "安全反作弊模式 (Secure Anti-Cheat)" : "Secure Anti-Cheat"}
+                          {isZh ? "安全反作弊模式" : "Secure anti-cheat"}
                         </label>
                         <p className="text-[11px] text-slate-400">
                           {isZh ? "校验客户端物品堆叠与非法非法移动数据包" : "Validate player inventories & movement packets"}
@@ -846,10 +846,10 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "封禁名单文件 (Banlist File)" : "Banlist File"}
+                          {isZh ? "封禁名单文件" : "Banlist file"}
                         </label>
                         <p className="text-[11px] text-slate-400">
-                          {isZh ? "记录被封禁玩家 IP 与 UUID 的文本文件" : "Text file recording banned IP addresses"}
+                          {isZh ? "记录被封禁玩家网络地址与唯一标识的文本文件" : "Text file recording banned IP addresses"}
                         </p>
                       </div>
                       <input
@@ -868,7 +868,7 @@ export default function ServerDetailPage() {
             {((!paramSearch && activeCategory === "engine") || (Boolean(paramSearch) && engineMatches > 0)) && (
               <div className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-2xs space-y-3">
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {isZh ? "05 引擎与调度 (Engine & Limits)" : "05 Engine & Limits"}
+                  {isZh ? "05 引擎与调度" : "05 Engine and limits"}
                 </h3>
 
                 <div className="space-y-3 text-xs divide-y divide-slate-100">
@@ -876,10 +876,10 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "CPU 核心配额 (CPU Limit)" : "CPU Limit"}
+                          {isZh ? "处理器核心配额" : "CPU limit"}
                         </label>
                         <p className="text-[11px] text-slate-400">
-                          {isZh ? "为该容器分配的宿主机 CPU 核心数" : "Number of CPU cores allocated"}
+                          {isZh ? "为该容器分配的宿主机处理器核心数" : "Number of CPU cores allocated"}
                         </p>
                       </div>
                       <select
@@ -887,9 +887,9 @@ export default function ServerDetailPage() {
                         onChange={(e) => setCpuLimit(Number(e.target.value))}
                         className="h-8 sm:w-48 rounded-lg border border-slate-200/80 bg-white px-2 text-xs text-slate-800 focus:border-emerald-500 focus:outline-none shadow-2xs cursor-pointer"
                       >
-                        <option value={1}>{isZh ? "1 核心 (Standard)" : "1 Core"}</option>
-                        <option value={2}>{isZh ? "2 核心 (Recommended)" : "2 Cores"}</option>
-                        <option value={4}>{isZh ? "4 核心 (Performance)" : "4 Cores"}</option>
+                        <option value={1}>{isZh ? "1 核心" : "1 core"}</option>
+                        <option value={2}>{isZh ? "2 核心（推荐）" : "2 cores (recommended)"}</option>
+                        <option value={4}>{isZh ? "4 核心" : "4 cores"}</option>
                       </select>
                     </div>
                   )}
@@ -898,10 +898,10 @@ export default function ServerDetailPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3">
                       <div>
                         <label className="font-semibold text-slate-800 block">
-                          {isZh ? "内存上限 (Memory Limit)" : "Memory Limit"}
+                          {isZh ? "内存上限" : "Memory limit"}
                         </label>
                         <p className="text-[11px] text-slate-400">
-                          {isZh ? "大型地图或搭载多 Mod 时建议 4GB 以上" : "RAM memory allocation cap"}
+                          {isZh ? "大型地图或搭载多个模组时建议分配 4 GB 以上" : "RAM memory allocation cap"}
                         </p>
                       </div>
                       <select
@@ -938,7 +938,7 @@ export default function ServerDetailPage() {
           <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-2">
             <span className="flex items-center gap-2">
               <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{isZh ? "实时控制台 (Live Container TTY)" : "Live Container Console"}</span>
+              <span>{isZh ? "实时控制台" : "Live container console"}</span>
             </span>
             <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
               Port: {port}
@@ -968,7 +968,7 @@ export default function ServerDetailPage() {
               type="text"
               value={consoleCommand}
               onChange={(e) => setConsoleCommand(e.target.value)}
-              placeholder={isZh ? "输入指令 (例如 help, say hello, save, exit)..." : "Type server command (e.g. help, say, save)..."}
+              placeholder={isZh ? "输入服务器指令…" : "Type a server command…"}
               className="flex-1 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
             />
             <button

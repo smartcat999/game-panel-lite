@@ -459,7 +459,15 @@ export type UserAccount = {
   username: string;
   role: UserRole;
   permissions?: Permission[];
+  preferences?: AccountPreferences;
   createdAt?: string;
+};
+
+export type ThemeMode = "light" | "dark" | "system";
+
+export type AccountPreferences = {
+  locale: "zh" | "en";
+  theme: ThemeMode;
 };
 
 export type AuthBootstrap = {
@@ -638,5 +646,4 @@ export type ServerOperation = {
   status: "pending" | "succeeded" | "failed";
   createdAt: string;
 };
-
 

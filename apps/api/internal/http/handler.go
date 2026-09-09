@@ -190,6 +190,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Use(h.requireAuth)
 		r.Use(h.requireMutationPermission)
 		r.Get("/api/auth/me", h.currentAccount)
+		r.Get("/api/account/preferences", h.getAccountPreferences)
+		r.Put("/api/account/preferences", h.updateAccountPreferences)
 		r.With(h.requirePermission(domain.PermissionModManage, "mod management permission required")).Get("/api/auth/me/mods", h.listMyLibraryMods)
 		r.With(h.requirePermission(domain.PermissionModManage, "mod management permission required")).Post("/api/auth/me/mods/upload", h.uploadMyLibraryMod)
 		r.Get("/api/auth/me/organizations", h.listMyOrganizations)

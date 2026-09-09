@@ -178,7 +178,7 @@ export function DeployInstanceModal({ open, onClose }: DeployInstanceModalProps)
           </section>
 
           <section className="space-y-2">
-            <h3 className="font-semibold text-slate-800">Region</h3>
+            <h3 className="font-semibold text-slate-800">{isZh ? "区域" : "Region"}</h3>
             {plansQuery.isLoading ? (
               <div className="h-9 animate-pulse rounded-lg bg-slate-100" />
             ) : regionIds.length > 0 ? (

@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
@@ -78,6 +78,20 @@ export async function getApiHealth(): Promise<{ status: string }> {
 export async function getAuthBootstrap(signal?: AbortSignal): Promise<AuthBootstrap> {
   const response = await apiFetch(`${API_BASE}/api/auth/bootstrap`, { cache: "no-store", signal }, false);
   return readPayload<AuthBootstrap>(response, "Unable to load auth state");
+}
+
+export async function getAccountPreferences(signal?: AbortSignal): Promise<AccountPreferences> {
+  const response = await apiFetch(`${API_BASE}/api/account/preferences`, { cache: "no-store", signal });
+  return readPayload<AccountPreferences>(response, "Unable to load account preferences");
+}
+
+export async function updateAccountPreferences(preferences: AccountPreferences): Promise<AccountPreferences> {
+  const response = await apiFetch(`${API_BASE}/api/account/preferences`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(preferences)
+  });
+  return readPayload<AccountPreferences>(response, "Unable to update account preferences");
 }
 
 export async function setupAdmin(username: string, password: string): Promise<AuthAccount> {
@@ -2011,5 +2025,4 @@ export async function acceptInvitation(token: string): Promise<{ status: string;
   });
   return readPayload<{ status: string; organizationId: string; role: string }>(response, "Unable to accept invitation");
 }
-
 

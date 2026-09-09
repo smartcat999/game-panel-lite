@@ -47,14 +47,14 @@ export function ServerManagementTable({
       <table className="w-full text-left text-xs">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold text-slate-400 select-none">
-            <th className="py-2.5 pl-3.5 pr-2 font-medium">NAME</th>
-            <th className="py-2.5 px-2 font-medium">STATUS</th>
-            <th className="py-2.5 px-2 font-medium">ENGINE</th>
-            <th className="py-2.5 px-2 font-medium">ENDPOINT</th>
-            <th className="py-2.5 px-2 font-medium">PLAYERS</th>
-            <th className="py-2.5 px-2 font-medium">MEMORY</th>
-            <th className="py-2.5 px-2 font-medium">PING</th>
-            <th className="py-2.5 pr-3.5 pl-2 font-medium text-right">ACTIONS</th>
+            <th className="py-2.5 pl-3.5 pr-2 font-medium">{isZh ? "名称" : "NAME"}</th>
+            <th className="py-2.5 px-2 font-medium">{isZh ? "状态" : "STATUS"}</th>
+            <th className="py-2.5 px-2 font-medium">{isZh ? "引擎" : "ENGINE"}</th>
+            <th className="py-2.5 px-2 font-medium">{isZh ? "接入点" : "ENDPOINT"}</th>
+            <th className="py-2.5 px-2 font-medium">{isZh ? "玩家" : "PLAYERS"}</th>
+            <th className="py-2.5 px-2 font-medium">{isZh ? "内存" : "MEMORY"}</th>
+            <th className="py-2.5 px-2 font-medium">{isZh ? "延迟" : "LATENCY"}</th>
+            <th className="py-2.5 pr-3.5 pl-2 font-medium text-right">{isZh ? "操作" : "ACTIONS"}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 text-xs">
@@ -88,12 +88,12 @@ export function ServerManagementTable({
                   {isRunning ? (
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>Running</span>
+                      <span>{isZh ? "运行中" : "Running"}</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                      <span>Stopped</span>
+                      <span>{isZh ? "已停止" : "Stopped"}</span>
                     </span>
                   )}
                 </td>
@@ -106,7 +106,7 @@ export function ServerManagementTable({
                     </span>
                   ) : (
                     <span className="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200/60">
-                      Vanilla 1.4.4.9
+                      {isZh ? "原版" : "Vanilla"} 1.4.4.9
                     </span>
                   )}
                 </td>
@@ -121,12 +121,12 @@ export function ServerManagementTable({
                   {isRunning ? (
                     <>
                       <span className="font-bold">{players}</span>{" "}
-                      <span className="text-[10px] text-slate-400">max {maxPlayers}</span>
+                      <span className="text-[10px] text-slate-400">{isZh ? `上限 ${maxPlayers}` : `max ${maxPlayers}`}</span>
                     </>
                   ) : (
                     <>
                       <span className="text-slate-400">0</span>{" "}
-                      <span className="text-[10px] text-slate-300">max {maxPlayers}</span>
+                      <span className="text-[10px] text-slate-300">{isZh ? `上限 ${maxPlayers}` : `max ${maxPlayers}`}</span>
                     </>
                   )}
                 </td>
@@ -136,7 +136,7 @@ export function ServerManagementTable({
                   {isRunning ? (
                     <>
                       <span className="font-bold">{ramUsed} GB</span>{" "}
-                      <span className="text-[10px] text-slate-400">cap {ramCap} GB</span>
+                      <span className="text-[10px] text-slate-400">{isZh ? `上限 ${ramCap} GB` : `cap ${ramCap} GB`}</span>
                     </>
                   ) : (
                     <span className="text-[11px] text-slate-400 font-mono">0 GB</span>

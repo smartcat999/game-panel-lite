@@ -51,4 +51,15 @@
 
 - No blocking polish remains. A future catalog iteration can expose additional Region-specific plans without frontend structural changes.
 
+## Account Preferences Pass
+
+- Scope: account-bound language and theme preferences on `/settings`, plus navigation and instance-table copy cleanup.
+- Verified at 490 × 814 CSS pixels in the Codex in-app browser with the authenticated local preview.
+- Chinese state: navigation, settings, deployment entry, and instance table use Chinese UI copy consistently; technical product names such as GamePanel Cloud and tModLoader remain proper names.
+- English state: changing the account language updates the full visible shell and settings surface without a reload.
+- Theme states: light, dark, and system choices update the document theme immediately. Both light and dark settings surfaces retain readable contrast, border hierarchy, and selected-state visibility.
+- Persistence: selected English/light preferences remained selected after a full page reload. The preview was then restored to Chinese/system.
+- Backend boundary: preferences use a dedicated account-level record queried by `account_id`; no SQL joins were introduced.
+- Validation: focused preference API/store tests, full `go test ./...`, `go vet ./...`, frontend lint, typecheck, and production build passed.
+
 final result: passed

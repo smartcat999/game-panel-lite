@@ -38,11 +38,12 @@ type authContextKey string
 const authAccountContextKey authContextKey = "account"
 
 type authAccountResponse struct {
-	ID          string              `json:"id"`
-	Username    string              `json:"username"`
-	Role        domain.Role         `json:"role"`
-	Permissions []domain.Permission `json:"permissions"`
-	CreatedAt   string              `json:"createdAt,omitempty"`
+	ID          string                      `json:"id"`
+	Username    string                      `json:"username"`
+	Role        domain.Role                 `json:"role"`
+	Permissions []domain.Permission         `json:"permissions"`
+	Preferences *accountPreferencesResponse `json:"preferences,omitempty"`
+	CreatedAt   string                      `json:"createdAt,omitempty"`
 }
 
 type authBootstrapResponse struct {
@@ -71,12 +72,18 @@ func (h *Handler) authBootstrap(w http.ResponseWriter, r *http.Request) {
 		AllowRegistration: allowReg,
 	}
 	if account, ok := accountFromContext(r.Context()); ok {
+		preferences, err := h.store.GetAccountPreferences(r.Context(), account.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		role := domain.NormalizeAccountRole(account.Role)
 		response.Account = &authAccountResponse{
 			ID:          account.ID,
 			Username:    account.Username,
 			Role:        role,
 			Permissions: domain.PermissionsForRole(role),
+			Preferences: &accountPreferencesResponse{Locale: preferences.Locale, Theme: preferences.Theme},
 			CreatedAt:   account.CreatedAt.Format(time.RFC3339),
 		}
 	}

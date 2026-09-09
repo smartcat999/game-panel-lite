@@ -51,7 +51,7 @@ function ProtectedAuthGate({ children }: { children: ReactNode }) {
             {isZh ? "后端服务未连接" : "Backend Unavailable"}
           </h2>
           <p className="text-xs text-slate-500">
-            {isZh ? "无法连接到 API 服务，请确认 Go 后端已启动。" : "Cannot connect to API server. Please make sure the Go service is running."}
+            {isZh ? "无法连接到后端服务，请确认服务已启动。" : "Cannot connect to the API server. Please make sure the service is running."}
           </p>
           <Button variant="secondary" onClick={() => authQuery.refetch()} className="w-full">
             {isZh ? "重试连接" : "Retry"}

@@ -571,6 +571,14 @@ type AdminAccount struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
+type AccountPreferences struct {
+	AccountID string    `json:"accountId" gorm:"primaryKey"`
+	Locale    string    `json:"locale"`
+	Theme     string    `json:"theme"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type Session struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
 	AccountID string    `json:"accountId" gorm:"index"`
