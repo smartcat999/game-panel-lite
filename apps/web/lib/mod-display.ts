@@ -1,5 +1,35 @@
 import type { ModFile } from "./types";
 
+export function dstConfiguredWorkshopIds(config: Record<string, unknown> | undefined): string[] {
+  const mods = config?.mods;
+  if (!mods || typeof mods !== "object" || Array.isArray(mods)) return [];
+  const workshopIds = (mods as Record<string, unknown>).workshopIds;
+  if (!Array.isArray(workshopIds)) return [];
+
+  return [...new Set(workshopIds.map(String).map((id) => id.trim()).filter(Boolean))];
+}
+
+export function mergeConfiguredWorkshopMods(
+  installedMods: ModFile[],
+  libraryMods: ModFile[],
+  workshopIds: string[]
+): ModFile[] {
+  const merged = [...installedMods];
+  const installedWorkshopIds = new Set(installedMods.map((mod) => mod.workshopId).filter(Boolean));
+  const libraryByWorkshopId = new Map(
+    libraryMods
+      .filter((mod) => mod.workshopId)
+      .map((mod) => [mod.workshopId as string, mod])
+  );
+
+  for (const workshopId of workshopIds) {
+    if (installedWorkshopIds.has(workshopId)) continue;
+    const libraryMod = libraryByWorkshopId.get(workshopId);
+    if (libraryMod) merged.push({ ...libraryMod, enabled: true });
+  }
+  return merged;
+}
+
 export function modDisplayName(mod: ModFile, locale: string) {
   if (mod.title?.trim()) {
     return mod.title.trim();

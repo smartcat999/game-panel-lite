@@ -68,7 +68,7 @@ import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
-import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
+import { dstConfiguredWorkshopIds, dstModScope, isServerAssignableMod, mergeConfiguredWorkshopMods, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
@@ -595,6 +595,20 @@ export default function ServerDetailPage() {
     () => modPacks.filter((pack) => !serverResource || pack.providerKey === serverResource.providerKey),
     [modPacks, serverResource]
   );
+  const configuredWorkshopIds = useMemo(
+    () => dstConfiguredWorkshopIds(serverResource?.spec.config),
+    [serverResource?.spec.config]
+  );
+  const showConfiguredModsDuringLifecycle = serverResource?.providerKey === "dont-starve-together" && isServerLifecyclePending(resourceStatus);
+  const displayedServerMods = useMemo(
+    () => showConfiguredModsDuringLifecycle
+      ? mergeConfiguredWorkshopMods(serverMods, providerGlobalMods, configuredWorkshopIds)
+      : serverMods,
+    [configuredWorkshopIds, providerGlobalMods, serverMods, showConfiguredModsDuringLifecycle]
+  );
+  const displayedServerModsLoading = modsQuery.isLoading || (
+    showConfiguredModsDuringLifecycle && configuredWorkshopIds.length > displayedServerMods.length && globalModsQuery.isLoading
+  );
   const modUploadAccept = serverResource?.providerKey === "palworld" ? ".pak" : serverResource?.providerKey === "terraria-tmodloader" ? ".tmod" : "";
   const supportsDirectModUpload = Boolean(modUploadAccept);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
@@ -913,8 +927,8 @@ export default function ServerDetailPage() {
               assigning={modAssign.isPending}
               deleting={modDelete.isPending}
               isError={modsQuery.isError}
-              isLoading={modsQuery.isLoading}
-              items={serverMods}
+              isLoading={displayedServerModsLoading}
+              items={displayedServerMods}
               libraryError={globalModsQuery.isError || modPacksQuery.isError}
               modPacks={providerModPacks}
               pendingRestart={modsPendingRestart}

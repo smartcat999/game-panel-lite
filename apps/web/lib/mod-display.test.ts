@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dstModScope, isServerAssignableMod, modRuntimeState } from "./mod-display";
+import { dstConfiguredWorkshopIds, dstModScope, isServerAssignableMod, mergeConfiguredWorkshopMods, modRuntimeState } from "./mod-display";
 import type { ModFile } from "./types";
 
 function mod(tags: string[]): ModFile {
@@ -31,6 +31,25 @@ describe("dstModScope", () => {
     expect(isServerAssignableMod(mod([]))).toBe(false);
     expect(isServerAssignableMod(mod(["server_only_mod"]))).toBe(true);
     expect(isServerAssignableMod(mod(["all_clients_require_mod"]))).toBe(true);
+  });
+});
+
+describe("DST configured mod display", () => {
+  it("reads unique Workshop IDs from the saved server config", () => {
+    expect(dstConfiguredWorkshopIds({ mods: { workshopIds: [" 376333686 ", "376333686", 378160973] } })).toEqual([
+      "376333686",
+      "378160973"
+    ]);
+  });
+
+  it("fills server mods from the library while lifecycle materialization is incomplete", () => {
+    const installed = mod(["server_only_mod"]);
+    const configured = { ...mod(["all_clients_require_mod"]), id: "library-2", instanceId: "unassigned", workshopId: "378160973" };
+
+    expect(mergeConfiguredWorkshopMods([installed], [configured], ["376333686", "378160973"])).toEqual([
+      installed,
+      { ...configured, enabled: true }
+    ]);
   });
 });
 
