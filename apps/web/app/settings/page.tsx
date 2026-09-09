@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 import { NodeSettingsPanel } from "@/components/node-settings-panel";
 import { UserManagement } from "@/components/user-management";
+import { TeamSettingsPanel } from "@/components/team-settings-panel";
 import { TrafficTopology } from "@/components/traffic-topology";
 import { SettingsSubNav } from "@/components/sub-nav";
 import { Users, Server } from "lucide-react";
@@ -204,7 +205,12 @@ export default function SettingsPage() {
         </Card>
       </form> : null}
 
-      {activeTab === "team" ? <UserManagement /> : null}
+      {activeTab === "team" ? (
+        <div className="space-y-8">
+          <TeamSettingsPanel />
+          <UserManagement />
+        </div>
+      ) : null}
       {activeTab === "nodes" ? (
         <div className="space-y-6">
           <TrafficTopology />

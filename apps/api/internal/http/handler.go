@@ -184,6 +184,7 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/api/agent/servers/{id}/logs", h.agentUploadLogs)
 	r.Get("/api/commerce/plans", h.listCommercePlans)
 	r.Post("/api/commerce/payments/webhook", h.handlePaymentWebhook)
+	r.Get("/api/invitations/{token}", h.getInvitationInfo)
 
 	r.Group(func(r chi.Router) {
 		r.Use(h.requireAuth)
@@ -199,6 +200,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Post("/api/commerce/orders", h.createCommerceOrder)
 		r.Post("/api/commerce/orders/{id}/cancel", h.cancelCommerceOrder)
 		r.Post("/api/auth/password", h.changePassword)
+		r.Post("/api/invitations/{token}/accept", h.acceptInvitation)
 		r.Group(func(r chi.Router) {
 			r.Use(h.requireAdmin)
 			r.Get("/api/users", h.listUsers)
@@ -211,9 +213,12 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireAdmin).Get("/api/organizations", h.listOrganizations)
 		r.With(h.requireAdmin).Post("/api/organizations", h.createOrganization)
 		r.With(h.requireAdmin).Get("/api/organizations/{id}", h.getOrganization)
-		r.With(h.requireAdmin).Get("/api/organizations/{id}/members", h.listOrganizationMembers)
-		r.With(h.requireAdmin).Post("/api/organizations/{id}/members", h.addOrganizationMember)
-		r.With(h.requireAdmin).Delete("/api/organizations/{id}/members/{userId}", h.removeOrganizationMember)
+		r.Get("/api/organizations/{id}/members", h.listOrganizationMembers)
+		r.Post("/api/organizations/{id}/members", h.addOrganizationMember)
+		r.Delete("/api/organizations/{id}/members/{userId}", h.removeOrganizationMember)
+		r.Get("/api/organizations/{id}/invitations", h.listOrganizationInvitations)
+		r.Post("/api/organizations/{id}/invitations", h.createOrganizationInvitation)
+		r.Delete("/api/organizations/{id}/invitations/{inviteId}", h.revokeOrganizationInvitation)
 		r.With(h.requireAdmin).Get("/api/organizations/{id}/usage", h.getOrganizationUsage)
 		r.With(h.requireAdmin).Put("/api/organizations/{id}/quota", h.updateOrganizationQuota)
 		r.With(h.requireAdmin).Get("/api/organizations/{id}/credits", h.getOrganizationCredits)

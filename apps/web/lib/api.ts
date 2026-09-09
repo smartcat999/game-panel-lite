@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
@@ -1741,6 +1741,7 @@ export async function createComputeNode(payload: {
   port?: number;
   token?: string;
   publicIp?: string;
+  publicDomain?: string;
   region?: string;
   cpuCores?: number;
   memoryTotalMb?: number;
@@ -1757,6 +1758,7 @@ export async function updateComputeNode(id: string, payload: {
   name?: string;
   region?: string;
   publicIp?: string;
+  publicDomain?: string;
   host?: string;
   port?: number;
   unschedulable?: boolean;
@@ -1969,6 +1971,45 @@ export async function simulatePaymentWebhook(req: {
 export async function getOperationStatus(operationId: string): Promise<ServerOperation> {
   const response = await apiFetch(`${API_BASE}/api/operations/${encodeURIComponent(operationId)}`, { cache: "no-store" });
   return readPayload<ServerOperation>(response, "Unable to load operation status");
+}
+
+export async function createOrganizationInvitation(
+  orgId: string,
+  payload: { role?: string; maxUses?: number; expiresInHours?: number; expireDays?: number }
+): Promise<OrganizationInvitation> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${encodeURIComponent(orgId)}/invitations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return readPayload<OrganizationInvitation>(response, "Unable to create invitation");
+}
+
+export async function listOrganizationInvitations(orgId: string): Promise<OrganizationInvitation[]> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${encodeURIComponent(orgId)}/invitations`, { cache: "no-store" });
+  return readPayload<OrganizationInvitation[]>(response, "Unable to load invitations");
+}
+
+export async function revokeOrganizationInvitation(orgId: string, inviteId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${encodeURIComponent(orgId)}/invitations/${encodeURIComponent(inviteId)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error || "Unable to revoke invitation");
+  }
+}
+
+export async function getInvitationInfo(token: string): Promise<InvitationSummary> {
+  const response = await apiFetch(`${API_BASE}/api/invitations/${encodeURIComponent(token)}`, { cache: "no-store" });
+  return readPayload<InvitationSummary>(response, "Unable to load invitation details");
+}
+
+export async function acceptInvitation(token: string): Promise<{ status: string; organizationId: string; role: string }> {
+  const response = await apiFetch(`${API_BASE}/api/invitations/${encodeURIComponent(token)}/accept`, {
+    method: "POST",
+  });
+  return readPayload<{ status: string; organizationId: string; role: string }>(response, "Unable to accept invitation");
 }
 
 

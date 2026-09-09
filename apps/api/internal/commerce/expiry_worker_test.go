@@ -9,8 +9,8 @@ import (
 )
 
 type mockExpiryStore struct {
-	claimed     []string
-	expired     map[string]bool
+	claimed      []string
+	expired      map[string]bool
 	failServerID string
 }
 

@@ -45,21 +45,37 @@ func (h *Handler) serverJoinInfo(server domain.GameServer) domain.ServerJoinInfo
 		info = defaultJoinInfo(server)
 	}
 
-	if server.NodeID != "" && server.NodeID != "node-local" {
+	if server.NodeID != "" {
 		node, err := h.store.GetComputeNode(context.Background(), server.NodeID)
 		if err == nil {
-			if strings.TrimSpace(node.PublicIP) != "" {
-				info.Address = strings.TrimSpace(node.PublicIP)
+			if strings.TrimSpace(node.PublicDomain) != "" {
+				replaceAddressInJoinInfo(&info, strings.TrimSpace(node.PublicDomain))
 				return info
-			} else if strings.TrimSpace(node.Host) != "" && node.Host != "0.0.0.0" {
-				info.Address = strings.TrimSpace(node.Host)
-				return info
+			}
+			if server.NodeID != "node-local" {
+				if strings.TrimSpace(node.PublicIP) != "" {
+					replaceAddressInJoinInfo(&info, strings.TrimSpace(node.PublicIP))
+					return info
+				} else if strings.TrimSpace(node.Host) != "" && node.Host != "0.0.0.0" {
+					replaceAddressInJoinInfo(&info, strings.TrimSpace(node.Host))
+					return info
+				}
 			}
 		}
 	}
 
 	h.applyPublicHostToJoinInfo(&info)
 	return info
+}
+
+func replaceAddressInJoinInfo(info *domain.ServerJoinInfo, targetHost string) {
+	if targetHost == "" || targetHost == info.Address {
+		return
+	}
+	old := info.Address
+	info.Address = targetHost
+	info.InviteText = strings.ReplaceAll(info.InviteText, old+":"+fmt.Sprintf("%d", info.Port), targetHost+":"+fmt.Sprintf("%d", info.Port))
+	info.InviteText = strings.ReplaceAll(info.InviteText, old, targetHost)
 }
 
 func (h *Handler) resolvePublicHost() string {
@@ -86,13 +102,7 @@ func (h *Handler) resolveLocale(ctx context.Context) string {
 
 func (h *Handler) applyPublicHostToJoinInfo(info *domain.ServerJoinInfo) {
 	host := h.resolvePublicHost()
-	if host == "" || host == info.Address {
-		return
-	}
-	old := info.Address
-	info.Address = host
-	info.InviteText = strings.ReplaceAll(info.InviteText, old+":"+fmt.Sprintf("%d", info.Port), host+":"+fmt.Sprintf("%d", info.Port))
-	info.InviteText = strings.ReplaceAll(info.InviteText, old, host)
+	replaceAddressInJoinInfo(info, host)
 }
 
 func defaultJoinInfo(server domain.GameServer) domain.ServerJoinInfo {

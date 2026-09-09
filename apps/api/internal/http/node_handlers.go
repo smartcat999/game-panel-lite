@@ -24,6 +24,7 @@ type createNodeRequest struct {
 	Host          string `json:"host"`
 	Port          int    `json:"port"`
 	PublicIP      string `json:"publicIp"`
+	PublicDomain  string `json:"publicDomain,omitempty"`
 	Region        string `json:"region"`
 	CPUCores      int    `json:"cpuCores,omitempty"`
 	MemoryTotalMB int64  `json:"memoryTotalMb,omitempty"`
@@ -137,6 +138,7 @@ func (h *Handler) createNode(w http.ResponseWriter, r *http.Request) {
 		Port:          req.Port,
 		Token:         token,
 		PublicIP:      req.PublicIP,
+		PublicDomain:  strings.TrimSpace(req.PublicDomain),
 		Region:        req.Region,
 		Status:        "offline",
 		IsLocal:       false,
@@ -161,6 +163,7 @@ type updateNodeRequest struct {
 	Name          *string `json:"name"`
 	Region        *string `json:"region"`
 	PublicIP      *string `json:"publicIp"`
+	PublicDomain  *string `json:"publicDomain"`
 	Host          *string `json:"host"`
 	Port          *int    `json:"port"`
 	Unschedulable *bool   `json:"unschedulable"`
@@ -187,6 +190,10 @@ func (h *Handler) updateNode(w http.ResponseWriter, r *http.Request) {
 	if req.PublicIP != nil {
 		value := strings.TrimSpace(*req.PublicIP)
 		patch.PublicIP = &value
+	}
+	if req.PublicDomain != nil {
+		value := strings.TrimSpace(*req.PublicDomain)
+		patch.PublicDomain = &value
 	}
 	if req.Host != nil && strings.TrimSpace(*req.Host) != "" {
 		value := strings.TrimSpace(*req.Host)

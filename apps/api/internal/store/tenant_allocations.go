@@ -292,4 +292,3 @@ func (s *Store) ensureLogicalServerSync(ctx context.Context, instance *domain.Ga
 	}
 	return nil
 }
-

@@ -49,7 +49,7 @@ func Open(path string) (*Store, error) {
 }
 
 func initialize(db *gorm.DB) (*Store, error) {
-	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}, &domain.Organization{}, &domain.OrganizationMember{}, &domain.TenantQuota{}, &domain.ComputeNode{}, &domain.NodeTask{}, &domain.WorkloadAssignment{}, &domain.WorkloadObservation{}, &ExecutionLease{}, &domain.CreditTransaction{}, &domain.OAuthIdentity{}); err != nil {
+	if err := db.AutoMigrate(&domain.GameServer{}, &domain.Backup{}, &domain.World{}, &domain.ModFile{}, &domain.ModPack{}, &domain.ActivityEvent{}, &domain.GameUpdateJob{}, &domain.WorldRegenerationJob{}, &domain.AdminAccount{}, &domain.Session{}, &domain.Setting{}, &domain.ServerShare{}, &domain.ConfigPreset{}, &domain.Organization{}, &domain.OrganizationMember{}, &domain.OrganizationInvitation{}, &domain.TenantQuota{}, &domain.ComputeNode{}, &domain.NodeTask{}, &domain.WorkloadAssignment{}, &domain.WorkloadObservation{}, &ExecutionLease{}, &domain.CreditTransaction{}, &domain.OAuthIdentity{}); err != nil {
 		sqlDB, _ := db.DB()
 		if sqlDB != nil {
 			_ = sqlDB.Close()

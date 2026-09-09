@@ -529,6 +529,10 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if _, ok := accountFromContext(r.Context()); ok {
+			next.ServeHTTP(w, r)
+			return
+		}
 		account, ok := h.accountFromRequest(r)
 		if !ok {
 			writeError(w, http.StatusUnauthorized, "authentication required")

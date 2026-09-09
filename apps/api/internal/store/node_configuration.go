@@ -14,6 +14,7 @@ type NodeConfigurationPatch struct {
 	Name          *string
 	Region        *string
 	PublicIP      *string
+	PublicDomain  *string
 	Host          *string
 	Port          *int
 	Unschedulable *bool
@@ -21,7 +22,7 @@ type NodeConfigurationPatch struct {
 
 func (s *Store) UpdateNodeConfiguration(ctx context.Context, id string, patch NodeConfigurationPatch) (domain.ComputeNode, error) {
 	updates := map[string]any{}
-	for column, value := range map[string]*string{"name": patch.Name, "region": patch.Region, "public_ip": patch.PublicIP, "host": patch.Host} {
+	for column, value := range map[string]*string{"name": patch.Name, "region": patch.Region, "public_ip": patch.PublicIP, "public_domain": patch.PublicDomain, "host": patch.Host} {
 		if value != nil {
 			updates[column] = *value
 		}

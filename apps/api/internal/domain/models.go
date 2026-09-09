@@ -424,6 +424,29 @@ type OrganizationMember struct {
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
+type OrganizationInvitation struct {
+	ID             string    `json:"id" gorm:"primaryKey"`
+	OrganizationID string    `json:"organizationId" gorm:"index:idx_org_invitations"`
+	InviterUserID  string    `json:"inviterUserId"`
+	Token          string    `json:"token" gorm:"uniqueIndex"`
+	Role           Role      `json:"role"`
+	MaxUses        int       `json:"maxUses"`
+	UsedCount      int       `json:"usedCount"`
+	ExpiresAt      time.Time `json:"expiresAt"`
+	Revoked        bool      `json:"revoked"`
+	CreatedAt      time.Time `json:"createdAt"`
+}
+
+type InvitationSummary struct {
+	Token            string    `json:"token"`
+	OrganizationID   string    `json:"organizationId"`
+	OrganizationName string    `json:"organizationName"`
+	InviterName      string    `json:"inviterName"`
+	Role             Role      `json:"role"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+	IsExpired        bool      `json:"isExpired"`
+}
+
 type TenantQuota struct {
 	OrganizationID string  `json:"organizationId" gorm:"primaryKey"`
 	MaxServers     int     `json:"maxServers"`
@@ -449,6 +472,7 @@ type ComputeNode struct {
 	Port                 int       `json:"port"`
 	Token                string    `json:"token,omitempty"`
 	PublicIP             string    `json:"publicIp"`
+	PublicDomain         string    `json:"publicDomain,omitempty" gorm:"column:public_domain"`
 	Region               string    `json:"region"`
 	Status               string    `json:"status"`
 	IsLocal              bool      `json:"isLocal"`

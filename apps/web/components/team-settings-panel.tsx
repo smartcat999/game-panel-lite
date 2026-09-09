@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Cpu, HardDrive, Settings2, Shield, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Building2, Cpu, HardDrive, Link2, Settings2, Shield, Trash2, UserPlus, Users, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { SquadInviteDialog } from "@/components/squad-invite-dialog";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import {
   addOrganizationMember,
@@ -22,6 +23,9 @@ export function TeamSettingsPanel() {
   const isZh = locale === "zh";
   const queryClient = useQueryClient();
   const [selectedOrgId] = useState<string>("default-org");
+
+  // Squad Invite Dialog State
+  const [squadInviteOpen, setSquadInviteOpen] = useState(false);
 
   // Add Member State
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -209,12 +213,21 @@ export function TeamSettingsPanel() {
               {isZh ? "管理此工作区的组织成员与访问权限角色。" : "Manage members and assign access roles in this workspace."}
             </p>
           </div>
-          <Button
-            onClick={() => setAddDialogOpen(true)}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs self-start sm:self-auto"
-          >
-            <UserPlus className="size-3.5" /> {isZh ? "邀请新成员" : "Invite Member"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <Button
+              onClick={() => setSquadInviteOpen(true)}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-panel-green text-slate-950 font-bold hover:bg-panel-green/90"
+            >
+              <Link2 className="size-3.5" /> {isZh ? "生成免密邀请链接" : "Shareable Invite Link"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setAddDialogOpen(true)}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs"
+            >
+              <UserPlus className="size-3.5" /> {isZh ? "指定账号添加" : "Add by Username"}
+            </Button>
+          </div>
         </div>
 
         <div className="mt-4 overflow-x-auto">
@@ -416,6 +429,12 @@ export function TeamSettingsPanel() {
           onConfirm={() => removeMemberMutation.mutate(removingMember.userId)}
         />
       ) : null}
+
+      <SquadInviteDialog
+        open={squadInviteOpen}
+        onOpenChange={setSquadInviteOpen}
+        defaultOrgId={currentOrg?.id}
+      />
     </div>
   );
 }

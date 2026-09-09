@@ -69,12 +69,14 @@ export function NodeManagement() {
   const [newNodeName, setNewNodeName] = useState("");
   const [newNodeRegion, setNewNodeRegion] = useState("Hong Kong");
   const [newNodeHost, setNewNodeHost] = useState("");
+  const [newNodePublicDomain, setNewNodePublicDomain] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   // Edit Form state
   const [editName, setEditName] = useState("");
   const [editRegion, setEditRegion] = useState("");
   const [editHost, setEditHost] = useState("");
+  const [editPublicDomain, setEditPublicDomain] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
 
   const { data: nodes = [], isLoading } = useQuery({
@@ -90,6 +92,7 @@ export function NodeManagement() {
       setIsAddModalOpen(false);
       setNewNodeName("");
       setNewNodeHost("");
+      setNewNodePublicDomain("");
       openJoinModal(createdNode);
     },
     onError: (err: Error) => {
@@ -98,7 +101,7 @@ export function NodeManagement() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { name?: string; region?: string; publicIp?: string; host?: string } }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: { name?: string; region?: string; publicIp?: string; host?: string; publicDomain?: string } }) =>
       updateComputeNode(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["compute-nodes"] });
@@ -163,6 +166,7 @@ export function NodeManagement() {
     setEditName(node.name);
     setEditRegion(node.region || "");
     setEditHost(node.publicIp || (node.host !== "0.0.0.0" ? node.host : ""));
+    setEditPublicDomain(node.publicDomain || "");
     setEditError(null);
   };
 
@@ -248,6 +252,14 @@ export function NodeManagement() {
                         <span className="text-slate-600">·</span>
                         <span className="font-mono text-slate-400 truncate max-w-[110px]">{node.publicIp || node.host}</span>
                       </div>
+                      {node.publicDomain && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-sky-400 font-mono">
+                          <span className="inline-flex items-center gap-1 rounded bg-sky-500/10 px-1.5 py-0.5 border border-sky-500/20 truncate max-w-[180px]" title={node.publicDomain}>
+                            <Globe className="size-2.5 text-sky-400 shrink-0" />
+                            {node.publicDomain}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col items-end gap-1 shrink-0">
@@ -470,7 +482,7 @@ export function NodeManagement() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-medium text-slate-300">{isZh ? "公网 IP / 域名 (选填)" : "Public IP (Optional)"}</label>
+                  <label className="block text-[11px] font-medium text-slate-300">{isZh ? "公网 IP (选填)" : "Public IP (Optional)"}</label>
                   <Input
                     value={newNodeHost}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewNodeHost(e.target.value)}
@@ -478,6 +490,21 @@ export function NodeManagement() {
                     className="w-full h-8.5 text-xs bg-slate-950 border-slate-800"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-slate-300">
+                  {isZh ? "公网直连解析域名 (选填)" : "Public Domain (Optional)"}
+                </label>
+                <Input
+                  value={newNodePublicDomain}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewNodePublicDomain(e.target.value)}
+                  placeholder="e.g. shanghai-1.games.cloud"
+                  className="w-full h-8.5 text-xs bg-slate-950 border-slate-800 font-mono"
+                />
+                <p className="text-[10px] text-slate-500">
+                  {isZh ? "配置后，该节点上的服务器玩家连接信息优先展示此域名而非原始 IP" : "When configured, players will connect using this domain instead of raw IP"}
+                </p>
               </div>
 
               <div className="rounded-lg border border-panel-green/20 bg-panel-green/5 p-2.5 text-[11px] text-slate-400 flex items-start gap-2">
@@ -502,7 +529,8 @@ export function NodeManagement() {
                   name: newNodeName.trim(),
                   host: newNodeHost.trim() || "0.0.0.0",
                   publicIp: newNodeHost.trim(),
-                  region: newNodeRegion.trim()
+                  region: newNodeRegion.trim(),
+                  publicDomain: newNodePublicDomain.trim() || undefined
                 })}
                 className="h-8 text-xs bg-panel-green text-slate-950 font-bold hover:bg-panel-green/90"
               >
@@ -564,7 +592,7 @@ export function NodeManagement() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-medium text-slate-300">{isZh ? "公网 IP / 域名" : "Public IP / Host"}</label>
+                  <label className="block text-[11px] font-medium text-slate-300">{isZh ? "公网 IP" : "Public IP"}</label>
                   <Input
                     value={editHost}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditHost(e.target.value)}
@@ -572,6 +600,21 @@ export function NodeManagement() {
                     className="w-full h-8.5 text-xs bg-slate-950 border-slate-800"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-slate-300">
+                  {isZh ? "公网直连解析域名 (Public Domain)" : "Public Domain"}
+                </label>
+                <Input
+                  value={editPublicDomain}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditPublicDomain(e.target.value)}
+                  placeholder="e.g. shanghai-1.games.cloud"
+                  className="w-full h-8.5 text-xs bg-slate-950 border-slate-800 font-mono"
+                />
+                <p className="text-[10px] text-slate-500">
+                  {isZh ? "配置后，该节点上的服务器玩家连接信息优先展示此域名而非原始 IP" : "When configured, players will connect using this domain instead of raw IP"}
+                </p>
               </div>
             </div>
 
@@ -593,7 +636,8 @@ export function NodeManagement() {
                     name: editName.trim(),
                     region: editRegion.trim(),
                     publicIp: editHost.trim(),
-                    host: editHost.trim() || undefined
+                    host: editHost.trim() || undefined,
+                    publicDomain: editPublicDomain.trim()
                   }
                 })}
                 className="h-8 text-xs bg-panel-green text-slate-950 font-bold hover:bg-panel-green/90"

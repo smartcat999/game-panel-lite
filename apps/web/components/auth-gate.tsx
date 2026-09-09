@@ -12,7 +12,7 @@ import { useI18n } from "@/lib/i18n";
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (pathname === "/" || pathname.startsWith("/share/")) {
+  if (pathname === "/" || pathname.startsWith("/share/") || pathname.startsWith("/join")) {
     return children;
   }
   return <ProtectedAuthGate>{children}</ProtectedAuthGate>;

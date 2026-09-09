@@ -263,12 +263,14 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cpuLimit := resources.CPULimitCores
-	if cpuLimit <= 0 {
-		cpuLimit = 2
-	}
 	memLimit := resources.MemoryLimitMB
-	if memLimit <= 0 {
-		memLimit = 4096
+	if organizationID == "" || payload.PrepaidPlanID != "" {
+		if cpuLimit <= 0 {
+			cpuLimit = 2
+		}
+		if memLimit <= 0 {
+			memLimit = 4096
+		}
 	}
 	now := time.Now()
 	server := domain.GameServer{

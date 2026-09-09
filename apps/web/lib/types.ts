@@ -475,6 +475,7 @@ export type ComputeNode = {
   port: number;
   token?: string;
   publicIp?: string;
+  publicDomain?: string;
   region?: string;
   status: "online" | "offline" | "degraded";
   isLocal: boolean;
@@ -493,6 +494,38 @@ export type ComputeNode = {
   lastHeartbeat?: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type OrganizationMember = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  username?: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  createdAt: string;
+};
+
+export type OrganizationInvitation = {
+  id: string;
+  organizationId: string;
+  inviterUserId: string;
+  token: string;
+  role: "admin" | "member" | "viewer";
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string;
+  revoked: boolean;
+  createdAt: string;
+};
+
+export type InvitationSummary = {
+  token: string;
+  organizationId: string;
+  organizationName: string;
+  inviterName: string;
+  role: "admin" | "member" | "viewer";
+  expiresAt: string;
+  isExpired: boolean;
 };
 
 export type NodeJoinCommand = {

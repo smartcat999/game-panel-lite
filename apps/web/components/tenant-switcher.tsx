@@ -1,16 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Check, ChevronsUpDown, Cpu, HardDrive } from "lucide-react";
+import { Building2, Check, ChevronsUpDown, Cpu, HardDrive, UserPlus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { listOrganizations, getOrganizationUsage } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { SquadInviteDialog } from "@/components/squad-invite-dialog";
 
 export function TenantSwitcher() {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
   const [open, setOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedOrgId, setSelectedOrgId] = useState<string>("default-org");
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -130,8 +132,29 @@ export function TenantSwitcher() {
               </div>
             </div>
           )}
+
+          {/* Action button to invite squad */}
+          <div className="mt-2.5 border-t border-slate-800 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setInviteOpen(true);
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-panel-green/30 bg-panel-green/10 py-1.5 text-xs font-semibold text-panel-green hover:bg-panel-green/20 transition"
+            >
+              <UserPlus className="size-3.5" />
+              <span>{isZh ? "邀请成员 · 战队开黑" : "Invite Squad Members"}</span>
+            </button>
+          </div>
         </div>
       )}
+
+      <SquadInviteDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        defaultOrgId={currentOrg?.id}
+      />
     </div>
   );
 }
