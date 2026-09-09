@@ -14,6 +14,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instanceview"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	modfiles "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modlibrary"
@@ -49,6 +50,7 @@ type Handler struct {
 	systemUpdate   *systemupdate.Service
 	gateway        *gateway.StreamGateway
 	regionOps      regionOperationsReader
+	instanceViews  instanceViewReader
 
 	agentLogsMu   sync.RWMutex
 	agentLogs     map[string][]string
@@ -70,6 +72,13 @@ type Handler struct {
 type regionOperationsReader interface {
 	ListRegionalNodes(context.Context, string, string, int) (regional.NodeOperationsPage, error)
 	ListRegionalDeployments(context.Context, string, string, int) (regional.DeploymentOperationsPage, error)
+}
+
+type instanceViewReader interface {
+	ListTenantInstanceViews(context.Context, string, string, string, int) (instanceview.Page[instanceview.Record], error)
+	GetTenantInstanceView(context.Context, string, string, string) (instanceview.Record, error)
+	ListPlatformInstanceViews(context.Context, string, string, string, int) (instanceview.Page[instanceview.PlatformRecord], error)
+	GetPlatformInstanceView(context.Context, string, string) (instanceview.PlatformRecord, error)
 }
 
 type resourceLimitPayload struct {
@@ -109,6 +118,7 @@ func NewHandler(
 		dockerMonitor:    dockerMonitor,
 		runtimeFactory:   runtimeFactory,
 		apiMetrics:       apiMetrics,
+		instanceViews:    store,
 		gateway:          streamGateway,
 		agentLogs:        make(map[string][]string),
 		agentLogChans:    make(map[string]map[chan string]struct{}),
@@ -211,6 +221,10 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/user/credits", h.getUserCredits)
 		r.Get("/api/commerce/subscriptions", h.listCommerceSubscriptions)
 		r.Get("/api/operations/{id}", h.getOperationStatus)
+		r.Get("/api/instances", h.listTenantInstances)
+		r.Get("/api/instances/{id}", h.getTenantInstance)
+		r.With(h.requireAdmin).Get("/api/platform/instances", h.listPlatformInstances)
+		r.With(h.requireAdmin).Get("/api/platform/instances/{id}", h.getPlatformInstance)
 		r.Post("/api/commerce/orders", h.createCommerceOrder)
 		r.Post("/api/commerce/orders/{id}/cancel", h.cancelCommerceOrder)
 		r.Post("/api/auth/password", h.changePassword)

@@ -106,6 +106,105 @@ paths:
         "403": {description: Platform administrator required}
         "404": {description: Region not found}
         "503": {description: Region operations connection unavailable}
+  /api/instances:
+    get:
+      security:
+        - sessionCookie: []
+      summary: List logical instances in one current tenant membership
+      description: Requires an explicit organization. Returns global intent, placement, latest operation and the safe asynchronous deployment projection. It never returns Node, runtime, protected configuration or regional error details.
+      parameters:
+        - in: query
+          name: organizationId
+          required: true
+          schema: {type: string}
+        - in: query
+          name: after
+          schema: {type: string}
+          description: Exclusive stable logical instance ID cursor.
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        "200":
+          description: Tenant-scoped logical instance page.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TenantInstanceViewPage"}
+        "400": {description: Missing, duplicate or invalid query parameter}
+        "401": {description: Authentication required}
+        "404": {description: Organization missing or account is not a current member}
+        "500": {description: Read model unavailable or inconsistent}
+  /api/instances/{id}:
+    get:
+      security:
+        - sessionCookie: []
+      summary: Read one logical instance in a current tenant membership
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+        - in: query
+          name: organizationId
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Tenant-safe logical instance view.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TenantInstanceView"}
+        "400": {description: Missing, duplicate or invalid query parameter}
+        "401": {description: Authentication required}
+        "404": {description: Instance missing or outside the current membership}
+        "500": {description: Read model unavailable or inconsistent}
+  /api/platform/instances:
+    get:
+      security:
+        - sessionCookie: []
+      summary: List global logical instances for platform operations
+      description: Platform-admin inventory. The optional organization filter is a query constraint rather than a console context. Node and regional task IDs may be present for tracing; runtime IDs, protected configuration and raw regional errors are never returned.
+      parameters:
+        - in: query
+          name: organizationId
+          schema: {type: string}
+        - in: query
+          name: after
+          schema: {type: string}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        "200":
+          description: Platform logical instance page.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PlatformInstanceViewPage"}
+        "400": {description: Duplicate or invalid query parameter}
+        "401": {description: Authentication required}
+        "403": {description: Platform administrator required}
+        "500": {description: Read model unavailable or inconsistent}
+  /api/platform/instances/{id}:
+    get:
+      security:
+        - sessionCookie: []
+      summary: Read one global logical instance for platform tracing
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Platform logical instance and deployment relationship.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PlatformInstanceView"}
+        "400": {description: Invalid path or unexpected query parameter}
+        "401": {description: Authentication required}
+        "403": {description: Platform administrator required}
+        "404": {description: Logical instance not found}
+        "500": {description: Read model unavailable or inconsistent}
   /api/games:
     get:
       summary: List the registered game and Provider catalog
@@ -1866,6 +1965,68 @@ components:
       in: cookie
       name: gamepanel_session
   schemas:
+    InstanceOperationSummary:
+      type: object
+      required: [id, kind, status, createdAt]
+      properties:
+        id: {type: string}
+        kind: {type: string}
+        status: {type: string, enum: [pending, succeeded, failed]}
+        createdAt: {type: string, format: date-time}
+    InstanceDeploymentSummary:
+      type: object
+      required: [operationId, actualState, outcome, observedAt]
+      properties:
+        operationId: {type: string}
+        actualState: {type: string, enum: [running, stopped, missing, unknown]}
+        outcome: {type: string, enum: [succeeded, failed]}
+        observedAt: {type: string, format: date-time}
+    TenantInstanceView:
+      type: object
+      required: [id, organizationId, name, providerKey, gameVersion, configSchemaVersion, cpu, memoryMb, desiredState, regionId, revisionId, specGeneration, intentVersion, placementEpoch, createdAt]
+      properties:
+        id: {type: string}
+        organizationId: {type: string}
+        name: {type: string}
+        providerKey: {type: string}
+        gameVersion: {type: string}
+        configSchemaVersion: {type: integer, minimum: 1}
+        cpu: {type: number, exclusiveMinimum: 0}
+        memoryMb: {type: integer, format: int64, minimum: 1}
+        desiredState: {type: string, enum: [running, stopped, deleted]}
+        regionId: {type: string}
+        revisionId: {type: string}
+        specGeneration: {type: integer, format: int64, minimum: 1}
+        intentVersion: {type: integer, format: int64, minimum: 1}
+        placementEpoch: {type: integer, format: int64, minimum: 1}
+        createdAt: {type: string, format: date-time}
+        latestOperation: {$ref: "#/components/schemas/InstanceOperationSummary"}
+        deployment: {$ref: "#/components/schemas/InstanceDeploymentSummary"}
+    PlatformInstanceView:
+      allOf:
+        - $ref: "#/components/schemas/TenantInstanceView"
+        - type: object
+          properties:
+            nodeId: {type: string}
+            taskId: {type: string}
+    TenantInstanceViewPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: "#/components/schemas/TenantInstanceView"}
+        nextCursor: {type: string}
+    PlatformInstanceViewPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: "#/components/schemas/PlatformInstanceView"}
+        nextCursor: {type: string}
     RegionDirectoryEntry:
       type: object
       required: [id, name, acceptingCreates, version]

@@ -5,14 +5,13 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { PlatformAccessGuard } from "@/components/platform-access-guard";
-import { listGameServers, listOrganizations } from "@/lib/api";
-import { gameServerStatus } from "@/lib/game-server-resource";
+import { listOrganizations, listPlatformInstanceViews } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export default function PlatformInstancesPage() {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
-  const instances = useQuery({ queryKey: ["platform", "instances"], queryFn: () => listGameServers(), retry: false });
+  const instances = useQuery({ queryKey: ["platform", "instances"], queryFn: () => listPlatformInstanceViews(), retry: false });
   const organizations = useQuery({ queryKey: ["platform", "organizations"], queryFn: listOrganizations, retry: false });
   const organizationNames = new Map((organizations.data ?? []).map((organization) => [organization.id, organization.name]));
 
@@ -31,7 +30,7 @@ export default function PlatformInstancesPage() {
             <div className="p-8 text-center text-xs text-slate-400">{isZh ? "正在读取平台实例…" : "Loading platform instances…"}</div>
           ) : instances.isError ? (
             <div className="p-8 text-center text-xs text-slate-500">{isZh ? "平台实例暂时无法读取。" : "Platform instances are temporarily unavailable."}</div>
-          ) : !instances.data?.length ? (
+          ) : !instances.data?.items.length ? (
             <div className="p-8 text-center text-xs text-slate-500">{isZh ? "当前没有逻辑实例。" : "No logical instances are available."}</div>
           ) : (
             <div className="overflow-x-auto">
@@ -48,7 +47,7 @@ export default function PlatformInstancesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {instances.data.map((instance) => (
+                  {instances.data.items.map((instance) => (
                     <tr key={instance.id} className="text-slate-600">
                       <td className="px-4 py-3">
                         <p className="font-semibold text-slate-800">{instance.name}</p>
@@ -58,10 +57,10 @@ export default function PlatformInstancesPage() {
                         <p>{organizationNames.get(instance.organizationId ?? "") ?? (isZh ? "未知租户" : "Unknown tenant")}</p>
                         <p className="mt-0.5 font-mono text-[10px] text-slate-400">{instance.organizationId ?? "—"}</p>
                       </td>
-                      <td className="px-3 py-3">{desiredStateLabel(instance.spec.desiredState, isZh)}</td>
-                      <td className="px-3 py-3">{statusLabel(gameServerStatus(instance), isZh)}</td>
-                      <td className="px-3 py-3 font-mono text-[11px]">{instance.region || (isZh ? "未分配" : "Unplaced")}</td>
-                      <td className="px-3 py-3 font-mono">{instance.spec.generation}</td>
+                      <td className="px-3 py-3">{desiredStateLabel(instance.desiredState, isZh)}</td>
+                      <td className="px-3 py-3">{statusLabel(instance.deployment?.actualState, instance.latestOperation?.status, isZh)}</td>
+                      <td className="px-3 py-3 font-mono text-[11px]">{instance.regionId}</td>
+                      <td className="px-3 py-3 font-mono">{instance.specGeneration}</td>
                       <td className="px-4 py-3 text-right">
                         <Link href={`/platform/instances/${encodeURIComponent(instance.id)}`} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:text-emerald-800">
                           {isZh ? "查看链路" : "Trace resource"}<ArrowRight className="size-3" />
@@ -85,7 +84,9 @@ function desiredStateLabel(state: string, isZh: boolean) {
   return isZh ? "停止" : "Stopped";
 }
 
-function statusLabel(status: string, isZh: boolean) {
+function statusLabel(actualState: string | undefined, operationStatus: string | undefined, isZh: boolean) {
+  if (!actualState && operationStatus === "pending") return isZh ? "交付中" : "Provisioning";
+  if (!actualState) return isZh ? "尚未上报" : "Not reported";
   const labels: Record<string, [string, string]> = {
     running: ["运行中", "Running"],
     stopped: ["已停止", "Stopped"],
@@ -94,6 +95,6 @@ function statusLabel(status: string, isZh: boolean) {
     deleting: ["删除中", "Deleting"],
     errored: ["异常", "Error"]
   };
-  const label = labels[status] ?? ["未知", "Unknown"];
+  const label = labels[actualState] ?? ["未知", "Unknown"];
   return isZh ? label[0] : label[1];
 }

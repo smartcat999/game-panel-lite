@@ -1,9 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getRegionDeployments, getRegionNodes, getWorldRegeneration, listBackups, listGames, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
+import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getPlatformInstanceView, getRegionDeployments, getRegionNodes, getWorldRegeneration, listBackups, listGames, listPlatformInstanceViews, listTenantInstanceViews, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("uses separate tenant and platform logical instance endpoints", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "logical-1" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await listTenantInstanceViews("tenant-a", "cursor-a", 25);
+    await listPlatformInstanceViews(undefined, undefined, 50);
+    await getPlatformInstanceView("logical-1");
+
+    const tenantURL = new URL(String(fetchMock.mock.calls[0]?.[0]), "http://local.test");
+    expect(tenantURL.pathname).toBe("/api/instances");
+    expect(tenantURL.searchParams.get("organizationId")).toBe("tenant-a");
+    expect(tenantURL.searchParams.get("after")).toBe("cursor-a");
+    expect(tenantURL.searchParams.get("limit")).toBe("25");
+    const platformURL = new URL(String(fetchMock.mock.calls[1]?.[0]), "http://local.test");
+    expect(platformURL.pathname).toBe("/api/platform/instances");
+    expect(platformURL.searchParams.has("organizationId")).toBe(false);
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/api/platform/instances/logical-1");
   });
 
   it("keeps raw backup bytes for aggregate dashboard metrics", async () => {

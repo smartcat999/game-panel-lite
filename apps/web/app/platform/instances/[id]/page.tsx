@@ -6,8 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Building2, MapPinned, Server } from "lucide-react";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { PlatformAccessGuard } from "@/components/platform-access-guard";
-import { getGameServer, listOrganizations } from "@/lib/api";
-import { gameServerStatus } from "@/lib/game-server-resource";
+import { getPlatformInstanceView, listOrganizations } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export default function PlatformInstanceDetailPage() {
@@ -15,7 +14,7 @@ export default function PlatformInstanceDetailPage() {
   const id = decodeURIComponent(params.id);
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
-  const instance = useQuery({ queryKey: ["platform", "instances", id], queryFn: () => getGameServer(id), enabled: Boolean(id), retry: false, refetchInterval: 10_000 });
+  const instance = useQuery({ queryKey: ["platform", "instances", id], queryFn: () => getPlatformInstanceView(id), enabled: Boolean(id), retry: false, refetchInterval: 10_000 });
   const organizations = useQuery({ queryKey: ["platform", "organizations"], queryFn: listOrganizations, retry: false });
   const resource = instance.data;
   const organization = organizations.data?.find((item) => item.id === resource?.organizationId);
@@ -54,23 +53,23 @@ export default function PlatformInstanceDetailPage() {
               </RelationCard>
 
               <RelationCard icon={<MapPinned className="size-4" />} title={isZh ? "部署位置" : "Placement"}>
-                <Definition label={isZh ? "区域" : "Region"} value={resource.region || (isZh ? "尚未分配" : "Not placed")} mono />
+                <Definition label={isZh ? "区域" : "Region"} value={resource.regionId} mono />
                 <Definition label={isZh ? "实际节点" : "Allocated node"} value={resource.nodeId || (isZh ? "尚未调度" : "Not scheduled")} mono />
-                {resource.region ? <Link href={`/platform/regions/${encodeURIComponent(resource.region)}`} className="mt-3 inline-flex text-[11px] font-medium text-emerald-700 hover:text-emerald-800">{isZh ? "查看区域运维" : "Open Region operations"}</Link> : null}
+                <Link href={`/platform/regions/${encodeURIComponent(resource.regionId)}`} className="mt-3 inline-flex text-[11px] font-medium text-emerald-700 hover:text-emerald-800">{isZh ? "查看区域运维" : "Open Region operations"}</Link>
               </RelationCard>
             </div>
 
             <section className="rounded-xl border bg-white p-4 micro-border subtle-elevation">
               <h2 className="text-xs font-semibold text-slate-800">{isZh ? "控制面状态" : "Control-plane state"}</h2>
               <div className="mt-3 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-                <Definition label={isZh ? "期望状态" : "Desired state"} value={desiredStateLabel(resource.spec.desiredState, isZh)} />
-                <Definition label={isZh ? "观测状态" : "Observed state"} value={statusLabel(gameServerStatus(resource), isZh)} />
-                <Definition label={isZh ? "配置版本" : "Spec generation"} value={String(resource.spec.generation)} mono />
-                <Definition label={isZh ? "已应用版本" : "Applied generation"} value={String(resource.status.appliedGeneration)} mono />
-                <Definition label={isZh ? "游戏" : "Game"} value={resource.gameKey} mono />
+                <Definition label={isZh ? "期望状态" : "Desired state"} value={desiredStateLabel(resource.desiredState, isZh)} />
+                <Definition label={isZh ? "观测状态" : "Observed state"} value={statusLabel(resource.deployment?.actualState, resource.latestOperation?.status, isZh)} />
+                <Definition label={isZh ? "配置版本" : "Spec generation"} value={String(resource.specGeneration)} mono />
+                <Definition label={isZh ? "意图版本" : "Intent version"} value={String(resource.intentVersion)} mono />
+                <Definition label={isZh ? "游戏版本" : "Game version"} value={resource.gameVersion} mono />
                 <Definition label={isZh ? "运行提供器" : "Provider"} value={resource.providerKey} mono />
-                <Definition label="CPU" value={`${resource.spec.resources?.cpuLimitCores ?? "—"}`} mono />
-                <Definition label={isZh ? "内存" : "Memory"} value={resource.spec.resources?.memoryLimitMb ? `${resource.spec.resources.memoryLimitMb} MB` : "—"} mono />
+                <Definition label="CPU" value={`${resource.cpu}`} mono />
+                <Definition label={isZh ? "内存" : "Memory"} value={`${resource.memoryMb} MB`} mono />
               </div>
             </section>
           </>
@@ -86,7 +85,9 @@ function desiredStateLabel(state: string, isZh: boolean) {
   return isZh ? "停止" : "Stopped";
 }
 
-function statusLabel(status: string, isZh: boolean) {
+function statusLabel(actualState: string | undefined, operationStatus: string | undefined, isZh: boolean) {
+  if (!actualState && operationStatus === "pending") return isZh ? "交付中" : "Provisioning";
+  if (!actualState) return isZh ? "尚未上报" : "Not reported";
   const labels: Record<string, [string, string]> = {
     running: ["运行中", "Running"],
     stopped: ["已停止", "Stopped"],
@@ -95,7 +96,7 @@ function statusLabel(status: string, isZh: boolean) {
     deleting: ["删除中", "Deleting"],
     errored: ["异常", "Error"]
   };
-  const label = labels[status] ?? ["未知", "Unknown"];
+  const label = labels[actualState] ?? ["未知", "Unknown"];
   return isZh ? label[0] : label[1];
 }
 

@@ -101,6 +101,9 @@ func forbiddenImport(file, imported string) string {
 	if under("deploymentstatus") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "deployment status contracts must remain independent of transport and persistence"
 	}
+	if under("instanceview") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "global instance read models must remain independent of transport and persistence"
+	}
 	if under("regionstatusingress") && ((strings.Contains(imported, ".") && imported != api+"regional" && imported != api+"regionstatus" && imported != api+"deploymentstatus") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "Region status ingress must depend on wire models and a consumer-owned projection port"
 	}

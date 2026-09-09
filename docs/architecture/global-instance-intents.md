@@ -1,6 +1,6 @@
 # 全局实例意图的持久化基础
 
-2026-09-08。本批实现逻辑模型和数据库事务，尚未切换 HTTP 创建入口，也未实现独立 Global／Region 数据库或 MQ 消费。目标边界见 [蓝图](architecture-target-blueprint.md)。
+2026-09-08。本批实现逻辑模型和数据库事务；2026-09-09 已接入租户及平台只读 HTTP 接口。创建／修订入口仍未切换，也未完成生产独立 Global／Region 部署。目标边界见 [蓝图](architecture-target-blueprint.md)。
 
 ## 已实现的数据所有权
 

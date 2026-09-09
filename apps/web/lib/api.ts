@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, RegionalDeploymentOperationsPage, RegionalNodeOperationsPage, RegionStatusSnapshot, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InstanceViewPage, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, PlatformInstanceView, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, RegionalDeploymentOperationsPage, RegionalNodeOperationsPage, RegionStatusSnapshot, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, TenantInstanceView, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
@@ -2010,6 +2010,32 @@ export async function simulatePaymentWebhook(req: {
 export async function getOperationStatus(operationId: string): Promise<ServerOperation> {
   const response = await apiFetch(`${API_BASE}/api/operations/${encodeURIComponent(operationId)}`, { cache: "no-store" });
   return readPayload<ServerOperation>(response, "Unable to load operation status");
+}
+
+export async function listTenantInstanceViews(organizationId: string, after?: string, limit = 50): Promise<InstanceViewPage> {
+  const query = new URLSearchParams({ organizationId, limit: String(limit) });
+  if (after) query.set("after", after);
+  const response = await apiFetch(`${API_BASE}/api/instances?${query}`, { cache: "no-store" });
+  return readPayload<InstanceViewPage>(response, "Unable to load tenant instances");
+}
+
+export async function getTenantInstanceView(organizationId: string, instanceId: string): Promise<TenantInstanceView> {
+  const query = new URLSearchParams({ organizationId });
+  const response = await apiFetch(`${API_BASE}/api/instances/${encodeURIComponent(instanceId)}?${query}`, { cache: "no-store" });
+  return readPayload<TenantInstanceView>(response, "Unable to load tenant instance");
+}
+
+export async function listPlatformInstanceViews(organizationId?: string, after?: string, limit = 50): Promise<InstanceViewPage<PlatformInstanceView>> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (organizationId) query.set("organizationId", organizationId);
+  if (after) query.set("after", after);
+  const response = await apiFetch(`${API_BASE}/api/platform/instances?${query}`, { cache: "no-store" });
+  return readPayload<InstanceViewPage<PlatformInstanceView>>(response, "Unable to load platform instances");
+}
+
+export async function getPlatformInstanceView(instanceId: string): Promise<PlatformInstanceView> {
+  const response = await apiFetch(`${API_BASE}/api/platform/instances/${encodeURIComponent(instanceId)}`, { cache: "no-store" });
+  return readPayload<PlatformInstanceView>(response, "Unable to load platform instance");
 }
 
 export async function createOrganizationInvitation(

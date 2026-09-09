@@ -703,3 +703,47 @@ export type ServerOperation = {
   status: "pending" | "succeeded" | "failed";
   createdAt: string;
 };
+
+export type InstanceOperationSummary = {
+  id: string;
+  kind: string;
+  status: "pending" | "succeeded" | "failed";
+  createdAt: string;
+};
+
+export type InstanceDeploymentSummary = {
+  operationId: string;
+  actualState: "running" | "stopped" | "missing" | "unknown";
+  outcome: "succeeded" | "failed";
+  observedAt: string;
+};
+
+export type TenantInstanceView = {
+  id: string;
+  organizationId: string;
+  name: string;
+  providerKey: string;
+  gameVersion: string;
+  configSchemaVersion: number;
+  cpu: number;
+  memoryMb: number;
+  desiredState: "running" | "stopped" | "deleted";
+  regionId: string;
+  revisionId: string;
+  specGeneration: number;
+  intentVersion: number;
+  placementEpoch: number;
+  createdAt: string;
+  latestOperation?: InstanceOperationSummary;
+  deployment?: InstanceDeploymentSummary;
+};
+
+export type PlatformInstanceView = TenantInstanceView & {
+  nodeId?: string;
+  taskId?: string;
+};
+
+export type InstanceViewPage<T extends TenantInstanceView = TenantInstanceView> = {
+  items: T[];
+  nextCursor?: string;
+};
