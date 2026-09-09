@@ -1,6 +1,7 @@
 "use client";
 
-import { Copy, Ellipsis, Globe2, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
+import { Copy, Ellipsis, Globe2, Play, RotateCcw, Settings, Square, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -41,7 +42,8 @@ export function ServerActions({
   const client = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const isZh = locale === "zh";
   const { isViewer, canDeleteServer } = usePermissions();
   const [pendingAction, setPendingAction] = useState<"stop" | "restart" | "delete" | null>(null);
   const [busyAction, setBusyAction] = useState<"start" | "stop" | "restart" | "delete" | null>(null);
@@ -209,49 +211,101 @@ export function ServerActions({
 
   return (
     <>
-      <div className={cn(rowMode ? "flex flex-nowrap justify-end gap-1.5" : compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
-        {status === "running" || status === "stopping" ? (
-          <Button className={buttonClassName} variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
-            <Square aria-hidden="true" />
-            {stopLabel}
-          </Button>
-        ) : (
-          <Button
-            className={cn(
-              "border border-panel-green/30 bg-panel-green/10 text-panel-green hover:border-panel-green/50 hover:bg-panel-green/15 disabled:border-panel-line disabled:bg-slate-900/70 disabled:text-slate-500",
-              buttonClassName
+      <div className={cn(rowMode ? "flex flex-nowrap items-center justify-end gap-1" : compact ? "grid grid-cols-2 gap-2 md:grid-cols-4" : "flex flex-wrap gap-2", className)}>
+        {rowMode ? (
+          <>
+            {/* Restart icon-only button */}
+            <button
+              type="button"
+              title={restartLabel}
+              aria-label={restartLabel}
+              onClick={() => runAction("restart")}
+              disabled={controlsDisabled}
+              className="flex size-7 items-center justify-center rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition disabled:opacity-30"
+            >
+              <RotateCcw className="size-3.5" />
+            </button>
+
+            {/* Start / Stop icon-only button */}
+            {status === "running" || status === "stopping" ? (
+              <button
+                type="button"
+                title={stopLabel}
+                aria-label={stopLabel}
+                onClick={() => runAction("stop")}
+                disabled={controlsDisabled}
+                className="flex size-7 items-center justify-center rounded hover:bg-amber-50 text-slate-500 hover:text-amber-600 transition disabled:opacity-30"
+              >
+                <Square className="size-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                title={startLabel}
+                aria-label={startLabel}
+                onClick={() => runAction("start")}
+                disabled={controlsDisabled}
+                className="flex size-7 items-center justify-center rounded hover:bg-emerald-50 text-emerald-600 transition disabled:opacity-30"
+              >
+                <Play className="size-3.5 fill-current" />
+              </button>
             )}
-            variant="ghost"
-            onClick={() => runAction("start")}
-            disabled={controlsDisabled}
-          >
-            <Play aria-hidden="true" />
-            {startLabel}
-          </Button>
+
+            {/* Config & Detail Link icon-only button */}
+            <Link
+              href={`/servers/${server.id}`}
+              title={isZh ? "参数配置与详情" : "Configuration & Details"}
+              aria-label={isZh ? "参数配置与详情" : "Configuration & Details"}
+              className="flex size-7 items-center justify-center rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition"
+            >
+              <Settings className="size-3.5" />
+            </Link>
+          </>
+        ) : (
+          <>
+            {status === "running" || status === "stopping" ? (
+              <Button className={buttonClassName} variant="danger" onClick={() => runAction("stop")} disabled={controlsDisabled}>
+                <Square aria-hidden="true" />
+                {stopLabel}
+              </Button>
+            ) : (
+              <Button
+                className={cn(
+                  "border border-emerald-500/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40",
+                  buttonClassName
+                )}
+                variant="ghost"
+                onClick={() => runAction("start")}
+                disabled={controlsDisabled}
+              >
+                <Play aria-hidden="true" />
+                {startLabel}
+              </Button>
+            )}
+            <Button className={buttonClassName} variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
+              <RotateCcw aria-hidden="true" />
+              {restartLabel}
+            </Button>
+            {showInvite && (
+              <Button className={buttonClassName} variant="secondary" onClick={() => void copyInvite()} disabled={status === "deleting"}>
+                <Copy aria-hidden="true" />
+                {copiedInvite ? t("copied") : t("actionCopyInvite")}
+              </Button>
+            )}
+          </>
         )}
-        {!rowMode ? (
-          <Button className={buttonClassName} variant="secondary" onClick={() => runAction("restart")} disabled={controlsDisabled}>
-            <RotateCcw aria-hidden="true" />
-            {restartLabel}
-          </Button>
-        ) : null}
-        {showInvite && (
-          <Button className={buttonClassName} variant="secondary" onClick={() => void copyInvite()} disabled={status === "deleting"}>
-            <Copy aria-hidden="true" />
-            {copiedInvite ? t("copied") : t("actionCopyInvite")}
-          </Button>
-        )}
+
         {rowMode || onRegenerateWorld || canShowDelete ? (
           <button
             aria-expanded={moreOpen}
             aria-haspopup="menu"
             aria-label={t("serverMoreActions")}
             className={cn(
-              "flex items-center justify-center rounded-md border border-panel-line bg-transparent text-slate-400 transition hover:border-slate-600 hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-1 focus-visible:ring-slate-500",
-              moreOpen && "border-slate-600 bg-slate-800 text-white",
-              rowMode ? "size-8 px-0" : "h-10 px-3",
+              "flex items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none",
+              moreOpen && "bg-slate-100 text-slate-900",
+              rowMode ? "size-7 px-0" : "h-10 px-3 border micro-border",
               compact && !rowMode && "col-span-2 w-full md:col-span-1",
-              controlsDisabled && "cursor-not-allowed opacity-50"
+              controlsDisabled && "cursor-not-allowed opacity-40"
             )}
             disabled={controlsDisabled}
             onClick={toggleMoreMenu}
@@ -259,65 +313,69 @@ export function ServerActions({
             title={t("serverMoreActions")}
             type="button"
           >
-            <Ellipsis aria-hidden="true" className="size-4" />
+            <Ellipsis aria-hidden="true" className="size-3.5" />
           </button>
         ) : null}
       </div>
+
       {moreOpen && typeof document !== "undefined" ? createPortal(
         <div
-          className="fixed z-[70] w-36 rounded-md border border-slate-700/80 bg-slate-900 p-1 shadow-[0_4px_8px_rgba(0,0,0,0.38)]"
+          className="fixed z-[70] w-36 rounded-xl border micro-border bg-white p-1 shadow-xl text-slate-700 animate-in fade-in zoom-in-95 duration-100"
           ref={moreMenuRef}
           role="menu"
           style={{ left: morePosition.left, top: morePosition.top }}
         >
-              {showRowRestart ? (
-                <button
-                  className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-slate-200 transition hover:bg-slate-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={controlsDisabled}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    runAction("restart");
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  <RotateCcw aria-hidden="true" className="size-3.5 text-slate-400" />
-                  {restartLabel}
-                </button>
-              ) : null}
-              {onRegenerateWorld ? <button
-                className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-panel-gold transition hover:bg-panel-gold/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-panel-gold/60 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={controlsDisabled || regenerationBusy}
-                onClick={() => {
-                  setMoreOpen(false);
-                  onRegenerateWorld();
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <Globe2 aria-hidden="true" className="size-3.5" />
-                {regenerationBusy ? t("worldRegenerationProgress") : t("worldRegenerateAction")}
-              </button> : null}
-              {canShowDelete && (onRegenerateWorld || showRowRestart) ? <div className="mx-2 my-1 border-t border-white/10" /> : null}
-              {canShowDelete ? (
-                <button
-                  className="flex h-8 w-full items-center gap-2 rounded-sm px-2.5 text-left text-[13px] text-red-300 transition hover:bg-red-400/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-red-400/60 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={controlsDisabled || !canDelete}
-                  onClick={() => {
-                    setMoreOpen(false);
-                    runAction("delete");
-                  }}
-                  role="menuitem"
-                  title={!canDelete ? t("deleteRequiresStopped") : undefined}
-                  type="button"
-                >
-                  <Trash2 aria-hidden="true" className="size-3.5" />
-                  {deleteLabel}
-                </button>
-              ) : null}
+          {showRowRestart && !rowMode ? (
+            <button
+              className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-slate-700 transition hover:bg-slate-50 focus:outline-none disabled:opacity-40"
+              disabled={controlsDisabled}
+              onClick={() => {
+                setMoreOpen(false);
+                runAction("restart");
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <RotateCcw aria-hidden="true" className="size-3.5 text-slate-400" />
+              {restartLabel}
+            </button>
+          ) : null}
+          {onRegenerateWorld ? (
+            <button
+              className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-amber-700 transition hover:bg-amber-50 focus:outline-none disabled:opacity-40"
+              disabled={controlsDisabled || regenerationBusy}
+              onClick={() => {
+                setMoreOpen(false);
+                onRegenerateWorld();
+              }}
+              role="menuitem"
+              type="button"
+            >
+              <Globe2 aria-hidden="true" className="size-3.5" />
+              {regenerationBusy ? t("worldRegenerationProgress") : t("worldRegenerateAction")}
+            </button>
+          ) : null}
+          {canShowDelete && (onRegenerateWorld || (showRowRestart && !rowMode)) ? <div className="mx-1 my-1 border-t border-slate-100" /> : null}
+          {canShowDelete ? (
+            <button
+              className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-rose-600 transition hover:bg-rose-50 focus:outline-none disabled:opacity-40"
+              disabled={controlsDisabled || !canDelete}
+              onClick={() => {
+                setMoreOpen(false);
+                runAction("delete");
+              }}
+              role="menuitem"
+              title={!canDelete ? t("deleteRequiresStopped") : undefined}
+              type="button"
+            >
+              <Trash2 aria-hidden="true" className="size-3.5" />
+              {deleteLabel}
+            </button>
+          ) : null}
         </div>,
         document.body
       ) : null}
+
       {(errorMessage || successMessage) && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
           <ToastNotice
@@ -332,9 +390,10 @@ export function ServerActions({
           />
         </div>
       )}
+
       {pendingAction && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 backdrop-blur-xs animate-in fade-in duration-150"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !busyAction) setPendingAction(null);
@@ -344,19 +403,19 @@ export function ServerActions({
             aria-describedby="server-action-confirm-description"
             aria-labelledby="server-action-confirm-title"
             aria-modal="true"
-            className="w-full max-w-md rounded-lg border border-panel-line bg-panel-card p-5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+            className="w-full max-w-md rounded-2xl border micro-border bg-white p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
             role="dialog"
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
               <div>
-                <p className="text-sm font-medium text-panel-gold">{t("destructiveAction")}</p>
-                <h2 className="mt-2 text-lg font-semibold text-white" id="server-action-confirm-title">
+                <p className="text-xs font-bold text-amber-600">{t("destructiveAction")}</p>
+                <h2 className="mt-1 text-base font-bold text-slate-900" id="server-action-confirm-title">
                   {t("confirmServerActionTitle", { action: pendingLabel })}
                 </h2>
               </div>
               <button
                 aria-label={t("cancel")}
-                className="flex size-8 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+                className="flex size-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
                 disabled={Boolean(busyAction)}
                 onClick={() => setPendingAction(null)}
                 type="button"
@@ -364,16 +423,16 @@ export function ServerActions({
                 <X aria-hidden="true" className="size-4" />
               </button>
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-400" id="server-action-confirm-description">
+            <p className="text-xs leading-relaxed text-slate-600" id="server-action-confirm-description">
               {pendingAction === "delete"
                 ? t("confirmServerDeleteDescription", { name: server.name })
                 : t("confirmServerActionDescription", { action: pendingLabel, name: server.name })}
             </p>
-            <div className="mt-4 rounded-md border border-panel-line bg-slate-950/60 px-3 py-2 text-sm">
-              <span className="text-slate-500">{t("server")}: </span>
-              <span className="font-medium text-white">{server.name}</span>
+            <div className="rounded-lg border micro-border bg-slate-50/70 px-3 py-2 text-xs">
+              <span className="text-slate-400">{t("server")}: </span>
+              <span className="font-mono font-bold text-slate-800">{server.name}</span>
             </div>
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2 border-t border-slate-100">
               <Button variant="secondary" onClick={() => setPendingAction(null)} disabled={Boolean(busyAction)}>
                 {t("cancel")}
               </Button>

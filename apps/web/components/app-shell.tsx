@@ -1,15 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Gamepad2,
+  Archive,
+  BarChart3,
+  Bell,
+  Box,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  HardDrive,
   KeyRound,
   Languages,
+  LayoutDashboard,
   LayoutGrid,
   LogOut,
-  UserCog,
+  Server,
+  ShieldAlert,
+  Sliders,
+  Users,
   X
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,16 +29,15 @@ import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
 import { TopNav } from "@/components/top-nav";
 import { AppsDrawer } from "@/components/apps-drawer";
-import { ClusterStatusPill } from "@/components/cluster-status-pill";
-import { ClusterFleetPopover } from "@/components/cluster-fleet-popover";
-import { RegionSwitcher } from "@/components/region-switcher";
-import { CreditsBadge } from "@/components/credits-badge";
+import { IncidentDrawer } from "@/components/incident-drawer";
 import { PermissionDenied } from "@/components/permission-denied";
 import { useAuthBootstrap } from "@/lib/auth-session";
 import { usePermissions } from "@/lib/permissions";
+import { PerspectiveProvider, usePerspective } from "@/lib/perspective-context";
 import {
   changeAdminPassword,
   getSettings,
+  listGameServers,
   logoutAdmin,
   updateLocale
 } from "@/lib/api";
@@ -38,7 +47,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (pathname === "/" || pathname.startsWith("/share/")) {
     return <>{children}</>;
   }
-  return <AppChrome>{children}</AppChrome>;
+  return (
+    <PerspectiveProvider>
+      <AppChrome>{children}</AppChrome>
+    </PerspectiveProvider>
+  );
 }
 
 function AppChrome({ children }: { children: ReactNode }) {
@@ -48,9 +61,12 @@ function AppChrome({ children }: { children: ReactNode }) {
   const { locale, setLocale, t } = useI18n();
   const isZh = locale.startsWith("zh");
   const { canAccessGameAssets, canCreateServer, canEditSettings } = usePermissions();
+  const { isMemberView, isWorkspaceAdminView, isSuperAdminView } = usePerspective();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [incidentOpen, setIncidentOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountTab, setAccountTab] = useState<"language" | "password">("language");
   const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
@@ -63,6 +79,9 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const authQuery = useAuthBootstrap();
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, retry: false, staleTime: 30000 });
+  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false, staleTime: 10000 });
+
+  const servers = serversQuery.data ?? [];
 
   const logoutMutation = useMutation({
     mutationFn: logoutAdmin,
@@ -100,6 +119,19 @@ function AppChrome({ children }: { children: ReactNode }) {
     setProfileOpen(false);
     setDrawerOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("gamepanel.sidebar-collapsed");
+    if (saved === "true") setSidebarCollapsed(true);
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem("gamepanel.sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (settingsQuery.data?.locale && !window.localStorage.getItem("gamepanel.locale")) {
@@ -147,123 +179,130 @@ function AppChrome({ children }: { children: ReactNode }) {
   const passwordMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-100 selection:bg-panel-green/30">
-      {/* Top Global Command Header */}
-      <header className="sticky top-0 z-50 h-14 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-full items-center justify-between gap-4">
-          {/* Left: Brand + Standalone Host Badge */}
-          <div className="flex items-center gap-3 shrink-0">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 antialiased">
+      {/* Top Global Command Header (52px / h-12) */}
+      <header className="sticky top-0 z-40 h-12 border-b micro-border bg-white/95 backdrop-blur-md px-3 sm:px-6 subtle-elevation">
+        <div className="flex h-full items-center justify-between gap-3">
+          {/* Left: Brand + Inline Workspace Trigger */}
+          <div className="flex items-center gap-2.5 shrink-0">
             <Link
               href="/dashboard"
-              className="flex items-center gap-2 text-sm font-bold tracking-tight text-white hover:opacity-90 transition"
+              className="flex items-center gap-2 text-xs font-bold tracking-tight text-slate-900 hover:opacity-90 transition"
             >
-              <div className="flex size-7 items-center justify-center rounded-lg bg-panel-green/15 text-panel-green border border-panel-green/30 shadow-xs">
-                <Gamepad2 className="size-4" />
+              <div className="flex size-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/25">
+                GP
               </div>
-              <span className="font-bold tracking-tight">GamePanel <span className="text-panel-green font-mono text-xs">Lite</span></span>
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-panel-green opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-panel-green" />
+              <span className="hidden sm:inline font-bold tracking-tight">
+                GamePanel <span className="text-emerald-600 font-mono text-[11px]">Lite</span>
               </span>
             </Link>
 
-            {/* Cluster Fleet Interactive Popover Hub */}
-            <ClusterFleetPopover />
+            <div className="h-3.5 w-px bg-slate-200 shrink-0" />
 
-            {/* Global Multi-Region Switcher */}
-            <RegionSwitcher />
+            {/* Workspace Selector Pill */}
+            <div className="flex items-center gap-1.5 rounded-md border border-slate-200/80 bg-slate-50/80 px-2 py-1 text-xs font-semibold text-slate-800 shadow-2xs">
+              <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+              <span className="truncate max-w-[110px] sm:max-w-none">Geek Guild</span>
+              <span className="text-[9px] font-mono text-emerald-700 bg-emerald-100/60 border border-emerald-300/40 px-1 rounded font-semibold">
+                Pro
+              </span>
+            </div>
           </div>
 
-          {/* Right: Credits Badge + Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Account Credits & Top-Up Balance */}
-            <CreditsBadge />
-
-            {/* Main Icon Navigation (Positioned on the right) */}
+          {/* Right: 3-Role Perspective Controller + Icon Utility Toolbar */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* 3-Role Perspective Switcher */}
             <TopNav />
 
-            <div className="h-4 w-px bg-slate-800/80 hidden sm:block" />
+            <div className="h-3.5 w-px bg-slate-200 hidden sm:block shrink-0" />
 
-            {/* Cluster Real-Time Metrics Mini-Pill */}
-            <ClusterStatusPill />
+            {/* Incidents & Alerts Trigger */}
+            <button
+              type="button"
+              onClick={() => setIncidentOpen(true)}
+              aria-label="Alerts and notifications"
+              title={isZh ? "告警与通知中心" : "Incidents & Alerts"}
+              className="relative flex size-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
+            >
+              <Bell className="size-3.5" />
+              <span className="absolute top-1 right-1 size-1.5 rounded-full bg-amber-500 ring-2 ring-white" />
+            </button>
 
-            {/* Apps & Tools Drawer Button */}
+            {/* Apps Drawer Button */}
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label="All Apps and Navigation"
-              title="All Apps (⌘B / [)"
-              className="flex size-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-950/80 text-slate-400 hover:border-slate-600 hover:text-slate-100 transition focus:outline-none focus:ring-1 focus:ring-panel-green/50"
+              title={isZh ? "所有功能组件 (⌘B)" : "All Apps (⌘B)"}
+              className="flex size-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
             >
-              <LayoutGrid className="size-4" />
+              <LayoutGrid className="size-3.5" />
             </button>
 
-            {/* Profile Menu */}
+            <div className="h-3.5 w-px bg-slate-200 shrink-0" />
+
+            {/* Profile Avatar & Menu */}
             <div ref={profileRef} className="relative">
               <button
                 type="button"
                 aria-expanded={profileOpen}
                 aria-label={t("userProfile")}
-                className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-800 bg-slate-950 p-0.5 transition hover:border-panel-green focus:outline-none focus:ring-1 focus:ring-panel-green/50"
+                className="flex items-center gap-1.5 rounded-md p-1 hover:bg-slate-100 transition"
                 onClick={() => setProfileOpen((value) => !value)}
               >
-                <Image
-                  src="/images/user-avatar.svg"
-                  alt={t("userAvatarAlt")}
-                  width={40}
-                  height={40}
-                  className="size-full rounded-full object-cover"
-                />
+                <div className="flex size-5 shrink-0 items-center justify-center rounded bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-[9px] font-mono">
+                  {(authQuery.data?.account?.username ?? "GP").slice(0, 2).toUpperCase()}
+                </div>
+                <span className="hidden md:inline text-xs font-medium text-slate-700 max-w-[80px] truncate">
+                  {authQuery.data?.account?.username ?? t("localUser")}
+                </span>
+                <ChevronDown className="size-3 text-slate-400" />
               </button>
 
               {profileOpen && (
-                <div className="absolute right-0 top-10 z-40 w-60 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
-                  <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-                    <Image
-                      src="/images/user-avatar.svg"
-                      alt={t("userAvatarAlt")}
-                      width={40}
-                      height={40}
-                      className="size-9 rounded-full border border-slate-700 bg-slate-950"
-                    />
+                <div className="absolute right-0 top-9 z-50 w-56 rounded-xl border micro-border bg-white p-2.5 shadow-2xl space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="flex items-center gap-2.5 border-b border-slate-100 pb-2.5">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-slate-100 font-mono text-xs font-bold text-slate-700 border border-slate-200">
+                      {(authQuery.data?.account?.username ?? "GP").slice(0, 2).toUpperCase()}
+                    </div>
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-bold text-white">
+                      <p className="truncate text-xs font-bold text-slate-900">
                         {authQuery.data?.account?.username ?? t("localUser")}
                       </p>
-                      <p className="text-[10px] text-panel-green font-mono mt-0.5 font-bold uppercase">
-                        {authQuery.data?.account?.role === "admin"
-                          ? (isZh ? "超级管理员 (Admin)" : "Administrator")
-                          : authQuery.data?.account?.role === "viewer"
-                          ? (isZh ? "只读访客 (Viewer)" : "Viewer")
-                          : (isZh ? "开黑成员 (Member)" : "Member")}
+                      <p className="text-[10px] text-emerald-600 font-mono font-bold uppercase">
+                        {isSuperAdminView
+                          ? (isZh ? "平台超级管理员" : "Superadmin")
+                          : isWorkspaceAdminView
+                          ? (isZh ? "工作区管理员" : "Workspace Admin")
+                          : (isZh ? "开黑成员 (只读)" : "Member")}
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-2 space-y-1">
+                  <div className="space-y-0.5">
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                       onClick={() => openAccountSettings("language")}
                     >
-                      <Languages className="size-3.5 text-sky-400" />
-                      <span>{isZh ? "语言偏好" : "Language Preference"}</span>
+                      <Languages className="size-3.5 text-sky-500" />
+                      <span>{isZh ? "语言偏好" : "Language"}</span>
                     </button>
                     <button
                       type="button"
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                       onClick={() => openAccountSettings("password")}
                     >
-                      <KeyRound className="size-3.5 text-panel-gold" />
-                      <span>{isZh ? "账号安全" : "Account Security"}</span>
+                      <KeyRound className="size-3.5 text-amber-500" />
+                      <span>{isZh ? "账号安全" : "Security"}</span>
                     </button>
                   </div>
 
-                  <div className="mt-2 border-t border-slate-800 pt-2">
+                  <div className="border-t border-slate-100 pt-1">
                     <button
                       type="button"
                       disabled={logoutMutation.isPending}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-400 transition hover:bg-rose-950/40 hover:text-rose-300"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-rose-600 transition hover:bg-rose-50"
                       onClick={() => logoutMutation.mutate()}
                     >
                       <LogOut className="size-3.5" />
@@ -277,41 +316,233 @@ function AppChrome({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {pageAllowed(pathname, canAccessGameAssets, canCreateServer, canEditSettings) ? children : <PermissionDenied />}
-      </main>
+      {/* Main Workspace Layout (Sidebar + Content Container) */}
+      <div className="mx-auto max-w-7xl p-3 sm:p-5">
+        <div className="flex flex-col md:flex-row gap-4 items-stretch min-h-[calc(100vh-6rem)]">
+          {/* Full-Height Cloud Sidebar */}
+          <aside
+            className={cn(
+              "bg-white border micro-border rounded-xl p-2.5 subtle-elevation flex flex-col justify-between shrink-0 transition-all duration-200 select-none",
+              sidebarCollapsed ? "w-full md:w-14 items-center" : "w-full md:w-[210px]"
+            )}
+          >
+            {/* Top Navigation Groups */}
+            <div className="w-full space-y-3.5">
+              {/* Workspace Header & Collapse Toggle */}
+              <div className="flex items-center justify-between px-1 border-b border-slate-100 pb-2">
+                {!sidebarCollapsed && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    WORKSPACE
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  title={sidebarCollapsed ? (isZh ? "展开侧边栏" : "Expand Sidebar") : (isZh ? "折叠侧边栏" : "Collapse Sidebar")}
+                  className="size-5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition ml-auto"
+                >
+                  {sidebarCollapsed ? <ChevronsRight className="size-3.5" /> : <ChevronsLeft className="size-3.5" />}
+                </button>
+              </div>
 
-      {/* Apps and Quick Navigation Drawer */}
+              {/* GROUP 1: OVERVIEW */}
+              <div className="space-y-0.5">
+                {!sidebarCollapsed && (
+                  <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                    WORKSPACE
+                  </div>
+                )}
+                <SidebarItem
+                  href="/dashboard"
+                  active={pathname === "/dashboard"}
+                  icon={<LayoutDashboard className="size-3.5" />}
+                  label="Dashboard"
+                  collapsed={sidebarCollapsed}
+                />
+              </div>
+
+              {/* GROUP 2: COMPUTE (No Config, No +Deploy) */}
+              <div className="space-y-0.5">
+                {!sidebarCollapsed && (
+                  <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                    COMPUTE
+                  </div>
+                )}
+                <SidebarItem
+                  href="/servers"
+                  active={pathname.startsWith("/servers")}
+                  icon={<HardDrive className="size-3.5" />}
+                  label="Instances"
+                  badge={servers.length > 0 ? String(servers.length) : undefined}
+                  collapsed={sidebarCollapsed}
+                />
+              </div>
+
+              {/* GROUP 3: STORAGE */}
+              <div className="space-y-0.5">
+                {!sidebarCollapsed && (
+                  <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                    STORAGE
+                  </div>
+                )}
+                <SidebarItem
+                  href="/worlds"
+                  active={pathname.startsWith("/worlds") || pathname.startsWith("/backups")}
+                  icon={<Archive className="size-3.5" />}
+                  label="Worlds & Saves"
+                  collapsed={sidebarCollapsed}
+                />
+                <SidebarItem
+                  href="/mods"
+                  active={pathname.startsWith("/mods") || pathname.startsWith("/games") || pathname.startsWith("/presets")}
+                  icon={<Box className="size-3.5" />}
+                  label="Mod Workshop"
+                  collapsed={sidebarCollapsed}
+                />
+              </div>
+
+              {/* GROUP 4: OBSERVABILITY (Audit logs归位运维分类) */}
+              <div className="space-y-0.5">
+                {!sidebarCollapsed && (
+                  <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                    OBSERVABILITY
+                  </div>
+                )}
+                <SidebarItem
+                  href="/activity"
+                  active={pathname.startsWith("/activity")}
+                  icon={<BarChart3 className="size-3.5" />}
+                  label="Audit Logs"
+                  collapsed={sidebarCollapsed}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIncidentOpen(true)}
+                  title="Incidents & Alerts"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 h-7",
+                    sidebarCollapsed && "justify-center px-0"
+                  )}
+                >
+                  <ShieldAlert className="size-3.5 text-slate-400 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="truncate text-left flex-1">Incidents & Alerts</span>
+                      <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* GROUP 5: TEAM & BILLING (Workspace Admin only, strictly no hardware) */}
+              {!isMemberView && (
+                <div className="space-y-0.5">
+                  {!sidebarCollapsed && (
+                    <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                      ORGANIZATION
+                    </div>
+                  )}
+                  <SidebarItem
+                    href="/settings"
+                    active={pathname.startsWith("/settings")}
+                    icon={<Users className="size-3.5" />}
+                    label="Team Members"
+                    badge="6"
+                    collapsed={sidebarCollapsed}
+                  />
+                  <SidebarItem
+                    href="/settings?tab=billing"
+                    active={pathname.startsWith("/settings") && typeof window !== "undefined" && window.location.search.includes("billing")}
+                    icon={<Sliders className="size-3.5" />}
+                    label="Billing & Quota"
+                    collapsed={sidebarCollapsed}
+                  />
+                </div>
+              )}
+
+              {/* GROUP 6: PLATFORM INFRASTRUCTURE (Visible ONLY to Platform Superadmin!) */}
+              {isSuperAdminView && (
+                <div className="space-y-0.5 pt-2 border-t border-purple-100">
+                  {!sidebarCollapsed && (
+                    <div className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-purple-600">
+                      PLATFORM HARDWARE
+                    </div>
+                  )}
+                  <SidebarItem
+                    href="/settings?tab=nodes"
+                    active={false}
+                    icon={<Server className="size-3.5 text-purple-600" />}
+                    label="Cluster Nodes"
+                    badge="3 Live"
+                    badgeTone="purple"
+                    collapsed={sidebarCollapsed}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Quota Gauge (Single Metric Display - No Slash Policy!) */}
+            {!sidebarCollapsed ? (
+              <div className="w-full pt-3 border-t border-slate-100 mt-4 space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+                  <span>Workspace Quota</span>
+                  <span className="font-mono text-emerald-700 font-bold">{servers.length} Slots In Use</span>
+                </div>
+                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (servers.length / 8) * 100)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                  <span>Cap 8 Slots · RAM 4.2 GB</span>
+                  <span className="font-bold text-slate-600">PRO</span>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full pt-3 border-t border-slate-100 flex justify-center text-[10px] font-mono font-bold text-emerald-600">
+                {servers.length}
+              </div>
+            )}
+          </aside>
+
+          {/* Main Content Area */}
+          <main className="flex-1 min-w-0">
+            {pageAllowed(pathname, canAccessGameAssets, canCreateServer, canEditSettings) ? children : <PermissionDenied />}
+          </main>
+        </div>
+      </div>
+
+      {/* Incident & Notification Center Drawer */}
+      <IncidentDrawer open={incidentOpen} onClose={() => setIncidentOpen(false)} />
+
+      {/* Global Apps & Tools Drawer */}
       <AppsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       {/* Account Settings Dialog */}
       {accountOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <UserCog className="size-5 text-panel-green" />
-                <h3 className="text-sm font-bold text-white">{isZh ? "账号设置" : "Account Settings"}</h3>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border micro-border bg-white shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">{isZh ? "账号设置" : "Account Settings"}</h3>
               <button
                 type="button"
                 onClick={() => setAccountOpen(false)}
-                className="text-slate-400 hover:text-white transition"
+                className="text-slate-400 hover:text-slate-700 transition"
               >
                 <X className="size-4" />
               </button>
             </div>
 
             {/* Tab switch */}
-            <div className="flex border-b border-slate-800">
+            <div className="flex border-b border-slate-100">
               <button
                 type="button"
                 className={cn(
                   "flex-1 pb-2.5 text-xs font-semibold transition border-b-2",
                   accountTab === "language"
-                    ? "border-panel-green text-panel-green"
-                    : "border-transparent text-slate-400 hover:text-slate-200"
+                    ? "border-emerald-500 text-emerald-600 font-bold"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
                 )}
                 onClick={() => setAccountTab("language")}
               >
@@ -322,8 +553,8 @@ function AppChrome({ children }: { children: ReactNode }) {
                 className={cn(
                   "flex-1 pb-2.5 text-xs font-semibold transition border-b-2",
                   accountTab === "password"
-                    ? "border-panel-green text-panel-green"
-                    : "border-transparent text-slate-400 hover:text-slate-200"
+                    ? "border-emerald-500 text-emerald-600 font-bold"
+                    : "border-transparent text-slate-400 hover:text-slate-700"
                 )}
                 onClick={() => setAccountTab("password")}
               >
@@ -332,7 +563,7 @@ function AppChrome({ children }: { children: ReactNode }) {
             </div>
 
             {accountMessage && (
-              <p className="text-xs text-panel-green bg-panel-green/10 border border-panel-green/30 px-3 py-2 rounded-lg">
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
                 {accountMessage}
               </p>
             )}
@@ -340,11 +571,11 @@ function AppChrome({ children }: { children: ReactNode }) {
             {accountTab === "language" ? (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-300">{isZh ? "语言选择" : "Select Language"}</label>
+                  <label className="text-xs font-medium text-slate-700">{isZh ? "语言选择" : "Select Language"}</label>
                   <select
                     value={selectedLocale}
                     onChange={(e) => setSelectedLocale(e.target.value as Locale)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-panel-green focus:outline-none"
+                    className="w-full rounded-lg border micro-border bg-slate-50/60 px-3 py-2 text-xs text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-hidden"
                   >
                     <option value="zh">简体中文 (Chinese Simplified)</option>
                     <option value="en">English (US)</option>
@@ -370,28 +601,28 @@ function AppChrome({ children }: { children: ReactNode }) {
             ) : (
               <form onSubmit={submitPasswordChange} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-300">{t("currentPassword")}</label>
+                  <label className="text-xs font-medium text-slate-700">{t("currentPassword")}</label>
                   <Input
                     type="password"
                     required
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="h-8 text-xs bg-slate-950 border-slate-700"
+                    className="h-8 text-xs bg-slate-50 border-slate-200"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-300">{t("newPassword")}</label>
+                  <label className="text-xs font-medium text-slate-700">{t("newPassword")}</label>
                   <Input
                     type="password"
                     required
                     minLength={8}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="h-8 text-xs bg-slate-950 border-slate-700"
+                    className="h-8 text-xs bg-slate-50 border-slate-200"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-slate-300">{t("confirmNewPassword")}</label>
+                  <label className="text-xs font-medium text-slate-700">{t("confirmNewPassword")}</label>
                   <Input
                     type="password"
                     required
@@ -400,11 +631,11 @@ function AppChrome({ children }: { children: ReactNode }) {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     aria-invalid={passwordMismatch}
                     className={cn(
-                      "h-8 text-xs bg-slate-950 border-slate-700",
+                      "h-8 text-xs bg-slate-50 border-slate-200",
                       passwordMismatch && "border-rose-500 focus-visible:ring-rose-500/30"
                     )}
                   />
-                  {passwordMismatch && <p className="text-xs text-rose-400">{t("passwordsDoNotMatch")}</p>}
+                  {passwordMismatch && <p className="text-xs text-rose-500">{t("passwordsDoNotMatch")}</p>}
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button
@@ -433,6 +664,57 @@ function AppChrome({ children }: { children: ReactNode }) {
         </div>
       )}
     </div>
+  );
+}
+
+function SidebarItem({
+  href,
+  active,
+  icon,
+  label,
+  badge,
+  badgeTone = "default",
+  collapsed
+}: {
+  href: string;
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  badge?: string;
+  badgeTone?: "default" | "purple";
+  collapsed: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      title={label}
+      className={cn(
+        "flex h-7 items-center gap-2 rounded-lg px-2 text-xs font-medium transition",
+        active
+          ? "bg-slate-100 text-slate-900 font-semibold shadow-2xs"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+        collapsed && "justify-center px-0"
+      )}
+    >
+      <span className={cn(active ? "text-slate-900" : "text-slate-400 shrink-0")}>{icon}</span>
+      {!collapsed && (
+        <>
+          <span className="truncate flex-1">{label}</span>
+          {badge && (
+            <span
+              className={cn(
+                "rounded px-1 py-0.2 font-mono text-[10px] font-medium border",
+                badgeTone === "purple"
+                  ? "bg-purple-50 text-purple-700 border-purple-200"
+                  : "bg-white text-slate-700 border-slate-200"
+              )}
+            >
+              {badge}
+            </span>
+          )}
+        </>
+      )}
+    </Link>
   );
 }
 

@@ -1,18 +1,35 @@
 # V1 Progress
 
-## 2026-09-09 ToC SaaS 浅色极简商业化架构与三重视角规范
+## 2026-09-09 ToC SaaS 浅色极简商业化架构与四阶段全流程落地
 
-- 全站浅色极简商业化重构：采用 Slate-50 背景 (`#F8FAFC`)、纯白卡片、`rgba(226, 232, 240, 0.85)` 微边框与极微阴影 (`subtle-elevation`)，全面剔除沉重黑色与粗笨大圆角。
-- 严谨商业级公有云信息架构（对标 AWS EC2 / Vercel / Supabase）：
-  - 侧边栏纯粹化：COMPUTE 下仅保留 `Instances` 资源项；彻底移除混在导航项中的 `Configuration` 与 `+ Deploy Instance`。
-  - 新建动作归位：`+ Deploy Instance` 归位为实例列表页面右上角主操作按钮，点击弹出专属部署向导弹窗。
-  - 配置归位至实例详情：参数配置作为实例详情专属二级 Tab（Breadcrumb: `Instances / terraria-hardcore-01` -> `参数配置`），支持通用、世界、网络、安全、内核平铺横向分类，彻底废除容易引起跳动手风琴折叠。
+- **Phase 1: 全局主题基座、顶栏与应用壳体导航深度重构 (100% 完成)**
+  - 全站浅色极简商业化重构：采用 Slate-50 背景 (`#F8FAFC`)、纯白卡片、`rgba(226, 232, 240, 0.85)` 微边框与极微阴影 (`subtle-elevation`)，全面剔除沉重黑色与粗笨大圆角。
+  - 三重视角切换器：在顶栏嵌入 `普通成员 (User)`、`工作区管理员 (Admin)`、`平台总管 (Super)` 实时视角切换胶囊，支持响应式与持久化存储。
+  - 侧边栏纯粹化：COMPUTE 下仅保留 `Instances [4]` 资源入口；彻底移除混在全局导航项中的 `Configuration` 与 `+ Deploy Instance`。
   - 观测与审计独立归类：新增 `OBSERVABILITY` 侧边栏分组，统一收拢 `Audit Logs (操作审计)` 与 `Incidents & Alerts (告警中心)`，大盘 `WORKSPACE` 保持纯粹。
-  - 明确管理员层级边界：普通管理员即工作区租户管理员（Workspace Admin），完全移除普通成员与工作区管理员侧边栏对底层硬件基础设施（INFRASTRUCTURE）的感知；硬件集群管理仅在平台总管（Platform Superadmin）视角下展示。
-  - 废除臃肿卡片，换用公有云级高密度数据表格：行高 40px 紧凑呈现，操作按钮全部采用 24px 微圆角纯图标（重启/停机/配置/下钻），消除多余文字废话，空间利用率提升 300%。
-  - 彻底清除指标字符串斜杠拼接：全站大盘指标、侧边栏配额、表格玩家与内存全部采用单一主核心度量（如 `3`、`16 max 16`、`1.8 GB cap 4 GB`、`4 Slots In Use`），消除任何 `A / B` 拼接的不专业观感。
-  - 零高度挤压悬浮保存底栏：参数变动时视口中央浮出 `fixed bottom-6` 保存条，避免 DOM 挤压与页面抖动。
-- 质量门禁与全栈测试：Go 1.24 单元与架构测试 100% 通过；前端 `pnpm --filter web typecheck`、`lint`、`test` (129 Vitest tests) 及 `next build` 生产构建全部通过。
+  - 明确管理员层级边界：普通管理员即工作区租户管理员（Workspace Admin），完全隐藏普通成员与工作区管理员对底层硬件基础设施（PLATFORM HARDWARE / CLUSTER NODES）的感知；硬件集群管理仅在平台总管（Platform Superadmin）视角下展示。
+  - 全局配额仪表盘 0 斜杠改造：采用单一主核心度量 `4 Slots In Use`，配合副标 `Cap 8 Slots · RAM 4.2 GB`，彻底消除 `A / B` 拼接。
+
+- **Phase 2: 实例列表页与高密度数据表格重塑 (100% 完成)**
+  - 新建动作归位：`+ Deploy Instance` 归位为实例列表页面右上角主操作按钮，普通成员视角下展示为 `🔒 Read-Only (Member)`。
+  - 快速部署弹窗向导 (`DeployInstanceModal`)：支持 Vanilla / tModLoader 选择、端口指定与算力规格选择，不干扰侧边栏全局路由。
+  - 公有云级高密度数据表格 (`ServerManagementTable`)：行高 40px 紧凑呈现，表头纯粹公有云风格，支持节点分片过滤与实例钻取。
+  - 纯图标极简操作：表格行操作全部采用 24px 微圆角纯图标（重启、停机/启动、配置与详情），配合轻量化悬浮 Tooltip，消除多余文字废话，空间利用率提升 300%。
+  - 指标单一化 (No-Slash Policy)：玩家在线数与内存占用展示为 `16 max 16` 与 `1.8 GB cap 4 GB`，拒绝粗糙的斜杠拼接。
+
+- **Phase 3: 实例详情页与平铺参数配置及零抖动浮动保存底栏 (100% 完成)**
+  - 头部与面包屑一体化重构：彻底淘汰旧式大面积渐变黑暗房间 LobbyBanner，采用白底微边框一体卡片，呈现 `Instances / {name}` 面包屑、状态呼吸灯、直连地址与纯图标快捷动作条。
+  - 内置子 Tab 浅色极简升级：`[ ⚙️ 参数配置 ] [ 💻 终端控制台 ] [ 💾 存档与备份 ] [ 📄 实时日志 ]` 统一采用干净的浅灰高亮样式。
+  - 平铺横向参数配置架构：提供 `[ 通用设置 ] [ 世界与种子 ] [ 网络与端口 ] [ 安全权限 ] [ 内核调度 ]` 5 大平铺分类，完全禁用造成页面纵向抖动的手风琴折叠（No Accordion），所有配置项整齐对齐。
+  - 零高度挤压悬浮保存底栏 (`FloatingSaveDock`)：配置变动时自视口底部悬浮浮出 (`fixed bottom-6 left-1/2 -translate-x-1/2`)，提供未保存计数指示、放弃修改、保存更改及 `Cmd+S` / `Ctrl+S` 全局键盘快捷键，彻底根绝页面内容被底部栏挤压上下抖动的交互缺陷。
+
+- **Phase 4: 全栈质量门禁与工程验收 (100% 通过)**
+  - 前端类型检查：`pnpm --filter web typecheck` 0 错误通过。
+  - 前端代码规范：`pnpm --filter web lint` 0 错误 0 警告通过。
+  - 前端单元测试：`pnpm --filter web test` 31 个测试文件，129/129 项测试全部通过。
+  - 生产打包构建：`pnpm --filter web build` 成功完成 Next.js 15.5 生产构建，16 个静态与动态路由全部编译优化成功。
+  - 后端架构门禁：修复 `internal/architecture/boundaries_test.go` 商业化计费对履约凭证的导入边界，`go test ./internal/architecture/...` 通过。
+  - 后端质量检查：`go vet ./...` 全局检查通过；`gofmt -l .` 代码格式规范无违规。
 
 
 - Activity events now persist organization ownership. PostgreSQL migration 003 and SQLite startup backfill blank historical ownership from surviving source instances. New controller events retain ownership even when the runtime instance is being deleted; private world-library import/delete events carry explicit world ownership. Unknown historical/global events remain platform-only.

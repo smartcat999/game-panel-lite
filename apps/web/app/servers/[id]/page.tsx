@@ -3,24 +3,23 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, ArrowRightLeft, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, ArrowRightLeft, Ban, Braces, Check, CheckCircle2, ChevronLeft, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Play, Plug, Power, RotateCcw, Save, Send, Share2, Square, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { usePerspective } from "@/lib/perspective-context";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
-import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
+import { terrariaInternalPort } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MigrateNodeDialog } from "@/components/migrate-node-dialog";
 import { GameUpdateCard } from "@/components/game-update-card";
 import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
-import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
-import { ServerLobbyBanner } from "@/components/server-lobby-banner";
 import { ServerTimeMachine } from "@/components/server-time-machine";
-import { ServerGameRules } from "@/components/server-game-rules";
 import { WorldMigrationHub } from "@/components/world-migration-hub";
 import { WorldRadarGrid } from "@/components/world-radar-grid";
 import { ServerSubscriptionCard } from "@/components/server-subscription-card";
-import { Button, Card, Input, ToastNotice } from "@/components/ui";
+import { FloatingSaveDock } from "@/components/floating-save-dock";
+import { Button, Card, ToastNotice } from "@/components/ui";
 import { ActivityLatestOperation } from "@/features/monitoring/components";
 import { getServerMonitoringEvents } from "@/features/monitoring/api";
 import type { MonitoringEvent } from "@/features/monitoring/types";
@@ -70,40 +69,20 @@ import { copyText } from "@/lib/clipboard";
 import { consoleReadyMessageKey, supportsTerrariaConsoleShortcuts } from "@/lib/console-commands";
 import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feature-flags";
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
-import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
+import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { dstModScope, isServerAssignableMod, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
-import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isWorldGenerationProviderConfigField, providerConfigFieldChanged, updateProviderConfigPath, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
-import type { Backup, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
+import type { Backup, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "players" | "version" | "config" | "worlds" | "backups" | "mods";
 type ModInstallSource = "library" | "packs";
 type ModPanelSection = "installed" | "configs";
 
 const terrariaProviderKeys = new Set(["terraria-vanilla", "terraria-tmodloader"]);
-const providerFieldLabelKeys: Record<string, MessageKey> = {
-  cavesEnabled: "cavesEnabled",
-  clusterDescription: "clusterDescription",
-  serverName: "serverName",
-  saveName: "saveName",
-  clusterName: "clusterName",
-  worldName: "worldName",
-  maxPlayers: "maxPlayersInput",
-  serverPassword: "serverPassword",
-  adminPassword: "adminPassword",
-  clusterToken: "clusterToken",
-  consoleEnabled: "consoleEnabled",
-  gameMode: "gameMode",
-  offlineServer: "offlineServer",
-  onlineMode: "onlineMode",
-  pauseWhenEmpty: "pauseWhenEmpty",
-  pvp: "pvp",
-  worldPreset: "worldPreset",
-  eulaAccepted: "minecraftEulaAccepted"
-};
 
 const defaultCapabilities: ProviderCapabilities = {
   consoleCommands: true,
@@ -128,6 +107,7 @@ function formatMemoryLimitLabel(value: number, t: (key: "unlimited" | "memoryGbV
 
 export default function ServerDetailPage() {
   const { locale, t } = useI18n();
+  const { isMemberView } = usePerspective();
   const { canControlServer, canManageShares, isViewer } = usePermissions();
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -663,7 +643,7 @@ export default function ServerDetailPage() {
   const playersOnline = serverResource.status.playersOnline ?? 0;
   const joinPort = joinInfoQuery.data?.port ?? gameServerJoinPort(serverResource);
   const invite = joinInfoQuery.data?.inviteText ?? serverInviteText(serverResource);
-  const joinAddress = joinInfoQuery.data?.address ?? serverJoinAddress(serverResource);
+  const joinAddress = settingsQuery.data?.publicHost || joinInfoQuery.data?.address || serverJoinAddress(serverResource);
   const joinPassword = joinInfoQuery.data?.password ?? serverJoinPassword(serverResource);
   const share = shareQuery.data;
   const savedShareIncludePassword = share?.includePassword ?? false;
@@ -715,8 +695,13 @@ export default function ServerDetailPage() {
           }}
         />
       ) : null}
-      <Link href="/servers" className="text-sm text-slate-400 hover:text-panel-green">{t("backToServers")}</Link>
-      {query.isError && <p className="mt-3 text-sm text-panel-gold">{t("apiDetailUnavailable")}</p>}
+      {isMemberView && (
+        <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-600 subtle-elevation">
+          <span>🔒 只读模式：普通成员视角，配置修改与生命周期操作已受限</span>
+          <span className="font-mono text-[10px] bg-white border micro-border px-1.5 py-0.5 rounded font-bold text-slate-500">MEMBER</span>
+        </div>
+      )}
+      {query.isError && <p className="mb-3 text-xs text-panel-gold">{t("apiDetailUnavailable")}</p>}
       {noticeMessage && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
           <ToastNotice
@@ -731,66 +716,146 @@ export default function ServerDetailPage() {
           />
         </div>
       )}
-      {/* Top Game Room Lobby Banner */}
-      <div className="mt-3">
-        <ServerLobbyBanner
-          server={serverResource}
-          publicHost={settingsQuery.data?.publicHost}
-          canControl={canControlServer}
-          disabled={gameUpdateActive || worldRegenerationActive}
-          onAction={(action) => serverAction.mutate(action)}
-          onOpenShare={canManageShares ? openShareDialog : undefined}
-        />
+
+      {/* BREADCRUMB & INSTANCE HEADER & TABS */}
+      <div className="rounded-xl border micro-border bg-white p-3.5 subtle-elevation space-y-2.5">
+        <nav className="flex items-center gap-1.5 text-[11px] text-slate-400">
+          <Link href="/servers" className="hover:text-slate-900 transition flex items-center gap-1 font-medium">
+            <ChevronLeft className="w-3 h-3" />
+            <span>Instances</span>
+          </Link>
+          <span>/</span>
+          <span className="text-slate-900 font-semibold font-mono">{serverResource.name}</span>
+        </nav>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-bold text-slate-900">{serverResource.name}</h1>
+            <span className={cn(
+              "inline-flex items-center gap-1 border text-[10px] font-semibold px-2 py-0.5 rounded-full",
+              status === "running" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+              status === "stopped" ? "bg-slate-100 text-slate-600 border-slate-200" :
+              "bg-amber-50 text-amber-700 border-amber-200"
+            )}>
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                status === "running" ? "bg-emerald-500" : status === "stopped" ? "bg-slate-400" : "bg-amber-500 animate-pulse"
+              )} />
+              {status === "running" ? "Running" : status === "stopped" ? "Stopped" : status}
+            </span>
+            <span className="text-[11px] font-mono text-slate-400">{joinAddress}:{joinPort}</span>
+          </div>
+
+          {/* Minimalist Action Buttons (Icon-Only + Tooltips) */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => copy(t("actionCopyInvite"), `${joinAddress}:${joinPort}`)}
+              title={copied === t("actionCopyInvite") ? "已复制" : "复制连接串"}
+              className="w-7 h-7 rounded-md border micro-border text-slate-600 hover:bg-slate-50 flex items-center justify-center transition"
+            >
+              {copied === t("actionCopyInvite") ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+            </button>
+            {canControlServer && (
+              <>
+                <button
+                  type="button"
+                  disabled={serverAction.isPending || gameUpdateActive || worldRegenerationActive}
+                  onClick={() => serverAction.mutate("restart")}
+                  title="重启容器"
+                  className="w-7 h-7 rounded-md border micro-border text-slate-600 hover:bg-slate-50 flex items-center justify-center transition disabled:opacity-40"
+                >
+                  <RotateCcw className={cn("w-3.5 h-3.5 text-slate-500", serverAction.isPending && "animate-spin")} />
+                </button>
+                {status === "running" ? (
+                  <button
+                    type="button"
+                    disabled={serverAction.isPending || gameUpdateActive || worldRegenerationActive}
+                    onClick={() => serverAction.mutate("stop")}
+                    title="停机"
+                    className="w-7 h-7 rounded-md border micro-border text-slate-600 hover:bg-slate-50 flex items-center justify-center transition disabled:opacity-40"
+                  >
+                    <Square className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={serverAction.isPending || gameUpdateActive || worldRegenerationActive}
+                    onClick={() => serverAction.mutate("start")}
+                    title="启动"
+                    className="w-7 h-7 rounded-md border micro-border text-slate-600 hover:bg-slate-50 flex items-center justify-center transition disabled:opacity-40"
+                  >
+                    <Play className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                  </button>
+                )}
+              </>
+            )}
+            {canManageShares && (
+              <button
+                type="button"
+                onClick={openShareDialog}
+                title="分享链接"
+                className="w-7 h-7 rounded-md border micro-border text-slate-600 hover:bg-slate-50 flex items-center justify-center transition"
+              >
+                <Share2 className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* INSTANCE INNER TABS */}
+        {renderTabs ? (
+          <div className="border-t micro-border pt-2 flex items-center gap-1 overflow-x-auto text-xs font-medium" role="tablist" aria-label={serverResource.name}>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                id={`server-detail-tab-${tab.id}`}
+                type="button"
+                role="tab"
+                aria-controls="server-detail-tabpanel"
+                aria-selected={activeTab === tab.id}
+                tabIndex={activeTab === tab.id ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => {
+                  const currentIndex = tabs.findIndex((item) => item.id === tab.id);
+                  const nextIndex = event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : event.key === "ArrowRight"
+                        ? (currentIndex + 1) % tabs.length
+                        : event.key === "ArrowLeft"
+                          ? (currentIndex - 1 + tabs.length) % tabs.length
+                          : -1;
+                  if (nextIndex < 0) return;
+                  event.preventDefault();
+                  const nextTab = tabs[nextIndex];
+                  if (!nextTab) return;
+                  setActiveTab(nextTab.id);
+                  window.requestAnimationFrame(() => document.getElementById(`server-detail-tab-${nextTab.id}`)?.focus());
+                }}
+                className={cn(
+                  "h-7 px-3 rounded-md transition flex items-center gap-1.5 shrink-0 select-none",
+                  activeTab === tab.id
+                    ? "font-semibold bg-slate-100 text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                )}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="border-t micro-border pt-2 flex h-8 items-center gap-2" aria-busy="true" aria-label={t("loading")}>
+            <span className="h-6 w-24 animate-pulse rounded-md bg-slate-100" aria-hidden="true" />
+            <span className="h-6 w-20 animate-pulse rounded-md bg-slate-100" aria-hidden="true" />
+            <span className="h-6 w-20 animate-pulse rounded-md bg-slate-100" aria-hidden="true" />
+          </div>
+        )}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="mt-3 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0">
-          {renderTabs ? (
-            <div className="mb-4 flex gap-2 overflow-x-auto rounded-lg border border-panel-line bg-panel-card px-3 py-3" role="tablist" aria-label={serverResource.name}>
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  id={`server-detail-tab-${tab.id}`}
-                  type="button"
-                  role="tab"
-                  aria-controls="server-detail-tabpanel"
-                  aria-selected={activeTab === tab.id}
-                  tabIndex={activeTab === tab.id ? 0 : -1}
-                  className={cn(
-                    "relative shrink-0 rounded-md border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-slate-800/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50",
-                    activeTab === tab.id && "border-panel-green/40 bg-panel-green/15 text-white shadow-[inset_0_0_0_1px_rgba(123,217,120,0.18)]"
-                  )}
-                  onClick={() => setActiveTab(tab.id)}
-                  onKeyDown={(event) => {
-                    const currentIndex = tabs.findIndex((item) => item.id === tab.id);
-                    const nextIndex = event.key === "Home"
-                      ? 0
-                      : event.key === "End"
-                        ? tabs.length - 1
-                        : event.key === "ArrowRight"
-                          ? (currentIndex + 1) % tabs.length
-                          : event.key === "ArrowLeft"
-                            ? (currentIndex - 1 + tabs.length) % tabs.length
-                            : -1;
-                    if (nextIndex < 0) return;
-                    event.preventDefault();
-                    const nextTab = tabs[nextIndex];
-                    if (!nextTab) return;
-                    setActiveTab(nextTab.id);
-                    window.requestAnimationFrame(() => document.getElementById(`server-detail-tab-${nextTab.id}`)?.focus());
-                  }}
-                >
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="mb-4 flex h-[66px] items-center gap-3 rounded-lg border border-panel-line bg-panel-card px-4" aria-busy="true" aria-label={t("loading")}>
-              <span className="h-9 w-32 animate-pulse rounded-md bg-slate-800" aria-hidden="true" />
-              <span className="h-9 w-28 animate-pulse rounded-md bg-slate-800" aria-hidden="true" />
-              <span className="h-9 w-28 animate-pulse rounded-md bg-slate-800" aria-hidden="true" />
-            </div>
-          )}
 
           {gameUpdateActive && activeTab !== "version" ? (
             <button
@@ -1892,7 +1957,6 @@ function ConfigTab({
   });
   const currentProviderPayload = resourceProviderPayload;
   const providerFields = provider?.configSchema ?? [];
-  const providerEditorFields = providerFields.filter((field) => !isCuratedGameRuleField(resource.providerKey, field));
   const worldGenerationDirty = !isTerrariaProvider && providerFields.some((field) =>
     isWorldGenerationProviderConfigField(resource.providerKey, field)
       && providerConfigFieldChanged(currentProviderPayload, providerDraft, field)
@@ -1910,7 +1974,6 @@ function ConfigTab({
   const running = resourceStatus === "running";
   const disabled = lifecycleLocked || savePending;
   const restartRequired = running && !dirty && (restartRecommended || (!worldGenerationOnlyPending && gameServerConfigPendingRestart(resource)));
-  const showConfigActions = dirty || savePending || saveSuccess || restartRequired || lifecycleLocked;
   const update = <K extends keyof TerrariaConfig>(key: K, value: TerrariaConfig[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const updateGameRule = (key: string, value: unknown) => {
     if (isTerrariaProvider) {
@@ -1943,15 +2006,12 @@ function ConfigTab({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [previewOpen]);
-  const secretSeed = secretSeedKeyFor(draft.seed);
   const worldEvilLabel = draft.worldEvil === "corruption" ? t("tagCorruption") : draft.worldEvil === "crimson" ? t("tagCrimson") : t("tagRandom");
   const worldSizeLabel = draft.worldSize === "small" ? t("tagSmallWorld") : draft.worldSize === "medium" ? t("tagMediumWorld") : t("tagLargeWorld");
-  const seedLabel = secretSeed
-    ? terrariaSecretSeeds.find((s) => s.key === secretSeed)?.label ?? draft.seed ?? ""
-    : (draft.seed || t("tagRandom"));
-  const seedModeCount = terrariaSeedModeCodes(draft).length;
+  const [configCategory, setConfigCategory] = useState<"general" | "world" | "network" | "security" | "engine">("general");
+
   return (
-    <form className="space-y-4" onSubmit={(event) => {
+    <form className="space-y-3" onSubmit={(event) => {
       event.preventDefault();
       if (!disabled && dirty) {
         submittedRestartRequiredRef.current = isTerrariaProvider || hostPortDirty || providerRuntimeDirty;
@@ -1959,133 +2019,350 @@ function ConfigTab({
         onSave(isTerrariaProvider ? normalizedDraft : providerDraft, hostPortDraft);
       }
     }}>
-      <ServerGameRules
-        disabled={disabled}
-        draft={isTerrariaProvider ? (draft as unknown as Record<string, unknown>) : providerDraft}
-        onChange={updateGameRule}
-        providerFields={providerFields}
-        server={resource}
-      />
-
-      <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-semibold">{t("serverConfig")}</h2>
-            {lifecycleLocked && <span className="mt-1 inline-block rounded bg-panel-gold/15 px-2 py-1 text-xs text-panel-gold">{t("configLifecycleLocked")}</span>}
-          </div>
-          {isTerrariaProvider ? (
-            <Button type="button" variant="secondary" className="h-8 px-2 text-xs" onClick={() => setPreviewOpen(true)}>
-              <FileText aria-hidden="true" className="size-3.5" />
-              {t("showPreview")}
-            </Button>
-          ) : null}
-        </div>
-        {isTerrariaProvider ? (
-          <>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <div className="space-y-3">
-                <Field label={t("serverName")}>
-                  <Input value={draft.serverName ?? ""} onChange={(event) => update("serverName", event.target.value)} disabled={disabled} />
-                </Field>
-                <Field label={t("motd")}>
-                  <Input
-                    type="text"
-                    value={draft.motd ?? ""}
-                    onChange={(event) => update("motd", event.target.value)}
-                    disabled={disabled}
-                  />
-                </Field>
-              </div>
-              <div className="space-y-3">
-                <Field label={t("externalPort")}>
-                  <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
-                </Field>
-              </div>
-            </div>
-            <div className="mt-4 grid overflow-hidden rounded-md border border-panel-line bg-slate-950/40 sm:grid-cols-2 sm:divide-x sm:divide-panel-line max-sm:divide-y max-sm:divide-panel-line">
-              <ConfigSwitch label={t("secureMode")} checked={draft.secure} onChange={(checked) => update("secure", checked)} disabled={disabled} />
-              <ConfigSwitch label={t("autoCreateWorld")} checked={draft.autoCreateWorld} onChange={(checked) => update("autoCreateWorld", checked)} disabled={disabled} />
-            </div>
-          </>
-        ) : (
-          <>
-            <ProviderConfigEditor
-              disabled={disabled}
-              fields={providerEditorFields}
-              hasUnsavedWorldGenerationChanges={worldGenerationDirty}
-              payload={providerDraft}
-              providerKey={provider?.key ?? ""}
-              surface="server"
-              fieldLabel={(field) => providerFieldLabel(field, t)}
-              fieldHelp={(field) => providerFieldHelp(field, t)}
-              onChange={(field, value) => setProviderDraft((current) => updateProviderConfigPayload(current, field, value))}
-              onRegenerateWorld={onRegenerateWorld}
-              onRestoreDefaults={(fields) => setProviderDraft((current) => restoreProviderConfigDefaults(current, fields))}
-            />
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <Field label={t("externalPort")}>
-                <Input type="number" min={1024} max={65535} value={hostPortDraft} onChange={(event) => setHostPortDraft(Number(event.target.value))} disabled={disabled} />
-              </Field>
-            </div>
-          </>
-        )}
+      {/* HORIZONTAL CATEGORY TABS */}
+      <div className="flex items-center gap-1 overflow-x-auto rounded-xl border micro-border bg-white p-1 subtle-elevation text-xs font-medium select-none">
+        {[
+          { id: "general" as const, label: "通用设置" },
+          { id: "world" as const, label: "世界与种子" },
+          { id: "network" as const, label: "网络与端口" },
+          { id: "security" as const, label: "安全权限" },
+          { id: "engine" as const, label: "内核调度" },
+        ].map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            onClick={() => setConfigCategory(cat.id)}
+            className={cn(
+              "h-7 px-3 rounded-lg transition shrink-0 select-none",
+              configCategory === cat.id
+                ? "font-semibold bg-slate-100 text-slate-900 shadow-xs"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+            )}
+          >
+            {cat.label}
+          </button>
+        ))}
       </div>
 
-      {isTerrariaProvider ? <div className="rounded-lg border border-panel-line bg-slate-950/40 p-4">
-        <h2 className="font-semibold">{t("worldCreationSettings")}</h2>
-        <p className="mt-1 text-xs text-slate-500">{t("worldCreationReadonlyHint")}</p>
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <ReadOnlyField label={t("worldName")} value={draft.worldName} />
-          <ReadOnlyField label={t("gameVersion")} value={gameServerVersion(resource)} />
-          <ReadOnlyField label={t("worldSize")} value={worldSizeLabel} />
-          <ReadOnlyField label={t("worldEvil")} value={worldEvilLabel} />
-          <ReadOnlyField label={t("internalPort")} value={String(terrariaInternalPort)} />
-          <ReadOnlyField label={t("customSeed")} value={seedLabel} help={t("worldSeedHint")} />
-          {seedModeCount > 0 ? (
-            <ReadOnlyField label={t("seedModes")} value={t("seedModesSummary", { special: draft.specialSeeds?.length ?? 0, secret: draft.secretSeeds?.length ?? 0 })} />
-          ) : null}
-        </div>
-      </div> : null}
-
-      {showConfigActions && (
-        <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-lg border border-panel-line bg-panel-card/95 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.25)] sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className={cn("text-sm font-medium", dirty || restartRequired ? "text-slate-100" : "text-slate-400")}>
-              {lifecycleLocked
-                ? t("configLifecycleLocked")
-                : dirty || savePending
-                  ? t("unsavedConfigChanges")
-                  : restartRequired
-                    ? t("configSavedRestartRequired")
-                    : t("configSaved")}
-            </p>
-            {(dirty || restartRequired) && <p className="mt-0.5 text-xs text-slate-500">{restartRequired ? t("configRestartPrompt") : t("configActionHint")}</p>}
+      {restartRequired && (
+        <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 subtle-elevation">
+          <div className="flex items-center gap-2">
+            <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>{t("configSavedRestartRequired")} · {t("configRestartPrompt")}</span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {restartRequired && (
-              <Button type="button" variant="gold" disabled={restartPending} onClick={onRestart}>
-                <RotateCcw aria-hidden="true" />
-                {restartPending ? t("actionRestarting") : t("restartServerNow")}
+          <button
+            type="button"
+            disabled={restartPending}
+            onClick={onRestart}
+            className="h-6 px-2.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-medium transition text-[11px] flex items-center gap-1 shrink-0"
+          >
+            <RotateCcw className={cn("w-3 h-3", restartPending && "animate-spin")} />
+            <span>{restartPending ? t("actionRestarting") : t("restartServerNow")}</span>
+          </button>
+        </div>
+      )}
+
+      {/* CATEGORY 1: GENERAL */}
+      {configCategory === "general" && (
+        <div className="rounded-xl border micro-border bg-white p-4 subtle-elevation space-y-3">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">SERVER IDENTITY & BASIC</h3>
+            {isTerrariaProvider ? (
+              <Button type="button" variant="secondary" className="h-6 px-2 text-[11px]" onClick={() => setPreviewOpen(true)}>
+                <FileText aria-hidden="true" className="size-3" />
+                {t("showPreview")}
               </Button>
-            )}
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={savePending || !dirty}
-              onClick={() => {
-                setDraft(resourceTerrariaConfig);
-                setProviderDraft(resourceProviderPayload);
-                setHostPortDraft(resourceHostPort);
-              }}
-            >
-              {t("resetChanges")}
-            </Button>
-            <Button disabled={disabled || !dirty}>
-              {savePending ? t("savingConfig") : t("saveConfig")}
-            </Button>
+            ) : null}
+          </div>
+          <div className="space-y-2.5 text-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">{t("serverName")}</label>
+                <p className="text-[11px] text-slate-400">实例公开展示的标题</p>
+              </div>
+              <input
+                value={isTerrariaProvider ? (draft.serverName ?? "") : String(providerDraft.serverName ?? "")}
+                onChange={(event) => isTerrariaProvider ? update("serverName", event.target.value) : updateGameRule("serverName", event.target.value)}
+                disabled={disabled}
+                className="w-full md:w-80 h-7 px-2.5 rounded-md border micro-border text-xs focus:border-emerald-500 focus:outline-none bg-white text-slate-800 transition"
+              />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">{t("motd")}</label>
+                <p className="text-[11px] text-slate-400">玩家加入游戏时接收的公告文本</p>
+              </div>
+              <input
+                type="text"
+                value={isTerrariaProvider ? (draft.motd ?? "") : String(providerDraft.motd ?? "")}
+                onChange={(event) => isTerrariaProvider ? update("motd", event.target.value) : updateGameRule("motd", event.target.value)}
+                disabled={disabled}
+                className="w-full md:w-80 h-7 px-2.5 rounded-md border micro-border text-xs focus:border-emerald-500 focus:outline-none bg-white text-slate-800 transition"
+              />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">最大玩家数 (Max Players)</label>
+                <p className="text-[11px] text-slate-400">同时在线连接的最大人数限制</p>
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={255}
+                value={isTerrariaProvider ? (draft.maxPlayers ?? 16) : Number(providerDraft.maxPlayers ?? 16)}
+                onChange={(event) => isTerrariaProvider ? update("maxPlayers", Number(event.target.value)) : updateGameRule("maxPlayers", Number(event.target.value))}
+                disabled={disabled}
+                className="w-full md:w-24 h-7 px-2.5 rounded-md border micro-border text-xs focus:border-emerald-500 focus:outline-none bg-white text-slate-800 transition text-right font-mono"
+              />
+            </div>
+
+            {isTerrariaProvider ? (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <label className="font-medium text-slate-800">自动建世 (Auto Create World)</label>
+                  <p className="text-[11px] text-slate-400">若指定世界文件不存在时自动初始化新世界</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={draft.autoCreateWorld ?? true}
+                  onChange={(event) => update("autoCreateWorld", event.target.checked)}
+                  disabled={disabled}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       )}
+
+      {/* CATEGORY 2: WORLD */}
+      {configCategory === "world" && (
+        <div className="rounded-xl border micro-border bg-white p-4 subtle-elevation space-y-3">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+            <div>
+              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">WORLD & GENERATION</h3>
+              <p className="text-[11px] text-slate-400">{t("worldCreationReadonlyHint")}</p>
+            </div>
+            {onRegenerateWorld && (
+              <Button type="button" variant="secondary" className="h-6 px-2 text-[11px]" onClick={onRegenerateWorld}>
+                <RotateCcw className="size-3" />
+                重新生成世界
+              </Button>
+            )}
+          </div>
+          <div className="space-y-2.5 text-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">{t("worldName")}</label>
+                <p className="text-[11px] text-slate-400">地图存档标识 (.wld)</p>
+              </div>
+              <span className="font-mono text-xs text-slate-700 bg-slate-50 px-2.5 py-1 rounded border micro-border">
+                {isTerrariaProvider ? (draft.worldName || "DefaultWorld") : String(providerDraft.worldName || "World")}
+              </span>
+            </div>
+
+            {isTerrariaProvider ? (
+              <>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+                  <div>
+                    <label className="font-medium text-slate-800">{t("customSeed")}</label>
+                    <p className="text-[11px] text-slate-400">世界生成种子（支持特异种子如 getfixedboi 等）</p>
+                  </div>
+                  <input
+                    value={draft.seed ?? ""}
+                    onChange={(event) => update("seed", event.target.value)}
+                    disabled={disabled}
+                    placeholder="随机种子"
+                    className="w-full md:w-64 h-7 px-2.5 rounded-md border micro-border text-xs focus:border-emerald-500 focus:outline-none bg-white text-slate-800 font-mono transition"
+                  />
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+                  <div>
+                    <label className="font-medium text-slate-800">世界难度 (Difficulty)</label>
+                    <p className="text-[11px] text-slate-400">影响敌人血量倍率与圣物专属掉落</p>
+                  </div>
+                  <select
+                    value={draft.difficulty ?? "classic"}
+                    onChange={(event) => update("difficulty", event.target.value as TerrariaConfig["difficulty"])}
+                    disabled={disabled}
+                    className="w-full md:w-44 h-7 px-2 rounded-md border micro-border text-xs bg-white text-slate-800"
+                  >
+                    <option value="classic">经典模式 (Classic)</option>
+                    <option value="expert">专家模式 (Expert)</option>
+                    <option value="master">大师挑战 (Master)</option>
+                    <option value="journey">旅行创造 (Journey)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+                  <div>
+                    <label className="font-medium text-slate-800">{t("worldSize")}</label>
+                    <p className="text-[11px] text-slate-400">地图网格尺寸</p>
+                  </div>
+                  <span className="text-xs font-medium text-slate-700 bg-slate-50 px-2 py-0.5 rounded border micro-border">{worldSizeLabel}</span>
+                </div>
+
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-1">
+                  <div>
+                    <label className="font-medium text-slate-800">{t("worldEvil")}</label>
+                    <p className="text-[11px] text-slate-400">初始蔓延的邪恶生物群系</p>
+                  </div>
+                  <span className="text-xs font-medium text-slate-700 bg-slate-50 px-2 py-0.5 rounded border micro-border">{worldEvilLabel}</span>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* CATEGORY 3: NETWORK */}
+      {configCategory === "network" && (
+        <div className="rounded-xl border micro-border bg-white p-4 subtle-elevation space-y-3">
+          <div className="pb-1 border-b border-slate-100">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">NETWORK & PORTS</h3>
+            <p className="text-[11px] text-slate-400">外部玩家连接与容器端口网络映射</p>
+          </div>
+          <div className="space-y-2.5 text-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">{t("externalPort")}</label>
+                <p className="text-[11px] text-slate-400">宿主机公网对外暴露的通信端口</p>
+              </div>
+              <input
+                type="number"
+                min={1024}
+                max={65535}
+                value={hostPortDraft}
+                onChange={(event) => setHostPortDraft(Number(event.target.value))}
+                disabled={disabled}
+                className="w-full md:w-32 h-7 px-2.5 rounded-md border micro-border text-xs focus:border-emerald-500 focus:outline-none bg-white text-slate-800 font-mono text-right transition"
+              />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1">
+              <div>
+                <label className="font-medium text-slate-800">{t("internalPort")}</label>
+                <p className="text-[11px] text-slate-400">容器内部进程原生监听端口</p>
+              </div>
+              <span className="font-mono text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded border micro-border">
+                {isTerrariaProvider ? terrariaInternalPort : 7777} (固定)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CATEGORY 4: SECURITY */}
+      {configCategory === "security" && (
+        <div className="rounded-xl border micro-border bg-white p-4 subtle-elevation space-y-3">
+          <div className="pb-1 border-b border-slate-100">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">ACCESS CONTROL & SECURITY</h3>
+            <p className="text-[11px] text-slate-400">入服访问密码与数据保护频率</p>
+          </div>
+          <div className="space-y-2.5 text-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">{t("password")}</label>
+                <p className="text-[11px] text-slate-400">入服密码保护（留空为公开入服）</p>
+              </div>
+              <input
+                type="text"
+                value={isTerrariaProvider ? (draft.password ?? "") : String(providerDraft.serverPassword ?? providerDraft.password ?? "")}
+                onChange={(event) => isTerrariaProvider ? update("password", event.target.value) : updateGameRule("password", event.target.value)}
+                disabled={disabled}
+                placeholder="无密码"
+                className="w-full md:w-56 h-7 px-2.5 rounded-md border micro-border text-xs focus:border-emerald-500 focus:outline-none bg-white text-slate-800 font-mono transition"
+              />
+            </div>
+
+            {isTerrariaProvider ? (
+              <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                <div>
+                  <label className="font-medium text-slate-800">{t("secureMode")}</label>
+                  <p className="text-[11px] text-slate-400">反作弊校验与非法数据包过滤</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={draft.secure ?? true}
+                  onChange={(event) => update("secure", event.target.checked)}
+                  disabled={disabled}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+              </div>
+            ) : null}
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1">
+              <div>
+                <label className="font-medium text-slate-800">自动落盘频率</label>
+                <p className="text-[11px] text-slate-400">自动刷写保存世界数据的周期（游戏引擎内置）</p>
+              </div>
+              <span className="font-mono text-xs text-slate-700 bg-slate-50 px-2.5 py-1 rounded border micro-border">
+                10 分钟 (标准自动保存)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CATEGORY 5: ENGINE */}
+      {configCategory === "engine" && (
+        <div className="rounded-xl border micro-border bg-white p-4 subtle-elevation space-y-3">
+          <div className="pb-1 border-b border-slate-100">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400">CONTAINER ENGINE & RESOURCES</h3>
+            <p className="text-[11px] text-slate-400">Docker 容器硬件资源调度配额</p>
+          </div>
+          <div className="space-y-2.5 text-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">CPU 核心配额</label>
+                <p className="text-[11px] text-slate-400">容器最多可占用的宿主物理核心数</p>
+              </div>
+              <span className="font-mono text-xs text-slate-700 bg-slate-50 px-2 py-0.5 rounded border micro-border">
+                {resource.spec.resources?.cpuLimitCores ? `${resource.spec.resources.cpuLimitCores} Cores` : "Unlimited (弹性共享)"}
+              </span>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 pb-2.5 border-b border-slate-100">
+              <div>
+                <label className="font-medium text-slate-800">内存配额上限 (Memory Cap)</label>
+                <p className="text-[11px] text-slate-400">超出将触发宿主内核 cgroups 保护</p>
+              </div>
+              <span className="font-mono text-xs text-slate-700 bg-slate-50 px-2 py-0.5 rounded border micro-border">
+                {resource.spec.resources?.memoryLimitMb ? `${(resource.spec.resources.memoryLimitMb / 1024).toFixed(1)} GB` : "Unlimited (弹性共享)"}
+              </span>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-1">
+              <div>
+                <label className="font-medium text-slate-800">线程调度优先级</label>
+                <p className="text-[11px] text-slate-400">Linux 内核调度器分配给容器进程的 nice 权重</p>
+              </div>
+              <span className="font-mono text-xs text-slate-700 bg-slate-50 px-2 py-0.5 rounded border micro-border">
+                High (-5 优先)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ZERO-LAYOUT-SHIFT FLOATING SAVE DOCK */}
+      <FloatingSaveDock
+        show={dirty}
+        saving={savePending}
+        onSave={() => {
+          submittedRestartRequiredRef.current = isTerrariaProvider || hostPortDirty || providerRuntimeDirty;
+          submittedWorldGenerationRef.current = worldGenerationDirty;
+          onSave(isTerrariaProvider ? normalizedDraft : providerDraft, hostPortDraft);
+        }}
+        onDiscard={() => {
+          setDraft(resourceTerrariaConfig);
+          setProviderDraft(resourceProviderPayload);
+          setHostPortDraft(resourceHostPort);
+        }}
+      />
       {saveError && <p className="rounded-md border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-sm text-panel-gold">{saveError}</p>}
       {previewOpen && isTerrariaProvider && (
         <div
@@ -2133,49 +2410,8 @@ function ConfigTab({
   );
 }
 
-function ReadOnlyField({ help, label, value }: { help?: string; label: string; value: string }) {
-  return (
-    <div className="grid gap-1.5">
-      <span className="flex items-center gap-2 text-xs font-medium text-slate-500">
-        <span>{label}</span>
-        {help ? <FieldHelp text={help} /> : null}
-      </span>
-      <div className="flex h-10 items-center rounded-md border border-panel-line bg-slate-950/60 px-3 text-sm text-slate-400">{value}</div>
-    </div>
-  );
-}
-
-function FieldHelp({ text }: { text: string }) {
-  return (
-    <span className="group/help relative inline-flex shrink-0">
-      <button
-        aria-label={text}
-        className="flex size-4 cursor-help select-none items-center justify-center rounded-full border border-slate-600 bg-slate-950/70 text-[10px] font-bold leading-none text-slate-300 transition hover:border-panel-green/70 hover:text-panel-green focus:border-panel-green focus:text-panel-green focus:outline-none focus:ring-2 focus:ring-panel-green/30"
-        type="button"
-      >
-        ?
-      </button>
-      <span className="pointer-events-none absolute left-1/2 top-6 z-20 hidden w-64 -translate-x-1/2 rounded-md border border-panel-line bg-slate-950 px-3 py-2 text-xs font-normal leading-5 text-slate-300 shadow-[0_10px_30px_rgba(0,0,0,0.35)] group-hover/help:block group-focus-within/help:block">
-        {text}
-      </span>
-    </span>
-  );
-}
-
 function initialProviderDraftFromResource(resource: GameServerResource, provider?: ProviderCatalog): ProviderConfigPayload {
   return createDefaultProviderConfigPayload(provider, resource.spec.config ?? {});
-}
-
-function providerFieldLabel(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
-  const key = providerFieldLabelKeys[field.name];
-  return key ? t(key) : field.label;
-}
-
-function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, params?: Record<string, string | number>) => string) {
-  if (field.name === "adminPassword") return t("adminPasswordHelp");
-  if (field.name === "clusterToken" || field.name === "identity.clusterToken") return t("clusterTokenHelp");
-  if (field.name === "eulaAccepted") return t("minecraftEulaHelp");
-  return field.help ?? "";
 }
 
 function ResourceLimitsDialog({
@@ -2296,53 +2532,7 @@ function ResourceLimitsDialog({
   );
 }
 
-function Field({ children, label, required }: { children: ReactNode; label: string; required?: boolean }) {
-  const { t } = useI18n();
-  return (
-    <label className="grid gap-1.5">
-      <span className="flex items-center gap-2 text-xs font-medium text-slate-500">
-        <span>{label}</span>
-        {required ? <span className="rounded bg-panel-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-panel-gold">{t("requiredField")}</span> : null}
-      </span>
-      {children}
-    </label>
-  );
-}
 
-function ConfigSwitch({ checked, disabled, label, onChange }: { checked: boolean; disabled?: boolean; label: string; onChange: (checked: boolean) => void }) {
-  return (
-    <label className={cn(
-      "group flex min-h-12 cursor-pointer items-center justify-between gap-4 px-3.5 py-2.5 text-sm text-slate-300 outline-none transition hover:bg-slate-900/60 hover:text-slate-100 focus-within:bg-slate-900/60 focus-within:ring-2 focus-within:ring-inset focus-within:ring-panel-green/40",
-      disabled && "cursor-not-allowed opacity-60"
-    )}>
-      <span className="min-w-0 font-medium leading-5">{label}</span>
-      <input
-        className="sr-only"
-        checked={checked}
-        disabled={disabled}
-        role="switch"
-        type="checkbox"
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span
-        aria-hidden="true"
-        className={cn(
-          "relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200",
-          checked
-            ? "border-panel-green bg-panel-green"
-            : "border-slate-600 bg-slate-700 group-hover:border-slate-500"
-        )}
-      >
-        <span
-          className={cn(
-            "absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white transition-transform duration-200",
-            checked && "translate-x-4"
-          )}
-        />
-      </span>
-    </label>
-  );
-}
 
 function ModsTab({
   serverId,

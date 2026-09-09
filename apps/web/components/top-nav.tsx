@@ -1,100 +1,51 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Activity, Gauge, Gamepad2, HardDrive, Settings } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { listGameServers } from "@/lib/api";
+import { usePerspective, type PerspectiveRole } from "@/lib/perspective-context";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { usePermissions } from "@/lib/permissions";
 
 export function TopNav() {
-  const pathname = usePathname();
+  const { perspective, setPerspective } = usePerspective();
   const { locale } = useI18n();
   const isZh = locale === "zh";
-  const { canAccessGameAssets, canEditSettings } = usePermissions();
 
-  const serversQuery = useQuery({
-    queryKey: ["game-servers"],
-    queryFn: listGameServers,
-    retry: false,
-    staleTime: 10000
-  });
-
-  const servers = serversQuery.data ?? [];
-  const runningCount = servers.filter((s) => s.status?.actualState === "running").length;
-
-  const navItems = [
+  const perspectives: Array<{ id: PerspectiveRole; label: string; desc: string }> = [
     {
-      href: "/dashboard",
-      title: isZh ? "仪表盘" : "Dashboard",
-      icon: Gauge,
-      active: pathname === "/dashboard"
+      id: "user",
+      label: isZh ? "普通成员" : "Member",
+      desc: isZh ? "战队协作者：只读权限" : "Collaborator: Read-only access"
     },
     {
-      href: "/servers",
-      title: isZh ? `游戏服务器 (${runningCount} 运行中)` : `Servers (${runningCount} Running)`,
-      icon: HardDrive,
-      badge: runningCount > 0 ? `${runningCount}` : undefined,
-      active: pathname.startsWith("/servers")
+      id: "admin",
+      label: isZh ? "工作区管理员" : "Workspace Admin",
+      desc: isZh ? "工作区管理员：管实例/存档/账单，无底层硬件设施" : "Workspace Admin: Manages servers & billing, no infra"
     },
-    ...(canAccessGameAssets ? [{
-      href: "/games",
-      title: isZh ? "游戏、模组与世界资产" : "Games, Mods & World Assets",
-      icon: Gamepad2,
-      active:
-        pathname.startsWith("/games") ||
-        pathname.startsWith("/mods") ||
-        pathname.startsWith("/presets") ||
-        pathname.startsWith("/worlds") ||
-        pathname.startsWith("/backups")
-    }] : []),
-    ...(canAccessGameAssets ? [{
-      href: "/activity",
-      title: isZh ? "监控与活动事件" : "Monitoring & Activity",
-      icon: Activity,
-      active: pathname.startsWith("/activity")
-    }] : []),
-    ...(canEditSettings ? [{
-      href: "/settings",
-      title: isZh ? "系统、节点与集群设置" : "System & Cluster Settings",
-      icon: Settings,
-      active: pathname.startsWith("/settings") || pathname.startsWith("/versions")
-    }] : [])
+    {
+      id: "super",
+      label: isZh ? "平台总管" : "Platform Superadmin",
+      desc: isZh ? "平台总管：多租户治理与底层硬件基础设施" : "Superadmin: Multi-tenant & hardware cluster"
+    }
   ];
 
   return (
-    <nav className="flex items-center gap-1">
-      {navItems.map((item) => {
-        const Icon = item.icon;
+    <nav className="flex items-center rounded-lg border border-slate-200/80 bg-slate-100/90 p-0.5 text-xs select-none">
+      {perspectives.map((p) => {
+        const active = perspective === p.id;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            title={item.title}
-            aria-label={item.title}
+          <button
+            key={p.id}
+            type="button"
+            title={p.desc}
+            onClick={() => setPerspective(p.id)}
             className={cn(
-              "group relative flex size-9 items-center justify-center rounded-lg transition-all",
-              item.active
-                ? "bg-slate-800/90 text-panel-green shadow-xs ring-1 ring-white/10"
-                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+              "rounded-md px-2.5 py-1 text-[11px] font-medium transition-all",
+              active
+                ? "bg-white text-slate-900 font-bold shadow-xs border border-slate-200/60"
+                : "text-slate-500 hover:text-slate-900"
             )}
           >
-            <Icon className={cn("size-4 transition-transform group-hover:scale-110", item.active ? "text-panel-green" : "text-slate-400 group-hover:text-slate-200")} />
-
-            {/* Active Glow Indicator */}
-            {item.active && (
-              <span className="absolute -bottom-1 left-2 right-2 h-[2px] rounded-full bg-panel-green shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-            )}
-
-            {/* Top Right Mini Badge */}
-            {item.badge && (
-              <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-panel-green text-[9px] font-black text-black ring-2 ring-slate-950">
-                {item.badge}
-              </span>
-            )}
-          </Link>
+            {p.label}
+          </button>
         );
       })}
     </nav>
