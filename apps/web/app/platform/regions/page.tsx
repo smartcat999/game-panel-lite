@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
-import { PlatformScopeGuard } from "@/components/platform-scope-guard";
+import { PlatformAccessGuard } from "@/components/platform-access-guard";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { listRegions } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -15,7 +15,7 @@ export default function PlatformRegionsPage() {
   const regions = useQuery({ queryKey: ["platform", "regions"], queryFn: listRegions, retry: false });
 
   return (
-    <PlatformScopeGuard>
+    <PlatformAccessGuard>
       <div className="space-y-3">
         <ConsolePageHeader title={isZh ? "区域与节点" : "Regions and nodes"} />
         <div className="overflow-x-auto rounded-xl border bg-white micro-border subtle-elevation">
@@ -36,6 +36,6 @@ export default function PlatformRegionsPage() {
           </table>
         </div>
       </div>
-    </PlatformScopeGuard>
+    </PlatformAccessGuard>
   );
 }

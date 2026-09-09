@@ -9,20 +9,21 @@ import { ConsolePageHeader } from "@/components/console-page-header";
 import { ServerManagementTable } from "@/components/server-management-table";
 import { DeployInstanceModal } from "@/components/deploy-instance-modal";
 import { useI18n } from "@/lib/i18n";
-import { useConsoleContext } from "@/lib/console-context";
+import { useTenantContext } from "@/lib/tenant-context";
 
 export default function ServersPage() {
   const { canCreateServer } = usePermissions();
   const { locale } = useI18n();
   const isZh = locale === "zh";
   const [deployModalOpen, setDeployModalOpen] = useState(false);
-  const { scope, currentOrganization } = useConsoleContext();
-  const organizationId = scope.kind === "organization" ? scope.organizationId : undefined;
+  const { currentOrganization } = useTenantContext();
+  const organizationId = currentOrganization?.id;
   const canDeployInScope = canCreateServer && Boolean(organizationId);
 
   const serversQuery = useQuery({
-    queryKey: ["game-servers", scope.kind, organizationId ?? "all"],
+    queryKey: ["game-servers", "tenant", organizationId],
     queryFn: () => listGameServers(organizationId),
+    enabled: Boolean(organizationId),
     retry: false,
     refetchInterval: 5000
   });
@@ -39,7 +40,7 @@ export default function ServersPage() {
   return (
     <div className="space-y-3">
       <ConsolePageHeader
-        title={scope.kind === "platform" ? (isZh ? "全局实例" : "Global instances") : (isZh ? "实例" : "Instances")}
+        title={isZh ? "实例" : "Instances"}
         action={
           canDeployInScope ? (
             <button
@@ -50,7 +51,7 @@ export default function ServersPage() {
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>{isZh ? "部署" : "Deploy"}</span>
             </button>
-          ) : scope.kind === "organization" ? (
+          ) : organizationId ? (
             <div className="flex items-center gap-1.5 rounded-md border bg-slate-50 px-2 py-1 text-[11px] text-slate-500 micro-border">
               <LockKeyhole className="size-3" />
               <span>{isZh ? "只读" : "Read only"}</span>

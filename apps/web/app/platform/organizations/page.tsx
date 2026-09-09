@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { PlatformScopeGuard } from "@/components/platform-scope-guard";
+import { PlatformAccessGuard } from "@/components/platform-access-guard";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { listOrganizations } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -12,7 +12,7 @@ export default function PlatformOrganizationsPage() {
   const organizations = useQuery({ queryKey: ["platform", "organizations"], queryFn: listOrganizations, retry: false });
 
   return (
-    <PlatformScopeGuard>
+    <PlatformAccessGuard>
       <div className="space-y-3">
         <ConsolePageHeader title={isZh ? "租户管理" : "Tenant management"} />
         <div className="overflow-x-auto rounded-xl border bg-white micro-border subtle-elevation">
@@ -34,6 +34,6 @@ export default function PlatformOrganizationsPage() {
           {!organizations.isLoading && organizations.data?.length === 0 ? <p className="p-6 text-center text-xs text-slate-400">{isZh ? "暂无租户" : "No tenants"}</p> : null}
         </div>
       </div>
-    </PlatformScopeGuard>
+    </PlatformAccessGuard>
   );
 }

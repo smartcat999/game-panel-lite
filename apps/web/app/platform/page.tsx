@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Building2, MapPinned, Server } from "lucide-react";
-import { PlatformScopeGuard } from "@/components/platform-scope-guard";
+import { PlatformAccessGuard } from "@/components/platform-access-guard";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { useI18n } from "@/lib/i18n";
 
@@ -10,7 +10,7 @@ export default function PlatformOverviewPage() {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
   return (
-    <PlatformScopeGuard>
+    <PlatformAccessGuard>
       <div className="space-y-3">
         <ConsolePageHeader title={isZh ? "平台概览" : "Platform overview"} />
         <div className="rounded-xl border bg-white p-5 micro-border subtle-elevation">
@@ -27,7 +27,7 @@ export default function PlatformOverviewPage() {
           <OverviewLink href="/platform/regions" icon={<MapPinned className="size-4" />} title={isZh ? "区域运维" : "Region operations"} description={isZh ? "区域目录、创建准入与状态摘要" : "Region directory, create admission, and status summaries"} />
         </div>
       </div>
-    </PlatformScopeGuard>
+    </PlatformAccessGuard>
   );
 }
 

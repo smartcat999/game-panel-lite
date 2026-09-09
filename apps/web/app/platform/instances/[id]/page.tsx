@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Building2, MapPinned, Server } from "lucide-react";
 import { ConsolePageHeader } from "@/components/console-page-header";
-import { PlatformScopeGuard } from "@/components/platform-scope-guard";
+import { PlatformAccessGuard } from "@/components/platform-access-guard";
 import { getGameServer, listOrganizations } from "@/lib/api";
 import { gameServerStatus } from "@/lib/game-server-resource";
 import { useI18n } from "@/lib/i18n";
@@ -21,7 +21,7 @@ export default function PlatformInstanceDetailPage() {
   const organization = organizations.data?.find((item) => item.id === resource?.organizationId);
 
   return (
-    <PlatformScopeGuard>
+    <PlatformAccessGuard>
       <div className="space-y-3">
         <ConsolePageHeader
           title={resource?.name ?? (isZh ? "平台实例详情" : "Platform instance details")}
@@ -76,7 +76,7 @@ export default function PlatformInstanceDetailPage() {
           </>
         )}
       </div>
-    </PlatformScopeGuard>
+    </PlatformAccessGuard>
   );
 }
 

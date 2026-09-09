@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ConsolePageHeader } from "@/components/console-page-header";
-import { PlatformScopeGuard } from "@/components/platform-scope-guard";
+import { PlatformAccessGuard } from "@/components/platform-access-guard";
 import { getRegionDeployments, getRegionNodes, getRegionStatus, listRegions } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { regionDisplayName } from "@/lib/region-display";
@@ -31,7 +31,7 @@ export default function RegionOperationsPage() {
   const isStale = snapshot ? Date.now() - snapshot.observedAtMs > 90_000 : false;
 
   return (
-    <PlatformScopeGuard>
+    <PlatformAccessGuard>
       <div className="space-y-3">
         <ConsolePageHeader
           title={region ? regionDisplayName(region, locale) : regionId}
@@ -156,7 +156,7 @@ export default function RegionOperationsPage() {
           )}
         </section>
       </div>
-    </PlatformScopeGuard>
+    </PlatformAccessGuard>
   );
 }
 

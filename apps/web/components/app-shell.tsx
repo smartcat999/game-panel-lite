@@ -27,7 +27,8 @@ import { usePermissions } from "@/lib/permissions";
 import { useAuthBootstrap } from "@/lib/auth-session";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import { useConsoleContext } from "@/lib/console-context";
+import { consoleSurfaceForPathname } from "@/lib/console-routing";
+import { useTenantContext } from "@/lib/tenant-context";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -44,8 +45,11 @@ function AppChrome({ children }: { children: ReactNode }) {
   const { setTheme } = useTheme();
   const isZh = locale.startsWith("zh");
   const { platformRole } = usePermissions();
-  const { scope, organizations, currentOrganization, selectPlatform, selectOrganization } = useConsoleContext();
-  const firstWorkspace = organizations[0];
+  const consoleSurface = consoleSurfaceForPathname(pathname);
+  const isPlatformConsole = consoleSurface === "platform";
+  const isTenantConsole = consoleSurface === "tenant";
+  const isAccountSurface = consoleSurface === "account";
+  const { organizations, currentOrganization, selectOrganization } = useTenantContext();
   const account = useAuthBootstrap().data?.account;
   const queryClient = useQueryClient();
 
@@ -74,10 +78,10 @@ function AppChrome({ children }: { children: ReactNode }) {
       <div className="max-w-6xl mx-auto space-y-3">
         {/* ULTRA-CLEAN TOP NAVBAR */}
         <header className="h-12 bg-white border micro-border rounded-xl px-3.5 flex items-center justify-between subtle-elevation select-none">
-          {/* LEFT: LOGO + UNIFIED WORKSPACE TRIGGER */}
+          {/* Product identity and tenant selector */}
           <div className="flex items-center gap-2.5 shrink-0">
             <Link
-              href={scope.kind === "platform" ? "/platform" : "/servers"}
+              href={isPlatformConsole ? "/platform" : isAccountSurface ? "/account/settings" : "/servers"}
               className="w-6 h-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-600 font-bold text-xs shrink-0 hover:opacity-80 transition"
             >
               GP
@@ -85,12 +89,20 @@ function AppChrome({ children }: { children: ReactNode }) {
 
             <div className="h-3.5 w-px bg-slate-200 shrink-0" />
 
-            {scope.kind === "platform" ? (
+            {isPlatformConsole ? (
               <div className="flex h-8 min-w-0 items-center gap-2 px-1">
                 <ShieldCheck className="size-3.5 text-slate-500" />
                 <span className="min-w-0">
                   <span className="block text-xs font-semibold leading-3.5 text-slate-800">{isZh ? "平台控制台" : "Platform console"}</span>
                   <span className="block text-[10px] font-normal leading-3 text-slate-400">{isZh ? "运营与基础设施" : "Operations and infrastructure"}</span>
+                </span>
+              </div>
+            ) : isAccountSurface ? (
+              <div className="flex h-8 min-w-0 items-center gap-2 px-1">
+                <SettingsIcon className="size-3.5 text-slate-500" />
+                <span className="min-w-0">
+                  <span className="block text-xs font-semibold leading-3.5 text-slate-800">{isZh ? "账号设置" : "Account settings"}</span>
+                  <span className="block text-[10px] font-normal leading-3 text-slate-400">{isZh ? "个人偏好" : "Personal preferences"}</span>
                 </span>
               </div>
             ) : (
@@ -133,7 +145,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                               <span className="block truncate text-xs font-semibold text-slate-800">{organization.name}</span>
                               <span className="block text-[10px] text-slate-400">{membershipLabel(organization.membershipRole, isZh)}</span>
                             </span>
-                            {scope.kind === "organization" && scope.organizationId === organization.id ? <Check className="size-3.5 text-emerald-600" /> : null}
+                            {currentOrganization?.id === organization.id ? <Check className="size-3.5 text-emerald-600" /> : null}
                           </button>
                         ))}
                       </div>
@@ -197,24 +209,24 @@ function AppChrome({ children }: { children: ReactNode }) {
                     <SettingsIcon className="size-3.5" />
                     <span>{isZh ? "账号设置" : "Account settings"}</span>
                   </Link>
-                  {platformRole === "platform_admin" && scope.kind !== "platform" ? (
+                  {platformRole === "platform_admin" && !isPlatformConsole ? (
                     <button
                       type="button"
-                      onClick={() => { selectPlatform(); setProfileOpen(false); router.push("/platform"); }}
+                      onClick={() => { setProfileOpen(false); router.push("/platform"); }}
                       className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                     >
                       <ShieldCheck className="size-3.5" />
                       <span>{isZh ? "进入平台控制台" : "Open platform console"}</span>
                     </button>
                   ) : null}
-                  {scope.kind === "platform" && firstWorkspace ? (
+                  {!isTenantConsole ? (
                     <button
                       type="button"
-                      onClick={() => { selectOrganization(firstWorkspace.id); setProfileOpen(false); router.push("/servers"); }}
+                      onClick={() => { setProfileOpen(false); router.push("/servers"); }}
                       className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                     >
                       <Building2 className="size-3.5" />
-                      <span>{isZh ? "返回租户控制台" : "Return to workspace"}</span>
+                      <span>{isZh ? "进入租户控制台" : "Open tenant console"}</span>
                     </button>
                   ) : null}
                   <button
@@ -232,13 +244,15 @@ function AppChrome({ children }: { children: ReactNode }) {
 
         {/* MAIN WORKSPACE LAYOUT: SIDEBAR + CONTENT */}
         <nav className="flex gap-1 overflow-x-auto rounded-xl border bg-white p-1.5 micro-border subtle-elevation md:hidden">
-          {scope.kind === "platform" ? (
+          {isPlatformConsole ? (
             <>
               <MobileNavLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "概览" : "Overview"} />
               <MobileNavLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户" : "Tenants"} />
               <MobileNavLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域" : "Regions"} />
               <MobileNavLink active={pathname.startsWith("/platform/instances")} href="/platform/instances" icon={<ServerIcon className="size-3.5" />} label={isZh ? "平台实例" : "Platform instances"} />
             </>
+          ) : isAccountSurface ? (
+            <MobileNavLink active href="/account/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "账号设置" : "Account settings"} />
           ) : (
             <>
               <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "实例" : "Instances"} />
@@ -252,9 +266,11 @@ function AppChrome({ children }: { children: ReactNode }) {
         <div className="flex flex-col items-stretch gap-3.5 md:min-h-[700px] md:flex-row">
           {/* SIDEBAR */}
           <aside className="relative hidden w-[210px] shrink-0 flex-col justify-between rounded-xl border bg-white p-2.5 transition-all duration-200 micro-border subtle-elevation md:flex">
-            {scope.kind === "platform"
+            {isPlatformConsole
               ? <PlatformNavigation pathname={pathname} isZh={isZh} />
-              : <WorkspaceNavigation pathname={pathname} isZh={isZh} />}
+              : isAccountSurface
+                ? <AccountNavigation isZh={isZh} />
+                : <WorkspaceNavigation pathname={pathname} isZh={isZh} />}
           </aside>
 
           {/* MAIN CONTENT AREA */}
@@ -356,6 +372,17 @@ function WorkspaceNavigation({ pathname, isZh }: { pathname: string; isZh: boole
       </NavigationGroup>
       <NavigationGroup title={isZh ? "空间管理" : "MANAGEMENT"}>
         <SidebarLink active={pathname.startsWith("/settings")} href="/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "空间设置" : "Workspace settings"} />
+      </NavigationGroup>
+    </div>
+  );
+}
+
+function AccountNavigation({ isZh }: { isZh: boolean }) {
+  return (
+    <div className="space-y-3.5">
+      <NavigationTitle>{isZh ? "账号" : "ACCOUNT"}</NavigationTitle>
+      <NavigationGroup title={isZh ? "个人设置" : "PERSONAL"}>
+        <SidebarLink active href="/account/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "语言与主题" : "Language and theme"} />
       </NavigationGroup>
     </div>
   );

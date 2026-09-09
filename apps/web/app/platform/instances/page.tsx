@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { ConsolePageHeader } from "@/components/console-page-header";
-import { PlatformScopeGuard } from "@/components/platform-scope-guard";
+import { PlatformAccessGuard } from "@/components/platform-access-guard";
 import { listGameServers, listOrganizations } from "@/lib/api";
 import { gameServerStatus } from "@/lib/game-server-resource";
 import { useI18n } from "@/lib/i18n";
@@ -17,7 +17,7 @@ export default function PlatformInstancesPage() {
   const organizationNames = new Map((organizations.data ?? []).map((organization) => [organization.id, organization.name]));
 
   return (
-    <PlatformScopeGuard>
+    <PlatformAccessGuard>
       <div className="space-y-3">
         <ConsolePageHeader title={isZh ? "平台实例" : "Platform instances"} />
         <section className="overflow-hidden rounded-xl border bg-white micro-border subtle-elevation">
@@ -75,7 +75,7 @@ export default function PlatformInstancesPage() {
           )}
         </section>
       </div>
-    </PlatformScopeGuard>
+    </PlatformAccessGuard>
   );
 }
 
