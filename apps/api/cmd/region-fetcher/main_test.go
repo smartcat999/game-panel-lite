@@ -168,8 +168,13 @@ func TestFetcherPostgresMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	entitlementHandler, err := controlapi.NewEntitlementHandler(global, identities, 65536)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/internal/region/backups/", backupHandler)
+	mux.Handle("/internal/region/entitlements/", entitlementHandler)
 	mux.Handle("/", handler)
 	var available atomic.Bool
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

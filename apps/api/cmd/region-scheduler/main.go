@@ -15,7 +15,9 @@ import (
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/controlclient"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/entitlements"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
@@ -109,7 +111,7 @@ func run(ctx context.Context, o options) error {
 		return errors.New("cannot initialize providers")
 	}
 	scheduler := regional.Scheduler{Resources: db, Networks: gameconfig.RegionalRenderer{Normalizer: gameconfig.LogicalNormalizer{Providers: registry, MaxBytes: o.maxConfigurationBytes}, Configurations: keys}, MaxHeartbeatAge: o.heartbeatAge}
-	worker := regional.SchedulingWorker{Tasks: db, Source: source, Scheduler: scheduler, Scopes: schedulingScopes{db: db, registry: registry, architecture: o.architecture, firstPort: o.firstPort, lastPort: o.lastPort}, Lease: o.lease, Timeout: o.requestTimeout, RetryDelay: o.retry}
+	worker := regional.SchedulingWorker{Tasks: db, Source: source, Scheduler: scheduler, Scopes: schedulingScopes{db: db, entitlements: source, registry: registry, architecture: o.architecture, firstPort: o.firstPort, lastPort: o.lastPort}, Lease: o.lease, Timeout: o.requestTimeout, RetryDelay: o.retry}
 	for ctx.Err() == nil {
 		workCtx, cancel := context.WithTimeout(ctx, o.taskTimeout)
 		done, err := worker.RunOnce(workCtx)
@@ -136,16 +138,39 @@ func run(ctx context.Context, o options) error {
 	return nil
 }
 
-// This adapter derives candidates from operator policy and Provider constraints.
-// It does not infer privileged user pinning or commercial execution entitlement.
+// This adapter first resolves current global commercial rights, then derives
+// candidates from regional operator policy and Provider constraints.
 type schedulingScopes struct {
-	db                  *store.RegionalStore
+	db                  nodeAccessReader
+	entitlements        runEntitlementReader
 	registry            *provider.Registry
 	architecture        string
 	firstPort, lastPort int
 }
 
+type nodeAccessReader interface {
+	RegionalNodeAccessPolicy(context.Context, string) (regional.NodeAccessPolicy, error)
+}
+
+type runEntitlementReader interface {
+	GetRunEntitlement(context.Context, instances.RevisionAvailable, int64) (entitlements.Record, error)
+}
+
 func (s schedulingScopes) SchedulingScope(ctx context.Context, snapshot regional.RevisionSnapshot) (regional.SchedulingScope, error) {
+	if s.entitlements == nil {
+		return regional.SchedulingScope{}, entitlements.ErrUnavailable
+	}
+	// Global verifies tenant, current placement/intent, policy lifetime and the
+	// requested resources in one read snapshot. This admission is deliberately
+	// repeated for every scheduling attempt and is never cached as execution authority.
+	right, err := s.entitlements.GetRunEntitlement(ctx, snapshot.Event, snapshot.IntentVersion)
+	if err != nil {
+		return regional.SchedulingScope{}, err
+	}
+	needed := snapshot.Revision.Specification.Resources
+	if right.Policy.Validate() != nil || right.Version < 1 || right.SourceKind == "" || right.SourceID == "" || right.Status != "active" || right.OrganizationID != snapshot.Event.OrganizationID || right.ServerID != snapshot.Event.ServerID || right.CPU < needed.CPU || right.MemoryMB < needed.MemoryMB {
+		return regional.SchedulingScope{}, entitlements.ErrUnavailable
+	}
 	policy, err := s.db.RegionalNodeAccessPolicy(ctx, snapshot.Event.OrganizationID)
 	if err != nil {
 		return regional.SchedulingScope{}, err

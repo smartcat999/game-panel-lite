@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/configprotection"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/entitlements"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -131,7 +133,24 @@ func testSchedulerProcess(t *testing.T, ctx context.Context, binary string, glob
 	if status != "pending" {
 		t.Fatal("offline global completed scheduling")
 	}
+	offlineAttempts := attempts
 	available.Store(true)
+	wait(func() bool { read(); return attempts > offlineAttempts })
+	if status != "pending" {
+		t.Fatal("missing entitlement completed scheduling")
+	}
+	var allocationCount int64
+	if err := admin.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+schema+".regional_allocations WHERE server_id=$1", event.ServerID).Scan(&allocationCount); err != nil || allocationCount != 0 {
+		t.Fatal("missing entitlement reserved resources", err)
+	}
+	account := domain.AdminAccount{ID: "scheduler-admin", Username: "scheduler-admin", Role: domain.RoleAdmin, PlatformRole: domain.PlatformRoleAdmin, PasswordHash: "test"}
+	if err := global.CreateAdminAccount(ctx, &account); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli()
+	if _, err := global.ChangeOperatorEntitlement(ctx, account.ID, entitlements.OperatorChange{Policy: entitlements.Policy{OrganizationID: event.OrganizationID, ServerID: event.ServerID, CPU: spec.Resources.CPU, MemoryMB: spec.Resources.MemoryMB, StartsAtMS: now - 1000, EndsAtMS: now + int64(time.Hour/time.Millisecond), Status: "active"}, RequestID: "scheduler-grant", Reason: "scheduler process test"}); err != nil {
+		t.Fatal(err)
+	}
 	wait(func() bool { read(); return status == "reserved" })
 	var node, ports, allocationID string
 	if err := admin.QueryRowContext(ctx, "SELECT id,node_id,ports FROM "+schema+".regional_allocations WHERE server_id=$1 AND status='reserved'", event.ServerID).Scan(&allocationID, &node, &ports); err != nil {
@@ -159,5 +178,5 @@ func testSchedulerProcess(t *testing.T, ctx context.Context, binary string, glob
 	if bytes.Contains(output.Bytes(), []byte("test-through-mtls")) || bytes.Contains(output.Bytes(), keyring) {
 		t.Fatal("scheduler logged configuration secrets")
 	}
-	t.Log("actual regional scheduler process: mutual TLS global intent, durable retry, provider/keyring/policy/port admission and graceful stop verified; Node heartbeats are fixtures")
+	t.Log("actual regional scheduler process: mutual TLS global intent and entitlement, denial before grant, durable retry, provider/keyring/policy/port admission and graceful stop verified; Node heartbeats are fixtures")
 }
