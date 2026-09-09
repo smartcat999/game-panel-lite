@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LockKeyhole, Plus } from "lucide-react";
-import { listGameServers, getSettings } from "@/lib/api";
+import { listTenantInstanceViews } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { ServerManagementTable } from "@/components/server-management-table";
@@ -20,22 +20,14 @@ export default function ServersPage() {
   const organizationId = currentOrganization?.id;
   const canDeployInScope = canCreateServer && Boolean(organizationId);
 
-  const serversQuery = useQuery({
-    queryKey: ["game-servers", "tenant", organizationId],
-    queryFn: () => listGameServers(organizationId),
+  const instancesQuery = useQuery({
+    queryKey: ["tenant-instances", organizationId],
+    queryFn: () => listTenantInstanceViews(organizationId!),
     enabled: Boolean(organizationId),
     retry: false,
     refetchInterval: 5000
   });
-
-  const settingsQuery = useQuery({
-    queryKey: ["settings"],
-    queryFn: getSettings,
-    retry: false,
-    staleTime: 5 * 60 * 1000
-  });
-
-  const servers = serversQuery.data ?? [];
+  const instances = instancesQuery.data?.items ?? [];
 
   return (
     <div className="space-y-3">
@@ -60,9 +52,18 @@ export default function ServersPage() {
         }
       />
 
-      {/* Public Cloud High-Density Table */}
       <div className="bg-white border micro-border rounded-xl subtle-elevation overflow-hidden">
-        <ServerManagementTable servers={servers} publicHost={settingsQuery.data?.publicHost} />
+        {instancesQuery.isLoading ? (
+          <div className="p-10 text-center text-xs text-slate-400">
+            {isZh ? "正在读取实例…" : "Loading instances…"}
+          </div>
+        ) : instancesQuery.isError ? (
+          <div className="p-10 text-center text-xs text-slate-500">
+            {isZh ? "实例列表暂时无法读取。" : "Instances are temporarily unavailable."}
+          </div>
+        ) : (
+          <ServerManagementTable instances={instances} />
+        )}
       </div>
 
       <DeployInstanceModal open={deployModalOpen} onClose={() => setDeployModalOpen(false)} organizationId={currentOrganization?.id} />

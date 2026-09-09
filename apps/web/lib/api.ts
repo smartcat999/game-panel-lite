@@ -1990,23 +1990,6 @@ export async function listCommerceSubscriptions(organizationId?: string): Promis
   return readPayload<CommerceSubscription[]>(response, "Unable to load subscriptions");
 }
 
-export async function simulatePaymentWebhook(req: {
-  provider: string;
-  merchantId: string;
-  transactionId: string;
-  eventId: string;
-  orderId: string;
-  amountMinor: number;
-  currency: string;
-}): Promise<{ success: boolean }> {
-  const response = await apiFetch(`${API_BASE}/api/commerce/payments/webhook`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  }, false);
-  return readPayload<{ success: boolean }>(response, "Payment callback failed");
-}
-
 export async function getOperationStatus(operationId: string): Promise<ServerOperation> {
   const response = await apiFetch(`${API_BASE}/api/operations/${encodeURIComponent(operationId)}`, { cache: "no-store" });
   return readPayload<ServerOperation>(response, "Unable to load operation status");

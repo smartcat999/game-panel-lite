@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Cpu, HardDrive, MapPin, MemoryStick, Server, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { createGameServerWithResources } from "@/lib/create-server-flow";
-import { listCommercePlans, listRegions } from "@/lib/api";
+import { createCommerceOrder, createTenantInstance, listCommercePlans, listRegions } from "@/lib/api";
 import type { CommercePlanVersion } from "@/lib/types";
 import { Button, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -21,7 +19,6 @@ interface DeployInstanceModalProps {
 type Engine = "vanilla" | "tmodloader";
 
 export function DeployInstanceModal({ open, onClose, organizationId }: DeployInstanceModalProps) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
@@ -31,6 +28,8 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
   const [regionId, setRegionId] = useState("");
   const [planId, setPlanId] = useState("");
   const [error, setError] = useState("");
+  const [createdOrderId, setCreatedOrderId] = useState("");
+  const requestIdentity = useRef("");
 
   const plansQuery = useQuery({
     queryKey: ["commerce-plans"],
@@ -52,20 +51,25 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
     [plansQuery.data, providerKey]
   );
   const regionIds = useMemo(
-    () => Array.from(new Set(providerPlans.map((plan) => plan.regionId))),
-    [providerPlans]
+    () => {
+      const accepting = new Set((regionsQuery.data ?? []).filter((region) => region.acceptingCreates).map((region) => region.id));
+      return Array.from(new Set(providerPlans.map((plan) => plan.regionId).filter((id) => accepting.has(id))));
+    },
+    [providerPlans, regionsQuery.data]
   );
   const visiblePlans = useMemo(
     () => providerPlans.filter((plan) => plan.regionId === regionId),
     [providerPlans, regionId]
   );
-  const selectedPlan = visiblePlans.find((plan) => plan.planId === planId);
+  const selectedPlan = visiblePlans.find((plan) => planKey(plan) === planId);
 
   useEffect(() => {
     if (!open) return;
     const randomSuffix = Math.floor(10 + Math.random() * 90);
     setName(`terraria-${randomSuffix}`);
     setError("");
+    setCreatedOrderId("");
+    requestIdentity.current = "";
   }, [open]);
 
   useEffect(() => {
@@ -77,7 +81,7 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
   useEffect(() => {
     if (!open || visiblePlans.length === 0) return;
     const firstPlan = visiblePlans[0];
-    if (firstPlan && !visiblePlans.some((plan) => plan.planId === planId)) setPlanId(firstPlan.planId);
+    if (firstPlan && !visiblePlans.some((plan) => planKey(plan) === planId)) setPlanId(planKey(firstPlan));
   }, [open, planId, visiblePlans]);
 
   useEffect(() => {
@@ -91,24 +95,31 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
 
   const deployMutation = useMutation({
     mutationFn: async () => {
+      if (!organizationId) throw new Error(isZh ? "请先选择空间" : "Select a workspace first");
       if (!selectedPlan) throw new Error(isZh ? "请选择可用套餐" : "Select an available plan");
-      return createGameServerWithResources({
+      if (!requestIdentity.current) requestIdentity.current = crypto.randomUUID();
+      const instance = await createTenantInstance({
+        organizationId,
         name: name.trim(),
-        mode: engine,
-        providerKey,
-        config: {},
-        resources: {
-          cpuLimitCores: selectedPlan.cpu,
-          memoryLimitMb: selectedPlan.memoryMb
-        },
-        prepaidPlanId: selectedPlan.planId,
-        organizationId
+        planId: selectedPlan.planId,
+        planVersion: selectedPlan.version,
+        idempotencyKey: `instance-${requestIdentity.current}`,
+        configuration: {}
       });
+      const order = await createCommerceOrder({
+        organizationId,
+        serverId: instance.instanceId,
+        planId: selectedPlan.planId,
+        planVersion: selectedPlan.version,
+        periods: 1,
+        idempotencyKey: `order-${requestIdentity.current}`
+      });
+      return { instance, order };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["game-servers"] });
-      onClose();
-      if (result.server.id) router.push(`/servers/${result.server.id}`);
+      queryClient.invalidateQueries({ queryKey: ["tenant-instances", organizationId] });
+      setCreatedOrderId(result.order.id);
+      setError("");
     },
     onError: (err: unknown) => {
       setError(err instanceof Error ? err.message : isZh ? "创建实例失败" : "Failed to deploy instance");
@@ -143,10 +154,10 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
             </div>
             <div>
               <h2 id="deploy-title" className="text-sm font-bold text-slate-900">
-                {isZh ? "部署 Terraria 实例" : "Deploy Terraria instance"}
+                {isZh ? "创建 Terraria 实例" : "Create Terraria instance"}
               </h2>
               <p className="text-[11px] text-slate-400">
-                {isZh ? "节点将由所选区域自动调度" : "A node will be scheduled automatically in the selected region"}
+                {isZh ? "服务激活后，由所选区域自动调度节点" : "The selected Region schedules a node after service activation"}
               </p>
             </div>
           </div>
@@ -216,10 +227,10 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
               {visiblePlans.map((plan) => (
                 <PlanOption
                   key={`${plan.planId}-${plan.version}`}
-                  active={plan.planId === planId}
+                  active={planKey(plan) === planId}
                   locale={locale}
                   plan={plan}
-                  onClick={() => setPlanId(plan.planId)}
+                  onClick={() => setPlanId(planKey(plan))}
                 />
               ))}
             </div>
@@ -242,11 +253,20 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
               {error}
             </p>
           ) : null}
+          {createdOrderId ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
+              <p className="font-semibold">{isZh ? "实例配置和待支付订单已创建" : "Instance configuration and pending order created"}</p>
+              <p className="mt-1 font-mono text-[10px] text-emerald-700">{createdOrderId}</p>
+              <p className="mt-1 text-[11px] leading-4 text-emerald-700">
+                {isZh ? "当前本地环境尚未配置真实支付渠道，订单不会自动授予运行权益。" : "No real payment provider is configured locally, so this order does not grant runtime entitlement automatically."}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 py-3">
           <p className="text-[11px] text-slate-400">
-            {selectedPlan ? formatPeriod(selectedPlan.periodSeconds, isZh) : ""}
+            {selectedPlan ? `${formatPeriod(selectedPlan.periodSeconds, isZh)} · ${isZh ? "激活后开始交付" : "delivery starts after activation"}` : ""}
           </p>
           <div className="flex items-center gap-2">
             <Button type="button" variant="secondary" onClick={onClose} disabled={deployMutation.isPending}>
@@ -254,11 +274,11 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
             </Button>
             <Button
               type="button"
-              onClick={() => deployMutation.mutate()}
-              disabled={deployMutation.isPending || !name.trim() || !selectedPlan}
+              onClick={() => createdOrderId ? onClose() : deployMutation.mutate()}
+              disabled={deployMutation.isPending || (!createdOrderId && (!name.trim() || !selectedPlan))}
               className="bg-slate-900 text-white hover:bg-slate-800"
             >
-              {deployMutation.isPending ? (isZh ? "部署中" : "Deploying") : (isZh ? "部署实例" : "Deploy instance")}
+              {createdOrderId ? (isZh ? "完成" : "Done") : deployMutation.isPending ? (isZh ? "正在创建" : "Creating") : (isZh ? "创建订单" : "Create order")}
             </Button>
           </div>
         </div>
@@ -331,6 +351,10 @@ function PlanOption({ active, locale, plan, onClick }: {
 function planName(planId: string) {
   const part = planId.split("-").at(-1) ?? planId;
   return part.replaceAll("_", " ");
+}
+
+function planKey(plan: CommercePlanVersion) {
+  return `${plan.planId}@${plan.version}`;
 }
 
 function formatPrice(plan: CommercePlanVersion, locale: string) {
