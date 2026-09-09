@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/commerce"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -1109,6 +1110,10 @@ func (h *Handler) requireRuntimeAvailable(ctx context.Context) error {
 func writeLifecycleError(w http.ResponseWriter, err error) {
 	if errors.Is(err, serverctrl.ErrServerDeletionPending) || errors.Is(err, serverctrl.ErrServerMustBeStoppedToDelete) {
 		writeError(w, http.StatusConflict, err.Error())
+		return
+	}
+	if errors.Is(err, commerce.ErrSubscriptionExpired) {
+		writeError(w, http.StatusPaymentRequired, err.Error())
 		return
 	}
 	writeAllocationError(w, err)

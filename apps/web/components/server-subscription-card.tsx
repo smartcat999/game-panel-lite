@@ -55,7 +55,7 @@ export function ServerSubscriptionCard({ server, isViewer }: ServerSubscriptionC
   });
 
   const currentSubscription = subscriptions.find(
-    (s: CommerceSubscription) => s.serverId === server.id && s.status === "active"
+    (s: CommerceSubscription) => s.serverId === server.id && (s.status === "active" || s.status === "expired")
   );
 
   // Compute expiry time and remaining days
@@ -66,7 +66,7 @@ export function ServerSubscriptionCard({ server, isViewer }: ServerSubscriptionC
     const now = Date.now();
     const remainingMs = expiresAt - now;
     const remainingDays = Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
-    const isExpired = remainingMs <= 0;
+    const isExpired = currentSubscription.status === "expired" || remainingMs <= 0;
     const isExpiringSoon = !isExpired && remainingDays <= 5;
     return {
       expiresAt: new Date(expiresAt).toLocaleDateString(locale, {
@@ -140,10 +140,17 @@ export function ServerSubscriptionCard({ server, isViewer }: ServerSubscriptionC
                 {isZh ? "SaaS 预付费订阅与商业保障" : "SaaS Prepaid Subscription & SLA"}
               </h2>
               {currentSubscription ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-panel-green/30 bg-panel-green/10 px-2 py-0.5 text-[10px] font-semibold text-panel-green">
-                  <ShieldCheck className="size-3" />
-                  {isZh ? "商业订阅生效中" : "Active Subscription"}
-                </span>
+                currentSubscription.status === "expired" || expiryInfo?.isExpired ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                    <AlertTriangle className="size-3" />
+                    {isZh ? "已到期停服（存档宽限期中）" : "Expired (In Grace Period)"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-panel-green/30 bg-panel-green/10 px-2 py-0.5 text-[10px] font-semibold text-panel-green">
+                    <ShieldCheck className="size-3" />
+                    {isZh ? "商业订阅生效中" : "Active Subscription"}
+                  </span>
+                )
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[10px] font-medium text-slate-400">
                   {isZh ? "基础点券模式" : "Credits Mode"}
@@ -282,6 +289,32 @@ export function ServerSubscriptionCard({ server, isViewer }: ServerSubscriptionC
               <span>{isZh ? "查看可用套餐" : "Browse Plans"}</span>
               <ArrowUpRight className="size-3" />
             </button>
+          )}
+        </div>
+      )}
+
+      {currentSubscription && (currentSubscription.status === "expired" || expiryInfo?.isExpired) && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 shrink-0 text-amber-400" />
+            <span>
+              {isZh
+                ? "该服务器预付费商业套餐已到期，已自动优雅停机以释放算力并保护数据。当前处于 7 天存档保留宽限期，续费即可秒级解锁重新启动！"
+                : "Subscription has expired. The instance was stopped to preserve data during a 7-day grace period. Renew to restore service immediately!"}
+            </span>
+          </div>
+          {!isViewer && (
+            <Button
+              variant="gold"
+              onClick={() => {
+                setActionError(null);
+                setActionSuccess(null);
+                setRenewModalOpen(true);
+              }}
+              className="shrink-0 text-xs px-2.5 py-1 font-semibold ml-auto sm:ml-2"
+            >
+              {isZh ? "立即续费激活" : "Renew Now"}
+            </Button>
           )}
         </div>
       )}

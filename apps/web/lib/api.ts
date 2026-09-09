@@ -7,7 +7,7 @@ import type { ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanV
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
 const API_BASE = "";
-function apiPath(path: string): string {
+function _apiPath(path: string): string {
   return `${getApiBaseUrl()}${path}`;
 }
 const DOCKER_CHECK_TIMEOUT_MS = 5000;

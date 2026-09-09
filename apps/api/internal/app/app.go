@@ -88,6 +88,8 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	_ = db.SeedDefaultPrepaidPlans(context.Background())
 	fulfillmentWorker := commerce.NewFulfillmentWorker(db, 50, 3*time.Second, logger)
 	go fulfillmentWorker.Start(appCtx)
+	expiryWorker := commerce.NewSubscriptionExpiryWorker(db, 50, 5*time.Second, logger)
+	go expiryWorker.Start(appCtx)
 	go dockerMonitor.Start(appCtx, 10*time.Second)
 	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(appCtx, 30*time.Second)
 	streamGateway := gateway.NewStreamGateway(logger)

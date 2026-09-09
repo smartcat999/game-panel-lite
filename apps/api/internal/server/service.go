@@ -69,7 +69,16 @@ func (s *Service) Create(ctx context.Context, cmd CreateCommand) (domain.GameSer
 	return server, nil
 }
 
+type EntitlementChecker interface {
+	CheckServerStartable(ctx context.Context, serverID string) error
+}
+
 func (s *Service) RequestStart(ctx context.Context, id string) (domain.GameServer, error) {
+	if checker, ok := s.store.(EntitlementChecker); ok {
+		if err := checker.CheckServerStartable(ctx, id); err != nil {
+			return domain.GameServer{}, err
+		}
+	}
 	return s.updateIntent(ctx, id, domain.DesiredRunning, "reuse", markPending)
 }
 
@@ -78,6 +87,11 @@ func (s *Service) RequestStop(ctx context.Context, id string) (domain.GameServer
 }
 
 func (s *Service) RequestRestart(ctx context.Context, id string) (domain.GameServer, error) {
+	if checker, ok := s.store.(EntitlementChecker); ok {
+		if err := checker.CheckServerStartable(ctx, id); err != nil {
+			return domain.GameServer{}, err
+		}
+	}
 	return s.updateIntent(ctx, id, domain.DesiredRunning, "refresh", markPending)
 }
 

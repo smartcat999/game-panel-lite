@@ -345,6 +345,35 @@ ALTER TABLE global_server_entitlements_v16 RENAME TO global_server_entitlements;
 				return err
 			}
 		}
+		var count17 int64
+		if err := tx.Table("gamepanel_sqlite_migrations").Where("version = 17").Count(&count17).Error; err != nil {
+			return err
+		}
+		if count17 == 0 {
+			migration17 := `
+CREATE TABLE IF NOT EXISTS service_subscriptions_v17 (
+ id text PRIMARY KEY,
+ organization_id text NOT NULL,
+ server_id text NOT NULL UNIQUE REFERENCES logical_servers(id),
+ order_id text NOT NULL UNIQUE REFERENCES prepaid_orders(id),
+ payment_id text NOT NULL UNIQUE REFERENCES prepaid_payment_captures(id),
+ revision_id text NOT NULL REFERENCES server_revisions(id),
+ placement_epoch bigint NOT NULL CHECK(placement_epoch > 0),
+ quote text NOT NULL,
+ status text NOT NULL CHECK(status IN ('pending_activation','active','expired','cancelled')),
+ created_at_ms bigint NOT NULL
+);
+INSERT OR IGNORE INTO service_subscriptions_v17 SELECT * FROM service_subscriptions;
+DROP TABLE service_subscriptions;
+ALTER TABLE service_subscriptions_v17 RENAME TO service_subscriptions;
+`
+			if err := tx.Exec(migration17).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec("INSERT INTO gamepanel_sqlite_migrations(version) VALUES(17)").Error; err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }

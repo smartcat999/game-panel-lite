@@ -587,7 +587,7 @@ export type CommerceSubscription = {
   serverId: string;
   orderId: string;
   paymentId: string;
-  status: "pending_activation" | "active" | "cancelled";
+  status: "pending_activation" | "active" | "expired" | "cancelled";
   quote: {
     plan: CommercePlanVersion;
     periods: number;
