@@ -6,7 +6,7 @@ import { AuthQueryProvider } from "@/lib/auth-session";
 import { sessionExpiredEvent } from "@/lib/session-events";
 import type { AuthBootstrap } from "@/lib/types";
 import { I18nProvider } from "@/lib/i18n";
-import { PerspectiveProvider } from "@/lib/perspective-context";
+import { ConsoleContextProvider } from "@/lib/console-context";
 import { ThemeProvider } from "@/lib/theme";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -30,9 +30,9 @@ export function Providers({ children }: { children: ReactNode }) {
       <QueryClientProvider client={client}>
         <I18nProvider>
           <ThemeProvider>
-            <PerspectiveProvider>
+            <ConsoleContextProvider>
               {children}
-            </PerspectiveProvider>
+            </ConsoleContextProvider>
           </ThemeProvider>
         </I18nProvider>
       </QueryClientProvider>

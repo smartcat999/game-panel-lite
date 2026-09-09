@@ -9,16 +9,20 @@ import { ConsolePageHeader } from "@/components/console-page-header";
 import { ServerManagementTable } from "@/components/server-management-table";
 import { DeployInstanceModal } from "@/components/deploy-instance-modal";
 import { useI18n } from "@/lib/i18n";
+import { useConsoleContext } from "@/lib/console-context";
 
 export default function ServersPage() {
   const { canCreateServer } = usePermissions();
   const { locale } = useI18n();
   const isZh = locale === "zh";
   const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const { scope, currentOrganization } = useConsoleContext();
+  const organizationId = scope.kind === "organization" ? scope.organizationId : undefined;
+  const canDeployInScope = canCreateServer && Boolean(organizationId);
 
   const serversQuery = useQuery({
-    queryKey: ["game-servers"],
-    queryFn: listGameServers,
+    queryKey: ["game-servers", scope.kind, organizationId ?? "all"],
+    queryFn: () => listGameServers(organizationId),
     retry: false,
     refetchInterval: 5000
   });
@@ -37,7 +41,7 @@ export default function ServersPage() {
       <ConsolePageHeader
         title={isZh ? "实例" : "Instances"}
         action={
-          canCreateServer ? (
+          canDeployInScope ? (
             <button
               type="button"
               onClick={() => setDeployModalOpen(true)}
@@ -46,12 +50,12 @@ export default function ServersPage() {
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>{isZh ? "部署" : "Deploy"}</span>
             </button>
-          ) : (
+          ) : scope.kind === "organization" ? (
             <div className="flex items-center gap-1.5 rounded-md border bg-slate-50 px-2 py-1 text-[11px] text-slate-500 micro-border">
               <LockKeyhole className="size-3" />
               <span>{isZh ? "只读" : "Read only"}</span>
             </div>
-          )
+          ) : null
         }
       />
 
@@ -60,7 +64,7 @@ export default function ServersPage() {
         <ServerManagementTable servers={servers} publicHost={settingsQuery.data?.publicHost} />
       </div>
 
-      <DeployInstanceModal open={deployModalOpen} onClose={() => setDeployModalOpen(false)} />
+      <DeployInstanceModal open={deployModalOpen} onClose={() => setDeployModalOpen(false)} organizationId={currentOrganization?.id} />
     </div>
   );
 }

@@ -914,7 +914,13 @@ paths:
   /api/servers:
     get:
       summary: List servers
-      description: Customer lists and pagination totals include only current workspace memberships. Platform administrators retain global visibility.
+      description: Customer lists and pagination totals include only current workspace memberships. Supplying organizationId narrows the result to one accessible workspace. Platform administrators retain global visibility and can explicitly scope the inventory to one workspace.
+      parameters:
+        - in: query
+          name: organizationId
+          schema:
+            type: string
+          description: Explicit tenant workspace scope.
       responses:
         "200":
           description: Server list

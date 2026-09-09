@@ -13,6 +13,8 @@ _Avoid_: 与 Organization 并列的另一套 Tenant 实体
 
 **MembershipRole（成员角色）**：账号与某个组织之间关系上的权限，可为 owner、admin、member 或 viewer；同一账号在不同组织中可以不同。
 
+**ConsoleScope（控制台范围）**：当前正在管理的平台全局或一个明确租户空间。切换范围不改变 PlatformRole 或 MembershipRole；业务查询与前端缓存键必须携带该范围。
+
 **GameServer（逻辑实例）**：用户拥有的稳定游戏服务器身份，包含全局配置与期望状态，跨区域迁移不改变其身份。
 _Avoid_: 容器、节点实例、区域部署
 

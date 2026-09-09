@@ -320,15 +320,16 @@ func (s *Store) ListGameServers(ctx context.Context) ([]domain.GameServer, error
 }
 
 type GameServerListOptions struct {
-	Page        int
-	PageSize    int
-	Search      string
-	GameKey     string
-	ProviderKey string
-	Status      string
-	Sort        string
-	Direction   string
-	Region      string
+	Page           int
+	PageSize       int
+	Search         string
+	GameKey        string
+	ProviderKey    string
+	Status         string
+	Sort           string
+	Direction      string
+	Region         string
+	OrganizationID string
 }
 
 type GameServerPage struct {
@@ -372,6 +373,9 @@ func (s *Store) listGameServersPage(query *gorm.DB, options GameServerListOption
 	}
 	if providerKey := strings.TrimSpace(options.ProviderKey); providerKey != "" && providerKey != "all" {
 		query = query.Where("provider_key = ?", providerKey)
+	}
+	if organizationID := strings.TrimSpace(options.OrganizationID); organizationID != "" {
+		query = query.Where("organization_id = ?", organizationID)
 	}
 	if region := strings.ToLower(strings.TrimSpace(options.Region)); region != "" && region != "all" {
 		var nodeIDs []string

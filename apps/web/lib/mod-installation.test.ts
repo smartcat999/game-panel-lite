@@ -33,4 +33,9 @@ describe("workspace installation transport", () => {
     expect((await listGameServers())[0]?.organizationId).toBe("space");
     expect((await getGameServer("server")).organizationId).toBe("space");
   });
+  it("sends the selected workspace when listing instances", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("[]"));
+    await listGameServers("space / one");
+    expect(fetch.mock.calls[0]?.[0]).toContain("organizationId=space+%2F+one");
+  });
 });

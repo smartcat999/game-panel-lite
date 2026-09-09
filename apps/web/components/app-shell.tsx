@@ -10,7 +10,10 @@ import {
   AlertTriangle,
   FileText,
   Bell,
+  Building2,
+  Check,
   ChevronDown,
+  Globe2,
   LogOut,
   X
 } from "lucide-react";
@@ -22,6 +25,7 @@ import { usePermissions } from "@/lib/permissions";
 import { useAuthBootstrap } from "@/lib/auth-session";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useConsoleContext } from "@/lib/console-context";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -37,10 +41,12 @@ function AppChrome({ children }: { children: ReactNode }) {
   const { setTheme } = useTheme();
   const isZh = locale.startsWith("zh");
   const { platformRole } = usePermissions();
+  const { scope, organizations, currentOrganization, selectPlatform, selectOrganization } = useConsoleContext();
   const account = useAuthBootstrap().data?.account;
   const queryClient = useQueryClient();
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
@@ -75,13 +81,70 @@ function AppChrome({ children }: { children: ReactNode }) {
 
             <div className="h-3.5 w-px bg-slate-200 shrink-0" />
 
-            <div className="h-7 px-2 rounded-md border border-slate-200/80 bg-slate-50/70 hover:bg-slate-100/90 cursor-pointer transition flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              <span>GamePanel Cloud</span>
-              <span className="text-[9px] font-mono text-emerald-700 bg-emerald-100/60 border border-emerald-300/40 px-1 py-0.2 rounded font-semibold ml-0.5">
-                {platformRole === "platform_admin" ? (isZh ? "平台管理员" : "Platform admin") : (isZh ? "租户用户" : "Tenant user")}
-              </span>
-              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={contextOpen}
+                onClick={() => setContextOpen((open) => !open)}
+                className="flex h-8 min-w-0 items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 text-left transition hover:bg-slate-100/90"
+              >
+                {scope.kind === "platform" ? <Globe2 className="size-3.5 text-slate-500" /> : <Building2 className="size-3.5 text-emerald-600" />}
+                <span className="min-w-0">
+                  <span className="block max-w-36 truncate text-xs font-semibold leading-3.5 text-slate-800">
+                    {scope.kind === "platform" ? (isZh ? "平台管理" : "Platform") : currentOrganization?.name ?? (isZh ? "租户空间" : "Workspace")}
+                  </span>
+                  <span className="block text-[10px] font-normal leading-3 text-slate-400">
+                    {scope.kind === "platform"
+                      ? (isZh ? "全局控制台" : "Global console")
+                      : membershipLabel(currentOrganization?.membershipRole, isZh)}
+                  </span>
+                </span>
+                <ChevronDown className="size-3 text-slate-400" />
+              </button>
+
+              {contextOpen ? (
+                <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-lg">
+                  {platformRole === "platform_admin" ? (
+                    <button
+                      type="button"
+                      onClick={() => { selectPlatform(); setContextOpen(false); }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50"
+                    >
+                      <Globe2 className="size-4 text-slate-500" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-semibold text-slate-800">{isZh ? "平台管理" : "Platform"}</span>
+                        <span className="block text-[10px] text-slate-400">{isZh ? "租户、订单与基础设施" : "Tenants, orders, and infrastructure"}</span>
+                      </span>
+                      {scope.kind === "platform" ? <Check className="size-3.5 text-emerald-600" /> : null}
+                    </button>
+                  ) : null}
+
+                  {organizations.length > 0 ? (
+                    <div className="mt-1 border-t border-slate-100 pt-1">
+                      <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        {isZh ? "租户空间" : "Workspaces"}
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        {organizations.map((organization) => (
+                          <button
+                            key={organization.id}
+                            type="button"
+                            onClick={() => { selectOrganization(organization.id); setContextOpen(false); }}
+                            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50"
+                          >
+                            <Building2 className="size-4 text-slate-400" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold text-slate-800">{organization.name}</span>
+                              <span className="block text-[10px] text-slate-400">{membershipLabel(organization.membershipRole, isZh)}</span>
+                            </span>
+                            {scope.kind === "organization" && scope.organizationId === organization.id ? <Check className="size-3.5 text-emerald-600" /> : null}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -303,6 +366,15 @@ function AppChrome({ children }: { children: ReactNode }) {
       )}
     </div>
   );
+}
+
+function membershipLabel(role: string | undefined, isZh: boolean) {
+  if (role === "platform_managed") return isZh ? "平台代管" : "Platform managed";
+  if (role === "owner") return isZh ? "空间所有者" : "Workspace owner";
+  if (role === "admin") return isZh ? "空间管理员" : "Workspace admin";
+  if (role === "member") return isZh ? "成员" : "Member";
+  if (role === "viewer") return isZh ? "只读成员" : "Viewer";
+  return isZh ? "正在加载" : "Loading";
 }
 
 function MobileNavLink({

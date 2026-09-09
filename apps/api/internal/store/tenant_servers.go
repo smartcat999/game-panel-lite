@@ -20,6 +20,20 @@ func (s *Store) ListUserGameServers(ctx context.Context, userID string) ([]domai
 	return servers, err
 }
 
+func (s *Store) ListOrganizationGameServers(ctx context.Context, organizationID string) ([]domain.GameServer, error) {
+	servers := []domain.GameServer{}
+	err := s.db.WithContext(ctx).Where("organization_id = ?", organizationID).Order("created_at DESC, id ASC").Find(&servers).Error
+	return servers, err
+}
+
+func (s *Store) ListUserOrganizationGameServers(ctx context.Context, userID, organizationID string) ([]domain.GameServer, error) {
+	servers := []domain.GameServer{}
+	err := s.readSnapshot(ctx, func(tx *Store) error {
+		return tx.userServers(ctx, userID).Where("organization_id = ?", organizationID).Order("created_at DESC, id ASC").Find(&servers).Error
+	})
+	return servers, err
+}
+
 func (s *Store) ListUserGameServersPage(ctx context.Context, userID string, options GameServerListOptions) (GameServerPage, error) {
 	var page GameServerPage
 	err := s.readSnapshot(ctx, func(tx *Store) error {

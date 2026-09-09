@@ -82,6 +82,18 @@ func TestServerRoutesEnforceTenantMembership(t *testing.T) {
 			t.Fatalf("scoped list: %d %s", got.Code, got.Body.String())
 		}
 	}
+	for _, path := range []string{"/api/servers?organizationId=tenant-a", "/api/servers?page=1&organizationId=tenant-a"} {
+		got := request(http.MethodGet, path, "")
+		if got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"id":"tenant-a"`) || strings.Contains(got.Body.String(), `"id":"tenant-b"`) {
+			t.Fatalf("explicit organization scope: %d %s", got.Code, got.Body.String())
+		}
+	}
+	for _, path := range []string{"/api/servers?organizationId=tenant-b", "/api/servers?page=1&organizationId=tenant-b"} {
+		got := request(http.MethodGet, path, "")
+		if got.Code != http.StatusOK || strings.Contains(got.Body.String(), `"id":"tenant-b"`) {
+			t.Fatalf("foreign organization scope: %d %s", got.Code, got.Body.String())
+		}
+	}
 	if got := request(http.MethodGet, "/api/servers/tenant-a", ""); got.Code != http.StatusOK {
 		t.Fatalf("own server: %d", got.Code)
 	}

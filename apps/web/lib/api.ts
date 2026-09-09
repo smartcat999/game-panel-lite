@@ -415,8 +415,11 @@ function toWorld(world: ApiWorld): World {
   };
 }
 
-export async function listGameServers(): Promise<GameServerResource[]> {
-  const response = await apiFetch(`${API_BASE}/api/servers`, { cache: "no-store" });
+export async function listGameServers(organizationId?: string): Promise<GameServerResource[]> {
+  const query = new URLSearchParams();
+  if (organizationId) query.set("organizationId", organizationId);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const response = await apiFetch(`${API_BASE}/api/servers${suffix}`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error("Unable to load servers");
   }
@@ -432,6 +435,7 @@ export type GameServerListParams = {
   provider?: string;
   status?: string;
   region?: string;
+  organizationId?: string;
   sort?: "name" | "status" | "createdAt" | "updatedAt";
   direction?: "asc" | "desc";
 };
@@ -456,6 +460,7 @@ export async function listGameServersPage(params: GameServerListParams = {}): Pr
   if (params.provider && params.provider !== "all") query.set("provider", params.provider);
   if (params.status && params.status !== "all") query.set("status", params.status);
   if (params.region && params.region !== "all") query.set("region", params.region);
+  if (params.organizationId) query.set("organizationId", params.organizationId);
   const response = await apiFetch(`${API_BASE}/api/servers?${query.toString()}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Unable to load servers");
   const payload = (await response.json()) as Omit<GameServerPage, "items"> & { items: ApiServer[] };

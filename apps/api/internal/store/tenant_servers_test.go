@@ -59,11 +59,31 @@ func testTenantServerQueries(t *testing.T, db *Store) {
 			t.Fatalf("scope list: %+v", servers)
 		}
 	}
+	shared := domain.Organization{ID: "scope-shared", Slug: "scope-shared"}
+	if err := db.CreateOrganization(ctx, &shared, "scope-a"); err != nil {
+		t.Fatal(err)
+	}
+	sharedServer := domain.GameServer{ID: "scope-shared", Name: "shared", OrganizationID: shared.ID, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := db.CreateGameServer(ctx, &sharedServer); err != nil {
+		t.Fatal(err)
+	}
+	servers, err := db.ListUserOrganizationGameServers(ctx, "scope-a", shared.ID)
+	if err != nil || len(servers) != 1 || servers[0].ID != sharedServer.ID {
+		t.Fatalf("organization-scoped list: %+v %v", servers, err)
+	}
+	servers, err = db.ListUserOrganizationGameServers(ctx, "scope-b", shared.ID)
+	if err != nil || len(servers) != 0 {
+		t.Fatalf("foreign organization-scoped list: %+v %v", servers, err)
+	}
+	page, err := db.ListUserGameServersPage(ctx, "scope-a", GameServerListOptions{OrganizationID: shared.ID})
+	if err != nil || page.Total != 1 || page.Items[0].ID != sharedServer.ID {
+		t.Fatalf("organization-scoped page: %+v %v", page, err)
+	}
 	if err := db.RemoveOrganizationMember(ctx, "scope-a", "scope-a"); err != nil {
 		t.Fatal(err)
 	}
-	page, err := db.ListUserGameServersPage(ctx, "scope-a", GameServerListOptions{})
-	if err != nil || page.Total != 0 {
+	page, err = db.ListUserGameServersPage(ctx, "scope-a", GameServerListOptions{})
+	if err != nil || page.Total != 1 {
 		t.Fatalf("revoked scope: %+v %v", page, err)
 	}
 }

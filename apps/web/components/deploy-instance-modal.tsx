@@ -14,11 +14,12 @@ import { cn } from "@/lib/utils";
 interface DeployInstanceModalProps {
   open: boolean;
   onClose: () => void;
+  organizationId?: string;
 }
 
 type Engine = "vanilla" | "tmodloader";
 
-export function DeployInstanceModal({ open, onClose }: DeployInstanceModalProps) {
+export function DeployInstanceModal({ open, onClose, organizationId }: DeployInstanceModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { locale } = useI18n();
@@ -99,7 +100,8 @@ export function DeployInstanceModal({ open, onClose }: DeployInstanceModalProps)
           cpuLimitCores: selectedPlan.cpu,
           memoryLimitMb: selectedPlan.memoryMb
         },
-        prepaidPlanId: selectedPlan.planId
+        prepaidPlanId: selectedPlan.planId,
+        organizationId
       });
     },
     onSuccess: (result) => {

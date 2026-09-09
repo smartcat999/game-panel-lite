@@ -2,6 +2,7 @@
 
 import { useAuthBootstrap } from "./auth-session";
 import type { Permission, UserRole } from "./types";
+import { useConsoleContext } from "./console-context";
 
 const rolePermissions: Record<UserRole, readonly Permission[]> = {
   admin: [
@@ -22,11 +23,18 @@ export function permissionsForRole(role: UserRole): readonly Permission[] {
 
 export function usePermissions() {
   const authQuery = useAuthBootstrap();
+  const { scope, currentOrganization } = useConsoleContext();
 
   const account = authQuery.data?.account;
-  const role: UserRole = account?.role ?? (authQuery.data?.initialized === false ? "admin" : "viewer");
   const platformRole = account?.platformRole ?? (authQuery.data?.initialized === false ? "platform_admin" : "user");
-  const permissions = new Set<Permission>(account?.permissions ?? permissionsForRole(role));
+  const membershipRole = currentOrganization?.membershipRole;
+  const role: UserRole = scope.kind === "organization"
+    ? membershipRole === "viewer" ? "viewer" : membershipRole === "member" ? "member" : "admin"
+    : account?.role ?? (authQuery.data?.initialized === false ? "admin" : "viewer");
+  const scopedPermissions = scope.kind === "platform" && platformRole === "platform_admin"
+    ? permissionsForRole("admin")
+    : permissionsForRole(role);
+  const permissions = new Set<Permission>(scope.kind === "platform" ? account?.permissions ?? scopedPermissions : scopedPermissions);
   const can = (permission: Permission) => permissions.has(permission);
 
   const isViewer = role === "viewer";

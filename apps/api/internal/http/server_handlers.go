@@ -25,29 +25,38 @@ import (
 )
 
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
+	organizationID := strings.TrimSpace(r.URL.Query().Get("organizationId"))
 	list := h.store.ListGameServers
 	listPage := h.store.ListGameServersPage
 	if account, ok := accountFromContext(r.Context()); ok && !domain.IsPlatformAdmin(account) {
 		list = func(ctx context.Context) ([]domain.GameServer, error) {
+			if organizationID != "" {
+				return h.store.ListUserOrganizationGameServers(ctx, account.ID, organizationID)
+			}
 			return h.store.ListUserGameServers(ctx, account.ID)
 		}
 		listPage = func(ctx context.Context, options store.GameServerListOptions) (store.GameServerPage, error) {
 			return h.store.ListUserGameServersPage(ctx, account.ID, options)
+		}
+	} else if organizationID != "" {
+		list = func(ctx context.Context) ([]domain.GameServer, error) {
+			return h.store.ListOrganizationGameServers(ctx, organizationID)
 		}
 	}
 	if r.URL.Query().Has("page") || r.URL.Query().Has("pageSize") {
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
 		servers, err := listPage(r.Context(), store.GameServerListOptions{
-			Page:        page,
-			PageSize:    pageSize,
-			Search:      r.URL.Query().Get("search"),
-			GameKey:     r.URL.Query().Get("game"),
-			ProviderKey: r.URL.Query().Get("provider"),
-			Status:      r.URL.Query().Get("status"),
-			Sort:        r.URL.Query().Get("sort"),
-			Direction:   r.URL.Query().Get("direction"),
-			Region:      r.URL.Query().Get("region"),
+			Page:           page,
+			PageSize:       pageSize,
+			Search:         r.URL.Query().Get("search"),
+			GameKey:        r.URL.Query().Get("game"),
+			ProviderKey:    r.URL.Query().Get("provider"),
+			Status:         r.URL.Query().Get("status"),
+			Sort:           r.URL.Query().Get("sort"),
+			Direction:      r.URL.Query().Get("direction"),
+			Region:         r.URL.Query().Get("region"),
+			OrganizationID: organizationID,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
