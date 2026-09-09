@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/deploymentstatus"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
 	"gorm.io/gorm"
@@ -251,7 +252,7 @@ func validateRegionalExecutionNode(tx *gorm.DB, candidate regional.ExecutionCand
 }
 
 func (s *RegionalStore) SaveRegionalExecutionObservation(ctx context.Context, candidate regional.ExecutionCandidate, holderID string, fence int64, observation workload.Observation) error {
-	if candidate.Task.RegionID != s.regionID || candidate.Validate(candidate.Task.NodeID, candidate.Task.SessionEpoch) != nil || !regionalExecutionIdentifier(holderID) || fence < 1 || observation.LeaseHolderID != holderID || observation.LeaseFence != fence || observation.ObservedGeneration != int(candidate.Task.SpecGeneration) || observation.ObservedAt.IsZero() || !regionalActualState(observation.ActualState) {
+	if candidate.Task.RegionID != s.regionID || candidate.Validate(candidate.Task.NodeID, candidate.Task.SessionEpoch) != nil || !regionalExecutionIdentifier(holderID) || fence < 1 || observation.LeaseHolderID != holderID || observation.LeaseFence != fence || observation.ObservedGeneration != int(candidate.Task.SpecGeneration) || observation.ObservedAt.IsZero() || observation.ObservedAt.UnixMilli() < 1 || !regionalActualState(observation.ActualState) {
 		return regional.ErrExecutionLeaseLost
 	}
 	payload, err := json.Marshal(observation)
@@ -291,7 +292,23 @@ func (s *RegionalStore) SaveRegionalExecutionObservation(ctx context.Context, ca
 			return regional.ErrExecutionLeaseLost
 		}
 		row := regionalObservationRow{TaskID: current.Task.ID, ServerID: current.Task.ServerID, NodeID: current.Task.NodeID, Generation: current.Task.SpecGeneration, HolderID: holderID, Fence: fence, InputToken: observation.ObservationToken, ObservationToken: uuid.NewString(), PayloadSHA256: payloadSHA256, Payload: string(payload), ObservedAt: observation.ObservedAt.UTC()}
-		return tx.Table("regional_workload_observations").Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "task_id"}}, DoUpdates: clause.AssignmentColumns([]string{"holder_id", "fence", "input_token", "observation_token", "payload_sha256", "payload", "observed_at", "updated_at"})}).Create(&row).Error
+		if err := tx.Table("regional_workload_observations").Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "task_id"}}, DoUpdates: clause.AssignmentColumns([]string{"holder_id", "fence", "input_token", "observation_token", "payload_sha256", "payload", "observed_at", "updated_at"})}).Create(&row).Error; err != nil {
+			return err
+		}
+		outcome := "succeeded"
+		if observation.LastError != "" || observation.ActualState != "running" || observation.RuntimeID == "" {
+			outcome = "failed"
+		}
+		event := deploymentstatus.Event{SchemaVersion: 1, EventID: uuid.NewString(), RegionID: current.Task.RegionID, OrganizationID: current.Task.OrganizationID, OperationID: current.Snapshot.Event.OperationID, ServerID: current.Task.ServerID, RevisionID: current.Task.RevisionID, TaskID: current.Task.ID, NodeID: current.Task.NodeID, PlacementEpoch: current.Task.PlacementEpoch, SpecGeneration: current.Task.SpecGeneration, IntentVersion: current.Task.IntentVersion, Fence: fence, ActualState: observation.ActualState, Outcome: outcome, RuntimeID: observation.RuntimeID, ObservedAtMS: observation.ObservedAt.UnixMilli()}
+		if event.Validate() != nil {
+			return regional.ErrExecutionLeaseLost
+		}
+		encoded, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		outbox := map[string]any{"id": event.EventID, "server_id": event.ServerID, "task_id": event.TaskID, "fence": event.Fence, "event_type": "deployment.status.observed", "payload": string(encoded)}
+		return tx.Table("regional_deployment_status_outbox").Create(outbox).Error
 	})
 }
 

@@ -98,7 +98,10 @@ func forbiddenImport(file, imported string) string {
 	if under("regionstatus") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "Region status contracts must remain independent of transport and persistence"
 	}
-	if under("regionstatusingress") && ((strings.Contains(imported, ".") && imported != api+"regional" && imported != api+"regionstatus") || imported == "os" || strings.HasPrefix(imported, "database/")) {
+	if under("deploymentstatus") && (strings.Contains(imported, ".") || imported == "net/http" || imported == "os" || strings.HasPrefix(imported, "database/")) {
+		return "deployment status contracts must remain independent of transport and persistence"
+	}
+	if under("regionstatusingress") && ((strings.Contains(imported, ".") && imported != api+"regional" && imported != api+"regionstatus" && imported != api+"deploymentstatus") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "Region status ingress must depend on wire models and a consumer-owned projection port"
 	}
 	if under("regionopsapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"regional" && imported != api+"serviceauth" {

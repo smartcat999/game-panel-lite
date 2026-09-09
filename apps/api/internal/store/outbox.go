@@ -15,13 +15,18 @@ var _ delivery.Outbox = (*Store)(nil)
 
 // Table choices are private constants; callers cannot select arbitrary SQL tables.
 type sqlOutbox struct {
-	db     *gorm.DB
-	table  string
-	region string // fixed identity for a Region-owned database; empty for global tables
+	db        *gorm.DB
+	table     string
+	region    string // fixed identity for a Region-owned database; empty for global tables
+	eventType string
 }
 
 func (s *RegionalStore) BackupResultOutbox() delivery.Outbox {
 	return &sqlOutbox{db: s.db, table: "regional_backup_result_outbox", region: s.regionID}
+}
+
+func (s *RegionalStore) DeploymentStatusOutbox() delivery.Outbox {
+	return &sqlOutbox{db: s.db, table: "regional_deployment_status_outbox", region: s.regionID, eventType: "deployment.status.observed"}
 }
 
 func (s *Store) BackupRequestOutbox() delivery.Outbox {
@@ -74,7 +79,7 @@ func (s *sqlOutbox) ClaimOutbox(ctx context.Context, region string, limit int, l
 		var rows []delivery.Message
 		query := tx.Table(s.table).Where("published_at_ms = 0 AND next_attempt_ms <= ? AND lease_until_ms <= ?", now, now).Order("next_attempt_ms,created_at,id").Limit(limit)
 		if s.region != "" {
-			query = query.Select("id,payload,attempts,? AS region_id", s.region)
+			query = query.Select("id,payload,attempts,? AS region_id,? AS type", s.region, s.eventType)
 		} else {
 			query = query.Select("id,region_id,payload,attempts").Where("region_id = ?", region)
 		}

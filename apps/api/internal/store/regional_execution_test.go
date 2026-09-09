@@ -2,13 +2,16 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/deploymentstatus"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
+	"gorm.io/gorm"
 )
 
 func testRegionalExecution(t *testing.T, db *RegionalStore, dsn string, snapshot regional.RevisionSnapshot, allocation regional.Allocation) {
@@ -93,11 +96,42 @@ func testRegionalExecution(t *testing.T, db *RegionalStore, dsn string, snapshot
 	}
 
 	observation := workload.Observation{LeaseHolderID: next.HolderID, LeaseFence: next.Fence, ObservationToken: next.ObservationToken, ObservedGeneration: next.Generation, RuntimeID: "container-a", ActualState: "running", ObservedAt: time.Now().UTC()}
+	const callback = "test:deployment-status-outbox-failure"
+	if err := reopened.db.Callback().Create().Before("gorm:create").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Table == "regional_deployment_status_outbox" {
+			tx.AddError(errors.New("injected status outbox failure"))
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	failed := reopened.SaveRegionalExecutionObservation(ctx, current, next.HolderID, next.Fence, observation)
+	_ = reopened.db.Callback().Create().Remove(callback)
+	if failed == nil {
+		t.Fatal("status outbox failure did not roll back observation")
+	}
+	for _, table := range []string{"regional_workload_observations", "regional_deployment_status_outbox"} {
+		var count int64
+		if err := reopened.db.Table(table).Where("task_id = ?", current.Task.ID).Count(&count).Error; err != nil || count != 0 {
+			t.Fatalf("%s partial observation: %d %v", table, count, err)
+		}
+	}
 	if err := reopened.SaveRegionalExecutionObservation(ctx, current, next.HolderID, next.Fence, observation); err != nil {
 		t.Fatal("save observation", err)
 	}
+	messages, err := reopened.DeploymentStatusOutbox().ClaimOutbox(ctx, reopened.regionID, 2, time.Minute)
+	if err != nil || len(messages) != 1 || messages[0].Type != "deployment.status.observed" {
+		t.Fatal("deployment status outbox", err)
+	}
+	var statusEvent deploymentstatus.Event
+	if json.Unmarshal([]byte(messages[0].Payload), &statusEvent) != nil || statusEvent.Validate() != nil || statusEvent.ServerID != current.Task.ServerID || statusEvent.TaskID != current.Task.ID || statusEvent.Fence != next.Fence || statusEvent.Outcome != "succeeded" || statusEvent.ActualState != "running" {
+		t.Fatal("invalid deployment status event")
+	}
 	if err := reopened.SaveRegionalExecutionObservation(ctx, current, next.HolderID, next.Fence, observation); err != nil {
 		t.Fatal("idempotent observation replay", err)
+	}
+	var events int64
+	if err := reopened.db.Table("regional_deployment_status_outbox").Where("task_id = ?", current.Task.ID).Count(&events).Error; err != nil || events != 1 {
+		t.Fatal("idempotent observation duplicated status event", err)
 	}
 	changed := observation
 	changed.RuntimeID = "different"

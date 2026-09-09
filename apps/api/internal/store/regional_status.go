@@ -14,7 +14,7 @@ import (
 )
 
 func (s *RegionalStore) RegionStatusOutbox() delivery.Outbox {
-	return &sqlOutbox{db: s.db, table: "regional_status_outbox", region: s.regionID}
+	return &sqlOutbox{db: s.db, table: "regional_status_outbox", region: s.regionID, eventType: "region.status.observed"}
 }
 
 // CaptureRegionStatus reads Region-owned tables in one short transaction and

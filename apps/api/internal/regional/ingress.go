@@ -17,8 +17,8 @@ var ErrInvalidNotification = errors.New("invalid regional notification")
 var ErrNotificationConflict = errors.New("notification identity reused with different contents")
 
 type Notification struct {
-	ID, ContentType string
-	Body            []byte
+	ID, ContentType, Type string
+	Body                  []byte
 }
 type Inbox interface {
 	RecordRevisionNotification(context.Context, instances.RevisionAvailable) error

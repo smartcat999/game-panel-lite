@@ -46,7 +46,7 @@ func TestRabbitMQConsumerAcknowledgements(t *testing.T) {
 	c := Consumer{Options: options, HandlerTimeout: time.Second, RetryDelay: 20 * time.Millisecond}
 	publish := func(id string) {
 		t.Helper()
-		if err := p.Publish(context.Background(), delivery.Message{ID: id, RegionID: "east", Payload: "{}"}); err != nil {
+		if err := p.Publish(context.Background(), delivery.Message{ID: id, RegionID: "east", Type: "deployment.status.observed", Payload: "{}"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -55,7 +55,7 @@ func TestRabbitMQConsumerAcknowledgements(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	n, _ := c.Run(ctx, handlerFunc(func(_ context.Context, message regional.Notification) error {
 		calls++
-		if message.ID != "retry" {
+		if message.ID != "retry" || message.Type != "deployment.status.observed" {
 			t.Error("wrong event")
 		}
 		if calls == 1 {

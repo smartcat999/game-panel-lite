@@ -126,6 +126,9 @@ var platformRolesSQL string
 //go:embed migrations/033_region_status_projection.sql
 var regionStatusProjectionSQL string
 
+//go:embed migrations/034_deployment_status_projection.sql
+var deploymentStatusProjectionSQL string
+
 type sqlMigration struct {
 	version   int
 	name, sql string
@@ -170,6 +173,7 @@ func postgresMigrations() []sqlMigration {
 		{31, "account_preferences", accountPreferencesSQL},
 		{32, "platform_roles", platformRolesSQL},
 		{33, "region_status_projection", regionStatusProjectionSQL},
+		{34, "deployment_status_projection", deploymentStatusProjectionSQL},
 	}
 }
 

@@ -97,7 +97,7 @@ func (c Consumer) Run(ctx context.Context, handler Handler) (int, error) {
 			}
 			for {
 				workCtx, stopWork := context.WithTimeout(ctx, c.HandlerTimeout)
-				err := handler.Handle(workCtx, regional.Notification{ID: message.MessageId, ContentType: message.ContentType, Body: message.Body})
+				err := handler.Handle(workCtx, regional.Notification{ID: message.MessageId, ContentType: message.ContentType, Type: message.Type, Body: message.Body})
 				stopWork()
 				if ctx.Err() != nil {
 					return acked, ctx.Err()

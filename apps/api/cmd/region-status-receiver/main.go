@@ -37,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
-	ingress := regionstatusingress.Ingress{SourceRegionID: *region, MaxBytes: *maxBytes, Projection: db}
+	ingress := regionstatusingress.Ingress{SourceRegionID: *region, MaxBytes: *maxBytes, Projection: db, Deployments: db}
 	consumer := rabbitmq.Consumer{Options: options, HandlerTimeout: *workTimeout, RetryDelay: *retry}
 	for ctx.Err() == nil {
 		acked, err := consumer.Run(ctx, ingress)

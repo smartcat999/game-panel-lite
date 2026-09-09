@@ -10,9 +10,9 @@ import (
 var ErrClaimLost = errors.New("outbox claim is no longer current")
 
 type Message struct {
-	ID, RegionID, Token string
-	Payload             string
-	Attempts            int64
+	ID, RegionID, Token, Type string
+	Payload                   string
+	Attempts                  int64
 }
 
 type Outbox interface {

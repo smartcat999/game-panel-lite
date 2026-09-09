@@ -246,6 +246,7 @@ func testGlobalInstanceIntents(t *testing.T, db *Store) {
 	testEncryptedGlobalCreate(t, db)
 	testRegionDirectory(t, db)
 	testRegionStatusProjection(t, db)
+	testDeploymentStatusProjection(t, db)
 }
 
 func TestSQLiteGlobalInstanceMigrationRollback(t *testing.T) {

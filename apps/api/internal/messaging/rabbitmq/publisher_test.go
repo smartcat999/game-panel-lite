@@ -69,14 +69,14 @@ func TestRabbitMQConfirmedPublication(t *testing.T) {
 	defer channel.Close()
 	defer func() { _, _ = channel.QueueDelete(queue, false, false, false) }()
 	defer func() { _, _ = channel.QueueDelete(queue+".dead", false, false, false) }()
-	message := delivery.Message{ID: "stable-event", RegionID: "east", Payload: `{"schemaVersion":1}`}
+	message := delivery.Message{ID: "stable-event", RegionID: "east", Type: "deployment.status.observed", Payload: `{"schemaVersion":1}`}
 	ctx := context.Background()
 	if err := p.Publish(ctx, message); err != nil {
 		t.Fatal(err)
 	}
 	firstConnection := p.connection
 	item, ok, err := channel.Get(queue, false)
-	if err != nil || !ok || item.MessageId != message.ID || string(item.Body) != message.Payload || item.DeliveryMode != amqp.Persistent {
+	if err != nil || !ok || item.MessageId != message.ID || item.Type != message.Type || string(item.Body) != message.Payload || item.DeliveryMode != amqp.Persistent {
 		t.Fatalf("confirmed delivery mismatch: %+v %v %v", item, ok, err)
 	}
 	if err := item.Ack(false); err != nil {

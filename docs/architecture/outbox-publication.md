@@ -37,6 +37,14 @@ Region 与队列名称须替换成已登记部署配置。可配置批次、发�
 
 真实 Broker 测试通过 `GAMEPANEL_TEST_RABBITMQ_URL` 启用，使用随机临时队列并清理，验证持久消息、稳定 ID、区域拒绝、连接复用、无法路由和断连恢复；另以本机无响应端点验证握手超时。单节点 Broker 的这些测试不证明多副本故障恢复、进程重启后端到端交付或跨区域高可用。
 
+## Region 状态回传
+
+`region-status-publisher` 复用同一进程和 Region 专属状态队列发布两种有界消息：周期性的 `region.status.observed` 聚合快照，以及 Node 观测事务产生的 `deployment.status.observed` 逐实例事件。AMQP `type` 是显式契约判别字段；接收端仍兼容历史上 type 为空的 Region 聚合快照，未知类型进入死信流程。逐实例事件不携带配置明文、运行时错误详情、凭证或日志。
+
+Region 迁移 018 为逐实例状态增加独立事务 Outbox。Node 观测和 Outbox 写入要么同时提交，要么同时回滚；同一任务和 fence 只产生一条事件。发布轮询与 Region 聚合采样使用独立间隔，避免 30 秒聚合周期拖慢实例状态。
+
+全局迁移 034 保存最新逐实例投影。接收事务分别按 ID 读取 Region 目录、逻辑实例、Placement 和 Operation，再在代码中核对，不使用 SQL JOIN。旧 Placement／generation／intent／fence 可安全确认而不覆盖新状态；未来版本、同 fence 不同内容或错误来源进入冲突处理。只有匹配全局当前身份的成功 `running` 事件才能完成对应 Operation，租约过期和消息到达本身不推断停服。
+
 ## 实际 Broker Adapter 的实现依据
 
 2026-09-08 核对 RabbitMQ 官方文档：未路由的消息也可能得到 Publisher Confirm；因此 Adapter 必须同时处理 mandatory 返回与确认，不能仅凭确认成功清除 Outbox。持久消息需配合持久队列，消费者确认与发布确认属于不同阶段。[RabbitMQ 确认语义](https://www.rabbitmq.com/docs/confirms)

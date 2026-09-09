@@ -22,7 +22,8 @@
 5. 校验通过后，Region Control 只在内存中解密并渲染 Workload，再在 Region 数据库事务中签发有限期租约。配置明文和 Workload Spec 不写入 Region 数据库。
 6. Agent 在每次 Runtime 变更前续租。续租会重复第 4 步，并在数据库事务内确认 Node session、运行能力及心跳新鲜度。
 7. Agent 回报带 holder 和单调 fence 的观测。Region 以 observation token 做 CAS；同内容重放幂等，冲突重放和旧 fence 被拒绝。
-8. 只有当前租约已保存成功的 `running` 观测后，Agent 才能释放租约并把任务标为成功。
+8. 保存观测的同一 Region 事务写入逐实例状态 Outbox。发布进程经 RabbitMQ 确认后，全局接收端按 Placement、generation、intent 和 fence 投影；匹配当前操作的成功运行观测会把 Operation 标为成功。
+9. 只有当前租约已保存成功的 `running` 观测后，Agent 才能释放租约并把任务标为成功。
 
 租约到期只撤销后续变更权限，不代表旧容器已经停止。Region 不会因控制面暂时不可用而伪造 stopped 状态或提前释放容量。物理隔离、停服和删除仍需要后续生命周期状态机处理。
 
@@ -55,4 +56,4 @@ Node Agent 的 Region 模式增加 `AGENT_EXECUTION_POLL_INTERVAL`。Agent 心�
 
 真实 PostgreSQL 16 race 测试覆盖并发领取只能一个成功、进程重开后续租、过期租约增加 fence、过期心跳拒绝、观测 CAS、幂等重放和成功完成。真实 TLS 测试覆盖 Node session、心跳、领取、每次变更续租、Runtime 创建／启动、观测与释放。
 
-当前还缺启停、重启、删除、资源释放、运行结果进入 Region Outbox 并投影到全局、外部资产准备，以及真实游戏容器和多主机故障验收。这里的测试不能替代这些完成条件。
+当前还缺启停、重启、删除、资源释放、逐实例状态的用户 API／前端接线、外部资产准备，以及真实游戏容器和多主机故障验收。这里的测试不能替代这些完成条件。

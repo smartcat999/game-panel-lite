@@ -80,7 +80,7 @@ func (p *Publisher) Close() error {
 }
 
 func (p *Publisher) Publish(parent context.Context, message delivery.Message) (result error) {
-	if message.ID == "" || len(message.ID) > 255 || message.RegionID != p.options.RegionID || len(message.Payload) == 0 || len(message.Payload) > p.options.MaxPayloadBytes {
+	if message.ID == "" || len(message.ID) > 255 || message.RegionID != p.options.RegionID || len(message.Type) > 128 || message.Type != strings.TrimSpace(message.Type) || strings.ContainsAny(message.Type, "\x00\r\n") || len(message.Payload) == 0 || len(message.Payload) > p.options.MaxPayloadBytes {
 		return ErrInvalidMessage
 	}
 	ctx, cancel := context.WithTimeout(parent, p.options.Timeout)
@@ -158,7 +158,7 @@ func (p *Publisher) Publish(parent context.Context, message delivery.Message) (r
 	} else if err := arm(p.raw); err != nil {
 		return ErrUnavailable
 	}
-	confirmation, err := p.channel.PublishWithDeferredConfirmWithContext(ctx, "", p.options.Queue, true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, ContentType: "application/json", MessageId: message.ID, Body: []byte(message.Payload)})
+	confirmation, err := p.channel.PublishWithDeferredConfirmWithContext(ctx, "", p.options.Queue, true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, ContentType: "application/json", MessageId: message.ID, Type: message.Type, Body: []byte(message.Payload)})
 	if err != nil || confirmation == nil {
 		return ErrUnavailable
 	}

@@ -32,7 +32,7 @@ func testRegionalStatusPublication(t *testing.T, db *RegionalStore) {
 		t.Fatalf("status snapshot: %+v", snapshot)
 	}
 	messages, err := db.RegionStatusOutbox().ClaimOutbox(ctx, db.regionID, 1, time.Minute)
-	if err != nil || len(messages) != 1 || messages[0].ID != snapshot.EventID {
+	if err != nil || len(messages) != 1 || messages[0].ID != snapshot.EventID || messages[0].Type != "region.status.observed" {
 		t.Fatalf("status outbox: %+v %v", messages, err)
 	}
 	var decoded regionstatus.Snapshot

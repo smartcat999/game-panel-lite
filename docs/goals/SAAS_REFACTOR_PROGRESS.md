@@ -1,5 +1,12 @@
 # SaaS 与后端改造验收清单
 
+### 2026-09-10 Region 实际状态异步投影
+
+- Region 保存 Node 观测时在同一 PostgreSQL 事务写逐实例状态 Outbox；注入 Outbox 写失败会回滚观测。消息只包含全局／区域身份、版本、Node、fence、实际状态和成功／失败类别，不传配置、凭证、日志或原始运行时错误。
+- 复用现有 `region-status-publisher`、Receiver 和 Region 专属状态队列，通过 AMQP `type` 区分聚合快照与逐实例事件，没有新增常驻服务。实例 Outbox 按 1 秒默认间隔独立轮询，不受 30 秒 Region 汇总采样周期限制。
+- 全局 PostgreSQL 迁移 034／SQLite 版本 19 保存租户隔离的最新实例投影。接收事务分别读取 Region、逻辑实例、Placement 和 Operation 后在 Go 中组合；旧版本和旧 fence 幂等丢弃，未来版本、错误来源和同 fence 冲突被拒绝，匹配当前版本的成功运行观测把对应 Operation 从 pending 更新为 succeeded。
+- 真实 PostgreSQL 16 race 验证 Region 观测／Outbox 原子性、消息类型领取、全局迁移和版本投影；真实 RabbitMQ 4 race 验证消息类型、持久发布确认、消费 ACK、重试与死信。全量 `go test ./...`、`go vet ./...`、架构门禁和差异空白检查通过。逐实例状态用户 API／前端、失败详情的 Region 运维读取、积压告警和跨主机链路仍待完成。
+
 ### 2026-09-10 Region 有限执行授权与 Node Runtime 接线
 
 - 新增 [Region 到 Node 的执行授权](../architecture/regional-node-execution.md)。全局仍拥有租户、逻辑实例、配置、Placement 和权益；Region Scheduler 只预留资源并登记元数据任务；Region Control 才能在重新读取全局当前配置与权益后短时渲染 Workload；Node Agent 只在有限租约内调用 RuntimeAdapter。
