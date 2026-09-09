@@ -656,21 +656,18 @@ func (h *Handler) syncDSTDesiredWorkshopConfig(ctx context.Context, server *doma
 	if err != nil {
 		return err
 	}
-	desired := map[string]struct{}{}
-	for _, id := range server.Spec.ModIDs {
-		desired[id] = struct{}{}
-	}
+	modIDs := make([]string, 0, len(mods))
 	workshopIDs := make([]string, 0, len(mods))
 	for _, item := range mods {
 		if !item.Enabled || item.Source != "workshop" || item.WorkshopID == "" {
 			continue
 		}
-		if _, ok := desired[item.ID]; !ok {
-			continue
-		}
+		modIDs = append(modIDs, item.ID)
 		workshopIDs = append(workshopIDs, item.WorkshopID)
 	}
+	sort.Strings(modIDs)
 	sort.Strings(workshopIDs)
+	server.Spec.ModIDs = uniqueNonEmptyStrings(modIDs)
 	if server.Spec.Config == nil {
 		server.Spec.Config = map[string]any{}
 	}

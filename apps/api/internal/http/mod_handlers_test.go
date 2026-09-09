@@ -1397,6 +1397,69 @@ func TestAssignGlobalWorkshopModWritesServerInstallFile(t *testing.T) {
 	}
 }
 
+func TestAssignGlobalDSTWorkshopModPreservesExistingAssignedMods(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("dst", cfg.DataDir)
+	server.GameKey = domain.GameDST
+	server.ProviderKey = domain.ProviderDST
+	resource := gameServerFromTestFixture(server)
+	resource.Spec.ModIDs = []string{"global-existing-mod"}
+	resource.Spec.Config = withDSTWorkshopIDs(resource.Spec.Config, []string{"111"})
+	if err := db.CreateGameServer(context.Background(), &resource); err != nil {
+		t.Fatal(err)
+	}
+
+	existingLibraryMod := domain.ModFile{
+		ID:          "global-existing-mod",
+		InstanceID:  "unassigned",
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+		FileName:    "workshop-111",
+		Source:      "workshop",
+		WorkshopID:  "111",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	existingServerMod := existingLibraryMod
+	existingServerMod.ID = "server-existing-mod"
+	existingServerMod.InstanceID = server.ID
+	newLibraryMod := existingLibraryMod
+	newLibraryMod.ID = "global-new-mod"
+	newLibraryMod.FileName = "workshop-222"
+	newLibraryMod.WorkshopID = "222"
+	for _, item := range []*domain.ModFile{&existingLibraryMod, &existingServerMod, &newLibraryMod} {
+		if err := db.CreateMod(context.Background(), item); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/mods/global-new-mod/assign", bytes.NewBufferString(`{"instanceId":"dst"}`))
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected assign 201, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var assigned domain.ModFile
+	if err := json.Unmarshal(recorder.Body.Bytes(), &assigned); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(persisted.Spec.ModIDs, []string{assigned.ID, existingServerMod.ID}) {
+		t.Fatalf("expected desired mod ids to use server records, got %v", persisted.Spec.ModIDs)
+	}
+	modsPayload, _ := persisted.Spec.Config["mods"].(map[string]any)
+	workshopIDs, err := json.Marshal(modsPayload["workshopIds"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(workshopIDs) != `["111","222"]` {
+		t.Fatalf("expected existing and new workshop ids, got %s", workshopIDs)
+	}
+}
+
 func TestGlobalModDeleteRejectsServerMod(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

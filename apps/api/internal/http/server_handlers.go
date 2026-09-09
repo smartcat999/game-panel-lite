@@ -307,6 +307,14 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
+	if err := h.syncDSTModsBeforeLifecycle(r.Context(), id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "server not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
 	server, err := serverctrl.NewService(h.store).RequestStart(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
@@ -343,6 +351,14 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
+	if err := h.syncDSTModsBeforeLifecycle(r.Context(), id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "server not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
 	server, err := serverctrl.NewService(h.store).RequestRestart(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "server not found")
@@ -350,6 +366,17 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), server.ID, "server.restart.queued", fmt.Sprintf("Queued restart for server %s", server.Name), activityServerPayload(server))
 	writeJSON(w, http.StatusAccepted, server)
+}
+
+func (h *Handler) syncDSTModsBeforeLifecycle(ctx context.Context, id string) error {
+	server, err := h.store.GetGameServer(ctx, id)
+	if err != nil || server.ProviderKey != domain.ProviderDST {
+		return err
+	}
+	if err := h.syncDSTDesiredWorkshopConfig(ctx, &server); err != nil {
+		return err
+	}
+	return h.store.SaveGameServer(ctx, &server)
 }
 
 func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
