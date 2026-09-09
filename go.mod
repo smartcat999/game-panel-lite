@@ -1,6 +1,6 @@
 module github.com/smartcat999/game-panel-lite
 
-go 1.25.0
+go 1.24.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.46.0

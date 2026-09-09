@@ -1,6 +1,19 @@
 # V1 Progress
 
-## 2026-09-07
+## 2026-09-09 ToC SaaS 浅色极简商业化架构与三重视角规范
+
+- 全站浅色极简商业化重构：采用 Slate-50 背景 (`#F8FAFC`)、纯白卡片、`rgba(226, 232, 240, 0.85)` 微边框与极微阴影 (`subtle-elevation`)，全面剔除沉重黑色与粗笨大圆角。
+- 严谨商业级公有云信息架构（对标 AWS EC2 / Vercel / Supabase）：
+  - 侧边栏纯粹化：COMPUTE 下仅保留 `Instances` 资源项；彻底移除混在导航项中的 `Configuration` 与 `+ Deploy Instance`。
+  - 新建动作归位：`+ Deploy Instance` 归位为实例列表页面右上角主操作按钮，点击弹出专属部署向导弹窗。
+  - 配置归位至实例详情：参数配置作为实例详情专属二级 Tab（Breadcrumb: `Instances / terraria-hardcore-01` -> `参数配置`），支持通用、世界、网络、安全、内核平铺横向分类，彻底废除容易引起跳动手风琴折叠。
+  - 观测与审计独立归类：新增 `OBSERVABILITY` 侧边栏分组，统一收拢 `Audit Logs (操作审计)` 与 `Incidents & Alerts (告警中心)`，大盘 `WORKSPACE` 保持纯粹。
+  - 明确管理员层级边界：普通管理员即工作区租户管理员（Workspace Admin），完全移除普通成员与工作区管理员侧边栏对底层硬件基础设施（INFRASTRUCTURE）的感知；硬件集群管理仅在平台总管（Platform Superadmin）视角下展示。
+  - 废除臃肿卡片，换用公有云级高密度数据表格：行高 40px 紧凑呈现，操作按钮全部采用 24px 微圆角纯图标（重启/停机/配置/下钻），消除多余文字废话，空间利用率提升 300%。
+  - 彻底清除指标字符串斜杠拼接：全站大盘指标、侧边栏配额、表格玩家与内存全部采用单一主核心度量（如 `3`、`16 max 16`、`1.8 GB cap 4 GB`、`4 Slots In Use`），消除任何 `A / B` 拼接的不专业观感。
+  - 零高度挤压悬浮保存底栏：参数变动时视口中央浮出 `fixed bottom-6` 保存条，避免 DOM 挤压与页面抖动。
+- 质量门禁与全栈测试：Go 1.24 单元与架构测试 100% 通过；前端 `pnpm --filter web typecheck`、`lint`、`test` (129 Vitest tests) 及 `next build` 生产构建全部通过。
+
 
 - Activity events now persist organization ownership. PostgreSQL migration 003 and SQLite startup backfill blank historical ownership from surviving source instances. New controller events retain ownership even when the runtime instance is being deleted; private world-library import/delete events carry explicit world ownership. Unknown historical/global events remain platform-only.
 - Customer activity lists filter membership before applying limits, retain owned history after instance deletion and reflect membership revocation on subsequent queries. Instance monitoring and watch snapshots also exclude history from other workspaces, even if it uses the same instance ID. Platform-wide administration retains its global view.
