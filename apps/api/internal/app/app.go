@@ -85,6 +85,10 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize providers: %w", err)
 	}
+	instanceCommands, err := buildInstanceProvisioner(cfg, db, registry)
+	if err != nil {
+		return nil, err
+	}
 	adapter, err := dockerruntime.NewAdapter(cfg.DockerHost)
 	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()
 	if err != nil {
@@ -125,6 +129,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	}
 	apiMetrics := metrics.NewRegistry()
 	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway, gameconfig.NewService(registry, db, domain.ProviderTerrariaVanilla), modruntime.NewService(registry, db)).WithScheduler(sched)
+	if instanceCommands != nil {
+		handler.WithInstanceCommands(instanceCommands)
+	}
 	if regionOps != nil {
 		handler.WithRegionOperations(regionOps)
 	}

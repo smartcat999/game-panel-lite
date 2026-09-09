@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getPlatformInstanceView, getRegionDeployments, getRegionNodes, getWorldRegeneration, listBackups, listGames, listPlatformInstanceViews, listTenantInstanceViews, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
+import { applyGameUpdate, checkGameUpdate, createTenantInstance, downloadWorldFile, getGameServer, getGameUpdate, getPlatformInstanceView, getRegionDeployments, getRegionNodes, getWorldRegeneration, listBackups, listGames, listPlatformInstanceViews, listTenantInstanceViews, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("sends an idempotent plan-derived create command without infrastructure fields", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      instanceId: "instance-a", operationId: "operation-a", operationStatus: "pending", revisionId: "revision-a", specGeneration: 1, intentVersion: 1, regionId: "east"
+    }), { status: 202, headers: { "Content-Type": "application/json" } }));
+
+    await createTenantInstance({ organizationId: "tenant-a", name: "server", planId: "starter", planVersion: 2, idempotencyKey: "request-a", configuration: {} });
+
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/instances");
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("request-a");
+    expect(JSON.parse(String(init?.body))).toEqual(expect.not.objectContaining({ nodeId: expect.anything(), regionId: expect.anything(), cpu: expect.anything() }));
   });
 
   it("uses separate tenant and platform logical instance endpoints", async () => {

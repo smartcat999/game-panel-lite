@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InstanceViewPage, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, PlatformInstanceView, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, RegionalDeploymentOperationsPage, RegionalNodeOperationsPage, RegionStatusSnapshot, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, TenantInstanceView, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreateTenantInstanceAccepted, CreateTenantInstanceInput, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InstanceViewPage, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, PlatformInstanceView, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, RegionalDeploymentOperationsPage, RegionalNodeOperationsPage, RegionStatusSnapshot, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, TenantInstanceView, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
@@ -2010,6 +2010,15 @@ export async function simulatePaymentWebhook(req: {
 export async function getOperationStatus(operationId: string): Promise<ServerOperation> {
   const response = await apiFetch(`${API_BASE}/api/operations/${encodeURIComponent(operationId)}`, { cache: "no-store" });
   return readPayload<ServerOperation>(response, "Unable to load operation status");
+}
+
+export async function createTenantInstance(input: CreateTenantInstanceInput): Promise<CreateTenantInstanceAccepted> {
+  const response = await apiFetch(`${API_BASE}/api/instances`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": input.idempotencyKey },
+    body: JSON.stringify(input)
+  });
+  return readPayload<CreateTenantInstanceAccepted>(response, "Unable to create logical instance");
 }
 
 export async function listTenantInstanceViews(organizationId: string, after?: string, limit = 50): Promise<InstanceViewPage> {

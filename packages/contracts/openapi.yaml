@@ -107,6 +107,32 @@ paths:
         "404": {description: Region not found}
         "503": {description: Region operations connection unavailable}
   /api/instances:
+    post:
+      security:
+        - sessionCookie: []
+      summary: Accept a tenant logical instance for asynchronous delivery
+      description: Resolves Provider, Region, CPU, memory and configuration schema from the immutable server-side plan version. The tenant cannot select a Node or submit protected configuration. Either idempotencyKey or the Idempotency-Key header is required.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: {type: string, maxLength: 128}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateTenantInstanceRequest"}
+      responses:
+        "202":
+          description: Durable global intent and Operation accepted. Regional delivery continues asynchronously.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/CreateTenantInstanceAccepted"}
+        "400": {description: Invalid request, configuration or unsupported game version}
+        "401": {description: Authentication required}
+        "403": {description: Tenant write permission required}
+        "409": {description: Plan, Region, quota, assets or idempotency conflict prevents admission}
+        "503": {description: Logical instance creation is not configured}
     get:
       security:
         - sessionCookie: []
@@ -1965,6 +1991,31 @@ components:
       in: cookie
       name: gamepanel_session
   schemas:
+    CreateTenantInstanceRequest:
+      type: object
+      additionalProperties: false
+      required: [organizationId, name, planId, planVersion, configuration]
+      properties:
+        organizationId: {type: string, maxLength: 128}
+        name: {type: string, maxLength: 128}
+        planId: {type: string, maxLength: 128}
+        planVersion: {type: integer, format: int64, minimum: 1}
+        gameVersion: {type: string, maxLength: 128}
+        idempotencyKey: {type: string, maxLength: 128}
+        configuration:
+          type: object
+          additionalProperties: true
+    CreateTenantInstanceAccepted:
+      type: object
+      required: [instanceId, operationId, operationStatus, revisionId, specGeneration, intentVersion, regionId]
+      properties:
+        instanceId: {type: string}
+        operationId: {type: string}
+        operationStatus: {type: string, enum: [pending, succeeded, failed]}
+        revisionId: {type: string}
+        specGeneration: {type: integer, format: int64, minimum: 1}
+        intentVersion: {type: integer, format: int64, minimum: 1}
+        regionId: {type: string}
     InstanceOperationSummary:
       type: object
       required: [id, kind, status, createdAt]

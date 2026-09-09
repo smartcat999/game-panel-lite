@@ -1,5 +1,13 @@
 # SaaS 与后端改造验收清单
 
+### 2026-09-10 套餐派生的异步实例创建入口
+
+- 新增租户 `POST /api/instances`，成功返回 202、逻辑实例 ID、Operation ID 和版本身份，不等待 Region 调度或容器启动。请求必须给出租户、实例名、不可变套餐 ID／版本、配置和幂等键；Node、Region、Provider、CPU／内存及 schema 不能由客户端覆盖。
+- `instanceapp.Provisioner` 只依赖消费侧套餐与 Provider 描述端口，从服务端套餐派生部署规格，再调用现有配置规范化、授权重放和受保护 Writer。组合根负责把计费 Store 与 Provider Registry 适配为端口；应用模块不依赖计费、Provider 实现、HTTP、数据库或文件系统。
+- 生产入口只在配置加密和请求指纹两个独立 keyring 同时存在时启用。组合根在启动任何 worker 前严格读取并校验 keyring，失败即停止启动；没有默认密钥，响应不返回配置明文、密文、运行时或 Node 数据。
+- Store 只读预检成员、Region 和资产，最终加密创建事务仍重新锁定并检查成员、Region、资产和配额。套餐版本字段不可变，但套餐停售、实例创建、下单与支付尚未组成一个原子商业流程；租户列表／弹窗也尚未切换，当前批次不能冒充完整购买交付旅程。
+- 全量 `go test ./...`、`go vet ./...`、架构依赖门禁、前端 31 个测试文件共 137 项、lint、typecheck、production build、OpenAPI YAML 解析与差异空白检查通过。构建后本地 3005 预览已恢复，租户实例、平台实例与 Region 页面均返回 200。
+
 ### 2026-09-10 逻辑实例读取职责分流
 
 - 新增纯领域读取模型和消费侧接口，将全局逻辑实例、不可变修订、Placement、当前修订对应的交付 Operation 与异步部署投影按 ID 批量读取后在 Go 中组合。查询有界分页并运行于一致快照，Operation 查询量随页面大小封顶，不扫描实例历史；不使用 SQL JOIN，也不读取旧兼容 `game_servers` 作为权威数据。

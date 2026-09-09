@@ -14,6 +14,8 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gateway"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instanceapp"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/instances"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/instanceview"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	modfiles "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
@@ -31,26 +33,27 @@ import (
 )
 
 type Handler struct {
-	modLibrary     *modlibrary.Service
-	modInstaller   *modlibrary.Installer
-	modDelivery    *modlibrary.Delivery
-	modRuntime     *modruntime.Service
-	gameConfig     *gameconfig.Service
-	scheduler      *scheduler.Scheduler
-	ctx            context.Context
-	cfg            config.Config
-	logger         *slog.Logger
-	store          *store.Store
-	provider       *provider.Registry
-	runtime        *runtime.SwitchableAdapter
-	dockerMonitor  *runtime.DockerMonitor
-	runtimeFactory func(string) (runtime.Adapter, error)
-	apiMetrics     *metrics.Registry
-	observability  *observability.CachedService
-	systemUpdate   *systemupdate.Service
-	gateway        *gateway.StreamGateway
-	regionOps      regionOperationsReader
-	instanceViews  instanceViewReader
+	modLibrary       *modlibrary.Service
+	modInstaller     *modlibrary.Installer
+	modDelivery      *modlibrary.Delivery
+	modRuntime       *modruntime.Service
+	gameConfig       *gameconfig.Service
+	scheduler        *scheduler.Scheduler
+	ctx              context.Context
+	cfg              config.Config
+	logger           *slog.Logger
+	store            *store.Store
+	provider         *provider.Registry
+	runtime          *runtime.SwitchableAdapter
+	dockerMonitor    *runtime.DockerMonitor
+	runtimeFactory   func(string) (runtime.Adapter, error)
+	apiMetrics       *metrics.Registry
+	observability    *observability.CachedService
+	systemUpdate     *systemupdate.Service
+	gateway          *gateway.StreamGateway
+	regionOps        regionOperationsReader
+	instanceViews    instanceViewReader
+	instanceCommands instanceCommandService
 
 	agentLogsMu   sync.RWMutex
 	agentLogs     map[string][]string
@@ -79,6 +82,10 @@ type instanceViewReader interface {
 	GetTenantInstanceView(context.Context, string, string, string) (instanceview.Record, error)
 	ListPlatformInstanceViews(context.Context, string, string, string, int) (instanceview.Page[instanceview.PlatformRecord], error)
 	GetPlatformInstanceView(context.Context, string, string) (instanceview.PlatformRecord, error)
+}
+
+type instanceCommandService interface {
+	Create(context.Context, string, instanceapp.CreateCommand) (instances.IntentResult, error)
 }
 
 type resourceLimitPayload struct {
@@ -144,6 +151,11 @@ func (h *Handler) WithScheduler(sched *scheduler.Scheduler) *Handler {
 
 func (h *Handler) WithRegionOperations(reader regionOperationsReader) *Handler {
 	h.regionOps = reader
+	return h
+}
+
+func (h *Handler) WithInstanceCommands(commands instanceCommandService) *Handler {
+	h.instanceCommands = commands
 	return h
 }
 
@@ -222,6 +234,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/api/commerce/subscriptions", h.listCommerceSubscriptions)
 		r.Get("/api/operations/{id}", h.getOperationStatus)
 		r.Get("/api/instances", h.listTenantInstances)
+		r.Post("/api/instances", h.createTenantInstance)
 		r.Get("/api/instances/{id}", h.getTenantInstance)
 		r.With(h.requireAdmin).Get("/api/platform/instances", h.listPlatformInstances)
 		r.With(h.requireAdmin).Get("/api/platform/instances/{id}", h.getPlatformInstance)

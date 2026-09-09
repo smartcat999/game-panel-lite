@@ -747,3 +747,23 @@ export type InstanceViewPage<T extends TenantInstanceView = TenantInstanceView> 
   items: T[];
   nextCursor?: string;
 };
+
+export type CreateTenantInstanceInput = {
+  organizationId: string;
+  name: string;
+  planId: string;
+  planVersion: number;
+  gameVersion?: string;
+  idempotencyKey: string;
+  configuration: Record<string, unknown>;
+};
+
+export type CreateTenantInstanceAccepted = {
+  instanceId: string;
+  operationId: string;
+  operationStatus: "pending" | "succeeded" | "failed";
+  revisionId: string;
+  specGeneration: number;
+  intentVersion: number;
+  regionId: string;
+};

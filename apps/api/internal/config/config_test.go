@@ -46,3 +46,17 @@ func TestModUploadSizePolicy(t *testing.T) {
 		t.Fatalf("configured limit: %d", got)
 	}
 }
+
+func TestLogicalInstanceConfiguration(t *testing.T) {
+	t.Setenv("GAMEPANEL_CONFIGURATION_KEYRING", "/run/secrets/configuration.json")
+	t.Setenv("GAMEPANEL_FINGERPRINT_KEYRING", "/run/secrets/fingerprint.json")
+	t.Setenv("GAMEPANEL_LOGICAL_CONFIG_MAX_BYTES", "2048")
+	cfg := Load()
+	if cfg.ConfigurationKeyringPath != "/run/secrets/configuration.json" || cfg.FingerprintKeyringPath != "/run/secrets/fingerprint.json" || cfg.LogicalConfigMaxBytes != 2048 {
+		t.Fatalf("logical instance configuration: %+v", cfg)
+	}
+	t.Setenv("GAMEPANEL_LOGICAL_CONFIG_MAX_BYTES", "999999999")
+	if got := Load().LogicalConfigMaxBytes; got != DefaultLogicalConfigMaxBytes {
+		t.Fatalf("invalid maximum did not fall back: %d", got)
+	}
+}
