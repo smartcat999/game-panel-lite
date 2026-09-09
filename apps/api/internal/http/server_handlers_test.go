@@ -268,6 +268,55 @@ func TestRestartServerRecreatesExistingContainer(t *testing.T) {
 	}
 }
 
+func TestRestartDSTServerRepairsDesiredWorkshopConfig(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("dst-repair", cfg.DataDir)
+	server.GameKey = domain.GameDST
+	server.ProviderKey = domain.ProviderDST
+	server.Status = domain.StatusRunning
+	resource := gameServerFromTestFixture(server)
+	resource.Spec.ModIDs = []string{"global-library-mod"}
+	resource.Spec.Config = withDSTWorkshopIDs(resource.Spec.Config, nil)
+	if err := db.CreateGameServer(context.Background(), &resource); err != nil {
+		t.Fatal(err)
+	}
+	serverMod := domain.ModFile{
+		ID:          "server-mod",
+		InstanceID:  server.ID,
+		GameKey:     domain.GameDST,
+		ProviderKey: domain.ProviderDST,
+		FileName:    "workshop-111",
+		Source:      "workshop",
+		WorkshopID:  "111",
+		Enabled:     true,
+		CreatedAt:   time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &serverMod); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers/"+server.ID+"/restart", nil))
+	if recorder.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected restart 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	persisted, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(persisted.Spec.ModIDs, []string{serverMod.ID}) {
+		t.Fatalf("expected restart to repair desired mod ids, got %v", persisted.Spec.ModIDs)
+	}
+	modsPayload, _ := persisted.Spec.Config["mods"].(map[string]any)
+	workshopIDs, err := json.Marshal(modsPayload["workshopIds"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(workshopIDs) != `["111"]` {
+		t.Fatalf("expected restart to restore workshop config, got %s", workshopIDs)
+	}
+}
+
 func TestStopServerReturnsAcceptedBeforeRuntimeCompletes(t *testing.T) {
 	adapter := newBlockingRuntimeAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)
