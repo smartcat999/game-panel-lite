@@ -106,6 +106,23 @@ paths:
         "403": {description: Platform administrator required}
         "404": {description: Region not found}
         "503": {description: Region operations connection unavailable}
+  /api/commerce/payments/webhook:
+    post:
+      summary: Receive an authenticated payment-provider notification
+      description: The request body and provider headers remain opaque until a configured provider adapter verifies signature, merchant, environment, event identity, captured status, amount, currency, and provider payment time. Without that adapter the endpoint returns 503 and records no payment or entitlement. Successful recording creates a durable fulfillment task; HTTP does not grant service directly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200": {description: Verified capture recorded idempotently and durable fulfillment queued}
+        "400": {description: Empty, oversized, or invalid provider notification}
+        "401": {description: Provider notification verification failed}
+        "409": {description: Verified payment conflicts with existing order or payment identity}
+        "503": {description: Payment provider verifier is not configured or accounting is unavailable}
   /api/instances:
     post:
       security:

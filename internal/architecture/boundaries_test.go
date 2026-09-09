@@ -116,6 +116,9 @@ func forbiddenImport(file, imported string) string {
 	if under("instanceapp") && ((strings.Contains(imported, ".") && imported != api+"instances") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
 		return "instance application orchestration must depend on consumer-owned ports and intent contracts"
 	}
+	if under("paymentingress") && ((strings.Contains(imported, ".") && imported != api+"commerce") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
+		return "payment ingress must depend on consumer-owned verification and accounting ports"
+	}
 	if under("configprotection") && ((strings.Contains(imported, ".") && imported != api+"instances") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
 		return "configuration cryptography must depend on immutable identity contracts, not storage, transport or process secrets"
 	}
@@ -192,6 +195,9 @@ func TestImportRules(t *testing.T) {
 		{"apps/api/internal/instances/models.go", "encoding/json", false},
 		{"apps/api/internal/instances/models.go", api + "domain", true},
 		{"apps/api/internal/instances/models.go", "gorm.io/gorm", true},
+		{"apps/api/internal/paymentingress/service.go", api + "commerce", false},
+		{"apps/api/internal/paymentingress/service.go", api + "store", true},
+		{"apps/api/internal/paymentingress/service.go", "net/http", true},
 		{"apps/api/internal/scheduling/capacity.go", "math", false},
 		{"apps/api/internal/scheduling/capacity.go", api + "store", true},
 		{"apps/api/internal/scheduling/capacity.go", "net/http", true},

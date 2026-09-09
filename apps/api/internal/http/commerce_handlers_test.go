@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/commerce"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -142,7 +143,7 @@ func TestCommerceHTTPFlow(t *testing.T) {
 		t.Fatalf("expected 200 OK cancel, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// 5. Create a second order and pay via Webhook
+	// 5. Create a second order and apply a capture from a trusted test adapter.
 	orderReq.IdempotencyKey = "order-test-2"
 	reqBytes, _ = json.Marshal(orderReq)
 	orderHttpReq = httptest.NewRequest(http.MethodPost, "/api/commerce/orders", bytes.NewReader(reqBytes))
@@ -155,7 +156,7 @@ func TestCommerceHTTPFlow(t *testing.T) {
 	var paidOrder commerce.Order
 	_ = json.Unmarshal(rec.Body.Bytes(), &paidOrder)
 
-	webhookReq := paymentWebhookRequest{
+	capture := commerce.CapturedPayment{
 		Provider:      "wechat",
 		MerchantID:    "mch_123",
 		TransactionID: "wx_tx_999",
@@ -163,12 +164,13 @@ func TestCommerceHTTPFlow(t *testing.T) {
 		OrderID:       paidOrder.ID,
 		AmountMinor:   paidOrder.Quote.AmountMinor,
 		Currency:      "CNY",
+		PaidAtMS:      time.Now().UnixMilli(),
 	}
-	wbBytes, _ := json.Marshal(webhookReq)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/commerce/payments/webhook", bytes.NewReader(wbBytes)))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected webhook 200, got %d: %s", rec.Code, rec.Body.String())
+	if receipt, err := db.RecordCapturedPayment(ctx, capture); err != nil || receipt.Disposition != "applied" {
+		t.Fatalf("record trusted test capture: %+v %v", receipt, err)
+	}
+	if _, _, err := db.FulfillPrepaidSubscription(ctx, paidOrder.ID); err != nil {
+		t.Fatalf("fulfill paid subscription: %v", err)
 	}
 
 	// 6. Verify subscription is active via GET /api/commerce/subscriptions
@@ -283,8 +285,8 @@ func TestCommerceEndToEndPrepaidLifecycle(t *testing.T) {
 		t.Fatalf("failed to decode order: %s", orderRec.Body.String())
 	}
 
-	// 6. Pay order via webhook
-	webhookReq := paymentWebhookRequest{
+	// 6. Apply a capture from a trusted test adapter and run fulfillment.
+	capture := commerce.CapturedPayment{
 		Provider:      "wechat",
 		MerchantID:    "mch_test",
 		TransactionID: "wx_tx_lifecycle_1",
@@ -292,12 +294,13 @@ func TestCommerceEndToEndPrepaidLifecycle(t *testing.T) {
 		OrderID:       order.ID,
 		AmountMinor:   order.Quote.AmountMinor,
 		Currency:      order.Quote.Plan.Currency,
+		PaidAtMS:      time.Now().UnixMilli(),
 	}
-	wbBytes, _ := json.Marshal(webhookReq)
-	whRec := httptest.NewRecorder()
-	router.ServeHTTP(whRec, httptest.NewRequest(http.MethodPost, "/api/commerce/payments/webhook", bytes.NewReader(wbBytes)))
-	if whRec.Code != http.StatusOK {
-		t.Fatalf("expected webhook 200, got %d: %s", whRec.Code, whRec.Body.String())
+	if receipt, err := db.RecordCapturedPayment(ctx, capture); err != nil || receipt.Disposition != "applied" {
+		t.Fatalf("record trusted test capture: %+v %v", receipt, err)
+	}
+	if _, _, err := db.FulfillPrepaidSubscription(ctx, order.ID); err != nil {
+		t.Fatalf("fulfill paid subscription: %v", err)
 	}
 
 	// 7. Verify subscription is active

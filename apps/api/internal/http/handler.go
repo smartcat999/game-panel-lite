@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/commerce"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/config"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/gameconfig"
@@ -23,6 +24,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/modruntime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/paymentingress"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -54,6 +56,7 @@ type Handler struct {
 	regionOps        regionOperationsReader
 	instanceViews    instanceViewReader
 	instanceCommands instanceCommandService
+	paymentCaptures  paymentCaptureService
 
 	agentLogsMu   sync.RWMutex
 	agentLogs     map[string][]string
@@ -86,6 +89,10 @@ type instanceViewReader interface {
 
 type instanceCommandService interface {
 	Create(context.Context, string, instanceapp.CreateCommand) (instances.IntentResult, error)
+}
+
+type paymentCaptureService interface {
+	Capture(context.Context, paymentingress.Notification) (commerce.PaymentReceipt, error)
 }
 
 type resourceLimitPayload struct {
@@ -156,6 +163,11 @@ func (h *Handler) WithRegionOperations(reader regionOperationsReader) *Handler {
 
 func (h *Handler) WithInstanceCommands(commands instanceCommandService) *Handler {
 	h.instanceCommands = commands
+	return h
+}
+
+func (h *Handler) WithPaymentCaptures(captures paymentCaptureService) *Handler {
+	h.paymentCaptures = captures
 	return h
 }
 

@@ -3,13 +3,14 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/commerce"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/paymentingress"
 )
 
 type createOrderRequest struct {
@@ -23,17 +24,6 @@ type createOrderRequest struct {
 
 type cancelOrderRequest struct {
 	Reason string `json:"reason"`
-}
-
-type paymentWebhookRequest struct {
-	Provider      string `json:"provider"`
-	MerchantID    string `json:"merchantId"`
-	TransactionID string `json:"transactionId"`
-	EventID       string `json:"eventId"`
-	OrderID       string `json:"orderId"`
-	AmountMinor   int64  `json:"amountMinor"`
-	Currency      string `json:"currency"`
-	Signature     string `json:"signature"`
 }
 
 // GET /api/commerce/plans
@@ -194,38 +184,35 @@ func (h *Handler) listCommerceSubscriptions(w http.ResponseWriter, r *http.Reque
 
 // POST /api/commerce/payments/webhook
 func (h *Handler) handlePaymentWebhook(w http.ResponseWriter, r *http.Request) {
-	var req paymentWebhookRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook payload")
+	if h.paymentCaptures == nil {
+		writeError(w, http.StatusServiceUnavailable, "payment provider is not configured")
 		return
 	}
-	if req.Provider == "" || req.MerchantID == "" || req.TransactionID == "" || req.EventID == "" || req.OrderID == "" || req.AmountMinor <= 0 || req.Currency == "" {
-		writeError(w, http.StatusBadRequest, "missing required webhook fields")
+	const maxNotificationBytes = 1 << 20
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxNotificationBytes+1))
+	if err != nil || len(body) == 0 || len(body) > maxNotificationBytes {
+		writeError(w, http.StatusBadRequest, "invalid payment notification")
 		return
 	}
-
-	now := time.Now().UnixMilli()
-	capture := commerce.CapturedPayment{
-		Provider:      req.Provider,
-		MerchantID:    req.MerchantID,
-		TransactionID: req.TransactionID,
-		EventID:       req.EventID,
-		OrderID:       req.OrderID,
-		AmountMinor:   req.AmountMinor,
-		Currency:      strings.ToUpper(req.Currency),
-		PaidAtMS:      now,
+	defer clear(body)
+	headers := make(map[string][]string, len(r.Header))
+	for name, values := range r.Header {
+		headers[name] = append([]string(nil), values...)
 	}
-
-	receipt, err := h.store.RecordCapturedPayment(r.Context(), capture)
+	receipt, err := h.paymentCaptures.Capture(r.Context(), paymentingress.Notification{Body: body, Headers: headers})
 	if err != nil {
-		writeError(w, http.StatusConflict, "payment capture failed: "+err.Error())
+		switch {
+		case errors.Is(err, paymentingress.ErrInvalidNotification):
+			writeError(w, http.StatusBadRequest, "invalid payment notification")
+		case errors.Is(err, paymentingress.ErrVerificationFailed):
+			writeError(w, http.StatusUnauthorized, "payment notification verification failed")
+		case errors.Is(err, commerce.ErrPaymentConflict), errors.Is(err, commerce.ErrOrderUnavailable):
+			writeError(w, http.StatusConflict, "payment notification conflicts with existing records")
+		default:
+			writeError(w, http.StatusServiceUnavailable, "payment notification could not be recorded")
+		}
 		return
 	}
-
-	if receipt.Disposition == "applied" {
-		_, _, _ = h.store.FulfillPrepaidSubscription(r.Context(), req.OrderID)
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"receipt": receipt,
