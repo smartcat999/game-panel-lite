@@ -29,16 +29,27 @@ func main() {
 	identities := flag.String("node-identities", "", "JSON URI SAN to node ID mapping file")
 	timeout := flag.Duration("request-timeout", 10*time.Second, "maximum node request time")
 	maxBytes := flag.Int64("max-request-bytes", 65536, "maximum event request bytes")
+	execution := executionOptions{}
+	flag.StringVar(&execution.endpoint, "global-control-endpoint", "", "global control HTTPS origin")
+	flag.StringVar(&execution.certificate, "global-client-certificate", "", "regional client certificate PEM file")
+	flag.StringVar(&execution.key, "global-client-key", "", "regional client private key PEM file")
+	flag.StringVar(&execution.ca, "global-server-ca", "", "trusted global server CA PEM file")
+	flag.StringVar(&execution.configurationKeys, "configuration-keys", "", "private JSON keyring for protected global revisions")
+	flag.StringVar(&execution.catalog, "provider-catalog", "", "provider catalog shared with global configuration validation")
+	flag.IntVar(&execution.maxConfigurationBytes, "max-configuration-bytes", 65536, "maximum plaintext provider configuration bytes")
+	flag.Int64Var(&execution.maxResponseBytes, "max-global-response-bytes", 4<<20, "maximum global control response bytes")
+	flag.DurationVar(&execution.leaseTTL, "execution-lease", 2*time.Minute, "short-lived Node execution authority")
+	flag.DurationVar(&execution.maxHeartbeatAge, "max-heartbeat-age", 30*time.Second, "maximum Node heartbeat age for execution authority")
 	flag.Parse()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, *region, *address, *certificate, *key, *clientCA, *identities, *timeout, *maxBytes); err != nil {
+	if err := run(ctx, *region, *address, *certificate, *key, *clientCA, *identities, *timeout, *maxBytes, &execution); err != nil {
 		slog.Error("regional control stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, region, address, certificateFile, keyFile, caFile, identitiesFile string, timeout time.Duration, maxBytes int64) error {
+func run(ctx context.Context, region, address, certificateFile, keyFile, caFile, identitiesFile string, timeout time.Duration, maxBytes int64, execution *executionOptions) error {
 	if os.Getenv("GAMEPANEL_REGIONAL_DATABASE_URL") == "" || timeout <= 0 || maxBytes < 1 {
 		return fmt.Errorf("regional database endpoint and positive request limits are required")
 	}
@@ -75,7 +86,17 @@ func run(ctx context.Context, region, address, certificateFile, keyFile, caFile,
 		return err
 	}
 	defer db.Close()
-	handler, err := nodeapi.NewHandler(db, identities, maxBytes)
+	var handler http.Handler
+	if execution == nil {
+		handler, err = nodeapi.NewHandler(db, identities, maxBytes)
+	} else {
+		authorizer, closeExecution, buildErr := buildExecutionAuthorizer(region, db, timeout, *execution)
+		if buildErr != nil {
+			return buildErr
+		}
+		defer closeExecution()
+		handler, err = nodeapi.NewExecutionHandler(db, authorizer, identities, maxBytes)
+	}
 	if err != nil {
 		return err
 	}

@@ -153,6 +153,9 @@ func testSchedulingClaims(t *testing.T, db *RegionalStore, dsn string, scheduler
 	if err := db.db.Transaction(func(tx *gorm.DB) error { return stageRegionalNodeTask(tx, first) }); err != nil {
 		t.Fatal("duplicate staging changed task", err)
 	}
+	if err := db.db.Table("regional_node_tasks").Where("allocation_id = ?", first.ID).Update("status", "active").Error; err != nil {
+		t.Fatal(err)
+	}
 	// New intent invalidates an old claim and queues only running deployments.
 	update := a.Snapshot
 	update.IntentVersion++

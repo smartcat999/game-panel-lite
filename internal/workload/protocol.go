@@ -65,6 +65,30 @@ type Assignment struct {
 	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
+// RegionalAssignmentRequest starts one short-lived execution attempt for the
+// authenticated Node session. HolderID identifies one Agent process attempt.
+type RegionalAssignmentRequest struct {
+	SessionEpoch int64  `json:"sessionEpoch"`
+	HolderID     string `json:"holderId"`
+}
+
+type RegionalLeaseRequest struct {
+	SessionEpoch int64  `json:"sessionEpoch"`
+	Action       string `json:"action"`
+	HolderID     string `json:"holderId"`
+	Fence        int64  `json:"fence"`
+}
+
+type RegionalObservationReport struct {
+	SessionEpoch int64       `json:"sessionEpoch"`
+	Observation  Observation `json:"observation"`
+}
+
+type AuthorizedAssignment struct {
+	Assignment Assignment `json:"assignment"`
+	Lease      LeaseGrant `json:"lease"`
+}
+
 const (
 	ConditionArtifactsReady = "ArtifactsReady"
 	ConditionAgentReachable = "AgentReachable"

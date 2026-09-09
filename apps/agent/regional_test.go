@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/internal/worker"
 	"github.com/smartcat999/game-panel-lite/internal/workload"
 )
 
@@ -202,5 +203,78 @@ func TestRegionalHeartbeatLoop(t *testing.T) {
 		default:
 			t.Fatal("missing observation")
 		}
+	}
+}
+
+type regionalRuntimeProbe struct{ state worker.State }
+
+func (r *regionalRuntimeProbe) Inspect(context.Context, string) (worker.State, error) {
+	return r.state, nil
+}
+func (r *regionalRuntimeProbe) Create(_ context.Context, assignment workload.Assignment) error {
+	r.state = worker.State{Exists: true, ID: "container-a", Managed: true, ServerID: assignment.ServerID, NodeID: assignment.NodeID, UID: assignment.UID, Generation: assignment.Generation}
+	return nil
+}
+func (r *regionalRuntimeProbe) Start(context.Context, worker.State) error {
+	r.state.Running = true
+	return nil
+}
+func (r *regionalRuntimeProbe) Stop(context.Context, worker.State) error {
+	r.state.Running = false
+	return nil
+}
+func (r *regionalRuntimeProbe) Remove(context.Context, worker.State) error {
+	r.state = worker.State{}
+	return nil
+}
+
+func TestRegionalExecutionClientReconcilesUnderLease(t *testing.T) {
+	var renewals, observations, releases atomic.Int64
+	token := ""
+	assignment := workload.Assignment{ID: "task-a", UID: "task-a", ServerID: "server-a", NodeID: "node-a", Generation: 1, DesiredState: "running", Spec: workload.Spec{ServerID: "server-a", Name: "server-a", Image: "registry.example/game@sha256:fixture", Network: workload.Network{Port: 7777, HostPort: 30001}}}
+	lease := workload.LeaseGrant{ObservationToken: &token, AssignmentUID: assignment.UID, ServerID: assignment.ServerID, NodeID: assignment.NodeID, Generation: 1, HolderID: "process-a", Fence: 7, ValidForMS: 120000}
+	client, _ := regionalTLS(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/internal/node/assignments/claim":
+			var request workload.RegionalAssignmentRequest
+			if json.NewDecoder(r.Body).Decode(&request) != nil || request.SessionEpoch != 3 || request.HolderID != "process-a" {
+				t.Error("invalid claim request")
+			}
+			_ = json.NewEncoder(w).Encode(workload.AuthorizedAssignment{Assignment: assignment, Lease: lease})
+		case "/internal/node/assignments/task-a/lease":
+			var request workload.RegionalLeaseRequest
+			if json.NewDecoder(r.Body).Decode(&request) != nil || request.SessionEpoch != 3 || request.HolderID != lease.HolderID || request.Fence != lease.Fence {
+				t.Error("invalid lease request")
+			}
+			if request.Action == "release" {
+				releases.Add(1)
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			renewals.Add(1)
+			_ = json.NewEncoder(w).Encode(lease)
+		case "/internal/node/assignments/task-a/observation":
+			var report workload.RegionalObservationReport
+			if json.NewDecoder(r.Body).Decode(&report) != nil || report.SessionEpoch != 3 || report.Observation.LeaseHolderID != lease.HolderID || report.Observation.LeaseFence != lease.Fence || report.Observation.ActualState != "running" {
+				t.Error("invalid observation")
+			}
+			observations.Add(1)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Error("unexpected execution route", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	claim, err := client.Claim(context.Background(), 3, "process-a")
+	if err != nil || claim.Granted == nil {
+		t.Fatal("claim", err)
+	}
+	runtime := &regionalRuntimeProbe{}
+	if err := reconcileRegionalAssignment(context.Background(), client, workload.NodeSession{Epoch: 3}, claim, runtime, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		t.Fatal(err)
+	}
+	if !runtime.state.Running || renewals.Load() < 2 || observations.Load() != 1 || releases.Load() != 1 {
+		t.Fatalf("incomplete regional execution: %+v renew=%d observe=%d release=%d", runtime.state, renewals.Load(), observations.Load(), releases.Load())
 	}
 }

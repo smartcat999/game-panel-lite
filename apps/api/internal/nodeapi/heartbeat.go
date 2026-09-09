@@ -20,6 +20,17 @@ type NodeState interface {
 }
 
 func NewHandler(state NodeState, identities *serviceauth.Nodes, maxBytes int64) (http.Handler, error) {
+	return newHandler(state, nil, identities, maxBytes)
+}
+
+func NewExecutionHandler(state NodeState, execution NodeExecution, identities *serviceauth.Nodes, maxBytes int64) (http.Handler, error) {
+	if execution == nil {
+		return nil, errors.New("regional node execution is required")
+	}
+	return newHandler(state, execution, identities, maxBytes)
+}
+
+func newHandler(state NodeState, execution NodeExecution, identities *serviceauth.Nodes, maxBytes int64) (http.Handler, error) {
 	if state == nil || identities == nil || maxBytes < 1 || state.RegionID() != identities.RegionID() {
 		return nil, errors.New("invalid regional node API configuration")
 	}
@@ -83,6 +94,9 @@ func NewHandler(state NodeState, identities *serviceauth.Nodes, maxBytes int64) 
 	router := chi.NewRouter()
 	router.Post("/internal/node/session", serve(true))
 	router.Post("/internal/node/heartbeat", serve(false))
+	if execution != nil {
+		mountExecutionRoutes(router, execution, identities, maxBytes)
+	}
 	return router, nil
 }
 

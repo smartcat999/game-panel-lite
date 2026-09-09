@@ -137,7 +137,7 @@ func TestRegionalNodeControl(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() {
-		done <- run(runCtx, "east", address, certPath, keyPath, caPath, identities, 2*time.Second, 1024)
+		done <- run(runCtx, "east", address, certPath, keyPath, caPath, identities, 2*time.Second, 1024, nil)
 	}()
 	defer func() {
 		stop()

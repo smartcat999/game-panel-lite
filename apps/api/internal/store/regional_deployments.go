@@ -45,7 +45,7 @@ func stageRegionalDeployment(tx *gorm.DB, snapshot regional.RevisionSnapshot) er
 	values["scheduling_token"] = ""
 	values["scheduling_until_ms"] = 0
 	values["scheduling_next_ms"] = 0
-	if err := tx.Table("regional_node_tasks").Where("deployment_id = ? AND status = ?", current.ID, "awaiting_authority").Update("status", "superseded").Error; err != nil {
+	if err := tx.Table("regional_node_tasks").Where("deployment_id = ? AND status IN ?", current.ID, []string{"awaiting_authority", "active"}).Update("status", "superseded").Error; err != nil {
 		return err
 	}
 	return tx.Table("regional_deployments").Where("id = ?", current.ID).Updates(values).Error

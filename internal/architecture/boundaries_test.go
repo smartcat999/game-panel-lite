@@ -119,7 +119,7 @@ func forbiddenImport(file, imported string) string {
 	if under("controlclient") && ((strings.Contains(imported, ".") && imported != api+"instances" && imported != api+"regional" && imported != api+"assets" && imported != api+"backup" && imported != api+"entitlements") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "regional control client must depend on wire models, not persistence, runtime or process configuration"
 	}
-	if under("nodeapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"regional" && imported != api+"serviceauth" {
+	if under("nodeapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"regional" && imported != api+"serviceauth" && imported != "github.com/smartcat999/game-panel-lite/internal/workload" {
 		return "node API must depend on authenticated identity and consumer-owned ports, not persistence or runtime"
 	}
 	if under("controlapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"instances" && imported != api+"regional" && imported != api+"serviceauth" && imported != api+"assets" && imported != api+"backup" && imported != api+"backupingress" && imported != api+"entitlements" {
@@ -169,7 +169,7 @@ func forbiddenImport(file, imported string) string {
 		return "domain must not depend on transport, services or infrastructure"
 	}
 	if strings.HasPrefix(imported, api+"provider/") && imported != api+"provider/runtimecatalog" &&
-		!under("provider") && !under("app") && file != "apps/api/cmd/region-scheduler/main.go" {
+		!under("provider") && !under("app") && !strings.HasPrefix(file, "apps/api/cmd/") {
 		return "concrete game providers belong in provider implementations or the composition root"
 	}
 	if under("runtime") && (strings.HasPrefix(imported, api+"provider") || strings.HasPrefix(imported, api+"http")) {
@@ -202,7 +202,10 @@ func TestImportRules(t *testing.T) {
 		{"apps/api/internal/modcatalog/metadata.go", api + "domain", false},
 		{"apps/api/internal/http/new.go", api + "provider/terraria", true},
 		{"apps/api/cmd/region-scheduler/main.go", api + "provider/terraria", false},
-		{"apps/api/cmd/region-scheduler/worker.go", api + "provider/terraria", true},
+		{"apps/api/cmd/region-control/execution.go", api + "provider/terraria", false},
+		{"apps/api/cmd/region-scheduler/worker.go", api + "provider/terraria", false},
+		{"apps/api/internal/nodeapi/execution.go", "github.com/smartcat999/game-panel-lite/internal/workload", false},
+		{"apps/api/internal/nodeapi/execution.go", api + "provider/terraria", true},
 		{"apps/agent/main.go", "github.com/smartcat999/game-panel-lite/internal/runtime/docker", false},
 		{"apps/agent/reconcile.go", "github.com/docker/docker/client", true},
 		{"internal/runtime/docker/adapter.go", "github.com/docker/docker/client", false},

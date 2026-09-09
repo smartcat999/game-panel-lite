@@ -168,8 +168,8 @@ func (s schedulingScopes) SchedulingScope(ctx context.Context, snapshot regional
 		return regional.SchedulingScope{}, err
 	}
 	needed := snapshot.Revision.Specification.Resources
-	if right.Policy.Validate() != nil || right.Version < 1 || right.SourceKind == "" || right.SourceID == "" || right.Status != "active" || right.OrganizationID != snapshot.Event.OrganizationID || right.ServerID != snapshot.Event.ServerID || right.CPU < needed.CPU || right.MemoryMB < needed.MemoryMB {
-		return regional.SchedulingScope{}, entitlements.ErrUnavailable
+	if err := entitlements.ValidateRunGrant(right, snapshot.Event.OrganizationID, snapshot.Event.ServerID, needed.CPU, needed.MemoryMB); err != nil {
+		return regional.SchedulingScope{}, err
 	}
 	policy, err := s.db.RegionalNodeAccessPolicy(ctx, snapshot.Event.OrganizationID)
 	if err != nil {

@@ -130,6 +130,7 @@ func testRegionalScheduler(t *testing.T, db *RegionalStore, dsn string) {
 		t.Fatal("tenant mismatch accepted", err)
 	}
 	testSchedulingClaims(t, db, dsn, scheduler, scope, allocation, next)
+	testRegionalExecution(t, db, dsn, secondSnapshot, next)
 	third, thirdSnapshot := create("schedule-server-c")
 	ranged := scope
 	ranged.MaxHostPort = scope.HostPort + 2

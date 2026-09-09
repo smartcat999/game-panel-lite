@@ -1,5 +1,13 @@
 # SaaS 与后端改造验收清单
 
+### 2026-09-10 Region 有限执行授权与 Node Runtime 接线
+
+- 新增 [Region 到 Node 的执行授权](../architecture/regional-node-execution.md)。全局仍拥有租户、逻辑实例、配置、Placement 和权益；Region Scheduler 只预留资源并登记元数据任务；Region Control 才能在重新读取全局当前配置与权益后短时渲染 Workload；Node Agent 只在有限租约内调用 RuntimeAdapter。
+- Region PostgreSQL 迁移 017 新增按逻辑实例单调递增的 execution fence、有限租约和观测 CAS。任务、Allocation、Deployment、配置快照与租约均按 ID 单表读取并在 Go 中组合，没有 SQL JOIN。配置明文和可执行 Workload 不落 Region 数据库。
+- Agent 的 Region 模式已接入领取、每次 Runtime 变更前续租、创建／启动、观测与释放。续租重复核对全局当前 generation、intent、期望状态、配置、资产和运行权益，并在数据库事务内校验 Node session、runtime-ready 与可配置的心跳新鲜度。租约过期只禁止后续变更，不把旧容器视为已停止。
+- 真实 PostgreSQL 16 race 测试验证并发领取唯一成功、重启续租、过期 fence、过期心跳拒绝、观测 CAS／重放及成功完成；完整 mTLS 包测试验证 Node session、心跳和 Agent Runtime 执行链。全量 `go test ./...`、`go vet ./...`、架构门禁与差异空白检查通过；具体 Provider 只出现在组合根或 Provider 模块，Node API、区域模块、共享 worker 与 Store／Docker 保持解耦。
+- 当前完成的是 `running` 且无外部资产任务的执行入口。启停、重启、删除、容量和端口释放、结果 Outbox／全局投影、外部资产准备、真实游戏容器及多主机故障验证继续未完成。
+
 ### 2026-09-10 平台控制台与租户控制台职责分离
 
 - 新增[控制台信息架构](../architecture/console-information-architecture.md)，明确账号、租户成员关系、平台业务控制面、区域基础设施运维和资源关联的边界。

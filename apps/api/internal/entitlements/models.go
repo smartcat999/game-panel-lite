@@ -53,3 +53,14 @@ func (c OperatorChange) Validate() error {
 	}
 	return nil
 }
+
+// ValidateRunGrant defensively checks an entitlement returned across a trust
+// boundary. Time and current placement are verified by the authoritative Store;
+// the consumer must still bind identity and requested capacity before use.
+func ValidateRunGrant(record Record, organizationID, serverID string, cpu float64, memoryMB int64) error {
+	if record.Policy.Validate() != nil || record.Version < 1 || record.SourceKind == "" || record.SourceID == "" || record.Status != "active" ||
+		record.OrganizationID != organizationID || record.ServerID != serverID || record.CPU < cpu || record.MemoryMB < memoryMB {
+		return ErrUnavailable
+	}
+	return nil
+}
