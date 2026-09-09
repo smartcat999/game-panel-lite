@@ -1,10 +1,11 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { PlatformScopeGuard } from "@/components/platform-scope-guard";
-import { getRegionNodes, getRegionStatus, listRegions } from "@/lib/api";
+import { getRegionDeployments, getRegionNodes, getRegionStatus, listRegions } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { regionDisplayName } from "@/lib/region-display";
 
@@ -21,9 +22,11 @@ export default function RegionOperationsPage() {
   const regions = useQuery({ queryKey: ["platform", "regions"], queryFn: listRegions, retry: false });
   const status = useQuery({ queryKey: ["platform", "regions", regionId, "status"], queryFn: () => getRegionStatus(regionId), retry: false, refetchInterval: 30_000 });
   const nodes = useQuery({ queryKey: ["platform", "regions", regionId, "nodes"], queryFn: () => getRegionNodes(regionId), retry: false, refetchInterval: 30_000 });
+  const deployments = useQuery({ queryKey: ["platform", "regions", regionId, "deployments"], queryFn: () => getRegionDeployments(regionId), retry: false, refetchInterval: 30_000 });
   const region = regions.data?.find((item) => item.id === regionId);
   const snapshot = status.data;
   const nodePage = nodes.data;
+  const deploymentPage = deployments.data;
   const observedAt = snapshot ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(snapshot.observedAtMs)) : "";
   const isStale = snapshot ? Date.now() - snapshot.observedAtMs > 90_000 : false;
 
@@ -80,6 +83,38 @@ export default function RegionOperationsPage() {
             <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-slate-500">{isZh ? "区域仍可存在于全局目录，但在区域状态发布器完成首次异步上报前，全局控制面不会推断节点或容量。" : "A Region can exist in the global directory, but the control plane will not infer nodes or capacity before its status publisher sends the first asynchronous report."}</p>
           </div>
         )}
+
+        <section className="overflow-hidden rounded-xl border bg-white micro-border subtle-elevation">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="text-xs font-semibold text-slate-800">{isZh ? "区域部署" : "Regional deployments"}</h2>
+            <p className="mt-1 text-[11px] text-slate-500">{isZh ? "这里跟踪区域执行；实例名称、配置和期望状态仍在全局实例中管理。" : "Track regional execution here. Names, configuration, and desired state remain managed on the global instance."}</p>
+          </div>
+          {deployments.isLoading ? (
+            <div className="p-8 text-center text-xs text-slate-400">{isZh ? "正在读取区域部署…" : "Loading regional deployments…"}</div>
+          ) : deployments.isError ? (
+            <div className="p-8 text-center text-xs text-slate-500">{isZh ? "区域部署暂时无法读取。" : "Regional deployments are temporarily unavailable."}</div>
+          ) : !deploymentPage || deploymentPage.deployments.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">{isZh ? "该区域尚无部署记录。" : "No deployments are recorded in this Region."}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[780px] text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400"><tr><th className="px-4 py-2.5 font-medium">{isZh ? "逻辑实例" : "Logical instance"}</th><th className="px-3 py-2.5 font-medium">{isZh ? "租户" : "Tenant"}</th><th className="px-3 py-2.5 font-medium">{isZh ? "期望状态" : "Desired state"}</th><th className="px-3 py-2.5 font-medium">{isZh ? "调度状态" : "Scheduling"}</th><th className="px-3 py-2.5 font-medium">{isZh ? "实际节点" : "Allocated node"}</th><th className="px-4 py-2.5 text-right font-medium">{isZh ? "配置版本" : "Revision"}</th></tr></thead>
+                <tbody className="divide-y divide-slate-100">
+                  {deploymentPage.deployments.map((deployment) => (
+                    <tr key={deployment.id} className="text-slate-600">
+                      <td className="px-4 py-3"><Link href={`/servers/${encodeURIComponent(deployment.serverId)}`} className="font-mono text-[11px] font-medium text-emerald-700 hover:underline">{deployment.serverId}</Link><p className="mt-0.5 font-mono text-[10px] text-slate-400">{isZh ? `归属版本 ${deployment.placementEpoch}` : `Placement ${deployment.placementEpoch}`}</p></td>
+                      <td className="px-3 py-3 font-mono text-[11px]">{deployment.organizationId}</td>
+                      <td className="px-3 py-3">{deployment.desiredState === "running" ? (isZh ? "运行" : "Running") : (isZh ? "停止" : "Stopped")}</td>
+                      <td className="px-3 py-3">{deployment.schedulingStatus === "reserved" ? (isZh ? "已分配" : "Allocated") : deployment.schedulingStatus === "pending" ? (isZh ? "待调度" : "Pending") : (isZh ? "已拒绝" : "Rejected")}</td>
+                      <td className="px-3 py-3 font-mono text-[11px]">{deployment.nodeId || "—"}</td>
+                      <td className="px-4 py-3 text-right font-mono">{deployment.specGeneration}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         <section className="overflow-hidden rounded-xl border bg-white micro-border subtle-elevation">
           <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 px-4 py-3">

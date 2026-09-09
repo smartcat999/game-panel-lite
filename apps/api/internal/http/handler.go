@@ -69,6 +69,7 @@ type Handler struct {
 
 type regionOperationsReader interface {
 	ListRegionalNodes(context.Context, string, string, int) (regional.NodeOperationsPage, error)
+	ListRegionalDeployments(context.Context, string, string, int) (regional.DeploymentOperationsPage, error)
 }
 
 type resourceLimitPayload struct {
@@ -239,6 +240,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireAdmin).Get("/api/nodes", h.listNodes)
 		r.With(h.requireAdmin).Get("/api/regions/{id}/status", h.getRegionStatus)
 		r.With(h.requireAdmin).Get("/api/regions/{id}/nodes", h.listRegionNodes)
+		r.With(h.requireAdmin).Get("/api/regions/{id}/deployments", h.listRegionDeployments)
 		r.With(h.requireAdmin).Post("/api/nodes", h.createNode)
 		r.With(h.requireAdmin).Get("/api/nodes/{id}", h.getNode)
 		r.With(h.requireAdmin).Get("/api/nodes/{id}/servers", h.listNodeServers)

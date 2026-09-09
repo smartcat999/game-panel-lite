@@ -77,6 +77,35 @@ paths:
         "403": {description: Platform administrator required}
         "404": {description: Region not found}
         "503": {description: Region operations connection unavailable}
+  /api/regions/{id}/deployments:
+    get:
+      security:
+        - sessionCookie: []
+      summary: List Region-owned deployment operations
+      description: Platform-admin execution view relating global logical server and tenant IDs to regional scheduling and allocation state. Business configuration remains in the global instance API.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+        - in: query
+          name: after
+          schema: {type: string}
+          description: Exclusive stable deployment ID cursor.
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 200, default: 100}
+      responses:
+        "200":
+          description: Region-owned deployment operations page.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RegionalDeploymentOperationsPage"}
+        "400": {description: Invalid cursor or limit}
+        "401": {description: Authentication required}
+        "403": {description: Platform administrator required}
+        "404": {description: Region not found}
+        "503": {description: Region operations connection unavailable}
   /api/games:
     get:
       summary: List the registered game and Provider catalog
@@ -1913,6 +1942,32 @@ components:
         reservedMemoryMb: {type: integer, format: int64, minimum: 0}
         allocations: {type: integer, format: int64, minimum: 0}
         pendingTasks: {type: integer, format: int64, minimum: 0}
+    RegionalDeploymentOperationsPage:
+      type: object
+      required: [regionId, observedAtMs, deployments]
+      properties:
+        regionId: {type: string}
+        observedAtMs: {type: integer, format: int64, minimum: 1}
+        nextCursor: {type: string}
+        deployments:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/RegionalDeploymentOperations"
+    RegionalDeploymentOperations:
+      type: object
+      required: [id, organizationId, serverId, placementEpoch, revisionId, specGeneration, intentVersion, desiredState, schedulingStatus]
+      properties:
+        id: {type: string}
+        organizationId: {type: string}
+        serverId: {type: string}
+        placementEpoch: {type: integer, format: int64, minimum: 1}
+        revisionId: {type: string}
+        specGeneration: {type: integer, format: int64, minimum: 1}
+        intentVersion: {type: integer, format: int64, minimum: 1}
+        desiredState: {type: string, enum: [running, stopped]}
+        schedulingStatus: {type: string, enum: [pending, reserved, rejected]}
+        nodeId: {type: string}
     AccountPreferences:
       type: object
       required: [locale, theme]

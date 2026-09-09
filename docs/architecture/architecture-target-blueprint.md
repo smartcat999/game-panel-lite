@@ -139,6 +139,8 @@ Region 状态发布采用本地数据库 Outbox 加专用消息队列。Region �
 
 该投影只服务全局态势和入口导航。节点增删、上下线、调度开关、容量细节、区域日志和告警仍在 Region 运维接口处理；需要进入明细时通过授权的区域路由访问，不能扩大全局投影为 Region 数据库副本。节点明细读取现由全局 Web API 完成平台管理员鉴权，再通过独立 mTLS 区域运维端点访问；节点 Agent 与全局运维使用不同证书信任入口，端点失败时不回退旧 `compute_nodes`。详见 [区域运维访问边界](region-operations-api.md)。
 
+Region 运维中的 Deployment 列表保留 `organizationId`、`serverId`、Placement epoch、配置 generation 和意图版本，并组合区域 Allocation 的实际 Node ID。平台管理员可由 `serverId` 返回全局实例详情；Region 页面不提供租户配置、订单或实例名称的第二写入口。
+
 ## 代码模块与实施顺序
 
 - app / cmd 只做组合与生命周期；HTTP 做协议适配，通过应用用例处理业务。

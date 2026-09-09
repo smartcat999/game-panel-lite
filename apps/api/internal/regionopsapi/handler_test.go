@@ -24,6 +24,13 @@ func (f *nodeReaderFixture) ListRegionalNodeOperations(_ context.Context, after 
 	}
 	return regional.NodeOperationsPage{RegionID: "east", ObservedAtMS: 1, Nodes: []regional.NodeOperations{}}, nil
 }
+func (f *nodeReaderFixture) ListRegionalDeploymentOperations(_ context.Context, after string, limit int) (regional.DeploymentOperationsPage, error) {
+	f.calls++
+	if after != "cursor" || limit != 10 {
+		return regional.DeploymentOperationsPage{}, regional.ErrInvalidDeploymentOperations
+	}
+	return regional.DeploymentOperationsPage{RegionID: "east", ObservedAtMS: 1, Deployments: []regional.DeploymentOperations{}}, nil
+}
 
 func TestNodeOperationsRequiresGlobalControlIdentity(t *testing.T) {
 	identity := "spiffe://gamepanel/global-control"
@@ -56,5 +63,12 @@ func TestNodeOperationsRequiresGlobalControlIdentity(t *testing.T) {
 	handler.ServeHTTP(record, request)
 	if record.Code != http.StatusBadRequest || reader.calls != 1 {
 		t.Fatal("ambiguous query reached regional store")
+	}
+	request = httptest.NewRequest(http.MethodGet, "/internal/operations/deployments?after=cursor&limit=10", nil)
+	request.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}, VerifiedChains: [][]*x509.Certificate{{leaf}}}
+	record = httptest.NewRecorder()
+	handler.ServeHTTP(record, request)
+	if record.Code != http.StatusOK || reader.calls != 2 {
+		t.Fatalf("deployment operations response: %d %s", record.Code, record.Body.String())
 	}
 }

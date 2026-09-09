@@ -24,6 +24,7 @@ import (
 
 var ErrUnavailable = errors.New("regional operations endpoint unavailable")
 var ErrInvalidResponse = errors.New("invalid regional operations response")
+var ErrInvalidQuery = errors.New("invalid regional operations query")
 
 type FileConfig struct {
 	CertificateFile  string            `json:"certificateFile"`
@@ -94,49 +95,70 @@ func NewDirectory(endpoints map[string]string, certificate tls.Certificate, root
 }
 
 func (d *Directory) ListRegionalNodes(ctx context.Context, regionID, after string, limit int) (regional.NodeOperationsPage, error) {
+	var page regional.NodeOperationsPage
+	if err := d.get(ctx, regionID, "/internal/operations/nodes", after, limit, &page); err != nil {
+		return regional.NodeOperationsPage{}, err
+	}
+	if page.RegionID != regionID || page.Validate() != nil {
+		return regional.NodeOperationsPage{}, ErrInvalidResponse
+	}
+	return page, nil
+}
+
+func (d *Directory) ListRegionalDeployments(ctx context.Context, regionID, after string, limit int) (regional.DeploymentOperationsPage, error) {
+	var page regional.DeploymentOperationsPage
+	if err := d.get(ctx, regionID, "/internal/operations/deployments", after, limit, &page); err != nil {
+		return regional.DeploymentOperationsPage{}, err
+	}
+	if page.RegionID != regionID || page.Validate() != nil {
+		return regional.DeploymentOperationsPage{}, ErrInvalidResponse
+	}
+	return page, nil
+}
+
+func (d *Directory) get(ctx context.Context, regionID, path, after string, limit int, output any) error {
 	endpoint, ok := d.endpoints[regionID]
 	if !ok {
-		return regional.NodeOperationsPage{}, ErrUnavailable
+		return ErrUnavailable
 	}
 	if limit < 1 || limit > 200 || len(after) > 128 || after != strings.TrimSpace(after) {
-		return regional.NodeOperationsPage{}, regional.ErrInvalidNodeOperations
+		return ErrInvalidQuery
 	}
-	target := *endpoint
-	target.Path = "/internal/operations/nodes"
-	query := target.Query()
+	targetURL := *endpoint
+	targetURL.Path = path
+	query := targetURL.Query()
 	query.Set("limit", fmt.Sprint(limit))
 	if after != "" {
 		query.Set("after", after)
 	}
-	target.RawQuery = query.Encode()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	targetURL.RawQuery = query.Encode()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL.String(), nil)
 	if err != nil {
-		return regional.NodeOperationsPage{}, err
+		return err
 	}
 	response, err := d.http.Do(request)
 	if err != nil {
-		return regional.NodeOperationsPage{}, ErrUnavailable
+		return ErrUnavailable
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, d.maxBytes))
-		return regional.NodeOperationsPage{}, ErrUnavailable
+		return ErrUnavailable
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
-		return regional.NodeOperationsPage{}, ErrInvalidResponse
+		return ErrInvalidResponse
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, d.maxBytes+1))
 	if err != nil || int64(len(body)) > d.maxBytes {
-		return regional.NodeOperationsPage{}, ErrInvalidResponse
+		return ErrInvalidResponse
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
-	var page regional.NodeOperationsPage
-	if err := decoder.Decode(&page); err != nil || requireEOF(decoder) != nil || page.RegionID != regionID || page.Validate() != nil {
-		return regional.NodeOperationsPage{}, ErrInvalidResponse
+	if err := decoder.Decode(output); err != nil || requireEOF(decoder) != nil {
+		return ErrInvalidResponse
 	}
-	return page, nil
+	return nil
 }
 
 func (d *Directory) Close() error {

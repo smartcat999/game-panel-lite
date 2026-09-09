@@ -1,5 +1,12 @@
 # SaaS 与后端改造验收清单
 
+### 2026-09-09 全局实例与区域部署的运维关联
+
+- 区域运维 API 新增 Deployment 有界分页。区域 Store 先读取 Deployment，再按页面内 deployment ID 批量读取有效 Allocation 并在 Go 中组合实际 Node ID，不使用 JOIN。
+- 运维视图只携带全局租户／逻辑实例身份、Placement epoch、配置和意图版本，以及区域调度／分配状态。平台页面可从 `serverId` 返回全局实例详情，但 Region 不读取或修改业务配置、订单和实例名称。
+- 全局平台路由继续要求平台管理员，并使用同一 Region mTLS 目录；普通租户不能读取区域 Deployment 清单。平台 Region 页面将部署执行表与节点基础设施表分开，避免把租户资源所有权和区域执行职责混成同一种资源管理。
+- 真实 PostgreSQL 16 集成套件与 race 检查验证调度完成、崩溃恢复预留和区域部署读取；全量 `go test ./...`、`go vet ./...`、前端 131 项测试、lint、typecheck、production build 与 OpenAPI 解析通过。代码检查确认新增数据路径没有 SQL JOIN。本地 API 与 Web 已恢复；Mac 锁屏阻止了本批最终浏览器截图复核。区域执行结果、日志、告警和处置操作仍是后续缺口。
+
 ### 2026-09-09 区域节点运维读取边界
 
 - 新增独立 `region-operations` 组合入口。它只打开所属 Region 的 PostgreSQL，使用专门的全局控制面客户端证书白名单，和面向 Node Agent 的 `region-control` 分离信任域。

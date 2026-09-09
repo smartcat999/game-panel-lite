@@ -29,6 +29,14 @@ func (f *regionOperationsFixture) ListRegionalNodes(_ context.Context, regionID,
 	return f.page, nil
 }
 
+func (f *regionOperationsFixture) ListRegionalDeployments(_ context.Context, regionID, after string, limit int) (regional.DeploymentOperationsPage, error) {
+	f.calls++
+	if regionID != f.region || after != "deployment-a" || limit != 20 {
+		return regional.DeploymentOperationsPage{}, regional.ErrInvalidDeploymentOperations
+	}
+	return regional.DeploymentOperationsPage{RegionID: f.region, ObservedAtMS: 11, Deployments: []regional.DeploymentOperations{}}, nil
+}
+
 func TestRegionDirectoryDoesNotInferRegionsFromNodes(t *testing.T) {
 	router, db, _ := newTestRouter(t)
 	ctx := context.Background()
@@ -128,5 +136,14 @@ func TestRegionNodeOperationsAreRoutedWithoutGlobalCopies(t *testing.T) {
 	handler.listRegionNodes(record, request)
 	if record.Code != http.StatusNotFound || reader.calls != 1 {
 		t.Fatal("unknown Region was routed")
+	}
+	request = httptest.NewRequest(http.MethodGet, "/api/regions/operations-east/deployments?after=deployment-a&limit=20", nil)
+	route = chi.NewRouteContext()
+	route.URLParams.Add("id", "operations-east")
+	request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, route))
+	record = httptest.NewRecorder()
+	handler.listRegionDeployments(record, request)
+	if record.Code != http.StatusOK || reader.calls != 2 {
+		t.Fatalf("regional deployments response: %d %s", record.Code, record.Body.String())
 	}
 }

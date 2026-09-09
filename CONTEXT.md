@@ -38,6 +38,8 @@ _Avoid_: 租户资源的所有者、与租户空间并列的管理身份
 
 **Region Operations Endpoint（区域运维端点）**：平台管理员按需读取某一 Region 节点明细的内部 mTLS 接口。全局 Web API 负责账号鉴权和 Region 路由，Region 自己读取并组合节点数据；该端点不改变资源所有权，也不将节点明细变成全局主数据。
 
+**Deployment Operations View（部署运维视图）**：Region 通过 `organizationId`、`serverId`、Placement epoch 和配置／意图版本引用全局资源，同时展示区域调度状态和实际 Node 分配。它用于定位执行问题；业务配置仍回到全局逻辑实例修改。
+
 **Node（计算节点）**：归属于唯一 Region 的宿主机，可承载多个运行实例。
 
 **SchedulingRequirement（调度要求）**：指定区域、规格、授权节点池及可选严格指定节点的用户或运维要求。

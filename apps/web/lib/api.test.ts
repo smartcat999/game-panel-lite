@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getRegionNodes, getWorldRegeneration, listBackups, listGames, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
+import { applyGameUpdate, checkGameUpdate, downloadWorldFile, getGameServer, getGameUpdate, getRegionDeployments, getRegionNodes, getWorldRegeneration, listBackups, listGames, listWorlds, previewWorkshopItems, regenerateWorld, setModEnabled, updateGameUpdateAutoCheck } from "./api";
 
 describe("api mappers", () => {
   afterEach(() => {
@@ -231,6 +231,19 @@ describe("api mappers", () => {
     await expect(getRegionNodes("region-east")).resolves.toEqual(page);
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining("/api/regions/region-east/nodes?limit=100"),
+      expect.objectContaining({ cache: "no-store", credentials: "include" })
+    );
+  });
+
+  it("reads regional deployments through the owning Region route", async () => {
+    const page = { regionId: "region-east", observedAtMs: 10, deployments: [] };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(page), { status: 200, headers: { "Content-Type": "application/json" } })
+    );
+
+    await expect(getRegionDeployments("region-east")).resolves.toEqual(page);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/api/regions/region-east/deployments?limit=100"),
       expect.objectContaining({ cache: "no-store", credentials: "include" })
     );
   });

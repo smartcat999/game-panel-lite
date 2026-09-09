@@ -629,6 +629,26 @@ export type RegionalNodeOperationsPage = {
   nextCursor?: string;
 };
 
+export type RegionalDeploymentOperations = {
+  id: string;
+  organizationId: string;
+  serverId: string;
+  placementEpoch: number;
+  revisionId: string;
+  specGeneration: number;
+  intentVersion: number;
+  desiredState: "running" | "stopped";
+  schedulingStatus: "pending" | "reserved" | "rejected";
+  nodeId?: string;
+};
+
+export type RegionalDeploymentOperationsPage = {
+  regionId: string;
+  observedAtMs: number;
+  deployments: RegionalDeploymentOperations[];
+  nextCursor?: string;
+};
+
 export type CommercePlanVersion = {
   planId: string;
   version: number;

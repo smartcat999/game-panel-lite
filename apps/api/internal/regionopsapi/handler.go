@@ -17,12 +17,15 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/serviceauth"
 )
 
-type NodeReader interface {
+var errInvalidPageQuery = errors.New("invalid regional operations page query")
+
+type Reader interface {
 	RegionID() string
 	ListRegionalNodeOperations(context.Context, string, int, time.Duration) (regional.NodeOperationsPage, error)
+	ListRegionalDeploymentOperations(context.Context, string, int) (regional.DeploymentOperationsPage, error)
 }
 
-func NewHandler(reader NodeReader, identities *serviceauth.GlobalControls, freshness time.Duration) (http.Handler, error) {
+func NewHandler(reader Reader, identities *serviceauth.GlobalControls, freshness time.Duration) (http.Handler, error) {
 	if reader == nil || identities == nil || reader.RegionID() == "" || freshness < time.Second || freshness > time.Hour {
 		return nil, errors.New("invalid regional operations API configuration")
 	}
@@ -33,20 +36,12 @@ func NewHandler(reader NodeReader, identities *serviceauth.GlobalControls, fresh
 			http.Error(w, "global control identity required", http.StatusUnauthorized)
 			return
 		}
-		query, err := url.ParseQuery(r.URL.RawQuery)
-		if err != nil || !validNodeQuery(query) {
+		after, limit, err := pageQuery(r, 50)
+		if err != nil {
 			http.Error(w, "invalid node query", http.StatusBadRequest)
 			return
 		}
-		limit := 50
-		if raw := query.Get("limit"); raw != "" {
-			limit, err = strconv.Atoi(raw)
-			if err != nil {
-				http.Error(w, "invalid node query", http.StatusBadRequest)
-				return
-			}
-		}
-		page, err := reader.ListRegionalNodeOperations(r.Context(), query.Get("after"), limit, freshness)
+		page, err := reader.ListRegionalNodeOperations(r.Context(), after, limit, freshness)
 		if errors.Is(err, regional.ErrInvalidNodeOperations) {
 			http.Error(w, "invalid node query", http.StatusBadRequest)
 			return
@@ -62,15 +57,55 @@ func NewHandler(reader NodeReader, identities *serviceauth.GlobalControls, fresh
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(page)
 	})
+	router.Get("/internal/operations/deployments", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if err := identities.Authenticate(r); err != nil {
+			http.Error(w, "global control identity required", http.StatusUnauthorized)
+			return
+		}
+		after, limit, err := pageQuery(r, 50)
+		if err != nil {
+			http.Error(w, "invalid deployment query", http.StatusBadRequest)
+			return
+		}
+		page, err := reader.ListRegionalDeploymentOperations(r.Context(), after, limit)
+		if errors.Is(err, regional.ErrInvalidDeploymentOperations) {
+			http.Error(w, "invalid deployment query", http.StatusBadRequest)
+			return
+		}
+		if err != nil || page.RegionID != reader.RegionID() || page.Validate() != nil {
+			http.Error(w, "regional deployment operations unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(page)
+	})
 	return router, nil
 }
 
-func validNodeQuery(query url.Values) bool {
+func pageQuery(r *http.Request, fallback int) (string, int, error) {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return "", 0, err
+	}
 	for key, values := range query {
 		if (key != "after" && key != "limit") || len(values) != 1 {
-			return false
+			return "", 0, errInvalidPageQuery
 		}
 	}
 	after := query.Get("after")
-	return len(after) <= 128 && after == strings.TrimSpace(after)
+	if len(after) > 128 || after != strings.TrimSpace(after) {
+		return "", 0, errInvalidPageQuery
+	}
+	limit := fallback
+	if raw := query.Get("limit"); raw != "" {
+		limit, err = strconv.Atoi(raw)
+		if err != nil {
+			return "", 0, err
+		}
+	}
+	if limit < 1 || limit > 200 {
+		return "", 0, errInvalidPageQuery
+	}
+	return after, limit, nil
 }
