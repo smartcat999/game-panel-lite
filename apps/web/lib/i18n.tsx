@@ -3209,11 +3209,17 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>("zh");
+  const [locale, setLocaleState] = useState<Locale>("zh");
   useEffect(() => {
     const saved = window.localStorage.getItem("gamepanel.locale");
-    if (saved === "zh" || saved === "en") setLocale(saved);
+    if (saved === "zh" || saved === "en") setLocaleState(saved);
   }, []);
+
+  const setLocale = (nextLocale: Locale) => {
+    setLocaleState(nextLocale);
+    window.localStorage.setItem("gamepanel.locale", nextLocale);
+  };
+
   const value = useMemo<I18nContextValue>(
     () => ({
       locale,

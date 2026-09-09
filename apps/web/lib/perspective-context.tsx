@@ -20,10 +20,7 @@ export function PerspectiveProvider({ children }: { children: ReactNode }) {
   const [perspective, setPerspectiveState] = useState<PerspectiveRole>("admin");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("gamepanel.perspective") as PerspectiveRole | null;
-    if (saved && ["user", "admin", "super"].includes(saved)) {
-      setPerspectiveState(saved);
-    } else if (actualRole === "viewer") {
+    if (actualRole === "viewer" || actualRole === "member") {
       setPerspectiveState("user");
     } else {
       setPerspectiveState("admin");

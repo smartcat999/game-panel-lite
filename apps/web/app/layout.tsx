@@ -6,8 +6,8 @@ import { AuthGate } from "@/components/auth-gate";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "GamePanel Lite | Self-hosted game server panel",
-  description: "Modern lightweight self-hosted panel for Docker-backed game servers, lifecycle operations, logs, and mods."
+  title: "GamePanel Lite",
+  description: "Lightweight self-hosted game server management panel."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

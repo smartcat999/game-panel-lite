@@ -1,391 +1,197 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ChevronRight, Copy, Plug, Users } from "lucide-react";
-import { ServerActions } from "@/components/server-actions";
-import { ServerGameArt } from "@/components/server-game-art";
-import { ServerStatusIndicator } from "@/components/server-badges";
-import { SelectionBox } from "@/components/selection-box";
-import { copyText } from "@/lib/clipboard";
-import {
-  gameServerJoinPort,
-  gameServerMaxPlayers,
-  gameServerMode,
-  gameServerStatus,
-  gameServerVersion
-} from "@/lib/game-server-resource";
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Play, Square, RotateCcw, Copy, Check, Trash2, ArrowUpRight } from "lucide-react";
+import { gameServerJoinPort, gameServerStatus } from "@/lib/game-server-resource";
+import { gameServerAction } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { serverProviderDisplay } from "@/lib/server-display";
-import type { ObservabilityServerMetric } from "@/lib/api";
-import type { GameServerResource } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
-
-export type ServerTableColumn = "players" | "resources" | "address" | "activity" | "version";
-export type ServerTableSort = "name" | "status" | "updatedAt";
+import { copyText } from "@/lib/clipboard";
+import type { GameServerResource } from "@/lib/types";
 
 export function ServerManagementTable({
   servers,
-  nodes = [],
-  metrics = [],
-  publicHost,
-  selectedIds,
-  visibleColumns,
-  sort,
-  direction,
-  onSelectionChange,
-  onSort,
-  onAddressCopied
+  publicHost
 }: {
   servers: GameServerResource[];
-  nodes?: Array<{ id: string; name: string; region?: string; isLocal?: boolean }>;
-  metrics?: ObservabilityServerMetric[];
   publicHost?: string;
-  selectedIds: Set<string>;
-  visibleColumns: Set<ServerTableColumn>;
-  sort: ServerTableSort;
-  direction: "asc" | "desc";
-  onSelectionChange: (ids: Set<string>) => void;
-  onSort: (sort: ServerTableSort) => void;
-  onAddressCopied: () => void;
 }) {
-  const { t, locale } = useI18n();
-  const { isViewer } = usePermissions();
-  const metricMap = new Map(metrics.map((metric) => [metric.id, metric]));
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const allSelected = servers.length > 0 && servers.every((server) => selectedIds.has(server.id));
-  const partiallySelected = !allSelected && servers.some((server) => selectedIds.has(server.id));
-  const togglePage = () => {
-    const next = new Set(selectedIds);
-    if (allSelected) servers.forEach((server) => next.delete(server.id));
-    else servers.forEach((server) => next.add(server.id));
-    onSelectionChange(next);
+  const { locale } = useI18n();
+  const isZh = locale.startsWith("zh");
+  const { canControlServer, canDeleteServer } = usePermissions();
+  const queryClient = useQueryClient();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const actionMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: "start" | "stop" | "restart" | "delete" }) => {
+      return gameServerAction(id, action);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["game-servers"] });
+    }
+  });
+
+  const handleCopyEndpoint = (server: GameServerResource, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const port = gameServerJoinPort(server) || 7777;
+    const host = publicHost || (typeof window !== "undefined" ? window.location.hostname : "127.0.0.1");
+    const endpoint = `${host}:${port}`;
+    copyText(endpoint);
+    setCopiedId(server.id);
+    setTimeout(() => setCopiedId(null), 1500);
   };
 
-  return (
-    <div className="overflow-hidden rounded-xl border micro-border bg-white subtle-elevation">
-      <div className="hidden max-h-[calc(100vh-19rem)] overflow-auto md:block">
-        <table className="w-full min-w-[1040px] table-fixed border-collapse text-left text-xs">
-          <thead className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50/80 text-[11px] font-semibold text-slate-400 select-none">
-            <tr>
-              {!isViewer && (
-                <th className="w-10 px-3 py-2.5">
-                  <SelectionBox checked={allSelected} indeterminate={partiallySelected} label={t("selectCurrentPage")} onChange={togglePage} />
-                </th>
-              )}
-              <SortableHeader active={sort === "name"} direction={direction} label="NAME" onClick={() => onSort("name")} className="w-64" />
-              <SortableHeader active={sort === "status"} direction={direction} label="STATUS" onClick={() => onSort("status")} className="w-24" />
-              <th className="w-36 px-2.5 py-2.5">ENGINE</th>
-              <th className="w-28 px-2.5 py-2.5">ENDPOINT</th>
-              {visibleColumns.has("players") ? <th className="w-24 px-2.5 py-2.5">PLAYERS</th> : null}
-              {visibleColumns.has("resources") ? <th className="w-40 px-2.5 py-2.5">MEMORY</th> : null}
-              {visibleColumns.has("address") ? <th className="w-48 px-2.5 py-2.5">ADDRESS</th> : null}
-              {visibleColumns.has("activity") ? <SortableHeader active={sort === "updatedAt"} direction={direction} label="ACTIVITY" onClick={() => onSort("updatedAt")} className="w-28" /> : null}
-              {visibleColumns.has("version") ? <th className="w-24 px-2.5 py-2.5">VERSION</th> : null}
-              <th className="w-32 px-3 py-2.5 text-right">ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-xs">
-            {servers.map((server) => {
-              const metric = metricMap.get(server.id);
-              const status = gameServerStatus(server);
-              const address = formatAddress(publicHost, gameServerJoinPort(server));
-              const provider = serverProviderDisplay(server);
-              const maxPlayers = gameServerMaxPlayers(server);
-              return (
-                <tr
-                  key={server.id}
-                  className={cn(
-                    "group transition-colors hover:bg-slate-50/80",
-                    selectedIds.has(server.id) && "bg-emerald-50/40"
-                  )}
-                >
-                  {!isViewer && (
-                    <td className="px-3 py-2.5">
-                      <SelectionBox
-                        checked={selectedIds.has(server.id)}
-                        label={t("selectServer", { name: server.name })}
-                        onChange={() => {
-                          const next = new Set(selectedIds);
-                          if (next.has(server.id)) next.delete(server.id);
-                          else next.add(server.id);
-                          onSelectionChange(next);
-                        }}
-                      />
-                    </td>
-                  )}
-                  <td className="px-2.5 py-2.5">
-                    <Link className="flex min-w-0 items-center gap-2" href={`/servers/${server.id}`}>
-                      <ServerGameArt
-                        server={{ gameKey: server.gameKey, providerKey: server.providerKey, mode: gameServerMode(server) }}
-                        className="size-7 rounded"
-                        compact
-                      />
-                      <span className="min-w-0">
-                        <span className="block max-w-56 truncate font-mono font-bold text-slate-900 group-hover:text-emerald-600 transition">
-                          {server.name}
-                        </span>
-                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-slate-400">
-                          <span>{server.id.slice(0, 8)}</span>
-                          <span>·</span>
-                          {(() => {
-                            const nodeInfo = server.nodeId ? nodeMap.get(server.nodeId) : undefined;
-                            const isWorker = server.nodeId && server.nodeId !== "node-local";
-                            const displayName = nodeInfo?.name || server.nodeId || "local";
-                            return (
-                              <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1 py-0.2 text-[9px] text-slate-500 font-medium">
-                                {isWorker && <span className="size-1 rounded-full bg-sky-500 animate-pulse" />}
-                                {displayName}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="px-2.5 py-2.5">
-                    <ServerStatusIndicator status={status} />
-                  </td>
-                  <td className="px-2.5 py-2.5">
-                    <span
-                      className={cn(
-                        "font-mono text-[11px] px-1.5 py-0.5 rounded border",
-                        gameServerMode(server) === "tmodloader"
-                          ? "bg-purple-50 text-purple-700 border-purple-200"
-                          : "bg-slate-100 text-slate-600 border-slate-200/60"
-                      )}
-                    >
-                      {provider.label}
-                    </span>
-                  </td>
-                  <td className="px-2.5 py-2.5 font-mono text-[11px] text-slate-500">
-                    :{gameServerJoinPort(server)}
-                  </td>
-                  {visibleColumns.has("players") ? (
-                    <td className="px-2.5 py-2.5 font-mono text-slate-800">
-                      {typeof server.status.playersOnline === "number" ? (
-                        <span>
-                          <span className="font-bold text-slate-900">{server.status.playersOnline}</span>{" "}
-                          <span className="text-[10px] text-slate-400">max {maxPlayers}</span>
-                        </span>
-                      ) : (
-                        <DataMissing />
-                      )}
-                    </td>
-                  ) : null}
-                  {visibleColumns.has("resources") ? (
-                    <td className="px-2.5 py-2.5">
-                      <ResourceUsage metric={metric} />
-                    </td>
-                  ) : null}
-                  {visibleColumns.has("address") ? (
-                    <td className="overflow-hidden px-2.5 py-2.5">
-                      <span className="flex min-w-0 items-center gap-1.5 font-mono text-slate-600">
-                        <span className="truncate text-xs" title={address}>
-                          {address}
-                        </span>
-                        <button
-                          className="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-800 focus:opacity-100 group-hover:opacity-100"
-                          aria-label={t("copyServerAddress")}
-                          onClick={() => void copyText(address).then(onAddressCopied)}
-                          type="button"
-                        >
-                          <Copy aria-hidden="true" className="size-3" />
-                        </button>
-                      </span>
-                    </td>
-                  ) : null}
-                  {visibleColumns.has("activity") ? (
-                    <td className="px-2.5 py-2.5 text-[11px] text-slate-400" title={formatTimestamp(server.updatedAt, locale)}>
-                      {formatRelativeTime(server.updatedAt, locale)}
-                    </td>
-                  ) : null}
-                  {visibleColumns.has("version") ? (
-                    <td className="px-2.5 py-2.5 font-mono text-[11px] text-slate-500">{gameServerVersion(server)}</td>
-                  ) : null}
-                  <td className="px-3 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <ServerActions server={server} rowMode showInvite={false} showDelete />
-                      <Link
-                        href={`/servers/${server.id}`}
-                        className="text-slate-300 hover:text-slate-600 transition"
-                        title="Detail"
-                      >
-                        <ChevronRight className="size-3.5" />
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+  if (servers.length === 0) {
+    return (
+      <div className="p-12 text-center text-xs text-slate-400">
+        {isZh ? "暂无服务器实例，点击右上角部署新实例" : "No server instances found. Deploy a new instance to get started."}
       </div>
+    );
+  }
 
-      {/* Mobile Card / Table Fallback */}
-      <div className="divide-y divide-slate-100 md:hidden">
-        {servers.map((server) => {
-          const metric = metricMap.get(server.id);
-          const status = gameServerStatus(server);
-          const address = formatAddress(publicHost, gameServerJoinPort(server));
-          const maxPlayers = gameServerMaxPlayers(server);
-          return (
-            <article key={server.id} className={cn("p-3.5", selectedIds.has(server.id) && "bg-emerald-50/40")}>
-              <div className="flex items-start gap-3">
-                <SelectionBox
-                  checked={selectedIds.has(server.id)}
-                  label={t("selectServer", { name: server.name })}
-                  onChange={() => {
-                    const next = new Set(selectedIds);
-                    if (next.has(server.id)) next.delete(server.id);
-                    else next.add(server.id);
-                    onSelectionChange(next);
-                  }}
-                />
-                <ServerGameArt
-                  server={{ gameKey: server.gameKey, providerKey: server.providerKey, mode: gameServerMode(server) }}
-                  className="size-8 rounded"
-                  compact
-                />
-                <div className="min-w-0 flex-1">
-                  <Link className="block truncate font-mono font-bold text-slate-900" href={`/servers/${server.id}`}>
-                    {server.name}
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold text-slate-400 select-none">
+            <th className="py-3 pl-4 pr-3 font-medium">{isZh ? "实例名称" : "NAME"}</th>
+            <th className="py-3 px-3 font-medium">{isZh ? "运行状态" : "STATUS"}</th>
+            <th className="py-3 px-3 font-medium">{isZh ? "游戏内核" : "ENGINE"}</th>
+            <th className="py-3 px-3 font-medium">{isZh ? "连接地址" : "ENDPOINT"}</th>
+            <th className="py-3 pr-4 pl-3 font-medium text-right">{isZh ? "快捷操作" : "ACTIONS"}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 text-xs">
+          {servers.map((server) => {
+            const status = gameServerStatus(server);
+            const isRunning = status === "running";
+            const isStopped = status === "stopped";
+            const isTmod = server.providerKey?.includes("tmod");
+            const port = gameServerJoinPort(server) || 7777;
+
+            return (
+              <tr
+                key={server.id}
+                className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+              >
+                {/* Name */}
+                <td className="py-3 pl-4 pr-3 font-mono font-bold text-slate-900">
+                  <Link href={`/servers/${server.id}`} className="hover:text-emerald-600 transition inline-flex items-center gap-1.5">
+                    <span>{server.name}</span>
+                    <ArrowUpRight className="size-3 text-slate-300 group-hover:text-emerald-600 transition opacity-0 group-hover:opacity-100" />
                   </Link>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                    <ServerStatusIndicator status={status} />
-                    <span>·</span>
-                    <span className="truncate">{serverProviderDisplay(server).label}</span>
+                </td>
+
+                {/* Status */}
+                <td className="py-3 px-3">
+                  {isRunning ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                      <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>{isZh ? "运行中" : "Running"}</span>
+                    </span>
+                  ) : isStopped ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
+                      <span className="size-1.5 rounded-full bg-slate-400" />
+                      <span>{isZh ? "已停止" : "Stopped"}</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">
+                      <span className="size-1.5 rounded-full bg-amber-500" />
+                      <span>{status}</span>
+                    </span>
+                  )}
+                </td>
+
+                {/* Engine */}
+                <td className="py-3 px-3 text-[11px]">
+                  {isTmod ? (
+                    <span className="font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200/70 font-semibold">
+                      tModLoader
+                    </span>
+                  ) : (
+                    <span className="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
+                      Vanilla 1.4.4.9
+                    </span>
+                  )}
+                </td>
+
+                {/* Endpoint */}
+                <td className="py-3 px-3 font-mono text-[11px] text-slate-600">
+                  <button
+                    onClick={(e) => handleCopyEndpoint(server, e)}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-50 border border-slate-200/60 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+                    title={isZh ? "点击复制完整连接地址" : "Click to copy join address"}
+                  >
+                    <span>:{port}</span>
+                    {copiedId === server.id ? (
+                      <Check className="size-3 text-emerald-600" />
+                    ) : (
+                      <Copy className="size-3 text-slate-400" />
+                    )}
+                  </button>
+                </td>
+
+                {/* Actions */}
+                <td className="py-3 pr-4 pl-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-1.5">
+                    {canControlServer && isStopped && (
+                      <button
+                        onClick={() => actionMutation.mutate({ id: server.id, action: "start" })}
+                        disabled={actionMutation.isPending}
+                        title={isZh ? "启动实例" : "Start"}
+                        className="flex h-7 items-center gap-1 px-2 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition cursor-pointer font-medium text-[11px]"
+                      >
+                        <Play className="size-3 fill-current" />
+                        <span>{isZh ? "启动" : "Start"}</span>
+                      </button>
+                    )}
+
+                    {canControlServer && isRunning && (
+                      <>
+                        <button
+                          onClick={() => actionMutation.mutate({ id: server.id, action: "restart" })}
+                          disabled={actionMutation.isPending}
+                          title={isZh ? "重启实例" : "Restart"}
+                          className="flex h-7 items-center gap-1 px-2 rounded-md bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer text-[11px]"
+                        >
+                          <RotateCcw className="size-3" />
+                          <span>{isZh ? "重启" : "Restart"}</span>
+                        </button>
+                        <button
+                          onClick={() => actionMutation.mutate({ id: server.id, action: "stop" })}
+                          disabled={actionMutation.isPending}
+                          title={isZh ? "停止实例" : "Stop"}
+                          className="flex h-7 items-center gap-1 px-2 rounded-md bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 transition cursor-pointer text-[11px]"
+                        >
+                          <Square className="size-3 fill-current" />
+                          <span>{isZh ? "停止" : "Stop"}</span>
+                        </button>
+                      </>
+                    )}
+
+                    {canDeleteServer && (
+                      <button
+                        onClick={() => {
+                          if (confirm(isZh ? `确定要删除实例 ${server.name} 吗？` : `Are you sure you want to delete ${server.name}?`)) {
+                            actionMutation.mutate({ id: server.id, action: "delete" });
+                          }
+                        }}
+                        disabled={actionMutation.isPending}
+                        title={isZh ? "删除实例" : "Delete"}
+                        className="flex size-7 items-center justify-center rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer ml-1"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
                   </div>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-y border-slate-100 py-2.5 text-xs">
-                <MobileMetric
-                  icon={<Users className="size-3.5" />}
-                  label={t("players")}
-                  value={
-                    typeof server.status.playersOnline === "number"
-                      ? `${server.status.playersOnline} (max ${maxPlayers})`
-                      : "—"
-                  }
-                />
-                <MobileResourceUsage metric={metric} />
-                <MobileMetric icon={<Plug className="size-3.5" />} label={t("serverAddress")} value={address} />
-                <MobileMetric label={t("recentActivity")} value={formatRelativeTime(server.updatedAt, locale)} />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <button
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900"
-                  onClick={() => void copyText(address).then(onAddressCopied)}
-                  type="button"
-                >
-                  <Copy className="size-3.5" />
-                  {t("copyAddress")}
-                </button>
-                <ServerActions server={server} rowMode showInvite={false} showDelete />
-              </div>
-            </article>
-          );
-        })}
-      </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
-}
-
-function SortableHeader({
-  active,
-  direction,
-  label,
-  onClick,
-  className
-}: {
-  active: boolean;
-  direction: "asc" | "desc";
-  label: string;
-  onClick: () => void;
-  className?: string;
-}) {
-  return (
-    <th className={cn("px-2.5 py-2.5", className)}>
-      <button
-        className={cn(
-          "inline-flex items-center gap-1 hover:text-slate-700 focus:outline-none",
-          active && "text-slate-800 font-bold"
-        )}
-        onClick={onClick}
-        type="button"
-      >
-        <span>{label}</span>
-        {active ? direction === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : null}
-      </button>
-    </th>
-  );
-}
-
-function MobileMetric({ icon, label, value }: { icon?: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <span className="flex items-center gap-1 text-slate-400">{icon}{label}</span>
-      <span className="mt-0.5 block truncate font-mono text-slate-800">{value}</span>
-    </div>
-  );
-}
-
-function MobileResourceUsage({ metric }: { metric?: ObservabilityServerMetric }) {
-  const { t } = useI18n();
-  return (
-    <div className="min-w-0">
-      <span className="text-slate-400">{t("resources")}</span>
-      <div className="mt-0.5"><ResourceUsage metric={metric} /></div>
-    </div>
-  );
-}
-
-function ResourceUsage({ metric }: { metric?: ObservabilityServerMetric }) {
-  if (!metric?.statsAvailable) return <DataMissing />;
-  const usage = formatMemory(metric.memoryMb);
-  const cap = metric.memoryLimitMb > 0 ? formatMemory(metric.memoryLimitMb) : null;
-  return (
-    <div className="flex flex-col text-xs font-mono text-slate-700 leading-tight">
-      <div>
-        <span className="font-bold text-slate-900">{usage}</span>
-        {cap && <span className="text-[10px] text-slate-400 ml-1">cap {cap}</span>}
-      </div>
-      <div className="text-[10px] text-slate-400">
-        <span>CPU {metric.cpuPercent.toFixed(1)}%</span>
-      </div>
-    </div>
-  );
-}
-
-function DataMissing() {
-  return <span className="text-slate-300 font-mono">—</span>;
-}
-
-function formatMemory(value: number) {
-  return value >= 1024 ? `${(value / 1024).toFixed(1)} GB` : `${Math.round(value)} MB`;
-}
-
-function formatAddress(host: string | undefined, port: number) {
-  const normalized = host?.trim();
-  if (!normalized) return `:${port}`;
-  return normalized.includes(":") && !normalized.startsWith("[") ? `[${normalized}]:${port}` : `${normalized}:${port}`;
-}
-
-function formatTimestamp(value: string, locale: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
-function formatRelativeTime(value: string, locale: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
-  const abs = Math.abs(seconds);
-  const formatter = new Intl.RelativeTimeFormat(locale === "zh" ? "zh-CN" : "en-US", { numeric: "auto" });
-  if (abs < 60) return formatter.format(seconds, "second");
-  if (abs < 3600) return formatter.format(Math.round(seconds / 60), "minute");
-  if (abs < 86400) return formatter.format(Math.round(seconds / 3600), "hour");
-  return formatter.format(Math.round(seconds / 86400), "day");
 }

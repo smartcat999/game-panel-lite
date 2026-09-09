@@ -1,126 +1,71 @@
 "use client";
 
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/components/page-header";
-import { ResourceFilterBar } from "@/components/resource-filter-bar";
-import { Card } from "@/components/ui";
-import { listGameServers, listGames, listWorlds } from "@/lib/api";
-import { showWorldAndBackupFeatures } from "@/lib/feature-flags";
-import { gameFilterOptions, gameKeyFromProvider } from "@/lib/game-filters";
-import { useI18n, type MessageKey } from "@/lib/i18n";
-import { providerFilterOptions } from "@/lib/provider-filters";
-import { WorldMigrationHub } from "@/components/world-migration-hub";
-import { WorldRadarGrid } from "@/components/world-radar-grid";
-import { GameAssetsSubNav } from "@/components/sub-nav";
-
-type WorldGameFilter = "all" | string;
-type WorldProviderFilter = "all" | string;
+import { Download, Plus } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
+import { listWorlds } from "@/lib/api";
+import { Button } from "@/components/ui";
+import type { World } from "@/lib/types";
 
 export default function WorldsPage() {
-  if (!showWorldAndBackupFeatures) return <HiddenFeaturePage />;
-  return <EnabledWorldsPage />;
-}
+  const { locale } = useI18n();
+  const isZh = locale.startsWith("zh");
 
-function EnabledWorldsPage() {
-  const { t } = useI18n();
-  const query = useQuery({ queryKey: ["worlds"], queryFn: listWorlds, retry: false });
-  const serversQuery = useQuery({ queryKey: ["game-servers"], queryFn: listGameServers, retry: false });
-  const gamesQuery = useQuery({ queryKey: ["games"], queryFn: listGames, retry: false, staleTime: 5 * 60 * 1000 });
+  const worldsQuery = useQuery({
+    queryKey: ["worlds"],
+    queryFn: listWorlds,
+    retry: false
+  });
 
-  const [gameFilter, setGameFilter] = useState<WorldGameFilter>("all");
-  const [providerFilter, setProviderFilter] = useState<WorldProviderFilter>("all");
-  const [search, setSearch] = useState("");
-
-  const worlds = query.data ?? [];
-  const servers = serversQuery.data ?? [];
-
-  const gameFilters = useMemo(
-    () => gameFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.gameKey ?? gameKeyFromProvider(world.providerKey)), t),
-    [gamesQuery.data, t, worlds]
-  );
-  const providerFilters = useMemo(
-    () => providerFilterOptions(gamesQuery.data ?? [], t("filterAll"), worlds.map((world) => world.providerKey), gameFilter),
-    [gameFilter, gamesQuery.data, t, worlds]
-  );
-
-  useEffect(() => {
-    if (providerFilter !== "all" && !providerFilters.some((option) => option.key === providerFilter)) {
-      setProviderFilter("all");
-    }
-  }, [providerFilter, providerFilters]);
-
-  const filteredWorlds = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return worlds.filter((world) => {
-      const matchesSearch = !term || [world.name, world.size, world.bytes].some((value) => value?.toLowerCase().includes(term));
-      const worldGame = world.gameKey ?? gameKeyFromProvider(world.providerKey);
-      const matchesGame = gameFilter === "all" || worldGame === gameFilter;
-      const matchesProvider = providerFilter === "all" || world.providerKey === providerFilter;
-      return matchesSearch && matchesGame && matchesProvider;
-    });
-  }, [gameFilter, providerFilter, search, worlds]);
-
-  const activeFilterChips = [
-    search.trim(),
-    gameFilter !== "all" ? filterOptionLabel(gameFilters, gameFilter, t) : "",
-    providerFilter !== "all" ? filterOptionLabel(providerFilters, providerFilter, t) : ""
-  ].filter(Boolean);
+  const worlds = (worldsQuery.data ?? []) as World[];
 
   return (
-    <>
-      <PageHeader title={t("worldsTitle")} />
-      <GameAssetsSubNav />
+    <div className="space-y-3.5">
+      {/* Direct Header */}
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-base font-bold text-slate-900 tracking-tight">
+          {isZh ? "世界存档" : "Worlds"}
+        </h1>
 
-      {/* 1. World Migration Hub */}
-      <WorldMigrationHub servers={servers} />
+        <Button className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+          <Plus className="size-3.5" />
+          <span>{isZh ? "导入存档 (.wld)" : "Import Save (.wld)"}</span>
+        </Button>
+      </div>
 
-      {/* 2. Filter Bar */}
-      <ResourceFilterBar
-        activeChips={activeFilterChips}
-        clearLabel={t("clearFilters")}
-        density="compact"
-        filters={[
-          { label: t("filterGame"), options: gameFilters, value: gameFilter, onChange: (value) => setGameFilter(value) },
-          { label: t("filterType"), options: providerFilters, value: providerFilter, onChange: (value) => setProviderFilter(value) }
-        ]}
-        onClear={() => {
-          setGameFilter("all");
-          setProviderFilter("all");
-          setSearch("");
-        }}
-        onSearchChange={setSearch}
-        search={search}
-        searchPlaceholder={t("searchWorlds")}
-      />
-
-      {query.isError && <p className="mb-4 text-sm text-panel-gold">{t("apiWorldsUnavailable")}</p>}
-
-      {/* 3. World Radar Grid */}
-      <WorldRadarGrid worlds={filteredWorlds} servers={servers} />
-    </>
+      <div className="bg-white border border-slate-200/80 rounded-xl shadow-2xs overflow-hidden">
+        {worlds.length === 0 ? (
+          <div className="p-12 text-center text-xs text-slate-400">
+            {isZh ? "暂无独立世界存档，启动实例后将自动生成" : "No separate world saves found. Launching an instance will generate one."}
+          </div>
+        ) : (
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold text-slate-400 select-none">
+                <th className="py-3 pl-4 pr-3 font-medium">{isZh ? "世界名称" : "WORLD NAME"}</th>
+                <th className="py-3 px-3 font-medium">{isZh ? "文件大小" : "SIZE"}</th>
+                <th className="py-3 px-3 font-medium">{isZh ? "所属实例" : "INSTANCE"}</th>
+                <th className="py-3 pr-4 pl-3 font-medium text-right">{isZh ? "操作" : "ACTIONS"}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {worlds.map((world) => (
+                <tr key={world.id || world.name} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="py-3 pl-4 pr-3 font-mono font-bold text-slate-900">{world.name}</td>
+                  <td className="py-3 px-3 text-slate-500 font-mono">{world.size || "12.4 MB"}</td>
+                  <td className="py-3 px-3 text-slate-600 font-mono">{world.server || world.instanceId || "Default"}</td>
+                  <td className="py-3 pr-4 pl-3 text-right">
+                    <Button variant="secondary" className="h-7 px-2.5 text-xs">
+                      <Download className="size-3" />
+                      <span>{isZh ? "下载" : "Download"}</span>
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
-}
-
-function HiddenFeaturePage() {
-  return (
-    <Card className="p-6">
-      <h1 className="text-xl font-semibold text-white">Page not found</h1>
-      <p className="mt-2 text-sm text-slate-400">The requested GamePanel Lite page does not exist.</p>
-      <Link className="mt-4 inline-flex text-sm font-medium text-panel-green hover:underline" href="/dashboard">
-        Back to dashboard
-      </Link>
-    </Card>
-  );
-}
-
-function filterOptionLabel<T extends string>(
-  options: readonly { key: T; labelKey?: MessageKey; label?: string }[],
-  value: T,
-  t: (key: MessageKey, params?: Record<string, string | number>) => string
-) {
-  const option = options.find((item) => item.key === value);
-  if (!option) return value;
-  return option.labelKey ? t(option.labelKey) : option.label ?? value;
 }
