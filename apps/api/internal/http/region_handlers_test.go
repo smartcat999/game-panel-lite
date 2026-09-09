@@ -9,9 +9,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/regionstatus"
 )
+
+type regionOperationsFixture struct {
+	region string
+	page   regional.NodeOperationsPage
+	calls  int
+}
+
+func (f *regionOperationsFixture) ListRegionalNodes(_ context.Context, regionID, after string, limit int) (regional.NodeOperationsPage, error) {
+	f.calls++
+	if regionID != f.region || after != "node-a" || limit != 25 {
+		return regional.NodeOperationsPage{}, regional.ErrInvalidNodeOperations
+	}
+	return f.page, nil
+}
 
 func TestRegionDirectoryDoesNotInferRegionsFromNodes(t *testing.T) {
 	router, db, _ := newTestRouter(t)
@@ -74,5 +90,43 @@ func TestRegionStatusIsAPlatformProjection(t *testing.T) {
 	}
 	if got := request("/api/regions/missing/status", true); got.Code != http.StatusNotFound {
 		t.Fatalf("missing Region returned %d", got.Code)
+	}
+}
+
+func TestRegionNodeOperationsAreRoutedWithoutGlobalCopies(t *testing.T) {
+	_, db, _ := newTestRouter(t)
+	ctx := context.Background()
+	if _, err := db.RegisterRegion(ctx, "operations-east", "Operations East"); err != nil {
+		t.Fatal(err)
+	}
+	page := regional.NodeOperationsPage{
+		RegionID:     "operations-east",
+		ObservedAtMS: 10,
+		Nodes: []regional.NodeOperations{{
+			Node: regional.Node{
+				NodeConfiguration: regional.NodeConfiguration{ID: "node-b", Name: "Node B", Architecture: "amd64", CPU: 8, MemoryMB: 8192, Schedulable: true},
+				Version:           1,
+			},
+		}},
+	}
+	reader := &regionOperationsFixture{region: "operations-east", page: page}
+	handler := &Handler{store: db, regionOps: reader}
+	request := httptest.NewRequest(http.MethodGet, "/api/regions/operations-east/nodes?after=node-a&limit=25", nil)
+	route := chi.NewRouteContext()
+	route.URLParams.Add("id", "operations-east")
+	request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, route))
+	record := httptest.NewRecorder()
+	handler.listRegionNodes(record, request)
+	if record.Code != http.StatusOK || reader.calls != 1 || record.Header().Get("Cache-Control") != "no-store" || !strings.Contains(record.Body.String(), `"id":"node-b"`) {
+		t.Fatalf("regional operations response: %d %s", record.Code, record.Body.String())
+	}
+	request = httptest.NewRequest(http.MethodGet, "/api/regions/unknown/nodes", nil)
+	route = chi.NewRouteContext()
+	route.URLParams.Add("id", "unknown")
+	request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, route))
+	record = httptest.NewRecorder()
+	handler.listRegionNodes(record, request)
+	if record.Code != http.StatusNotFound || reader.calls != 1 {
+		t.Fatal("unknown Region was routed")
 	}
 }

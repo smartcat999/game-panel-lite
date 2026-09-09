@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -59,4 +60,61 @@ func (h *Handler) getRegionStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, snapshot)
+}
+
+// listRegionNodes routes an authenticated platform operator to the owning
+// Region. Node details are never copied into the global database.
+func (h *Handler) listRegionNodes(w http.ResponseWriter, r *http.Request) {
+	regionID := chi.URLParam(r, "id")
+	if _, err := h.store.GetRegion(r.Context(), regionID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "region not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load region")
+		return
+	}
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil || !validRegionNodeQuery(query) {
+		writeError(w, http.StatusBadRequest, "invalid node query")
+		return
+	}
+	limit := 100
+	if raw := strings.TrimSpace(query.Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid node query")
+			return
+		}
+		limit = parsed
+	}
+	if limit < 1 || limit > 200 {
+		writeError(w, http.StatusBadRequest, "invalid node query")
+		return
+	}
+	if h.regionOps == nil {
+		writeError(w, http.StatusServiceUnavailable, "region operations unavailable")
+		return
+	}
+	page, err := h.regionOps.ListRegionalNodes(r.Context(), regionID, query.Get("after"), limit)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "region operations unavailable")
+		return
+	}
+	if page.RegionID != regionID || page.Validate() != nil {
+		writeError(w, http.StatusBadGateway, "invalid region operations response")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, page)
+}
+
+func validRegionNodeQuery(query url.Values) bool {
+	for key, values := range query {
+		if (key != "after" && key != "limit") || len(values) != 1 {
+			return false
+		}
+	}
+	after := query.Get("after")
+	return len(after) <= 128 && after == strings.TrimSpace(after)
 }

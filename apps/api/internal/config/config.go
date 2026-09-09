@@ -26,6 +26,7 @@ type Config struct {
 	PrometheusURL          string
 	PrometheusQueryTimeout time.Duration
 	ReleaseManifestURL     string
+	RegionOpsConfigPath    string
 	SystemUpdateInterval   time.Duration
 	UpdaterURL             string
 	UpdaterToken           string
@@ -77,6 +78,7 @@ func Load() Config {
 		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
 		PrometheusQueryTimeout: queryTimeout,
 		ReleaseManifestURL:     value("GAMEPANEL_RELEASE_MANIFEST_URL", "https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json"),
+		RegionOpsConfigPath:    value("GAMEPANEL_REGION_OPERATIONS_CONFIG", ""),
 		SystemUpdateInterval:   updateInterval,
 		UpdaterURL:             value("GAMEPANEL_UPDATER_URL", ""),
 		UpdaterToken:           value("GAMEPANEL_UPDATER_TOKEN", ""),

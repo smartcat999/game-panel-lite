@@ -1,0 +1,11 @@
+{
+  "certificateFile": "/run/secrets/global-control-client.crt",
+  "keyFile": "/run/secrets/global-control-client.key",
+  "serverCaFile": "/run/secrets/regional-operations-ca.crt",
+  "timeout": "5s",
+  "maxResponseBytes": 1048576,
+  "endpoints": {
+    "region-east": "https://region-east-operations.internal:9443",
+    "region-west": "https://region-west-operations.internal:9443"
+  }
+}

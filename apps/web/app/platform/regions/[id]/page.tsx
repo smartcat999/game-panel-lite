@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ConsolePageHeader } from "@/components/console-page-header";
 import { PlatformScopeGuard } from "@/components/platform-scope-guard";
-import { getRegionStatus, listRegions } from "@/lib/api";
+import { getRegionNodes, getRegionStatus, listRegions } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { regionDisplayName } from "@/lib/region-display";
 
@@ -20,8 +20,10 @@ export default function RegionOperationsPage() {
   const isZh = locale.startsWith("zh");
   const regions = useQuery({ queryKey: ["platform", "regions"], queryFn: listRegions, retry: false });
   const status = useQuery({ queryKey: ["platform", "regions", regionId, "status"], queryFn: () => getRegionStatus(regionId), retry: false, refetchInterval: 30_000 });
+  const nodes = useQuery({ queryKey: ["platform", "regions", regionId, "nodes"], queryFn: () => getRegionNodes(regionId), retry: false, refetchInterval: 30_000 });
   const region = regions.data?.find((item) => item.id === regionId);
   const snapshot = status.data;
+  const nodePage = nodes.data;
   const observedAt = snapshot ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(snapshot.observedAtMs)) : "";
   const isStale = snapshot ? Date.now() - snapshot.observedAtMs > 90_000 : false;
 
@@ -39,19 +41,6 @@ export default function RegionOperationsPage() {
             </label>
           }
         />
-
-        <div className="rounded-xl border bg-white px-4 py-3 micro-border subtle-elevation">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-slate-400">{isZh ? "职责边界" : "Responsibility boundary"}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">{isZh ? "全局控制面负责区域目录和新建准入；节点、容量、部署与执行任务由该区域独立负责。此处只读取区域异步上报的运维摘要。" : "The global control plane owns the Region directory and create admission. This Region independently owns nodes, capacity, deployments, and execution tasks. This page reads only its asynchronously reported operations summary."}</p>
-            </div>
-            <div className="text-left md:text-right">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400">{isZh ? "全局准入" : "Global admission"}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-700">{region?.acceptingCreates ? (isZh ? "允许新建实例" : "Accepting new instances") : (isZh ? "已停止新建准入" : "Create admission closed")}</p>
-            </div>
-          </div>
-        </div>
 
         {status.isLoading ? (
           <div className="rounded-xl border bg-white p-8 text-center text-xs text-slate-400 micro-border">{isZh ? "正在读取区域状态…" : "Loading Region status…"}</div>
@@ -91,6 +80,46 @@ export default function RegionOperationsPage() {
             <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-slate-500">{isZh ? "区域仍可存在于全局目录，但在区域状态发布器完成首次异步上报前，全局控制面不会推断节点或容量。" : "A Region can exist in the global directory, but the control plane will not infer nodes or capacity before its status publisher sends the first asynchronous report."}</p>
           </div>
         )}
+
+        <section className="overflow-hidden rounded-xl border bg-white micro-border subtle-elevation">
+          <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 px-4 py-3">
+            <div>
+              <h2 className="text-xs font-semibold text-slate-800">{isZh ? "节点运维" : "Node operations"}</h2>
+              <p className="mt-1 text-[11px] text-slate-500">{isZh ? "明细直接来自该区域的运维接口，不写入全局数据库。" : "Details come directly from this Region's operations API and are not stored in the global database."}</p>
+            </div>
+            {nodePage ? <p className="text-[10px] text-slate-400">{isZh ? `读取于 ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(nodePage.observedAtMs))}` : `Read ${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(nodePage.observedAtMs))}`}</p> : null}
+          </div>
+          {nodes.isLoading ? (
+            <div className="p-8 text-center text-xs text-slate-400">{isZh ? "正在连接区域运维服务…" : "Connecting to Region operations…"}</div>
+          ) : nodes.isError ? (
+            <div className="p-8 text-center">
+              <p className="text-sm font-medium text-slate-700">{isZh ? "区域运维通道暂不可用" : "Region operations are unavailable"}</p>
+              <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-slate-500">{isZh ? "全局状态摘要仍可独立工作；节点明细需要配置到该区域的双向认证连接。" : "The global status summary remains independent. Node details require a configured mutual-authentication connection to this Region."}</p>
+            </div>
+          ) : !nodePage || nodePage.nodes.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">{isZh ? "该区域尚未配置节点。" : "No nodes are configured in this Region."}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400">
+                  <tr><th className="px-4 py-2.5 font-medium">{isZh ? "节点" : "Node"}</th><th className="px-3 py-2.5 font-medium">{isZh ? "运行状态" : "Runtime"}</th><th className="px-3 py-2.5 font-medium">{isZh ? "调度" : "Scheduling"}</th><th className="px-3 py-2.5 font-medium">CPU</th><th className="px-3 py-2.5 font-medium">{isZh ? "内存" : "Memory"}</th><th className="px-4 py-2.5 text-right font-medium">{isZh ? "待授权任务" : "Pending tasks"}</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {nodePage.nodes.map((node) => (
+                    <tr key={node.id} className="text-slate-600">
+                      <td className="px-4 py-3"><p className="font-medium text-slate-800">{node.name}</p><p className="mt-0.5 font-mono text-[10px] text-slate-400">{node.id} · {node.architecture}</p></td>
+                      <td className="px-3 py-3"><span className="inline-flex items-center gap-1.5"><span className={`size-1.5 rounded-full ${node.online ? "bg-emerald-500" : "bg-slate-300"}`} />{node.online ? (isZh ? "在线" : "Online") : (isZh ? "离线" : "Offline")}</span></td>
+                      <td className="px-3 py-3">{node.schedulable ? (isZh ? "允许" : "Enabled") : (isZh ? "已暂停" : "Paused")}</td>
+                      <td className="px-3 py-3 font-mono">{node.reservedCpu} / {node.cpu}</td>
+                      <td className="px-3 py-3 font-mono">{node.reservedMemoryMb} / {node.memoryMb} MB</td>
+                      <td className="px-4 py-3 text-right font-mono">{node.pendingTasks}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </PlatformScopeGuard>
   );

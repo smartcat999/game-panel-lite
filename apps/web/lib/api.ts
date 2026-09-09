@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, RegionStatusSnapshot, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, RegionalNodeOperationsPage, RegionStatusSnapshot, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
@@ -1938,6 +1938,11 @@ export async function getRegionStatus(regionId: string): Promise<RegionStatusSna
   const response = await apiFetch(`${API_BASE}/api/regions/${encodeURIComponent(regionId)}/status`, { cache: "no-store" });
   if (response.status === 204) return null;
   return readPayload<RegionStatusSnapshot>(response, "Unable to load Region status");
+}
+
+export async function getRegionNodes(regionId: string): Promise<RegionalNodeOperationsPage> {
+  const response = await apiFetch(`${API_BASE}/api/regions/${encodeURIComponent(regionId)}/nodes?limit=100`, { cache: "no-store" });
+  return readPayload<RegionalNodeOperationsPage>(response, "Unable to load regional nodes");
 }
 
 // ---------------------------------------------------------------------------

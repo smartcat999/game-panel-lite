@@ -604,6 +604,31 @@ export type RegionStatusSnapshot = {
   tasks: { awaitingAuthority: number };
 };
 
+export type RegionalNodeOperations = {
+  id: string;
+  name: string;
+  architecture: string;
+  cpu: number;
+  memoryMb: number;
+  schedulable: boolean;
+  version: number;
+  online: boolean;
+  runtimeReady: boolean;
+  lastSeenMs: number;
+  sessionEpoch: number;
+  reservedCpu: number;
+  reservedMemoryMb: number;
+  allocations: number;
+  pendingTasks: number;
+};
+
+export type RegionalNodeOperationsPage = {
+  regionId: string;
+  observedAtMs: number;
+  nodes: RegionalNodeOperations[];
+  nextCursor?: string;
+};
+
 export type CommercePlanVersion = {
   planId: string;
   version: number;

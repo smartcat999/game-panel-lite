@@ -101,6 +101,12 @@ func forbiddenImport(file, imported string) string {
 	if under("regionstatusingress") && ((strings.Contains(imported, ".") && imported != api+"regional" && imported != api+"regionstatus") || imported == "os" || strings.HasPrefix(imported, "database/")) {
 		return "Region status ingress must depend on wire models and a consumer-owned projection port"
 	}
+	if under("regionopsapi") && strings.Contains(imported, ".") && imported != "github.com/go-chi/chi/v5" && imported != api+"regional" && imported != api+"serviceauth" {
+		return "Region operations API must depend on authenticated identity and consumer-owned read ports"
+	}
+	if under("regionopsclient") && strings.Contains(imported, ".") && imported != api+"regional" && imported != api+"regions" {
+		return "Region operations client must depend on wire models, not persistence or runtime"
+	}
 	if under("instanceapp") && ((strings.Contains(imported, ".") && imported != api+"instances") || imported == "os" || imported == "net/http" || strings.HasPrefix(imported, "database/")) {
 		return "instance application orchestration must depend on consumer-owned ports and intent contracts"
 	}

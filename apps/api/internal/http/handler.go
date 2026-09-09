@@ -21,6 +21,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/regional"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/scheduler"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -47,6 +48,7 @@ type Handler struct {
 	observability  *observability.CachedService
 	systemUpdate   *systemupdate.Service
 	gateway        *gateway.StreamGateway
+	regionOps      regionOperationsReader
 
 	agentLogsMu   sync.RWMutex
 	agentLogs     map[string][]string
@@ -63,6 +65,10 @@ type Handler struct {
 	workshopResolver   workshopsvc.Resolver
 	workshopPreviewsMu sync.Mutex
 	workshopPreviews   map[string]cachedWorkshopPreview
+}
+
+type regionOperationsReader interface {
+	ListRegionalNodes(context.Context, string, string, int) (regional.NodeOperationsPage, error)
 }
 
 type resourceLimitPayload struct {
@@ -122,6 +128,11 @@ func NewHandler(
 
 func (h *Handler) WithScheduler(sched *scheduler.Scheduler) *Handler {
 	h.scheduler = sched
+	return h
+}
+
+func (h *Handler) WithRegionOperations(reader regionOperationsReader) *Handler {
+	h.regionOps = reader
 	return h
 }
 
@@ -227,6 +238,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requireAdmin).Post("/api/organizations/{id}/topup", h.adminTopUpCredits)
 		r.With(h.requireAdmin).Get("/api/nodes", h.listNodes)
 		r.With(h.requireAdmin).Get("/api/regions/{id}/status", h.getRegionStatus)
+		r.With(h.requireAdmin).Get("/api/regions/{id}/nodes", h.listRegionNodes)
 		r.With(h.requireAdmin).Post("/api/nodes", h.createNode)
 		r.With(h.requireAdmin).Get("/api/nodes/{id}", h.getNode)
 		r.With(h.requireAdmin).Get("/api/nodes/{id}/servers", h.listNodeServers)

@@ -48,6 +48,35 @@ paths:
         "401": {description: Authentication required}
         "403": {description: Platform administrator required}
         "404": {description: Region not found}
+  /api/regions/{id}/nodes:
+    get:
+      security:
+        - sessionCookie: []
+      summary: List Region-owned node operations
+      description: Platform-admin route to the owning Region operations API. Node details are read through mutual TLS and are not copied into the global database.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+        - in: query
+          name: after
+          schema: {type: string}
+          description: Exclusive stable node ID cursor.
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 200, default: 100}
+      responses:
+        "200":
+          description: Region-owned node operations page.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RegionalNodeOperationsPage"}
+        "400": {description: Invalid cursor or limit}
+        "401": {description: Authentication required}
+        "403": {description: Platform administrator required}
+        "404": {description: Region not found}
+        "503": {description: Region operations connection unavailable}
   /api/games:
     get:
       summary: List the registered game and Provider catalog
@@ -1853,6 +1882,37 @@ components:
           required: [awaitingAuthority]
           properties:
             awaitingAuthority: {type: integer, format: int64, minimum: 0}
+    RegionalNodeOperationsPage:
+      type: object
+      required: [regionId, observedAtMs, nodes]
+      properties:
+        regionId: {type: string}
+        observedAtMs: {type: integer, format: int64, minimum: 1}
+        nextCursor: {type: string}
+        nodes:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/RegionalNodeOperations"
+    RegionalNodeOperations:
+      type: object
+      required: [id, name, architecture, cpu, memoryMb, schedulable, version, online, runtimeReady, lastSeenMs, sessionEpoch, reservedCpu, reservedMemoryMb, allocations, pendingTasks]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        architecture: {type: string}
+        cpu: {type: number, exclusiveMinimum: 0}
+        memoryMb: {type: integer, format: int64, minimum: 1}
+        schedulable: {type: boolean}
+        version: {type: integer, format: int64, minimum: 1}
+        online: {type: boolean}
+        runtimeReady: {type: boolean}
+        lastSeenMs: {type: integer, format: int64, minimum: 0}
+        sessionEpoch: {type: integer, format: int64, minimum: 0}
+        reservedCpu: {type: number, minimum: 0}
+        reservedMemoryMb: {type: integer, format: int64, minimum: 0}
+        allocations: {type: integer, format: int64, minimum: 0}
+        pendingTasks: {type: integer, format: int64, minimum: 0}
     AccountPreferences:
       type: object
       required: [locale, theme]

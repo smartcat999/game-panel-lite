@@ -26,6 +26,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/regionopsclient"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	dockerruntime "github.com/smartcat999/game-panel-lite/apps/api/internal/runtime/docker"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/scheduler"
@@ -41,6 +42,7 @@ type App struct {
 	handler   *apihttp.Handler
 	logger    *slog.Logger
 	closeOnce sync.Once
+	regionOps *regionopsclient.Directory
 }
 
 func New(cfg config.Config, logger *slog.Logger) (*App, error) {
@@ -49,11 +51,21 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return nil, err
 	}
 	initialized := false
+	var regionOps *regionopsclient.Directory
 	defer func() {
 		if !initialized {
 			_ = db.Close()
+			if regionOps != nil {
+				_ = regionOps.Close()
+			}
 		}
 	}()
+	if cfg.RegionOpsConfigPath != "" {
+		regionOps, err = regionopsclient.Load(cfg.RegionOpsConfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("initialize Region operations client: %w", err)
+		}
+	}
 	providerCatalog, err := runtimecatalog.Load(cfg.ProviderCatalogPath)
 	if err != nil {
 		logger.Warn("using built-in provider runtime catalog", "error", err)
@@ -113,6 +125,9 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	}
 	apiMetrics := metrics.NewRegistry()
 	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway, gameconfig.NewService(registry, db, domain.ProviderTerrariaVanilla), modruntime.NewService(registry, db)).WithScheduler(sched)
+	if regionOps != nil {
+		handler.WithRegionOperations(regionOps)
+	}
 	handler.Start(appCtx)
 
 	router := chi.NewRouter()
@@ -121,7 +136,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	router.Use(middleware.Recoverer)
 	handler.Register(router)
 	initialized = true
-	return &App{database: db, router: router, ctx: appCtx, cancel: cancel, handler: handler, logger: logger}, nil
+	return &App{database: db, router: router, ctx: appCtx, cancel: cancel, handler: handler, logger: logger, regionOps: regionOps}, nil
 }
 
 func (a *App) Routes() http.Handler {
@@ -149,6 +164,9 @@ func (a *App) Close() {
 		}
 		if a.database != nil {
 			_ = a.database.Close()
+		}
+		if a.regionOps != nil {
+			_ = a.regionOps.Close()
 		}
 	})
 }
