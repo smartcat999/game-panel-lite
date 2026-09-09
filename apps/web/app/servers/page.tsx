@@ -32,12 +32,7 @@ export default function ServersPage() {
     <div className="space-y-3">
       {/* Compact Header matching prototype */}
       <div className="h-11 bg-white border micro-border rounded-xl px-3.5 flex items-center justify-between subtle-elevation">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xs font-bold text-slate-900 leading-none">Instances</h1>
-          <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-            {servers.length} Total
-          </span>
-        </div>
+        <h1 className="text-xs font-bold text-slate-900 leading-none">Instances</h1>
 
         <div className="flex items-center gap-1.5">
           {canCreateServer ? (

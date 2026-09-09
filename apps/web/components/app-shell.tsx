@@ -15,10 +15,10 @@ import {
   LogOut,
   X
 } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
-import { listGameServers, logoutAdmin } from "@/lib/api";
+import { logoutAdmin } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
@@ -39,14 +39,6 @@ function AppChrome({ children }: { children: ReactNode }) {
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const serversQuery = useQuery({
-    queryKey: ["game-servers"],
-    queryFn: listGameServers,
-    retry: false
-  });
-
-  const servers = serversQuery.data ?? [];
 
   const handleLogout = async () => {
     try {
@@ -156,12 +148,9 @@ function AppChrome({ children }: { children: ReactNode }) {
           <aside className="w-full md:w-[210px] bg-white border micro-border rounded-xl p-2.5 subtle-elevation flex flex-col justify-between shrink-0 relative transition-all duration-200">
             <div className="space-y-3.5">
               {/* Workspace Title Strip */}
-              <div className="flex items-center justify-between px-1 border-b micro-border pb-2">
+              <div className="px-1 border-b micro-border pb-2">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                   COLLABORATOR
-                </span>
-                <span className="text-[10px] font-mono text-slate-400 border micro-border px-1.5 py-0.2 rounded">
-                  3
                 </span>
               </div>
 
@@ -196,9 +185,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                 >
                   <ServerIcon className="w-3.5 h-3.5 text-slate-800 shrink-0" />
                   <span className="truncate">Instances</span>
-                  <span className="ml-auto text-[10px] bg-white border micro-border text-slate-700 px-1 py-0.2 rounded font-mono font-medium">
-                    {servers.length || 4}
-                  </span>
                 </Link>
               </div>
 
