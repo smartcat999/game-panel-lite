@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Server as ServerIcon,
   Archive,
   Box,
   Settings as SettingsIcon,
-  AlertTriangle,
   FileText,
   Bell,
   Building2,
   Check,
   ChevronDown,
   Globe2,
+  LayoutDashboard,
   LogOut,
+  MapPinned,
+  UsersRound,
   X
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -37,6 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { locale, setLocale } = useI18n();
   const { setTheme } = useTheme();
   const isZh = locale.startsWith("zh");
@@ -73,7 +76,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           {/* LEFT: LOGO + UNIFIED WORKSPACE TRIGGER */}
           <div className="flex items-center gap-2.5 shrink-0">
             <Link
-              href="/servers"
+              href={scope.kind === "platform" ? "/platform" : "/servers"}
               className="w-6 h-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-600 font-bold text-xs shrink-0 hover:opacity-80 transition"
             >
               GP
@@ -107,7 +110,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                   {platformRole === "platform_admin" ? (
                     <button
                       type="button"
-                      onClick={() => { selectPlatform(); setContextOpen(false); }}
+                      onClick={() => { selectPlatform(); setContextOpen(false); router.push("/platform"); }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50"
                     >
                       <Globe2 className="size-4 text-slate-500" />
@@ -129,7 +132,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                           <button
                             key={organization.id}
                             type="button"
-                            onClick={() => { selectOrganization(organization.id); setContextOpen(false); }}
+                            onClick={() => { selectOrganization(organization.id); setContextOpen(false); router.push("/servers"); }}
                             className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50"
                           >
                             <Building2 className="size-4 text-slate-400" />
@@ -215,95 +218,29 @@ function AppChrome({ children }: { children: ReactNode }) {
 
         {/* MAIN WORKSPACE LAYOUT: SIDEBAR + CONTENT */}
         <nav className="flex gap-1 overflow-x-auto rounded-xl border bg-white p-1.5 micro-border subtle-elevation md:hidden">
-          <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "实例" : "Instances"} />
-          <MobileNavLink active={pathname.startsWith("/worlds")} href="/worlds" icon={<Archive className="size-3.5" />} label={isZh ? "存档" : "Saves"} />
-          <MobileNavLink active={pathname.startsWith("/mods")} href="/mods" icon={<Box className="size-3.5" />} label={isZh ? "模组" : "Mods"} />
-          <MobileNavLink active={pathname.startsWith("/settings")} href="/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "设置" : "Settings"} />
+          {scope.kind === "platform" ? (
+            <>
+              <MobileNavLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "概览" : "Overview"} />
+              <MobileNavLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户" : "Tenants"} />
+              <MobileNavLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域" : "Regions"} />
+              <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "全局实例" : "Global instances"} />
+            </>
+          ) : (
+            <>
+              <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "实例" : "Instances"} />
+              <MobileNavLink active={pathname.startsWith("/worlds")} href="/worlds" icon={<Archive className="size-3.5" />} label={isZh ? "存档" : "Saves"} />
+              <MobileNavLink active={pathname.startsWith("/mods")} href="/mods" icon={<Box className="size-3.5" />} label={isZh ? "模组" : "Mods"} />
+              <MobileNavLink active={pathname.startsWith("/settings")} href="/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "设置" : "Settings"} />
+            </>
+          )}
         </nav>
 
         <div className="flex flex-col items-stretch gap-3.5 md:min-h-[700px] md:flex-row">
           {/* SIDEBAR */}
           <aside className="relative hidden w-[210px] shrink-0 flex-col justify-between rounded-xl border bg-white p-2.5 transition-all duration-200 micro-border subtle-elevation md:flex">
-            <div className="space-y-3.5">
-              {/* Workspace Title Strip */}
-              <div className="px-1 border-b micro-border pb-2">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                  {isZh ? "工作空间" : "WORKSPACE"}
-                </span>
-              </div>
-
-              {/* GROUP 2: COMPUTE */}
-              <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{isZh ? "计算" : "COMPUTE"}</div>
-                <Link
-                  href="/servers"
-                  className={cn(
-                    "w-full h-7 flex items-center gap-2 px-2 rounded-lg text-xs transition text-left",
-                    pathname.startsWith("/servers")
-                      ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                  )}
-                >
-                  <ServerIcon className="w-3.5 h-3.5 text-slate-800 shrink-0" />
-                  <span className="truncate">{isZh ? "实例" : "Instances"}</span>
-                </Link>
-              </div>
-
-              {/* GROUP 3: STORAGE */}
-              <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{isZh ? "存储" : "STORAGE"}</div>
-                <Link
-                  href="/worlds"
-                  className={cn(
-                    "h-7 flex items-center gap-2 px-2 rounded-lg text-xs font-medium transition",
-                    pathname.startsWith("/worlds") || pathname.startsWith("/backups")
-                      ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <Archive className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{isZh ? "世界与存档" : "Worlds & saves"}</span>
-                </Link>
-                <Link
-                  href="/mods"
-                  className={cn(
-                    "h-7 flex items-center gap-2 px-2 rounded-lg text-xs font-medium transition",
-                    pathname.startsWith("/mods")
-                      ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <Box className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{isZh ? "模组工坊" : "Mod workshop"}</span>
-                </Link>
-              </div>
-
-              {/* GROUP 4: OBSERVABILITY */}
-              <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{isZh ? "运维" : "OPERATIONS"}</div>
-                <Link
-                  href="/settings"
-                  className={cn(
-                    "h-7 flex items-center gap-2 px-2 rounded-lg text-xs font-medium transition",
-                    pathname.startsWith("/settings")
-                      ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <SettingsIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{isZh ? "设置" : "Settings"}</span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setDrawerOpen(true)}
-                  className="w-full h-7 flex items-center gap-2 px-2 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-xs font-medium transition cursor-pointer"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{isZh ? "事件与告警" : "Incidents & alerts"}</span>
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-amber-500" />
-                </button>
-              </div>
-            </div>
+            {scope.kind === "platform"
+              ? <PlatformNavigation pathname={pathname} isZh={isZh} />
+              : <WorkspaceNavigation pathname={pathname} isZh={isZh} />}
           </aside>
 
           {/* MAIN CONTENT AREA */}
@@ -375,6 +312,68 @@ function membershipLabel(role: string | undefined, isZh: boolean) {
   if (role === "member") return isZh ? "成员" : "Member";
   if (role === "viewer") return isZh ? "只读成员" : "Viewer";
   return isZh ? "正在加载" : "Loading";
+}
+
+function PlatformNavigation({ pathname, isZh }: { pathname: string; isZh: boolean }) {
+  return (
+    <div className="space-y-3.5">
+      <NavigationTitle>{isZh ? "平台管理" : "PLATFORM"}</NavigationTitle>
+      <NavigationGroup title={isZh ? "全局" : "GLOBAL"}>
+        <SidebarLink active={pathname === "/platform"} href="/platform" icon={<LayoutDashboard className="size-3.5" />} label={isZh ? "平台概览" : "Platform overview"} />
+        <SidebarLink active={pathname.startsWith("/platform/organizations")} href="/platform/organizations" icon={<UsersRound className="size-3.5" />} label={isZh ? "租户管理" : "Tenant management"} />
+        <SidebarLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "全局实例" : "Global instances"} />
+      </NavigationGroup>
+      <NavigationGroup title={isZh ? "基础设施" : "INFRASTRUCTURE"}>
+        <SidebarLink active={pathname.startsWith("/platform/regions")} href="/platform/regions" icon={<MapPinned className="size-3.5" />} label={isZh ? "区域与节点" : "Regions and nodes"} />
+      </NavigationGroup>
+    </div>
+  );
+}
+
+function WorkspaceNavigation({ pathname, isZh }: { pathname: string; isZh: boolean }) {
+  return (
+    <div className="space-y-3.5">
+      <NavigationTitle>{isZh ? "租户空间" : "WORKSPACE"}</NavigationTitle>
+      <NavigationGroup title={isZh ? "计算" : "COMPUTE"}>
+        <SidebarLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label={isZh ? "实例" : "Instances"} />
+      </NavigationGroup>
+      <NavigationGroup title={isZh ? "内容" : "CONTENT"}>
+        <SidebarLink active={pathname.startsWith("/worlds") || pathname.startsWith("/backups")} href="/worlds" icon={<Archive className="size-3.5" />} label={isZh ? "世界与存档" : "Worlds and saves"} />
+        <SidebarLink active={pathname.startsWith("/mods")} href="/mods" icon={<Box className="size-3.5" />} label={isZh ? "模组工坊" : "Mod workshop"} />
+      </NavigationGroup>
+      <NavigationGroup title={isZh ? "空间管理" : "MANAGEMENT"}>
+        <SidebarLink active={pathname.startsWith("/settings")} href="/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "空间设置" : "Workspace settings"} />
+      </NavigationGroup>
+    </div>
+  );
+}
+
+function NavigationTitle({ children }: { children: ReactNode }) {
+  return <div className="border-b px-1 pb-2 text-[9px] font-bold uppercase tracking-wider text-slate-400 micro-border">{children}</div>;
+}
+
+function NavigationGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-0.5">
+      <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function SidebarLink({ active, href, icon, label }: { active: boolean; href: string; icon: ReactNode; label: string }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex h-7 items-center gap-2 rounded-lg px-2 text-xs font-medium transition",
+        active ? "bg-slate-100 font-semibold text-slate-900" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      )}
+    >
+      <span className={active ? "text-slate-800" : "text-slate-400"}>{icon}</span>
+      <span className="truncate">{label}</span>
+    </Link>
+  );
 }
 
 function MobileNavLink({

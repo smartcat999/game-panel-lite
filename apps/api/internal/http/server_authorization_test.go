@@ -73,6 +73,11 @@ func TestServerRoutesEnforceTenantMembership(t *testing.T) {
 			t.Fatalf("platform monitoring %s: %d", path, got.Code)
 		}
 	}
+	for _, path := range []string{"/api/nodes", "/api/nodes/node-local", "/api/nodes/node-local/servers"} {
+		if got := request(http.MethodGet, path, ""); got.Code != http.StatusForbidden {
+			t.Fatalf("tenant node access %s: %d", path, got.Code)
+		}
+	}
 	if checked < 40 {
 		t.Fatalf("unexpected route coverage: %d", checked)
 	}

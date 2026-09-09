@@ -5,6 +5,28 @@ info:
 servers:
   - url: http://localhost:4000
 paths:
+  /api/regions:
+    get:
+      summary: List the global Region directory
+      description: Returns persisted Region identities and create-admission state. The global directory does not infer Regions or node counts from legacy node records.
+      parameters:
+        - in: query
+          name: after
+          schema: {type: string}
+          description: Stable Region ID cursor.
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 100, default: 100}
+      responses:
+        "200":
+          description: Bounded Region directory page.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RegionDirectoryEntry"
+        "400": {description: Invalid cursor or limit}
   /api/games:
     get:
       summary: List the registered game and Provider catalog
@@ -1765,6 +1787,14 @@ components:
       in: cookie
       name: gamepanel_session
   schemas:
+    RegionDirectoryEntry:
+      type: object
+      required: [id, name, acceptingCreates, version]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        acceptingCreates: {type: boolean}
+        version: {type: integer, format: int64, minimum: 1}
     AccountPreferences:
       type: object
       required: [locale, theme]

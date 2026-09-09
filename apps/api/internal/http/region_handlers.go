@@ -2,48 +2,32 @@ package http
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
-	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/regions"
 )
 
-// Default predefined global cloud regions
-var standardRegions = []domain.RegionInfo{
-	{ID: "hk", Name: "香港", NameEn: "Hong Kong", Flag: "🇭🇰", Available: true},
-	{ID: "tokyo", Name: "东京", NameEn: "Tokyo", Flag: "🇯🇵", Available: true},
-	{ID: "silicon-valley", Name: "硅谷", NameEn: "Silicon Valley", Flag: "🇺🇸", Available: true},
-	{ID: "frankfurt", Name: "法兰克福", NameEn: "Frankfurt", Flag: "🇩🇪", Available: true},
-	{ID: "shanghai", Name: "上海", NameEn: "Shanghai", Flag: "🇨🇳", Available: true},
-}
-
-// listRegions returns the cloud regions catalog with live node counts: GET /api/regions
+// listRegions returns the bounded global Region directory. It never infers
+// Regions from legacy nodes because Node ownership belongs to each Region.
 func (h *Handler) listRegions(w http.ResponseWriter, r *http.Request) {
-	nodes, err := h.store.ListComputeNodes(r.Context())
+	limit := 100
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, regions.ErrInvalidRegion.Error())
+			return
+		}
+		limit = parsed
+	}
+	entries, err := h.store.ListRegions(r.Context(), strings.TrimSpace(r.URL.Query().Get("after")), limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to list nodes: "+err.Error())
+		if err == regions.ErrInvalidRegion {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to list regions")
 		return
 	}
-
-	// Count nodes per region
-	nodeCountMap := make(map[string]int)
-	for _, n := range nodes {
-		reg := strings.ToLower(strings.TrimSpace(n.Region))
-		if reg == "" {
-			reg = "hk" // default region if unset
-		}
-		nodeCountMap[reg]++
-	}
-
-	regions := make([]domain.RegionInfo, len(standardRegions))
-	for i, reg := range standardRegions {
-		regCopy := reg
-		regCopy.NodeCount = nodeCountMap[reg.ID]
-		// If there are compute nodes registered in this region or it's default hk, it's available
-		if regCopy.NodeCount > 0 || reg.ID == "hk" {
-			regCopy.Available = true
-		}
-		regions[i] = regCopy
-	}
-
-	writeJSON(w, http.StatusOK, regions)
+	writeJSON(w, http.StatusOK, entries)
 }

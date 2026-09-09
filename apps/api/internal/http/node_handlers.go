@@ -87,9 +87,6 @@ func (h *Handler) listNodes(w http.ResponseWriter, r *http.Request) {
 		filtered := make([]domain.ComputeNode, 0, len(nodes))
 		for _, n := range nodes {
 			reg := strings.ToLower(strings.TrimSpace(n.Region))
-			if reg == "" {
-				reg = "hk"
-			}
 			if reg == regionFilter {
 				filtered = append(filtered, n)
 			}

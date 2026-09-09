@@ -39,7 +39,7 @@ export default function ServersPage() {
   return (
     <div className="space-y-3">
       <ConsolePageHeader
-        title={isZh ? "实例" : "Instances"}
+        title={scope.kind === "platform" ? (isZh ? "全局实例" : "Global instances") : (isZh ? "实例" : "Instances")}
         action={
           canDeployInScope ? (
             <button

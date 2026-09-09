@@ -10,6 +10,7 @@ import { listCommercePlans, listRegions } from "@/lib/api";
 import type { CommercePlanVersion } from "@/lib/types";
 import { Button, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { regionDisplayName } from "@/lib/region-display";
 
 interface DeployInstanceModalProps {
   open: boolean;
@@ -118,7 +119,7 @@ export function DeployInstanceModal({ open, onClose, organizationId }: DeployIns
 
   const regionName = (id: string) => {
     const region = regionsQuery.data?.find((item) => item.id === id);
-    if (region) return isZh ? region.name : region.nameEn;
+    if (region) return regionDisplayName(region, locale);
     if (id === "default") return isZh ? "默认区域" : "Default region";
     return id.replaceAll("-", " ");
   };

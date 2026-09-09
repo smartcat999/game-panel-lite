@@ -585,13 +585,11 @@ export type OAuthProviderStatus = {
   google: boolean;
 };
 
-export type RegionInfo = {
+export type RegionDirectoryEntry = {
   id: string;
   name: string;
-  nameEn: string;
-  flag: string;
-  available: boolean;
-  nodeCount: number;
+  acceptingCreates: boolean;
+  version: number;
 };
 
 export type CommercePlanVersion = {

@@ -2,7 +2,7 @@ import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { notifySessionExpired } from "./session-events";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionInfo, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { AccountPreferences, ActivityEvent, AuthBootstrap, Backup, CommerceOrder, CommercePlanVersion, CommerceSubscription, ComputeNode, ConfigPreset, CreditTransaction, DrainNodeResponse, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, InvitationSummary, ModConfigFile, ModFile, ModPack, NodeJoinCommand, OAuthProviderStatus, OrganizationInvitation, ProviderKey, PublicServerShare, RecommendedMod, RegionDirectoryEntry, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerOperation, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserCreditsResponse, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 // In browser environments, API_BASE returns getApiBaseUrl() dynamically
 // so that template literals `${API_BASE}/api/...` evaluate at call time
@@ -1929,9 +1929,9 @@ export async function getOAuthProviders(): Promise<OAuthProviderStatus> {
 // Regions Catalog API
 // ---------------------------------------------------------------------------
 
-export async function listRegions(): Promise<RegionInfo[]> {
-  const response = await apiFetch(`${API_BASE}/api/regions`, { cache: "no-store" });
-  return readPayload<RegionInfo[]>(response, "Unable to load regions");
+export async function listRegions(): Promise<RegionDirectoryEntry[]> {
+  const response = await apiFetch(`${API_BASE}/api/regions?limit=100`, { cache: "no-store" });
+  return readPayload<RegionDirectoryEntry[]>(response, "Unable to load regions");
 }
 
 // ---------------------------------------------------------------------------

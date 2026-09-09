@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 # 控制台切换管理范围，不切换用户角色
 

@@ -421,15 +421,6 @@ type OAuthIdentity struct {
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
-type RegionInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	NameEn    string `json:"nameEn"`
-	Flag      string `json:"flag"`
-	Available bool   `json:"available"`
-	NodeCount int    `json:"nodeCount,omitempty"`
-}
-
 type OrganizationMember struct {
 	ID             string    `json:"id" gorm:"primaryKey"`
 	OrganizationID string    `json:"organizationId" gorm:"index:idx_org_user,unique"`
