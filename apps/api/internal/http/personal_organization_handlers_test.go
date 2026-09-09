@@ -47,11 +47,14 @@ func TestRegisteredUsersOwnSeparateWorkspaces(t *testing.T) {
 		}
 		accounts = append(accounts, account)
 		listed := request("/api/auth/me/organizations?userId=alice", cookie)
-		var orgs []domain.Organization
+		var orgs []domain.OrganizationMembershipSummary
 		if err := json.Unmarshal(listed.Body.Bytes(), &orgs); err != nil || listed.Code != http.StatusOK || len(orgs) != 1 {
 			t.Fatalf("list: %d %s %v", listed.Code, listed.Body.String(), err)
 		}
-		spaces = append(spaces, orgs[0])
+		if orgs[0].MembershipRole != domain.RoleOwner {
+			t.Fatalf("membership role: %s", orgs[0].MembershipRole)
+		}
+		spaces = append(spaces, orgs[0].Organization)
 	}
 	if spaces[0].ID == spaces[1].ID {
 		t.Fatal("shared personal workspace")

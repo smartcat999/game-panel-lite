@@ -1,5 +1,14 @@
 # SaaS 与后端改造验收清单
 
+### 2026-09-09 租户资源管理与 Region 运维职责收敛
+
+- 修正控制台领域关系：租户空间管理逻辑实例及期望状态，Region 运维管理 Deployment、Node、容量、任务和实际状态；两者不是对等的资源所有权视角，也不允许在 Region 页面另行编辑租户业务配置。
+- Region 工作负载只作为全局实例的区域执行记录，通过实例 ID、Placement epoch、配置 generation 和意图版本关联；平台运维可处置执行故障，业务修改必须回到平台全局实例边界。
+- 顶部仍只切换平台／租户管理范围。Region 选择器只存在于平台基础设施页面；租户侧的 Region 仅作为创建参数与资源筛选条件。
+- 用户空间列表新增成员关系摘要，明确返回每个空间对应的 `membershipRole`。Store 先读取成员关系，再按 ID 批量读取空间并在 Go 中组合，不使用 JOIN；撤权后摘要立即消失。前端契约已区分普通 Organization 与当前账号的 OrganizationMembershipSummary。
+- 定向 Store／HTTP 测试、全量 `go test ./...`、`go vet ./...`、前端 lint／typecheck／production build 和差异空白检查通过；本地 3005 预览在构建后已恢复。全量 Go 测试需在沙箱外运行，因为既有 SSE 测试要监听本机随机端口。
+- 本批尚未完成账号平台角色的持久模型拆分、控制台范围 Provider 或 Region 运维页面；不能仅凭成员角色摘要宣称权限模型迁移完成。
+
 ## 2026-09-08 用户确认的交付优先级调整
 
 - 存档与备份接入方向调整为自建、兼容 S3 API 的对象存储，先完成同 Region 使用；实现边界与剩余工作见 [区域对象存储方案](../architecture/regional-object-storage.md)。
@@ -829,4 +838,3 @@
 - 创服与支付容差优化：支持指定套餐免点券创服，支付时间戳校验增加 60 秒时钟容差（解决时钟漂移导致支付落入 review 状态）。
 - 前端服务器续费与套餐卡片：新建 `server-subscription-card.tsx` 并挂载于服务器详情概览页，支持展示当前有效订阅、到期时间、剩余天数倒计时、续费弹窗（1/3/6/12 个月）与一键开通套餐弹窗。
 - 远端验证：在 `um773` (192.168.2.4:3005) 完成镜像构建与热更新部署，GET `/api/commerce/plans` 正常返回，Go 1.25 端到端测试 `TestCommerceEndToEndPrepaidLifecycle` 验证通过。
-

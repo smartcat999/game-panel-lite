@@ -536,7 +536,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PersonalOrganization"
+                  $ref: "#/components/schemas/OrganizationMembershipSummary"
         "401":
           description: Authentication required, including before initial setup
         "500":
@@ -1830,6 +1830,15 @@ components:
         updatedAt:
           type: string
           format: date-time
+    OrganizationMembershipSummary:
+      allOf:
+        - $ref: "#/components/schemas/PersonalOrganization"
+        - type: object
+          required: [membershipRole]
+          properties:
+            membershipRole:
+              type: string
+              enum: [owner, admin, member, viewer]
     Backup:
       type: object
       required: [id, instanceId, fileName, worldName, sizeBytes, type, createdAt]

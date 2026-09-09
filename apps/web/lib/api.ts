@@ -1643,6 +1643,10 @@ export type Organization = {
   updatedAt: string;
 };
 
+export type OrganizationMembershipSummary = Organization & {
+  membershipRole: "owner" | "admin" | "member" | "viewer";
+};
+
 export type OrganizationMember = {
   id: string;
   organizationId: string;
@@ -1667,9 +1671,9 @@ export type TenantUsage = {
   quota: TenantQuota;
 };
 
-export async function listMyOrganizations(): Promise<Organization[]> {
+export async function listMyOrganizations(): Promise<OrganizationMembershipSummary[]> {
   const response = await apiFetch(`${API_BASE}/api/auth/me/organizations`, { cache: "no-store" });
-  return readPayload<Organization[]>(response, "Unable to load your workspaces");
+  return readPayload<OrganizationMembershipSummary[]>(response, "Unable to load your workspaces");
 }
 
 export async function listOrganizations(): Promise<Organization[]> {
@@ -2025,4 +2029,3 @@ export async function acceptInvitation(token: string): Promise<{ status: string;
   });
   return readPayload<{ status: string; organizationId: string; role: string }>(response, "Unable to accept invitation");
 }
-

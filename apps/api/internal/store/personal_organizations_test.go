@@ -36,6 +36,10 @@ func testPersonalOrganizations(t *testing.T, db *Store) {
 		if err != nil || member.Role != domain.RoleOwner {
 			t.Fatalf("owner: %+v %v", member, err)
 		}
+		summaries, err := db.ListUserOrganizationMemberships(ctx, id)
+		if err != nil || len(summaries) != 1 || summaries[0].ID != orgs[0].ID || summaries[0].MembershipRole != domain.RoleOwner {
+			t.Fatalf("membership summary: %+v %v", summaries, err)
+		}
 		var count int64
 		if err := db.db.Model(&domain.TenantQuota{}).Where("organization_id = ?", orgs[0].ID).Count(&count).Error; err != nil || count != 1 {
 			t.Fatalf("quota count: %d %v", count, err)
@@ -50,6 +54,9 @@ func testPersonalOrganizations(t *testing.T, db *Store) {
 	}
 	if err := db.RemoveOrganizationMember(ctx, a[0].ID, "personal-a"); err != nil {
 		t.Fatal(err)
+	}
+	if summaries, err := db.ListUserOrganizationMemberships(ctx, "personal-a"); err != nil || len(summaries) != 0 {
+		t.Fatalf("revoked membership summary: %+v %v", summaries, err)
 	}
 	if _, err := db.GetUserOrganization(ctx, "personal-a", a[0].ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("revoked membership: %v", err)

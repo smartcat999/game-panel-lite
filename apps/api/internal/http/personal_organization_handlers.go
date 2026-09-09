@@ -14,7 +14,7 @@ func (h *Handler) listMyOrganizations(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	orgs, err := h.store.ListUserOrganizations(r.Context(), account.ID)
+	orgs, err := h.store.ListUserOrganizationMemberships(r.Context(), account.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list workspaces")
 		return

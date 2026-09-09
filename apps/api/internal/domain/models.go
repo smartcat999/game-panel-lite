@@ -385,6 +385,13 @@ type Organization struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// OrganizationMembershipSummary is the authenticated account's view of one
+// workspace. MembershipRole belongs to the relationship, not the account.
+type OrganizationMembershipSummary struct {
+	Organization
+	MembershipRole Role `json:"membershipRole"`
+}
+
 type CreditTransaction struct {
 	ID             string    `json:"id" gorm:"primaryKey"`
 	OrganizationID string    `json:"organizationId" gorm:"index"`

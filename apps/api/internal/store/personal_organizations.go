@@ -33,28 +33,59 @@ func (s *Store) CreateAccountWithPersonalOrganization(ctx context.Context, accou
 }
 
 func (s *Store) ListUserOrganizations(ctx context.Context, userID string) ([]domain.Organization, error) {
-	orgs := []domain.Organization{}
+	summaries, err := s.ListUserOrganizationMemberships(ctx, userID)
+	orgs := make([]domain.Organization, 0, len(summaries))
+	for _, summary := range summaries {
+		orgs = append(orgs, summary.Organization)
+	}
+	return orgs, err
+}
+
+// ListUserOrganizationMemberships returns workspace data together with the
+// caller's role on each membership. It intentionally reads memberships and
+// organizations separately and composes them in memory.
+func (s *Store) ListUserOrganizationMemberships(ctx context.Context, userID string) ([]domain.OrganizationMembershipSummary, error) {
+	summaries := []domain.OrganizationMembershipSummary{}
 	err := s.readSnapshot(ctx, func(tx *Store) error {
-		var ids []string
-		if err := tx.readableMemberships(ctx, userID).Pluck("organization_id", &ids).Error; err != nil {
+		var memberships []domain.OrganizationMember
+		if err := tx.readableMemberships(ctx, userID).Find(&memberships).Error; err != nil {
 			return err
 		}
+		ids := make([]string, 0, len(memberships))
+		roles := make(map[string]domain.Role, len(memberships))
+		for _, membership := range memberships {
+			ids = append(ids, membership.OrganizationID)
+			roles[membership.OrganizationID] = membership.Role
+		}
+		organizations := make(map[string]domain.Organization, len(ids))
 		for start := 0; start < len(ids); start += idLookupBatchSize {
 			var batch []domain.Organization
 			if err := tx.db.WithContext(ctx).Where("id IN ?", ids[start:min(start+idLookupBatchSize, len(ids))]).Find(&batch).Error; err != nil {
 				return err
 			}
-			orgs = append(orgs, batch...)
+			for _, organization := range batch {
+				organizations[organization.ID] = organization
+			}
+		}
+		for _, id := range ids {
+			organization, ok := organizations[id]
+			if !ok {
+				continue
+			}
+			summaries = append(summaries, domain.OrganizationMembershipSummary{
+				Organization:   organization,
+				MembershipRole: roles[id],
+			})
 		}
 		return nil
 	})
-	sort.Slice(orgs, func(i, j int) bool {
-		if orgs[i].CreatedAt.Equal(orgs[j].CreatedAt) {
-			return orgs[i].ID < orgs[j].ID
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].CreatedAt.Equal(summaries[j].CreatedAt) {
+			return summaries[i].ID < summaries[j].ID
 		}
-		return orgs[i].CreatedAt.Before(orgs[j].CreatedAt)
+		return summaries[i].CreatedAt.Before(summaries[j].CreatedAt)
 	})
-	return orgs, err
+	return summaries, err
 }
 
 func (s *Store) GetUserOrganization(ctx context.Context, userID, orgID string) (domain.Organization, error) {
