@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { LockKeyhole, Plus } from "lucide-react";
 import { listGameServers, getSettings } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
+import { ConsolePageHeader } from "@/components/console-page-header";
 import { ServerManagementTable } from "@/components/server-management-table";
 import { DeployInstanceModal } from "@/components/deploy-instance-modal";
 
@@ -30,12 +31,10 @@ export default function ServersPage() {
 
   return (
     <div className="space-y-3">
-      {/* Compact Header matching prototype */}
-      <div className="h-11 bg-white border micro-border rounded-xl px-3.5 flex items-center justify-between subtle-elevation">
-        <h1 className="text-xs font-bold text-slate-900 leading-none">Instances</h1>
-
-        <div className="flex items-center gap-1.5">
-          {canCreateServer ? (
+      <ConsolePageHeader
+        title="Instances"
+        action={
+          canCreateServer ? (
             <button
               type="button"
               onClick={() => setDeployModalOpen(true)}
@@ -45,12 +44,13 @@ export default function ServersPage() {
               <span>Deploy</span>
             </button>
           ) : (
-            <div className="text-[11px] text-slate-400 font-mono bg-slate-50 border micro-border px-2 py-0.5 rounded-md">
-              🔒 Read-Only
+            <div className="flex items-center gap-1.5 rounded-md border bg-slate-50 px-2 py-1 text-[11px] text-slate-500 micro-border">
+              <LockKeyhole className="size-3" />
+              <span>Read-only</span>
             </div>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {/* Public Cloud High-Density Table */}
       <div className="bg-white border micro-border rounded-xl subtle-elevation overflow-hidden">

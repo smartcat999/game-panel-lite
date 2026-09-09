@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useI18n } from "@/lib/i18n";
 import { getSettings, updatePublicHost } from "@/lib/api";
 import { Button, Input } from "@/components/ui";
+import { ConsolePageHeader } from "@/components/console-page-header";
 
 export default function SettingsPage() {
   const { locale } = useI18n();
@@ -42,14 +43,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-3.5">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-base font-bold text-slate-900 tracking-tight">
-          {isZh ? "系统设置" : "Settings"}
-        </h1>
-      </div>
+    <div className="space-y-3">
+      <ConsolePageHeader title={isZh ? "系统设置" : "Settings"} />
 
-      <form onSubmit={handleSubmit} className="bg-white border border-slate-200/80 rounded-xl p-5 shadow-2xs space-y-4 max-w-xl">
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-4 rounded-xl border bg-white p-5 micro-border subtle-elevation">
         <div>
           <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
             {isZh ? "公网连接配置" : "Public Endpoint"}

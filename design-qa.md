@@ -1,24 +1,54 @@
-**Findings**
-- No P0/P1/P2 findings remain.
+# Product Design QA
 
-**Open Questions**
-- None.
+## Evidence
 
-**Implementation Checklist**
-- Source visual truth path: `/Users/pengwu/Downloads/stitch_gamepanel_lite_official_website/kinetic_obsidian/DESIGN.md`, plus stitched reference screenshots in `/Users/pengwu/Downloads/stitch_gamepanel_lite_official_website`.
-- Implementation screenshot path: `/private/tmp/gamepanel-pw-desktop.png` and `/private/tmp/gamepanel-pw-mobile.png`.
-- Viewport: desktop `1280x720`, mobile `390x900`.
-- State: public home page at `/`, default closed mobile menu.
-- Full-view comparison evidence: desktop and mobile screenshots were captured with headless Chrome against `http://localhost:3030`.
-- Focused region comparison evidence: focused screenshot regions were not needed after full-page checks confirmed no horizontal overflow, all images loaded, and all seven sections rendered.
-- Fonts and typography: homepage uses the project's existing sans stack with weight and scale tuned to the Kinetic Obsidian reference.
-- Spacing and layout rhythm: desktop and mobile layouts match the reference structure: hero, pain points, capabilities, interface previews, setup steps, roadmap, CTA, footer.
-- Colors and visual tokens: dark surfaces, mint primary action color, restrained borders, and purple reserved for modded/Terraria-adjacent context.
-- Image quality and asset fidelity: reference screenshots were copied into `apps/web/public/official` and rendered as real image assets.
-- Copy and content: copy is tailored to GamePanel Lite V1 with Terraria, tModLoader, Docker isolation, backups, logs, and join info.
-- Patches made since previous QA pass: removed hidden reveal motion, constrained preview image widths, switched below-fold interface images to eager loading.
+- Source visual truth: Codex in-app browser capture of the authenticated `/servers` page at commit `6c3ef902`, before this migration pass.
+- Source implementation path: `git:6c3ef902:apps/web/components/app-shell.tsx` and `git:6c3ef902:apps/web/app/servers/page.tsx`.
+- Implementation URL and screenshot source: `http://localhost:3005/servers`, captured in the Codex in-app browser after the changes in this working tree.
+- Mobile viewport: 490 × 814 CSS pixels, device pixel ratio 2. Source and implementation used the same browser surface and density.
+- Desktop viewport: 1280 × 900 CSS pixels, device pixel ratio 1, applied with the browser's device-metrics override for the responsive check.
+- State: authenticated temporary local admin session, Chinese locale, one stopped instance. The repository database was not modified.
 
-**Follow-up Polish**
-- Add real hosted documentation links once the docs site exists.
+## Findings
+
+- No actionable P0, P1, or P2 findings remain.
+- Fonts and typography: the system sans and monospace data treatment match the existing light SaaS console. Page titles, labels, prices, and resource values retain the established hierarchy without decorative count badges.
+- Spacing and layout rhythm: desktop keeps the compact sidebar and content split. Mobile now uses a single compact horizontal navigation row, keeping the page action and first data surface above the fold.
+- Colors and visual tokens: existing slate surfaces, restrained emerald selection states, purple tModLoader state, micro borders, and subtle elevation remain consistent.
+- Image quality and asset fidelity: these management screens contain no product imagery. Existing Lucide icons are used consistently; no placeholder images, emoji, custom SVG, or CSS-drawn assets were introduced.
+- Copy and content: navigation now names the actual Settings destination. Deploy copy explains Region-level selection and automatic Node scheduling. Plan prices and resources come from the backend catalog.
+- Accessibility and interaction: the deploy surface exposes dialog semantics and a labelled close control. Engine, Region, and plan selection work with native buttons. World and mod actions open typed file inputs and provide visible operation status.
+
+## Full-view Comparison Evidence
+
+- Before: the 490-pixel viewport rendered the complete desktop sidebar above the Instances content, pushing the primary task below the fold.
+- After: the same viewport renders the top bar, compact navigation, page header, and first table row in the initial view.
+- Desktop: the 1280 × 900 check retains the sidebar, aligned page header, and high-density table without changing the established shell proportions.
+
+## Focused Region Comparison Evidence
+
+- Deploy dialog: inspected Vanilla and tModLoader states at the mobile viewport. Changing engine updates the available catalog plans; Region and plan selections remain visible without horizontal clipping. Resource specifications and price are readable at the decision point.
+- Worlds, Mods, and Settings: inspected as authenticated mobile routes. Headers, actions, empty/data states, and settings form align to the shared console frame.
+- Browser console: no new warning or error entries were recorded during the final three-minute verification window after a clean preview restart.
+
+## Comparison History
+
+1. P1 mobile navigation: the full sidebar consumed the first screen. Fixed by using a compact mobile navigation and keeping the sidebar at desktop widths.
+2. P2 navigation semantics: Dashboard duplicated Instances, while Audit Logs routed to Settings. Fixed by removing the duplicate link and naming Settings accurately.
+3. P2 deployment model: the old dialog requested a host port and hardcoded resources. Fixed by reading Region and plan availability from the commerce catalog, passing the selected plan resources, and leaving Node placement to the scheduler.
+4. Post-fix evidence: recaptured `/servers`, the Deploy dialog, `/worlds`, `/mods`, and `/settings`; verified engine-plan interaction and found no remaining P0/P1/P2 issue.
+
+## Implementation Checklist
+
+- [x] Reuse one page-header component across management routes.
+- [x] Replace the mobile full sidebar with compact navigation.
+- [x] Read deployment plans and Region availability from the backend catalog.
+- [x] Keep Node scheduling automatic.
+- [x] Make world import and mod upload actions functional.
+- [x] Pass lint, typecheck, production build, route checks, and browser console review.
+
+## Follow-up Polish
+
+- No blocking polish remains. A future catalog iteration can expose additional Region-specific plans without frontend structural changes.
 
 final result: passed

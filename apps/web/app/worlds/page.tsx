@@ -1,15 +1,20 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Download, Plus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Archive, Download, Plus } from "lucide-react";
+import { useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { listWorlds } from "@/lib/api";
+import { importWorld, listWorlds } from "@/lib/api";
 import { Button } from "@/components/ui";
+import { ConsolePageHeader } from "@/components/console-page-header";
 import type { World } from "@/lib/types";
 
 export default function WorldsPage() {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = useState("");
 
   const worldsQuery = useQuery({
     queryKey: ["worlds"],
@@ -19,27 +24,61 @@ export default function WorldsPage() {
 
   const worlds = (worldsQuery.data ?? []) as World[];
 
+  const importMutation = useMutation({
+    mutationFn: (file: File) => importWorld(file),
+    onSuccess: async () => {
+      setNotice(isZh ? "存档已导入" : "Save imported");
+      await queryClient.invalidateQueries({ queryKey: ["worlds"] });
+      if (inputRef.current) inputRef.current.value = "";
+    },
+    onError: (error) => {
+      setNotice(error instanceof Error ? error.message : isZh ? "导入失败" : "Import failed");
+    }
+  });
+
   return (
-    <div className="space-y-3.5">
-      {/* Direct Header */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-base font-bold text-slate-900 tracking-tight">
-          {isZh ? "世界存档" : "Worlds"}
-        </h1>
+    <div className="space-y-3">
+      <ConsolePageHeader
+        title={isZh ? "世界存档" : "Worlds"}
+        action={
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".wld"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) importMutation.mutate(file);
+              }}
+            />
+            <Button
+              type="button"
+              disabled={importMutation.isPending}
+              onClick={() => inputRef.current?.click()}
+              className="h-7 bg-slate-900 px-2.5 text-xs text-white hover:bg-slate-800"
+            >
+              <Plus className="size-3.5" />
+              <span>{importMutation.isPending ? (isZh ? "导入中" : "Importing") : (isZh ? "导入存档" : "Import save")}</span>
+            </Button>
+          </>
+        }
+      />
 
-        <Button className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
-          <Plus className="size-3.5" />
-          <span>{isZh ? "导入存档 (.wld)" : "Import Save (.wld)"}</span>
-        </Button>
-      </div>
+      {notice ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{notice}</p> : null}
 
-      <div className="bg-white border border-slate-200/80 rounded-xl shadow-2xs overflow-hidden">
+      <div className="overflow-hidden rounded-xl border bg-white micro-border subtle-elevation">
         {worlds.length === 0 ? (
-          <div className="p-12 text-center text-xs text-slate-400">
-            {isZh ? "暂无独立世界存档，启动实例后将自动生成" : "No separate world saves found. Launching an instance will generate one."}
+          <div className="flex min-h-56 flex-col items-center justify-center gap-2 px-6 text-center">
+            <Archive className="size-5 text-slate-300" />
+            <p className="text-xs font-semibold text-slate-700">{isZh ? "还没有独立存档" : "No saves yet"}</p>
+            <p className="max-w-sm text-[11px] leading-relaxed text-slate-400">
+              {isZh ? "启动实例后会自动生成存档，也可以导入现有 .wld 文件。" : "A save appears after an instance starts, or you can import an existing .wld file."}
+            </p>
           </div>
         ) : (
-          <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto">
+          <table className="min-w-[620px] w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold text-slate-400 select-none">
                 <th className="py-3 pl-4 pr-3 font-medium">{isZh ? "世界名称" : "WORLD NAME"}</th>
@@ -64,6 +103,7 @@ export default function WorldsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

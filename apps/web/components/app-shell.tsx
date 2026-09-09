@@ -6,8 +6,7 @@ import {
   Server as ServerIcon,
   Archive,
   Box,
-  LayoutDashboard,
-  Activity,
+  Settings as SettingsIcon,
   AlertTriangle,
   FileText,
   Bell,
@@ -143,32 +142,22 @@ function AppChrome({ children }: { children: ReactNode }) {
         </header>
 
         {/* MAIN WORKSPACE LAYOUT: SIDEBAR + CONTENT */}
-        <div className="flex flex-col md:flex-row gap-3.5 items-stretch min-h-[700px]">
+        <nav className="flex gap-1 overflow-x-auto rounded-xl border bg-white p-1.5 micro-border subtle-elevation md:hidden">
+          <MobileNavLink active={pathname.startsWith("/servers")} href="/servers" icon={<ServerIcon className="size-3.5" />} label="Instances" />
+          <MobileNavLink active={pathname.startsWith("/worlds")} href="/worlds" icon={<Archive className="size-3.5" />} label={isZh ? "存档" : "Saves"} />
+          <MobileNavLink active={pathname.startsWith("/mods")} href="/mods" icon={<Box className="size-3.5" />} label={isZh ? "模组" : "Mods"} />
+          <MobileNavLink active={pathname.startsWith("/settings")} href="/settings" icon={<SettingsIcon className="size-3.5" />} label={isZh ? "设置" : "Settings"} />
+        </nav>
+
+        <div className="flex flex-col items-stretch gap-3.5 md:min-h-[700px] md:flex-row">
           {/* SIDEBAR */}
-          <aside className="w-full md:w-[210px] bg-white border micro-border rounded-xl p-2.5 subtle-elevation flex flex-col justify-between shrink-0 relative transition-all duration-200">
+          <aside className="relative hidden w-[210px] shrink-0 flex-col justify-between rounded-xl border bg-white p-2.5 transition-all duration-200 micro-border subtle-elevation md:flex">
             <div className="space-y-3.5">
               {/* Workspace Title Strip */}
               <div className="px-1 border-b micro-border pb-2">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                   COLLABORATOR
                 </span>
-              </div>
-
-              {/* GROUP 1: WORKSPACE */}
-              <div className="space-y-0.5">
-                <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-400">WORKSPACE</div>
-                <Link
-                  href="/servers"
-                  className={cn(
-                    "w-full h-7 flex items-center gap-2 px-2 rounded-lg text-xs font-medium transition text-left",
-                    pathname === "/dashboard"
-                      ? "bg-slate-100 text-slate-900 font-semibold"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  )}
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Dashboard</span>
-                </Link>
               </div>
 
               {/* GROUP 2: COMPUTE */}
@@ -229,8 +218,8 @@ function AppChrome({ children }: { children: ReactNode }) {
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
-                  <Activity className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Audit Logs</span>
+                  <SettingsIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">Settings</span>
                 </Link>
                 <button
                   type="button"
@@ -304,5 +293,30 @@ function AppChrome({ children }: { children: ReactNode }) {
         </div>
       )}
     </div>
+  );
+}
+
+function MobileNavLink({
+  active,
+  href,
+  icon,
+  label
+}: {
+  active: boolean;
+  href: string;
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition",
+        active ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </Link>
   );
 }
