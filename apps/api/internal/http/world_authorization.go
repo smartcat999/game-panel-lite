@@ -10,7 +10,7 @@ import (
 
 func (h *Handler) worldForRequest(w http.ResponseWriter, r *http.Request, id string) (domain.World, bool) {
 	account, customer := accountFromContext(r.Context())
-	customer = customer && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin
+	customer = customer && !domain.IsPlatformAdmin(account)
 	var item domain.World
 	var err error
 	if customer {

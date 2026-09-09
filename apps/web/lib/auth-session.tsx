@@ -25,5 +25,5 @@ export function useAuthBootstrap() {
 }
 
 export function accountCacheKey(account: UserAccount): string {
-  return JSON.stringify([account.id, account.role, account.permissions ? [...account.permissions].sort() : null]);
+  return JSON.stringify([account.id, account.platformRole, account.role, account.permissions ? [...account.permissions].sort() : null]);
 }

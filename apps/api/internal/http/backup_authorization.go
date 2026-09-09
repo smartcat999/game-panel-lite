@@ -12,7 +12,7 @@ import (
 // nested save URLs, before touching any file or attempting cleanup/restoration.
 func (h *Handler) backupForRequest(w http.ResponseWriter, r *http.Request, id string) (domain.Backup, bool) {
 	account, customer := accountFromContext(r.Context())
-	customer = customer && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin
+	customer = customer && !domain.IsPlatformAdmin(account)
 	var item domain.Backup
 	var err error
 	if customer {

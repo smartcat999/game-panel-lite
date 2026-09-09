@@ -52,7 +52,8 @@ func (s *Store) RotatePassword(ctx context.Context, accountID, expectedHash, new
 
 // UpdateAccountRole must not persist a previously read password hash.
 func (s *Store) UpdateAccountRole(ctx context.Context, id string, role domain.Role) error {
-	result := s.db.WithContext(ctx).Model(&domain.AdminAccount{}).Where("id = ?", id).Updates(map[string]any{"role": role, "updated_at": time.Now()})
+	platformRole := domain.NormalizePlatformRole("", role)
+	result := s.db.WithContext(ctx).Model(&domain.AdminAccount{}).Where("id = ?", id).Updates(map[string]any{"role": role, "platform_role": platformRole, "updated_at": time.Now()})
 	if result.Error != nil {
 		return result.Error
 	}

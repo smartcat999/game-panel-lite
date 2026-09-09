@@ -41,6 +41,9 @@ func TestAuthSetupLoginAndProtectedRoutes(t *testing.T) {
 	if setup.Code != stdhttp.StatusCreated {
 		t.Fatalf("expected setup 201, got %d: %s", setup.Code, setup.Body.String())
 	}
+	if !strings.Contains(setup.Body.String(), `"platformRole":"platform_admin"`) {
+		t.Fatalf("expected platform administrator role, got %s", setup.Body.String())
+	}
 	setupCookie := authCookieFromRecorder(t, setup)
 
 	unauthorized := httptest.NewRecorder()
@@ -184,6 +187,9 @@ func TestUserManagementAndRegistrationPolicy(t *testing.T) {
 	router.ServeHTTP(regEnabled, regEnabledReq)
 	if regEnabled.Code != stdhttp.StatusCreated {
 		t.Fatalf("expected register 201 when enabled, got %d: %s", regEnabled.Code, regEnabled.Body.String())
+	}
+	if !strings.Contains(regEnabled.Body.String(), `"platformRole":"user"`) {
+		t.Fatalf("expected registered platform user role, got %s", regEnabled.Body.String())
 	}
 	memberCookie := authCookieFromRecorder(t, regEnabled)
 

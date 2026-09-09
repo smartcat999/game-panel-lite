@@ -26,3 +26,15 @@ func TestRolePermissions(t *testing.T) {
 		})
 	}
 }
+
+func TestPlatformRoleIsIndependentFromMembershipRole(t *testing.T) {
+	if got := NormalizePlatformRole(PlatformRoleUser, RoleAdmin); got != PlatformRoleUser {
+		t.Fatalf("explicit platform role was overridden by legacy role: %q", got)
+	}
+	if got := NormalizePlatformRole("", RoleAdmin); got != PlatformRoleAdmin {
+		t.Fatalf("legacy administrator migration: %q", got)
+	}
+	if got := NormalizePlatformRole("", RoleOwner); got != PlatformRoleUser {
+		t.Fatalf("workspace owner became platform administrator: %q", got)
+	}
+}

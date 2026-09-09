@@ -19,7 +19,7 @@ func tenantRoleCanWrite(role domain.Role) bool {
 func (h *Handler) requireServerAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		account, ok := accountFromContext(r.Context())
-		if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+		if !ok || domain.IsPlatformAdmin(account) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -43,7 +43,7 @@ func (h *Handler) requireServerAccess(next http.Handler) http.Handler {
 func (h *Handler) creationOrganization(r *http.Request, requested string) (string, int, error) {
 	requested = strings.TrimSpace(requested)
 	account, ok := accountFromContext(r.Context())
-	if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if !ok || domain.IsPlatformAdmin(account) {
 		if requested == "" {
 			return "", 0, nil
 		}
@@ -77,7 +77,7 @@ func (h *Handler) creationOrganization(r *http.Request, requested string) (strin
 
 func (h *Handler) serverTransferAllowed(w http.ResponseWriter, r *http.Request, server domain.GameServer, sourceOrg string) bool {
 	account, ok := accountFromContext(r.Context())
-	if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if !ok || domain.IsPlatformAdmin(account) {
 		return true
 	}
 	if server.OrganizationID == "" {
@@ -98,7 +98,7 @@ func (h *Handler) serverTransferAllowed(w http.ResponseWriter, r *http.Request, 
 
 func allocationActor(r *http.Request) string {
 	account, ok := accountFromContext(r.Context())
-	if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if !ok || domain.IsPlatformAdmin(account) {
 		return ""
 	}
 	return account.ID

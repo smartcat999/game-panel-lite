@@ -36,7 +36,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const { locale, setLocale } = useI18n();
   const { setTheme } = useTheme();
   const isZh = locale.startsWith("zh");
-  const { role } = usePermissions();
+  const { platformRole } = usePermissions();
   const account = useAuthBootstrap().data?.account;
   const queryClient = useQueryClient();
 
@@ -79,7 +79,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
               <span>GamePanel Cloud</span>
               <span className="text-[9px] font-mono text-emerald-700 bg-emerald-100/60 border border-emerald-300/40 px-1 py-0.2 rounded font-semibold ml-0.5">
-                {role === "admin" ? (isZh ? "管理员" : "Admin") : (isZh ? "成员" : "Member")}
+                {platformRole === "platform_admin" ? (isZh ? "平台管理员" : "Platform admin") : (isZh ? "租户用户" : "Tenant user")}
               </span>
               <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
             </div>
@@ -127,7 +127,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                 <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-lg z-50 animate-in fade-in zoom-in-95 duration-100 space-y-1">
                   <div className="px-2.5 py-1.5 border-b border-slate-100 text-[11px]">
                     <div className="font-bold text-slate-900">{account?.username ?? (isZh ? "当前用户" : "Current user")}</div>
-                    <div className="text-slate-400 text-[10px] truncate">{role === "admin" ? (isZh ? "管理员账号" : "Administrator account") : (isZh ? "成员账号" : "Member account")}</div>
+                    <div className="text-slate-400 text-[10px] truncate">{platformRole === "platform_admin" ? (isZh ? "平台管理员账号" : "Platform administrator") : (isZh ? "平台用户账号" : "Platform user")}</div>
                   </div>
                   <Link
                     href="/settings"

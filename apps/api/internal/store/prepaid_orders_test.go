@@ -28,7 +28,7 @@ func testPrepaidOrders(t *testing.T, db *Store) {
 		t.Fatal(err)
 	}
 	admin := domain.AdminAccount{ID: "order-admin", Username: "order-admin", Role: domain.RoleAdmin, PasswordHash: "test"}
-	if err := db.db.Create(&admin).Error; err != nil {
+	if err := db.CreateAdminAccount(ctx, &admin); err != nil {
 		t.Fatal(err)
 	}
 	plan := commerce.PlanVersion{PlanID: "order-plan", Version: 1, ProviderKey: "test", RegionID: "east", CPU: 1, MemoryMB: 128, StorageBytes: 1024, Currency: "CNY", UnitAmountMinor: 100, PeriodSeconds: 86400}

@@ -104,7 +104,7 @@ func (h *Handler) observabilityPrometheusText(ctx context.Context) (string, erro
 
 func (h *Handler) listActivity(w http.ResponseWriter, r *http.Request) {
 	list := h.store.ListActivity
-	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+	if account, ok := accountFromContext(r.Context()); ok && !domain.IsPlatformAdmin(account) {
 		list = func(ctx context.Context, limit int) ([]domain.ActivityEvent, error) {
 			return h.store.ListUserActivity(ctx, account.ID, "", limit)
 		}

@@ -38,12 +38,13 @@ type authContextKey string
 const authAccountContextKey authContextKey = "account"
 
 type authAccountResponse struct {
-	ID          string                      `json:"id"`
-	Username    string                      `json:"username"`
-	Role        domain.Role                 `json:"role"`
-	Permissions []domain.Permission         `json:"permissions"`
-	Preferences *accountPreferencesResponse `json:"preferences,omitempty"`
-	CreatedAt   string                      `json:"createdAt,omitempty"`
+	ID           string                      `json:"id"`
+	Username     string                      `json:"username"`
+	Role         domain.Role                 `json:"role"`
+	PlatformRole domain.PlatformRole         `json:"platformRole"`
+	Permissions  []domain.Permission         `json:"permissions"`
+	Preferences  *accountPreferencesResponse `json:"preferences,omitempty"`
+	CreatedAt    string                      `json:"createdAt,omitempty"`
 }
 
 type authBootstrapResponse struct {
@@ -79,12 +80,13 @@ func (h *Handler) authBootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 		role := domain.NormalizeAccountRole(account.Role)
 		response.Account = &authAccountResponse{
-			ID:          account.ID,
-			Username:    account.Username,
-			Role:        role,
-			Permissions: domain.PermissionsForRole(role),
-			Preferences: &accountPreferencesResponse{Locale: preferences.Locale, Theme: preferences.Theme},
-			CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+			ID:           account.ID,
+			Username:     account.Username,
+			Role:         role,
+			PlatformRole: domain.NormalizePlatformRole(account.PlatformRole, account.Role),
+			Permissions:  domain.PermissionsForRole(role),
+			Preferences:  &accountPreferencesResponse{Locale: preferences.Locale, Theme: preferences.Theme},
+			CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 		}
 	}
 	writeJSON(w, http.StatusOK, response)
@@ -122,6 +124,7 @@ func (h *Handler) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		ID:           uuid.NewString(),
 		Username:     username,
 		Role:         domain.RoleAdmin,
+		PlatformRole: domain.PlatformRoleAdmin,
 		PasswordHash: passwordHash,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -135,11 +138,12 @@ func (h *Handler) setupAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, authAccountResponse{
-		ID:          account.ID,
-		Username:    account.Username,
-		Role:        account.Role,
-		Permissions: domain.PermissionsForRole(account.Role),
-		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		ID:           account.ID,
+		Username:     account.Username,
+		Role:         account.Role,
+		PlatformRole: account.PlatformRole,
+		Permissions:  domain.PermissionsForRole(account.Role),
+		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -174,6 +178,7 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		ID:           uuid.NewString(),
 		Username:     username,
 		Role:         domain.RoleMember,
+		PlatformRole: domain.PlatformRoleUser,
 		PasswordHash: passwordHash,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -187,11 +192,12 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, authAccountResponse{
-		ID:          account.ID,
-		Username:    account.Username,
-		Role:        account.Role,
-		Permissions: domain.PermissionsForRole(account.Role),
-		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		ID:           account.ID,
+		Username:     account.Username,
+		Role:         account.Role,
+		PlatformRole: account.PlatformRole,
+		Permissions:  domain.PermissionsForRole(account.Role),
+		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -223,11 +229,12 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	role := domain.NormalizeAccountRole(account.Role)
 	writeJSON(w, http.StatusOK, authAccountResponse{
-		ID:          account.ID,
-		Username:    account.Username,
-		Role:        role,
-		Permissions: domain.PermissionsForRole(role),
-		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		ID:           account.ID,
+		Username:     account.Username,
+		Role:         role,
+		PlatformRole: domain.NormalizePlatformRole(account.PlatformRole, account.Role),
+		Permissions:  domain.PermissionsForRole(role),
+		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -249,11 +256,12 @@ func (h *Handler) currentAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	role := domain.NormalizeAccountRole(account.Role)
 	writeJSON(w, http.StatusOK, authAccountResponse{
-		ID:          account.ID,
-		Username:    account.Username,
-		Role:        role,
-		Permissions: domain.PermissionsForRole(role),
-		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		ID:           account.ID,
+		Username:     account.Username,
+		Role:         role,
+		PlatformRole: domain.NormalizePlatformRole(account.PlatformRole, account.Role),
+		Permissions:  domain.PermissionsForRole(role),
+		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -304,11 +312,12 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, sessionCookie(r, token, replacement.ExpiresAt))
 	writeJSON(w, http.StatusOK, authAccountResponse{
-		ID:          persisted.ID,
-		Username:    persisted.Username,
-		Role:        domain.NormalizeAccountRole(persisted.Role),
-		Permissions: domain.PermissionsForRole(persisted.Role),
-		CreatedAt:   persisted.CreatedAt.Format(time.RFC3339),
+		ID:           persisted.ID,
+		Username:     persisted.Username,
+		Role:         domain.NormalizeAccountRole(persisted.Role),
+		PlatformRole: domain.NormalizePlatformRole(persisted.PlatformRole, persisted.Role),
+		Permissions:  domain.PermissionsForRole(persisted.Role),
+		CreatedAt:    persisted.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -329,11 +338,12 @@ func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 			role = domain.RoleAdmin
 		}
 		out = append(out, authAccountResponse{
-			ID:          acc.ID,
-			Username:    acc.Username,
-			Role:        role,
-			Permissions: domain.PermissionsForRole(role),
-			CreatedAt:   acc.CreatedAt.Format(time.RFC3339),
+			ID:           acc.ID,
+			Username:     acc.Username,
+			Role:         role,
+			PlatformRole: domain.NormalizePlatformRole(acc.PlatformRole, acc.Role),
+			Permissions:  domain.PermissionsForRole(role),
+			CreatedAt:    acc.CreatedAt.Format(time.RFC3339),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -371,6 +381,7 @@ func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
 		ID:           uuid.NewString(),
 		Username:     username,
 		Role:         role,
+		PlatformRole: domain.NormalizePlatformRole("", role),
 		PasswordHash: passwordHash,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -380,11 +391,12 @@ func (h *Handler) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, authAccountResponse{
-		ID:          account.ID,
-		Username:    account.Username,
-		Role:        account.Role,
-		Permissions: domain.PermissionsForRole(account.Role),
-		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		ID:           account.ID,
+		Username:     account.Username,
+		Role:         account.Role,
+		PlatformRole: account.PlatformRole,
+		Permissions:  domain.PermissionsForRole(account.Role),
+		CreatedAt:    account.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -407,7 +419,7 @@ func (h *Handler) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Prevent demoting the last admin
-	if target.Role == domain.RoleAdmin && payload.Role != domain.RoleAdmin {
+	if domain.IsPlatformAdmin(target) && payload.Role != domain.RoleAdmin {
 		count, err := h.store.CountAdminRoleAccounts(r.Context())
 		if err == nil && count <= 1 {
 			writeError(w, http.StatusBadRequest, "cannot demote the last remaining admin")
@@ -415,17 +427,19 @@ func (h *Handler) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	target.Role = payload.Role
+	target.PlatformRole = domain.NormalizePlatformRole("", payload.Role)
 	target.UpdatedAt = time.Now()
 	if err := h.store.UpdateAccountRole(r.Context(), target.ID, target.Role); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, authAccountResponse{
-		ID:          target.ID,
-		Username:    target.Username,
-		Role:        target.Role,
-		Permissions: domain.PermissionsForRole(target.Role),
-		CreatedAt:   target.CreatedAt.Format(time.RFC3339),
+		ID:           target.ID,
+		Username:     target.Username,
+		Role:         target.Role,
+		PlatformRole: domain.NormalizePlatformRole(target.PlatformRole, target.Role),
+		Permissions:  domain.PermissionsForRole(target.Role),
+		CreatedAt:    target.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -464,11 +478,12 @@ func (h *Handler) resetUserPassword(w http.ResponseWriter, r *http.Request) {
 		clearSessionCookie(w, r)
 	}
 	writeJSON(w, http.StatusOK, authAccountResponse{
-		ID:          target.ID,
-		Username:    target.Username,
-		Role:        target.Role,
-		Permissions: domain.PermissionsForRole(target.Role),
-		CreatedAt:   target.CreatedAt.Format(time.RFC3339),
+		ID:           target.ID,
+		Username:     target.Username,
+		Role:         target.Role,
+		PlatformRole: domain.NormalizePlatformRole(target.PlatformRole, target.Role),
+		Permissions:  domain.PermissionsForRole(target.Role),
+		CreatedAt:    target.CreatedAt.Format(time.RFC3339),
 	})
 }
 
@@ -484,7 +499,7 @@ func (h *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}
-	if target.Role == domain.RoleAdmin {
+	if domain.IsPlatformAdmin(target) {
 		count, err := h.store.CountAdminRoleAccounts(r.Context())
 		if err == nil && count <= 1 {
 			writeError(w, http.StatusBadRequest, "cannot delete the last remaining admin")
@@ -550,7 +565,26 @@ func (h *Handler) requireAuth(next http.Handler) http.Handler {
 }
 
 func (h *Handler) requireAdmin(next http.Handler) http.Handler {
-	return h.requirePermission(domain.PermissionSystemManage, "administrator role required")(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if account, ok := accountFromContext(r.Context()); ok {
+			if !domain.IsPlatformAdmin(account) {
+				writeError(w, http.StatusForbidden, "platform administrator role required")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		initialized, err := h.store.HasAdminAccount(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if initialized {
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *Handler) requirePermission(permission domain.Permission, message string) func(http.Handler) http.Handler {

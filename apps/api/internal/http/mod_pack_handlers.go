@@ -267,7 +267,7 @@ func (h *Handler) modPackResponse(ctx context.Context, pack domain.ModPack) (mod
 	for _, modID := range modIDs {
 		var item domain.ModFile
 		var err error
-		if account, ok := accountFromContext(ctx); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+		if account, ok := accountFromContext(ctx); ok && !domain.IsPlatformAdmin(account) {
 			item, err = h.store.GetUserLibraryMod(ctx, account.ID, modID)
 		} else {
 			item, err = h.store.GetMod(ctx, modID)

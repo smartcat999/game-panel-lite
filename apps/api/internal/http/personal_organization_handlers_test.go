@@ -72,6 +72,7 @@ func TestRegisteredUsersOwnSeparateWorkspaces(t *testing.T) {
 	}
 	// Even platform role elevation does not bypass membership on the user endpoint.
 	accounts[1].Role = domain.RoleAdmin
+	accounts[1].PlatformRole = domain.PlatformRoleAdmin
 	if err := db.SaveAdminAccount(ctx, &accounts[1]); err != nil {
 		t.Fatal(err)
 	}

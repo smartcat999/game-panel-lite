@@ -28,7 +28,7 @@ func (h *Handler) modTransferSource(w http.ResponseWriter, r *http.Request, item
 		return "", false
 	}
 	account, ok := accountFromContext(r.Context())
-	if !ok || domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if !ok || domain.IsPlatformAdmin(account) {
 		return source.OrganizationID, true
 	}
 	_, err = h.store.GetUserOrganization(r.Context(), account.ID, source.OrganizationID)

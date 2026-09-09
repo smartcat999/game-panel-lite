@@ -25,7 +25,7 @@ func (h *Handler) streamAuthorized(r *http.Request, serverID string, permission 
 	if !domain.RoleHasPermission(account.Role, permission) {
 		return false
 	}
-	if domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if domain.IsPlatformAdmin(account) {
 		return true
 	}
 	role, err := h.store.ServerMembershipRole(r.Context(), account.ID, serverID)

@@ -37,7 +37,7 @@ func (s *Store) globalReservedResources(ctx context.Context, organizationID stri
 		ID, CurrentRevisionID string
 	}
 	if err := s.db.WithContext(ctx).Table("logical_servers").Select("id,current_revision_id").
-		Where("organization_id = ?", organizationID).Scan(&servers).Error; err != nil {
+		Where("organization_id = ? AND desired_state <> ?", organizationID, "deleted").Scan(&servers).Error; err != nil {
 		return nil, err
 	}
 	result := make([]domain.GameServer, 0, len(servers))

@@ -375,6 +375,13 @@ const (
 	RoleViewer Role = "viewer"
 )
 
+type PlatformRole string
+
+const (
+	PlatformRoleAdmin PlatformRole = "platform_admin"
+	PlatformRoleUser  PlatformRole = "user"
+)
+
 type Organization struct {
 	ID        string    `json:"id" gorm:"primaryKey"`
 	Name      string    `json:"name"`
@@ -570,12 +577,13 @@ type WorkloadObservation struct {
 }
 
 type AdminAccount struct {
-	ID           string    `json:"id" gorm:"primaryKey"`
-	Username     string    `json:"username" gorm:"uniqueIndex"`
-	Role         Role      `json:"role" gorm:"default:admin"`
-	PasswordHash string    `json:"-"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID           string       `json:"id" gorm:"primaryKey"`
+	Username     string       `json:"username" gorm:"uniqueIndex"`
+	Role         Role         `json:"role" gorm:"default:admin"`
+	PlatformRole PlatformRole `json:"platformRole" gorm:"column:platform_role"`
+	PasswordHash string       `json:"-"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
 }
 
 type AccountPreferences struct {

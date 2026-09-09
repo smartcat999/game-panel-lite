@@ -27,7 +27,7 @@ import (
 func (h *Handler) listServers(w http.ResponseWriter, r *http.Request) {
 	list := h.store.ListGameServers
 	listPage := h.store.ListGameServersPage
-	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+	if account, ok := accountFromContext(r.Context()); ok && !domain.IsPlatformAdmin(account) {
 		list = func(ctx context.Context) ([]domain.GameServer, error) {
 			return h.store.ListUserGameServers(ctx, account.ID)
 		}
@@ -709,7 +709,7 @@ func (h *Handler) serverRuntimeStats(ctx context.Context, server domain.GameServ
 
 func (h *Handler) serverWatchEvents(ctx context.Context, server domain.GameServer) []serverWatchEvent {
 	list := h.store.ListActivityByInstance
-	if account, ok := accountFromContext(ctx); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+	if account, ok := accountFromContext(ctx); ok && !domain.IsPlatformAdmin(account) {
 		list = func(ctx context.Context, instanceID string, limit int) ([]domain.ActivityEvent, error) {
 			return h.store.ListUserActivity(ctx, account.ID, instanceID, limit)
 		}

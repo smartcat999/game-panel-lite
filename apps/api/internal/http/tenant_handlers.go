@@ -99,7 +99,7 @@ type createInvitationRequest struct {
 }
 
 func (h *Handler) canManageOrganization(ctx context.Context, orgID string, account domain.AdminAccount) bool {
-	if domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if domain.IsPlatformAdmin(account) {
 		return true
 	}
 	member, err := h.store.GetOrganizationMember(ctx, orgID, account.ID)
@@ -110,7 +110,7 @@ func (h *Handler) canManageOrganization(ctx context.Context, orgID string, accou
 }
 
 func (h *Handler) canViewOrganization(ctx context.Context, orgID string, account domain.AdminAccount) bool {
-	if domain.NormalizeAccountRole(account.Role) == domain.RoleAdmin {
+	if domain.IsPlatformAdmin(account) {
 		return true
 	}
 	_, err := h.store.GetOrganizationMember(ctx, orgID, account.ID)

@@ -59,6 +59,23 @@ func NormalizeAccountRole(role Role) Role {
 	return role
 }
 
+// NormalizePlatformRole supports accounts created before platform_role was
+// introduced. New platform authorization must use this result, not Role.
+func NormalizePlatformRole(platformRole PlatformRole, legacyRole Role) PlatformRole {
+	switch platformRole {
+	case PlatformRoleAdmin, PlatformRoleUser:
+		return platformRole
+	}
+	if NormalizeAccountRole(legacyRole) == RoleAdmin {
+		return PlatformRoleAdmin
+	}
+	return PlatformRoleUser
+}
+
+func IsPlatformAdmin(account AdminAccount) bool {
+	return NormalizePlatformRole(account.PlatformRole, account.Role) == PlatformRoleAdmin
+}
+
 func PermissionsForRole(role Role) []Permission {
 	var permissions []Permission
 	switch NormalizeAccountRole(role) {

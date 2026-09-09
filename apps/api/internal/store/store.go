@@ -56,6 +56,13 @@ func initialize(db *gorm.DB) (*Store, error) {
 		}
 		return nil, err
 	}
+	if err := backfillAccountPlatformRoles(db); err != nil {
+		pool, _ := db.DB()
+		if pool != nil {
+			_ = pool.Close()
+		}
+		return nil, err
+	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for _, table := range []string{"worlds", "activity_events"} {
 			if err := backfillInstanceOwnership(tx, table); err != nil {
@@ -187,6 +194,7 @@ func (s *Store) HasAdminAccount(ctx context.Context) (bool, error) {
 }
 
 func (s *Store) CreateAdminAccount(ctx context.Context, account *domain.AdminAccount) error {
+	account.PlatformRole = domain.NormalizePlatformRole(account.PlatformRole, account.Role)
 	return s.db.WithContext(ctx).Create(account).Error
 }
 
@@ -209,6 +217,7 @@ func (s *Store) GetAdminAccount(ctx context.Context, id string) (domain.AdminAcc
 }
 
 func (s *Store) SaveAdminAccount(ctx context.Context, account *domain.AdminAccount) error {
+	account.PlatformRole = domain.NormalizePlatformRole(account.PlatformRole, account.Role)
 	return s.db.WithContext(ctx).Save(account).Error
 }
 
@@ -224,8 +233,24 @@ func (s *Store) DeleteAdminAccount(ctx context.Context, id string) error {
 
 func (s *Store) CountAdminRoleAccounts(ctx context.Context) (int64, error) {
 	var count int64
-	err := s.db.WithContext(ctx).Model(&domain.AdminAccount{}).Where("role = ?", domain.RoleAdmin).Count(&count).Error
+	err := s.db.WithContext(ctx).Model(&domain.AdminAccount{}).Where("platform_role = ?", domain.PlatformRoleAdmin).Count(&count).Error
 	return count, err
+}
+
+func backfillAccountPlatformRoles(db *gorm.DB) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`UPDATE admin_accounts SET platform_role = CASE WHEN role = 'admin' THEN 'platform_admin' ELSE 'user' END WHERE platform_role IS NULL OR platform_role = ''`).Error; err != nil {
+			return err
+		}
+		var invalid int64
+		if err := tx.Model(&domain.AdminAccount{}).Where("platform_role NOT IN ?", []domain.PlatformRole{domain.PlatformRoleAdmin, domain.PlatformRoleUser}).Count(&invalid).Error; err != nil {
+			return err
+		}
+		if invalid != 0 {
+			return errors.New("invalid account platform role")
+		}
+		return nil
+	})
 }
 
 func (s *Store) CreateSession(ctx context.Context, session *domain.Session) error {
@@ -411,10 +436,16 @@ func (s *Store) getStoredGameServer(ctx context.Context, id string) (domain.Game
 }
 
 func (s *Store) DeleteGameServer(ctx context.Context, id string) error {
-	_ = s.db.WithContext(ctx).Table("server_placements").Where("server_id = ?", id).Delete(nil).Error
-	_ = s.db.WithContext(ctx).Table("server_revisions").Where("server_id = ?", id).Delete(nil).Error
-	_ = s.db.WithContext(ctx).Table("logical_servers").Where("id = ?", id).Delete(nil).Error
-	return s.db.WithContext(ctx).Delete(&domain.GameServer{}, "id = ?", id).Error
+	return s.Transaction(ctx, func(tx *Store) error {
+		logical := tx.db.WithContext(ctx).Table("logical_servers").Where("id = ? AND desired_state <> ?", id, "deleted").Updates(map[string]any{
+			"desired_state":  "deleted",
+			"intent_version": gorm.Expr("intent_version + 1"),
+		})
+		if logical.Error != nil {
+			return logical.Error
+		}
+		return tx.db.WithContext(ctx).Delete(&domain.GameServer{}, "id = ?", id).Error
+	})
 }
 
 func (s *Store) CreateGameUpdateJob(ctx context.Context, job *domain.GameUpdateJob) error {

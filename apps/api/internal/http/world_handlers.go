@@ -21,7 +21,7 @@ import (
 
 func (h *Handler) listWorlds(w http.ResponseWriter, r *http.Request) {
 	list := h.store.ListWorlds
-	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+	if account, ok := accountFromContext(r.Context()); ok && !domain.IsPlatformAdmin(account) {
 		list = func(ctx context.Context) ([]domain.World, error) { return h.store.ListUserWorlds(ctx, account.ID) }
 	}
 	worlds, err := list(r.Context())

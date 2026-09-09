@@ -22,7 +22,7 @@ func TestPrepaidCatalog(t *testing.T) {
 func testPrepaidCatalog(t *testing.T, db *Store) {
 	ctx := context.Background()
 	admin := domain.AdminAccount{ID: "catalog-admin", Username: "catalog-admin", Role: domain.RoleAdmin, PasswordHash: "test"}
-	if err := db.db.Create(&admin).Error; err != nil {
+	if err := db.CreateAdminAccount(ctx, &admin); err != nil {
 		t.Fatal(err)
 	}
 	plan := commerce.PlanVersion{PlanID: "standard", Version: 1, ProviderKey: "test", RegionID: "east", CPU: 1, MemoryMB: 128, StorageBytes: 1024, BackupRetentionCount: 1, Currency: "CNY", UnitAmountMinor: 100, PeriodSeconds: 86400}

@@ -101,6 +101,17 @@ func testTenantAllocations(t *testing.T, db *Store) {
 	if err := db.DeleteGameServer(ctx, servers[1].ID); err != nil {
 		t.Fatal(err)
 	}
+	var deleted struct {
+		DesiredState  string
+		IntentVersion int64
+	}
+	if err := db.db.Table("logical_servers").Select("desired_state", "intent_version").Where("id = ?", servers[1].ID).Take(&deleted).Error; err != nil || deleted.DesiredState != "deleted" || deleted.IntentVersion != 2 {
+		t.Fatalf("logical deletion tombstone: %+v %v", deleted, err)
+	}
+	var revisionCount int64
+	if err := db.db.Table("server_revisions").Where("server_id = ?", servers[1].ID).Count(&revisionCount).Error; err != nil || revisionCount != 1 {
+		t.Fatalf("immutable revision history: %d %v", revisionCount, err)
+	}
 	replacement := newServer("allocation-replacement")
 	if err := db.CreateAllocatedGameServer(ctx, "allocator", &replacement); err != nil {
 		t.Fatal(err)

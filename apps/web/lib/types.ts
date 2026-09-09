@@ -437,6 +437,7 @@ export type ActivityEvent = {
 };
 
 export type UserRole = "admin" | "member" | "viewer";
+export type PlatformRole = "platform_admin" | "user";
 
 export type Permission =
   | "server.view"
@@ -455,9 +456,10 @@ export type Permission =
   | "system.manage";
 
 export type UserAccount = {
-  id: string;
-  username: string;
-  role: UserRole;
+	id: string;
+	username: string;
+	role: UserRole;
+	platformRole: PlatformRole;
   permissions?: Permission[];
   preferences?: AccountPreferences;
   createdAt?: string;
@@ -646,4 +648,3 @@ export type ServerOperation = {
   status: "pending" | "succeeded" | "failed";
   createdAt: string;
 };
-

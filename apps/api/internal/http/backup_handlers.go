@@ -19,7 +19,7 @@ import (
 
 func (h *Handler) listBackups(w http.ResponseWriter, r *http.Request) {
 	list := h.store.ListBackups
-	if account, ok := accountFromContext(r.Context()); ok && domain.NormalizeAccountRole(account.Role) != domain.RoleAdmin {
+	if account, ok := accountFromContext(r.Context()); ok && !domain.IsPlatformAdmin(account) {
 		list = func(ctx context.Context) ([]domain.Backup, error) { return h.store.ListUserBackups(ctx, account.ID) }
 	}
 	backups, err := list(r.Context())

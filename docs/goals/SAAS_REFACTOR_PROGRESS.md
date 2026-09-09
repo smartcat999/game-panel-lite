@@ -9,6 +9,14 @@
 - 定向 Store／HTTP 测试、全量 `go test ./...`、`go vet ./...`、前端 lint／typecheck／production build 和差异空白检查通过；本地 3005 预览在构建后已恢复。全量 Go 测试需在沙箱外运行，因为既有 SSE 测试要监听本机随机端口。
 - 本批尚未完成账号平台角色的持久模型拆分、控制台范围 Provider 或 Region 运维页面；不能仅凭成员角色摘要宣称权限模型迁移完成。
 
+### 2026-09-09 账号平台角色持久化拆分
+
+- 新增明确的 `PlatformRole`：账号全局角色只允许 `platform_admin` 或 `user`，空间内 `owner/admin/member/viewer` 继续归成员关系。PostgreSQL 32 号迁移将旧 `admin` 账号回填为平台管理员，其余旧账号回填为平台用户；SQLite 启动迁移同样完成旧数据回填和非法值检查。
+- 平台管理路由、平台运维绕过、套餐目录发布和人工权益调整改为读取 `platform_role`。显式平台角色优先于旧兼容字段，空间 owner/admin 不会因此取得平台管理员权限；认证响应和前端账号缓存新增 `platformRole`，顶栏身份说明使用平台角色。
+- 真实 PostgreSQL 回归发现旧测试直接绕过 Store 写账号会被新 CHECK 拒绝，相关写入已收敛到账号 Store 边界。随后又发现旧删除函数吞掉不可变修订删除错误；现改为事务写入逻辑实例 `deleted` 墓碑并保留不可变修订，租户额度查询明确排除已删除逻辑实例。
+- 全量 `go test ./...`、`go vet ./...`、前端 126 项测试、lint、typecheck、production build、SQLite 旧账号迁移测试及 PostgreSQL 16 `TestPostgresIntegration -race` 通过。本地认证实测返回 `platformRole=platform_admin`，3005 页面刷新后显示“平台管理员”。临时 PostgreSQL 容器已删除。
+- 旧 `role` 和基于它的通用权限列表仍为兼容层，尚未由当前控制台范围与空间成员角色完全替代；`PerspectiveProvider`、顶部空间切换和查询缓存范围隔离继续待改造。
+
 ## 2026-09-08 用户确认的交付优先级调整
 
 - 存档与备份接入方向调整为自建、兼容 S3 API 的对象存储，先完成同 Region 使用；实现边界与剩余工作见 [区域对象存储方案](../architecture/regional-object-storage.md)。

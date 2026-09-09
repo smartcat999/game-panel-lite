@@ -105,6 +105,7 @@ func TestStreamAuthorizationUsesCurrentRoleAndExpiresSessions(t *testing.T) {
 		t.Fatal("admin stream denied")
 	}
 	account.Role = domain.RoleViewer
+	account.PlatformRole = domain.PlatformRoleUser
 	if err := db.SaveAdminAccount(ctx, &account); err != nil {
 		t.Fatal(err)
 	}

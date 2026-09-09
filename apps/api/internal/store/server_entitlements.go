@@ -39,13 +39,16 @@ func (s *Store) ChangeOperatorEntitlement(ctx context.Context, actor string, cha
 	hash := hex.EncodeToString(digest[:])
 	var result entitlements.Record
 	err = s.Transaction(ctx, func(tx *Store) error {
-		var account struct{ Role string }
-		query := tx.db.WithContext(ctx).Table("admin_accounts").Select("role").Where("id = ?", actor)
+		var account struct {
+			Role         domain.Role
+			PlatformRole domain.PlatformRole
+		}
+		query := tx.db.WithContext(ctx).Table("admin_accounts").Select("role", "platform_role").Where("id = ?", actor)
 		if tx.db.Dialector.Name() == "postgres" {
 			query = query.Clauses(clause.Locking{Strength: "SHARE"})
 		}
 		err := query.Take(&account).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && account.Role != string(domain.RoleAdmin)) {
+		if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && domain.NormalizePlatformRole(account.PlatformRole, account.Role) != domain.PlatformRoleAdmin) {
 			return entitlements.ErrOperatorRequired
 		}
 		if err != nil {

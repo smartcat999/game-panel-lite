@@ -26,13 +26,16 @@ type prepaidSaleRow struct {
 }
 
 func requireCatalogOperator(tx *gorm.DB, actor string) error {
-	var account struct{ Role domain.Role }
-	q := tx.Table("admin_accounts").Select("role").Where("id = ?", actor)
+	var account struct {
+		Role         domain.Role
+		PlatformRole domain.PlatformRole
+	}
+	q := tx.Table("admin_accounts").Select("role", "platform_role").Where("id = ?", actor)
 	if tx.Dialector.Name() == "postgres" {
 		q = q.Clauses(clause.Locking{Strength: "SHARE"})
 	}
 	err := q.Take(&account).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && account.Role != domain.RoleAdmin) {
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && domain.NormalizePlatformRole(account.PlatformRole, account.Role) != domain.PlatformRoleAdmin) {
 		return commerce.ErrOperatorRequired
 	}
 	return err
@@ -145,12 +148,13 @@ func (s *Store) ListAvailablePrepaidPlans(ctx context.Context) ([]commerce.PlanV
 // commercial plans are published and enabled for sale.
 func (s *Store) SeedDefaultPrepaidPlans(ctx context.Context) error {
 	var admin domain.AdminAccount
-	err := s.db.WithContext(ctx).Table("admin_accounts").Where("role = ?", domain.RoleAdmin).First(&admin).Error
+	err := s.db.WithContext(ctx).Table("admin_accounts").Where("platform_role = ?", domain.PlatformRoleAdmin).First(&admin).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		admin = domain.AdminAccount{
 			ID:           "system-catalog-admin",
 			Username:     "system_admin",
 			Role:         domain.RoleAdmin,
+			PlatformRole: domain.PlatformRoleAdmin,
 			PasswordHash: "$2a$10$defaultseedhashplaceholder",
 		}
 		if createErr := s.db.WithContext(ctx).Table("admin_accounts").Create(&admin).Error; createErr != nil {

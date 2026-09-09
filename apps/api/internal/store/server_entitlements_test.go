@@ -32,7 +32,7 @@ func testServerEntitlements(t *testing.T, db *Store) {
 		t.Fatal(err)
 	}
 	admin := domain.AdminAccount{ID: "ent-admin", Username: "ent-admin", Role: domain.RoleAdmin, PasswordHash: "test"}
-	if err := db.db.Create(&admin).Error; err != nil {
+	if err := db.CreateAdminAccount(ctx, &admin); err != nil {
 		t.Fatal(err)
 	}
 	created, err := db.CreateGlobalServer(ctx, "ent-user", instances.CreateRequest{OrganizationID: org.ID, Name: "ent-server", RegionID: "ent-east", IdempotencyKey: "ent-create", Specification: instances.Specification{ProviderKey: "test", GameVersion: "1", ConfigSchemaVersion: 1, Configuration: instances.ProtectedConfiguration{KeyID: "test", Ciphertext: []byte("opaque")}, Resources: instances.Resources{CPU: 1, MemoryMB: 128}}})

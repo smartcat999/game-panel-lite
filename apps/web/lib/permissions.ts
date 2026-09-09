@@ -25,16 +25,18 @@ export function usePermissions() {
 
   const account = authQuery.data?.account;
   const role: UserRole = account?.role ?? (authQuery.data?.initialized === false ? "admin" : "viewer");
+  const platformRole = account?.platformRole ?? (authQuery.data?.initialized === false ? "platform_admin" : "user");
   const permissions = new Set<Permission>(account?.permissions ?? permissionsForRole(role));
   const can = (permission: Permission) => permissions.has(permission);
 
   const isViewer = role === "viewer";
   const isMember = role === "member";
-  const isAdmin = role === "admin";
+  const isAdmin = platformRole === "platform_admin";
 
   return {
     account,
     role,
+    platformRole,
     permissions,
     can,
     isViewer,
