@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isCuratedGameRuleField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload } from "./provider-config";
+import { createDefaultProviderConfigPayload, isAdvancedProviderConfigField, isCuratedGameRuleField, isProviderFieldModified, isWorldGenerationProviderConfigField, providerConfigFieldChanged, providerConfigValue, restoreProviderConfigDefaults, updateDSTGameModePayload, updateProviderConfigPath, updateProviderConfigPayload } from "./provider-config";
 import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 const provider: ProviderCatalog = {
@@ -129,6 +129,27 @@ describe("provider config helpers", () => {
       }
     });
     expect(payload.world.overrides.winters_feast).toBe("default");
+  });
+
+  it("keeps DST death rules consistent with the selected game mode", () => {
+    const updated = updateDSTGameModePayload({
+      gameplay: { gameMode: "survival" },
+      world: { overrides: { grass: "often", resettime: "default", portalresurection: "none" } }
+    }, "endless");
+
+    expect(updated).toMatchObject({
+      gameplay: { gameMode: "endless" },
+      world: {
+        overrides: {
+          grass: "often",
+          spawnmode: "fixed",
+          ghostenabled: "always",
+          portalresurection: "always",
+          ghostsanitydrain: "none",
+          resettime: "none"
+        }
+      }
+    });
   });
 
   it("keeps nested schema defaults when stored override groups are empty", () => {

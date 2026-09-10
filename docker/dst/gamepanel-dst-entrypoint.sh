@@ -287,6 +287,10 @@ sync_server_mods() {
     if ! download_server_mods "${refresh_dir}"; then
       echo "DST Workshop refresh failed; keeping the previous cache." >&2
       rm -rf "${refresh_dir}"
+      if [[ -z "$(missing_workshop_ids "${UGC_DIR}")" ]]; then
+        echo "Continuing with the previous verified GamePanel DST Workshop cache."
+        return 0
+      fi
       exit 1
     fi
     local missing
@@ -294,6 +298,10 @@ sync_server_mods() {
     if [[ -n "${missing}" ]]; then
       echo "DST Workshop refresh failed; missing IDs: ${missing//$'\n'/, }" >&2
       rm -rf "${refresh_dir}"
+      if [[ -z "$(missing_workshop_ids "${UGC_DIR}")" ]]; then
+        echo "Continuing with the previous verified GamePanel DST Workshop cache."
+        return 0
+      fi
       exit 1
     fi
     rm -rf "${previous_dir}"

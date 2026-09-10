@@ -71,7 +71,7 @@ import { isWorldOrBackupEventType, showWorldAndBackupFeatures } from "@/lib/feat
 import { gameServerConfigPendingRestart, gameServerJoinPort, gameServerMode, gameServerStatus, gameServerVersion, terrariaConfigFromGameServer } from "@/lib/game-server-resource";
 import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstConfiguredWorkshopIds, dstModScope, isServerAssignableMod, mergeConfiguredWorkshopMods, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
-import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
+import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateDSTGameModePayload, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
@@ -1826,6 +1826,10 @@ function ConfigTab({
   const updateGameRule = (key: string, value: unknown) => {
     if (isTerrariaProvider) {
       setDraft((current) => ({ ...current, [key]: value } as TerrariaConfig));
+      return;
+    }
+    if (resource.providerKey === "dont-starve-together" && key === "gameplay.gameMode") {
+      setProviderDraft((current) => updateDSTGameModePayload(current, String(value)));
       return;
     }
     setProviderDraft((current) => updateProviderConfigPath(current, key, value));

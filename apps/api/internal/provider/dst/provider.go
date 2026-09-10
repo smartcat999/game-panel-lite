@@ -354,6 +354,7 @@ func normalizeConfig(config Config) Config {
 		config.Shards.CavesID = DefaultCavesShardID
 	}
 	config.World.Overrides = cleanOverrides(config.World.Overrides)
+	config.World.Overrides = applyGameModeOverrides(config.Gameplay.GameMode, config.World.Overrides)
 	if config.Caves != nil {
 		if strings.TrimSpace(config.Caves.Preset) == "" {
 			config.Caves.Preset = "cave_default"
@@ -378,6 +379,39 @@ func normalizeConfig(config Config) Config {
 	return config
 }
 
+func applyGameModeOverrides(gameMode string, overrides map[string]string) map[string]string {
+	if overrides == nil {
+		overrides = map[string]string{}
+	}
+	modeOverrides := map[string]map[string]string{
+		"survival": {
+			"spawnmode":         "fixed",
+			"ghostenabled":      "always",
+			"portalresurection": "none",
+			"ghostsanitydrain":  "always",
+			"resettime":         "default",
+		},
+		"endless": {
+			"spawnmode":         "fixed",
+			"ghostenabled":      "always",
+			"portalresurection": "always",
+			"ghostsanitydrain":  "none",
+			"resettime":         "none",
+		},
+		"wilderness": {
+			"spawnmode":         "scatter",
+			"ghostenabled":      "none",
+			"portalresurection": "none",
+			"ghostsanitydrain":  "none",
+			"resettime":         "none",
+		},
+	}
+	for key, value := range modeOverrides[gameMode] {
+		overrides[key] = value
+	}
+	return overrides
+}
+
 func configFromPayload(payload map[string]any, fallback Config) Config {
 	config := normalizeConfig(fallback)
 	if identity := objectPayload(payload, "identity"); identity != nil {
@@ -388,11 +422,21 @@ func configFromPayload(payload map[string]any, fallback Config) Config {
 		config.Identity.ClusterToken = stringPayload(identity, "clusterToken")
 		config.Identity.Visibility = stringPayload(identity, "visibility")
 	}
-	if val := stringPayload(payload, "serverName"); val != "" { config.Identity.ServerName = val }
-	if val := stringPayload(payload, "clusterName"); val != "" { config.Identity.ClusterName = val }
-	if val := stringPayload(payload, "password"); val != "" { config.Identity.Password = val }
-	if val := stringPayload(payload, "identity.password"); val != "" { config.Identity.Password = val }
-	if val := stringPayload(payload, "clusterToken"); val != "" { config.Identity.ClusterToken = val }
+	if val := stringPayload(payload, "serverName"); val != "" {
+		config.Identity.ServerName = val
+	}
+	if val := stringPayload(payload, "clusterName"); val != "" {
+		config.Identity.ClusterName = val
+	}
+	if val := stringPayload(payload, "password"); val != "" {
+		config.Identity.Password = val
+	}
+	if val := stringPayload(payload, "identity.password"); val != "" {
+		config.Identity.Password = val
+	}
+	if val := stringPayload(payload, "clusterToken"); val != "" {
+		config.Identity.ClusterToken = val
+	}
 
 	if gameplay := objectPayload(payload, "gameplay"); gameplay != nil {
 		if value, ok := intPayload(gameplay, "maxPlayers"); ok {
@@ -403,14 +447,30 @@ func configFromPayload(payload map[string]any, fallback Config) Config {
 		config.Gameplay.PauseWhenEmpty = boolPayloadDefault(gameplay, "pauseWhenEmpty", config.Gameplay.PauseWhenEmpty)
 		config.Gameplay.ConsoleEnabled = boolPayloadDefault(gameplay, "consoleEnabled", config.Gameplay.ConsoleEnabled)
 	}
-	if val, ok := intPayload(payload, "gameplay.maxPlayers"); ok { config.Gameplay.MaxPlayers = val }
-	if val, ok := intPayload(payload, "maxPlayers"); ok { config.Gameplay.MaxPlayers = val }
-	if val := stringPayload(payload, "gameplay.gameMode"); val != "" { config.Gameplay.GameMode = val }
-	if val := stringPayload(payload, "gameMode"); val != "" { config.Gameplay.GameMode = val }
-	if _, ok := payload["gameplay.pvp"]; ok { config.Gameplay.PVP = boolPayload(payload, "gameplay.pvp") }
-	if _, ok := payload["pvp"]; ok { config.Gameplay.PVP = boolPayload(payload, "pvp") }
-	if _, ok := payload["gameplay.pauseWhenEmpty"]; ok { config.Gameplay.PauseWhenEmpty = boolPayload(payload, "gameplay.pauseWhenEmpty") }
-	if _, ok := payload["pauseWhenEmpty"]; ok { config.Gameplay.PauseWhenEmpty = boolPayload(payload, "pauseWhenEmpty") }
+	if val, ok := intPayload(payload, "gameplay.maxPlayers"); ok {
+		config.Gameplay.MaxPlayers = val
+	}
+	if val, ok := intPayload(payload, "maxPlayers"); ok {
+		config.Gameplay.MaxPlayers = val
+	}
+	if val := stringPayload(payload, "gameplay.gameMode"); val != "" {
+		config.Gameplay.GameMode = val
+	}
+	if val := stringPayload(payload, "gameMode"); val != "" {
+		config.Gameplay.GameMode = val
+	}
+	if _, ok := payload["gameplay.pvp"]; ok {
+		config.Gameplay.PVP = boolPayload(payload, "gameplay.pvp")
+	}
+	if _, ok := payload["pvp"]; ok {
+		config.Gameplay.PVP = boolPayload(payload, "pvp")
+	}
+	if _, ok := payload["gameplay.pauseWhenEmpty"]; ok {
+		config.Gameplay.PauseWhenEmpty = boolPayload(payload, "gameplay.pauseWhenEmpty")
+	}
+	if _, ok := payload["pauseWhenEmpty"]; ok {
+		config.Gameplay.PauseWhenEmpty = boolPayload(payload, "pauseWhenEmpty")
+	}
 
 	if world := objectPayload(payload, "world"); world != nil {
 		config.World.Preset = stringPayload(world, "preset")
@@ -425,11 +485,15 @@ func configFromPayload(payload map[string]any, fallback Config) Config {
 		}
 	}
 	if _, ok := payload["caves.enabled"]; ok {
-		if config.Caves == nil { config.Caves = &DSTCaveConfig{} }
+		if config.Caves == nil {
+			config.Caves = &DSTCaveConfig{}
+		}
 		config.Caves.Enabled = boolPayload(payload, "caves.enabled")
 	}
 	if _, ok := payload["cavesEnabled"]; ok {
-		if config.Caves == nil { config.Caves = &DSTCaveConfig{} }
+		if config.Caves == nil {
+			config.Caves = &DSTCaveConfig{}
+		}
 		config.Caves.Enabled = boolPayload(payload, "cavesEnabled")
 	}
 

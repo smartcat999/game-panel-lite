@@ -428,3 +428,44 @@ func TestServerRuntimeUsesSemanticConfigPayload(t *testing.T) {
 		t.Fatalf("expected payload token file, got %q", got)
 	}
 }
+
+func TestGameModesApplyMatchingDeathRules(t *testing.T) {
+	tests := []struct {
+		name     string
+		gameMode string
+		expected map[string]string
+	}{
+		{
+			name:     "survival",
+			gameMode: "survival",
+			expected: map[string]string{"spawnmode": "fixed", "ghostenabled": "always", "portalresurection": "none", "ghostsanitydrain": "always", "resettime": "default"},
+		},
+		{
+			name:     "endless",
+			gameMode: "endless",
+			expected: map[string]string{"spawnmode": "fixed", "ghostenabled": "always", "portalresurection": "always", "ghostsanitydrain": "none", "resettime": "none"},
+		},
+		{
+			name:     "wilderness",
+			gameMode: "wilderness",
+			expected: map[string]string{"spawnmode": "scatter", "ghostenabled": "none", "portalresurection": "none", "ghostsanitydrain": "none", "resettime": "none"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := normalizeConfig(Config{
+				Gameplay: DSTGameplayConfig{GameMode: tt.gameMode},
+				World: DSTWorldConfig{Overrides: map[string]string{
+					"resettime":         "fast",
+					"portalresurection": "none",
+				}},
+			})
+			for key, expected := range tt.expected {
+				if got := config.World.Overrides[key]; got != expected {
+					t.Fatalf("expected %s=%q for %s mode, got %q", key, expected, tt.gameMode, got)
+				}
+			}
+		})
+	}
+}
