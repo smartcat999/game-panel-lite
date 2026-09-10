@@ -39,3 +39,20 @@ type CommandIdentity struct {
 	CommandID      CommandID      `json:"commandId"`
 	IdempotencyKey IdempotencyKey `json:"idempotencyKey"`
 }
+
+type ListenerRequirement struct {
+	Name               string   `json:"name"`
+	Purpose            string   `json:"purpose"`
+	Transports         []string `json:"transports"`
+	InternalPort       int      `json:"internalPort"`
+	ExternalPortPolicy string   `json:"externalPortPolicy"`
+	AddressMode        string   `json:"addressMode"`
+	Primary            bool     `json:"primary"`
+}
+
+type ModLockEntry struct {
+	ModID   string `json:"modId"`
+	Version string `json:"version"`
+	Digest  string `json:"digest"`
+	Direct  bool   `json:"direct"`
+}

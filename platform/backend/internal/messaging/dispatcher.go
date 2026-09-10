@@ -96,8 +96,8 @@ func subjectFor(message PendingMessage) string {
 		RegionID string `json:"regionId"`
 	}
 	_ = json.Unmarshal(message.Payload, &payload)
-	if message.MessageType == "deployment.desired.v1" && payload.RegionID != "" {
-		return fmt.Sprintf("gamepanel.region.%s.deployment.desired.v1", payload.RegionID)
+	if (message.MessageType == "deployment.desired.v1" || message.MessageType == "console.command.requested.v1" || message.MessageType == "backup.requested.v1") && payload.RegionID != "" {
+		return fmt.Sprintf("gamepanel.region.%s.%s", payload.RegionID, message.MessageType)
 	}
 	return "gamepanel.global." + message.MessageType
 }

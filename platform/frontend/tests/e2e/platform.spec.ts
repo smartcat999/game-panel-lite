@@ -9,6 +9,15 @@ test("provider-driven create flow exposes mods only when supported", async ({ pa
   await expect(modStep).toBeVisible();
   await page.getByRole("button", { name: "下一步" }).click();
   await expect(page.getByText("公网地址与端口由系统部署时自动分配，协议由游戏 Provider 声明。")).toBeVisible();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await expect(page.getByLabel("服务器名称")).toHaveValue("Ember Modded");
+  await expect(page.getByLabel("附加启动参数")).toBeVisible();
+  await page.getByRole("checkbox", { name: "启动时更新模组" }).uncheck();
+  await expect(page.getByLabel("附加启动参数")).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "启动时更新模组" }).check();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await page.getByRole("checkbox", { name: "Calamity Mod" }).check();
+  await expect(page.getByLabel("Calamity Mod 版本")).toBeEnabled();
 });
 
 test("instance lifecycle, logs, backup and restore are clickable", async ({ page }) => {
@@ -17,11 +26,17 @@ test("instance lifecycle, logs, backup and restore are clickable", async ({ page
   await expect(page.getByText("TCP/UDP · 固定", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "停止" }).click();
   await expect(page.getByText("已停止", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "终端控制台" }).click();
+  await page.getByLabel("控制台命令").fill("status");
+  await page.getByRole("button", { name: "发送" }).click();
+  await expect(page.getByText("Command accepted")).toBeVisible();
   await page.getByRole("button", { name: "实时日志" }).click();
   await expect(page.getByText(/Logical instance lin_terraria01 attached/)).toBeVisible();
   await page.getByRole("button", { name: "备份" }).click();
   await page.getByRole("button", { name: "创建备份" }).click();
   await expect(page.getByText("手动备份", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "恢复", exact: true }).first().click();
+  await expect(page.getByRole("button", { name: "恢复中" }).first()).toBeDisabled();
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations.filter((item) => item.impact === "critical" || item.impact === "serious")).toEqual([]);
 });

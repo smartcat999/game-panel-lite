@@ -122,13 +122,10 @@ func checkRebaselineGo(file SourceFile) []Violation {
 			if unquoteErr == nil && strings.Contains(strings.ToLower(text), "/world") {
 				violations = append(violations, Violation{Rule: "World routes are outside hosted V1", File: file.Path, Line: parsedLine(file.Content, value.Value)})
 			}
-		case *ast.Ident:
-			if value.Obj == nil {
-				break
-			}
-			switch value.Name {
+		case *ast.TypeSpec:
+			switch value.Name.Name {
 			case "Plan", "PlanVersion", "Order", "Payment", "Entitlement":
-				violations = append(violations, Violation{Rule: "legacy commerce model is forbidden in rebaseline production code", File: file.Path, Line: parsedLine(file.Content, value.Name)})
+				violations = append(violations, Violation{Rule: "legacy commerce model is forbidden in rebaseline production code", File: file.Path, Line: parsedLine(file.Content, value.Name.Name)})
 			}
 		}
 		return true

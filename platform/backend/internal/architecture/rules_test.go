@@ -50,7 +50,7 @@ func TestRebaselineNewSourcePassesRules(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	backendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	var files []SourceFile
-	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/deliveryapi", "internal/deliverycontrol", "internal/deliveryworker", "internal/eventtransport", "internal/httpfilter", "internal/messaging", "internal/regionaldelivery", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql", "migrations/global/0007_async_delivery.sql", "migrations/region/0004_async_delivery.sql"} {
+	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/deliveryapi", "internal/deliverycontrol", "internal/deliveryworker", "internal/eventtransport", "internal/httpfilter", "internal/instanceaction", "internal/instanceconfiguration", "internal/instanceobservability", "internal/instanceprovisioning", "internal/messaging", "internal/nodeworkload", "internal/providercontract", "internal/regionaldelivery", "internal/regionaltask", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql", "migrations/global/0007_async_delivery.sql", "migrations/global/0008_provider_driven_operation.sql", "migrations/region/0004_async_delivery.sql", "migrations/region/0005_provider_driven_operation.sql"} {
 		path := filepath.Join(backendRoot, relative)
 		info, err := os.Stat(path)
 		if err != nil {
@@ -122,6 +122,23 @@ func TestPlatformFrontendDoesNotReferenceLegacyFrontend(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestProviderDrivenFrontendHasNoGameSpecificBranches(t *testing.T) {
+	_, currentFile, _, _ := runtime.Caller(0)
+	frontendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "frontend"))
+	for _, relative := range []string{"features/prototype/workspace-pages.tsx", "lib/prototype-store.tsx"} {
+		path := filepath.Join(frontendRoot, relative)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, branch := range []string{`.game ===`, `.game !==`, `supportsMods`, `provider ===`, `provider !==`, `"Terraria" | "tModLoader"`} {
+			if strings.Contains(string(content), branch) {
+				t.Errorf("%s contains game-specific branch or duplicate capability %q", path, branch)
+			}
+		}
 	}
 }
 

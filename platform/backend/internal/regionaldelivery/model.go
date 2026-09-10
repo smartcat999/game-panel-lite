@@ -64,8 +64,11 @@ type State struct {
 	OperationID             string
 	DesiredState            string
 	ProviderReleaseID       string
+	GameVersion             string
+	ApplyBehavior           string
 	ResourceSpec            billing.ResourceSpec
 	Configuration           map[string]any
+	ModLock                 []deliverycontrol.ModLockEntry
 	ListenerRequirements    []deliverycontrol.ListenerRequirement
 	Phase                   string
 	NodeID                  string
@@ -88,8 +91,11 @@ type Assignment struct {
 	FencingToken       int64
 	DesiredState       string
 	ProviderReleaseID  string
+	GameVersion        string
+	ApplyBehavior      string
 	ResourceSpec       billing.ResourceSpec
 	Configuration      map[string]any
+	ModLock            []deliverycontrol.ModLockEntry
 	Endpoints          []deliverycontrol.EndpointBinding
 	LeaseUntil         time.Time
 	Attempt            int

@@ -38,8 +38,8 @@ func TestContractDocumentsParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed != 8 {
-		t.Fatalf("expected 8 versioned contract documents, parsed %d", parsed)
+	if parsed != 10 {
+		t.Fatalf("expected 10 versioned contract documents, parsed %d", parsed)
 	}
 }
 
@@ -53,6 +53,7 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 			"GET /v1/workspaces":                                                                                   "listWorkspaces",
 			"GET /v1/regions/{regionId}/catalog":                                                                   "getRegionCatalog",
 			"GET /v1/providers/releases/{providerReleaseId}/manifest":                                              "getProviderManifest",
+			"GET /v1/providers/releases/{providerReleaseId}/mods":                                                  "getProviderModCatalog",
 			"GET /v1/workspaces/{workspaceId}/wallet":                                                              "getWorkspaceWallet",
 			"POST /v1/workspaces/{workspaceId}/quotes":                                                             "createResourceQuote",
 			"POST /v1/workspaces/{workspaceId}/instances":                                                          "createLogicalInstance",
@@ -61,8 +62,12 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:stop":                                 "stopLogicalInstance",
 			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:restart":                              "restartLogicalInstance",
 			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts":                 "createConfigurationDraft",
+			"PUT /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts/{draftId}":        "saveConfigurationDraft",
 			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts/{draftId}:apply": "applyConfigurationDraft",
+			"GET /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/revisions/{revisionId}":                "getInstanceRevision",
 			"GET /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/logs":                                  "getInstanceLogs",
+			"GET /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/metrics":                               "getInstanceMetrics",
+			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/console-commands":                     "sendGameConsoleCommand",
 			"GET /v1/workspaces/{workspaceId}/backups":                                                             "listWorkspaceBackups",
 			"POST /v1/workspaces/{workspaceId}/backups/{backupId}:restore":                                         "restoreBackup",
 			"GET /v1/operations/{operationId}":                                                                     "getOperation",
@@ -100,12 +105,14 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 
 func TestEventV1CompatibilitySurface(t *testing.T) {
 	expectedPayloadFields := map[string][]string{
-		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "operationId", "desiredState", "providerReleaseId", "resourceSpec", "configuration", "listenerRequirements", "authorityGrant"},
-		"deployment-observed.schema.json": {"workspaceId", "logicalInstanceId", "regionalDeploymentId", "runtimeAttemptId", "regionId", "placementVersion", "sequence", "observedState", "endpointBindings", "observedAt"},
-		"usage-observed.schema.json":      {"workspaceId", "logicalInstanceId", "runtimeAttemptId", "regionId", "resourceKind", "quantity", "intervalStart", "intervalEnd"},
-		"wallet-exhausted.schema.json":    {"workspaceId", "ledgerSequence", "exhaustedAt"},
-		"backup-observed.schema.json":     {"backupRequestId", "logicalInstanceId", "regionId", "sequence", "status", "observedAt"},
-		"backup-requested.schema.json":    {"backupRequestId", "logicalInstanceId", "regionId", "kind", "objectKey", "transferUrl", "relativePath"},
+		"deployment-desired.schema.json":        {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "operationId", "desiredState", "providerReleaseId", "gameVersion", "applyBehavior", "resourceSpec", "configuration", "modLock", "listenerRequirements", "authorityGrant"},
+		"deployment-observed.schema.json":       {"workspaceId", "logicalInstanceId", "regionalDeploymentId", "runtimeAttemptId", "regionId", "placementVersion", "sequence", "observedState", "endpointBindings", "observedAt"},
+		"usage-observed.schema.json":            {"workspaceId", "logicalInstanceId", "runtimeAttemptId", "regionId", "resourceKind", "quantity", "intervalStart", "intervalEnd"},
+		"wallet-exhausted.schema.json":          {"workspaceId", "ledgerSequence", "exhaustedAt"},
+		"backup-observed.schema.json":           {"workspaceId", "backupRequestId", "operationId", "logicalInstanceId", "regionId", "sequence", "status", "providerReleaseId", "gameVersion", "configurationRevisionId", "modLock", "checksums", "observedAt"},
+		"backup-requested.schema.json":          {"workspaceId", "backupRequestId", "operationId", "logicalInstanceId", "regionId", "kind", "objectKey", "transferUrl", "dataScope", "authorityGrant"},
+		"instance-observed.schema.json":         {"workspaceId", "logicalInstanceId", "regionId", "regionalDeploymentId", "runtimeAttemptId", "sequence", "logs", "metrics", "observedAt"},
+		"console-command-requested.schema.json": {"workspaceId", "logicalInstanceId", "regionId", "operationId", "command", "authorityGrant"},
 	}
 	envelopeFields := []string{"schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"}
 	for filename, payloadFields := range expectedPayloadFields {
@@ -128,6 +135,13 @@ func TestProviderConfigurationTypesFailClosed(t *testing.T) {
 	want := []string{"string", "integer", "number", "boolean", "enum", "secret", "string-list"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("configuration field types must be an explicit fail-closed allowlist: got %v", got)
+	}
+	required := stringSlice(t, field["required"], "ConfigurationFieldSchema required")
+	assertContainsAll(t, required, []string{"applyBehavior"}, "ConfigurationFieldSchema")
+	applyBehavior := object(t, properties["applyBehavior"], "ConfigurationFieldSchema applyBehavior")
+	wantApply := []string{"hot-reload", "restart-required", "recreate-required", "create-only"}
+	if got := stringSlice(t, applyBehavior["enum"], "apply behavior enum"); strings.Join(got, ",") != strings.Join(wantApply, ",") {
+		t.Fatalf("apply behavior must fail closed: got %v", got)
 	}
 }
 

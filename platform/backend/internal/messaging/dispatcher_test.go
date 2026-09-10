@@ -49,3 +49,15 @@ func TestDispatcherRetainsFailedMessagesForRetry(t *testing.T) {
 		t.Fatalf("retry count=%d err=%v published=%v", count, err, outbox.published)
 	}
 }
+
+func TestRequestedInstanceWorkRoutesToOwningRegion(t *testing.T) {
+	for _, messageType := range []string{"deployment.desired.v1", "console.command.requested.v1", "backup.requested.v1"} {
+		message := PendingMessage{MessageType: messageType, Payload: []byte(`{"regionId":"reg_asia"}`)}
+		if subject := subjectFor(message); subject != "gamepanel.region.reg_asia."+messageType {
+			t.Fatalf("type=%s subject=%s", messageType, subject)
+		}
+	}
+	if subject := subjectFor(PendingMessage{MessageType: "backup.observed.v1", Payload: []byte(`{"regionId":"reg_asia"}`)}); subject != "gamepanel.global.backup.observed.v1" {
+		t.Fatalf("global observation subject=%s", subject)
+	}
+}

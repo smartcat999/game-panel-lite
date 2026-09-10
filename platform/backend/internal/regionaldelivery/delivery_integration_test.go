@@ -25,8 +25,8 @@ import (
 var deliveryNow = time.Now().UTC().Truncate(time.Second)
 
 func TestDurableDeliveryRecoversEveryStepAndComposesEndpointTruth(t *testing.T) {
-	global := openDeliveryDatabase(t, "GAMEPANEL_GLOBAL_TEST_DSN", "global", []string{"0002_product_instance_messaging.sql", "0006_resource_pricing_wallet.sql", "0007_async_delivery.sql"})
-	region := openDeliveryDatabase(t, "GAMEPANEL_REGION_TEST_DSN", "region", []string{"0001_region_execution.sql", "0004_async_delivery.sql"})
+	global := openDeliveryDatabase(t, "GAMEPANEL_GLOBAL_TEST_DSN", "global", []string{"0002_product_instance_messaging.sql", "0006_resource_pricing_wallet.sql", "0007_async_delivery.sql", "0008_provider_driven_operation.sql"})
+	region := openDeliveryDatabase(t, "GAMEPANEL_REGION_TEST_DSN", "region", []string{"0001_region_execution.sql", "0004_async_delivery.sql", "0005_provider_driven_operation.sql"})
 	fundingKey := []byte("funding-key-01234567890123456789")
 	authorityKey := []byte("authority-key-012345678901234567")
 	quote := authorizedQuote(t, global, fundingKey)
@@ -34,7 +34,7 @@ func TestDurableDeliveryRecoversEveryStepAndComposesEndpointTruth(t *testing.T) 
 		{Name: "game", Purpose: "join", Transports: []string{"tcp", "udp"}, InternalPort: 7777, ExternalPortPolicy: "allocated", AddressMode: "ip-port", Primary: true},
 		{Name: "discovery", Purpose: "direct discovery", Transports: []string{"udp"}, InternalPort: 7778, ExternalPortPolicy: "allocated", AddressMode: "ip-only"},
 	}
-	command := deliverycontrol.CreateCommand{WorkspaceID: "ws_ember", Name: "server-one", ProviderReleaseID: "gpr_fake_v1", QuoteID: quote.ID, Configuration: map[string]any{"difficulty": "normal"}, ListenerRequirements: listeners, IdempotencyKey: "create-server-one"}
+	command := deliverycontrol.CreateCommand{WorkspaceID: "ws_ember", Name: "server-one", ProviderReleaseID: "gpr_fake_v1", GameVersion: "1.0.0", SchemaVersion: 1, QuoteID: quote.ID, Configuration: map[string]any{"difficulty": "normal"}, ModLock: []deliverycontrol.ModLockEntry{}, ListenerRequirements: listeners, IdempotencyKey: "create-server-one"}
 	control := deliverycontrol.NewPostgres(global, fundingKey, authorityKey)
 	if _, err := global.Exec(`UPDATE resource_quotes SET funding_signature='forged' WHERE id=$1`, quote.ID); err != nil {
 		t.Fatal(err)
@@ -61,7 +61,9 @@ func TestDurableDeliveryRecoversEveryStepAndComposesEndpointTruth(t *testing.T) 
 	// Idempotent replay returns the committed result even after the Quote expires.
 	replayedInstance, replayedOperation, err := control.Create(context.Background(), command, quote.ExpiresAt.Add(time.Second))
 	if err != nil || replayedInstance.ID != instance.ID || replayedOperation.ID != operation.ID {
-		t.Fatalf("replay instance=%#v operation=%#v err=%v", replayedInstance, replayedOperation, err)
+		stored, _ := control.Instance(context.Background(), command.WorkspaceID, instance.ID)
+		revision, _ := control.Revision(context.Background(), command.WorkspaceID, instance.ID, instance.InstanceRevisionID)
+		t.Fatalf("replay instance=%#v operation=%#v err=%v stored=%#v revision=%#v command=%#v", replayedInstance, replayedOperation, err, stored, revision, command)
 	}
 	changed := command
 	changed.Name = "different"
@@ -186,10 +188,56 @@ func TestDurableDeliveryRecoversEveryStepAndComposesEndpointTruth(t *testing.T) 
 	if stored.ObservationSequence != newer.Sequence {
 		t.Fatalf("observation sequence regressed to %d", stored.ObservationSequence)
 	}
+	revision, applyOperation, err := control.ApplyRevision(context.Background(), deliverycontrol.ApplyRevisionCommand{WorkspaceID: "ws_ember", LogicalInstanceID: instance.ID, BaseRevisionID: stored.InstanceRevisionID, ProviderReleaseID: stored.ProviderReleaseID, GameVersion: stored.GameVersion, SchemaVersion: 1, Configuration: map[string]any{"difficulty": "hard"}, ModLock: []deliverycontrol.ModLockEntry{}, ApplyBehavior: "restart-required", IdempotencyKey: "apply-server-one"}, deliveryNow.Add(71*time.Second))
+	if err != nil || revision.ID == stored.InstanceRevisionID || applyOperation.Kind != "instance.configuration.apply" {
+		t.Fatalf("revision=%#v operation=%#v err=%v", revision, applyOperation, err)
+	}
+	replayedRevision, replayedApply, err := control.ApplyRevision(context.Background(), deliverycontrol.ApplyRevisionCommand{WorkspaceID: "ws_ember", LogicalInstanceID: instance.ID, BaseRevisionID: stored.InstanceRevisionID, ProviderReleaseID: stored.ProviderReleaseID, GameVersion: stored.GameVersion, SchemaVersion: 1, Configuration: map[string]any{"difficulty": "hard"}, ModLock: []deliverycontrol.ModLockEntry{}, ApplyBehavior: "restart-required", IdempotencyKey: "apply-server-one"}, deliveryNow.Add(72*time.Second))
+	if err != nil || replayedRevision.ID != revision.ID || replayedApply.ID != applyOperation.ID {
+		t.Fatalf("apply replay revision=%#v operation=%#v err=%v", replayedRevision, replayedApply, err)
+	}
+	var applyPayload []byte
+	if err := global.QueryRow(`SELECT payload FROM global_outbox WHERE payload->>'operationId'=$1`, applyOperation.ID).Scan(&applyPayload); err != nil {
+		t.Fatal(err)
+	}
+	var applyDesired deliverycontrol.DesiredPayload
+	if err := json.Unmarshal(applyPayload, &applyDesired); err != nil {
+		t.Fatal(err)
+	}
+	if accepted, err := regional.ReceiveDesired(context.Background(), "msg_apply_revision", applyDesired, deliveryNow.Add(72*time.Second)); err != nil || !accepted {
+		t.Fatalf("apply desired accepted=%v err=%v", accepted, err)
+	}
+	updatedState, err := regional.State(context.Background(), instance.ID)
+	if err != nil || updatedState.Phase != regionaldelivery.PhaseEndpoints || updatedState.NodeID != "node_one" {
+		t.Fatalf("in-place revision state=%#v err=%v", updatedState, err)
+	}
+	var activeEndpoints int
+	if err := region.QueryRow(`SELECT count(*) FROM endpoint_allocations WHERE logical_instance_id=$1 AND active=true`, instance.ID).Scan(&activeEndpoints); err != nil || activeEndpoints != 2 {
+		t.Fatalf("active endpoints=%d err=%v", activeEndpoints, err)
+	}
+	if worked, err := regional.ReconcileOne(context.Background(), "apply-worker", deliveryNow.Add(73*time.Second)); err != nil || !worked {
+		t.Fatalf("apply assignment worked=%v err=%v", worked, err)
+	}
+	applyAssignment, ok, err := regional.ClaimAssignment(context.Background(), "node_one", "apply-agent", deliveryNow.Add(74*time.Second))
+	if err != nil || !ok || applyAssignment.ApplyBehavior != "restart-required" || len(applyAssignment.Endpoints) != 2 {
+		t.Fatalf("apply assignment=%#v ok=%v err=%v", applyAssignment, ok, err)
+	}
+	stop, err := control.ChangeState(context.Background(), deliverycontrol.ChangeStateCommand{WorkspaceID: "ws_ember", LogicalInstanceID: instance.ID, Action: "stop", IdempotencyKey: "stop-server-one"}, deliveryNow.Add(75*time.Second))
+	if err != nil || stop.Kind != "instance.stop" {
+		t.Fatalf("stop=%#v err=%v", stop, err)
+	}
+	var stoppedPayload []byte
+	if err := global.QueryRow(`SELECT payload FROM global_outbox WHERE payload->>'operationId'=$1`, stop.ID).Scan(&stoppedPayload); err != nil {
+		t.Fatal(err)
+	}
+	var stoppedDesired deliverycontrol.DesiredPayload
+	if err := json.Unmarshal(stoppedPayload, &stoppedDesired); err != nil || stoppedDesired.DesiredState != "stopped" || stoppedDesired.InstanceRevisionID != revision.ID || stoppedDesired.PlacementVersion != 2 {
+		t.Fatalf("stopped desired=%#v err=%v", stoppedDesired, err)
+	}
 }
 
 func TestFailedEndpointStepAutomaticallyCleansResidualCapacity(t *testing.T) {
-	region := openDeliveryDatabase(t, "GAMEPANEL_REGION_TEST_DSN", "region", []string{"0001_region_execution.sql", "0004_async_delivery.sql"})
+	region := openDeliveryDatabase(t, "GAMEPANEL_REGION_TEST_DSN", "region", []string{"0001_region_execution.sql", "0004_async_delivery.sql", "0005_provider_driven_operation.sql"})
 	authorityKey := []byte("authority-key-012345678901234567")
 	regional := regionaldelivery.NewPostgres(region, "reg_asia", authorityKey)
 	if err := regional.RegisterNode(context.Background(), regionaldelivery.Node{ID: "node_one", RegionID: "reg_asia", State: "ready", CPUCapacityMilli: 2000, MemoryCapacityMiB: 4096, DiskCapacityGiB: 50, LeaseUntil: deliveryNow.Add(time.Hour), UpdatedAt: deliveryNow}); err != nil {
@@ -199,7 +247,7 @@ func TestFailedEndpointStepAutomaticallyCleansResidualCapacity(t *testing.T) {
 	if err := regional.AddEndpointPool(context.Background(), regionaldelivery.EndpointPool{ID: "pool_gateway", RegionID: "reg_asia", DeliveryMode: "gateway", Address: "play.asia.example", PortStart: &start, PortEnd: &end, Stability: "stable", Active: true}); err != nil {
 		t.Fatal(err)
 	}
-	desired := deliverycontrol.DesiredPayload{WorkspaceID: "ws_one", LogicalInstanceID: "lin_failure", RegionID: "reg_asia", PlacementVersion: 1, InstanceRevisionID: "rev_failure", OperationID: "op_failure", DesiredState: "running", ProviderReleaseID: "gpr_fake", ResourceSpec: billing.ResourceSpec{CPUMilli: 1000, MemoryMiB: 1024, DiskGiB: 10}, Configuration: map[string]any{}, ListenerRequirements: []deliverycontrol.ListenerRequirement{{Name: "game", Purpose: "join", Transports: []string{"udp"}, InternalPort: 7777, ExternalPortPolicy: "default-required", AddressMode: "ip-port", Primary: true}}}
+	desired := deliverycontrol.DesiredPayload{WorkspaceID: "ws_one", LogicalInstanceID: "lin_failure", RegionID: "reg_asia", PlacementVersion: 1, InstanceRevisionID: "rev_failure", OperationID: "op_failure", DesiredState: "running", ProviderReleaseID: "gpr_fake", GameVersion: "1.0.0", ApplyBehavior: "recreate-required", ResourceSpec: billing.ResourceSpec{CPUMilli: 1000, MemoryMiB: 1024, DiskGiB: 10}, Configuration: map[string]any{}, ModLock: []deliverycontrol.ModLockEntry{}, ListenerRequirements: []deliverycontrol.ListenerRequirement{{Name: "game", Purpose: "join", Transports: []string{"udp"}, InternalPort: 7777, ExternalPortPolicy: "default-required", AddressMode: "ip-port", Primary: true}}}
 	grant, err := deliverycontrol.NewAuthorityGrant(desired, authorityKey, deliveryNow.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)

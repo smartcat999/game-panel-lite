@@ -64,7 +64,7 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, messageID string, desired
 		return false, nil
 	}
 	current, err := stateByInstance(ctx, tx, desired.LogicalInstanceID, true)
-	if err == nil && desired.PlacementVersion <= current.PlacementVersion {
+	if err == nil && (desired.PlacementVersion < current.PlacementVersion || desired.PlacementVersion == current.PlacementVersion && desired.InstanceRevisionID == current.InstanceRevisionID) {
 		_, err = tx.ExecContext(ctx, `UPDATE regional_inbox SET handled_at=$2 WHERE message_id=$1`, messageID, receivedAt)
 		if err != nil {
 			return false, err
@@ -73,6 +73,19 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, messageID string, desired
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
+	}
+	if err == nil && desired.PlacementVersion == current.PlacementVersion && desired.InstanceRevisionID != current.InstanceRevisionID && current.NodeID != "" && current.Phase != PhaseFailed && current.Phase != PhaseCleaned {
+		configuration, _ := json.Marshal(desired.Configuration)
+		listeners, _ := json.Marshal(desired.ListenerRequirements)
+		modLock, _ := json.Marshal(desired.ModLock)
+		_, err = tx.ExecContext(ctx, `UPDATE regional_delivery_states SET instance_revision_id=$2,operation_id=$3,desired_state=$4,provider_release_id=$5,game_version=$6,apply_behavior=$7,configuration=$8,mod_lock=$9,listener_requirements=$10,phase=$11,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,telemetry_sequence=0,failure_code=NULL,updated_at=$12 WHERE id=$1`, current.ID, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.GameVersion, desired.ApplyBehavior, configuration, modLock, listeners, PhaseEndpoints, receivedAt)
+		if err != nil {
+			return false, err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE regional_inbox SET handled_at=$2 WHERE message_id=$1`, messageID, receivedAt); err != nil {
+			return false, err
+		}
+		return true, tx.Commit()
 	}
 	if err == nil && current.Phase != PhaseCleaned {
 		if err := cleanup(ctx, tx, current, receivedAt); err != nil {
@@ -85,7 +98,8 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, messageID string, desired
 	}
 	configuration, _ := json.Marshal(desired.Configuration)
 	listeners, _ := json.Marshal(desired.ListenerRequirements)
-	_, err = tx.ExecContext(ctx, `INSERT INTO regional_delivery_states (id,workspace_id,logical_instance_id,region_id,placement_version,instance_revision_id,operation_id,desired_state,provider_release_id,cpu_milli,memory_mib,disk_gib,configuration,listener_requirements,phase,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT (logical_instance_id) DO UPDATE SET id=EXCLUDED.id,workspace_id=EXCLUDED.workspace_id,region_id=EXCLUDED.region_id,placement_version=EXCLUDED.placement_version,instance_revision_id=EXCLUDED.instance_revision_id,operation_id=EXCLUDED.operation_id,desired_state=EXCLUDED.desired_state,provider_release_id=EXCLUDED.provider_release_id,cpu_milli=EXCLUDED.cpu_milli,memory_mib=EXCLUDED.memory_mib,disk_gib=EXCLUDED.disk_gib,configuration=EXCLUDED.configuration,listener_requirements=EXCLUDED.listener_requirements,phase=EXCLUDED.phase,node_id=NULL,fencing_token=0,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,failure_code=NULL,residual_cleanup_required=false,updated_at=EXCLUDED.updated_at`, stateID, desired.WorkspaceID, desired.LogicalInstanceID, desired.RegionID, desired.PlacementVersion, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.ResourceSpec.CPUMilli, desired.ResourceSpec.MemoryMiB, desired.ResourceSpec.DiskGiB, configuration, listeners, PhasePending, receivedAt)
+	modLock, _ := json.Marshal(desired.ModLock)
+	_, err = tx.ExecContext(ctx, `INSERT INTO regional_delivery_states (id,workspace_id,logical_instance_id,region_id,placement_version,instance_revision_id,operation_id,desired_state,provider_release_id,game_version,apply_behavior,cpu_milli,memory_mib,disk_gib,configuration,mod_lock,listener_requirements,phase,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (logical_instance_id) DO UPDATE SET id=EXCLUDED.id,workspace_id=EXCLUDED.workspace_id,region_id=EXCLUDED.region_id,placement_version=EXCLUDED.placement_version,instance_revision_id=EXCLUDED.instance_revision_id,operation_id=EXCLUDED.operation_id,desired_state=EXCLUDED.desired_state,provider_release_id=EXCLUDED.provider_release_id,game_version=EXCLUDED.game_version,apply_behavior=EXCLUDED.apply_behavior,cpu_milli=EXCLUDED.cpu_milli,memory_mib=EXCLUDED.memory_mib,disk_gib=EXCLUDED.disk_gib,configuration=EXCLUDED.configuration,mod_lock=EXCLUDED.mod_lock,listener_requirements=EXCLUDED.listener_requirements,phase=EXCLUDED.phase,node_id=NULL,fencing_token=0,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,telemetry_sequence=0,failure_code=NULL,residual_cleanup_required=false,updated_at=EXCLUDED.updated_at`, stateID, desired.WorkspaceID, desired.LogicalInstanceID, desired.RegionID, desired.PlacementVersion, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.GameVersion, desired.ApplyBehavior, desired.ResourceSpec.CPUMilli, desired.ResourceSpec.MemoryMiB, desired.ResourceSpec.DiskGiB, configuration, modLock, listeners, PhasePending, receivedAt)
 	if err != nil {
 		return false, err
 	}
@@ -145,7 +159,7 @@ func (p *Postgres) ClaimAssignment(ctx context.Context, nodeID, worker string, n
 	if err := tx.Commit(); err != nil {
 		return Assignment{}, false, err
 	}
-	return Assignment{RegionalDeliveryID: state.ID, LogicalInstanceID: state.LogicalInstanceID, NodeID: state.NodeID, FencingToken: state.FencingToken, DesiredState: state.DesiredState, ProviderReleaseID: state.ProviderReleaseID, ResourceSpec: state.ResourceSpec, Configuration: state.Configuration, Endpoints: endpoints, LeaseUntil: leaseUntil, Attempt: state.AssignmentAttempts}, true, nil
+	return Assignment{RegionalDeliveryID: state.ID, LogicalInstanceID: state.LogicalInstanceID, NodeID: state.NodeID, FencingToken: state.FencingToken, DesiredState: state.DesiredState, ProviderReleaseID: state.ProviderReleaseID, GameVersion: state.GameVersion, ApplyBehavior: state.ApplyBehavior, ResourceSpec: state.ResourceSpec, Configuration: state.Configuration, ModLock: state.ModLock, Endpoints: endpoints, LeaseUntil: leaseUntil, Attempt: state.AssignmentAttempts}, true, nil
 }
 
 func (p *Postgres) CompleteAssignment(ctx context.Context, deliveryID, worker string, fencingToken int64, ready bool, failureCode string, now time.Time) (bool, error) {
@@ -344,7 +358,7 @@ func (p *Postgres) publishObservation(ctx context.Context, state State, worker s
 	if err != nil {
 		return err
 	}
-	payload := deliverycontrol.Observation{MessageID: messageID, WorkspaceID: current.WorkspaceID, LogicalInstanceID: current.LogicalInstanceID, RegionalDeploymentID: current.ID, RuntimeAttemptID: fmt.Sprintf("rta_%s_%d", current.ID, current.AssignmentAttempts), RegionID: current.RegionID, PlacementVersion: current.PlacementVersion, Sequence: current.ObservationSequence, ObservedState: "running", EndpointBindings: endpoints, ObservedAt: now}
+	payload := deliverycontrol.Observation{MessageID: messageID, WorkspaceID: current.WorkspaceID, LogicalInstanceID: current.LogicalInstanceID, RegionalDeploymentID: current.ID, RuntimeAttemptID: fmt.Sprintf("rta_%s_%d", current.ID, current.AssignmentAttempts), RegionID: current.RegionID, PlacementVersion: current.PlacementVersion, Sequence: current.ObservationSequence, ObservedState: current.DesiredState, EndpointBindings: endpoints, ObservedAt: now}
 	message := messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(messageID), MessageType: "deployment.observed.v1", IdempotencyKey: contract.IdempotencyKey(fmt.Sprintf("observe:%s:%d", current.ID, current.ObservationSequence)), Payload: payload, CreatedAt: now}
 	if err := messaging.NewPostgres(p.database).InsertOutboxTo(ctx, tx, messaging.RegionOutbox, message); err != nil {
 		return err
@@ -416,7 +430,7 @@ func (p *Postgres) validateDesired(desired deliverycontrol.DesiredPayload, now t
 	if desired.RegionID != p.regionID {
 		return ErrWrongRegion
 	}
-	if desired.WorkspaceID == "" || desired.LogicalInstanceID == "" || desired.OperationID == "" || desired.ProviderReleaseID == "" || desired.PlacementVersion < 1 || len(desired.ListenerRequirements) == 0 || !deliverycontrol.VerifyAuthority(desired, p.authorityKey, now) {
+	if desired.WorkspaceID == "" || desired.LogicalInstanceID == "" || desired.OperationID == "" || desired.ProviderReleaseID == "" || desired.GameVersion == "" || desired.ApplyBehavior != "hot-reload" && desired.ApplyBehavior != "restart-required" && desired.ApplyBehavior != "recreate-required" || desired.PlacementVersion < 1 || len(desired.ListenerRequirements) == 0 || !deliverycontrol.VerifyAuthority(desired, p.authorityKey, now) {
 		return ErrInvalidDesired
 	}
 	return nil

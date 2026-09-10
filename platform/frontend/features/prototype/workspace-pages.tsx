@@ -73,7 +73,7 @@ function InstanceRow({ instance, workspaceSlug }: { instance: PrototypeInstance;
   return <tr className={instance.state === "stopped" ? "muted-row" : undefined}>
     <td><Link className="resource-name" href={`/w/${workspaceSlug}/instances/${instance.id}`}>{instance.name}</Link>{instance.stale ? <span className="stale-tag">状态延迟</span> : null}</td>
     <td><StateBadge state={instance.state} /></td>
-    <td><span className={cn("provider-tag", instance.supportsMods && "provider-modded")}>{instance.provider} {instance.version}</span></td>
+    <td><span className={cn("provider-tag", instance.capabilities.includes("mods") && "provider-modded")}>{instance.provider} {instance.version}</span></td>
     <td><EndpointSummary instance={instance} /></td>
     <td><strong>{instance.memoryMiB / 1024} GB</strong><span className="cell-secondary"> · {instance.cpuMilli / 1000} vCPU</span></td>
     <td>{instance.region}</td>
@@ -96,8 +96,8 @@ type WizardValues = Record<string, string | number | boolean | string[]>;
 export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string }) {
   const router = useRouter();
   const { balanceMinor, createInstance } = usePrototype();
-  const [manifestId, setManifestId] = useState(providerManifests[0].id);
-  const manifest = providerManifests.find((item) => item.id === manifestId) ?? providerManifests[0];
+  const [manifestId, setManifestId] = useState(providerManifests[0].providerReleaseId);
+  const manifest = providerManifests.find((item) => item.providerReleaseId === manifestId) ?? providerManifests[0];
   const steps = useMemo(() => ["基础", "资源", "游戏配置", ...(manifest.capabilities.includes("mods") ? ["模组"] : []), "确认"], [manifest]);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("terraria-new-01");
@@ -106,13 +106,14 @@ export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string })
   const [memoryMiB, setMemoryMiB] = useState(4096);
   const [diskGiB, setDiskGiB] = useState(20);
   const [configuration, setConfiguration] = useState<WizardValues>(() => defaultConfiguration(manifest));
-  const [modText, setModText] = useState("CalamityMod\nInfernumMode");
+  const [modSelections, setModSelections] = useState<Record<string, string>>({});
   const hourlyMinor = Math.round(cpuMilli / 1000 * 28 + memoryMiB / 1024 * 16 + diskGiB * 0.35);
 
   const changeManifest = (id: string) => {
-    const next = providerManifests.find((item) => item.id === id) ?? providerManifests[0];
+    const next = providerManifests.find((item) => item.providerReleaseId === id) ?? providerManifests[0];
     setManifestId(id);
     setConfiguration(defaultConfiguration(next));
+    setModSelections({});
     setStep(0);
   };
 
@@ -120,17 +121,18 @@ export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string })
     if (balanceMinor < hourlyMinor) return;
     const instance = createInstance({
       name,
-      provider: manifest.game,
-      version: manifest.version,
+      providerReleaseId: manifest.providerReleaseId,
+      provider: manifest.displayName,
+      version: manifest.gameVersions[0],
       region,
       cpuMilli,
       memoryMiB,
       diskGiB,
-      supportsMods: manifest.capabilities.includes("mods"),
+      capabilities: manifest.capabilities,
       serverName: String(configuration.serverName ?? name),
       maxPlayers: Number(configuration.maxPlayers ?? 16),
       password: String(configuration.password ?? ""),
-      modIds: modText.split("\n").map((item) => item.trim()).filter(Boolean),
+      modIds: Object.keys(modSelections),
       players: undefined,
       stale: false,
     });
@@ -144,7 +146,7 @@ export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string })
       <div className="wizard-body">
         {step === 0 ? <div className="form-grid">
           <Field label="实例名称"><input onChange={(event) => setName(event.target.value)} value={name} /></Field>
-          <Field label="游戏与版本"><select onChange={(event) => changeManifest(event.target.value)} value={manifestId}>{providerManifests.map((item) => <option key={item.id} value={item.id}>{item.game} · {item.version}</option>)}</select></Field>
+          <Field label="游戏与版本"><select onChange={(event) => changeManifest(event.target.value)} value={manifestId}>{providerManifests.map((item) => <option key={item.providerReleaseId} value={item.providerReleaseId}>{item.displayName} · {item.gameVersions[0]}</option>)}</select></Field>
           <Field label="区域"><select onChange={(event) => setRegion(event.target.value)} value={region}><option>华东 1</option><option>华北 1</option></select></Field>
         </div> : null}
         {step === 1 ? <div className="form-grid three-columns">
@@ -154,9 +156,9 @@ export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string })
           <div className="form-note span-all">公网地址与端口由系统部署时自动分配，协议由游戏 Provider 声明。</div>
         </div> : null}
         {steps[step] === "游戏配置" ? <ConfigurationRenderer manifest={manifest} onChange={setConfiguration} values={configuration} /> : null}
-        {steps[step] === "模组" ? <div className="form-grid"><Field label="Workshop ID / 模组标识" hint="每行一个，部署时由运行环境联网下载"><textarea onChange={(event) => setModText(event.target.value)} rows={6} value={modText} /></Field></div> : null}
+        {steps[step] === "模组" ? <div className="mod-catalog">{manifest.modCatalog?.entries.map((mod) => <label className="mod-row" key={mod.modId}><span><input checked={mod.modId in modSelections} onChange={(event) => setModSelections((current) => { const next = { ...current }; if (event.target.checked) next[mod.modId] = mod.versions[0].version; else delete next[mod.modId]; return next; })} type="checkbox" /><strong>{mod.displayName}</strong></span><select aria-label={`${mod.displayName} 版本`} disabled={!(mod.modId in modSelections)} onChange={(event) => setModSelections((current) => ({ ...current, [mod.modId]: event.target.value }))} value={modSelections[mod.modId] ?? mod.versions[0].version}>{mod.versions.map((version) => <option key={version.version}>{version.version}</option>)}</select></label>)}</div> : null}
         {steps[step] === "确认" ? <div className="review-grid">
-          <Review label="实例" value={name} /><Review label="游戏" value={`${manifest.game} ${manifest.version}`} /><Review label="区域" value={region} />
+          <Review label="实例" value={name} /><Review label="游戏" value={`${manifest.displayName} ${manifest.gameVersions[0]}`} /><Review label="区域" value={region} />
           <Review label="规格" value={`${cpuMilli / 1000} vCPU · ${memoryMiB / 1024} GB · ${diskGiB} GB`} />
           <Review label="预计费用" value={`¥${(hourlyMinor / 100).toFixed(2)} / 小时`} /><Review label="可用余额" value={`¥${(balanceMinor / 100).toFixed(2)}`} />
           {balanceMinor < hourlyMinor ? <div className="inline-alert span-all"><CircleAlert size={17} /><div><strong>余额不足</strong><span>请联系平台管理员发放测试额度。</span></div></div> : null}
@@ -171,12 +173,13 @@ export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string })
 }
 
 function ConfigurationRenderer({ manifest, values, onChange }: { manifest: ProviderManifestFixture; values: WizardValues; onChange: (values: WizardValues) => void }) {
-  return <div className="schema-form">{manifest.configuration.map((section) => <section key={section.id}><h2>{section.title}</h2><div className="form-grid">{Object.entries(section.fields).map(([key, field]) => <ConfigurationInput field={field} key={key} onChange={(value) => onChange({ ...values, [key]: value })} value={values[key]} />)}</div></section>)}</div>;
+  const sections = [...manifest.uiSchema.sections].sort((left, right) => left.order - right.order);
+  return <div className="schema-form">{sections.map((section) => <section key={section.id}><h2>{section.title}</h2><div className="form-grid">{Object.entries(manifest.configurationSchema.properties).filter(([key]) => { const ui = manifest.uiSchema.fields[key]; return ui?.section === section.id && (!ui.visibleWhen || values[ui.visibleWhen.field] === ui.visibleWhen.equals); }).sort(([left], [right]) => manifest.uiSchema.fields[left].order - manifest.uiSchema.fields[right].order).map(([key, field]) => <ConfigurationInput field={field} key={key} onChange={(value) => onChange({ ...values, [key]: value })} value={values[key]} />)}</div></section>)}</div>;
 }
 
 function ConfigurationInput({ field, value, onChange }: { field: ConfigurationField; value: WizardValues[string]; onChange: (value: WizardValues[string]) => void }) {
   if (field.type === "boolean") return <label className="switch-row"><span><strong>{field.title}</strong>{field.description ? <small>{field.description}</small> : null}</span><input checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} type="checkbox" /></label>;
-  if (field.type === "enum") return <Field label={field.title} hint={field.description}><select onChange={(event) => onChange(event.target.value)} value={String(value)}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field>;
+  if (field.type === "enum") return <Field label={field.title} hint={field.description}><select onChange={(event) => onChange(event.target.value)} value={String(value)}>{field.enum?.map((option) => <option key={option} value={option}>{option}</option>)}</select></Field>;
   if (field.type === "integer" || field.type === "number") return <Field label={field.title} hint={field.description}><input max={field.maximum} min={field.minimum} onChange={(event) => onChange(Number(event.target.value))} type="number" value={Number(value)} /></Field>;
   if (field.type === "string-list") return <Field label={field.title} hint={field.description}><textarea onChange={(event) => onChange(event.target.value.split("\n"))} rows={3} value={Array.isArray(value) ? value.join("\n") : ""} /></Field>;
   return <Field label={field.title} hint={field.description}><input onChange={(event) => onChange(event.target.value)} type={field.type === "secret" ? "password" : "text"} value={String(value)} /></Field>;
@@ -227,7 +230,7 @@ export function InstanceDetailPage({ workspaceSlug, instanceId }: { workspaceSlu
     { id: "logs", label: "实时日志", icon: FileText },
     { id: "backups", label: "备份", icon: Archive },
     { id: "configuration", label: "配置", icon: Settings },
-    ...(instance.supportsMods ? [{ id: "mods", label: "模组", icon: Boxes }] : []),
+    ...(instance.capabilities.includes("mods") ? [{ id: "mods", label: "模组", icon: Boxes }] : []),
   ];
   return <>
     <section className="instance-header">
@@ -269,10 +272,18 @@ function LogsTab() {
 }
 
 function ConfigurationTab({ instance }: { instance: PrototypeInstance }) {
-  const manifest = providerManifests.find((item) => item.game === instance.provider) ?? providerManifests[0];
-  const [values, setValues] = useState<WizardValues>(() => defaultConfiguration(manifest));
+  const manifest = providerManifests.find((item) => item.providerReleaseId === instance.providerReleaseId) ?? providerManifests[0];
+  const initialValues = useMemo(() => defaultConfiguration(manifest), [manifest]);
+  const [values, setValues] = useState<WizardValues>(() => initialValues);
   const [saved, setSaved] = useState(false);
-  return <section className="detail-panel"><ConfigurationRenderer manifest={manifest} onChange={(next) => { setValues(next); setSaved(false); }} values={values} /><div className="panel-footer"><Button onClick={() => setSaved(true)}><Save size={16} />{saved ? "已保存" : "保存配置"}</Button></div></section>;
+  const behavior = strongestApplyBehavior(manifest, initialValues, values);
+  const action = { "hot-reload": "应用配置", "restart-required": "保存并重启", "recreate-required": "保存并重建", "create-only": "仅创建时可设置" }[behavior];
+  return <section className="detail-panel"><ConfigurationRenderer manifest={manifest} onChange={(next) => { setValues(next); setSaved(false); }} values={values} /><div className="panel-footer"><span className="muted-text">{action}</span><Button disabled={behavior === "create-only"} onClick={() => setSaved(true)}><Save size={16} />{saved ? "已提交" : action}</Button></div></section>;
+}
+
+function strongestApplyBehavior(manifest: ProviderManifestFixture, initial: WizardValues, values: WizardValues) {
+  const rank = { "hot-reload": 0, "restart-required": 1, "recreate-required": 2, "create-only": 3 } as const;
+  return Object.entries(manifest.configurationSchema.properties).reduce<ConfigurationField["applyBehavior"]>((result, [key, field]) => JSON.stringify(initial[key]) !== JSON.stringify(values[key]) && rank[field.applyBehavior] > rank[result] ? field.applyBehavior : result, "hot-reload");
 }
 
 function ModsTab() {

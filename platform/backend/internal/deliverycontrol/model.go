@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/billing"
+	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
 )
 
 var (
@@ -13,15 +14,8 @@ var (
 	ErrImmutable      = errors.New("idempotency key already used with different content")
 )
 
-type ListenerRequirement struct {
-	Name               string   `json:"name"`
-	Purpose            string   `json:"purpose"`
-	Transports         []string `json:"transports"`
-	InternalPort       int      `json:"internalPort"`
-	ExternalPortPolicy string   `json:"externalPortPolicy"`
-	AddressMode        string   `json:"addressMode"`
-	Primary            bool     `json:"primary"`
-}
+type ListenerRequirement = contract.ListenerRequirement
+type ModLockEntry = contract.ModLockEntry
 
 type EndpointBinding struct {
 	Name           string   `json:"name"`
@@ -61,11 +55,13 @@ type Instance struct {
 	RegionID             string                `json:"regionId"`
 	Name                 string                `json:"name"`
 	ProviderReleaseID    string                `json:"providerReleaseId"`
+	GameVersion          string                `json:"gameVersion"`
 	QuoteID              string                `json:"-"`
 	InstanceRevisionID   string                `json:"configurationRevisionId"`
 	PlacementVersion     int64                 `json:"placementVersion"`
 	ResourceSpec         billing.ResourceSpec  `json:"resourceSpec"`
 	Configuration        map[string]any        `json:"-"`
+	ModLock              []ModLockEntry        `json:"-"`
 	ListenerRequirements []ListenerRequirement `json:"-"`
 	DesiredState         string                `json:"desiredState"`
 	ObservedState        string                `json:"observedState"`
@@ -76,14 +72,51 @@ type Instance struct {
 	UpdatedAt            time.Time             `json:"updatedAt"`
 }
 
+type Revision struct {
+	ID                string         `json:"id"`
+	OperationID       string         `json:"operationId"`
+	WorkspaceID       string         `json:"-"`
+	LogicalInstanceID string         `json:"logicalInstanceId"`
+	ProviderReleaseID string         `json:"providerReleaseId"`
+	GameVersion       string         `json:"gameVersion"`
+	SchemaVersion     int            `json:"schemaVersion"`
+	Configuration     map[string]any `json:"configuration"`
+	ModLock           []ModLockEntry `json:"modLock"`
+	ApplyBehavior     string         `json:"applyBehavior"`
+	CreatedAt         time.Time      `json:"createdAt"`
+}
+
 type CreateCommand struct {
 	WorkspaceID          string
 	Name                 string
 	ProviderReleaseID    string
+	GameVersion          string
+	SchemaVersion        int
 	Configuration        map[string]any
+	ModLock              []ModLockEntry
 	ListenerRequirements []ListenerRequirement
 	QuoteID              string
 	IdempotencyKey       string
+}
+
+type ApplyRevisionCommand struct {
+	WorkspaceID       string
+	LogicalInstanceID string
+	BaseRevisionID    string
+	ProviderReleaseID string
+	GameVersion       string
+	SchemaVersion     int
+	Configuration     map[string]any
+	ModLock           []ModLockEntry
+	ApplyBehavior     string
+	IdempotencyKey    string
+}
+
+type ChangeStateCommand struct {
+	WorkspaceID       string
+	LogicalInstanceID string
+	Action            string
+	IdempotencyKey    string
 }
 
 type DesiredPayload struct {
@@ -95,8 +128,11 @@ type DesiredPayload struct {
 	OperationID          string                `json:"operationId"`
 	DesiredState         string                `json:"desiredState"`
 	ProviderReleaseID    string                `json:"providerReleaseId"`
+	GameVersion          string                `json:"gameVersion"`
+	ApplyBehavior        string                `json:"applyBehavior"`
 	ResourceSpec         billing.ResourceSpec  `json:"resourceSpec"`
 	Configuration        map[string]any        `json:"configuration"`
+	ModLock              []ModLockEntry        `json:"modLock"`
 	ListenerRequirements []ListenerRequirement `json:"listenerRequirements"`
 	AuthorityGrant       AuthorityGrant        `json:"authorityGrant"`
 }
