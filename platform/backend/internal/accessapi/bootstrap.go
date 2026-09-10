@@ -22,16 +22,24 @@ type Config struct {
 }
 
 func PostgresRoutes(database *sql.DB, config Config) (http.Handler, error) {
+	services, err := PostgresServices(database, config)
+	if err != nil {
+		return nil, err
+	}
+	return Routes(services), nil
+}
+
+func PostgresServices(database *sql.DB, config Config) (Services, error) {
 	key, err := base64.StdEncoding.DecodeString(config.TOTPKeyBase64)
 	if err != nil || len(key) != 32 {
-		return nil, fmt.Errorf("TOTP encryption key must be 32 bytes encoded as base64")
+		return Services{}, fmt.Errorf("TOTP encryption key must be 32 bytes encoded as base64")
 	}
 	if config.GitHubClientID == "" || config.GitHubClientSecret == "" || config.GitHubRedirectURL == "" {
-		return nil, fmt.Errorf("GitHub OAuth configuration is incomplete")
+		return Services{}, fmt.Errorf("GitHub OAuth configuration is incomplete")
 	}
 	secretCipher, err := authentication.NewSecretCipher(key)
 	if err != nil {
-		return nil, err
+		return Services{}, err
 	}
 	store := authentication.NewPostgresStore(database)
 	sessions := authentication.NewSessionService(store, authentication.SessionPolicy{
@@ -41,7 +49,7 @@ func PostgresRoutes(database *sql.DB, config Config) (http.Handler, error) {
 		SecureCookies:    config.SecureCookies,
 	})
 	bindings := authorization.NewPostgresStore(database)
-	services := Services{
+	return Services{
 		OAuth:       authentication.NewOAuthService(store, authentication.NewGitHubClient(config.GitHubClientID, config.GitHubClientSecret, config.GitHubRedirectURL), sessions, 10*time.Minute),
 		Passwords:   authentication.NewPasswordService(store, sessions),
 		Sessions:    sessions,
@@ -49,8 +57,7 @@ func PostgresRoutes(database *sql.DB, config Config) (http.Handler, error) {
 		Invitations: authentication.NewInvitationService(store, bindings),
 		Authorizer:  authorization.NewEngine(bindings),
 		Resolver:    httpfilter.NewPostgresScopeResolver(database),
-	}
-	return Routes(services), nil
+	}, nil
 }
 
 func WithFallback(access, fallback http.Handler) http.Handler {

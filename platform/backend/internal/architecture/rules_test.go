@@ -46,11 +46,11 @@ func TestRebaselineRulesRejectDeliberateViolations(t *testing.T) {
 	}
 }
 
-func TestRebaselinePhaseTwoSourcePassesRules(t *testing.T) {
+func TestRebaselineNewSourcePassesRules(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	backendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	var files []SourceFile
-	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/httpfilter", "migrations/global/0005_identity_authorization_rebaseline.sql"} {
+	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/httpfilter", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql"} {
 		path := filepath.Join(backendRoot, relative)
 		info, err := os.Stat(path)
 		if err != nil {
@@ -83,7 +83,7 @@ func TestRebaselinePhaseTwoSourcePassesRules(t *testing.T) {
 		}
 	}
 	if violations := CheckRebaseline(files); len(violations) > 0 {
-		t.Fatalf("Phase 2 architecture violations:\n%s", formatViolations(violations))
+		t.Fatalf("rebaseline architecture violations:\n%s", formatViolations(violations))
 	}
 }
 

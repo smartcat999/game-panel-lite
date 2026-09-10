@@ -18,6 +18,7 @@ The rebaseline access API is enabled when the Control Plane has a global Postgre
 - `GAMEPANEL_GITHUB_CLIENT_SECRET`
 - `GAMEPANEL_GITHUB_REDIRECT_URL`
 - `GAMEPANEL_TOTP_KEY_BASE64`, a base64-encoded 32-byte AES key
+- `GAMEPANEL_FUNDING_SIGNING_KEY_BASE64`, a separate base64-encoded key containing at least 32 bytes
 
 Session cookies are Secure by default. `GAMEPANEL_INSECURE_COOKIES=true` is only for local HTTP development. Apply global migrations in numeric order before enabling the access API.
 

@@ -6,8 +6,9 @@
     "/v1/platform/users": {"get": {"operationId": "listPlatformUsers", "responses": {"200": {"description": "Users"}}}, "post": {"operationId": "createLocalUser", "requestBody": {"$ref": "#/components/requestBodies/CreateLocalUser"}, "responses": {"201": {"description": "Local user with one-time password"}}}},
     "/v1/platform/workspaces": {"get": {"operationId": "listPlatformWorkspaces", "responses": {"200": {"description": "Workspaces"}}}},
     "/v1/platform/invitations": {"post": {"operationId": "createPlatformInvitation", "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
-    "/v1/platform/credit-grants": {"post": {"operationId": "grantPromotionalCredit", "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
-    "/v1/platform/price-books": {"get": {"operationId": "listPriceBooks", "responses": {"200": {"description": "Price books"}}}, "post": {"operationId": "createPriceBookRevision", "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/platform/credit-grants": {"post": {"operationId": "grantPromotionalCredit", "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "requestBody": {"$ref": "#/components/requestBodies/PromotionalCreditGrant"}, "responses": {"201": {"description": "Promotional credit ledger entry committed"}}}},
+    "/v1/platform/price-books": {"get": {"operationId": "listPriceBooks", "responses": {"200": {"description": "Price books"}}}, "post": {"operationId": "createPriceBookRevision", "requestBody": {"$ref": "#/components/requestBodies/PriceBookRevision"}, "responses": {"201": {"description": "Immutable price book revision published"}}}},
+    "/v1/platform/region-catalogs": {"post": {"operationId": "createRegionCatalogRevision", "requestBody": {"$ref": "#/components/requestBodies/RegionCatalogRevision"}, "responses": {"201": {"description": "Region resource catalog revision published"}}}},
     "/v1/platform/instances": {"get": {"operationId": "listPlatformInstances", "responses": {"200": {"description": "Cross-workspace instance inventory"}}}},
     "/v1/platform/regions": {"get": {"operationId": "listPlatformRegions", "responses": {"200": {"description": "Regions"}}}},
     "/v1/platform/regions/{regionId}": {"get": {"operationId": "getPlatformRegion", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region"}}}, "patch": {"operationId": "updatePlatformRegionOperations", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region updated"}}}},
@@ -24,7 +25,10 @@
   },
   "components": {
     "requestBodies": {
-      "CreateLocalUser": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["username", "displayName", "oneTimePassword"], "properties": {"username": {"type": "string", "minLength": 3, "maxLength": 64}, "displayName": {"type": "string", "minLength": 1, "maxLength": 80}, "oneTimePassword": {"type": "string", "format": "password", "minLength": 12}}}}}}
+      "CreateLocalUser": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["username", "displayName", "oneTimePassword"], "properties": {"username": {"type": "string", "minLength": 3, "maxLength": 64}, "displayName": {"type": "string", "minLength": 1, "maxLength": 80}, "oneTimePassword": {"type": "string", "format": "password", "minLength": 12}}}}}},
+      "PromotionalCreditGrant": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PromotionalCreditGrant"}}}},
+      "PriceBookRevision": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PriceBookRevision"}}}},
+      "RegionCatalogRevision": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegionCatalogRevision"}}}}
     },
     "parameters": {
       "RegionId": {"name": "regionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"}},
@@ -43,9 +47,10 @@
       "PriceBookRevision": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["regionId", "currency", "effectiveAt", "unitPrices"],
+        "required": ["regionId", "revision", "currency", "effectiveAt", "unitPrices"],
         "properties": {
           "regionId": {"type": "string"},
+          "revision": {"type": "integer", "minimum": 1},
           "currency": {"const": "CNY"},
           "effectiveAt": {"type": "string", "format": "date-time"},
           "unitPrices": {
@@ -54,16 +59,19 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["resourceKind", "priceMinor", "unit"],
+                "required": ["resourceKind", "priceMinor", "unitQuantity", "unit"],
               "properties": {
                 "resourceKind": {"type": "string", "enum": ["cpu", "memory", "instance-disk", "backup-storage", "dedicated-ip"]},
-                "priceMinor": {"type": "integer", "minimum": 0},
+                  "priceMinor": {"type": "integer", "minimum": 0},
+                  "unitQuantity": {"type": "integer", "minimum": 1},
                 "unit": {"type": "string"}
               }
             }
           }
         }
-      }
+      },
+      "RegionCatalogRevision": {"type": "object", "additionalProperties": false, "required": ["regionId", "version", "cpu", "memory", "disk", "dedicatedIpAvailable", "endpointDeliveryModes", "availability", "effectiveAt"], "properties": {"regionId": {"type": "string"}, "version": {"type": "integer", "minimum": 1}, "cpu": {"$ref": "#/components/schemas/ResourceRange"}, "memory": {"$ref": "#/components/schemas/ResourceRange"}, "disk": {"$ref": "#/components/schemas/ResourceRange"}, "dedicatedIpAvailable": {"type": "boolean"}, "endpointDeliveryModes": {"type": "array", "items": {"type": "string", "enum": ["gateway", "dedicated-ip", "node-direct"]}, "minItems": 1, "uniqueItems": true}, "availability": {"type": "string", "enum": ["available", "limited", "unavailable"]}, "effectiveAt": {"type": "string", "format": "date-time"}}},
+      "ResourceRange": {"type": "object", "additionalProperties": false, "required": ["minimum", "maximum", "step"], "properties": {"minimum": {"type": "integer", "minimum": 1}, "maximum": {"type": "integer", "minimum": 1}, "step": {"type": "integer", "minimum": 1}}}
     }
   }
 }

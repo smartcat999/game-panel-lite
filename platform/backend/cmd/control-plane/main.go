@@ -2,12 +2,15 @@ package main
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"log/slog"
 	"os"
 	"strings"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/accessapi"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/billing"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/billingapi"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/bootstrap"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/controlplane"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/globalproduct"
@@ -32,7 +35,7 @@ func main() {
 		product = globalproduct.NewPostgres(database)
 		application = controlplane.NewHandler(environment.Identity, environment.Workspace, product)
 		if os.Getenv("GAMEPANEL_GITHUB_CLIENT_ID") != "" {
-			access, err := accessapi.PostgresRoutes(database, accessapi.Config{
+			accessServices, err := accessapi.PostgresServices(database, accessapi.Config{
 				GitHubClientID:     os.Getenv("GAMEPANEL_GITHUB_CLIENT_ID"),
 				GitHubClientSecret: os.Getenv("GAMEPANEL_GITHUB_CLIENT_SECRET"),
 				GitHubRedirectURL:  os.Getenv("GAMEPANEL_GITHUB_REDIRECT_URL"),
@@ -43,7 +46,20 @@ func main() {
 				slog.Error("configure access API", "error", err)
 				os.Exit(1)
 			}
-			application = accessapi.WithFallback(access, application)
+			fundingKey, err := base64.StdEncoding.DecodeString(os.Getenv("GAMEPANEL_FUNDING_SIGNING_KEY_BASE64"))
+			if err != nil || len(fundingKey) < 32 {
+				slog.Error("configure billing API", "error", "funding signing key must contain at least 32 bytes encoded as base64")
+				os.Exit(1)
+			}
+			accessRoutes := accessapi.Routes(accessServices)
+			application = accessapi.WithFallback(accessRoutes, application)
+			billingRoutes := billingapi.Routes(billingapi.Services{
+				Billing:    billing.New(billing.NewPostgresStore(database), fundingKey),
+				Sessions:   accessServices.Sessions,
+				Authorizer: accessServices.Authorizer,
+				Resolver:   accessServices.Resolver,
+			})
+			application = billingapi.WithFallback(billingRoutes, application)
 		}
 	}
 	server := bootstrap.HealthServer{
