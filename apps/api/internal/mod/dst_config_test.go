@@ -101,3 +101,35 @@ configuration_options = {
 		t.Fatalf("expected helper-generated localized choices, got %+v", options)
 	}
 }
+
+func TestParseDSTConfigOptionsSupportsLocaleConditionalTables(t *testing.T) {
+	source := `
+local isCh = locale == "zh" or locale == "zhr"
+configuration_options = isCh and
+{
+  {name = "language_switch", label = "选择语言", options = {
+    {description = "中文", data = "ch"}, {description = "English", data = "eng"},
+  }, default = "ch"},
+} or
+{
+  {name = "language_switch", label = "Language", options = {
+    {description = "中文", data = "ch"}, {description = "English", data = "eng"},
+  }, default = "eng"},
+}`
+
+	zhOptions, err := ParseDSTConfigOptions(source, "zh-CN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(zhOptions) != 1 || zhOptions[0].Label != "选择语言" || zhOptions[0].Default != "ch" {
+		t.Fatalf("expected Chinese conditional table, got %+v", zhOptions)
+	}
+
+	enOptions, err := ParseDSTConfigOptions(source, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(enOptions) != 1 || enOptions[0].Label != "Language" || enOptions[0].Default != "eng" {
+		t.Fatalf("expected English conditional table, got %+v", enOptions)
+	}
+}
