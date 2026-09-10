@@ -88,7 +88,7 @@ func (s *PostgresStore) CreateLocalAccount(ctx context.Context, user User, crede
 	if _, err := tx.ExecContext(ctx, `INSERT INTO users (id, username, display_name, email, created_at) VALUES ($1, $2, $3, NULL, $4)`, user.ID, user.Username, user.DisplayName, user.CreatedAt); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO local_credentials (user_id, login, password_hash, must_change, updated_at) VALUES ($1, $2, $3, $4, $5)`, credential.UserID, credential.Login, credential.PasswordHash, credential.MustChange, credential.UpdatedAt); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO local_credentials (user_id, login, password_hash, must_change, expires_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`, credential.UserID, credential.Login, credential.PasswordHash, credential.MustChange, credential.ExpiresAt, credential.UpdatedAt); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -109,19 +109,19 @@ func (s *PostgresStore) HasIdentity(ctx context.Context, userID, provider string
 
 func (s *PostgresStore) PutCredential(ctx context.Context, credential Credential) error {
 	_, err := s.database.ExecContext(ctx, `
-		INSERT INTO local_credentials (user_id, login, password_hash, must_change, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (user_id) DO UPDATE SET login = EXCLUDED.login, password_hash = EXCLUDED.password_hash, must_change = EXCLUDED.must_change, updated_at = EXCLUDED.updated_at`,
-		credential.UserID, credential.Login, credential.PasswordHash, credential.MustChange, credential.UpdatedAt)
+		INSERT INTO local_credentials (user_id, login, password_hash, must_change, expires_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (user_id) DO UPDATE SET login = EXCLUDED.login, password_hash = EXCLUDED.password_hash, must_change = EXCLUDED.must_change, expires_at = EXCLUDED.expires_at, updated_at = EXCLUDED.updated_at`,
+		credential.UserID, credential.Login, credential.PasswordHash, credential.MustChange, credential.ExpiresAt, credential.UpdatedAt)
 	return err
 }
 
 func (s *PostgresStore) CredentialByUser(ctx context.Context, userID string) (Credential, error) {
-	return scanCredential(s.database.QueryRowContext(ctx, `SELECT user_id, login, password_hash, must_change, updated_at FROM local_credentials WHERE user_id = $1`, userID))
+	return scanCredential(s.database.QueryRowContext(ctx, `SELECT user_id, login, password_hash, must_change, expires_at, updated_at FROM local_credentials WHERE user_id = $1`, userID))
 }
 
 func (s *PostgresStore) CredentialByLogin(ctx context.Context, login string) (Credential, error) {
-	return scanCredential(s.database.QueryRowContext(ctx, `SELECT user_id, login, password_hash, must_change, updated_at FROM local_credentials WHERE login = $1`, login))
+	return scanCredential(s.database.QueryRowContext(ctx, `SELECT user_id, login, password_hash, must_change, expires_at, updated_at FROM local_credentials WHERE login = $1`, login))
 }
 
 type rowScanner interface {
@@ -130,7 +130,7 @@ type rowScanner interface {
 
 func scanCredential(row rowScanner) (Credential, error) {
 	var credential Credential
-	err := row.Scan(&credential.UserID, &credential.Login, &credential.PasswordHash, &credential.MustChange, &credential.UpdatedAt)
+	err := row.Scan(&credential.UserID, &credential.Login, &credential.PasswordHash, &credential.MustChange, &credential.ExpiresAt, &credential.UpdatedAt)
 	return credential, err
 }
 

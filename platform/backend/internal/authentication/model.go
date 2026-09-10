@@ -50,6 +50,7 @@ type Credential struct {
 	Login        string
 	PasswordHash string
 	MustChange   bool
+	ExpiresAt    *time.Time
 	UpdatedAt    time.Time
 }
 

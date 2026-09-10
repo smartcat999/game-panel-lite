@@ -125,7 +125,7 @@ func TestLocalCredentialsAreHashedAndConstrained(t *testing.T) {
 		t.Fatal(err)
 	}
 	credential, _ := store.CredentialByUser(context.Background(), "usr_local")
-	if credential.PasswordHash == "temporary-pass-123" || !strings.HasPrefix(credential.PasswordHash, "$2") || !credential.MustChange {
+	if credential.PasswordHash == "temporary-pass-123" || !strings.HasPrefix(credential.PasswordHash, "$2") || !credential.MustChange || credential.ExpiresAt == nil || !credential.ExpiresAt.Equal(testNow.Add(24*time.Hour)) {
 		t.Fatalf("credential not safely stored: %#v", credential)
 	}
 	_, session, mustChange, err := passwords.Authenticate(context.Background(), "LOCAL-ADMIN", "temporary-pass-123")
@@ -137,6 +137,21 @@ func TestLocalCredentialsAreHashedAndConstrained(t *testing.T) {
 	}
 	if _, _, mustChange, err = passwords.Authenticate(context.Background(), "local-admin", "permanent-pass-456"); err != nil || mustChange {
 		t.Fatalf("changed credential failed: mustChange=%v err=%v", mustChange, err)
+	}
+}
+
+func TestOneTimeCredentialExpiresAfterTwentyFourHours(t *testing.T) {
+	store := NewMemoryStore()
+	store.AddUser(User{ID: "usr_expiring", Username: "expiring"})
+	sessions := testSessions(store)
+	passwords := NewPasswordService(store, sessions)
+	passwords.now = func() time.Time { return testNow }
+	if err := passwords.CreateOneTimeCredential(context.Background(), "usr_expiring", "expiring", "temporary-pass-123"); err != nil {
+		t.Fatal(err)
+	}
+	passwords.now = func() time.Time { return testNow.Add(24 * time.Hour) }
+	if _, _, _, err := passwords.Authenticate(context.Background(), "expiring", "temporary-pass-123"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expired one-time credential accepted: %v", err)
 	}
 }
 

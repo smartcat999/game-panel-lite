@@ -7,6 +7,7 @@ CREATE TABLE local_credentials (
     login text NOT NULL UNIQUE,
     password_hash text NOT NULL,
     must_change boolean NOT NULL DEFAULT false,
+    expires_at timestamptz,
     updated_at timestamptz NOT NULL
 );
 

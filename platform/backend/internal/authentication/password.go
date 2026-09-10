@@ -38,7 +38,8 @@ func (s *PasswordService) CreateLocalAccount(ctx context.Context, username, disp
 	}
 	now := s.now().UTC()
 	user := User{ID: id, Username: username, DisplayName: displayName, CreatedAt: now}
-	credential := Credential{UserID: id, Login: username, PasswordHash: string(hash), MustChange: true, UpdatedAt: now}
+	expiresAt := now.Add(24 * time.Hour)
+	credential := Credential{UserID: id, Login: username, PasswordHash: string(hash), MustChange: true, ExpiresAt: &expiresAt, UpdatedAt: now}
 	if err := s.store.CreateLocalAccount(ctx, user, credential); err != nil {
 		return User{}, err
 	}
@@ -76,7 +77,7 @@ func (s *PasswordService) SetForAuthenticatedUser(ctx context.Context, session S
 
 func (s *PasswordService) ChangeTemporary(ctx context.Context, userID, currentPassword, newPassword string) error {
 	credential, err := s.store.CredentialByUser(ctx, userID)
-	if err != nil || !credential.MustChange || bcrypt.CompareHashAndPassword([]byte(credential.PasswordHash), []byte(currentPassword)) != nil {
+	if err != nil || !credential.MustChange || credential.ExpiresAt == nil || !s.now().UTC().Before(*credential.ExpiresAt) || bcrypt.CompareHashAndPassword([]byte(credential.PasswordHash), []byte(currentPassword)) != nil {
 		return ErrInvalidCredentials
 	}
 	return s.put(ctx, userID, credential.Login, newPassword, false)
@@ -84,7 +85,7 @@ func (s *PasswordService) ChangeTemporary(ctx context.Context, userID, currentPa
 
 func (s *PasswordService) Authenticate(ctx context.Context, login, password string) (string, Session, bool, error) {
 	credential, err := s.store.CredentialByLogin(ctx, normalizeLogin(login))
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(credential.PasswordHash), []byte(password)) != nil {
+	if err != nil || (credential.MustChange && (credential.ExpiresAt == nil || !s.now().UTC().Before(*credential.ExpiresAt))) || bcrypt.CompareHashAndPassword([]byte(credential.PasswordHash), []byte(password)) != nil {
 		return "", Session{}, false, ErrInvalidCredentials
 	}
 	token, session, err := s.sessions.Issue(ctx, credential.UserID, true)
@@ -100,7 +101,12 @@ func (s *PasswordService) put(ctx context.Context, userID, login, password strin
 	if err != nil {
 		return err
 	}
-	return s.store.PutCredential(ctx, Credential{UserID: userID, Login: login, PasswordHash: string(hash), MustChange: mustChange, UpdatedAt: s.now().UTC()})
+	credential := Credential{UserID: userID, Login: login, PasswordHash: string(hash), MustChange: mustChange, UpdatedAt: s.now().UTC()}
+	if mustChange {
+		expiresAt := credential.UpdatedAt.Add(24 * time.Hour)
+		credential.ExpiresAt = &expiresAt
+	}
+	return s.store.PutCredential(ctx, credential)
 }
 
 func normalizeLogin(login string) string {

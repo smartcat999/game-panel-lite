@@ -3,6 +3,7 @@ package authentication
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,20 +22,29 @@ func TestPostgresIdentityAuthorizationRoundTrip(t *testing.T) {
 	store := NewPostgresStore(database)
 	sessions := NewSessionService(store, SessionPolicy{AbsoluteLifetime: 24 * time.Hour, IdleTimeout: time.Hour, ReauthWindow: 10 * time.Minute, SecureCookies: true})
 	passwords := NewPasswordService(store, sessions)
+	passwords.now = func() time.Time { return testNow }
 	user, err := passwords.CreateLocalAccount(ctx, "local-operator", "Local Operator", "temporary-pass-123")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var storedHash string
-	if err := database.QueryRow(`SELECT password_hash FROM local_credentials WHERE user_id = $1`, user.ID).Scan(&storedHash); err != nil {
+	var credentialExpiry time.Time
+	if err := database.QueryRow(`SELECT password_hash, expires_at FROM local_credentials WHERE user_id = $1`, user.ID).Scan(&storedHash, &credentialExpiry); err != nil {
 		t.Fatal(err)
 	}
 	if storedHash == "temporary-pass-123" || !strings.HasPrefix(storedHash, "$2") {
 		t.Fatal("plaintext password persisted")
 	}
+	if !credentialExpiry.Equal(testNow.Add(24 * time.Hour)) {
+		t.Fatalf("credential expiry=%s", credentialExpiry)
+	}
 	token, session, mustChange, err := passwords.Authenticate(ctx, "LOCAL-OPERATOR", "temporary-pass-123")
 	if err != nil || token == "" || session.UserID != user.ID || !mustChange {
 		t.Fatalf("local login failed: %#v mustChange=%v err=%v", session, mustChange, err)
+	}
+	passwords.now = func() time.Time { return testNow.Add(24 * time.Hour) }
+	if _, _, _, err := passwords.Authenticate(ctx, "local-operator", "temporary-pass-123"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expired PostgreSQL credential accepted: %v", err)
 	}
 	var rawMatches int
 	if err := database.QueryRow(`SELECT count(*) FROM auth_sessions WHERE token_hash = $1`, token).Scan(&rawMatches); err != nil || rawMatches != 0 {
