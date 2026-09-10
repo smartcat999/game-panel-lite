@@ -3,174 +3,103 @@
   "info": {"title": "GamePanel Control Plane API", "version": "1.0.0"},
   "servers": [{"url": "/api"}],
   "paths": {
+    "/v1/auth/github/start": {"post": {"operationId": "startGitHubSignIn", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/auth/github/callback": {"get": {"operationId": "completeGitHubSignIn", "responses": {"302": {"description": "Session established"}}}},
+    "/v1/auth/password/sign-in": {"post": {"operationId": "signInWithPassword", "requestBody": {"$ref": "#/components/requestBodies/PasswordSignIn"}, "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/auth/password": {"put": {"operationId": "setLocalPassword", "requestBody": {"$ref": "#/components/requestBodies/SetPassword"}, "responses": {"204": {"description": "Password set after recent reauthentication"}}}},
     "/v1/session": {
-      "get": {
-        "operationId": "getSession",
-        "responses": {"200": {"description": "Current session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Session"}}}}}
-      }
+      "get": {"operationId": "getSession", "responses": {"200": {"description": "Current session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Session"}}}}}},
+      "delete": {"operationId": "signOut", "responses": {"204": {"description": "Session ended"}}}
     },
+    "/v1/invitations/{invitationToken}:redeem": {"post": {"operationId": "redeemInvitation", "parameters": [{"$ref": "#/components/parameters/InvitationToken"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
     "/v1/user-preferences": {
-      "get": {
-        "operationId": "getUserPreferences",
-        "responses": {"200": {"description": "User preferences", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UserPreferences"}}}}}
-      },
-      "patch": {
-        "operationId": "updateUserPreferences",
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateUserPreferences"}}}},
-        "responses": {"200": {"description": "Updated user preferences", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UserPreferences"}}}}}
-      }
+      "get": {"operationId": "getUserPreferences", "responses": {"200": {"$ref": "#/components/responses/OK"}}},
+      "patch": {"operationId": "updateUserPreferences", "responses": {"200": {"$ref": "#/components/responses/OK"}}}
     },
-    "/v1/workspace-selection": {
-      "post": {
-        "operationId": "selectWorkspace",
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceSelection"}}}},
-        "responses": {"204": {"description": "Workspace selected"}}
-      }
-    },
-    "/v1/workspaces": {
-      "get": {
-        "operationId": "listWorkspaces",
-        "responses": {"200": {"description": "Workspaces for the current User", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Workspace"}}}}}}
-      }
-    },
-    "/v1/workspaces/{workspaceId}/members": {
-      "get": {
-        "operationId": "listWorkspaceMembers",
-        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
-        "responses": {"200": {"description": "Workspace members", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceMember"}}}}}}
-      }
-    },
-    "/v1/instances": {
-      "post": {
-        "operationId": "createLogicalInstance",
-        "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateLogicalInstance"}}}},
-        "responses": {"201": {"description": "Checkout created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CheckoutResult"}}}}}
-      }
-    },
-    "/v1/instances/{logicalInstanceId}": {
-      "get": {
-        "operationId": "getLogicalInstance",
-        "parameters": [{"name": "logicalInstanceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/LogicalInstanceId"}}],
-        "responses": {"200": {"description": "Logical Instance", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LogicalInstance"}}}}}
-      }
-    },
-    "/v1/regions": {
-      "get": {
-        "operationId": "listRegions",
-        "responses": {"200": {"description": "Customer-visible Region catalog", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/RegionCatalogItem"}}}}}}
-      }
-    },
-    "/v1/plans": {
-      "get": {
-        "operationId": "listPlanVersions",
-        "responses": {"200": {"description": "Available immutable Plan versions", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/PlanVersion"}}}}}}
-      }
-    },
+    "/v1/workspaces": {"get": {"operationId": "listWorkspaces", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/workspace-selection": {"post": {"operationId": "selectWorkspace", "responses": {"204": {"description": "Workspace selected"}}}},
+    "/v1/workspaces/{workspaceId}/members": {"get": {"operationId": "listWorkspaceMembers", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/workspaces/{workspaceId}/invitations": {"post": {"operationId": "createWorkspaceInvitation", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/workspaces/{workspaceId}/role-bindings": {"get": {"operationId": "listWorkspaceRoleBindings", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/regions": {"get": {"operationId": "listRegions", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/regions/{regionId}/catalog": {"get": {"operationId": "getRegionCatalog", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region capacity classes and price book", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegionCatalog"}}}}}}},
+    "/v1/providers/releases": {"get": {"operationId": "listProviderReleases", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/providers/releases/{providerReleaseId}/manifest": {"get": {"operationId": "getProviderManifest", "parameters": [{"$ref": "#/components/parameters/ProviderReleaseId"}], "responses": {"200": {"description": "Immutable provider configuration and listener manifest", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProviderManifest"}}}}}}},
+    "/v1/workspaces/{workspaceId}/wallet": {"get": {"operationId": "getWorkspaceWallet", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"description": "Prepaid wallet", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Wallet"}}}}}}},
+    "/v1/workspaces/{workspaceId}/ledger-entries": {"get": {"operationId": "listWorkspaceLedgerEntries", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/workspaces/{workspaceId}/quotes": {"post": {"operationId": "createResourceQuote", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateQuote"}}}}, "responses": {"200": {"description": "Short-lived resource quote", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Quote"}}}}}}},
     "/v1/workspaces/{workspaceId}/instances": {
-      "get": {
-        "operationId": "listWorkspaceInstances",
-        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
-        "responses": {"200": {"description": "Workspace Logical Instances", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/LogicalInstance"}}}}}}
-      }
+      "get": {"operationId": "listWorkspaceInstances", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}},
+      "post": {"operationId": "createLogicalInstance", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateLogicalInstance"}}}}, "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}
     },
-    "/v1/workspaces/{workspaceId}/instances/{instanceId}": {
-      "get": {
-        "operationId": "getWorkspaceInstance",
-        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}, {"name": "instanceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/LogicalInstanceId"}}],
-        "responses": {"200": {"description": "Logical Instance detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InstanceDetail"}}}}}
-      }
-    },
-    "/v1/workspaces/{workspaceId}/orders": {
-      "get": {
-        "operationId": "listWorkspaceOrders",
-        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
-        "responses": {"200": {"description": "Workspace Orders", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Order"}}}}}}
-      }
-    },
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}": {"get": {"operationId": "getWorkspaceInstance", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}], "responses": {"200": {"description": "Logical instance", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InstanceDetail"}}}}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:start": {"post": {"operationId": "startLogicalInstance", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:stop": {"post": {"operationId": "stopLogicalInstance", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:restart": {"post": {"operationId": "restartLogicalInstance", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts": {"post": {"operationId": "createConfigurationDraft", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts/{draftId}:apply": {"post": {"operationId": "applyConfigurationDraft", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}, {"name": "draftId", "in": "path", "required": true, "schema": {"type": "string"}}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/logs": {"get": {"operationId": "getInstanceLogs", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/metrics": {"get": {"operationId": "getInstanceMetrics", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/LogicalInstanceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
     "/v1/workspaces/{workspaceId}/backups": {
-      "get": {
-        "operationId": "listWorkspaceBackups",
-        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
-        "responses": {"200": {"description": "Workspace backup and restore requests", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/BackupRequest"}}}}}}
-      },
-      "post": {
-        "operationId": "createBackupRequest",
-        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}, {"$ref": "#/components/parameters/IdempotencyKey"}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateBackupRequest"}}}},
-        "responses": {"202": {"description": "Backup or restore request accepted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BackupRequest"}}}}}
-      }
-    }
+      "get": {"operationId": "listWorkspaceBackups", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}},
+      "post": {"operationId": "createBackup", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateBackup"}}}}, "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}
+    },
+    "/v1/workspaces/{workspaceId}/backups/{backupId}:restore": {"post": {"operationId": "restoreBackup", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"name": "backupId", "in": "path", "required": true, "schema": {"type": "string"}}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/operations/{operationId}": {"get": {"operationId": "getOperation", "parameters": [{"name": "operationId", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Asynchronous operation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Operation"}}}}}}}
   },
   "components": {
     "parameters": {
-      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 128}}
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 128}},
+      "WorkspaceId": {"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}},
+      "LogicalInstanceId": {"name": "logicalInstanceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/LogicalInstanceId"}},
+      "RegionId": {"name": "regionId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/RegionId"}},
+      "ProviderReleaseId": {"name": "providerReleaseId", "in": "path", "required": true, "schema": {"type": "string"}},
+      "InvitationToken": {"name": "invitationToken", "in": "path", "required": true, "schema": {"type": "string"}}
+    },
+    "requestBodies": {
+      "PasswordSignIn": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["username", "password"], "properties": {"username": {"type": "string"}, "password": {"type": "string", "format": "password"}}}}}},
+      "SetPassword": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["password"], "properties": {"password": {"type": "string", "format": "password", "minLength": 12}}}}}}
+    },
+    "responses": {
+      "OK": {"description": "Successful response"},
+      "Accepted": {"description": "Durable operation accepted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Operation"}}}}
     },
     "schemas": {
       "UserId": {"type": "string", "pattern": "^usr_[A-Za-z0-9]+$"},
       "WorkspaceId": {"type": "string", "pattern": "^ws_[A-Za-z0-9]+$"},
       "LogicalInstanceId": {"type": "string", "pattern": "^lin_[A-Za-z0-9]+$"},
       "RegionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
-      "Session": {
-        "type": "object", "additionalProperties": false, "required": ["userId", "workspaceIds", "selectedWorkspaceId", "platformOperator"],
-        "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "workspaceIds": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceId"}}, "selectedWorkspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "platformOperator": {"type": "boolean"}}
-      },
-      "UserPreferences": {
-        "type": "object", "additionalProperties": false, "required": ["locale", "theme", "timeZone"],
-        "properties": {"locale": {"type": "string", "enum": ["en", "zh-CN"]}, "theme": {"type": "string", "enum": ["light", "dark", "system"]}, "timeZone": {"type": "string", "minLength": 1}}
-      },
-      "UpdateUserPreferences": {
-        "type": "object", "additionalProperties": false, "minProperties": 1,
-        "properties": {"locale": {"type": "string", "enum": ["en", "zh-CN"]}, "theme": {"type": "string", "enum": ["light", "dark", "system"]}, "timeZone": {"type": "string", "minLength": 1}}
-      },
-      "WorkspaceSelection": {
-        "type": "object", "additionalProperties": false, "required": ["workspaceId"],
-        "properties": {"workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}}
-      },
-      "Workspace": {
-        "type": "object", "additionalProperties": false, "required": ["id", "slug", "name"],
-        "properties": {"id": {"$ref": "#/components/schemas/WorkspaceId"}, "slug": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "name": {"type": "string", "minLength": 1}}
-      },
-      "WorkspaceMember": {
-        "type": "object", "additionalProperties": false, "required": ["membershipId", "user", "role"],
-        "properties": {"membershipId": {"type": "string", "pattern": "^mem_[A-Za-z0-9_]+$"}, "user": {"type": "object", "additionalProperties": false, "required": ["id", "displayName", "email"], "properties": {"id": {"$ref": "#/components/schemas/UserId"}, "displayName": {"type": "string"}, "email": {"type": "string", "format": "email"}}}, "role": {"type": "string", "enum": ["owner", "administrator", "operator", "billing", "viewer"]}}
-      },
-      "CreateLogicalInstance": {
-        "type": "object", "additionalProperties": false, "required": ["workspaceId", "planVersionId", "regionId", "name", "gameKey", "gameVersion", "configuration"],
-        "properties": {"workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "planVersionId": {"type": "string", "pattern": "^plv_[A-Za-z0-9_]+$"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "name": {"type": "string", "minLength": 1, "maxLength": 80}, "gameKey": {"type": "string", "minLength": 1}, "gameVersion": {"type": "string", "minLength": 1}, "configuration": {"type": "object", "additionalProperties": true}}
-      },
-      "LogicalInstance": {
-        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "name", "gameKey", "desiredState", "billingState", "deploymentState", "stale", "createdAt"],
-        "properties": {"id": {"$ref": "#/components/schemas/LogicalInstanceId"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "name": {"type": "string"}, "gameKey": {"type": "string"}, "desiredState": {"type": "string", "enum": ["running", "stopped"]}, "billingState": {"type": "string", "enum": ["pending_payment", "active"]}, "deploymentState": {"type": "string", "enum": ["pending_payment", "waiting_region", "running", "stopped", "failed"]}, "stale": {"type": "boolean"}, "createdAt": {"type": "string", "format": "date-time"}}
-      },
-      "PlanVersion": {
-        "type": "object", "additionalProperties": false, "required": ["id", "planId", "version", "name", "priceMinor", "currency", "billingPeriod", "regionIds", "memoryMegabytes", "cpuUnits"],
-        "properties": {"id": {"type": "string"}, "planId": {"type": "string"}, "version": {"type": "integer"}, "name": {"type": "string"}, "priceMinor": {"type": "integer"}, "currency": {"type": "string"}, "billingPeriod": {"type": "string"}, "regionIds": {"type": "array", "items": {"$ref": "#/components/schemas/RegionId"}}, "memoryMegabytes": {"type": "integer"}, "cpuUnits": {"type": "integer"}}
-      },
-      "Order": {
-        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "planVersionId", "status", "expiresAt"],
-        "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "planVersionId": {"type": "string"}, "status": {"type": "string", "enum": ["pending_payment", "paid"]}, "expiresAt": {"type": "string", "format": "date-time"}}
-      },
-      "CheckoutResult": {
-        "type": "object", "additionalProperties": false, "required": ["instance", "order"],
-        "properties": {"instance": {"$ref": "#/components/schemas/LogicalInstance"}, "order": {"$ref": "#/components/schemas/Order"}}
-      },
-      "InstanceDetail": {
-        "type": "object", "additionalProperties": false, "required": ["instance", "revision", "placement"],
-        "properties": {"instance": {"$ref": "#/components/schemas/LogicalInstance"}, "revision": {"type": "object"}, "placement": {"type": "object"}}
-      },
-      "RegionCatalogItem": {
-        "type": "object", "additionalProperties": false, "required": ["id", "code", "name", "available"],
-        "properties": {"id": {"$ref": "#/components/schemas/RegionId"}, "code": {"type": "string"}, "name": {"type": "string"}, "available": {"type": "boolean"}}
-      },
-      "CreateBackupRequest": {
-        "type": "object", "additionalProperties": false, "required": ["logicalInstanceId", "regionId", "kind"],
-        "properties": {"logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "kind": {"type": "string", "enum": ["backup", "restore"]}, "sourceBackupRequestId": {"type": "string", "pattern": "^bkr_[A-Za-z0-9]+$"}}
-      },
-      "BackupRequest": {
-        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "regionId", "kind", "status", "sequence", "createdAt", "updatedAt"],
-        "properties": {"id": {"type": "string", "pattern": "^bkr_[A-Za-z0-9]+$"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "kind": {"type": "string", "enum": ["backup", "restore"]}, "status": {"type": "string", "enum": ["queued", "running", "completed", "failed"]}, "sequence": {"type": "integer", "minimum": 0}, "objectKey": {"type": "string"}, "sizeBytes": {"type": "integer", "minimum": 0}, "checksum": {"type": "string"}, "createdAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}}
-      }
+      "Session": {"type": "object", "additionalProperties": false, "required": ["userId", "workspaceIds", "selectedWorkspaceId"], "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "workspaceIds": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceId"}}, "selectedWorkspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "reauthenticatedAt": {"type": "string", "format": "date-time"}}},
+      "BuiltInRole": {"type": "string", "enum": ["platform.admin", "region.operator", "workspace.owner", "workspace.operator", "workspace.viewer"]},
+      "Action": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$", "examples": ["instance.read", "instance.start", "backup.restore", "wallet.read"]},
+      "AuthorizationScope": {"type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": {"type": {"type": "string", "enum": ["platform", "region", "workspace"]}, "id": {"type": "string"}}},
+      "RoleBinding": {"type": "object", "additionalProperties": false, "required": ["id", "principalId", "role", "scope"], "properties": {"id": {"type": "string"}, "principalId": {"$ref": "#/components/schemas/UserId"}, "role": {"$ref": "#/components/schemas/BuiltInRole"}, "scope": {"$ref": "#/components/schemas/AuthorizationScope"}}},
+      "AuthorizationCheck": {"type": "object", "additionalProperties": false, "required": ["resourceType", "resourceId", "action"], "properties": {"resourceType": {"type": "string"}, "resourceId": {"type": "string"}, "action": {"$ref": "#/components/schemas/Action"}}},
+      "AuthorizationBatchRequest": {"type": "object", "additionalProperties": false, "required": ["checks"], "properties": {"checks": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/components/schemas/AuthorizationCheck"}}}},
+      "AuthorizationBatchResult": {"type": "object", "additionalProperties": false, "required": ["resourceType", "resourceId", "action", "allowed"], "properties": {"resourceType": {"type": "string"}, "resourceId": {"type": "string"}, "action": {"$ref": "#/components/schemas/Action"}, "allowed": {"type": "boolean"}, "reason": {"type": "string"}}},
+      "Operation": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "resourceType", "resourceId", "status", "steps", "createdAt"], "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "resourceType": {"type": "string"}, "resourceId": {"type": "string"}, "status": {"type": "string", "enum": ["queued", "running", "succeeded", "failed", "cancelled"]}, "steps": {"type": "array", "items": {"$ref": "#/components/schemas/OperationStep"}}, "failureCode": {"type": "string"}, "createdAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}}},
+      "OperationStep": {"type": "object", "additionalProperties": false, "required": ["key", "label", "status"], "properties": {"key": {"type": "string"}, "label": {"type": "string"}, "status": {"type": "string", "enum": ["pending", "running", "succeeded", "failed"]}, "detail": {"type": "string"}}},
+      "ResourceSpec": {"type": "object", "additionalProperties": false, "required": ["cpuMilli", "memoryMiB", "diskGiB"], "properties": {"cpuMilli": {"type": "integer", "minimum": 250}, "memoryMiB": {"type": "integer", "minimum": 512}, "diskGiB": {"type": "integer", "minimum": 5}}},
+      "RegionCatalog": {"type": "object", "additionalProperties": false, "required": ["regionId", "currency", "resourceBounds", "unitPrices", "capacityState"], "properties": {"regionId": {"$ref": "#/components/schemas/RegionId"}, "currency": {"const": "CNY"}, "resourceBounds": {"type": "object"}, "unitPrices": {"type": "array", "items": {"$ref": "#/components/schemas/UnitPrice"}}, "capacityState": {"type": "string", "enum": ["available", "limited", "unavailable"]}}},
+      "PriceBook": {"type": "object", "additionalProperties": false, "required": ["id", "regionId", "revision", "currency", "unitPrices", "effectiveAt"], "properties": {"id": {"type": "string"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "revision": {"type": "integer", "minimum": 1}, "currency": {"const": "CNY"}, "unitPrices": {"type": "array", "items": {"$ref": "#/components/schemas/UnitPrice"}}, "effectiveAt": {"type": "string", "format": "date-time"}}},
+      "UnitPrice": {"type": "object", "additionalProperties": false, "required": ["resourceKind", "priceMinor", "unit", "billingInterval"], "properties": {"resourceKind": {"type": "string", "enum": ["cpu", "memory", "instance-disk", "backup-storage", "dedicated-ip"]}, "priceMinor": {"type": "integer", "minimum": 0}, "unit": {"type": "string"}, "billingInterval": {"type": "string", "enum": ["hour"]}}},
+      "Wallet": {"type": "object", "additionalProperties": false, "required": ["workspaceId", "currency", "availableMinor", "ledgerSequence", "state"], "properties": {"workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "currency": {"const": "CNY"}, "availableMinor": {"type": "integer"}, "ledgerSequence": {"type": "integer", "minimum": 0}, "state": {"type": "string", "enum": ["active", "exhausted", "suspended"]}}},
+      "LedgerEntry": {"type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "sequence", "kind", "amountMinor", "currency", "occurredAt"], "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "sequence": {"type": "integer", "minimum": 1}, "kind": {"type": "string", "enum": ["promotional-credit", "usage-debit", "correction"]}, "amountMinor": {"type": "integer"}, "currency": {"const": "CNY"}, "resourceId": {"type": "string"}, "occurredAt": {"type": "string", "format": "date-time"}}},
+      "UsageRecord": {"type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "regionId", "resourceKind", "quantity", "intervalStart", "intervalEnd", "priceBookId"], "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "resourceKind": {"type": "string"}, "quantity": {"type": "integer", "minimum": 0}, "intervalStart": {"type": "string", "format": "date-time"}, "intervalEnd": {"type": "string", "format": "date-time"}, "priceBookId": {"type": "string"}}},
+      "CapacityHold": {"type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "regionId", "resourceSpec", "status", "expiresAt"], "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "resourceSpec": {"$ref": "#/components/schemas/ResourceSpec"}, "status": {"type": "string", "enum": ["held", "consumed", "released", "expired"]}, "expiresAt": {"type": "string", "format": "date-time"}}},
+      "FundingAuthorization": {"type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "quoteId", "maximumDebitMinor", "currency", "expiresAt", "signature"], "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "quoteId": {"type": "string"}, "maximumDebitMinor": {"type": "integer", "minimum": 0}, "currency": {"const": "CNY"}, "expiresAt": {"type": "string", "format": "date-time"}, "signature": {"type": "string", "minLength": 16}}},
+      "CreateQuote": {"type": "object", "additionalProperties": false, "required": ["regionId", "providerReleaseId", "resourceSpec"], "properties": {"regionId": {"$ref": "#/components/schemas/RegionId"}, "providerReleaseId": {"type": "string"}, "resourceSpec": {"$ref": "#/components/schemas/ResourceSpec"}}},
+      "Quote": {"type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "regionId", "resourceSpec", "currency", "estimatedHourlyMinor", "expiresAt"], "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "resourceSpec": {"$ref": "#/components/schemas/ResourceSpec"}, "currency": {"const": "CNY"}, "estimatedHourlyMinor": {"type": "integer", "minimum": 0}, "expiresAt": {"type": "string", "format": "date-time"}}},
+      "CreateLogicalInstance": {"type": "object", "additionalProperties": false, "required": ["name", "regionId", "providerReleaseId", "resourceSpec", "configuration", "quoteId"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "providerReleaseId": {"type": "string"}, "resourceSpec": {"$ref": "#/components/schemas/ResourceSpec"}, "configuration": {"type": "object"}, "quoteId": {"type": "string"}}},
+      "EndpointBinding": {"type": "object", "additionalProperties": false, "required": ["name", "purpose", "address", "transports", "stability", "displayAddress", "primary"], "properties": {"name": {"type": "string"}, "purpose": {"type": "string"}, "address": {"type": "string"}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}, "transports": {"type": "array", "items": {"type": "string", "enum": ["tcp", "udp"]}, "minItems": 1, "uniqueItems": true}, "stability": {"type": "string", "enum": ["stable", "may-change"]}, "displayAddress": {"type": "string"}, "primary": {"type": "boolean"}}},
+      "LogicalInstance": {"type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "regionId", "name", "providerReleaseId", "resourceSpec", "desiredState", "observedState", "createdAt"], "properties": {"id": {"$ref": "#/components/schemas/LogicalInstanceId"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "name": {"type": "string"}, "providerReleaseId": {"type": "string"}, "resourceSpec": {"$ref": "#/components/schemas/ResourceSpec"}, "desiredState": {"type": "string", "enum": ["running", "stopped", "deleted"]}, "observedState": {"type": "string", "enum": ["pending", "starting", "running", "stopping", "stopped", "failed", "unknown"]}, "createdAt": {"type": "string", "format": "date-time"}}},
+      "InstanceDetail": {"type": "object", "additionalProperties": false, "required": ["instance", "configurationRevisionId", "endpoints", "latestOperationId"], "properties": {"instance": {"$ref": "#/components/schemas/LogicalInstance"}, "configurationRevisionId": {"type": "string"}, "endpoints": {"type": "array", "items": {"$ref": "#/components/schemas/EndpointBinding"}}, "latestOperationId": {"type": "string"}}},
+      "CreateBackup": {"type": "object", "additionalProperties": false, "required": ["logicalInstanceId", "label"], "properties": {"logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "label": {"type": "string", "maxLength": 80}}},
+      "ProviderManifest": {"type": "object", "additionalProperties": false, "required": ["providerReleaseId", "gameKey", "displayName", "schemaVersion", "configurationSchema", "uiSchema", "listenerRequirements", "capabilities"], "properties": {"providerReleaseId": {"type": "string"}, "gameKey": {"type": "string"}, "displayName": {"type": "string"}, "schemaVersion": {"type": "integer", "minimum": 1}, "configurationSchema": {"$ref": "#/components/schemas/ControlledConfigurationSchema"}, "uiSchema": {"$ref": "#/components/schemas/ProviderUISchema"}, "listenerRequirements": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/ListenerRequirement"}}, "capabilities": {"type": "array", "items": {"type": "string", "enum": ["configuration", "mods", "console", "logs", "backup", "player-observation"]}, "uniqueItems": true}}},
+      "ControlledConfigurationSchema": {"type": "object", "additionalProperties": false, "required": ["type", "properties"], "properties": {"type": {"const": "object"}, "properties": {"type": "object", "additionalProperties": {"$ref": "#/components/schemas/ConfigurationFieldSchema"}}, "required": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}},
+      "ConfigurationFieldSchema": {"type": "object", "additionalProperties": false, "required": ["type", "title"], "properties": {"type": {"type": "string", "enum": ["string", "integer", "number", "boolean", "enum", "secret", "string-list"]}, "title": {"type": "string"}, "description": {"type": "string"}, "default": {}, "minimum": {"type": "number"}, "maximum": {"type": "number"}, "enum": {"type": "array", "items": {"type": ["string", "number", "integer"]}}, "pattern": {"type": "string"}, "minLength": {"type": "integer"}, "maxLength": {"type": "integer"}}},
+      "ProviderUISchema": {"type": "object", "additionalProperties": false, "required": ["sections", "fields"], "properties": {"sections": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "title", "order"], "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "order": {"type": "integer"}}}}, "fields": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": false, "required": ["section", "order", "control"], "properties": {"section": {"type": "string"}, "order": {"type": "integer"}, "control": {"type": "string", "enum": ["text", "textarea", "number", "switch", "select", "password", "tag-list"]}, "visibleWhen": {"type": "object", "additionalProperties": false, "required": ["field", "equals"], "properties": {"field": {"type": "string"}, "equals": {}}}}}}}},
+      "ListenerRequirement": {"type": "object", "additionalProperties": false, "required": ["name", "purpose", "transports", "internalPort", "externalPortPolicy", "addressMode", "primary"], "properties": {"name": {"type": "string"}, "purpose": {"type": "string"}, "transports": {"type": "array", "items": {"type": "string", "enum": ["tcp", "udp"]}, "minItems": 1, "uniqueItems": true}, "internalPort": {"type": "integer", "minimum": 1, "maximum": 65535}, "externalPortPolicy": {"type": "string", "enum": ["allocated", "default-required"]}, "addressMode": {"type": "string", "enum": ["ip-port", "ip-only"]}, "primary": {"type": "boolean"}}}
     }
   }
 }

@@ -1,5 +1,5 @@
-import { AppShell } from "@/components/app-shell";
+import { redirect } from "next/navigation";
 
 export default function PlatformConsole() {
-  return <AppShell area="platform" />;
+  redirect("/platform/regions");
 }

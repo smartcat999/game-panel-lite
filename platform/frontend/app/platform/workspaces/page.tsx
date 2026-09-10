@@ -1,4 +1,4 @@
 import { AppShell } from "@/components/app-shell";
-import { PlatformResource } from "@/features/platform/platform-resource";
+import { PlatformTablePage } from "@/features/prototype/platform-pages";
 
-export default function PlatformWorkspacesPage() { return <AppShell area="platform"><PlatformResource resource="workspaces" /></AppShell>; }
+export default function PlatformWorkspacesPage() { return <AppShell area="platform"><PlatformTablePage resource="workspaces" /></AppShell>; }

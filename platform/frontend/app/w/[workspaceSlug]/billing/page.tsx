@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/app-shell";
-import { OrderList } from "@/features/orders/order-list";
+import { BillingPage as Billing } from "@/features/prototype/workspace-pages";
 
 export default async function BillingPage({ params }: { params: Promise<{ workspaceSlug: string }> }) {
   const { workspaceSlug } = await params;
-  return <AppShell area="workspace" workspaceSlug={workspaceSlug}><OrderList workspaceSlug={workspaceSlug} /></AppShell>;
+  return <AppShell area="workspace" workspaceSlug={workspaceSlug}><Billing /></AppShell>;
 }

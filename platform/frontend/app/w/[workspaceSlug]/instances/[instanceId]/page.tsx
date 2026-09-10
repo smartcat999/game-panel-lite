@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/app-shell";
-import { InstanceDetail } from "@/features/instances/instance-detail";
+import { InstanceDetailPage } from "@/features/prototype/workspace-pages";
 
 export default async function InstancePage({ params }: { params: Promise<{ workspaceSlug: string; instanceId: string }> }) {
   const { workspaceSlug, instanceId } = await params;
-  return <AppShell area="workspace" workspaceSlug={workspaceSlug}><InstanceDetail workspaceSlug={workspaceSlug} instanceId={instanceId} /></AppShell>;
+  return <AppShell area="workspace" workspaceSlug={workspaceSlug}><InstanceDetailPage workspaceSlug={workspaceSlug} instanceId={instanceId} /></AppShell>;
 }

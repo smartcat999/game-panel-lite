@@ -1,4 +1,4 @@
 import { AppShell } from "@/components/app-shell";
-import { PlatformResource } from "@/features/platform/platform-resource";
+import { RegionsPage } from "@/features/prototype/platform-pages";
 
-export default function PlatformRegionsPage() { return <AppShell area="platform"><PlatformResource resource="regions" /></AppShell>; }
+export default function PlatformRegionsPage() { return <AppShell area="platform"><RegionsPage /></AppShell>; }

@@ -6,27 +6,35 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"],
   "properties": {
-    "schemaVersion": {"const": 1},
-    "messageId": {"type": "string", "pattern": "^evt_[A-Za-z0-9]+$"},
+    "schemaVersion": {"const": "v1"},
+    "messageId": {"type": "string", "pattern": "^msg_[A-Za-z0-9]+$"},
     "messageType": {"const": "deployment.desired.v1"},
     "occurredAt": {"type": "string", "format": "date-time"},
     "idempotencyKey": {"type": "string", "minLength": 8, "maxLength": 128},
     "payload": {
       "type": "object", "additionalProperties": false,
-      "required": ["workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState", "gameKey", "gameVersion", "configuration", "cpuUnits", "memoryMegabytes"],
+      "required": ["workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "operationId", "desiredState", "providerReleaseId", "resourceSpec", "configuration", "listenerRequirements", "authorityGrant"],
       "properties": {
-        "workspaceId": {"type": "string", "pattern": "^ws_[A-Za-z0-9]+$"},
-        "logicalInstanceId": {"type": "string", "pattern": "^lin_[A-Za-z0-9]+$"},
-        "regionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
-        "placementVersion": {"type": "integer", "minimum": 1},
-        "instanceRevisionId": {"type": "string", "pattern": "^rev_[A-Za-z0-9]+$"},
-        "desiredState": {"type": "string", "enum": ["running", "stopped"]},
-        "gameKey": {"type": "string", "minLength": 1},
-        "gameVersion": {"type": "string", "minLength": 1},
-        "configuration": {"type": "object"},
-        "cpuUnits": {"type": "integer", "minimum": 1},
-        "memoryMegabytes": {"type": "integer", "minimum": 1}
+        "workspaceId": {"type": "string"}, "logicalInstanceId": {"type": "string"}, "regionId": {"type": "string"},
+        "placementVersion": {"type": "integer", "minimum": 1}, "instanceRevisionId": {"type": "string"}, "operationId": {"type": "string"},
+        "desiredState": {"type": "string", "enum": ["running", "stopped", "deleted"]}, "providerReleaseId": {"type": "string"},
+        "resourceSpec": {"$ref": "#/$defs/resourceSpec"}, "configuration": {"type": "object"},
+        "listenerRequirements": {"type": "array", "items": {"$ref": "#/$defs/listenerRequirement"}, "minItems": 1},
+        "secretReferences": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "authorityGrant": {"$ref": "#/$defs/authorityGrant"}
       }
     }
+  },
+  "$defs": {
+    "resourceSpec": {"type": "object", "additionalProperties": false, "required": ["cpuMilli", "memoryMiB", "diskGiB"], "properties": {"cpuMilli": {"type": "integer", "minimum": 1}, "memoryMiB": {"type": "integer", "minimum": 1}, "diskGiB": {"type": "integer", "minimum": 1}}},
+    "listenerRequirement": {"type": "object", "additionalProperties": false, "required": ["name", "purpose", "transports", "internalPort", "externalPortPolicy", "addressMode", "primary"], "properties": {
+      "name": {"type": "string"}, "purpose": {"type": "string"}, "transports": {"type": "array", "items": {"type": "string", "enum": ["tcp", "udp"]}, "minItems": 1, "uniqueItems": true},
+      "internalPort": {"type": "integer", "minimum": 1, "maximum": 65535}, "externalPortPolicy": {"type": "string", "enum": ["allocated", "default-required"]},
+      "addressMode": {"type": "string", "enum": ["ip-port", "ip-only"]}, "primary": {"type": "boolean"}
+    }},
+    "authorityGrant": {"type": "object", "additionalProperties": false, "required": ["issuer", "action", "regionId", "placementVersion", "expiresAt", "signature"], "properties": {
+      "issuer": {"const": "control-plane"}, "action": {"const": "deployment.reconcile"}, "regionId": {"type": "string"},
+      "placementVersion": {"type": "integer", "minimum": 1}, "expiresAt": {"type": "string", "format": "date-time"}, "signature": {"type": "string", "minLength": 16}
+    }}
   }
 }

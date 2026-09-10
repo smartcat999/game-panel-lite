@@ -1,107 +1,65 @@
 {
   "openapi": "3.1.0",
-  "info": {"title": "GamePanel Platform Region Operations API", "version": "1.0.0"},
+  "info": {"title": "GamePanel Platform and Region Operations API", "version": "1.0.0"},
   "servers": [{"url": "/api"}],
   "paths": {
-    "/v1/platform/regions": {
-      "get": {
-        "operationId": "listPlatformRegions",
-        "responses": {"200": {"description": "Platform Region list", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/PlatformRegion"}}}}}}
-      }
-    },
-    "/v1/platform/regions/{regionId}": {
-      "get": {
-        "operationId": "getPlatformRegion",
-        "parameters": [{"$ref": "#/components/parameters/RegionId"}],
-        "responses": {"200": {"description": "Platform Region", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlatformRegion"}}}}}
-      },
-      "patch": {
-        "operationId": "updatePlatformRegionOperations",
-        "parameters": [{"$ref": "#/components/parameters/RegionId"}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateRegionOperations"}}}},
-        "responses": {"200": {"description": "Updated Platform Region", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlatformRegion"}}}}}
-      }
-    },
-    "/v1/platform/workspaces": {
-      "get": {"operationId": "listPlatformWorkspaces", "responses": {"200": {"description": "All Workspaces", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/Workspace"}}}}}}}
-    },
-    "/v1/platform/plans": {
-      "get": {"operationId": "listPlatformPlans", "responses": {"200": {"description": "All Plan versions", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/PlanVersion"}}}}}}}
-    },
-    "/v1/platform/orders": {
-      "get": {"operationId": "listPlatformOrders", "responses": {"200": {"description": "All Orders", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/Order"}}}}}}}
-    },
-    "/v1/platform/instances": {
-      "get": {"operationId": "listPlatformInstances", "responses": {"200": {"description": "All Logical Instances", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/LogicalInstance"}}}}}}}
-    },
-    "/v1/platform/payments/verified": {
-      "post": {
-        "operationId": "activateVerifiedPayment",
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifiedPayment"}}}},
-        "responses": {"200": {"description": "Verified payment activation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ActivationResult"}}}}}
-      }
-    },
-    "/v1/regions/{regionId}/overview": {
-      "get": {"operationId": "getRegionExecutionOverview", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region-local execution overview", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegionOverview"}}}}}}
-    },
-    "/v1/regions/{regionId}/nodes": {
-      "get": {"operationId": "listRegionNodes", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region Nodes", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}}}}}}
-    },
-    "/v1/regions/{regionId}/deployments": {
-      "get": {"operationId": "listRegionalDeployments", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Regional Deployments", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/RegionalDeployment"}}}}}}}
-    },
-    "/v1/regions/{regionId}/tasks": {
-      "get": {"operationId": "listRegionalTasks", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Regional Tasks", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/RegionalTask"}}}}}}}
-    },
-    "/v1/regions/{regionId}/capacity": {
-      "get": {"operationId": "getRegionCapacity", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region capacity", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegionCapacity"}}}}}}
-    },
-    "/v1/regions/{regionId}/storage": {
-      "get": {"operationId": "getRegionStorage", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region storage status"}}}
-    },
-    "/v1/regions/{regionId}/monitoring": {
-      "get": {"operationId": "getRegionMonitoring", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region monitoring signals"}}}
-    },
-    "/v1/regions/{regionId}/deployments/{deploymentId}/placement-override": {
-      "post": {"operationId": "overrideRegionalPlacement", "parameters": [{"$ref": "#/components/parameters/RegionId"}, {"name": "deploymentId", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlacementOverride"}}}}, "responses": {"200": {"description": "Explicit Node reservation"}}}
-    }
+    "/v1/platform/users": {"get": {"operationId": "listPlatformUsers", "responses": {"200": {"description": "Users"}}}, "post": {"operationId": "createLocalUser", "responses": {"201": {"description": "Local user with one-time password"}}}},
+    "/v1/platform/workspaces": {"get": {"operationId": "listPlatformWorkspaces", "responses": {"200": {"description": "Workspaces"}}}},
+    "/v1/platform/invitations": {"post": {"operationId": "createPlatformInvitation", "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/platform/credit-grants": {"post": {"operationId": "grantPromotionalCredit", "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/platform/price-books": {"get": {"operationId": "listPriceBooks", "responses": {"200": {"description": "Price books"}}}, "post": {"operationId": "createPriceBookRevision", "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/platform/instances": {"get": {"operationId": "listPlatformInstances", "responses": {"200": {"description": "Cross-workspace instance inventory"}}}},
+    "/v1/platform/regions": {"get": {"operationId": "listPlatformRegions", "responses": {"200": {"description": "Regions"}}}},
+    "/v1/platform/regions/{regionId}": {"get": {"operationId": "getPlatformRegion", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region"}}}, "patch": {"operationId": "updatePlatformRegionOperations", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region updated"}}}},
+    "/v1/platform/audit-events": {"get": {"operationId": "listPlatformAuditEvents", "responses": {"200": {"description": "Audit events"}}}},
+    "/v1/regions/{regionId}/health": {"get": {"operationId": "getRegionHealth", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region health"}}}},
+    "/v1/regions/{regionId}/nodes": {"get": {"operationId": "listRegionNodes", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Nodes"}}}},
+    "/v1/regions/{regionId}/deployments": {"get": {"operationId": "listRegionalDeployments", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Deployments"}}}},
+    "/v1/regions/{regionId}/tasks": {"get": {"operationId": "listRegionalTasks", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Durable tasks"}}}},
+    "/v1/regions/{regionId}/tasks/{taskId}:retry": {"post": {"operationId": "retryRegionalTask", "parameters": [{"$ref": "#/components/parameters/RegionId"}, {"name": "taskId", "in": "path", "required": true, "schema": {"type": "string"}}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/regions/{regionId}/capacity": {"get": {"operationId": "getRegionCapacity", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Capacity"}}}},
+    "/v1/regions/{regionId}/storage": {"get": {"operationId": "getRegionStorage", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Storage"}}}},
+    "/v1/regions/{regionId}/monitoring": {"get": {"operationId": "getRegionMonitoring", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Monitoring"}}}},
+    "/v1/regions/{regionId}/deployments/{deploymentId}:override-placement": {"post": {"operationId": "overrideRegionalPlacement", "parameters": [{"$ref": "#/components/parameters/RegionId"}, {"name": "deploymentId", "in": "path", "required": true, "schema": {"type": "string"}}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}}
   },
   "components": {
     "parameters": {
-      "RegionId": {"name": "regionId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/RegionId"}}
+      "RegionId": {"name": "regionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"}},
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 128}}
+    },
+    "responses": {
+      "Accepted": {
+        "description": "Durable operation accepted",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OperationReference"}}}
+      }
     },
     "schemas": {
-      "RegionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
-      "PlatformRegion": {
-        "type": "object", "additionalProperties": false, "required": ["id", "code", "name", "operationalState"],
-        "properties": {"id": {"$ref": "#/components/schemas/RegionId"}, "code": {"type": "string"}, "name": {"type": "string"}, "operationalState": {"type": "string", "enum": ["active", "maintenance", "disabled"]}}
-      },
-      "UpdateRegionOperations": {
-        "type": "object", "additionalProperties": false, "required": ["operationalState", "reason"],
-        "properties": {"operationalState": {"type": "string", "enum": ["active", "maintenance", "disabled"]}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}
-      },
-      "VerifiedPayment": {
-        "type": "object", "additionalProperties": false, "required": ["orderId", "providerNotificationId", "verified"],
-        "properties": {"orderId": {"type": "string"}, "providerNotificationId": {"type": "string"}, "verified": {"type": "boolean"}}
-      },
-      "ActivationResult": {
-        "type": "object", "additionalProperties": false, "required": ["payment", "entitlement"],
-        "properties": {"payment": {"$ref": "#/components/schemas/Payment"}, "entitlement": {"$ref": "#/components/schemas/Entitlement"}}
-      },
-      "Payment": {
-        "type": "object", "additionalProperties": false, "required": ["id", "orderId", "providerNotificationId", "verifiedAt"],
-        "properties": {"id": {"type": "string"}, "orderId": {"type": "string"}, "providerNotificationId": {"type": "string"}, "verifiedAt": {"type": "string", "format": "date-time"}}
-      },
-      "Entitlement": {
-        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "planVersionId", "effectiveAt", "expiresAt", "active"],
-        "properties": {"id": {"type": "string"}, "workspaceId": {"type": "string"}, "logicalInstanceId": {"type": "string"}, "planVersionId": {"type": "string"}, "effectiveAt": {"type": "string", "format": "date-time"}, "expiresAt": {"type": "string", "format": "date-time"}, "active": {"type": "boolean"}}
-      },
-      "RegionOverview": {"type": "object", "additionalProperties": false, "required": ["regionId", "readyNodes", "deploymentCount", "pendingTasks", "unschedulableCount"], "properties": {"regionId": {"type": "string"}, "readyNodes": {"type": "integer"}, "deploymentCount": {"type": "integer"}, "pendingTasks": {"type": "integer"}, "unschedulableCount": {"type": "integer"}}},
-      "Node": {"type": "object", "additionalProperties": true, "required": ["id", "regionId", "state", "cpuCapacity", "memoryCapacityMb", "reservedCpu", "reservedMemoryMb"], "properties": {"id": {"type": "string"}, "regionId": {"type": "string"}, "state": {"type": "string", "enum": ["ready", "draining", "stale"]}, "cpuCapacity": {"type": "integer"}, "memoryCapacityMb": {"type": "integer"}, "reservedCpu": {"type": "integer"}, "reservedMemoryMb": {"type": "integer"}}},
-      "RegionalDeployment": {"type": "object", "additionalProperties": true, "required": ["id", "workspaceId", "logicalInstanceId", "regionId", "placementVersion", "observedState"], "properties": {"id": {"type": "string"}, "workspaceId": {"type": "string"}, "logicalInstanceId": {"type": "string"}, "regionId": {"type": "string"}, "placementVersion": {"type": "integer"}, "observedState": {"type": "string"}}},
-      "RegionalTask": {"type": "object", "additionalProperties": true, "required": ["id", "regionalDeploymentId", "kind", "status"], "properties": {"id": {"type": "string"}, "regionalDeploymentId": {"type": "string"}, "kind": {"type": "string"}, "status": {"type": "string"}}},
-      "RegionCapacity": {"type": "object", "additionalProperties": false, "required": ["cpuCapacity", "cpuReserved", "memoryCapacityMb", "memoryReservedMb"], "properties": {"cpuCapacity": {"type": "integer"}, "cpuReserved": {"type": "integer"}, "memoryCapacityMb": {"type": "integer"}, "memoryReservedMb": {"type": "integer"}}},
-      "PlacementOverride": {"type": "object", "additionalProperties": false, "required": ["nodeId", "reason"], "properties": {"nodeId": {"type": "string"}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}
+      "BuiltInRole": {"type": "string", "enum": ["platform.admin", "region.operator", "workspace.owner", "workspace.operator", "workspace.viewer"]},
+      "OperationReference": {"type": "object", "additionalProperties": false, "required": ["id", "status"], "properties": {"id": {"type": "string"}, "status": {"type": "string", "enum": ["queued", "running", "succeeded", "failed"]}}},
+      "PromotionalCreditGrant": {"type": "object", "additionalProperties": false, "required": ["workspaceId", "currency", "amountMinor", "reason"], "properties": {"workspaceId": {"type": "string"}, "currency": {"const": "CNY"}, "amountMinor": {"type": "integer", "minimum": 1}, "reason": {"type": "string", "minLength": 1, "maxLength": 160}}},
+      "PriceBookRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["regionId", "currency", "effectiveAt", "unitPrices"],
+        "properties": {
+          "regionId": {"type": "string"},
+          "currency": {"const": "CNY"},
+          "effectiveAt": {"type": "string", "format": "date-time"},
+          "unitPrices": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["resourceKind", "priceMinor", "unit"],
+              "properties": {
+                "resourceKind": {"type": "string", "enum": ["cpu", "memory", "instance-disk", "backup-storage", "dedicated-ip"]},
+                "priceMinor": {"type": "integer", "minimum": 0},
+                "unit": {"type": "string"}
+              }
+            }
+          }
+        }
       }
     }
   }

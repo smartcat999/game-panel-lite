@@ -1,27 +1,13 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gamepanel.dev/contracts/events/v1/deployment-observed.schema.json",
-  "title": "deployment.observed.v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://gamepanel.dev/contracts/events/v1/deployment-observed.schema.json", "title": "deployment.observed.v1",
+  "type": "object", "additionalProperties": false, "required": ["schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"],
   "properties": {
-    "schemaVersion": {"const": 1},
-    "messageId": {"type": "string", "pattern": "^evt_[A-Za-z0-9]+$"},
-    "messageType": {"const": "deployment.observed.v1"},
-    "occurredAt": {"type": "string", "format": "date-time"},
-    "idempotencyKey": {"type": "string", "minLength": 8, "maxLength": 128},
-    "payload": {
-      "type": "object", "additionalProperties": false,
-      "required": ["logicalInstanceId", "regionalDeploymentId", "regionId", "sequence", "observedState", "observedAt"],
-      "properties": {
-        "logicalInstanceId": {"type": "string", "pattern": "^lin_[A-Za-z0-9]+$"},
-        "regionalDeploymentId": {"type": "string", "pattern": "^rdp_[A-Za-z0-9]+$"},
-        "regionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
-        "sequence": {"type": "integer", "minimum": 1},
-        "observedState": {"type": "string", "enum": ["pending", "running", "stopped", "failed", "unknown"]},
-        "observedAt": {"type": "string", "format": "date-time"}
-      }
-    }
+    "schemaVersion": {"const": "v1"}, "messageId": {"type": "string"}, "messageType": {"const": "deployment.observed.v1"}, "occurredAt": {"type": "string", "format": "date-time"}, "idempotencyKey": {"type": "string", "minLength": 8},
+    "payload": {"type": "object", "additionalProperties": false, "required": ["workspaceId", "logicalInstanceId", "regionalDeploymentId", "runtimeAttemptId", "regionId", "placementVersion", "sequence", "observedState", "endpointBindings", "observedAt"], "properties": {
+      "workspaceId": {"type": "string"}, "logicalInstanceId": {"type": "string"}, "regionalDeploymentId": {"type": "string"}, "runtimeAttemptId": {"type": "string"}, "regionId": {"type": "string"},
+      "placementVersion": {"type": "integer", "minimum": 1}, "sequence": {"type": "integer", "minimum": 0}, "observedState": {"type": "string", "enum": ["pending", "starting", "running", "stopping", "stopped", "failed", "unknown", "deleted"]},
+      "endpointBindings": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "address", "port", "transport", "stability", "displayAddress"], "properties": {"name": {"type": "string"}, "address": {"type": "string"}, "port": {"type": "integer"}, "transport": {"type": "string", "enum": ["tcp", "udp"]}, "stability": {"type": "string", "enum": ["stable", "may-change"]}, "displayAddress": {"type": "string"}}}},
+      "reasonCode": {"type": "string"}, "observedAt": {"type": "string", "format": "date-time"}
+    }}
   }
 }

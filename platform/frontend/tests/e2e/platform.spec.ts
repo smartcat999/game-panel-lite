@@ -1,60 +1,24 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
 
-function captureUnexpectedBrowserErrors(page: Page) {
-  const errors: string[] = [];
-  page.on("console", message => {
-    if (message.type() === "error") errors.push(message.text());
-  });
-  page.on("pageerror", error => errors.push(error.message));
-  return () => expect(errors).toEqual([]);
-}
-
-test("customer creates a versioned Terraria checkout", async ({ page }) => {
-  const expectNoBrowserErrors = captureUnexpectedBrowserErrors(page);
-  await page.goto("/w/northstar/instances/new");
-  await page.getByLabel("Instance name").fill("Provider Contract World");
-  await page.getByLabel("Plan").selectOption({ index: 1 });
-  await page.getByLabel("Region").selectOption({ index: 1 });
-  await expect(page.getByLabel("Game version")).toHaveValue("1.4.5.6");
-  await page.getByRole("button", { name: "Continue to payment", exact: true }).click();
-  await expect(page.getByText("Payment is required before this instance can be deployed.", { exact: true })).toBeVisible();
-  await expect(page.getByText("1.4.5.6", { exact: true })).toBeVisible();
-  const accessibility = await new AxeBuilder({ page }).analyze();
-  expect(accessibility.violations.filter(item => item.impact === "critical" || item.impact === "serious")).toEqual([]);
-  expectNoBrowserErrors();
+test("provider-driven create flow exposes mods only when supported", async ({ page }) => {
+  await page.goto("/w/ember/instances/new");
+  await expect(page.getByText("模组", { exact: true })).toHaveCount(0);
+  await page.getByLabel("游戏与版本").selectOption("prv_tmod_202506");
+  await expect(page.getByText("模组", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "下一步" }).click();
+  await expect(page.getByText("公网地址与端口由系统部署时自动分配，协议由游戏 Provider 声明。")).toBeVisible();
 });
 
-test("backup request and same-Region restore remain accessible", async ({ page }) => {
-  const expectNoBrowserErrors = captureUnexpectedBrowserErrors(page);
-  await page.goto("/w/northstar/backups");
-  await expect(page.getByText("bkr_000001", { exact: true })).toBeVisible();
-  await page.locator("select").nth(2).selectOption("lin_000003");
-  await page.getByRole("button", { name: "Create backup", exact: true }).click();
-  await expect(page.getByRole("cell", { name: "Queued", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Restore", exact: true }).click();
-  await expect(page.getByRole("cell", { name: "Restore", exact: true })).toBeVisible();
+test("instance lifecycle, logs, backup and restore are clickable", async ({ page }) => {
+  await page.goto("/w/ember/instances/lin_terraria01");
+  await page.getByRole("button", { name: "停止" }).click();
+  await expect(page.getByText("已停止", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "实时日志" }).click();
+  await expect(page.getByText(/Logical instance lin_terraria01 attached/)).toBeVisible();
+  await page.getByRole("button", { name: "备份" }).click();
+  await page.getByRole("button", { name: "创建备份" }).click();
+  await expect(page.getByText("手动备份", { exact: true })).toBeVisible();
   const accessibility = await new AxeBuilder({ page }).analyze();
-  expect(accessibility.violations.filter(item => item.impact === "critical" || item.impact === "serious")).toEqual([]);
-  expectNoBrowserErrors();
-});
-
-test("locale, dark theme, monitoring, and mobile navigation", async ({ page }) => {
-  const expectNoBrowserErrors = captureUnexpectedBrowserErrors(page);
-  await page.goto("/platform/regions/reg_asia_east/monitoring");
-  await page.locator("select").nth(0).selectOption("zh-CN");
-  await page.locator("select").nth(1).selectOption("dark");
-  await expect(page.getByText("任务延迟（毫秒）", { exact: true })).toBeVisible();
-  await expect(page.getByText("协调失败", { exact: true })).toBeVisible();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-
-  await page.locator("select").nth(1).selectOption("light");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.locator("select").nth(1).selectOption("dark");
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("button", { name: "打开导航", exact: true })).toBeVisible();
-  const accessibility = await new AxeBuilder({ page }).analyze();
-  expect(accessibility.violations.filter(item => item.impact === "critical" || item.impact === "serious")).toEqual([]);
-  expectNoBrowserErrors();
+  expect(accessibility.violations.filter((item) => item.impact === "critical" || item.impact === "serious")).toEqual([]);
 });

@@ -40,6 +40,19 @@ func Check(files []SourceFile) []Violation {
 	return violations
 }
 
+// CheckRebaseline applies rules that become mandatory for code introduced after
+// the hosted V1 rebaseline. The superseded implementation remains executable
+// during Phase 1, so callers opt new source into these rules until it is replaced.
+func CheckRebaseline(files []SourceFile) []Violation {
+	violations := Check(files)
+	for _, file := range files {
+		if strings.HasSuffix(file.Path, ".go") {
+			violations = append(violations, checkRebaselineGo(file)...)
+		}
+	}
+	return violations
+}
+
 func checkGo(file SourceFile) []Violation {
 	parsed, err := parser.ParseFile(token.NewFileSet(), file.Path, file.Content, parser.ParseComments)
 	if err != nil {
@@ -73,6 +86,100 @@ func checkGo(file SourceFile) []Violation {
 		return true
 	})
 	return violations
+}
+
+func checkRebaselineGo(file SourceFile) []Violation {
+	parsed, err := parser.ParseFile(token.NewFileSet(), file.Path, file.Content, parser.ParseComments)
+	if err != nil {
+		return nil
+	}
+	var violations []Violation
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.Field:
+			for _, name := range value.Names {
+				if name.Name == "IsAdmin" || name.Name == "Admin" || name.Name == "PlatformOperator" {
+					violations = append(violations, Violation{Rule: "admin flags are forbidden; use role bindings and typed actions", File: file.Path, Line: parsedLine(file.Content, name.Name)})
+				}
+			}
+		case *ast.FuncDecl:
+			if strings.HasSuffix(file.Path, "handler.go") && functionCallsAuthorization(value.Body) {
+				violations = append(violations, Violation{Rule: "HTTP handlers must not authorize; use authentication and authorization filters", File: file.Path, Line: parsedLine(file.Content, "func "+value.Name.Name)})
+			}
+		case *ast.ForStmt:
+			if blockCallsSQL(value.Body) {
+				violations = append(violations, Violation{Rule: "per-resource SQL loops are forbidden; batch IDs before evaluating in Go", File: file.Path, Line: parsedLine(file.Content, "for")})
+			}
+		case *ast.RangeStmt:
+			if blockCallsSQL(value.Body) {
+				violations = append(violations, Violation{Rule: "per-resource SQL loops are forbidden; batch IDs before evaluating in Go", File: file.Path, Line: parsedLine(file.Content, "range")})
+			}
+		case *ast.BasicLit:
+			if value.Kind != token.STRING {
+				break
+			}
+			text, unquoteErr := strconv.Unquote(value.Value)
+			if unquoteErr == nil && strings.Contains(strings.ToLower(text), "/world") {
+				violations = append(violations, Violation{Rule: "World routes are outside hosted V1", File: file.Path, Line: parsedLine(file.Content, value.Value)})
+			}
+		case *ast.Ident:
+			if value.Obj == nil {
+				break
+			}
+			switch value.Name {
+			case "Plan", "PlanVersion", "Order", "Payment", "Entitlement":
+				violations = append(violations, Violation{Rule: "legacy commerce model is forbidden in rebaseline production code", File: file.Path, Line: parsedLine(file.Content, value.Name)})
+			}
+		}
+		return true
+	})
+	return violations
+}
+
+func functionCallsAuthorization(body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		name := calledName(call.Fun)
+		if strings.Contains(strings.ToLower(name), "authoriz") || strings.Contains(strings.ToLower(name), "requirepermission") {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func blockCallsSQL(body *ast.BlockStmt) bool {
+	found := false
+	ast.Inspect(body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch calledName(call.Fun) {
+		case "Query", "QueryContext", "QueryRow", "QueryRowContext", "Exec", "ExecContext":
+			found = true
+			return false
+		default:
+			return true
+		}
+	})
+	return found
+}
+
+func calledName(expression ast.Expr) string {
+	switch value := expression.(type) {
+	case *ast.Ident:
+		return value.Name
+	case *ast.SelectorExpr:
+		return value.Sel.Name
+	default:
+		return ""
+	}
 }
 
 func contextFromPath(path string) string {

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://gamepanel.dev/contracts/events/v1/usage-observed.schema.json", "title": "usage.observed.v1",
+  "type": "object", "additionalProperties": false, "required": ["schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"],
+  "properties": {
+    "schemaVersion": {"const": "v1"}, "messageId": {"type": "string"}, "messageType": {"const": "usage.observed.v1"}, "occurredAt": {"type": "string", "format": "date-time"}, "idempotencyKey": {"type": "string", "minLength": 8},
+    "payload": {"type": "object", "additionalProperties": false, "required": ["workspaceId", "logicalInstanceId", "regionId", "runtimeAttemptId", "resourceKind", "quantity", "intervalStart", "intervalEnd"], "properties": {
+      "workspaceId": {"type": "string"}, "logicalInstanceId": {"type": "string"}, "regionId": {"type": "string"}, "runtimeAttemptId": {"type": "string"},
+      "resourceKind": {"type": "string", "enum": ["cpu", "memory", "instance-disk", "backup-storage", "dedicated-ip"]}, "quantity": {"type": "integer", "minimum": 0},
+      "intervalStart": {"type": "string", "format": "date-time"}, "intervalEnd": {"type": "string", "format": "date-time"}
+    }}
+  }
+}

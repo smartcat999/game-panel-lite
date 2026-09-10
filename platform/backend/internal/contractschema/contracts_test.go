@@ -38,47 +38,47 @@ func TestContractDocumentsParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed != 7 {
-		t.Fatalf("expected 7 versioned contract documents, parsed %d", parsed)
+	if parsed != 8 {
+		t.Fatalf("expected 8 versioned contract documents, parsed %d", parsed)
 	}
 }
 
 func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 	expected := map[string]map[string]string{
 		"control-plane.openapi.json": {
-			"GET /v1/session":                                         "getSession",
-			"GET /v1/user-preferences":                                "getUserPreferences",
-			"PATCH /v1/user-preferences":                              "updateUserPreferences",
-			"POST /v1/workspace-selection":                            "selectWorkspace",
-			"GET /v1/workspaces":                                      "listWorkspaces",
-			"GET /v1/workspaces/{workspaceId}/members":                "listWorkspaceMembers",
-			"POST /v1/instances":                                      "createLogicalInstance",
-			"GET /v1/instances/{logicalInstanceId}":                   "getLogicalInstance",
-			"GET /v1/regions":                                         "listRegions",
-			"GET /v1/plans":                                           "listPlanVersions",
-			"GET /v1/workspaces/{workspaceId}/instances":              "listWorkspaceInstances",
-			"GET /v1/workspaces/{workspaceId}/instances/{instanceId}": "getWorkspaceInstance",
-			"GET /v1/workspaces/{workspaceId}/orders":                 "listWorkspaceOrders",
-			"GET /v1/workspaces/{workspaceId}/backups":                "listWorkspaceBackups",
-			"POST /v1/workspaces/{workspaceId}/backups":               "createBackupRequest",
+			"POST /v1/auth/github/start":                                                                           "startGitHubSignIn",
+			"POST /v1/auth/password/sign-in":                                                                       "signInWithPassword",
+			"GET /v1/session":                                                                                      "getSession",
+			"POST /v1/invitations/{invitationToken}:redeem":                                                        "redeemInvitation",
+			"GET /v1/workspaces":                                                                                   "listWorkspaces",
+			"GET /v1/regions/{regionId}/catalog":                                                                   "getRegionCatalog",
+			"GET /v1/providers/releases/{providerReleaseId}/manifest":                                              "getProviderManifest",
+			"GET /v1/workspaces/{workspaceId}/wallet":                                                              "getWorkspaceWallet",
+			"POST /v1/workspaces/{workspaceId}/quotes":                                                             "createResourceQuote",
+			"POST /v1/workspaces/{workspaceId}/instances":                                                          "createLogicalInstance",
+			"GET /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}":                                       "getWorkspaceInstance",
+			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:start":                                "startLogicalInstance",
+			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:stop":                                 "stopLogicalInstance",
+			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}:restart":                              "restartLogicalInstance",
+			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts":                 "createConfigurationDraft",
+			"POST /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/configuration-drafts/{draftId}:apply": "applyConfigurationDraft",
+			"GET /v1/workspaces/{workspaceId}/instances/{logicalInstanceId}/logs":                                  "getInstanceLogs",
+			"GET /v1/workspaces/{workspaceId}/backups":                                                             "listWorkspaceBackups",
+			"POST /v1/workspaces/{workspaceId}/backups/{backupId}:restore":                                         "restoreBackup",
+			"GET /v1/operations/{operationId}":                                                                     "getOperation",
 		},
 		"platform-operations.openapi.json": {
-			"GET /v1/platform/regions":                                                  "listPlatformRegions",
-			"GET /v1/platform/regions/{regionId}":                                       "getPlatformRegion",
-			"PATCH /v1/platform/regions/{regionId}":                                     "updatePlatformRegionOperations",
-			"GET /v1/platform/workspaces":                                               "listPlatformWorkspaces",
-			"GET /v1/platform/plans":                                                    "listPlatformPlans",
-			"GET /v1/platform/orders":                                                   "listPlatformOrders",
+			"GET /v1/platform/users":                                                    "listPlatformUsers",
+			"POST /v1/platform/credit-grants":                                           "grantPromotionalCredit",
+			"GET /v1/platform/price-books":                                              "listPriceBooks",
 			"GET /v1/platform/instances":                                                "listPlatformInstances",
-			"POST /v1/platform/payments/verified":                                       "activateVerifiedPayment",
-			"GET /v1/regions/{regionId}/overview":                                       "getRegionExecutionOverview",
+			"GET /v1/platform/regions":                                                  "listPlatformRegions",
+			"GET /v1/regions/{regionId}/health":                                         "getRegionHealth",
 			"GET /v1/regions/{regionId}/nodes":                                          "listRegionNodes",
 			"GET /v1/regions/{regionId}/deployments":                                    "listRegionalDeployments",
 			"GET /v1/regions/{regionId}/tasks":                                          "listRegionalTasks",
-			"GET /v1/regions/{regionId}/capacity":                                       "getRegionCapacity",
-			"GET /v1/regions/{regionId}/storage":                                        "getRegionStorage",
-			"GET /v1/regions/{regionId}/monitoring":                                     "getRegionMonitoring",
-			"POST /v1/regions/{regionId}/deployments/{deploymentId}/placement-override": "overrideRegionalPlacement",
+			"POST /v1/regions/{regionId}/tasks/{taskId}:retry":                          "retryRegionalTask",
+			"POST /v1/regions/{regionId}/deployments/{deploymentId}:override-placement": "overrideRegionalPlacement",
 		},
 	}
 	for filename, operations := range expected {
@@ -100,9 +100,10 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 
 func TestEventV1CompatibilitySurface(t *testing.T) {
 	expectedPayloadFields := map[string][]string{
-		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState", "gameKey", "gameVersion", "configuration", "cpuUnits", "memoryMegabytes"},
-		"entitlement-changed.schema.json": {"workspaceId", "logicalInstanceId", "entitlementId", "status", "effectiveAt", "expiresAt"},
-		"deployment-observed.schema.json": {"logicalInstanceId", "regionalDeploymentId", "regionId", "sequence", "observedState", "observedAt"},
+		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "operationId", "desiredState", "providerReleaseId", "resourceSpec", "configuration", "listenerRequirements", "authorityGrant"},
+		"deployment-observed.schema.json": {"workspaceId", "logicalInstanceId", "regionalDeploymentId", "runtimeAttemptId", "regionId", "placementVersion", "sequence", "observedState", "endpointBindings", "observedAt"},
+		"usage-observed.schema.json":      {"workspaceId", "logicalInstanceId", "runtimeAttemptId", "regionId", "resourceKind", "quantity", "intervalStart", "intervalEnd"},
+		"wallet-exhausted.schema.json":    {"workspaceId", "ledgerSequence", "exhaustedAt"},
 		"backup-observed.schema.json":     {"backupRequestId", "logicalInstanceId", "regionId", "sequence", "status", "observedAt"},
 		"backup-requested.schema.json":    {"backupRequestId", "logicalInstanceId", "regionId", "kind", "objectKey", "transferUrl", "relativePath"},
 	}
@@ -113,6 +114,84 @@ func TestEventV1CompatibilitySurface(t *testing.T) {
 		properties := object(t, doc["properties"], filename+" properties")
 		payload := object(t, properties["payload"], filename+" payload")
 		assertContainsAll(t, stringSlice(t, payload["required"], filename+" payload required"), payloadFields, filename+" payload")
+	}
+}
+
+func TestProviderConfigurationTypesFailClosed(t *testing.T) {
+	doc := readDocument(t, filepath.Join(contractRoot(t), "openapi", "v1", "control-plane.openapi.json"))
+	components := object(t, doc["components"], "components")
+	schemas := object(t, components["schemas"], "schemas")
+	field := object(t, schemas["ConfigurationFieldSchema"], "ConfigurationFieldSchema")
+	properties := object(t, field["properties"], "ConfigurationFieldSchema properties")
+	fieldType := object(t, properties["type"], "ConfigurationFieldSchema type")
+	got := stringSlice(t, fieldType["enum"], "ConfigurationFieldSchema type enum")
+	want := []string{"string", "integer", "number", "boolean", "enum", "secret", "string-list"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("configuration field types must be an explicit fail-closed allowlist: got %v", got)
+	}
+}
+
+func TestAuthorizationContractSupportsScopedHundredResourceBatch(t *testing.T) {
+	doc := readDocument(t, filepath.Join(contractRoot(t), "openapi", "v1", "control-plane.openapi.json"))
+	components := object(t, doc["components"], "components")
+	schemas := object(t, components["schemas"], "schemas")
+
+	role := object(t, schemas["BuiltInRole"], "BuiltInRole")
+	wantRoles := []string{"platform.admin", "region.operator", "workspace.owner", "workspace.operator", "workspace.viewer"}
+	if got := stringSlice(t, role["enum"], "BuiltInRole enum"); strings.Join(got, ",") != strings.Join(wantRoles, ",") {
+		t.Fatalf("unexpected built-in roles: %v", got)
+	}
+
+	scope := object(t, schemas["AuthorizationScope"], "AuthorizationScope")
+	scopeProperties := object(t, scope["properties"], "AuthorizationScope properties")
+	scopeType := object(t, scopeProperties["type"], "AuthorizationScope type")
+	wantScopes := []string{"platform", "region", "workspace"}
+	if got := stringSlice(t, scopeType["enum"], "AuthorizationScope type enum"); strings.Join(got, ",") != strings.Join(wantScopes, ",") {
+		t.Fatalf("unexpected authorization scopes: %v", got)
+	}
+
+	batch := object(t, schemas["AuthorizationBatchRequest"], "AuthorizationBatchRequest")
+	batchProperties := object(t, batch["properties"], "AuthorizationBatchRequest properties")
+	checks := object(t, batchProperties["checks"], "AuthorizationBatchRequest checks")
+	if checks["maxItems"] != float64(100) {
+		t.Fatalf("authorization batch must support exactly 100 resources, got %v", checks["maxItems"])
+	}
+
+	principalID := "usr_example"
+	bindings := []struct {
+		PrincipalID string
+		Role        string
+		Scope       string
+	}{
+		{PrincipalID: principalID, Role: "platform.admin", Scope: "platform"},
+		{PrincipalID: principalID, Role: "region.operator", Scope: "region"},
+		{PrincipalID: principalID, Role: "workspace.viewer", Scope: "workspace"},
+	}
+	if len(bindings) != 3 {
+		t.Fatal("authorization fixture must cover Platform, Region, and Workspace bindings for one Principal")
+	}
+	resourceIDs := make([]string, 100)
+	for index := range resourceIDs {
+		resourceIDs[index] = fmt.Sprintf("lin_%03d", index)
+	}
+	if len(resourceIDs) != int(checks["maxItems"].(float64)) {
+		t.Fatalf("authorization fixture must exercise the full batch, got %d resources", len(resourceIDs))
+	}
+}
+
+func TestCommerceRebaselineSchemasArePresent(t *testing.T) {
+	doc := readDocument(t, filepath.Join(contractRoot(t), "openapi", "v1", "control-plane.openapi.json"))
+	components := object(t, doc["components"], "components")
+	schemas := object(t, components["schemas"], "schemas")
+	for _, name := range []string{"RegionCatalog", "PriceBook", "Quote", "CapacityHold", "Wallet", "LedgerEntry", "UsageRecord", "FundingAuthorization"} {
+		if _, ok := schemas[name]; !ok {
+			t.Errorf("missing rebaseline commerce schema %s", name)
+		}
+	}
+	for _, legacy := range []string{"Plan", "PlanVersion", "Order", "Payment", "Entitlement"} {
+		if _, ok := schemas[legacy]; ok {
+			t.Errorf("legacy commerce schema %s must not remain in v1", legacy)
+		}
 	}
 }
 

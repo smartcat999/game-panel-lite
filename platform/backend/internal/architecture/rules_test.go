@@ -33,6 +33,19 @@ func TestRulesRejectDeliberateViolations(t *testing.T) {
 	}
 }
 
+func TestRebaselineRulesRejectDeliberateViolations(t *testing.T) {
+	files := []SourceFile{
+		{Path: "/platform/backend/internal/example/model.go", Content: "package example\ntype Session struct { IsAdmin bool }\ntype Plan struct{}"},
+		{Path: "/platform/backend/internal/example/handler.go", Content: "package example\nfunc handle() { authorize() }\nfunc authorize() {}"},
+		{Path: "/platform/backend/internal/example/repository.go", Content: "package example\nfunc load(db DB, ids []string) { for range ids { db.QueryContext() } }\ntype DB interface { QueryContext() }"},
+		{Path: "/platform/backend/internal/example/routes.go", Content: "package example\nconst route = `/v1/workspaces/{workspaceId}/worlds`"},
+	}
+	violations := CheckRebaseline(files)
+	if len(violations) != 5 {
+		t.Fatalf("expected all five rebaseline violations, got %d:\n%s", len(violations), formatViolations(violations))
+	}
+}
+
 func TestPlatformFrontendDoesNotReferenceLegacyFrontend(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	frontendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "frontend"))
@@ -57,6 +70,11 @@ func TestPlatformFrontendDoesNotReferenceLegacyFrontend(t *testing.T) {
 		for _, legacyReference := range []string{"apps/web", "@/../apps", "../../../apps"} {
 			if strings.Contains(string(content), legacyReference) {
 				t.Errorf("%s references legacy frontend path %q", path, legacyReference)
+			}
+		}
+		for _, forbidden := range []string{"is_admin", "IsAdmin", "PlatformOperator", "pending_payment", "/plans", "/orders", "/payments", "/entitlements", "/worlds"} {
+			if strings.Contains(string(content), forbidden) {
+				t.Errorf("%s contains forbidden rebaseline frontend term %q", path, forbidden)
 			}
 		}
 		return nil
