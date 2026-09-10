@@ -33,6 +33,39 @@ func TestRulesRejectDeliberateViolations(t *testing.T) {
 	}
 }
 
+func TestPlatformFrontendDoesNotReferenceLegacyFrontend(t *testing.T) {
+	_, currentFile, _, _ := runtime.Caller(0)
+	frontendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "frontend"))
+	err := filepath.WalkDir(frontendRoot, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if entry.Name() == "node_modules" || entry.Name() == ".next" || entry.Name() == "test-results" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		extension := filepath.Ext(path)
+		if extension != ".ts" && extension != ".tsx" && extension != ".css" {
+			return nil
+		}
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, legacyReference := range []string{"apps/web", "@/../apps", "../../../apps"} {
+			if strings.Contains(string(content), legacyReference) {
+				t.Errorf("%s references legacy frontend path %q", path, legacyReference)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func productionFiles(root string) ([]SourceFile, error) {
 	var files []SourceFile
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {

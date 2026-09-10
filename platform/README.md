@@ -18,3 +18,4 @@ No legacy route, page, style, tenant model, order model, database model, handler
 - `CONTEXT-MAP.md`: canonical domain language and ownership map
 
 Start with [the development plan](docs/development-plan.md). Do not scaffold product code before completing its Phase 1 acceptance checks.
+Production deployment, schema rollout, SLO, alerting, backup recovery, and Region isolation procedures are documented in [docs/production-operations.md](docs/production-operations.md).
