@@ -3,6 +3,7 @@ package mod
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -84,21 +85,42 @@ func localizedDSTModInfoCandidates(path, locale string) []string {
 	return []string{filepath.Join(dir, "modinfo_"+code+".lua")}
 }
 
-var dstTableAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*(?:local[ \t]+)?(descs|options|configs|vars|configuration_options)[ \t]*=[ \t]*\{`)
+var dstTableAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*(descs|options|configs|vars|configuration_options)[ \t]*=[ \t]*\{`)
+var dstLocalTableExpressionAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*local[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t\r\n]*((?:[A-Za-z_][A-Za-z0-9_]*[ \t]+and[ \t]+)?\{)`)
 var dstConfigExpressionAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*configuration_options[ \t]*=[ \t]*`)
 var dstLocaleBooleanAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*local[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(locale[ \t]*==[^\r\n]+)`)
+var dstAppendTableLoop = regexp.MustCompile(`(?s)for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=[ \t]*1[ \t]*,[ \t]*#([A-Za-z_][A-Za-z0-9_]*)[ \t]+do[ \t\r\n]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*\[[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\+[ \t]*1[ \t]*\][ \t]*=[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*\[[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]*\][ \t\r\n]+end`)
 
 func ParseDSTConfigOptions(source, locale string) ([]DSTConfigOption, error) {
 	source = selectDSTLocale(source, locale)
-	wantedLocale := strings.ToLower(strings.TrimSpace(locale))
-	if separator := strings.IndexAny(wantedLocale, "-_"); separator >= 0 {
-		wantedLocale = wantedLocale[:separator]
-	}
+	wantedLocale := normalizeDSTLocale(locale)
 	env := map[string]luaValue{"L": {scalar: wantedLocale == "zh"}}
 	for _, match := range dstLocaleBooleanAssignment.FindAllStringSubmatchIndex(source, -1) {
 		name := source[match[2]:match[3]]
 		condition := source[match[4]:match[5]]
 		env[name] = luaValue{scalar: localeConditionMatches(condition, wantedLocale)}
+	}
+	for _, match := range dstLocalTableExpressionAssignment.FindAllStringSubmatchIndex(source, -1) {
+		name := source[match[2]:match[3]]
+		parser := newLuaTableParser(source[match[4]:], env)
+		value, err := parser.parseValue()
+		if err != nil {
+			continue
+		}
+		env[name] = value
+	}
+	for _, match := range dstAppendTableLoop.FindAllStringSubmatchIndex(source, -1) {
+		sourceName := source[match[2]:match[3]]
+		targetName := source[match[4]:match[5]]
+		rightSourceName := source[match[6]:match[7]]
+		if sourceName != rightSourceName {
+			continue
+		}
+		sourceTable, sourceOK := env[sourceName].table()
+		targetTable, targetOK := env[targetName].table()
+		if sourceOK && targetOK {
+			targetTable.items = append(targetTable.items, sourceTable.items...)
+		}
 	}
 	matches := dstTableAssignment.FindAllStringSubmatchIndex(source, -1)
 	for _, match := range matches {
@@ -175,9 +197,10 @@ func ParseDSTConfigOptions(source, locale string) ([]DSTConfigOption, error) {
 }
 
 func selectDSTLocale(source, locale string) string {
-	wanted := strings.ToLower(strings.TrimSpace(locale))
-	if separator := strings.IndexAny(wanted, "-_"); separator >= 0 {
-		wanted = wanted[:separator]
+	wanted := normalizeDSTLocale(locale)
+	localeBooleans := make(map[string]bool)
+	for _, match := range dstLocaleBooleanAssignment.FindAllStringSubmatchIndex(source, -1) {
+		localeBooleans[source[match[2]:match[3]]] = localeConditionMatches(source[match[4]:match[5]], wanted)
 	}
 	lines := strings.Split(source, "\n")
 	selected := make([]string, 0, len(lines))
@@ -186,11 +209,14 @@ func selectDSTLocale(source, locale string) string {
 	matchedBlock := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if !inLocaleBlock && strings.HasPrefix(trimmed, "if locale") && strings.HasSuffix(trimmed, "then") {
-			inLocaleBlock = true
-			keepBlock = localeConditionMatches(trimmed, wanted)
-			matchedBlock = keepBlock
-			continue
+		if !inLocaleBlock && strings.HasPrefix(trimmed, "if ") && strings.HasSuffix(trimmed, "then") {
+			condition := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "if "), "then"))
+			if value, ok := localeBlockConditionValue(condition, wanted, localeBooleans); ok {
+				inLocaleBlock = true
+				keepBlock = value
+				matchedBlock = keepBlock
+				continue
+			}
 		}
 		if inLocaleBlock && strings.HasPrefix(trimmed, "elseif locale") && strings.HasSuffix(trimmed, "then") {
 			keepBlock = !matchedBlock && localeConditionMatches(trimmed, wanted)
@@ -213,6 +239,22 @@ func selectDSTLocale(source, locale string) string {
 		}
 	}
 	return strings.Join(selected, "\n")
+}
+
+func normalizeDSTLocale(locale string) string {
+	wanted := strings.ToLower(strings.TrimSpace(locale))
+	if separator := strings.IndexAny(wanted, "-_"); separator >= 0 {
+		wanted = wanted[:separator]
+	}
+	return wanted
+}
+
+func localeBlockConditionValue(condition, wanted string, values map[string]bool) (bool, bool) {
+	if strings.HasPrefix(condition, "locale") {
+		return localeConditionMatches(condition, wanted), true
+	}
+	value, ok := values[condition]
+	return value, ok
 }
 
 func localeConditionMatches(condition, wanted string) bool {
@@ -278,7 +320,17 @@ func (p *luaTableParser) parseTable() (luaValue, error) {
 		if p.accept(",") || p.accept(";") {
 			continue
 		}
-		if p.peek().kind == luaIdent && p.peekNext().text == "=" {
+		if p.accept("[") {
+			key, err := p.parseValue()
+			if err != nil || !p.accept("]") || !p.accept("=") {
+				return luaValue{}, fmt.Errorf("invalid table key")
+			}
+			value, err := p.parseValue()
+			if err != nil {
+				return luaValue{}, err
+			}
+			setLuaTableValue(table, key, value)
+		} else if p.peek().kind == luaIdent && p.peekNext().text == "=" {
 			key := p.take().text
 			p.take()
 			value, err := p.parseValue()
@@ -302,10 +354,39 @@ func (p *luaTableParser) parseTable() (luaValue, error) {
 	return luaValue{tab: table}, nil
 }
 
+func setLuaTableValue(table *luaTable, key, value luaValue) {
+	if number, ok := key.scalar.(float64); ok && number >= 1 && number == math.Trunc(number) {
+		index := int(number) - 1
+		for len(table.items) <= index {
+			table.items = append(table.items, luaValue{})
+		}
+		table.items[index] = value
+		return
+	}
+	if name, ok := key.stringValue(); ok {
+		table.fields[name] = value
+	}
+}
+
 func (p *luaTableParser) parseValue() (luaValue, error) {
 	value, err := p.parsePrimary()
 	if err != nil {
 		return luaValue{}, err
+	}
+	for p.peek().text == "." && p.peekNext().text == "." {
+		p.take()
+		p.take()
+		right, err := p.parsePrimary()
+		if err != nil {
+			return luaValue{}, err
+		}
+		leftString, leftOK := value.stringValue()
+		rightString, rightOK := right.stringValue()
+		if !leftOK || !rightOK {
+			value = luaValue{ref: "concatenation"}
+			continue
+		}
+		value = luaValue{scalar: leftString + rightString}
 	}
 	if p.peek().text != "and" {
 		return value, nil
@@ -345,6 +426,9 @@ func (p *luaTableParser) parsePrimary() (luaValue, error) {
 		}
 		if token.text == "false" {
 			return luaValue{scalar: false}, nil
+		}
+		if token.text == "nil" {
+			return luaValue{}, nil
 		}
 		path := token.text
 		for p.accept(".") {
@@ -445,7 +529,69 @@ func luaConfigCall(path string, args []luaValue) luaValue {
 			"options": {tab: &luaTable{items: []luaValue{choice}, fields: map[string]luaValue{}}},
 		}}}
 	}
+	if path == "AddTitle" && len(args) > 0 {
+		choice := luaValue{tab: &luaTable{fields: map[string]luaValue{
+			"description": {scalar: ""},
+			"data":        {scalar: float64(0)},
+		}}}
+		return luaValue{tab: &luaTable{fields: map[string]luaValue{
+			"name":    {scalar: ""},
+			"label":   args[0],
+			"default": {scalar: float64(0)},
+			"options": {tab: &luaTable{items: []luaValue{choice}, fields: map[string]luaValue{}}},
+		}}}
+	}
+	if path == "AddConfig" && len(args) >= 4 {
+		fields := map[string]luaValue{
+			"label":   args[0],
+			"name":    args[1],
+			"options": args[2],
+			"default": args[3],
+		}
+		if len(args) > 4 {
+			fields["hover"] = args[4]
+		}
+		return luaValue{tab: &luaTable{fields: fields}}
+	}
+	if path == "AddOptions" && len(args) > 0 {
+		values, ok := args[0].table()
+		if !ok {
+			return luaValue{ref: path}
+		}
+		isPercent := len(args) > 1 && truthyLuaValue(args[1])
+		opposite := len(args) > 2 && truthyLuaValue(args[2])
+		choices := make([]luaValue, 0, len(values.items))
+		for _, item := range values.items {
+			number, ok := item.scalar.(float64)
+			if !ok {
+				continue
+			}
+			descriptionValue := number
+			if opposite {
+				descriptionValue = 1 - descriptionValue
+			}
+			if isPercent {
+				descriptionValue *= 100
+			}
+			description := formatLuaNumber(descriptionValue)
+			if isPercent {
+				description += "%"
+			}
+			choices = append(choices, luaValue{tab: &luaTable{fields: map[string]luaValue{
+				"description": {scalar: description},
+				"data":        item,
+			}}})
+		}
+		return luaValue{tab: &luaTable{items: choices, fields: map[string]luaValue{}}}
+	}
 	return luaValue{ref: path}
+}
+
+func formatLuaNumber(value float64) string {
+	if math.Abs(value-math.Round(value)) < 1e-9 {
+		value = math.Round(value)
+	}
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 func (p *luaTableParser) resolve(path string) luaValue {
@@ -558,7 +704,7 @@ func lexLuaTable(source string) []luaToken {
 			tokens = append(tokens, luaToken{kind: luaIdent, text: source[start:i]})
 			continue
 		}
-		if source[i] == '-' || source[i] >= '0' && source[i] <= '9' {
+		if source[i] == '-' || source[i] >= '0' && source[i] <= '9' || source[i] == '.' && i+1 < len(source) && source[i+1] >= '0' && source[i+1] <= '9' {
 			start := i
 			i++
 			for i < len(source) && ((source[i] >= '0' && source[i] <= '9') || source[i] == '.') {

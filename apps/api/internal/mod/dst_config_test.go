@@ -133,3 +133,70 @@ configuration_options = isCh and
 		t.Fatalf("expected English conditional table, got %+v", enOptions)
 	}
 }
+
+func TestParseDSTConfigOptionsSupportsJingXiHelpers(t *testing.T) {
+	source := `
+local is_chinese = locale == "zh" or locale == "zht" or locale == "zhr"
+local key_info = is_chinese and {{description = "禁用", data = false}} or {{description = "Disable", data = false}}
+local key_info2 = {{description = "J", data = "KEY_J"}, {description = "K", data = "KEY_K"}}
+for i = 1, #key_info2 do
+  key_info[i + 1] = key_info2[i]
+end
+local str = {[1] = "减缓食物腐烂的速率"}
+local switch_ch = {{description = "开启", data = true}, {description = "关闭", data = false}}
+local switch_en = {{description = "Enable", data = true}, {description = "Disable", data = false}}
+local function AddTitle(title) return {label = title, name = "", hover = "", options = {{description = "", data = 0}}, default = 0} end
+local function AddConfig(label, name, options, default, hover) return {label = label, name = name, options = options, default = default, hover = hover or ""} end
+local function AddOptions(data, ispercent, opposite_desc) return {} end
+if is_chinese then
+  configuration_options = {
+    AddTitle("手工编织野餐篮"),
+    AddConfig("保鲜率", "jx_basket_preserver", AddOptions({1,.95}, true, true), .95, str[1]),
+    AddConfig("传球按键", "jx_football_key1", key_info, "KEY_J", nil),
+  }
+else
+  configuration_options = {
+    AddTitle("Hand Woven Basket"),
+    AddConfig("Preservation rate", "jx_basket_preserver", AddOptions({1,.95}, true, true), .95, nil),
+  }
+end`
+
+	zhOptions, err := ParseDSTConfigOptions(source, "zh-CN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(zhOptions) != 3 || !zhOptions[0].Section || zhOptions[0].Label != "手工编织野餐篮" {
+		t.Fatalf("expected Chinese helper-generated options, got %+v", zhOptions)
+	}
+	if zhOptions[1].Description != "减缓食物腐烂的速率" || len(zhOptions[1].Choices) != 2 || zhOptions[1].Choices[1].Label != "5%" {
+		t.Fatalf("expected indexed description and generated percentage choices, got %+v", zhOptions[1])
+	}
+	if len(zhOptions[2].Choices) != 3 || zhOptions[2].Choices[1].Value != "KEY_J" {
+		t.Fatalf("expected appended keyboard choices, got %+v", zhOptions[2])
+	}
+
+	enOptions, err := ParseDSTConfigOptions(source, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(enOptions) != 2 || enOptions[0].Label != "Hand Woven Basket" || enOptions[1].Label != "Preservation rate" {
+		t.Fatalf("expected English configuration branch, got %+v", enOptions)
+	}
+}
+
+func TestParseDSTConfigOptionsSupportsConcatenatedDescriptions(t *testing.T) {
+	source := `configuration_options = {{
+  name = "fires",
+  label = "Show Fires",
+  hover = "Show fires globally." .. "\nThey will smoke.",
+  options = {{description = "Show", data = true}, {description = "Hide", data = false}},
+  default = true,
+}}`
+	options, err := ParseDSTConfigOptions(source, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options) != 1 || options[0].Description != "Show fires globally.\nThey will smoke." {
+		t.Fatalf("expected concatenated description, got %+v", options)
+	}
+}
