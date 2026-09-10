@@ -15,8 +15,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/commerce"
 	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/instancecontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/messaging"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/persistence"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/projection"
 )
 
 func TestPostgresCheckoutAndActivationTransactions(t *testing.T) {
@@ -99,6 +101,26 @@ func TestPostgresCheckoutAndActivationTransactions(t *testing.T) {
 	if err != nil || wasHandled || handled != 1 {
 		t.Fatalf("inbox redelivery handled=%v calls=%d error=%v", wasHandled, handled, err)
 	}
+
+	consumer := projection.NewPostgres(messaging.NewPostgres(database), instancecontrol.NewPostgres(database))
+	newer := projection.DeploymentObserved{MessageID: "evt_projection_2", LogicalInstanceID: first.Instance.ID, RegionalDeploymentID: "rdp_projection", RegionID: "reg_test", Sequence: 2, ObservedState: "running", ObservedAt: now}
+	if handled, err := consumer.Consume(ctx, newer, now); err != nil || !handled {
+		t.Fatalf("new projection handled=%v error=%v", handled, err)
+	}
+	older := newer
+	older.MessageID = "evt_projection_1"
+	older.Sequence = 1
+	older.ObservedState = "failed"
+	if handled, err := consumer.Consume(ctx, older, now); err != nil || !handled {
+		t.Fatalf("older envelope handled=%v error=%v", handled, err)
+	}
+	detail, err := product.Instance(ctx, command.WorkspaceID, first.Instance.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Instance.DeploymentState != instancecontrol.DeploymentRunning {
+		t.Fatalf("customer projection regressed: %#v", detail.Instance)
+	}
 }
 
 func openPostgresTestDatabase(t *testing.T) *sql.DB {
@@ -128,11 +150,13 @@ func openPostgresTestDatabase(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	_, filename, _, _ := runtime.Caller(0)
-	migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "global", "0002_product_instance_messaging.sql"))
-	if err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"0002_product_instance_messaging.sql", "0003_deployment_summaries.sql"} {
+		migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "global", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		execStatements(t, database, string(migration))
 	}
-	execStatements(t, database, string(migration))
 	seed := `
 		INSERT INTO regions (id, code, name, available, created_at) VALUES ('reg_test', 'test', 'Test', true, $1);
 		INSERT INTO plans (id, name, created_at) VALUES ('pln_standard', 'Standard', $1);

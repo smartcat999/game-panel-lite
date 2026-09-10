@@ -163,16 +163,54 @@ func (p *Postgres) Plans(ctx context.Context) ([]commerce.PlanVersion, error) {
 	return p.commerce.Plans(ctx)
 }
 func (p *Postgres) Instances(ctx context.Context, workspaceID contract.WorkspaceID) ([]instancecontrol.LogicalInstance, error) {
-	return p.instances.List(ctx, &workspaceID)
+	instances, err := p.instances.List(ctx, &workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	return p.composeSummaries(ctx, instances)
 }
 func (p *Postgres) Instance(ctx context.Context, workspaceID contract.WorkspaceID, instanceID contract.LogicalInstanceID) (instancecontrol.Detail, error) {
-	return p.instances.Detail(ctx, p.db, &workspaceID, instanceID)
+	detail, err := p.instances.Detail(ctx, p.db, &workspaceID, instanceID)
+	if err != nil {
+		return instancecontrol.Detail{}, err
+	}
+	instances, err := p.composeSummaries(ctx, []instancecontrol.LogicalInstance{detail.Instance})
+	if err != nil {
+		return instancecontrol.Detail{}, err
+	}
+	detail.Instance = instances[0]
+	return detail, nil
 }
 func (p *Postgres) Orders(ctx context.Context, workspaceID contract.WorkspaceID) ([]commerce.Order, error) {
 	return p.commerce.Orders(ctx, &workspaceID)
 }
 func (p *Postgres) AllInstances(ctx context.Context) ([]instancecontrol.LogicalInstance, error) {
-	return p.instances.List(ctx, nil)
+	instances, err := p.instances.List(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return p.composeSummaries(ctx, instances)
+}
+
+func (p *Postgres) composeSummaries(ctx context.Context, instances []instancecontrol.LogicalInstance) ([]instancecontrol.LogicalInstance, error) {
+	ids := make([]contract.LogicalInstanceID, 0, len(instances))
+	for _, instance := range instances {
+		ids = append(ids, instance.ID)
+	}
+	summaries, err := p.instances.DeploymentSummaries(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[contract.LogicalInstanceID]instancecontrol.DeploymentSummary, len(summaries))
+	for _, summary := range summaries {
+		byID[summary.LogicalInstanceID] = summary
+	}
+	for index := range instances {
+		if summary, ok := byID[instances[index].ID]; ok {
+			instances[index] = instancecontrol.ApplySummary(instances[index], summary)
+		}
+	}
+	return instances, nil
 }
 func (p *Postgres) AllOrders(ctx context.Context) ([]commerce.Order, error) {
 	return p.commerce.Orders(ctx, nil)
@@ -191,11 +229,22 @@ func (p *Postgres) insertDeploymentEvent(ctx context.Context, query persistence.
 	if err != nil {
 		return err
 	}
+	entitlement, active, err := p.commerce.ActiveEntitlement(ctx, query, instanceID, now)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return ErrActiveEntitlementNeeded
+	}
+	plan, err := p.commerce.Plan(ctx, query, entitlement.PlanVersionID)
+	if err != nil {
+		return err
+	}
 	eventID, err := persistence.NewID("evt")
 	if err != nil {
 		return err
 	}
-	return p.messages.InsertOutbox(ctx, query, messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(eventID), MessageType: "deployment.desired.v1", IdempotencyKey: key, CreatedAt: now, Payload: map[string]any{"workspaceId": detail.Instance.WorkspaceID, "logicalInstanceId": instanceID, "regionId": detail.Placement.RegionID, "placementVersion": detail.Placement.Version, "instanceRevisionId": detail.Revision.ID, "desiredState": detail.Instance.DesiredState}})
+	return p.messages.InsertOutbox(ctx, query, messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(eventID), MessageType: "deployment.desired.v1", IdempotencyKey: key, CreatedAt: now, Payload: map[string]any{"workspaceId": detail.Instance.WorkspaceID, "logicalInstanceId": instanceID, "regionId": detail.Placement.RegionID, "placementVersion": detail.Placement.Version, "instanceRevisionId": detail.Revision.ID, "desiredState": detail.Instance.DesiredState, "gameKey": detail.Instance.GameKey, "cpuUnits": plan.CPUUnits, "memoryMegabytes": plan.MemoryMegabytes}})
 }
 
 func checkoutIDs() (contract.LogicalInstanceID, contract.InstanceRevisionID, contract.PlacementID, contract.OrderID, error) {

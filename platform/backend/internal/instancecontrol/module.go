@@ -102,6 +102,7 @@ type Module struct {
 	instances  map[contract.LogicalInstanceID]LogicalInstance
 	revisions  map[contract.LogicalInstanceID]InstanceRevision
 	placements map[contract.LogicalInstanceID]Placement
+	summaries  map[contract.LogicalInstanceID]DeploymentSummary
 	nextID     int
 }
 
@@ -110,6 +111,7 @@ func New() *Module {
 		instances:  make(map[contract.LogicalInstanceID]LogicalInstance),
 		revisions:  make(map[contract.LogicalInstanceID]InstanceRevision),
 		placements: make(map[contract.LogicalInstanceID]Placement),
+		summaries:  make(map[contract.LogicalInstanceID]DeploymentSummary),
 	}
 }
 

@@ -132,6 +132,17 @@ export function AppShell({ area, scope, workspaceSlug = "northstar", children }:
     if (area === "region" && index === 0) {
       return `/platform/regions/${scope ?? "region-local"}`;
     }
+	if (area === "region") {
+		const regionRoutes: Partial<Record<MessageKey, string>> = {
+			"region.nav.nodes": "nodes",
+			"region.nav.deployments": "deployments",
+			"region.nav.tasks": "tasks",
+			"region.nav.capacity": "capacity",
+			"region.nav.storage": "storage",
+			"region.nav.monitoring": "monitoring",
+		};
+		if (regionRoutes[item.label]) return `/platform/regions/${scope ?? "region-local"}/${regionRoutes[item.label]}`;
+	}
     return `#${item.label.replaceAll(".", "-")}`;
   };
 
@@ -261,7 +272,7 @@ export function AppShell({ area, scope, workspaceSlug = "northstar", children }:
         <main className="content-canvas">
           <div className="page-heading">
             <div>
-              <p>{t("empty.phase")}</p>
+              <p>{t(area === "region" ? "region.phase" : "empty.phase")}</p>
               <h1>{t(copy.title)}</h1>
             </div>
             <span className="scope-id">{scopeName}</span>

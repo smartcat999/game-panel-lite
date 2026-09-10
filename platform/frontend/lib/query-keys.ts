@@ -9,4 +9,5 @@ export const queryKeys = {
   regions: ["regions"] as const,
   plans: ["plans"] as const,
   platform: (resource: string) => ["platform", resource] as const,
+  region: (regionId: string, resource: string) => ["region", regionId, resource] as const,
 };

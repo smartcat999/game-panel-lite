@@ -13,14 +13,17 @@
     "idempotencyKey": {"type": "string", "minLength": 8, "maxLength": 128},
     "payload": {
       "type": "object", "additionalProperties": false,
-      "required": ["workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState"],
+      "required": ["workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState", "gameKey", "cpuUnits", "memoryMegabytes"],
       "properties": {
         "workspaceId": {"type": "string", "pattern": "^ws_[A-Za-z0-9]+$"},
         "logicalInstanceId": {"type": "string", "pattern": "^lin_[A-Za-z0-9]+$"},
         "regionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
         "placementVersion": {"type": "integer", "minimum": 1},
         "instanceRevisionId": {"type": "string", "pattern": "^rev_[A-Za-z0-9]+$"},
-        "desiredState": {"type": "string", "enum": ["running", "stopped"]}
+        "desiredState": {"type": "string", "enum": ["running", "stopped"]},
+        "gameKey": {"type": "string", "minLength": 1},
+        "cpuUnits": {"type": "integer", "minimum": 1},
+        "memoryMegabytes": {"type": "integer", "minimum": 1}
       }
     }
   }

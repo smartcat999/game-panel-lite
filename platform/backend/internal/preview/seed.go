@@ -12,6 +12,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/instancecontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/messaging"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regiondirectory"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionexecution"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/workspace"
 )
 
@@ -21,6 +22,7 @@ type Environment struct {
 	Identity  *identity.Module
 	Workspace *workspace.Module
 	Product   *globalproduct.Module
+	Region    *regionexecution.Module
 }
 
 func Modules() Environment {
@@ -31,6 +33,9 @@ func Modules() Environment {
 		Preferences:       map[contract.UserID]identity.Preferences{userID: {Locale: "en", Theme: "system", TimeZone: "Asia/Shanghai"}},
 		Sessions:          map[string]contract.UserID{SessionToken: userID},
 		PlatformOperators: []contract.UserID{userID},
+		RegionOperators: map[contract.UserID][]contract.RegionID{
+			userID: {"reg_asia_east", "reg_europe_west"},
+		},
 	})
 	workspaceModule := workspace.New(workspace.Seed{
 		Workspaces: []workspace.Workspace{
@@ -57,8 +62,39 @@ func Modules() Environment {
 	messages := messaging.New()
 	product := globalproduct.New(regions, commerceModule, instances, messages)
 	seedProduct(product, instances, contract.WorkspaceID("ws_northstar"), regionID)
-	return Environment{Identity: identityModule, Workspace: workspaceModule, Product: product}
+	region := seedRegion(regionID, nowForRegionSeed())
+	return Environment{Identity: identityModule, Workspace: workspaceModule, Product: product, Region: region}
 }
+
+func seedRegion(regionID contract.RegionID, now time.Time) *regionexecution.Module {
+	region := regionexecution.New(regionID, []regionexecution.Node{
+		{ID: "nod_jade", RegionID: regionID, Name: "Jade", State: regionexecution.NodeReady, Games: []string{"terraria"}, CPUCapacity: 8000, MemoryCapacityMB: 16384, LeaseUntil: now.Add(time.Hour), LastHeartbeatAt: now},
+		{ID: "nod_cedar", RegionID: regionID, Name: "Cedar", State: regionexecution.NodeDraining, Games: []string{"terraria"}, CPUCapacity: 4000, MemoryCapacityMB: 8192, LeaseUntil: now.Add(time.Hour), LastHeartbeatAt: now},
+		{ID: "nod_echo", RegionID: regionID, Name: "Echo", State: regionexecution.NodeStale, Games: []string{"terraria"}, CPUCapacity: 4000, MemoryCapacityMB: 8192, LeaseUntil: now.Add(-time.Minute), LastHeartbeatAt: now.Add(-time.Hour)},
+	})
+	items := []struct {
+		instanceID  contract.LogicalInstanceID
+		workspaceID contract.WorkspaceID
+		game        string
+		state       regionexecution.ObservedState
+	}{
+		{instanceID: "lin_000003", workspaceID: "ws_northstar", game: "terraria", state: regionexecution.ObservedRunning},
+		{instanceID: "lin_000005", workspaceID: "ws_northstar", game: "terraria", state: regionexecution.ObservedFailed},
+		{instanceID: "lin_remote", workspaceID: "ws_ember", game: "unsupported-preview", state: regionexecution.ObservedPending},
+	}
+	for index, item := range items {
+		deployment, _, err := region.ReceiveDesired(context.Background(), regionexecution.DesiredDeployment{MessageID: contract.EventID(fmt.Sprintf("evt_region_seed_%d", index)), WorkspaceID: item.workspaceID, LogicalInstanceID: item.instanceID, RegionID: regionID, PlacementVersion: 1, InstanceRevisionID: contract.InstanceRevisionID(fmt.Sprintf("rev_region_%d", index)), DesiredState: "running", GameKey: item.game, CPUUnits: 1000, MemoryMegabytes: 2048}, now)
+		if err != nil {
+			panic(err)
+		}
+		if _, err := region.Schedule(context.Background(), deployment.ID, now); err == nil {
+			_, _ = region.ApplyObservation(context.Background(), regionexecution.Observation{MessageID: contract.EventID(fmt.Sprintf("evt_region_observed_%d", index)), RegionalDeploymentID: deployment.ID, Sequence: 1, State: item.state, ObservedAt: now})
+		}
+	}
+	return region
+}
+
+func nowForRegionSeed() time.Time { return time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC) }
 
 func seedProduct(product *globalproduct.Module, instances *instancecontrol.Module, workspaceID contract.WorkspaceID, regionID contract.RegionID) {
 	now := time.Date(2026, time.September, 10, 0, 0, 0, 0, time.UTC)

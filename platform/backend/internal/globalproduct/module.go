@@ -162,6 +162,14 @@ func (m *Module) publishDeployment(instanceID contract.LogicalInstanceID, key co
 		// Checkout invariants ensure an Entitlement always names an existing instance.
 		return
 	}
+	entitlement, active := m.commerce.ActiveEntitlement(instanceID, now)
+	if !active {
+		return
+	}
+	plan, err := m.commerce.Plan(context.Background(), entitlement.PlanVersionID)
+	if err != nil {
+		return
+	}
 	m.messaging.Publish("deployment.desired.v1", key, map[string]any{
 		"workspaceId":        detail.Instance.WorkspaceID,
 		"logicalInstanceId":  instanceID,
@@ -169,6 +177,9 @@ func (m *Module) publishDeployment(instanceID contract.LogicalInstanceID, key co
 		"placementVersion":   detail.Placement.Version,
 		"instanceRevisionId": detail.Revision.ID,
 		"desiredState":       detail.Instance.DesiredState,
+		"gameKey":            detail.Instance.GameKey,
+		"cpuUnits":           plan.CPUUnits,
+		"memoryMegabytes":    plan.MemoryMegabytes,
 	}, now)
 }
 

@@ -18,6 +18,9 @@ type LogicalInstanceID string
 type RegionID string
 type RegionalDeploymentID string
 type NodeID string
+type ReservationID string
+type RegionalTaskID string
+type AuditRecordID string
 type CommandID string
 type EventID string
 type IdempotencyKey string

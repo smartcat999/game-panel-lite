@@ -1,0 +1,151 @@
+package regionexecution
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
+	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
+)
+
+func TestPostgresRegionalDurabilityAndConcurrentReservation(t *testing.T) {
+	database := openRegionPostgresTestDatabase(t)
+	ctx := context.Background()
+	now := phase4Now()
+	region := NewPostgres(database, "reg_test")
+
+	firstDesired := desiredEvent("evt_durable", "lin_durable")
+	firstDesired.CPUUnits, firstDesired.MemoryMegabytes = 500, 512
+	first, changed, err := region.ReceiveDesired(ctx, firstDesired, now)
+	if err != nil || !changed {
+		t.Fatalf("first ingress changed=%v error=%v", changed, err)
+	}
+	restarted := NewPostgres(database, "reg_test")
+	repeated, changed, err := restarted.ReceiveDesired(ctx, firstDesired, now.Add(time.Minute))
+	if err != nil || changed || repeated.ID != first.ID {
+		t.Fatalf("durable redelivery id=%s changed=%v error=%v", repeated.ID, changed, err)
+	}
+
+	secondDesired := desiredEvent("evt_compete", "lin_compete")
+	secondDesired.CPUUnits, secondDesired.MemoryMegabytes = 500, 512
+	second, _, err := region.ReceiveDesired(ctx, secondDesired, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wait sync.WaitGroup
+	for _, deploymentID := range []contract.RegionalDeploymentID{first.ID, second.ID} {
+		wait.Add(1)
+		go func(id contract.RegionalDeploymentID) {
+			defer wait.Done()
+			<-start
+			_, err := region.Schedule(ctx, id, now)
+			results <- err
+		}(deploymentID)
+	}
+	close(start)
+	wait.Wait()
+	close(results)
+	succeeded := 0
+	for err := range results {
+		if err == nil {
+			succeeded++
+		}
+	}
+	if succeeded != 1 {
+		t.Fatalf("successful concurrent reservations=%d, want 1", succeeded)
+	}
+	capacity := region.Capacity(ctx)
+	if capacity.CPUReserved != 500 || capacity.MemoryReservedMB != 512 {
+		t.Fatalf("reserved capacity=%#v", capacity)
+	}
+	assertRegionTableCount(t, database, "reservations", 1)
+	assertRegionTableCount(t, database, "regional_tasks", 1)
+
+	if changed, err := region.ApplyObservation(ctx, Observation{MessageID: "evt_obs_2", RegionalDeploymentID: first.ID, Sequence: 2, State: ObservedRunning, ObservedAt: now}); err != nil || !changed {
+		t.Fatalf("new observation changed=%v error=%v", changed, err)
+	}
+	if changed, err := region.ApplyObservation(ctx, Observation{MessageID: "evt_obs_1", RegionalDeploymentID: first.ID, Sequence: 1, State: ObservedFailed, ObservedAt: now.Add(time.Minute)}); err != nil || changed {
+		t.Fatalf("old observation changed=%v error=%v", changed, err)
+	}
+	if deployment := deploymentFromList(region.Deployments(ctx), first.ID); deployment.ObservedState != ObservedRunning || deployment.ObservationSequence != 2 {
+		t.Fatalf("deployment regressed: %#v", deployment)
+	}
+	assertRegionTableCount(t, database, "regional_outbox", 1)
+}
+
+func openRegionPostgresTestDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+	dsn := os.Getenv("GAMEPANEL_REGION_TEST_DSN")
+	if dsn == "" {
+		t.Skip("GAMEPANEL_REGION_TEST_DSN is not set")
+	}
+	admin, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := fmt.Sprintf("phase4_%d", time.Now().UnixNano())
+	if _, err := admin.Exec(`CREATE SCHEMA "` + schema + `"`); err != nil {
+		admin.Close()
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	query.Set("search_path", schema)
+	parsed.RawQuery = query.Encode()
+	database, err := sql.Open("pgx", parsed.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, filename, _, _ := runtime.Caller(0)
+	migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "region", "0001_region_execution.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range strings.Split(string(migration), ";") {
+		if strings.TrimSpace(statement) == "" {
+			continue
+		}
+		if _, err := database.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	games := []byte(`["terraria"]`)
+	if _, err := database.Exec(`INSERT INTO nodes (id, region_id, name, state, games, cpu_capacity, memory_capacity_mb, lease_until, last_heartbeat_at) VALUES ('nod_test', 'reg_test', 'Test', 'ready', $1, 500, 512, $2, $3)`, games, phase4Now().Add(time.Hour), phase4Now()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { database.Close(); _, _ = admin.Exec(`DROP SCHEMA "` + schema + `" CASCADE`); admin.Close() })
+	return database
+}
+
+func deploymentFromList(items []RegionalDeployment, id contract.RegionalDeploymentID) RegionalDeployment {
+	for _, item := range items {
+		if item.ID == id {
+			return item
+		}
+	}
+	return RegionalDeployment{}
+}
+func assertRegionTableCount(t *testing.T, database *sql.DB, table string, want int) {
+	t.Helper()
+	var got int
+	if err := database.QueryRow(`SELECT count(*) FROM ` + table).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("%s count=%d, want %d", table, got, want)
+	}
+}

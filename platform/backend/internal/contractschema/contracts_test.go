@@ -61,14 +61,22 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 			"GET /v1/workspaces/{workspaceId}/orders":                 "listWorkspaceOrders",
 		},
 		"platform-operations.openapi.json": {
-			"GET /v1/platform/regions":              "listPlatformRegions",
-			"GET /v1/platform/regions/{regionId}":   "getPlatformRegion",
-			"PATCH /v1/platform/regions/{regionId}": "updatePlatformRegionOperations",
-			"GET /v1/platform/workspaces":           "listPlatformWorkspaces",
-			"GET /v1/platform/plans":                "listPlatformPlans",
-			"GET /v1/platform/orders":               "listPlatformOrders",
-			"GET /v1/platform/instances":            "listPlatformInstances",
-			"POST /v1/platform/payments/verified":   "activateVerifiedPayment",
+			"GET /v1/platform/regions":                                                  "listPlatformRegions",
+			"GET /v1/platform/regions/{regionId}":                                       "getPlatformRegion",
+			"PATCH /v1/platform/regions/{regionId}":                                     "updatePlatformRegionOperations",
+			"GET /v1/platform/workspaces":                                               "listPlatformWorkspaces",
+			"GET /v1/platform/plans":                                                    "listPlatformPlans",
+			"GET /v1/platform/orders":                                                   "listPlatformOrders",
+			"GET /v1/platform/instances":                                                "listPlatformInstances",
+			"POST /v1/platform/payments/verified":                                       "activateVerifiedPayment",
+			"GET /v1/regions/{regionId}/overview":                                       "getRegionExecutionOverview",
+			"GET /v1/regions/{regionId}/nodes":                                          "listRegionNodes",
+			"GET /v1/regions/{regionId}/deployments":                                    "listRegionalDeployments",
+			"GET /v1/regions/{regionId}/tasks":                                          "listRegionalTasks",
+			"GET /v1/regions/{regionId}/capacity":                                       "getRegionCapacity",
+			"GET /v1/regions/{regionId}/storage":                                        "getRegionStorage",
+			"GET /v1/regions/{regionId}/monitoring":                                     "getRegionMonitoring",
+			"POST /v1/regions/{regionId}/deployments/{deploymentId}/placement-override": "overrideRegionalPlacement",
 		},
 	}
 	for filename, operations := range expected {
@@ -90,7 +98,7 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 
 func TestEventV1CompatibilitySurface(t *testing.T) {
 	expectedPayloadFields := map[string][]string{
-		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState"},
+		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState", "gameKey", "cpuUnits", "memoryMegabytes"},
 		"entitlement-changed.schema.json": {"workspaceId", "logicalInstanceId", "entitlementId", "status", "effectiveAt", "expiresAt"},
 		"deployment-observed.schema.json": {"logicalInstanceId", "regionalDeploymentId", "regionId", "sequence", "observedState", "observedAt"},
 		"backup-observed.schema.json":     {"backupRequestId", "logicalInstanceId", "regionId", "sequence", "status", "observedAt"},

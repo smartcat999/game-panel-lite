@@ -44,6 +44,7 @@ type Seed struct {
 	Preferences       map[contract.UserID]Preferences
 	Sessions          map[string]contract.UserID
 	PlatformOperators []contract.UserID
+	RegionOperators   map[contract.UserID][]contract.RegionID
 }
 
 type Module struct {
@@ -53,6 +54,7 @@ type Module struct {
 	preferences       map[contract.UserID]Preferences
 	sessions          map[string]contract.UserID
 	platformOperators map[contract.UserID]bool
+	regionOperators   map[contract.UserID]map[contract.RegionID]bool
 }
 
 func New(seed Seed) *Module {
@@ -62,6 +64,7 @@ func New(seed Seed) *Module {
 		preferences:       make(map[contract.UserID]Preferences),
 		sessions:          make(map[string]contract.UserID),
 		platformOperators: make(map[contract.UserID]bool),
+		regionOperators:   make(map[contract.UserID]map[contract.RegionID]bool),
 	}
 	for _, user := range seed.Users {
 		module.users[user.ID] = user
@@ -77,6 +80,12 @@ func New(seed Seed) *Module {
 	}
 	for _, userID := range seed.PlatformOperators {
 		module.platformOperators[userID] = true
+	}
+	for userID, regionIDs := range seed.RegionOperators {
+		module.regionOperators[userID] = make(map[contract.RegionID]bool, len(regionIDs))
+		for _, regionID := range regionIDs {
+			module.regionOperators[userID][regionID] = true
+		}
 	}
 	return module
 }
@@ -133,4 +142,10 @@ func (m *Module) IsPlatformOperator(_ context.Context, userID contract.UserID) b
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.platformOperators[userID]
+}
+
+func (m *Module) IsRegionOperator(_ context.Context, userID contract.UserID, regionID contract.RegionID) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.platformOperators[userID] && m.regionOperators[userID][regionID]
 }
