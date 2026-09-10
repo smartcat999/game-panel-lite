@@ -471,6 +471,10 @@ func reserve(ctx context.Context, query persistence.DBTX, deployment RegionalDep
 	if err != nil {
 		return Reservation{}, err
 	}
+	assignmentID, err := persistence.NewID("was")
+	if err != nil {
+		return Reservation{}, err
+	}
 	var token int64
 	if err := query.QueryRowContext(ctx, `SELECT nextval('reservation_fencing_token_seq')`).Scan(&token); err != nil {
 		return Reservation{}, err
@@ -488,6 +492,9 @@ func reserve(ctx context.Context, query persistence.DBTX, deployment RegionalDep
 	if _, err := query.ExecContext(ctx, `INSERT INTO regional_tasks (id, regional_deployment_id, kind, status, attempts, created_at) VALUES ($1, $2, $3, $4, 0, $5)`, taskID, deployment.ID, "reconcile_workload", "pending", now); err != nil {
 		return Reservation{}, err
 	}
+	if _, err := query.ExecContext(ctx, `INSERT INTO work_assignments (id, regional_task_id, regional_deployment_id, node_id, action, payload, fencing_token, status, attempts, created_at) VALUES ($1, $2, $3, $4, $5, '{}'::jsonb, $6, $7, 0, $8)`, assignmentID, taskID, deployment.ID, node.ID, "reconcile_workload", token, AssignmentAvailable, now); err != nil {
+		return Reservation{}, err
+	}
 	return reservation, nil
 }
 func releaseReservation(ctx context.Context, query persistence.DBTX, deploymentID contract.RegionalDeploymentID) error {
@@ -499,6 +506,9 @@ func releaseReservation(ctx context.Context, query persistence.DBTX, deploymentI
 		return err
 	}
 	_, err = query.ExecContext(ctx, `UPDATE reservations SET active = false WHERE id = $1`, reservation.ID)
+	if err == nil {
+		_, err = query.ExecContext(ctx, `UPDATE work_assignments SET status = $1 WHERE regional_deployment_id = $2 AND status IN ($3, $4)`, AssignmentCancelled, deploymentID, AssignmentAvailable, AssignmentClaimed)
+	}
 	return err
 }
 func nullableNode(id contract.NodeID) any {

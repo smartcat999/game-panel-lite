@@ -110,6 +110,9 @@ export function AppShell({ area, scope, workspaceSlug = "northstar", children }:
     if (area === "workspace" && item.label === "workspace.nav.billing") {
       return `/w/${workspaceSlug}/billing`;
     }
+    if (area === "workspace" && item.label === "workspace.nav.backups") {
+		return `/w/${workspaceSlug}/backups`;
+	}
     if (area === "workspace" && item.label === "workspace.nav.members") {
       return `/w/${workspaceSlug}/members`;
     }

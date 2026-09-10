@@ -4,7 +4,7 @@ export type RegionalDeployment = { id: string; workspaceId: string; logicalInsta
 export type RegionalTask = { id: string; regionalDeploymentId: string; kind: string; status: string; attempts: number; createdAt: string };
 export type RegionCapacity = { cpuCapacity: number; cpuReserved: number; memoryCapacityMb: number; memoryReservedMb: number };
 export type RegionStorage = { directTransfer: boolean; configured: boolean };
-export type RegionMonitoring = { inboxLag: number; outboxLag: number; staleNodes: number };
+export type RegionMonitoring = { inboxLag: number; outboxLag: number; staleNodes: number; taskLatencyMilliseconds: number; reconciliationFailures: number };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/region-control${path}`, { ...init, headers: { Authorization: "Bearer local-preview", "Content-Type": "application/json", ...init?.headers } });

@@ -84,6 +84,60 @@ func TestPostgresRegionalDurabilityAndConcurrentReservation(t *testing.T) {
 	assertRegionTableCount(t, database, "regional_outbox", 1)
 }
 
+func TestPostgresAssignmentRestartAndBackupCompletionAreDurable(t *testing.T) {
+	database := openRegionPostgresTestDatabase(t)
+	ctx := context.Background()
+	now := phase4Now()
+	region := NewPostgres(database, "reg_test")
+	desired := desiredEvent("evt_phase5_durable", "lin_phase5")
+	desired.CPUUnits, desired.MemoryMegabytes = 500, 512
+	deployment, _, err := region.ReceiveDesired(ctx, desired, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := region.Schedule(ctx, deployment.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	initial := region.PollAssignments(ctx, "nod_test", 1, now)
+	if len(initial) != 1 {
+		t.Fatalf("initial assignments=%#v", initial)
+	}
+	if _, err := region.ClaimAssignment(ctx, initial[0].ID, "nod_test", now.Add(time.Second), now); err != nil {
+		t.Fatal(err)
+	}
+	restarted := NewPostgres(database, "reg_test")
+	if polled := restarted.PollAssignments(ctx, "nod_test", 1, now.Add(500*time.Millisecond)); len(polled) != 0 {
+		t.Fatalf("live lease was reclaimed: %#v", polled)
+	}
+	reclaimed := restarted.PollAssignments(ctx, "nod_test", 1, now.Add(2*time.Second))
+	if len(reclaimed) != 1 {
+		t.Fatalf("expired lease was not reclaimed: %#v", reclaimed)
+	}
+	claimed, err := restarted.ClaimAssignment(ctx, reclaimed[0].ID, "nod_test", now.Add(time.Minute), now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed, err := restarted.CompleteAssignment(ctx, claimed.ID, "nod_test", claimed.FencingToken, true, now.Add(3*time.Second)); err != nil || !completed {
+		t.Fatalf("reclaimed completion=%v error=%v", completed, err)
+	}
+	backupAssignment, changed, err := restarted.ReceiveBackup(ctx, BackupRequested{MessageID: "evt_backup_requested", BackupRequestID: "bkr_region", LogicalInstanceID: "lin_phase5", RegionID: "reg_test", Kind: "backup", ObjectKey: "regions/reg_test/backup.tar.gz", TransferURL: "https://objects.invalid/signed", RelativePath: "instances/lin_phase5/world"}, now.Add(4*time.Second))
+	if err != nil || !changed {
+		t.Fatalf("backup assignment=%#v changed=%v error=%v", backupAssignment, changed, err)
+	}
+	claimedBackup, err := restarted.ClaimAssignment(ctx, backupAssignment.ID, "nod_test", now.Add(time.Minute), now.Add(4*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := BackupResult{BackupRequestID: "bkr_region", Sequence: 1, Status: "completed", ObjectKey: "regions/reg_test/backup.tar.gz", SizeBytes: 128, Checksum: "sha", ObservedAt: now.Add(5 * time.Second)}
+	if changed, err := restarted.RecordBackupResult(ctx, claimedBackup, result); err != nil || !changed {
+		t.Fatalf("backup result changed=%v error=%v", changed, err)
+	}
+	if changed, err := restarted.RecordBackupResult(ctx, claimedBackup, result); err != nil || changed {
+		t.Fatalf("backup result duplicated changed=%v error=%v", changed, err)
+	}
+	assertRegionTableCount(t, database, "region_backup_results", 1)
+}
+
 func openRegionPostgresTestDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("GAMEPANEL_REGION_TEST_DSN")
@@ -111,16 +165,18 @@ func openRegionPostgresTestDatabase(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	_, filename, _, _ := runtime.Caller(0)
-	migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "region", "0001_region_execution.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, statement := range strings.Split(string(migration), ";") {
-		if strings.TrimSpace(statement) == "" {
-			continue
-		}
-		if _, err := database.Exec(statement); err != nil {
+	for _, name := range []string{"0001_region_execution.sql", "0002_node_assignments_and_backups.sql"} {
+		migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "region", name))
+		if err != nil {
 			t.Fatal(err)
+		}
+		for _, statement := range strings.Split(string(migration), ";") {
+			if strings.TrimSpace(statement) == "" {
+				continue
+			}
+			if _, err := database.Exec(statement); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	games := []byte(`["terraria"]`)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/backupcontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/commerce"
 	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/globalproduct"
@@ -43,6 +44,8 @@ type ProductModule interface {
 	Orders(context.Context, contract.WorkspaceID) ([]commerce.Order, error)
 	AllInstances(context.Context) ([]instancecontrol.LogicalInstance, error)
 	AllOrders(context.Context) ([]commerce.Order, error)
+	RequestBackup(context.Context, backupcontrol.CreateCommand, time.Time) (backupcontrol.Request, error)
+	Backups(context.Context, contract.WorkspaceID) ([]backupcontrol.Request, error)
 }
 
 type Handler struct {
@@ -70,6 +73,8 @@ func NewHandler(identityModule IdentityModule, workspaceModule WorkspaceModule, 
 	mux.HandleFunc("GET /v1/workspaces/{workspaceId}/instances", handler.listInstances)
 	mux.HandleFunc("GET /v1/workspaces/{workspaceId}/instances/{instanceId}", handler.getInstance)
 	mux.HandleFunc("GET /v1/workspaces/{workspaceId}/orders", handler.listOrders)
+	mux.HandleFunc("GET /v1/workspaces/{workspaceId}/backups", handler.listBackups)
+	mux.HandleFunc("POST /v1/workspaces/{workspaceId}/backups", handler.createBackup)
 	mux.HandleFunc("GET /v1/platform/workspaces", handler.listPlatformWorkspaces)
 	mux.HandleFunc("GET /v1/platform/plans", handler.listPlatformPlans)
 	mux.HandleFunc("GET /v1/platform/orders", handler.listPlatformOrders)
@@ -349,6 +354,53 @@ func (h Handler) listOrders(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, orders)
+}
+
+func (h Handler) listBackups(w http.ResponseWriter, request *http.Request) {
+	userID, ok := h.authenticate(w, request)
+	if !ok {
+		return
+	}
+	workspaceID := contract.WorkspaceID(request.PathValue("workspaceId"))
+	if _, err := h.workspace.Members(request.Context(), userID, workspaceID); err != nil {
+		writeWorkspaceError(w, err)
+		return
+	}
+	backups, err := h.product.Backups(request.Context(), workspaceID)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "product_unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, backups)
+}
+
+func (h Handler) createBackup(w http.ResponseWriter, request *http.Request) {
+	userID, ok := h.authenticate(w, request)
+	if !ok {
+		return
+	}
+	workspaceID := contract.WorkspaceID(request.PathValue("workspaceId"))
+	if _, err := h.workspace.Members(request.Context(), userID, workspaceID); err != nil {
+		writeWorkspaceError(w, err)
+		return
+	}
+	var input struct {
+		LogicalInstanceID     contract.LogicalInstanceID `json:"logicalInstanceId"`
+		RegionID              contract.RegionID          `json:"regionId"`
+		Kind                  backupcontrol.Kind         `json:"kind"`
+		SourceBackupRequestID contract.BackupRequestID   `json:"sourceBackupRequestId"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	key := contract.IdempotencyKey(request.Header.Get("Idempotency-Key"))
+	result, err := h.product.RequestBackup(request.Context(), backupcontrol.CreateCommand{Identity: contract.CommandIdentity{CommandID: contract.CommandID(request.Header.Get("X-Command-ID")), IdempotencyKey: key}, WorkspaceID: workspaceID, LogicalInstanceID: input.LogicalInstanceID, RegionID: input.RegionID, Kind: input.Kind, SourceBackupRequestID: input.SourceBackupRequestID}, time.Now().UTC())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "backup_request_rejected")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, result)
 }
 
 func (h Handler) listPlatformWorkspaces(w http.ResponseWriter, request *http.Request) {

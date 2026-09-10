@@ -13,6 +13,7 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/backupcontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/commerce"
 	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/instancecontrol"
@@ -121,6 +122,25 @@ func TestPostgresCheckoutAndActivationTransactions(t *testing.T) {
 	if detail.Instance.DeploymentState != instancecontrol.DeploymentRunning {
 		t.Fatalf("customer projection regressed: %#v", detail.Instance)
 	}
+	backupCommand := backupcontrol.CreateCommand{Identity: contract.CommandIdentity{IdempotencyKey: "backup_database_repeat"}, WorkspaceID: command.WorkspaceID, LogicalInstanceID: first.Instance.ID, RegionID: "reg_test", Kind: backupcontrol.KindBackup}
+	backup, err := product.RequestBackup(ctx, backupCommand, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repeatedBackup, err := product.RequestBackup(ctx, backupCommand, now.Add(time.Minute))
+	if err != nil || repeatedBackup.ID != backup.ID {
+		t.Fatalf("backup redelivery=%#v error=%v", repeatedBackup, err)
+	}
+	if changed, err := product.ApplyBackupObservation(ctx, backupcontrol.Observation{MessageID: "evt_backup_new", BackupRequestID: backup.ID, Sequence: 2, Status: backupcontrol.StatusCompleted, ObjectKey: backup.ObjectKey, SizeBytes: 64, Checksum: "sha", ObservedAt: now.Add(time.Minute)}); err != nil || !changed {
+		t.Fatalf("backup completion changed=%v error=%v", changed, err)
+	}
+	if changed, err := product.ApplyBackupObservation(ctx, backupcontrol.Observation{MessageID: "evt_backup_old", BackupRequestID: backup.ID, Sequence: 1, Status: backupcontrol.StatusFailed, ObservedAt: now.Add(2 * time.Minute)}); err != nil || changed {
+		t.Fatalf("stale backup observation changed=%v error=%v", changed, err)
+	}
+	backups, err := product.Backups(ctx, command.WorkspaceID)
+	if err != nil || len(backups) != 1 || backups[0].Status != backupcontrol.StatusCompleted {
+		t.Fatalf("backups=%#v error=%v", backups, err)
+	}
 }
 
 func openPostgresTestDatabase(t *testing.T) *sql.DB {
@@ -150,7 +170,7 @@ func openPostgresTestDatabase(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	_, filename, _, _ := runtime.Caller(0)
-	for _, name := range []string{"0002_product_instance_messaging.sql", "0003_deployment_summaries.sql"} {
+	for _, name := range []string{"0002_product_instance_messaging.sql", "0003_deployment_summaries.sql", "0004_backup_requests.sql"} {
 		migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "global", name))
 		if err != nil {
 			t.Fatal(err)

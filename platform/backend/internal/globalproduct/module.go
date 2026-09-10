@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/backupcontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/commerce"
 	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/instancecontrol"
@@ -45,15 +46,32 @@ type Module struct {
 	commerce    *commerce.Module
 	instances   *instancecontrol.Module
 	messaging   *messaging.Module
+	backups     *backupcontrol.Module
 	checkouts   map[contract.IdempotencyKey]CheckoutResult
 	activations map[string]ActivationResult
 }
 
 func New(regions *regiondirectory.Module, commerceModule *commerce.Module, instances *instancecontrol.Module, messages *messaging.Module) *Module {
 	return &Module{
-		regions: regions, commerce: commerceModule, instances: instances, messaging: messages,
+		regions: regions, commerce: commerceModule, instances: instances, messaging: messages, backups: backupcontrol.New(messages),
 		checkouts: make(map[contract.IdempotencyKey]CheckoutResult), activations: make(map[string]ActivationResult),
 	}
+}
+
+func (m *Module) RequestBackup(ctx context.Context, command backupcontrol.CreateCommand, now time.Time) (backupcontrol.Request, error) {
+	detail, err := m.instances.Get(ctx, command.WorkspaceID, command.LogicalInstanceID)
+	if err != nil || detail.Placement.RegionID != command.RegionID {
+		return backupcontrol.Request{}, backupcontrol.ErrInvalidRequest
+	}
+	return m.backups.Create(ctx, command, now)
+}
+
+func (m *Module) Backups(ctx context.Context, workspaceID contract.WorkspaceID) ([]backupcontrol.Request, error) {
+	return m.backups.List(ctx, workspaceID), nil
+}
+
+func (m *Module) ApplyBackupObservation(ctx context.Context, observation backupcontrol.Observation) (bool, error) {
+	return m.backups.ApplyObservation(ctx, observation)
 }
 
 func (m *Module) CreateCheckout(ctx context.Context, command CreateCommand, now time.Time) (CheckoutResult, error) {

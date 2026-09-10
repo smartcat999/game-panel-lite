@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gamepanel.dev/contracts/events/v1/backup-requested.schema.json",
+  "title": "backup.requested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "messageId": {"type": "string", "pattern": "^evt_[A-Za-z0-9]+$"},
+    "messageType": {"const": "backup.requested.v1"},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "idempotencyKey": {"type": "string", "minLength": 8, "maxLength": 128},
+    "payload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["backupRequestId", "logicalInstanceId", "regionId", "kind", "objectKey", "transferUrl", "relativePath"],
+      "properties": {
+        "backupRequestId": {"type": "string"},
+        "logicalInstanceId": {"type": "string"},
+        "regionId": {"type": "string"},
+        "kind": {"type": "string", "enum": ["backup", "restore"]},
+        "objectKey": {"type": "string", "minLength": 1},
+        "transferUrl": {"type": "string", "format": "uri"},
+        "relativePath": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

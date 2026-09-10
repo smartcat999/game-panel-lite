@@ -38,8 +38,8 @@ func TestContractDocumentsParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed != 6 {
-		t.Fatalf("expected 6 versioned contract documents, parsed %d", parsed)
+	if parsed != 7 {
+		t.Fatalf("expected 7 versioned contract documents, parsed %d", parsed)
 	}
 }
 
@@ -59,6 +59,8 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 			"GET /v1/workspaces/{workspaceId}/instances":              "listWorkspaceInstances",
 			"GET /v1/workspaces/{workspaceId}/instances/{instanceId}": "getWorkspaceInstance",
 			"GET /v1/workspaces/{workspaceId}/orders":                 "listWorkspaceOrders",
+			"GET /v1/workspaces/{workspaceId}/backups":                "listWorkspaceBackups",
+			"POST /v1/workspaces/{workspaceId}/backups":               "createBackupRequest",
 		},
 		"platform-operations.openapi.json": {
 			"GET /v1/platform/regions":                                                  "listPlatformRegions",
@@ -102,6 +104,7 @@ func TestEventV1CompatibilitySurface(t *testing.T) {
 		"entitlement-changed.schema.json": {"workspaceId", "logicalInstanceId", "entitlementId", "status", "effectiveAt", "expiresAt"},
 		"deployment-observed.schema.json": {"logicalInstanceId", "regionalDeploymentId", "regionId", "sequence", "observedState", "observedAt"},
 		"backup-observed.schema.json":     {"backupRequestId", "logicalInstanceId", "regionId", "sequence", "status", "observedAt"},
+		"backup-requested.schema.json":    {"backupRequestId", "logicalInstanceId", "regionId", "kind", "objectKey", "transferUrl", "relativePath"},
 	}
 	envelopeFields := []string{"schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"}
 	for filename, payloadFields := range expectedPayloadFields {

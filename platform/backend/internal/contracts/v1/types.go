@@ -20,6 +20,7 @@ type RegionalDeploymentID string
 type NodeID string
 type ReservationID string
 type RegionalTaskID string
+type WorkAssignmentID string
 type AuditRecordID string
 type CommandID string
 type EventID string

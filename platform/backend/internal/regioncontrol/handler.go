@@ -23,6 +23,7 @@ type RegionModule interface {
 	Deployments(context.Context) []regionexecution.RegionalDeployment
 	Tasks(context.Context) []regionexecution.RegionalTask
 	Capacity(context.Context) regionexecution.Capacity
+	Monitoring(context.Context) regionexecution.Monitoring
 	Audits(context.Context) []regionexecution.AuditRecord
 	Reconcile(context.Context, time.Time)
 	OverridePlacement(context.Context, contract.UserID, contract.RegionalDeploymentID, contract.NodeID, string, time.Time) (regionexecution.Reservation, error)
@@ -80,13 +81,7 @@ func (h Handler) storage(w http.ResponseWriter, r *http.Request) {
 }
 func (h Handler) monitoring(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authorize(w, r); ok {
-		stale := 0
-		for _, node := range h.region.Nodes(r.Context()) {
-			if node.State == regionexecution.NodeStale {
-				stale++
-			}
-		}
-		writeJSON(w, http.StatusOK, map[string]int{"inboxLag": 0, "outboxLag": 0, "staleNodes": stale})
+		writeJSON(w, http.StatusOK, h.region.Monitoring(r.Context()))
 	}
 }
 func (h Handler) audit(w http.ResponseWriter, r *http.Request) {

@@ -479,6 +479,43 @@ select {
   border-bottom: 1px solid var(--border);
 }
 
+.backup-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.backup-toolbar label {
+  display: grid;
+  gap: 7px;
+  min-width: min(360px, 100%);
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.backup-toolbar select {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0 12px;
+}
+
+.empty-inline {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted-foreground);
+  padding: 28px;
+  text-align: center;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
 .data-table-wrap table {
   width: 100%;
   border-collapse: collapse;
@@ -538,7 +575,8 @@ select {
 }
 
 .status-running,
-.status-paid {
+.status-paid,
+.status-completed {
   background: var(--success-bg);
   color: var(--success);
 }
@@ -546,6 +584,12 @@ select {
 .status-pending_payment {
   background: var(--warning-bg);
   color: var(--warning);
+}
+
+.status-queued {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: color-mix(in oklab, var(--warning) 24%, transparent);
 }
 
 .status-waiting_region {
@@ -994,6 +1038,7 @@ select {
   .metric-strip > div:nth-child(-n + 2) { border-bottom: 1px solid var(--border); }
   .deployment-context { grid-template-columns: 1fr; }
   .override-form { grid-template-columns: 1fr; padding-left: 0; border-left: 0; }
+  .backup-toolbar { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 520px) {

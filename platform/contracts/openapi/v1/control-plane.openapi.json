@@ -87,6 +87,19 @@
         "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
         "responses": {"200": {"description": "Workspace Orders", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Order"}}}}}}
       }
+    },
+    "/v1/workspaces/{workspaceId}/backups": {
+      "get": {
+        "operationId": "listWorkspaceBackups",
+        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
+        "responses": {"200": {"description": "Workspace backup and restore requests", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/BackupRequest"}}}}}}
+      },
+      "post": {
+        "operationId": "createBackupRequest",
+        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}, {"$ref": "#/components/parameters/IdempotencyKey"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateBackupRequest"}}}},
+        "responses": {"202": {"description": "Backup or restore request accepted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BackupRequest"}}}}}
+      }
     }
   },
   "components": {
@@ -149,6 +162,14 @@
       "RegionCatalogItem": {
         "type": "object", "additionalProperties": false, "required": ["id", "code", "name", "available"],
         "properties": {"id": {"$ref": "#/components/schemas/RegionId"}, "code": {"type": "string"}, "name": {"type": "string"}, "available": {"type": "boolean"}}
+      },
+      "CreateBackupRequest": {
+        "type": "object", "additionalProperties": false, "required": ["logicalInstanceId", "regionId", "kind"],
+        "properties": {"logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "kind": {"type": "string", "enum": ["backup", "restore"]}, "sourceBackupRequestId": {"type": "string", "pattern": "^bkr_[A-Za-z0-9]+$"}}
+      },
+      "BackupRequest": {
+        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "regionId", "kind", "status", "sequence", "createdAt", "updatedAt"],
+        "properties": {"id": {"type": "string", "pattern": "^bkr_[A-Za-z0-9]+$"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "kind": {"type": "string", "enum": ["backup", "restore"]}, "status": {"type": "string", "enum": ["queued", "running", "completed", "failed"]}, "sequence": {"type": "integer", "minimum": 0}, "objectKey": {"type": "string"}, "sizeBytes": {"type": "integer", "minimum": 0}, "checksum": {"type": "string"}, "createdAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}}
       }
     }
   }

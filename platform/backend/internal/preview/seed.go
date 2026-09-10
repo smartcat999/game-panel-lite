@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/backupcontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/commerce"
 	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/globalproduct"
@@ -127,5 +128,12 @@ func seedProduct(product *globalproduct.Module, instances *instancecontrol.Modul
 				panic(err)
 			}
 		}
+	}
+	backup, err := product.RequestBackup(context.Background(), backupcontrol.CreateCommand{Identity: contract.CommandIdentity{CommandID: "cmd_seed_backup", IdempotencyKey: "backup_seed_green_valley"}, WorkspaceID: workspaceID, LogicalInstanceID: "lin_000003", RegionID: regionID, Kind: backupcontrol.KindBackup}, now.Add(10*time.Minute))
+	if err != nil {
+		panic(err)
+	}
+	if _, err := product.ApplyBackupObservation(context.Background(), backupcontrol.Observation{MessageID: "evt_seed_backup_complete", BackupRequestID: backup.ID, Sequence: 1, Status: backupcontrol.StatusCompleted, ObjectKey: backup.ObjectKey, SizeBytes: 7340032, Checksum: "preview", ObservedAt: now.Add(12 * time.Minute)}); err != nil {
+		panic(err)
 	}
 }

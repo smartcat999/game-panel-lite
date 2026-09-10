@@ -48,6 +48,11 @@ export type CreateInstanceInput = {
   gameKey: string; gameVersion: string; configuration: Record<string, unknown>;
 };
 export type CheckoutResult = { instance: LogicalInstance; order: Order };
+export type BackupRequest = {
+  id: string; workspaceId: string; logicalInstanceId: string; regionId: string; kind: "backup" | "restore";
+  status: "queued" | "running" | "completed" | "failed"; sequence: number; objectKey?: string; sizeBytes?: number;
+  checksum?: string; createdAt: string; updatedAt: string;
+};
 
 export class ControlPlaneError extends Error {
   constructor(public readonly status: number) {
@@ -86,6 +91,8 @@ export const controlPlane = {
   plans: () => request<PlanVersion[]>("/v1/plans"),
   workspaceInstances: (workspaceId: string) => request<LogicalInstance[]>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/instances`),
   workspaceOrders: (workspaceId: string) => request<Order[]>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/orders`),
+  workspaceBackups: (workspaceId: string) => request<BackupRequest[]>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/backups`),
+  createBackup: (workspaceId: string, input: { logicalInstanceId: string; regionId: string; kind: "backup" | "restore"; sourceBackupRequestId?: string }, idempotencyKey: string) => request<BackupRequest>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/backups`, { method: "POST", body: JSON.stringify(input), headers: { "Idempotency-Key": idempotencyKey, "X-Command-ID": `cmd_${idempotencyKey}` } }),
   instance: (workspaceId: string, instanceId: string) => request<InstanceDetail>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/instances/${encodeURIComponent(instanceId)}`),
   createInstance: (input: CreateInstanceInput, idempotencyKey: string) => request<CheckoutResult>("/v1/instances", {
     method: "POST", body: JSON.stringify(input), headers: { "Idempotency-Key": idempotencyKey, "X-Command-ID": `cmd_${idempotencyKey}` },
