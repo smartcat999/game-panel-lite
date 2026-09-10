@@ -85,6 +85,15 @@ func TestVerifiedPaymentActivationIsIdempotentAndTransactional(t *testing.T) {
 	if messages.Count("entitlement.changed.v1") != 1 || messages.Count("deployment.desired.v1") != 1 {
 		t.Fatalf("payment redelivery duplicated outbox: %#v", messages.Outbox(context.Background()))
 	}
+	for _, message := range messages.Outbox(context.Background()) {
+		if message.MessageType != "deployment.desired.v1" {
+			continue
+		}
+		payload, ok := message.Payload.(map[string]any)
+		if !ok || payload["gameVersion"] != "1.4.5.6" || payload["configuration"].(map[string]any)["maxPlayers"] != 8 {
+			t.Fatalf("deployment event lost provider input: %#v", message.Payload)
+		}
+	}
 }
 
 func newTestProduct() (*Module, *commerce.Module, *instancecontrol.Module, *messaging.Module) {
@@ -103,7 +112,7 @@ func validCommand(key contract.IdempotencyKey) CreateCommand {
 	return CreateCommand{
 		Identity: contract.CommandIdentity{CommandID: "cmd_test", IdempotencyKey: key}, WorkspaceID: "ws_test",
 		PlanVersionID: "plv_standard_1", RegionID: "reg_test", Name: "Terraria One", GameKey: "terraria",
-		GameVersion: "latest", Configuration: map[string]any{"maxPlayers": 8},
+		GameVersion: "1.4.5.6", Configuration: map[string]any{"maxPlayers": 8},
 	}
 }
 

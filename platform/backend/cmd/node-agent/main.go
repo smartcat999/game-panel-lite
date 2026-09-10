@@ -10,8 +10,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/bootstrap"
 	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/gameprovider/terraria"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/nodeexecution"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionexecution"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/runtimeprovider/docker"
 )
 
 func main() {
@@ -36,7 +38,12 @@ func main() {
 			nodeID = "nod_local"
 		}
 		store := regionexecution.NewPostgres(database, regionID)
-		executor := nodeexecution.Executor{Root: root, Transfer: nodeexecution.HTTPObjectTransfer{}, Results: store}
+		runtimeProvider, err := docker.New(os.Getenv("GAMEPANEL_DOCKER_HOST"))
+		if err != nil {
+			slog.Error("initialize Docker Runtime Provider", "error", err)
+			os.Exit(1)
+		}
+		executor := nodeexecution.Executor{Root: root, Transfer: nodeexecution.HTTPObjectTransfer{}, Results: store, WorkloadResults: store, Games: map[string]nodeexecution.GameProvider{terraria.GameKey: terraria.Provider{}}, Runtime: runtimeProvider}
 		agent := nodeexecution.Agent{NodeID: nodeID, BatchSize: 16, ClaimTTL: 30 * time.Second, BackoffBase: 250 * time.Millisecond, BackoffMax: 10 * time.Second, Store: store, Reconcile: executor.Reconcile}
 		go func() {
 			if err := agent.Run(context.Background(), func() time.Time { return time.Now().UTC() }); err != nil {

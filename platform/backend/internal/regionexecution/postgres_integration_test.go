@@ -29,10 +29,16 @@ func TestPostgresRegionalDurabilityAndConcurrentReservation(t *testing.T) {
 	if err != nil || !changed {
 		t.Fatalf("first ingress changed=%v error=%v", changed, err)
 	}
+	if first.GameVersion != "1.4.5.6" || first.Configuration["worldName"] != "Regional World" {
+		t.Fatalf("provider input was not persisted: %#v", first)
+	}
 	restarted := NewPostgres(database, "reg_test")
 	repeated, changed, err := restarted.ReceiveDesired(ctx, firstDesired, now.Add(time.Minute))
 	if err != nil || changed || repeated.ID != first.ID {
 		t.Fatalf("durable redelivery id=%s changed=%v error=%v", repeated.ID, changed, err)
+	}
+	if repeated.GameVersion != first.GameVersion || repeated.Configuration["worldName"] != first.Configuration["worldName"] {
+		t.Fatalf("provider input was not recovered after restart: %#v", repeated)
 	}
 
 	secondDesired := desiredEvent("evt_compete", "lin_compete")
@@ -165,7 +171,7 @@ func openRegionPostgresTestDatabase(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	_, filename, _, _ := runtime.Caller(0)
-	for _, name := range []string{"0001_region_execution.sql", "0002_node_assignments_and_backups.sql"} {
+	for _, name := range []string{"0001_region_execution.sql", "0002_node_assignments_and_backups.sql", "0003_provider_workload_fields.sql"} {
 		migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "region", name))
 		if err != nil {
 			t.Fatal(err)

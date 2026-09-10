@@ -244,7 +244,7 @@ func (p *Postgres) insertDeploymentEvent(ctx context.Context, query persistence.
 	if err != nil {
 		return err
 	}
-	return p.messages.InsertOutbox(ctx, query, messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(eventID), MessageType: "deployment.desired.v1", IdempotencyKey: key, CreatedAt: now, Payload: map[string]any{"workspaceId": detail.Instance.WorkspaceID, "logicalInstanceId": instanceID, "regionId": detail.Placement.RegionID, "placementVersion": detail.Placement.Version, "instanceRevisionId": detail.Revision.ID, "desiredState": detail.Instance.DesiredState, "gameKey": detail.Instance.GameKey, "cpuUnits": plan.CPUUnits, "memoryMegabytes": plan.MemoryMegabytes}})
+	return p.messages.InsertOutbox(ctx, query, messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(eventID), MessageType: "deployment.desired.v1", IdempotencyKey: key, CreatedAt: now, Payload: map[string]any{"workspaceId": detail.Instance.WorkspaceID, "logicalInstanceId": instanceID, "regionId": detail.Placement.RegionID, "placementVersion": detail.Placement.Version, "instanceRevisionId": detail.Revision.ID, "desiredState": detail.Instance.DesiredState, "gameKey": detail.Instance.GameKey, "gameVersion": detail.Revision.GameVersion, "configuration": detail.Revision.Configuration, "cpuUnits": plan.CPUUnits, "memoryMegabytes": plan.MemoryMegabytes}})
 }
 
 func checkoutIDs() (contract.LogicalInstanceID, contract.InstanceRevisionID, contract.PlacementID, contract.OrderID, error) {

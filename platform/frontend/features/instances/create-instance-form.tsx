@@ -20,7 +20,7 @@ export function CreateInstanceForm({ workspaceSlug }: { workspaceSlug: string })
   const [name, setName] = useState("");
   const [planVersionId, setPlanVersionId] = useState("");
   const [regionId, setRegionId] = useState("");
-  const [gameVersion, setGameVersion] = useState("1.4.4.9");
+  const [gameVersion, setGameVersion] = useState("1.4.5.6");
   const checkout = useMutation({
     mutationFn: () => controlPlane.createInstance({
       workspaceId: workspace!.id, planVersionId, regionId, name, gameKey: "terraria", gameVersion,

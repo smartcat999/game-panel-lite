@@ -100,7 +100,7 @@ func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 
 func TestEventV1CompatibilitySurface(t *testing.T) {
 	expectedPayloadFields := map[string][]string{
-		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState", "gameKey", "cpuUnits", "memoryMegabytes"},
+		"deployment-desired.schema.json":  {"workspaceId", "logicalInstanceId", "regionId", "placementVersion", "instanceRevisionId", "desiredState", "gameKey", "gameVersion", "configuration", "cpuUnits", "memoryMegabytes"},
 		"entitlement-changed.schema.json": {"workspaceId", "logicalInstanceId", "entitlementId", "status", "effectiveAt", "expiresAt"},
 		"deployment-observed.schema.json": {"logicalInstanceId", "regionalDeploymentId", "regionId", "sequence", "observedState", "observedAt"},
 		"backup-observed.schema.json":     {"backupRequestId", "logicalInstanceId", "regionId", "sequence", "status", "observedAt"},

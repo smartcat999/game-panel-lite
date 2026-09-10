@@ -58,6 +58,10 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, desired DesiredDeployment
 		return RegionalDeployment{}, false, err
 	}
 	defer tx.Rollback()
+	configuration, err := json.Marshal(desired.Configuration)
+	if err != nil {
+		return RegionalDeployment{}, false, err
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO regional_inbox (message_id, message_type, received_at) VALUES ($1, $2, $3) ON CONFLICT (message_id) DO NOTHING`, desired.MessageID, "deployment.desired.v1", now)
 	if err != nil {
 		return RegionalDeployment{}, false, err
@@ -76,8 +80,8 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, desired DesiredDeployment
 		if idErr != nil {
 			return RegionalDeployment{}, false, idErr
 		}
-		deployment = RegionalDeployment{ID: contract.RegionalDeploymentID(id), WorkspaceID: desired.WorkspaceID, LogicalInstanceID: desired.LogicalInstanceID, RegionID: desired.RegionID, PlacementVersion: desired.PlacementVersion, InstanceRevisionID: desired.InstanceRevisionID, DesiredState: desired.DesiredState, ObservedState: ObservedPending, GameKey: desired.GameKey, CPUUnits: desired.CPUUnits, MemoryMegabytes: desired.MemoryMegabytes, UpdatedAt: now}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO regional_deployments (id, workspace_id, logical_instance_id, region_id, placement_version, instance_revision_id, desired_state, observed_state, observation_sequence, game_key, cpu_units, memory_megabytes, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12)`, deployment.ID, deployment.WorkspaceID, deployment.LogicalInstanceID, deployment.RegionID, deployment.PlacementVersion, deployment.InstanceRevisionID, deployment.DesiredState, deployment.ObservedState, deployment.GameKey, deployment.CPUUnits, deployment.MemoryMegabytes, deployment.UpdatedAt); err != nil {
+		deployment = RegionalDeployment{ID: contract.RegionalDeploymentID(id), WorkspaceID: desired.WorkspaceID, LogicalInstanceID: desired.LogicalInstanceID, RegionID: desired.RegionID, PlacementVersion: desired.PlacementVersion, InstanceRevisionID: desired.InstanceRevisionID, DesiredState: desired.DesiredState, ObservedState: ObservedPending, GameKey: desired.GameKey, GameVersion: desired.GameVersion, Configuration: desired.Configuration, CPUUnits: desired.CPUUnits, MemoryMegabytes: desired.MemoryMegabytes, UpdatedAt: now}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO regional_deployments (id, workspace_id, logical_instance_id, region_id, placement_version, instance_revision_id, desired_state, observed_state, observation_sequence, game_key, game_version, configuration, cpu_units, memory_megabytes, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, $11, $12, $13, $14)`, deployment.ID, deployment.WorkspaceID, deployment.LogicalInstanceID, deployment.RegionID, deployment.PlacementVersion, deployment.InstanceRevisionID, deployment.DesiredState, deployment.ObservedState, deployment.GameKey, deployment.GameVersion, configuration, deployment.CPUUnits, deployment.MemoryMegabytes, deployment.UpdatedAt); err != nil {
 			return RegionalDeployment{}, false, err
 		}
 	} else if err != nil {
@@ -95,9 +99,10 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, desired DesiredDeployment
 			return RegionalDeployment{}, false, err
 		}
 		deployment.WorkspaceID, deployment.PlacementVersion, deployment.InstanceRevisionID = desired.WorkspaceID, desired.PlacementVersion, desired.InstanceRevisionID
-		deployment.DesiredState, deployment.GameKey, deployment.CPUUnits, deployment.MemoryMegabytes = desired.DesiredState, desired.GameKey, desired.CPUUnits, desired.MemoryMegabytes
+		deployment.DesiredState, deployment.GameKey, deployment.GameVersion, deployment.Configuration = desired.DesiredState, desired.GameKey, desired.GameVersion, desired.Configuration
+		deployment.CPUUnits, deployment.MemoryMegabytes = desired.CPUUnits, desired.MemoryMegabytes
 		deployment.NodeID, deployment.UnschedulableReason, deployment.UpdatedAt = "", "", now
-		if _, err := tx.ExecContext(ctx, `UPDATE regional_deployments SET workspace_id = $1, placement_version = $2, instance_revision_id = $3, desired_state = $4, game_key = $5, cpu_units = $6, memory_megabytes = $7, node_id = NULL, unschedulable_reason = NULL, updated_at = $8 WHERE id = $9`, deployment.WorkspaceID, deployment.PlacementVersion, deployment.InstanceRevisionID, deployment.DesiredState, deployment.GameKey, deployment.CPUUnits, deployment.MemoryMegabytes, now, deployment.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE regional_deployments SET workspace_id = $1, placement_version = $2, instance_revision_id = $3, desired_state = $4, game_key = $5, game_version = $6, configuration = $7, cpu_units = $8, memory_megabytes = $9, node_id = NULL, unschedulable_reason = NULL, updated_at = $10 WHERE id = $11`, deployment.WorkspaceID, deployment.PlacementVersion, deployment.InstanceRevisionID, deployment.DesiredState, deployment.GameKey, deployment.GameVersion, configuration, deployment.CPUUnits, deployment.MemoryMegabytes, now, deployment.ID); err != nil {
 			return RegionalDeployment{}, false, err
 		}
 	}
@@ -368,7 +373,7 @@ func (p *Postgres) Overview(ctx context.Context) Overview {
 	return result
 }
 
-const deploymentSelect = `SELECT id, workspace_id, logical_instance_id, region_id, placement_version, instance_revision_id, desired_state, observed_state, observation_sequence, game_key, cpu_units, memory_megabytes, COALESCE(node_id, ''), COALESCE(unschedulable_reason, ''), updated_at FROM regional_deployments`
+const deploymentSelect = `SELECT id, workspace_id, logical_instance_id, region_id, placement_version, instance_revision_id, desired_state, observed_state, observation_sequence, game_key, game_version, configuration, cpu_units, memory_megabytes, COALESCE(node_id, ''), COALESCE(unschedulable_reason, ''), updated_at FROM regional_deployments`
 const nodeSelect = `SELECT id, region_id, name, state, games, cpu_capacity, memory_capacity_mb, reserved_cpu, reserved_memory_mb, lease_until, last_heartbeat_at FROM nodes`
 
 func deploymentByID(ctx context.Context, query persistence.DBTX, id contract.RegionalDeploymentID, lock bool) (RegionalDeployment, error) {
@@ -390,7 +395,11 @@ type scanner interface{ Scan(...any) error }
 
 func scanDeployment(row scanner) (RegionalDeployment, error) {
 	var item RegionalDeployment
-	err := row.Scan(&item.ID, &item.WorkspaceID, &item.LogicalInstanceID, &item.RegionID, &item.PlacementVersion, &item.InstanceRevisionID, &item.DesiredState, &item.ObservedState, &item.ObservationSequence, &item.GameKey, &item.CPUUnits, &item.MemoryMegabytes, &item.NodeID, &item.UnschedulableReason, &item.UpdatedAt)
+	var configuration []byte
+	err := row.Scan(&item.ID, &item.WorkspaceID, &item.LogicalInstanceID, &item.RegionID, &item.PlacementVersion, &item.InstanceRevisionID, &item.DesiredState, &item.ObservedState, &item.ObservationSequence, &item.GameKey, &item.GameVersion, &configuration, &item.CPUUnits, &item.MemoryMegabytes, &item.NodeID, &item.UnschedulableReason, &item.UpdatedAt)
+	if err == nil {
+		err = json.Unmarshal(configuration, &item.Configuration)
+	}
 	return item, err
 }
 func scanNode(row scanner) (Node, error) {
@@ -492,7 +501,11 @@ func reserve(ctx context.Context, query persistence.DBTX, deployment RegionalDep
 	if _, err := query.ExecContext(ctx, `INSERT INTO regional_tasks (id, regional_deployment_id, kind, status, attempts, created_at) VALUES ($1, $2, $3, $4, 0, $5)`, taskID, deployment.ID, "reconcile_workload", "pending", now); err != nil {
 		return Reservation{}, err
 	}
-	if _, err := query.ExecContext(ctx, `INSERT INTO work_assignments (id, regional_task_id, regional_deployment_id, node_id, action, payload, fencing_token, status, attempts, created_at) VALUES ($1, $2, $3, $4, $5, '{}'::jsonb, $6, $7, 0, $8)`, assignmentID, taskID, deployment.ID, node.ID, "reconcile_workload", token, AssignmentAvailable, now); err != nil {
+	payload, err := json.Marshal(workloadPayload(deployment))
+	if err != nil {
+		return Reservation{}, err
+	}
+	if _, err := query.ExecContext(ctx, `INSERT INTO work_assignments (id, regional_task_id, regional_deployment_id, node_id, action, payload, fencing_token, status, attempts, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9)`, assignmentID, taskID, deployment.ID, node.ID, "reconcile_workload", payload, token, AssignmentAvailable, now); err != nil {
 		return Reservation{}, err
 	}
 	return reservation, nil

@@ -115,7 +115,7 @@ func seedProduct(product *globalproduct.Module, instances *instancecontrol.Modul
 		checkout, err := product.CreateCheckout(context.Background(), globalproduct.CreateCommand{
 			Identity:    contract.CommandIdentity{CommandID: contract.CommandID(fmt.Sprintf("cmd_seed_%d", index)), IdempotencyKey: contract.IdempotencyKey(fmt.Sprintf("idem_seed_%d", index))},
 			WorkspaceID: workspaceID, PlanVersionID: "plv_standard_1", RegionID: regionID,
-			Name: item.name, GameKey: "terraria", GameVersion: "1.4.4.9", Configuration: map[string]any{"maxPlayers": 8},
+			Name: item.name, GameKey: "terraria", GameVersion: "1.4.5.6", Configuration: map[string]any{"maxPlayers": 8},
 		}, now.Add(time.Duration(index)*time.Minute))
 		if err != nil {
 			panic(err)

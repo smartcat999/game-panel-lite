@@ -90,7 +90,7 @@ func assignedRegion(t *testing.T) (*regionexecution.Module, time.Time) {
 		{ID: "nod_test", RegionID: "reg_test", State: regionexecution.NodeReady, Games: []string{"terraria"}, CPUCapacity: 4000, MemoryCapacityMB: 8192, LeaseUntil: now.Add(time.Hour)},
 		{ID: "nod_other", RegionID: "reg_test", State: regionexecution.NodeReady, Games: []string{"terraria"}, CPUCapacity: 8000, MemoryCapacityMB: 16384, LeaseUntil: now.Add(time.Hour)},
 	})
-	deployment, _, err := region.ReceiveDesired(context.Background(), regionexecution.DesiredDeployment{MessageID: "evt_assignment", WorkspaceID: "ws_test", LogicalInstanceID: "lin_test", RegionID: "reg_test", PlacementVersion: 1, InstanceRevisionID: "rev_test", DesiredState: "running", GameKey: "terraria", CPUUnits: 1000, MemoryMegabytes: 1024}, now)
+	deployment, _, err := region.ReceiveDesired(context.Background(), regionexecution.DesiredDeployment{MessageID: "evt_assignment", WorkspaceID: "ws_test", LogicalInstanceID: "lin_test", RegionID: "reg_test", PlacementVersion: 1, InstanceRevisionID: "rev_test", DesiredState: "running", GameKey: "terraria", GameVersion: "1.4.5.6", Configuration: map[string]any{"worldName": "Assigned World"}, CPUUnits: 1000, MemoryMegabytes: 1024}, now)
 	if err != nil {
 		t.Fatal(err)
 	}

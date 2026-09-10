@@ -196,6 +196,8 @@ func (m *Module) publishDeployment(instanceID contract.LogicalInstanceID, key co
 		"instanceRevisionId": detail.Revision.ID,
 		"desiredState":       detail.Instance.DesiredState,
 		"gameKey":            detail.Instance.GameKey,
+		"gameVersion":        detail.Revision.GameVersion,
+		"configuration":      detail.Revision.Configuration,
 		"cpuUnits":           plan.CPUUnits,
 		"memoryMegabytes":    plan.MemoryMegabytes,
 	}, now)

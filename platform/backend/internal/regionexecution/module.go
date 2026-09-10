@@ -2,9 +2,11 @@ package regionexecution
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +71,8 @@ type DesiredDeployment struct {
 	InstanceRevisionID contract.InstanceRevisionID
 	DesiredState       string
 	GameKey            string
+	GameVersion        string
+	Configuration      map[string]any
 	CPUUnits           int
 	MemoryMegabytes    int
 }
@@ -84,6 +88,8 @@ type RegionalDeployment struct {
 	ObservedState       ObservedState                 `json:"observedState"`
 	ObservationSequence int64                         `json:"observationSequence"`
 	GameKey             string                        `json:"gameKey"`
+	GameVersion         string                        `json:"gameVersion"`
+	Configuration       map[string]any                `json:"configuration"`
 	CPUUnits            int                           `json:"cpuUnits"`
 	MemoryMegabytes     int                           `json:"memoryMegabytes"`
 	NodeID              contract.NodeID               `json:"nodeId,omitempty"`
@@ -280,6 +286,8 @@ func (m *Module) ReceiveDesired(_ context.Context, desired DesiredDeployment, no
 		deployment.InstanceRevisionID = desired.InstanceRevisionID
 		deployment.DesiredState = desired.DesiredState
 		deployment.GameKey = desired.GameKey
+		deployment.GameVersion = desired.GameVersion
+		deployment.Configuration = desired.Configuration
 		deployment.CPUUnits = desired.CPUUnits
 		deployment.MemoryMegabytes = desired.MemoryMegabytes
 		deployment.NodeID = ""
@@ -288,7 +296,7 @@ func (m *Module) ReceiveDesired(_ context.Context, desired DesiredDeployment, no
 		m.deployments[deployment.ID] = deployment
 		return deployment, true, nil
 	}
-	deployment := RegionalDeployment{ID: contract.RegionalDeploymentID(m.next("rdp")), WorkspaceID: desired.WorkspaceID, LogicalInstanceID: desired.LogicalInstanceID, RegionID: desired.RegionID, PlacementVersion: desired.PlacementVersion, InstanceRevisionID: desired.InstanceRevisionID, DesiredState: desired.DesiredState, ObservedState: ObservedPending, GameKey: desired.GameKey, CPUUnits: desired.CPUUnits, MemoryMegabytes: desired.MemoryMegabytes, UpdatedAt: now}
+	deployment := RegionalDeployment{ID: contract.RegionalDeploymentID(m.next("rdp")), WorkspaceID: desired.WorkspaceID, LogicalInstanceID: desired.LogicalInstanceID, RegionID: desired.RegionID, PlacementVersion: desired.PlacementVersion, InstanceRevisionID: desired.InstanceRevisionID, DesiredState: desired.DesiredState, ObservedState: ObservedPending, GameKey: desired.GameKey, GameVersion: desired.GameVersion, Configuration: desired.Configuration, CPUUnits: desired.CPUUnits, MemoryMegabytes: desired.MemoryMegabytes, UpdatedAt: now}
 	m.deployments[deployment.ID] = deployment
 	m.byInstance[deployment.LogicalInstanceID] = deployment.ID
 	return deployment, true, nil
@@ -372,7 +380,7 @@ func (m *Module) scheduleLocked(deploymentID contract.RegionalDeploymentID, now 
 	m.deployments[deployment.ID] = deployment
 	task := RegionalTask{ID: contract.RegionalTaskID(m.next("rtk")), RegionalDeploymentID: deployment.ID, Kind: "reconcile_workload", Status: "pending", CreatedAt: now}
 	m.tasks[task.ID] = task
-	m.createAssignmentLocked(task, reservation, "reconcile_workload", nil, now)
+	m.createAssignmentLocked(task, reservation, "reconcile_workload", workloadPayload(deployment), now)
 	return reservation, nil
 }
 
@@ -451,6 +459,32 @@ func (m *Module) RecordBackupResult(_ context.Context, assignment WorkAssignment
 	return true, nil
 }
 
+func (m *Module) RecordWorkloadResult(_ context.Context, assignment WorkAssignment, state, _ string, now time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	messageID := workloadEventID(assignment.ID)
+	if m.inbox[messageID] {
+		return false, nil
+	}
+	current, ok := m.assignments[assignment.ID]
+	reservation, active := m.reservations[assignment.RegionalDeploymentID]
+	node := m.nodes[assignment.NodeID]
+	if !ok || current.Status != AssignmentClaimed || current.ClaimedBy != assignment.NodeID || !active || !reservation.Active || reservation.FencingToken != assignment.FencingToken || node.State != NodeReady || !node.LeaseUntil.After(now) {
+		return false, errors.New("stale workload result")
+	}
+	observedState := ObservedState(state)
+	if observedState != ObservedRunning && observedState != ObservedStopped && observedState != ObservedFailed {
+		return false, errors.New("invalid workload observation")
+	}
+	deployment := m.deployments[assignment.RegionalDeploymentID]
+	deployment.ObservationSequence++
+	deployment.ObservedState, deployment.UpdatedAt = observedState, now
+	m.deployments[deployment.ID] = deployment
+	observation := Observation{MessageID: messageID, RegionalDeploymentID: deployment.ID, Sequence: deployment.ObservationSequence, State: observedState, ObservedAt: now}
+	m.outbox[messageID], m.inbox[messageID] = observation, true
+	return true, nil
+}
+
 func (m *Module) BackupResults(_ context.Context) []BackupResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -500,7 +534,7 @@ func (m *Module) OverridePlacement(_ context.Context, actor contract.UserID, dep
 	m.deployments[deploymentID] = deployment
 	task := RegionalTask{ID: contract.RegionalTaskID(m.next("rtk")), RegionalDeploymentID: deployment.ID, Kind: "reconcile_workload", Status: "pending", CreatedAt: now}
 	m.tasks[task.ID] = task
-	m.createAssignmentLocked(task, reservation, "reconcile_workload", nil, now)
+	m.createAssignmentLocked(task, reservation, "reconcile_workload", workloadPayload(deployment), now)
 	m.audit = append(m.audit, AuditRecord{ID: contract.AuditRecordID(m.next("aud")), ActorUserID: actor, RegionID: m.regionID, RegionalDeploymentID: deploymentID, PreviousNodeID: previousNodeID, RequestedNodeID: nodeID, Reason: strings.TrimSpace(reason), CreatedAt: now})
 	return reservation, nil
 }
@@ -730,4 +764,25 @@ func supports(games []string, game string) bool {
 		}
 	}
 	return false
+}
+
+func workloadPayload(deployment RegionalDeployment) map[string]string {
+	configuration, err := json.Marshal(deployment.Configuration)
+	if err != nil {
+		configuration = []byte("{}")
+	}
+	return map[string]string{
+		"logicalInstanceId": string(deployment.LogicalInstanceID),
+		"gameKey":           deployment.GameKey,
+		"gameVersion":       deployment.GameVersion,
+		"configuration":     string(configuration),
+		"desiredState":      deployment.DesiredState,
+		"dataRelative":      "instances/" + string(deployment.LogicalInstanceID),
+		"cpuUnits":          strconv.Itoa(deployment.CPUUnits),
+		"memoryMegabytes":   strconv.Itoa(deployment.MemoryMegabytes),
+	}
+}
+
+func workloadEventID(assignmentID contract.WorkAssignmentID) contract.EventID {
+	return contract.EventID("evt_" + strings.ReplaceAll(string(assignmentID), "_", ""))
 }

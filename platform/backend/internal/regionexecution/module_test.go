@@ -165,7 +165,7 @@ func newTestRegion(cpu, memory int) *Module {
 }
 
 func desiredEvent(messageID contract.EventID, instanceID contract.LogicalInstanceID) DesiredDeployment {
-	return DesiredDeployment{MessageID: messageID, WorkspaceID: "ws_test", LogicalInstanceID: instanceID, RegionID: "reg_test", PlacementVersion: 1, InstanceRevisionID: "rev_test", DesiredState: "running", GameKey: "terraria", CPUUnits: 1000, MemoryMegabytes: 1024}
+	return DesiredDeployment{MessageID: messageID, WorkspaceID: "ws_test", LogicalInstanceID: instanceID, RegionID: "reg_test", PlacementVersion: 1, InstanceRevisionID: "rev_test", DesiredState: "running", GameKey: "terraria", GameVersion: "1.4.5.6", Configuration: map[string]any{"worldName": "Regional World"}, CPUUnits: 1000, MemoryMegabytes: 1024}
 }
 
 func phase4Now() time.Time { return time.Date(2026, time.September, 10, 1, 0, 0, 0, time.UTC) }
