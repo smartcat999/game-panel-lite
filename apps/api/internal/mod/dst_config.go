@@ -193,7 +193,24 @@ func ParseDSTConfigOptions(source, locale string) ([]DSTConfigOption, error) {
 		}
 		result = append(result, DSTConfigOption{Name: name, Label: label, Description: description, Default: defaultValue.scalar, Choices: choices, Section: section})
 	}
-	return result, nil
+	return trimLeadingDSTConfigSections(result), nil
+}
+
+func trimLeadingDSTConfigSections(options []DSTConfigOption) []DSTConfigOption {
+	firstEditable := -1
+	for index, option := range options {
+		if !option.Section {
+			firstEditable = index
+			break
+		}
+	}
+	if firstEditable < 0 {
+		return []DSTConfigOption{}
+	}
+	if firstEditable <= 1 {
+		return options
+	}
+	return options[firstEditable-1:]
 }
 
 func selectDSTLocale(source, locale string) string {

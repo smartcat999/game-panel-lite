@@ -150,12 +150,16 @@ local function AddConfig(label, name, options, default, hover) return {label = l
 local function AddOptions(data, ispercent, opposite_desc) return {} end
 if is_chinese then
   configuration_options = {
+    AddTitle("-----------------------------------------"),
+    AddTitle("小提示:模组默认配置仅作为维基配置"),
     AddTitle("手工编织野餐篮"),
     AddConfig("保鲜率", "jx_basket_preserver", AddOptions({1,.95}, true, true), .95, str[1]),
     AddConfig("传球按键", "jx_football_key1", key_info, "KEY_J", nil),
   }
 else
   configuration_options = {
+    AddTitle("-----------------------------------------"),
+    AddTitle("Configure these options to your preference"),
     AddTitle("Hand Woven Basket"),
     AddConfig("Preservation rate", "jx_basket_preserver", AddOptions({1,.95}, true, true), .95, nil),
   }
