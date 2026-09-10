@@ -84,6 +84,25 @@ func TestDSTEntrypointPreservesOldCacheWhenRefreshIsIncomplete(t *testing.T) {
 	}
 }
 
+func TestDSTEntrypointFallsBackToCompleteCacheWhenRefreshIsIncomplete(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, false)
+	for _, id := range []string{"111", "222"} {
+		writeTestFile(t, filepath.Join(dataDir, "ugc_mods", "content", "322330", id, "modinfo.lua"), "cached")
+	}
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("expected complete previous cache to keep the server available: %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "Continuing with the previous verified GamePanel DST Workshop cache.") {
+		t.Fatalf("expected verified cache fallback message, got:\n%s", output)
+	}
+	log := readTestFile(t, filepath.Join(dataDir, "fake-server.log"))
+	if !strings.Contains(log, "-skip_update_server_mods") {
+		t.Fatalf("expected normal shard startup with the previous cache, got %q", log)
+	}
+}
+
 func TestDSTEntrypointDownloadsAndLinksLegacyWorkshopMod(t *testing.T) {
 	root, dataDir, script := dstEntrypointFixture(t, false)
 	clusterDir := filepath.Join(dataDir, "dst", "GamePanelLite")

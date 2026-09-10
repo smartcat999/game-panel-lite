@@ -39,6 +39,38 @@ export function updateProviderConfigPath(
   };
 }
 
+const dstGameModeOverrides: Record<string, Record<string, string>> = {
+  survival: {
+    spawnmode: "fixed",
+    ghostenabled: "always",
+    portalresurection: "none",
+    ghostsanitydrain: "always",
+    resettime: "default"
+  },
+  endless: {
+    spawnmode: "fixed",
+    ghostenabled: "always",
+    portalresurection: "always",
+    ghostsanitydrain: "none",
+    resettime: "none"
+  },
+  wilderness: {
+    spawnmode: "scatter",
+    ghostenabled: "none",
+    portalresurection: "none",
+    ghostsanitydrain: "none",
+    resettime: "none"
+  }
+};
+
+export function updateDSTGameModePayload(payload: ProviderConfigPayload, gameMode: string): ProviderConfigPayload {
+  let updated = updateProviderConfigPath(payload, "gameplay.gameMode", gameMode);
+  for (const [key, value] of Object.entries(dstGameModeOverrides[gameMode] ?? {})) {
+    updated = updateProviderConfigPath(updated, `world.overrides.${key}`, value);
+  }
+  return updated;
+}
+
 export function providerConfigValue(payload: ProviderConfigPayload | undefined, path: string): unknown {
   const parts = path.split(".").filter(Boolean);
   let cursor: unknown = payload;
