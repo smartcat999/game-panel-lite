@@ -12,6 +12,8 @@ This Compose project runs a fresh v2 control plane, Region plane, node agent, Po
 6. Stop the old deployment, change `GAMEPANEL_PUBLIC_PORT` to `3005`, and recreate only the v2 nginx service.
 7. Repeat health and browser checks on port 3005. Only then remove the old containers; keep their deployment files and data until the rollback window closes.
 
+nginx resolves the `web` and `control-plane` service names through Docker DNS on each validity window. Release verification must recreate both upstream services without recreating nginx, then prove `/health` and `/login` still succeed; this catches stale container-address regressions during rolling replacement.
+
 ## Rollback
 
 1. Stop `gamepanel-platform-v2` nginx, without deleting v2 volumes or `/var/lib/gamepanel-v2`.
