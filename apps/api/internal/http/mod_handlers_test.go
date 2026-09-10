@@ -379,6 +379,74 @@ func TestTModLoaderModEnabledEndpoint(t *testing.T) {
 	}
 }
 
+func TestDSTModConfigurationEndpointsLocalizeValidateAndPersist(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("dst-config", cfg.DataDir)
+	server.GameKey = domain.GameDST
+	server.ProviderKey = domain.ProviderDST
+	server.ConfigPayload = map[string]any{
+		"identity": map[string]any{"clusterName": "Keep Me"},
+		"mods":     map[string]any{"workshopIds": []any{"1289779251"}},
+	}
+	createTestServer(t, db, server)
+	item := domain.ModFile{
+		ID: "cherry", InstanceID: server.ID, GameKey: domain.GameDST, ProviderKey: domain.ProviderDST,
+		FileName: "workshop-1289779251", Source: "workshop", WorkshopID: "1289779251", Enabled: true, CreatedAt: time.Now(),
+	}
+	if err := db.CreateMod(context.Background(), &item); err != nil {
+		t.Fatal(err)
+	}
+	modDir := filepath.Join(server.DataDir, "ugc_mods", "content", "322330", item.WorkshopID)
+	if err := os.MkdirAll(modDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	modInfo := `
+local descs = { fast = "Faster generation" }
+local options = { toggle = {{description = "Disabled", data = false}, {description = "Enabled", data = true}} }
+local configs = { fast = "Fast generation" }
+if locale == "zh" or locale == "zht" then
+  descs = { fast = "加快地图生成" }
+  options = { toggle = {{description = "关闭", data = false}, {description = "开启", data = true}} }
+  configs = { fast = "快速生成" }
+end
+configuration_options = {{name = "biome_fastgen", label = configs.fast, hover = descs.fast, options = options.toggle, default = false}}
+`
+	if err := os.WriteFile(filepath.Join(modDir, "modinfo.lua"), []byte(modInfo), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	get := httptest.NewRecorder()
+	router.ServeHTTP(get, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/dst-config/mods/cherry/configuration?locale=zh-CN", nil))
+	if get.Code != stdhttp.StatusOK || !strings.Contains(get.Body.String(), "快速生成") || !strings.Contains(get.Body.String(), "开启") {
+		t.Fatalf("expected localized DST config schema, got %d: %s", get.Code, get.Body.String())
+	}
+
+	put := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPut, "/api/servers/dst-config/mods/cherry/configuration?locale=zh", strings.NewReader(`{"values":{"biome_fastgen":true}}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(put, request)
+	if put.Code != stdhttp.StatusOK {
+		t.Fatalf("expected DST config update 200, got %d: %s", put.Code, put.Body.String())
+	}
+	persisted, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Spec.Config["identity"].(map[string]any)["clusterName"] != "Keep Me" {
+		t.Fatalf("expected unrelated server config to be preserved, got %+v", persisted.Spec.Config)
+	}
+	values := dstModConfigurationValues(persisted, item.WorkshopID)
+	if values["biome_fastgen"] != true {
+		t.Fatalf("expected mod configuration to be persisted, got %+v", values)
+	}
+
+	invalid := httptest.NewRecorder()
+	router.ServeHTTP(invalid, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/dst-config/mods/cherry/configuration", strings.NewReader(`{"values":{"biome_fastgen":"yes"}}`)))
+	if invalid.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected invalid choice to be rejected, got %d: %s", invalid.Code, invalid.Body.String())
+	}
+}
+
 func TestRunningTModLoaderServerAllowsModMutation(t *testing.T) {
 	router, db, cfg := newTestRouter(t)
 	server := testServer("tmod", cfg.DataDir)

@@ -740,6 +740,51 @@ paths:
           description: Deleted mod
         "409":
           description: A game update is active for this server
+  /api/servers/{id}/mods/{modId}/configuration:
+    get:
+      summary: Read localized Don't Starve Together mod configuration options
+      parameters:
+        - in: query
+          name: locale
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mod configuration schema and saved values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DSTModConfiguration"
+        "409":
+          description: The Workshop mod files have not been downloaded yet
+    put:
+      summary: Save validated Don't Starve Together mod configuration values
+      parameters:
+        - in: query
+          name: locale
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [values]
+              properties:
+                values:
+                  $ref: "#/components/schemas/DSTModConfigurationValues"
+      responses:
+        "200":
+          description: Saved mod configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DSTModConfiguration"
+        "400":
+          description: A submitted option or value is not declared by the mod
+        "409":
+          description: The mod is unavailable or a server lifecycle action is in progress
   /api/servers/{id}/mod-configs:
     get:
       summary: List safe tModLoader ModConfigs JSON files
@@ -1863,6 +1908,55 @@ components:
         content:
           type: string
           description: Present only when reading or mutating one file.
+    DSTModConfigurationValue:
+      oneOf:
+        - type: string
+        - type: number
+        - type: boolean
+    DSTModConfigChoice:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        description:
+          type: string
+        value:
+          $ref: "#/components/schemas/DSTModConfigurationValue"
+    DSTModConfigOption:
+      type: object
+      required: [name, label, default, choices]
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        default:
+          $ref: "#/components/schemas/DSTModConfigurationValue"
+        choices:
+          type: array
+          items:
+            $ref: "#/components/schemas/DSTModConfigChoice"
+        section:
+          type: boolean
+    DSTModConfigurationValues:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/DSTModConfigurationValue"
+    DSTModConfiguration:
+      type: object
+      required: [workshopId, options, values]
+      properties:
+        workshopId:
+          type: string
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/DSTModConfigOption"
+        values:
+          $ref: "#/components/schemas/DSTModConfigurationValues"
     TerrariaConfig:
       type: object
       required: [worldName, worldSize, worldEvil, difficulty, maxPlayers, port, secure, autoCreateWorld]

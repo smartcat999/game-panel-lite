@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, AuthBootstrap, Backup, ComputeNode, ConfigPreset, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, AuthBootstrap, Backup, ComputeNode, ConfigPreset, DSTModConfiguration, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -1052,6 +1052,22 @@ export async function listMods(serverId: string): Promise<ModFile[]> {
   }
   const payload = (await response.json()) as ApiModFile[];
   return payload.map(toModFile);
+}
+
+export async function getDSTModConfiguration(serverId: string, modId: string, locale: string): Promise<DSTModConfiguration> {
+  const query = new URLSearchParams({ locale });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}/configuration?${query}`, { cache: "no-store" });
+  return readPayload<DSTModConfiguration>(response, "Unable to load mod configuration");
+}
+
+export async function saveDSTModConfiguration(serverId: string, modId: string, locale: string, values: DSTModConfiguration["values"]): Promise<DSTModConfiguration> {
+  const query = new URLSearchParams({ locale });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}/configuration?${query}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ values })
+  });
+  return readPayload<DSTModConfiguration>(response, "Unable to save mod configuration");
 }
 
 export async function listModConfigs(serverId: string): Promise<ModConfigFile[]> {

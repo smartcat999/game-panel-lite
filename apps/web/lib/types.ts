@@ -343,6 +343,27 @@ export type ModConfigFile = {
   content?: string;
 };
 
+export type DSTModConfigChoice = {
+  label: string;
+  description?: string;
+  value: string | number | boolean;
+};
+
+export type DSTModConfigOption = {
+  name: string;
+  label: string;
+  description?: string;
+  default: string | number | boolean;
+  choices: DSTModConfigChoice[];
+  section?: boolean;
+};
+
+export type DSTModConfiguration = {
+  workshopId: string;
+  options: DSTModConfigOption[];
+  values: Record<string, string | number | boolean>;
+};
+
 export type RecommendedMod = {
   rank: number;
   source?: string;
