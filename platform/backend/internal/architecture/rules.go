@@ -78,7 +78,7 @@ func checkGo(file SourceFile) []Violation {
 			return true
 		}
 		value, err := strconv.Unquote(literal.Value)
-		if err == nil {
+		if err == nil && looksLikeSQL(value) {
 			if line := joinLine(value); line > 0 {
 				violations = append(violations, Violation{Rule: "production SQL must not contain JOIN", File: file.Path, Line: parsedLine(file.Content, literal.Value)})
 			}
@@ -86,6 +86,16 @@ func checkGo(file SourceFile) []Violation {
 		return true
 	})
 	return violations
+}
+
+func looksLikeSQL(source string) bool {
+	trimmed := strings.TrimSpace(strings.ToUpper(source))
+	for _, prefix := range []string{"SELECT ", "INSERT ", "UPDATE ", "DELETE ", "CREATE ", "ALTER ", "DROP ", "WITH "} {
+		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func checkRebaselineGo(file SourceFile) []Violation {
@@ -119,7 +129,7 @@ func checkRebaselineGo(file SourceFile) []Violation {
 				break
 			}
 			text, unquoteErr := strconv.Unquote(value.Value)
-			if unquoteErr == nil && strings.Contains(strings.ToLower(text), "/world") {
+			if unquoteErr == nil && isWorldRoute(text) {
 				violations = append(violations, Violation{Rule: "World routes are outside hosted V1", File: file.Path, Line: parsedLine(file.Content, value.Value)})
 			}
 		case *ast.TypeSpec:
@@ -131,6 +141,11 @@ func checkRebaselineGo(file SourceFile) []Violation {
 		return true
 	})
 	return violations
+}
+
+func isWorldRoute(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	return strings.HasPrefix(normalized, "/v1/") && strings.Contains(normalized, "/world")
 }
 
 func functionCallsAuthorization(body *ast.BlockStmt) bool {

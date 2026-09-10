@@ -33,6 +33,17 @@ func TestRulesRejectDeliberateViolations(t *testing.T) {
 	}
 }
 
+func TestJoinRuleOnlyInspectsSQLLiterals(t *testing.T) {
+	files := []SourceFile{
+		{Path: "/platform/backend/internal/example/model.go", Content: "package example\nconst purpose = `join`"},
+		{Path: "/platform/backend/internal/example/query.go", Content: "package example\nconst query = `SELECT * FROM instances JOIN nodes ON nodes.id = instances.node_id`"},
+	}
+	violations := Check(files)
+	if len(violations) != 1 || violations[0].File != files[1].Path {
+		t.Fatalf("expected only the SQL literal to fail, got %#v", violations)
+	}
+}
+
 func TestRebaselineRulesRejectDeliberateViolations(t *testing.T) {
 	files := []SourceFile{
 		{Path: "/platform/backend/internal/example/model.go", Content: "package example\ntype Session struct { IsAdmin bool }\ntype Plan struct{}"},
@@ -46,11 +57,18 @@ func TestRebaselineRulesRejectDeliberateViolations(t *testing.T) {
 	}
 }
 
+func TestWorldRuleAllowsProviderRuntimePaths(t *testing.T) {
+	files := []SourceFile{{Path: "/platform/backend/internal/gameprovider/provider.go", Content: "package gameprovider\nconst dataPath = `/data/Worlds`"}}
+	if violations := CheckRebaseline(files); len(violations) != 0 {
+		t.Fatalf("provider runtime path was mistaken for a World HTTP route: %#v", violations)
+	}
+}
+
 func TestRebaselineNewSourcePassesRules(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	backendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	var files []SourceFile
-	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/deliveryapi", "internal/deliverycontrol", "internal/deliveryworker", "internal/eventtransport", "internal/httpfilter", "internal/instanceaction", "internal/instanceconfiguration", "internal/instanceobservability", "internal/instanceprovisioning", "internal/messaging", "internal/nodeworkload", "internal/providercontract", "internal/regionaldelivery", "internal/regionaltask", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql", "migrations/global/0007_async_delivery.sql", "migrations/global/0008_provider_driven_operation.sql", "migrations/region/0004_async_delivery.sql", "migrations/region/0005_provider_driven_operation.sql"} {
+	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/deliveryapi", "internal/deliverycontrol", "internal/deliveryworker", "internal/eventtransport", "internal/gameprovider", "internal/httpfilter", "internal/instanceaction", "internal/instanceconfiguration", "internal/instanceobservability", "internal/instanceprovisioning", "internal/messaging", "internal/nodeworkload", "internal/productioncatalog", "internal/productionseed", "internal/providercontract", "internal/regionaldelivery", "internal/regionaltask", "internal/runtimeprovider", "internal/workspaceapi", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql", "migrations/global/0007_async_delivery.sql", "migrations/global/0008_provider_driven_operation.sql", "migrations/region/0004_async_delivery.sql", "migrations/region/0005_provider_driven_operation.sql", "migrations/region/0006_node_task_ownership.sql"} {
 		path := filepath.Join(backendRoot, relative)
 		info, err := os.Stat(path)
 		if err != nil {

@@ -275,6 +275,26 @@ func (p *Postgres) Instance(ctx context.Context, workspaceID, instanceID string)
 	return instance, nil
 }
 
+func (p *Postgres) ListInstances(ctx context.Context, workspaceID string, limit int) ([]Instance, error) {
+	if limit < 1 || limit > 100 {
+		limit = 100
+	}
+	rows, err := p.database.QueryContext(ctx, `SELECT id, workspace_id, region_id, name, provider_release_id, game_version, quote_id, instance_revision_id, placement_version, cpu_milli, memory_mib, disk_gib, configuration, mod_lock, listener_requirements, desired_state, observed_state, observation_sequence, endpoint_bindings, latest_operation_id, created_at, updated_at FROM managed_instances WHERE workspace_id=$1 ORDER BY created_at DESC,id LIMIT $2`, workspaceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]Instance, 0)
+	for rows.Next() {
+		instance, err := scanInstance(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, instance)
+	}
+	return result, rows.Err()
+}
+
 func (p *Postgres) Operation(ctx context.Context, workspaceID, operationID string) (Operation, error) {
 	operation, err := operationByID(ctx, p.database, operationID)
 	if err != nil || operation.WorkspaceID != workspaceID {
@@ -449,9 +469,13 @@ func scanOperation(row rowScanner) (Operation, error) {
 }
 
 func instanceByID(ctx context.Context, query persistence.DBTX, id string) (Instance, error) {
+	return scanInstance(query.QueryRowContext(ctx, `SELECT id, workspace_id, region_id, name, provider_release_id, game_version, quote_id, instance_revision_id, placement_version, cpu_milli, memory_mib, disk_gib, configuration, mod_lock, listener_requirements, desired_state, observed_state, observation_sequence, endpoint_bindings, latest_operation_id, created_at, updated_at FROM managed_instances WHERE id=$1`, id))
+}
+
+func scanInstance(row rowScanner) (Instance, error) {
 	var instance Instance
 	var configuration, modLock, listeners, endpoints []byte
-	err := query.QueryRowContext(ctx, `SELECT id, workspace_id, region_id, name, provider_release_id, game_version, quote_id, instance_revision_id, placement_version, cpu_milli, memory_mib, disk_gib, configuration, mod_lock, listener_requirements, desired_state, observed_state, observation_sequence, endpoint_bindings, latest_operation_id, created_at, updated_at FROM managed_instances WHERE id=$1`, id).Scan(&instance.ID, &instance.WorkspaceID, &instance.RegionID, &instance.Name, &instance.ProviderReleaseID, &instance.GameVersion, &instance.QuoteID, &instance.InstanceRevisionID, &instance.PlacementVersion, &instance.ResourceSpec.CPUMilli, &instance.ResourceSpec.MemoryMiB, &instance.ResourceSpec.DiskGiB, &configuration, &modLock, &listeners, &instance.DesiredState, &instance.ObservedState, &instance.ObservationSequence, &endpoints, &instance.LatestOperationID, &instance.CreatedAt, &instance.UpdatedAt)
+	err := row.Scan(&instance.ID, &instance.WorkspaceID, &instance.RegionID, &instance.Name, &instance.ProviderReleaseID, &instance.GameVersion, &instance.QuoteID, &instance.InstanceRevisionID, &instance.PlacementVersion, &instance.ResourceSpec.CPUMilli, &instance.ResourceSpec.MemoryMiB, &instance.ResourceSpec.DiskGiB, &configuration, &modLock, &listeners, &instance.DesiredState, &instance.ObservedState, &instance.ObservationSequence, &endpoints, &instance.LatestOperationID, &instance.CreatedAt, &instance.UpdatedAt)
 	if err != nil {
 		return Instance{}, err
 	}

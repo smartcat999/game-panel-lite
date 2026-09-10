@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { CreateInstancePage } from "@/features/prototype/workspace-pages";
+import { CreateInstancePage } from "@/features/production/workspace-pages";
 
 export default async function NewInstancePage({ params }: { params: Promise<{ workspaceSlug: string }> }) {
   const { workspaceSlug } = await params;

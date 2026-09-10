@@ -29,6 +29,7 @@ Every event name carries its major schema version, such as `deployment.desired.v
 | Inbox lag | less than 30 seconds | oldest pending inbox message above 60 seconds |
 | Outbox lag | less than 30 seconds | oldest unpublished outbox message above 60 seconds |
 | Node freshness | heartbeat within one lease interval | any ready Node misses two lease intervals |
+| Instance readiness | 99% of accepted creates ready within 10 minutes | any create exceeds 15 minutes or reports ready before listener and Provider marker checks pass |
 | Backup completion | 99% within 15 minutes | failure ratio above 5% or age above 30 minutes |
 
 Page on sustained Region database unavailability, fencing rejection spikes, or backup integrity mismatch. Ticket isolated single-task failures with their Region, assignment, Logical Instance, and fencing token identifiers; do not include passwords or signed transfer URLs.
@@ -48,6 +49,18 @@ Cross-Region restore is intentionally unsupported. Migration requires a separate
 When a Region loses broker or Control Plane connectivity, keep Region Controller, Region PostgreSQL, and Node Agents running. Existing deployments continue reconciling from regional durable state. Stop new global placement into the Region, inspect pending inbox/outbox age, and avoid manual database edits. After connectivity returns, allow idempotent redelivery to drain naturally and confirm sequence guards reject stale observations.
 
 When a Node is lost, let its lease expire, mark it stale, and schedule or explicitly override onto a ready compatible Node. Never extend a dead Node lease or reuse its fencing token. Escalate if capacity cannot host the displaced workload.
+
+## Workload network runbook
+
+Game workloads need unrestricted internet egress for Steam updates and controlled mod downloads, but must not reach host, private management, metadata, or link-local networks. The `workload-firewall` service owns the `DOCKER-USER` policy for containers attached to `gamepanel-workloads`; application containers do not modify host firewall state.
+
+Before and after each rollout, run the firewall self-check, prove an anchor workload can reach a public HTTPS endpoint, and prove it cannot reach the management address. A failed self-check blocks rollout. Do not solve update failures by attaching game workloads to the management network or by removing RFC1918/link-local rejection rules.
+
+## Replacement deployment runbook
+
+Bring up the new Compose project on port 3006 with fresh databases and a separate data root. Complete health, login, Terraria, tModLoader, lifecycle, console, logs, backup/restore, egress isolation, and real-browser checks before touching the old project. Stop the old project, bind the candidate nginx to port 3005, and repeat health and browser checks. Only then remove old containers and their network without `--volumes`; retain the old release directory, database volumes, and data root for the rollback window.
+
+Rollback changes traffic ownership only: stop the new nginx, restart the recorded previous Compose release on port 3005, and verify health and login. Never import or rewrite old business records as part of either cutover direction.
 
 ## Validation commands
 

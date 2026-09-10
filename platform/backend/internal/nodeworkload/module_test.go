@@ -14,7 +14,7 @@ func TestRuntimeReplacementPreservesInstanceHistoryAndInternetEgress(t *testing.
 	sink := &MemoryTelemetry{}
 	game := &FakeGameProvider{Artifact: "fixture:v1", Metrics: []instanceobservability.MetricSample{{ID: "met_players", Metric: "players.online", Value: 2, Unit: "count", Source: "provider-api", SampledAt: now}}}
 	manifest := providercontract.Manifest{ProviderReleaseID: "gpr_fixture", Capabilities: []string{"logs", "game-metrics", "console", "backup"}, Metrics: []providercontract.Metric{{Key: "players.online", Source: "provider-api"}}}
-	intent := Intent{WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_one", ProviderReleaseID: "gpr_fixture", GameVersion: "1.0", ApplyBehavior: "recreate-required", DataScope: "instances/lin_one"}
+	intent := Intent{WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_one", ProviderReleaseID: "gpr_fixture", GameVersion: "1.0", DesiredState: "running", ApplyBehavior: "recreate-required", CPUMilli: 1000, MemoryMiB: 1024, DiskGiB: 10, FencingToken: 1, DataScope: "instances/lin_one"}
 	firstRuntime := &FakeRuntimeProvider{Name: "alpha"}
 	first := New(game, firstRuntime, sink, []string{"10.0.0.0/8"})
 	if _, err := first.Reconcile(context.Background(), manifest, intent, 1, now); err != nil {
@@ -39,7 +39,7 @@ func TestGameMetricsAreConditional(t *testing.T) {
 	sink := &MemoryTelemetry{}
 	game := &FakeGameProvider{Metrics: []instanceobservability.MetricSample{{ID: "met_players", Metric: "players.online", Source: "provider-api", SampledAt: now}}}
 	module := New(game, &FakeRuntimeProvider{Name: "one"}, sink, nil)
-	intent := Intent{WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_one", ProviderReleaseID: "gpr_fixture", GameVersion: "1.0", ApplyBehavior: "recreate-required", DataScope: "instances/lin_one"}
+	intent := Intent{WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_one", ProviderReleaseID: "gpr_fixture", GameVersion: "1.0", DesiredState: "running", ApplyBehavior: "recreate-required", CPUMilli: 1000, MemoryMiB: 1024, DiskGiB: 10, FencingToken: 1, DataScope: "instances/lin_one"}
 	if _, err := module.Reconcile(context.Background(), providercontract.Manifest{ProviderReleaseID: "gpr_fixture", Capabilities: []string{"logs"}}, intent, 1, now); err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +53,8 @@ func TestConsoleAndBackupAreCapabilityGated(t *testing.T) {
 	runtime := &FakeRuntimeProvider{Name: "one"}
 	module := New(game, runtime, &MemoryTelemetry{}, nil)
 	manifest := providercontract.Manifest{Capabilities: []string{"console", "backup"}}
-	if err := module.Console(context.Background(), manifest, RuntimeHandle{RuntimeAttemptID: "rta_one"}, "status"); err != nil || len(game.ConsoleHistory) != 1 {
-		t.Fatalf("console history=%#v err=%v", game.ConsoleHistory, err)
+	if err := module.Console(context.Background(), manifest, RuntimeHandle{RuntimeAttemptID: "rta_one", RuntimeID: "container-one"}, "status"); err != nil || len(runtime.Commands) != 1 {
+		t.Fatalf("console history=%#v err=%v", runtime.Commands, err)
 	}
 	artifact, err := module.Backup(context.Background(), manifest, "lin_one", "object://backup")
 	if err != nil || artifact.ObjectKey == "" {

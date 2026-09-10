@@ -25,7 +25,7 @@ import (
 
 func TestDurableBackupAndSameRegionRestoreFlow(t *testing.T) {
 	global := openPhase5Database(t, "GAMEPANEL_GLOBAL_TEST_DSN", "global", []string{"0002_product_instance_messaging.sql", "0007_async_delivery.sql", "0008_provider_driven_operation.sql"})
-	region := openPhase5Database(t, "GAMEPANEL_REGION_TEST_DSN", "region", []string{"0001_region_execution.sql", "0004_async_delivery.sql", "0005_provider_driven_operation.sql"})
+	region := openPhase5Database(t, "GAMEPANEL_REGION_TEST_DSN", "region", []string{"0001_region_execution.sql", "0004_async_delivery.sql", "0005_provider_driven_operation.sql", "0006_node_task_ownership.sql"})
 	now := time.Now().UTC().Truncate(time.Second)
 	authorityKey := []byte("authority-key-012345678901234567")
 	registry := providercontract.NewRegistry(providercontract.NewPostgresStore(global), []byte("provider-signing-key-012345678901"))
@@ -56,7 +56,7 @@ func TestDurableBackupAndSameRegionRestoreFlow(t *testing.T) {
 	if accepted, err := regional.ReceiveBackup(context.Background(), messageID, requested, now.Add(time.Second)); err != nil || !accepted {
 		t.Fatalf("receive accepted=%v err=%v", accepted, err)
 	}
-	task, ok, err := regional.Claim(context.Background(), "node-agent", now.Add(2*time.Second))
+	task, ok, err := regional.Claim(context.Background(), "node_one", "node-agent", now.Add(2*time.Second))
 	if err != nil || !ok {
 		t.Fatalf("claim task=%#v ok=%v err=%v", task, ok, err)
 	}

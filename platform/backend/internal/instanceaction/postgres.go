@@ -112,6 +112,18 @@ type BackupObservation struct {
 	ObservedAt              time.Time               `json:"observedAt"`
 }
 
+type ActionObservation struct {
+	MessageID         string    `json:"-"`
+	WorkspaceID       string    `json:"workspaceId"`
+	OperationID       string    `json:"operationId"`
+	LogicalInstanceID string    `json:"logicalInstanceId"`
+	RegionID          string    `json:"regionId"`
+	Kind              string    `json:"kind"`
+	Status            string    `json:"status"`
+	FailureCode       string    `json:"failureCode,omitempty"`
+	ObservedAt        time.Time `json:"observedAt"`
+}
+
 func NewPostgres(database *sql.DB, instances InstanceReader, providers ProviderRegistry, authorityKey []byte) *Postgres {
 	return &Postgres{database: database, instances: instances, providers: providers, authorityKey: append([]byte(nil), authorityKey...)}
 }
@@ -221,7 +233,31 @@ func (p *Postgres) ApplyBackupObservation(ctx context.Context, observation Backu
 		} else if observation.Status == "failed" {
 			status = "failed"
 		}
-		_, err = query.ExecContext(ctx, `UPDATE operations SET status=$2,failure_code=NULLIF($3,''),updated_at=$4 WHERE id=$1`, observation.OperationID, status, observation.FailureCode, observation.ObservedAt)
+		steps := []deliverycontrol.Step{{Key: "accepted", Label: "Request accepted", Status: "succeeded"}, {Key: "executed", Label: "Executed by node", Status: status}}
+		_, err = query.ExecContext(ctx, `UPDATE operations SET status=$2,steps=$3,failure_code=NULLIF($4,''),updated_at=$5 WHERE id=$1`, observation.OperationID, status, jsonValue(steps), observation.FailureCode, observation.ObservedAt)
+		return err
+	})
+}
+
+func (p *Postgres) ApplyActionObservation(ctx context.Context, observation ActionObservation) (bool, error) {
+	if observation.MessageID == "" || observation.WorkspaceID == "" || observation.OperationID == "" || observation.LogicalInstanceID == "" || observation.RegionID == "" || observation.Kind != "console" && observation.Kind != "restore" || observation.Status != "completed" && observation.Status != "failed" || observation.ObservedAt.IsZero() {
+		return false, ErrInvalidAction
+	}
+	return messaging.NewPostgres(p.database).HandleOnce(ctx, contract.EventID(observation.MessageID), "instance.action.observed.v1", observation.ObservedAt, func(query persistence.DBTX) error {
+		var workspaceID, resourceID, kind string
+		if err := query.QueryRowContext(ctx, `SELECT workspace_id,resource_id,kind FROM operations WHERE id=$1`, observation.OperationID).Scan(&workspaceID, &resourceID, &kind); err != nil {
+			return err
+		}
+		expectedKind := "instance." + observation.Kind
+		if workspaceID != observation.WorkspaceID || resourceID != observation.LogicalInstanceID || kind != expectedKind {
+			return ErrInvalidAction
+		}
+		status := "succeeded"
+		if observation.Status == "failed" {
+			status = "failed"
+		}
+		steps := []deliverycontrol.Step{{Key: "accepted", Label: "Request accepted", Status: "succeeded"}, {Key: "executed", Label: "Executed by node", Status: status}}
+		_, err := query.ExecContext(ctx, `UPDATE operations SET status=$2,steps=$3,failure_code=NULLIF($4,''),updated_at=$5 WHERE id=$1`, observation.OperationID, status, jsonValue(steps), observation.FailureCode, observation.ObservedAt)
 		return err
 	})
 }
@@ -244,6 +280,14 @@ func (p *Postgres) ListBackups(ctx context.Context, workspaceID string, limit in
 		result = append(result, backup)
 	}
 	return result, rows.Err()
+}
+
+func (p *Postgres) Backup(ctx context.Context, workspaceID, backupID string) (Backup, error) {
+	backup, err := backupByID(ctx, p.database, backupID)
+	if err != nil || backup.WorkspaceID != workspaceID {
+		return Backup{}, ErrInvalidAction
+	}
+	return backup, nil
 }
 
 func (p *Postgres) instanceCapability(ctx context.Context, workspaceID, instanceID, capability string) (deliverycontrol.Instance, providercontract.Manifest, error) {

@@ -31,13 +31,17 @@ func TestTelemetryRemainsInstanceKeyedAcrossRuntimeAttempts(t *testing.T) {
 	}
 	service := NewPostgres(database, registry)
 	confidence, lowConfidence := 1.0, 0.2
-	first := Observation{MessageID: "msg_first", WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_one", RuntimeAttemptID: "rta_alpha", Sequence: 1, Logs: []LogEntry{{ID: "log_alpha", Stream: "system", Message: "alpha ready", ObservedAt: now}}, Metrics: []MetricSample{{ID: "met_cpu", Metric: "cpu.utilization", Value: .1, Unit: "ratio", Source: "platform", SampledAt: now}, {ID: "met_players", Metric: "players.online", Value: 4, Unit: "count", Source: "provider-api", Confidence: &confidence, FreshUntil: pointerTime(now.Add(time.Minute)), SampledAt: now}, {ID: "met_untrusted", Metric: "players.online", Value: 9, Unit: "count", Source: "provider-api", Confidence: &lowConfidence, FreshUntil: pointerTime(now.Add(time.Minute)), SampledAt: now}}, ObservedAt: now}
+	first := Observation{MessageID: "msg_first", WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_one", RuntimeAttemptID: "rta_alpha", FencingToken: 1, Sequence: 1, Logs: []LogEntry{{ID: "log_alpha", Stream: "system", Message: "alpha ready", ObservedAt: now}}, Metrics: []MetricSample{{ID: "met_cpu", Metric: "cpu.utilization", Value: .1, Unit: "ratio", Source: "platform", SampledAt: now}, {ID: "met_players", Metric: "players.online", Value: 4, Unit: "count", Source: "provider-api", Confidence: &confidence, FreshUntil: pointerTime(now.Add(time.Minute)), SampledAt: now}, {ID: "met_untrusted", Metric: "players.online", Value: 9, Unit: "count", Source: "provider-api", Confidence: &lowConfidence, FreshUntil: pointerTime(now.Add(time.Minute)), SampledAt: now}}, ObservedAt: now}
 	if changed, err := service.Handle(context.Background(), first); err != nil || !changed {
 		t.Fatalf("first changed=%v err=%v", changed, err)
 	}
-	second := Observation{MessageID: "msg_second", WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_two", RuntimeAttemptID: "rta_beta", Sequence: 2, Logs: []LogEntry{{ID: "log_beta", Stream: "system", Message: "beta ready", ObservedAt: now.Add(time.Second)}}, Metrics: []MetricSample{}, ObservedAt: now.Add(time.Second)}
+	second := Observation{MessageID: "msg_second", WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_two", RuntimeAttemptID: "rta_beta", FencingToken: 2, Sequence: 2, Logs: []LogEntry{{ID: "log_beta", Stream: "system", Message: "beta ready", ObservedAt: now.Add(time.Second)}}, Metrics: []MetricSample{}, ObservedAt: now.Add(time.Second)}
 	if changed, err := service.Handle(context.Background(), second); err != nil || !changed {
 		t.Fatalf("second changed=%v err=%v", changed, err)
+	}
+	empty := Observation{MessageID: "msg_empty", WorkspaceID: "ws_one", LogicalInstanceID: "lin_one", RegionID: "reg_one", RegionalDeploymentID: "rdp_two", RuntimeAttemptID: "rta_beta", FencingToken: 2, Sequence: 3, ObservedAt: now.Add(2 * time.Second)}
+	if changed, err := service.Handle(context.Background(), empty); err != nil || !changed {
+		t.Fatalf("empty changed=%v err=%v", changed, err)
 	}
 	logs, err := service.Logs(context.Background(), "ws_one", "lin_one", 500)
 	if err != nil || len(logs) != 2 || logs[0].RuntimeAttemptID == logs[1].RuntimeAttemptID {

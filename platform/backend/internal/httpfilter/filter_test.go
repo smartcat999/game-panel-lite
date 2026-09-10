@@ -161,7 +161,7 @@ func TestResourceTypesMapToOneAuthoritativeTable(t *testing.T) {
 		{ResourceWorkspace, "FROM workspaces", authorization.ScopeWorkspace},
 		{ResourceInstance, "FROM managed_instances", authorization.ScopeWorkspace},
 		{ResourceOperation, "FROM operations", authorization.ScopeWorkspace},
-		{ResourceBackup, "FROM backup_requests", authorization.ScopeWorkspace},
+		{ResourceBackup, "FROM managed_backups", authorization.ScopeWorkspace},
 	} {
 		query, scope, err := scopeQuery(test.resource)
 		if err != nil || !strings.Contains(query, test.table) || scope != test.scope || strings.Contains(strings.ToUpper(query), " JOIN ") {

@@ -78,7 +78,7 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, messageID string, desired
 		configuration, _ := json.Marshal(desired.Configuration)
 		listeners, _ := json.Marshal(desired.ListenerRequirements)
 		modLock, _ := json.Marshal(desired.ModLock)
-		_, err = tx.ExecContext(ctx, `UPDATE regional_delivery_states SET instance_revision_id=$2,operation_id=$3,desired_state=$4,provider_release_id=$5,game_version=$6,apply_behavior=$7,configuration=$8,mod_lock=$9,listener_requirements=$10,phase=$11,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,telemetry_sequence=0,failure_code=NULL,updated_at=$12 WHERE id=$1`, current.ID, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.GameVersion, desired.ApplyBehavior, configuration, modLock, listeners, PhaseEndpoints, receivedAt)
+		_, err = tx.ExecContext(ctx, `UPDATE regional_delivery_states SET instance_revision_id=$2,operation_id=$3,desired_state=$4,provider_release_id=$5,game_version=$6,apply_behavior=$7,configuration=$8,mod_lock=$9,listener_requirements=$10,phase=$11,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,failure_code=NULL,updated_at=$12 WHERE id=$1`, current.ID, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.GameVersion, desired.ApplyBehavior, configuration, modLock, listeners, PhaseEndpoints, receivedAt)
 		if err != nil {
 			return false, err
 		}
@@ -99,7 +99,7 @@ func (p *Postgres) ReceiveDesired(ctx context.Context, messageID string, desired
 	configuration, _ := json.Marshal(desired.Configuration)
 	listeners, _ := json.Marshal(desired.ListenerRequirements)
 	modLock, _ := json.Marshal(desired.ModLock)
-	_, err = tx.ExecContext(ctx, `INSERT INTO regional_delivery_states (id,workspace_id,logical_instance_id,region_id,placement_version,instance_revision_id,operation_id,desired_state,provider_release_id,game_version,apply_behavior,cpu_milli,memory_mib,disk_gib,configuration,mod_lock,listener_requirements,phase,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (logical_instance_id) DO UPDATE SET id=EXCLUDED.id,workspace_id=EXCLUDED.workspace_id,region_id=EXCLUDED.region_id,placement_version=EXCLUDED.placement_version,instance_revision_id=EXCLUDED.instance_revision_id,operation_id=EXCLUDED.operation_id,desired_state=EXCLUDED.desired_state,provider_release_id=EXCLUDED.provider_release_id,game_version=EXCLUDED.game_version,apply_behavior=EXCLUDED.apply_behavior,cpu_milli=EXCLUDED.cpu_milli,memory_mib=EXCLUDED.memory_mib,disk_gib=EXCLUDED.disk_gib,configuration=EXCLUDED.configuration,mod_lock=EXCLUDED.mod_lock,listener_requirements=EXCLUDED.listener_requirements,phase=EXCLUDED.phase,node_id=NULL,fencing_token=0,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,telemetry_sequence=0,failure_code=NULL,residual_cleanup_required=false,updated_at=EXCLUDED.updated_at`, stateID, desired.WorkspaceID, desired.LogicalInstanceID, desired.RegionID, desired.PlacementVersion, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.GameVersion, desired.ApplyBehavior, desired.ResourceSpec.CPUMilli, desired.ResourceSpec.MemoryMiB, desired.ResourceSpec.DiskGiB, configuration, modLock, listeners, PhasePending, receivedAt)
+	_, err = tx.ExecContext(ctx, `INSERT INTO regional_delivery_states (id,workspace_id,logical_instance_id,region_id,placement_version,instance_revision_id,operation_id,desired_state,provider_release_id,game_version,apply_behavior,cpu_milli,memory_mib,disk_gib,configuration,mod_lock,listener_requirements,phase,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) ON CONFLICT (logical_instance_id) DO UPDATE SET id=EXCLUDED.id,workspace_id=EXCLUDED.workspace_id,region_id=EXCLUDED.region_id,placement_version=EXCLUDED.placement_version,instance_revision_id=EXCLUDED.instance_revision_id,operation_id=EXCLUDED.operation_id,desired_state=EXCLUDED.desired_state,provider_release_id=EXCLUDED.provider_release_id,game_version=EXCLUDED.game_version,apply_behavior=EXCLUDED.apply_behavior,cpu_milli=EXCLUDED.cpu_milli,memory_mib=EXCLUDED.memory_mib,disk_gib=EXCLUDED.disk_gib,configuration=EXCLUDED.configuration,mod_lock=EXCLUDED.mod_lock,listener_requirements=EXCLUDED.listener_requirements,phase=EXCLUDED.phase,node_id=NULL,fencing_token=0,reconcile_owner=NULL,reconcile_lease_until=NULL,assignment_owner=NULL,assignment_lease_until=NULL,assignment_attempts=0,observation_sequence=0,failure_code=NULL,residual_cleanup_required=false,updated_at=EXCLUDED.updated_at`, stateID, desired.WorkspaceID, desired.LogicalInstanceID, desired.RegionID, desired.PlacementVersion, desired.InstanceRevisionID, desired.OperationID, desired.DesiredState, desired.ProviderReleaseID, desired.GameVersion, desired.ApplyBehavior, desired.ResourceSpec.CPUMilli, desired.ResourceSpec.MemoryMiB, desired.ResourceSpec.DiskGiB, configuration, modLock, listeners, PhasePending, receivedAt)
 	if err != nil {
 		return false, err
 	}
@@ -159,7 +159,33 @@ func (p *Postgres) ClaimAssignment(ctx context.Context, nodeID, worker string, n
 	if err := tx.Commit(); err != nil {
 		return Assignment{}, false, err
 	}
-	return Assignment{RegionalDeliveryID: state.ID, LogicalInstanceID: state.LogicalInstanceID, NodeID: state.NodeID, FencingToken: state.FencingToken, DesiredState: state.DesiredState, ProviderReleaseID: state.ProviderReleaseID, GameVersion: state.GameVersion, ApplyBehavior: state.ApplyBehavior, ResourceSpec: state.ResourceSpec, Configuration: state.Configuration, ModLock: state.ModLock, Endpoints: endpoints, LeaseUntil: leaseUntil, Attempt: state.AssignmentAttempts}, true, nil
+	return Assignment{RegionalDeliveryID: state.ID, WorkspaceID: state.WorkspaceID, LogicalInstanceID: state.LogicalInstanceID, RegionID: state.RegionID, NodeID: state.NodeID, FencingToken: state.FencingToken, DesiredState: state.DesiredState, ProviderReleaseID: state.ProviderReleaseID, GameVersion: state.GameVersion, ApplyBehavior: state.ApplyBehavior, ResourceSpec: state.ResourceSpec, Configuration: state.Configuration, ModLock: state.ModLock, Endpoints: endpoints, LeaseUntil: leaseUntil, Attempt: state.AssignmentAttempts, TelemetrySequence: state.TelemetrySequence}, true, nil
+}
+
+func (p *Postgres) ClaimObservation(ctx context.Context, nodeID string, now time.Time) (Assignment, bool, error) {
+	tx, err := p.database.BeginTx(ctx, nil)
+	if err != nil {
+		return Assignment{}, false, err
+	}
+	defer tx.Rollback()
+	state, err := scanState(tx.QueryRowContext(ctx, stateSelect+` WHERE node_id=$1 AND phase=$2 AND updated_at<=$3 ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, nodeID, PhasePublished, now.Add(-5*time.Second)))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Assignment{}, false, nil
+	}
+	if err != nil {
+		return Assignment{}, false, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE regional_delivery_states SET updated_at=$2 WHERE id=$1`, state.ID, now); err != nil {
+		return Assignment{}, false, err
+	}
+	endpoints, err := endpointsFor(ctx, tx, state.ID)
+	if err != nil {
+		return Assignment{}, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Assignment{}, false, err
+	}
+	return Assignment{RegionalDeliveryID: state.ID, WorkspaceID: state.WorkspaceID, LogicalInstanceID: state.LogicalInstanceID, RegionID: state.RegionID, NodeID: state.NodeID, FencingToken: state.FencingToken, DesiredState: state.DesiredState, ProviderReleaseID: state.ProviderReleaseID, GameVersion: state.GameVersion, ApplyBehavior: state.ApplyBehavior, ResourceSpec: state.ResourceSpec, Configuration: state.Configuration, ModLock: state.ModLock, Endpoints: endpoints, TelemetrySequence: state.TelemetrySequence}, true, nil
 }
 
 func (p *Postgres) CompleteAssignment(ctx context.Context, deliveryID, worker string, fencingToken int64, ready bool, failureCode string, now time.Time) (bool, error) {

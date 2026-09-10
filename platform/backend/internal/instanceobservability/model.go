@@ -25,14 +25,15 @@ type MetricSample struct {
 }
 
 type Observation struct {
-	MessageID            string
-	WorkspaceID          string
-	LogicalInstanceID    string
-	RegionID             string
-	RegionalDeploymentID string
-	RuntimeAttemptID     string
-	Sequence             int64
-	Logs                 []LogEntry
-	Metrics              []MetricSample
-	ObservedAt           time.Time
+	MessageID            string         `json:"-"`
+	WorkspaceID          string         `json:"workspaceId"`
+	LogicalInstanceID    string         `json:"logicalInstanceId"`
+	RegionID             string         `json:"regionId"`
+	RegionalDeploymentID string         `json:"regionalDeploymentId"`
+	RuntimeAttemptID     string         `json:"runtimeAttemptId"`
+	FencingToken         int64          `json:"fencingToken"`
+	Sequence             int64          `json:"sequence"`
+	Logs                 []LogEntry     `json:"logs"`
+	Metrics              []MetricSample `json:"metrics"`
+	ObservedAt           time.Time      `json:"observedAt"`
 }

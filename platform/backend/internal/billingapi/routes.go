@@ -23,7 +23,7 @@ type Services struct {
 
 func Routes(services Services) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("GET /v1/regions/{regionId}/catalog", services.authenticated(http.HandlerFunc(services.getRegionCatalog)))
+	mux.Handle("GET /v1/regions/{regionId}/catalog", services.workspaceQueryAuthorized(authorization.ActionWorkspaceRead, http.HandlerFunc(services.getRegionCatalog)))
 	mux.Handle("POST /v1/workspaces/{workspaceId}/quotes", services.workspaceAuthorized(authorization.ActionInstanceCreate, http.HandlerFunc(services.createQuote)))
 	mux.Handle("GET /v1/workspaces/{workspaceId}/wallet", services.workspaceAuthorized(authorization.ActionBillingRead, http.HandlerFunc(services.getWallet)))
 	mux.Handle("GET /v1/workspaces/{workspaceId}/ledger-entries", services.workspaceAuthorized(authorization.ActionBillingRead, http.HandlerFunc(services.listLedgerEntries)))
@@ -59,6 +59,11 @@ func (s Services) authenticated(next http.Handler) http.Handler {
 
 func (s Services) workspaceAuthorized(action authorization.Action, next http.Handler) http.Handler {
 	policy := httpfilter.RoutePolicy{Action: action, ResourceType: httpfilter.ResourceWorkspace, ResourceIDs: httpfilter.PathID("workspaceId")}
+	return s.authenticated(httpfilter.Authorize(s.Resolver, s.Authorizer, policy, next))
+}
+
+func (s Services) workspaceQueryAuthorized(action authorization.Action, next http.Handler) http.Handler {
+	policy := httpfilter.RoutePolicy{Action: action, ResourceType: httpfilter.ResourceWorkspace, ResourceIDs: httpfilter.QueryIDs("workspaceId")}
 	return s.authenticated(httpfilter.Authorize(s.Resolver, s.Authorizer, policy, next))
 }
 

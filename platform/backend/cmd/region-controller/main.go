@@ -16,6 +16,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/messaging"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/preview"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionaldelivery"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionaltask"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regioncontrol"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionexecution"
 )
@@ -52,7 +53,7 @@ func main() {
 				os.Exit(1)
 			}
 			delivery := regionaldelivery.NewPostgres(database, string(regionID), authorityKey)
-			worker := deliveryworker.Region{RegionID: string(regionID), Dispatch: messaging.Dispatcher{Outbox: messaging.NewPostgresOutbox(database, messaging.RegionOutbox), Publisher: transport}, Consume: transport, Control: delivery}
+			worker := deliveryworker.Region{RegionID: string(regionID), Dispatch: messaging.Dispatcher{Outbox: messaging.NewPostgresOutbox(database, messaging.RegionOutbox), Publisher: transport}, Consume: transport, Control: delivery, Tasks: regionaltask.NewPostgres(database, string(regionID), authorityKey)}
 			go runDeliveryWorker(worker)
 		}
 	}

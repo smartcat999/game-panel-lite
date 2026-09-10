@@ -175,6 +175,15 @@ func TestPublicPasswordRegistrationDoesNotExist(t *testing.T) {
 	}
 }
 
+func TestGitHubRouteFailsClosedWhenOAuthIsNotConfigured(t *testing.T) {
+	handler, _, _ := setupRoutes(t)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/auth/github/start", strings.NewReader(`{"returnPath":"/"}`)))
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "github_sign_in_unavailable") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func testTOTPCode(secret string, now time.Time) string {
 	key, _ := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
 	message := make([]byte, 8)

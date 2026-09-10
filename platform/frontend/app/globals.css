@@ -272,6 +272,7 @@ code, pre, .resource-name, .provider-tag { font-family: "SFMono-Regular", Consol
 .auth-form label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 650; }
 .auth-form input { min-height: 39px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--foreground); }
 .auth-footnote { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 18px 0 0; color: var(--faint-foreground); font-size: 11px; }
+.form-error { margin: 14px 0 0; color: #b42318; font-size: 12px; line-height: 1.5; }
 .invitation-card { text-align: center; }
 .invitation-card .auth-brand { text-align: left; }
 .invitation-icon { display: grid; width: 46px; height: 46px; place-items: center; margin: 24px auto 0; border: 1px solid #a6e2cf; border-radius: 50%; background: var(--success-bg); color: var(--success); }

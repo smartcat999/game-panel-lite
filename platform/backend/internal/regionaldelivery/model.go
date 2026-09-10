@@ -79,6 +79,7 @@ type State struct {
 	AssignmentLeaseUntil    time.Time
 	AssignmentAttempts      int
 	ObservationSequence     int64
+	TelemetrySequence       int64
 	FailureCode             string
 	ResidualCleanupRequired bool
 	UpdatedAt               time.Time
@@ -86,7 +87,9 @@ type State struct {
 
 type Assignment struct {
 	RegionalDeliveryID string
+	WorkspaceID        string
 	LogicalInstanceID  string
+	RegionID           string
 	NodeID             string
 	FencingToken       int64
 	DesiredState       string
@@ -99,4 +102,5 @@ type Assignment struct {
 	Endpoints          []deliverycontrol.EndpointBinding
 	LeaseUntil         time.Time
 	Attempt            int
+	TelemetrySequence  int64
 }

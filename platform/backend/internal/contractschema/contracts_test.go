@@ -38,8 +38,8 @@ func TestContractDocumentsParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed != 10 {
-		t.Fatalf("expected 10 versioned contract documents, parsed %d", parsed)
+	if parsed != 11 {
+		t.Fatalf("expected 11 versioned contract documents, parsed %d", parsed)
 	}
 }
 
@@ -112,6 +112,7 @@ func TestEventV1CompatibilitySurface(t *testing.T) {
 		"backup-observed.schema.json":           {"workspaceId", "backupRequestId", "operationId", "logicalInstanceId", "regionId", "sequence", "status", "providerReleaseId", "gameVersion", "configurationRevisionId", "modLock", "checksums", "observedAt"},
 		"backup-requested.schema.json":          {"workspaceId", "backupRequestId", "operationId", "logicalInstanceId", "regionId", "kind", "objectKey", "transferUrl", "dataScope", "authorityGrant"},
 		"instance-observed.schema.json":         {"workspaceId", "logicalInstanceId", "regionId", "regionalDeploymentId", "runtimeAttemptId", "sequence", "logs", "metrics", "observedAt"},
+		"instance-action-observed.schema.json":  {"workspaceId", "operationId", "logicalInstanceId", "regionId", "kind", "status", "observedAt"},
 		"console-command-requested.schema.json": {"workspaceId", "logicalInstanceId", "regionId", "operationId", "command", "authorityGrant"},
 	}
 	envelopeFields := []string{"schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"}

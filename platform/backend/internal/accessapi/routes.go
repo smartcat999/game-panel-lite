@@ -61,6 +61,10 @@ func (s Services) platformAuthorized(requireTOTP bool, next http.Handler) http.H
 }
 
 func (s Services) startGitHub(response http.ResponseWriter, request *http.Request) {
+	if s.OAuth == nil {
+		respondError(response, http.StatusServiceUnavailable, "github_sign_in_unavailable")
+		return
+	}
 	var body struct {
 		ReturnPath string `json:"returnPath"`
 	}
@@ -76,6 +80,10 @@ func (s Services) startGitHub(response http.ResponseWriter, request *http.Reques
 }
 
 func (s Services) completeGitHub(response http.ResponseWriter, request *http.Request) {
+	if s.OAuth == nil {
+		respondError(response, http.StatusServiceUnavailable, "github_sign_in_unavailable")
+		return
+	}
 	token, _, returnPath, err := s.OAuth.Complete(request.Context(), request.URL.Query().Get("state"), request.URL.Query().Get("code"))
 	if err != nil {
 		respondError(response, http.StatusUnauthorized, "github_sign_in_failed")

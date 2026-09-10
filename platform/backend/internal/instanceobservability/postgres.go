@@ -29,7 +29,7 @@ func NewPostgres(database *sql.DB, providers ProviderRegistry) *Postgres {
 }
 
 func (p *Postgres) Handle(ctx context.Context, observation Observation) (bool, error) {
-	if observation.MessageID == "" || observation.WorkspaceID == "" || observation.LogicalInstanceID == "" || observation.RegionID == "" || observation.RuntimeAttemptID == "" || observation.Sequence < 1 || observation.ObservedAt.IsZero() || len(observation.Logs) > 500 || len(observation.Metrics) > 1000 {
+	if observation.MessageID == "" || observation.WorkspaceID == "" || observation.LogicalInstanceID == "" || observation.RegionID == "" || observation.RuntimeAttemptID == "" || observation.FencingToken < 1 || observation.Sequence < 1 || observation.ObservedAt.IsZero() || len(observation.Logs) > 500 || len(observation.Metrics) > 1000 {
 		return false, ErrInvalidObservation
 	}
 	for _, entry := range observation.Logs {
@@ -54,11 +54,19 @@ func (p *Postgres) Handle(ctx context.Context, observation Observation) (bool, e
 		if observation.Sequence <= sequence {
 			return nil
 		}
-		logs, err := json.Marshal(observation.Logs)
+		logsToStore := observation.Logs
+		if logsToStore == nil {
+			logsToStore = []LogEntry{}
+		}
+		logs, err := json.Marshal(logsToStore)
 		if err != nil {
 			return err
 		}
-		metrics, err := json.Marshal(observation.Metrics)
+		metricsToStore := observation.Metrics
+		if metricsToStore == nil {
+			metricsToStore = []MetricSample{}
+		}
+		metrics, err := json.Marshal(metricsToStore)
 		if err != nil {
 			return err
 		}

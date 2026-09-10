@@ -3,56 +3,124 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/bootstrap"
-	contract "github.com/smartcat999/game-panel-lite/platform/backend/internal/contracts/v1"
-	"github.com/smartcat999/game-panel-lite/platform/backend/internal/gameprovider/terraria"
-	"github.com/smartcat999/game-panel-lite/platform/backend/internal/nodeexecution"
-	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionexecution"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/nodeworkload"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/productioncatalog"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/providercontract"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionaldelivery"
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/regionaltask"
 	"github.com/smartcat999/game-panel-lite/platform/backend/internal/runtimeprovider/docker"
 )
 
 func main() {
-	if databaseURL, rootPath := os.Getenv("GAMEPANEL_REGION_DATABASE_URL"), os.Getenv("GAMEPANEL_NODE_ROOT"); databaseURL != "" && rootPath != "" {
+	if databaseURL := os.Getenv("GAMEPANEL_REGION_DATABASE_URL"); databaseURL != "" {
 		database, err := sql.Open("pgx", databaseURL)
 		if err != nil {
-			slog.Error("open Region database", "error", err)
-			os.Exit(1)
+			fatal("open Region database", err)
 		}
 		defer database.Close()
-		root, err := nodeexecution.NewScopedRoot(rootPath)
+		if err := database.Ping(); err != nil {
+			fatal("connect to Region database", err)
+		}
+		providerKey := decodeKey("GAMEPANEL_PROVIDER_SIGNING_KEY_BASE64")
+		registry, providers, err := productioncatalog.Publish(context.Background(), providercontract.NewMemoryStore(), providerKey)
 		if err != nil {
-			slog.Error("open scoped workload root", "error", err)
-			os.Exit(1)
+			fatal("load signed Provider Releases", err)
 		}
-		regionID := contract.RegionID(os.Getenv("GAMEPANEL_REGION_ID"))
-		if regionID == "" {
-			regionID = "reg_asia_east"
-		}
-		nodeID := contract.NodeID(os.Getenv("GAMEPANEL_NODE_ID"))
-		if nodeID == "" {
-			nodeID = "nod_local"
-		}
-		store := regionexecution.NewPostgres(database, regionID)
-		runtimeProvider, err := docker.New(os.Getenv("GAMEPANEL_DOCKER_HOST"))
+		runtimeProvider, err := docker.New(os.Getenv("GAMEPANEL_DOCKER_HOST"), required("GAMEPANEL_NODE_DATA_ROOT"), required("GAMEPANEL_NODE_BACKUP_ROOT"))
 		if err != nil {
-			slog.Error("initialize Docker Runtime Provider", "error", err)
-			os.Exit(1)
+			fatal("initialize Docker Runtime Provider", err)
 		}
-		executor := nodeexecution.Executor{Root: root, Transfer: nodeexecution.HTTPObjectTransfer{}, Results: store, WorkloadResults: store, Games: map[string]nodeexecution.GameProvider{terraria.GameKey: terraria.Provider{}}, Runtime: runtimeProvider}
-		agent := nodeexecution.Agent{NodeID: nodeID, BatchSize: 16, ClaimTTL: 30 * time.Second, BackoffBase: 250 * time.Millisecond, BackoffMax: 10 * time.Second, Store: store, Reconcile: executor.Reconcile}
+		regionID := valueOr("GAMEPANEL_REGION_ID", "reg_asia_east")
+		nodeID := valueOr("GAMEPANEL_NODE_ID", "node_um773")
+		delivery := regionaldelivery.NewPostgres(database, regionID, decodeKey("GAMEPANEL_DELIVERY_AUTHORITY_KEY_BASE64"))
+		tasks := regionaltask.NewPostgres(database, regionID, decodeKey("GAMEPANEL_DELIVERY_AUTHORITY_KEY_BASE64"))
+		agent := &nodeworkload.Agent{NodeID: nodeID, WorkerID: nodeID + "-agent", Assignments: delivery, Tasks: tasks, Registry: registry, Providers: providers, Runtime: runtimeProvider, Telemetry: delivery, Management: managementCIDRs()}
+		go heartbeat(context.Background(), delivery, regionID, nodeID)
 		go func() {
-			if err := agent.Run(context.Background(), func() time.Time { return time.Now().UTC() }); err != nil {
-				slog.Error("node reconciliation stopped", "error", err)
+			if err := agent.Run(context.Background()); err != nil {
+				slog.Error("node workload loop stopped", "error", err)
 			}
 		}()
 	}
 	server := bootstrap.HealthServer{Name: "node-agent", Addr: bootstrap.Address(":8082")}
 	if err := server.Run(); err != nil {
-		slog.Error("node agent stopped", "error", err)
+		fatal("node agent stopped", err)
 	}
+}
+
+func heartbeat(ctx context.Context, delivery *regionaldelivery.Postgres, regionID, nodeID string) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		now := time.Now().UTC()
+		node := regionaldelivery.Node{ID: nodeID, RegionID: regionID, State: "ready", CPUCapacityMilli: integerOr("GAMEPANEL_NODE_CPU_MILLI", 8000), MemoryCapacityMiB: integerOr("GAMEPANEL_NODE_MEMORY_MIB", 16384), DiskCapacityGiB: integerOr("GAMEPANEL_NODE_DISK_GIB", 200), LeaseUntil: now.Add(30 * time.Second), UpdatedAt: now}
+		if err := delivery.RegisterNode(ctx, node); err != nil {
+			slog.Warn("node heartbeat failed", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func decodeKey(name string) []byte {
+	key, err := base64.StdEncoding.DecodeString(required(name))
+	if err != nil || len(key) < 32 {
+		fatal("decode signing key", err)
+	}
+	return key
+}
+
+func managementCIDRs() []string {
+	value := valueOr("GAMEPANEL_MANAGEMENT_CIDRS", "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16")
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
+}
+
+func integerOr(name string, fallback int64) int64 {
+	value, err := strconv.ParseInt(os.Getenv(name), 10, 64)
+	if err != nil || value < 1 {
+		return fallback
+	}
+	return value
+}
+
+func valueOr(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func required(name string) string {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		fatal("missing required environment", nil, "name", name)
+	}
+	return value
+}
+
+func fatal(message string, err error, attributes ...any) {
+	if err != nil {
+		attributes = append(attributes, "error", err)
+	}
+	slog.Error(message, attributes...)
+	os.Exit(1)
 }

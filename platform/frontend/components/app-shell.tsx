@@ -15,7 +15,6 @@ import {
   Menu,
   Network,
   Server,
-  Settings,
   ShieldCheck,
   UserRound,
   Users,
@@ -37,12 +36,7 @@ function workspaceNavigation(slug: string): Array<{ group: string; items: NavIte
   return [
     { group: "计算", items: [{ label: "实例", href: `/w/${slug}/instances`, icon: Server }] },
     { group: "数据", items: [{ label: "备份", href: `/w/${slug}/backups`, icon: Archive }] },
-    { group: "运维", items: [{ label: "操作", href: `/w/${slug}/operations`, icon: ListChecks }] },
-    { group: "工作区", items: [
-      { label: "账单", href: `/w/${slug}/billing`, icon: CircleDollarSign },
-      { label: "成员", href: `/w/${slug}/members`, icon: Users },
-      { label: "设置", href: `/w/${slug}/settings`, icon: Settings },
-    ] },
+    { group: "工作区", items: [{ label: "账单", href: `/w/${slug}/billing`, icon: CircleDollarSign }] },
   ];
 }
 
@@ -113,7 +107,7 @@ export function AppShell({ area, scope, workspaceSlug = "ember", children }: { a
           <button aria-label="通知" className="notification" type="button"><Bell size={18} /><span /></button>
           <span className="topbar-divider" />
           <details className="account-menu">
-            <summary><span className="avatar">PW</span><span>Peng Wu</span><ChevronDown size={14} /></summary>
+            <summary><span className="avatar">GP</span><span>账户</span><ChevronDown size={14} /></summary>
             <div className="menu-popover">
               <Link href="/account"><UserRound size={15} />账户设置</Link>
               <Link href="/platform"><ShieldCheck size={15} />平台管理</Link>

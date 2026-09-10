@@ -55,7 +55,7 @@ func scopeQuery(resourceType ResourceType) (string, authorization.ScopeType, err
 	case ResourceOperation:
 		return `SELECT id, workspace_id FROM operations WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
 	case ResourceBackup:
-		return `SELECT id, workspace_id FROM backup_requests WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
+		return `SELECT id, workspace_id FROM managed_backups WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
 	default:
 		return "", "", fmt.Errorf("unsupported resource type %q", resourceType)
 	}

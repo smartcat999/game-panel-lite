@@ -95,7 +95,7 @@ func billingRequest(handler http.Handler, method, path, body, token string) *htt
 func TestWorkspaceBillingRoutesUseScopeFilterAndServerCatalog(t *testing.T) {
 	handler, sessions, _, _, _ := setupBillingRoutes(t)
 	token, _, _ := sessions.Issue(context.Background(), "usr_owner", true)
-	catalog := billingRequest(handler, http.MethodGet, "/v1/regions/reg_asia/catalog", "", token)
+	catalog := billingRequest(handler, http.MethodGet, "/v1/regions/reg_asia/catalog?workspaceId=ws_ember", "", token)
 	if catalog.Code != http.StatusOK || !strings.Contains(catalog.Body.String(), `"priceBookId":"pb_asia_1"`) || !strings.Contains(catalog.Body.String(), `"cpuMilli"`) {
 		t.Fatalf("catalog status=%d body=%s", catalog.Code, catalog.Body.String())
 	}

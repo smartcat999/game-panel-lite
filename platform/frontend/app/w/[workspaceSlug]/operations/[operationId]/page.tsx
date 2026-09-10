@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { OperationPage } from "@/features/prototype/workspace-pages";
+import { OperationPage } from "@/features/production/workspace-pages";
 
 export default async function Operation({ params }: { params: Promise<{ workspaceSlug: string; operationId: string }> }) {
   const { workspaceSlug, operationId } = await params;

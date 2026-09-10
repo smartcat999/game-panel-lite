@@ -23,6 +23,7 @@ type Task struct {
 	MessageID         string
 	WorkspaceID       string
 	LogicalInstanceID string
+	NodeID            string
 	RegionID          string
 	OperationID       string
 	Kind              string
@@ -89,14 +90,15 @@ func (p *Postgres) receive(ctx context.Context, messageID, workspaceID, instance
 		return false, nil
 	}
 	var fencingToken int64
-	if err := tx.QueryRowContext(ctx, `SELECT fencing_token FROM regional_delivery_states WHERE logical_instance_id=$1 AND workspace_id=$2 AND region_id=$3`, instanceID, workspaceID, p.regionID).Scan(&fencingToken); err != nil {
+	var nodeID string
+	if err := tx.QueryRowContext(ctx, `SELECT fencing_token,node_id FROM regional_delivery_states WHERE logical_instance_id=$1 AND workspace_id=$2 AND region_id=$3`, instanceID, workspaceID, p.regionID).Scan(&fencingToken, &nodeID); err != nil {
 		return false, err
 	}
 	id, err := persistence.NewID("tsk")
 	if err != nil {
 		return false, err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO regional_instance_tasks (id,message_id,workspace_id,logical_instance_id,region_id,operation_id,kind,payload,status,fencing_token,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'queued',$9,$10,$10)`, id, messageID, workspaceID, instanceID, p.regionID, operationID, kind, encoded, fencingToken, now); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO regional_instance_tasks (id,message_id,workspace_id,logical_instance_id,node_id,region_id,operation_id,kind,payload,status,fencing_token,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'queued',$10,$11,$11)`, id, messageID, workspaceID, instanceID, nodeID, p.regionID, operationID, kind, encoded, fencingToken, now); err != nil {
 		return false, err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE regional_inbox SET handled_at=$2 WHERE message_id=$1`, messageID, now); err != nil {
@@ -105,13 +107,13 @@ func (p *Postgres) receive(ctx context.Context, messageID, workspaceID, instance
 	return true, tx.Commit()
 }
 
-func (p *Postgres) Claim(ctx context.Context, worker string, now time.Time) (Task, bool, error) {
+func (p *Postgres) Claim(ctx context.Context, nodeID, worker string, now time.Time) (Task, bool, error) {
 	tx, err := p.database.BeginTx(ctx, nil)
 	if err != nil {
 		return Task{}, false, err
 	}
 	defer tx.Rollback()
-	task, err := scanTask(tx.QueryRowContext(ctx, taskSelect+` WHERE status='queued' AND (claim_until IS NULL OR claim_until<=$1) ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, now))
+	task, err := scanTask(tx.QueryRowContext(ctx, taskSelect+` WHERE node_id=$1 AND status='queued' AND (claim_until IS NULL OR claim_until<=$2) ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, nodeID, now))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, false, nil
 	}
@@ -169,16 +171,25 @@ func (p *Postgres) Complete(ctx context.Context, taskID, worker string, fencingT
 		if err := messaging.NewPostgres(p.database).InsertOutboxTo(ctx, tx, messaging.RegionOutbox, messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(messageID), MessageType: "backup.observed.v1", IdempotencyKey: contract.IdempotencyKey("backup:" + task.ID), Payload: observed, CreatedAt: now}); err != nil {
 			return false, err
 		}
+	} else {
+		messageID, err := persistence.NewID("msg")
+		if err != nil {
+			return false, err
+		}
+		observed := instanceaction.ActionObservation{WorkspaceID: task.WorkspaceID, OperationID: task.OperationID, LogicalInstanceID: task.LogicalInstanceID, RegionID: task.RegionID, Kind: task.Kind, Status: result.Status, FailureCode: result.FailureCode, ObservedAt: now}
+		if err := messaging.NewPostgres(p.database).InsertOutboxTo(ctx, tx, messaging.RegionOutbox, messaging.OutboxMessage{SchemaVersion: 1, ID: contract.EventID(messageID), MessageType: "instance.action.observed.v1", IdempotencyKey: contract.IdempotencyKey("action:" + task.ID), Payload: observed, CreatedAt: now}); err != nil {
+			return false, err
+		}
 	}
 	return true, tx.Commit()
 }
 
-const taskSelect = `SELECT id,message_id,workspace_id,logical_instance_id,region_id,operation_id,kind,payload,status,COALESCE(claim_owner,''),claim_until,attempt_count,fencing_token FROM regional_instance_tasks`
+const taskSelect = `SELECT id,message_id,workspace_id,logical_instance_id,node_id,region_id,operation_id,kind,payload,status,COALESCE(claim_owner,''),claim_until,attempt_count,fencing_token FROM regional_instance_tasks`
 
 func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 	var task Task
 	var claimUntil sql.NullTime
-	err := row.Scan(&task.ID, &task.MessageID, &task.WorkspaceID, &task.LogicalInstanceID, &task.RegionID, &task.OperationID, &task.Kind, &task.Payload, &task.Status, &task.ClaimOwner, &claimUntil, &task.AttemptCount, &task.FencingToken)
+	err := row.Scan(&task.ID, &task.MessageID, &task.WorkspaceID, &task.LogicalInstanceID, &task.NodeID, &task.RegionID, &task.OperationID, &task.Kind, &task.Payload, &task.Status, &task.ClaimOwner, &claimUntil, &task.AttemptCount, &task.FencingToken)
 	task.ClaimUntil = claimUntil.Time
 	return task, err
 }
