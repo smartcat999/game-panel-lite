@@ -46,6 +46,47 @@ func TestRebaselineRulesRejectDeliberateViolations(t *testing.T) {
 	}
 }
 
+func TestRebaselinePhaseTwoSourcePassesRules(t *testing.T) {
+	_, currentFile, _, _ := runtime.Caller(0)
+	backendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
+	var files []SourceFile
+	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/httpfilter", "migrations/global/0005_identity_authorization_rebaseline.sql"} {
+		path := filepath.Join(backendRoot, relative)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.IsDir() {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files = append(files, SourceFile{Path: path, Content: string(content)})
+			continue
+		}
+		err = filepath.WalkDir(path, func(sourcePath string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() || strings.HasSuffix(sourcePath, "_test.go") || !strings.HasSuffix(sourcePath, ".go") {
+				return nil
+			}
+			content, readErr := os.ReadFile(sourcePath)
+			if readErr != nil {
+				return readErr
+			}
+			files = append(files, SourceFile{Path: sourcePath, Content: string(content)})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if violations := CheckRebaseline(files); len(violations) > 0 {
+		t.Fatalf("Phase 2 architecture violations:\n%s", formatViolations(violations))
+	}
+}
+
 func TestPlatformFrontendDoesNotReferenceLegacyFrontend(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	frontendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "frontend"))

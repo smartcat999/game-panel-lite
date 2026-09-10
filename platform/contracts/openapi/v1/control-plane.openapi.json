@@ -3,10 +3,12 @@
   "info": {"title": "GamePanel Control Plane API", "version": "1.0.0"},
   "servers": [{"url": "/api"}],
   "paths": {
-    "/v1/auth/github/start": {"post": {"operationId": "startGitHubSignIn", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
+    "/v1/auth/github/start": {"post": {"operationId": "startGitHubSignIn", "requestBody": {"$ref": "#/components/requestBodies/GitHubSignInStart"}, "responses": {"200": {"description": "GitHub authorization redirect", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GitHubSignInStartResult"}}}}}}},
     "/v1/auth/github/callback": {"get": {"operationId": "completeGitHubSignIn", "responses": {"302": {"description": "Session established"}}}},
-    "/v1/auth/password/sign-in": {"post": {"operationId": "signInWithPassword", "requestBody": {"$ref": "#/components/requestBodies/PasswordSignIn"}, "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
-    "/v1/auth/password": {"put": {"operationId": "setLocalPassword", "requestBody": {"$ref": "#/components/requestBodies/SetPassword"}, "responses": {"204": {"description": "Password set after recent reauthentication"}}}},
+    "/v1/auth/password/sign-in": {"post": {"operationId": "signInWithPassword", "requestBody": {"$ref": "#/components/requestBodies/PasswordSignIn"}, "responses": {"200": {"description": "Session established", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PasswordSignInResult"}}}}}}},
+    "/v1/auth/password": {"put": {"operationId": "setLocalPassword", "requestBody": {"$ref": "#/components/requestBodies/SetPassword"}, "responses": {"204": {"description": "OAuth or operator-created user password set after recent reauthentication"}}}},
+    "/v1/auth/operator/totp/enroll": {"post": {"operationId": "enrollOperatorTotp", "responses": {"201": {"description": "TOTP secret returned once after recent reauthentication"}}}},
+    "/v1/auth/operator/totp/verify": {"post": {"operationId": "verifyOperatorTotp", "requestBody": {"$ref": "#/components/requestBodies/TotpVerification"}, "responses": {"204": {"description": "Operator session rotated and elevated"}}}},
     "/v1/session": {
       "get": {"operationId": "getSession", "responses": {"200": {"description": "Current session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Session"}}}}}},
       "delete": {"operationId": "signOut", "responses": {"204": {"description": "Session ended"}}}
@@ -19,7 +21,7 @@
     "/v1/workspaces": {"get": {"operationId": "listWorkspaces", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
     "/v1/workspace-selection": {"post": {"operationId": "selectWorkspace", "responses": {"204": {"description": "Workspace selected"}}}},
     "/v1/workspaces/{workspaceId}/members": {"get": {"operationId": "listWorkspaceMembers", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
-    "/v1/workspaces/{workspaceId}/invitations": {"post": {"operationId": "createWorkspaceInvitation", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
+    "/v1/workspaces/{workspaceId}/invitations": {"post": {"operationId": "createWorkspaceInvitation", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "requestBody": {"$ref": "#/components/requestBodies/CreateWorkspaceInvitation"}, "responses": {"201": {"description": "Single-use invitation created"}}}},
     "/v1/workspaces/{workspaceId}/role-bindings": {"get": {"operationId": "listWorkspaceRoleBindings", "parameters": [{"$ref": "#/components/parameters/WorkspaceId"}], "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
     "/v1/regions": {"get": {"operationId": "listRegions", "responses": {"200": {"$ref": "#/components/responses/OK"}}}},
     "/v1/regions/{regionId}/catalog": {"get": {"operationId": "getRegionCatalog", "parameters": [{"$ref": "#/components/parameters/RegionId"}], "responses": {"200": {"description": "Region capacity classes and price book", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RegionCatalog"}}}}}}},
@@ -57,8 +59,11 @@
       "InvitationToken": {"name": "invitationToken", "in": "path", "required": true, "schema": {"type": "string"}}
     },
     "requestBodies": {
+      "GitHubSignInStart": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["returnPath"], "properties": {"returnPath": {"type": "string", "pattern": "^/[^/].*|^/$"}}}}}},
       "PasswordSignIn": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["username", "password"], "properties": {"username": {"type": "string"}, "password": {"type": "string", "format": "password"}}}}}},
-      "SetPassword": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["password"], "properties": {"password": {"type": "string", "format": "password", "minLength": 12}}}}}}
+      "SetPassword": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["password"], "properties": {"password": {"type": "string", "format": "password", "minLength": 12}}}}}},
+      "TotpVerification": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["code"], "properties": {"code": {"type": "string", "pattern": "^[0-9]{6}$"}}}}}},
+      "CreateWorkspaceInvitation": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["role"], "properties": {"role": {"type": "string", "enum": ["workspace.owner", "workspace.operator", "workspace.viewer"]}}}}}}
     },
     "responses": {
       "OK": {"description": "Successful response"},
@@ -66,10 +71,12 @@
     },
     "schemas": {
       "UserId": {"type": "string", "pattern": "^usr_[A-Za-z0-9]+$"},
+      "GitHubSignInStartResult": {"type": "object", "additionalProperties": false, "required": ["authorizationUrl"], "properties": {"authorizationUrl": {"type": "string", "format": "uri"}}},
+      "PasswordSignInResult": {"type": "object", "additionalProperties": false, "required": ["userId", "mustChangePassword"], "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "mustChangePassword": {"type": "boolean"}}},
       "WorkspaceId": {"type": "string", "pattern": "^ws_[A-Za-z0-9]+$"},
       "LogicalInstanceId": {"type": "string", "pattern": "^lin_[A-Za-z0-9]+$"},
       "RegionId": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"},
-      "Session": {"type": "object", "additionalProperties": false, "required": ["userId", "workspaceIds", "selectedWorkspaceId"], "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "workspaceIds": {"type": "array", "items": {"$ref": "#/components/schemas/WorkspaceId"}}, "selectedWorkspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "reauthenticatedAt": {"type": "string", "format": "date-time"}}},
+      "Session": {"type": "object", "additionalProperties": false, "required": ["userId", "expiresAt"], "properties": {"userId": {"$ref": "#/components/schemas/UserId"}, "expiresAt": {"type": "string", "format": "date-time"}, "reauthenticatedAt": {"type": "string", "format": "date-time"}, "operatorVerifiedAt": {"type": "string", "format": "date-time"}}},
       "BuiltInRole": {"type": "string", "enum": ["platform.admin", "region.operator", "workspace.owner", "workspace.operator", "workspace.viewer"]},
       "Action": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$", "examples": ["instance.read", "instance.start", "backup.restore", "wallet.read"]},
       "AuthorizationScope": {"type": "object", "additionalProperties": false, "required": ["type", "id"], "properties": {"type": {"type": "string", "enum": ["platform", "region", "workspace"]}, "id": {"type": "string"}}},

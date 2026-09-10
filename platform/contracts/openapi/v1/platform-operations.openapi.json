@@ -3,7 +3,7 @@
   "info": {"title": "GamePanel Platform and Region Operations API", "version": "1.0.0"},
   "servers": [{"url": "/api"}],
   "paths": {
-    "/v1/platform/users": {"get": {"operationId": "listPlatformUsers", "responses": {"200": {"description": "Users"}}}, "post": {"operationId": "createLocalUser", "responses": {"201": {"description": "Local user with one-time password"}}}},
+    "/v1/platform/users": {"get": {"operationId": "listPlatformUsers", "responses": {"200": {"description": "Users"}}}, "post": {"operationId": "createLocalUser", "requestBody": {"$ref": "#/components/requestBodies/CreateLocalUser"}, "responses": {"201": {"description": "Local user with one-time password"}}}},
     "/v1/platform/workspaces": {"get": {"operationId": "listPlatformWorkspaces", "responses": {"200": {"description": "Workspaces"}}}},
     "/v1/platform/invitations": {"post": {"operationId": "createPlatformInvitation", "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
     "/v1/platform/credit-grants": {"post": {"operationId": "grantPromotionalCredit", "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}},
@@ -23,6 +23,9 @@
     "/v1/regions/{regionId}/deployments/{deploymentId}:override-placement": {"post": {"operationId": "overrideRegionalPlacement", "parameters": [{"$ref": "#/components/parameters/RegionId"}, {"name": "deploymentId", "in": "path", "required": true, "schema": {"type": "string"}}, {"$ref": "#/components/parameters/IdempotencyKey"}], "responses": {"202": {"$ref": "#/components/responses/Accepted"}}}}
   },
   "components": {
+    "requestBodies": {
+      "CreateLocalUser": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["username", "displayName", "oneTimePassword"], "properties": {"username": {"type": "string", "minLength": 3, "maxLength": 64}, "displayName": {"type": "string", "minLength": 1, "maxLength": 80}, "oneTimePassword": {"type": "string", "format": "password", "minLength": 12}}}}}}
+    },
     "parameters": {
       "RegionId": {"name": "regionId", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^reg_[A-Za-z0-9]+$"}},
       "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 128}}
