@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Activity, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Settings2, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -32,6 +32,7 @@ import {
   deleteWorld,
   enableServerShare,
   getDockerStatus,
+  getDSTModConfiguration,
   getModConfig,
   getGameServer,
   getRuntimeStats,
@@ -54,6 +55,7 @@ import {
   gameServerAction,
   setModEnabled,
   saveModConfig,
+  saveDSTModConfiguration,
   serverLogsUrl,
   serverWatchUrl,
   updateGameServerConfig,
@@ -74,7 +76,7 @@ import { describeResourceAction, formatServerDetailError, isServerLifecyclePendi
 import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
-import type { Backup, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
+import type { Backup, DSTModConfiguration, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
 
 type TabId = "overview" | "console" | "logs" | "players" | "version" | "config" | "worlds" | "backups" | "mods";
 type ModInstallSource = "library" | "packs";
@@ -941,6 +943,10 @@ export default function ServerDetailPage() {
               onAssignMods={(mods) => modAssign.mutate(mods.map((mod) => mod.id))}
               onDelete={setPendingModDelete}
               onInstallPack={setPendingModPackInstall}
+              onConfigured={() => {
+                markModsChanged();
+                showSuccess(t("dstModConfigurationSaved"));
+              }}
               onUpload={supportsDirectModUpload ? () => modUploadInputRef.current?.click() : undefined}
               onToggle={(mod) => setPendingModToggle({ mod, enabled: !mod.enabled })}
             />
@@ -2270,6 +2276,7 @@ function ModsTab({
   onAssignMods,
   onDelete,
   onInstallPack,
+  onConfigured,
   onUpload,
   onToggle
 }: {
@@ -2293,6 +2300,7 @@ function ModsTab({
   onAssignMods: (mods: ModFile[]) => void;
   onDelete: (mod: ModFile) => void;
   onInstallPack: (pack: ModPack) => void;
+  onConfigured: () => void;
   onUpload?: () => void;
   onToggle: (mod: ModFile) => void;
 }) {
@@ -2301,6 +2309,7 @@ function ModsTab({
   const [installSource, setInstallSource] = useState<ModInstallSource>("library");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [activeSection, setActiveSection] = useState<ModPanelSection>("installed");
+  const [configuringMod, setConfiguringMod] = useState<ModFile | null>(null);
   const modConfigsSummary = useQuery({
     queryKey: ["server-mod-configs", serverId],
     queryFn: () => listModConfigs(serverId),
@@ -2427,6 +2436,7 @@ function ModsTab({
                         mod={mod}
                         toggling={toggling}
                         onDelete={onDelete}
+                        onConfigure={setConfiguringMod}
                         onToggle={onToggle}
                       />
                     ))}
@@ -2594,6 +2604,19 @@ function ModsTab({
             </div>
           </div>
         </div>
+      ) : null}
+      {configuringMod ? (
+        <DSTModConfigurationDialog
+          disabled={blocked}
+          locale={locale}
+          mod={configuringMod}
+          serverId={serverId}
+          onClose={() => setConfiguringMod(null)}
+          onSaved={() => {
+            setConfiguringMod(null);
+            onConfigured();
+          }}
+        />
       ) : null}
     </div>
   );
@@ -2806,6 +2829,7 @@ function ServerModRow({
   mod,
   toggling,
   onDelete,
+  onConfigure,
   onToggle
 }: {
   deleting: boolean;
@@ -2813,6 +2837,7 @@ function ServerModRow({
   mod: ModFile;
   toggling: boolean;
   onDelete: (mod: ModFile) => void;
+  onConfigure: (mod: ModFile) => void;
   onToggle: (mod: ModFile) => void;
 }) {
   const { locale, t } = useI18n();
@@ -2871,6 +2896,12 @@ function ServerModRow({
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+        {mod.providerKey === "dont-starve-together" && mod.source === "workshop" ? (
+          <Button variant="secondary" onClick={() => onConfigure(mod)} disabled={disabled}>
+            <Settings2 aria-hidden="true" />
+            {t("configureMod")}
+          </Button>
+        ) : null}
         <Button variant="secondary" onClick={() => onToggle(mod)} disabled={toggling || disabled}>
           <Power aria-hidden="true" />
           {mod.enabled ? t("disable") : t("enable")}
@@ -2878,6 +2909,90 @@ function ServerModRow({
         <Button variant="danger" aria-label={t("delete")} onClick={() => onDelete(mod)} disabled={deleting || disabled}>
           <Trash2 aria-hidden="true" />
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function DSTModConfigurationDialog({
+  disabled,
+  locale,
+  mod,
+  serverId,
+  onClose,
+  onSaved
+}: {
+  disabled: boolean;
+  locale: string;
+  mod: ModFile;
+  serverId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const [values, setValues] = useState<DSTModConfiguration["values"]>({});
+  const configuration = useQuery({
+    queryKey: ["dst-mod-configuration", serverId, mod.id, locale],
+    queryFn: () => getDSTModConfiguration(serverId, mod.id, locale),
+    retry: false
+  });
+  useEffect(() => {
+    if (!configuration.data) return;
+    const next: DSTModConfiguration["values"] = {};
+    for (const option of configuration.data.options) {
+      if (option.section) continue;
+      next[option.name] = configuration.data.values[option.name] ?? option.default;
+    }
+    setValues(next);
+  }, [configuration.data]);
+  const save = useMutation({
+    mutationFn: () => saveDSTModConfiguration(serverId, mod.id, locale, values),
+    onSuccess: onSaved
+  });
+  const error = save.error ?? configuration.error;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !save.isPending) onClose(); }}>
+      <div className="flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-panel-line bg-panel-card shadow-[0_12px_40px_rgba(0,0,0,0.35)]" role="dialog" aria-modal="true" aria-labelledby="dst-mod-configuration-title">
+        <div className="flex items-start justify-between gap-4 border-b border-panel-line px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="truncate font-semibold text-white" id="dst-mod-configuration-title">{t("configureModTitle", { name: modDisplayName(mod, locale === "zh" ? "zh" : "en") })}</h3>
+            <p className="mt-1 text-sm text-slate-400">{t("dstModConfigurationHint")}</p>
+          </div>
+          <button className="flex size-9 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-panel-green/50" onClick={onClose} disabled={save.isPending} aria-label={t("cancel")} type="button"><X aria-hidden="true" className="size-4" /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {configuration.isLoading ? <p className="py-10 text-center text-sm text-slate-400">{t("loading")}</p> : null}
+          {configuration.data?.options.length === 0 ? <p className="py-10 text-center text-sm text-slate-400">{t("dstModHasNoConfiguration")}</p> : null}
+          {configuration.data ? (
+            <div className="space-y-3">
+              {configuration.data.options.map((option) => option.section ? (
+                <div key={option.name} className="border-b border-panel-line pb-2 pt-3 text-sm font-semibold text-panel-green">{option.label}</div>
+              ) : (
+                <label key={option.name} className="grid gap-2 rounded-md border border-panel-line bg-slate-950/35 p-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-slate-100">{option.label}</span>
+                    {option.description ? <span className="mt-1 block whitespace-pre-line text-xs leading-5 text-slate-500">{option.description}</span> : null}
+                  </span>
+                  <select
+                    className="h-10 rounded-md border border-panel-line bg-slate-950 px-3 text-sm text-slate-100 outline-none transition focus:border-panel-green focus:ring-2 focus:ring-panel-green/20"
+                    disabled={disabled || save.isPending}
+                    value={JSON.stringify(values[option.name] ?? option.default)}
+                    onChange={(event) => setValues((current) => ({ ...current, [option.name]: JSON.parse(event.target.value) as string | number | boolean }))}
+                  >
+                    {option.choices.map((choice, index) => <option key={`${option.name}-${index}`} value={JSON.stringify(choice.value)}>{choice.label || String(choice.value)}</option>)}
+                  </select>
+                </label>
+              ))}
+            </div>
+          ) : null}
+          {error ? <p className="mt-3 rounded-md border border-red-400/25 bg-red-400/10 px-3 py-2 text-sm text-red-300">{error instanceof Error ? error.message : t("dstModConfigurationLoadFailed")}</p> : null}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-panel-line px-5 py-4">
+          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>{t("cancel")}</Button>
+          <Button onClick={() => save.mutate()} disabled={disabled || save.isPending || !configuration.data || configuration.data.options.length === 0}>
+            <Save aria-hidden="true" />{save.isPending ? t("actionWorking") : t("saveModConfig")}
+          </Button>
+        </div>
       </div>
     </div>
   );

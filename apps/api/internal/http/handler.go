@@ -262,6 +262,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Post("/api/servers/{id}/mods/upload", h.uploadMod)
 		r.Post("/api/servers/{id}/mods/workshop", h.importWorkshopMods)
 		r.Patch("/api/servers/{id}/mods/{modId}", h.updateMod)
+		r.With(h.requirePermission(domain.PermissionModManage, "member role required")).Get("/api/servers/{id}/mods/{modId}/configuration", h.getDSTModConfiguration)
+		r.Put("/api/servers/{id}/mods/{modId}/configuration", h.saveDSTModConfiguration)
 		r.Delete("/api/servers/{id}/mods/{modId}", h.deleteMod)
 		r.With(h.requirePermission(domain.PermissionModManage, "member role required")).Get("/api/servers/{id}/mod-configs", h.listModConfigs)
 		r.Post("/api/servers/{id}/mod-configs/upload", h.uploadModConfig)
