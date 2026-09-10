@@ -45,7 +45,7 @@
         "operationId": "createLogicalInstance",
         "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}],
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateLogicalInstance"}}}},
-        "responses": {"201": {"description": "Logical Instance created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LogicalInstance"}}}}}
+        "responses": {"201": {"description": "Checkout created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CheckoutResult"}}}}}
       }
     },
     "/v1/instances/{logicalInstanceId}": {
@@ -59,6 +59,33 @@
       "get": {
         "operationId": "listRegions",
         "responses": {"200": {"description": "Customer-visible Region catalog", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/RegionCatalogItem"}}}}}}
+      }
+    },
+    "/v1/plans": {
+      "get": {
+        "operationId": "listPlanVersions",
+        "responses": {"200": {"description": "Available immutable Plan versions", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/PlanVersion"}}}}}}
+      }
+    },
+    "/v1/workspaces/{workspaceId}/instances": {
+      "get": {
+        "operationId": "listWorkspaceInstances",
+        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
+        "responses": {"200": {"description": "Workspace Logical Instances", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/LogicalInstance"}}}}}}
+      }
+    },
+    "/v1/workspaces/{workspaceId}/instances/{instanceId}": {
+      "get": {
+        "operationId": "getWorkspaceInstance",
+        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}, {"name": "instanceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/LogicalInstanceId"}}],
+        "responses": {"200": {"description": "Logical Instance detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InstanceDetail"}}}}}
+      }
+    },
+    "/v1/workspaces/{workspaceId}/orders": {
+      "get": {
+        "operationId": "listWorkspaceOrders",
+        "parameters": [{"name": "workspaceId", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/WorkspaceId"}}],
+        "responses": {"200": {"description": "Workspace Orders", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Order"}}}}}}
       }
     }
   },
@@ -96,12 +123,28 @@
         "properties": {"membershipId": {"type": "string", "pattern": "^mem_[A-Za-z0-9_]+$"}, "user": {"type": "object", "additionalProperties": false, "required": ["id", "displayName", "email"], "properties": {"id": {"$ref": "#/components/schemas/UserId"}, "displayName": {"type": "string"}, "email": {"type": "string", "format": "email"}}}, "role": {"type": "string", "enum": ["owner", "administrator", "operator", "billing", "viewer"]}}
       },
       "CreateLogicalInstance": {
-        "type": "object", "additionalProperties": false, "required": ["workspaceId", "regionId", "name", "gameKey", "gameVersion", "configuration"],
-        "properties": {"workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "name": {"type": "string", "minLength": 1, "maxLength": 80}, "gameKey": {"type": "string", "minLength": 1}, "gameVersion": {"type": "string", "minLength": 1}, "configuration": {"type": "object", "additionalProperties": true}}
+        "type": "object", "additionalProperties": false, "required": ["workspaceId", "planVersionId", "regionId", "name", "gameKey", "gameVersion", "configuration"],
+        "properties": {"workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "planVersionId": {"type": "string", "pattern": "^plv_[A-Za-z0-9_]+$"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "name": {"type": "string", "minLength": 1, "maxLength": 80}, "gameKey": {"type": "string", "minLength": 1}, "gameVersion": {"type": "string", "minLength": 1}, "configuration": {"type": "object", "additionalProperties": true}}
       },
       "LogicalInstance": {
-        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "regionId", "name", "desiredState"],
-        "properties": {"id": {"$ref": "#/components/schemas/LogicalInstanceId"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "regionId": {"$ref": "#/components/schemas/RegionId"}, "name": {"type": "string"}, "desiredState": {"type": "string", "enum": ["running", "stopped"]}}
+        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "name", "gameKey", "desiredState", "billingState", "deploymentState", "stale", "createdAt"],
+        "properties": {"id": {"$ref": "#/components/schemas/LogicalInstanceId"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "name": {"type": "string"}, "gameKey": {"type": "string"}, "desiredState": {"type": "string", "enum": ["running", "stopped"]}, "billingState": {"type": "string", "enum": ["pending_payment", "active"]}, "deploymentState": {"type": "string", "enum": ["pending_payment", "waiting_region", "running", "stopped", "failed"]}, "stale": {"type": "boolean"}, "createdAt": {"type": "string", "format": "date-time"}}
+      },
+      "PlanVersion": {
+        "type": "object", "additionalProperties": false, "required": ["id", "planId", "version", "name", "priceMinor", "currency", "billingPeriod", "regionIds", "memoryMegabytes", "cpuUnits"],
+        "properties": {"id": {"type": "string"}, "planId": {"type": "string"}, "version": {"type": "integer"}, "name": {"type": "string"}, "priceMinor": {"type": "integer"}, "currency": {"type": "string"}, "billingPeriod": {"type": "string"}, "regionIds": {"type": "array", "items": {"$ref": "#/components/schemas/RegionId"}}, "memoryMegabytes": {"type": "integer"}, "cpuUnits": {"type": "integer"}}
+      },
+      "Order": {
+        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "planVersionId", "status", "expiresAt"],
+        "properties": {"id": {"type": "string"}, "workspaceId": {"$ref": "#/components/schemas/WorkspaceId"}, "logicalInstanceId": {"$ref": "#/components/schemas/LogicalInstanceId"}, "planVersionId": {"type": "string"}, "status": {"type": "string", "enum": ["pending_payment", "paid"]}, "expiresAt": {"type": "string", "format": "date-time"}}
+      },
+      "CheckoutResult": {
+        "type": "object", "additionalProperties": false, "required": ["instance", "order"],
+        "properties": {"instance": {"$ref": "#/components/schemas/LogicalInstance"}, "order": {"$ref": "#/components/schemas/Order"}}
+      },
+      "InstanceDetail": {
+        "type": "object", "additionalProperties": false, "required": ["instance", "revision", "placement"],
+        "properties": {"instance": {"$ref": "#/components/schemas/LogicalInstance"}, "revision": {"type": "object"}, "placement": {"type": "object"}}
       },
       "RegionCatalogItem": {
         "type": "object", "additionalProperties": false, "required": ["id", "code", "name", "available"],

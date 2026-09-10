@@ -104,6 +104,12 @@ export function AppShell({ area, scope, workspaceSlug = "northstar", children }:
   const scopeName = area === "workspace" ? workspaceName : area === "platform" ? t("platform.scope") : scope ?? "region-local";
 
   const navHref = (item: NavItem, index: number) => {
+    if (area === "workspace" && item.label === "workspace.nav.instances") {
+      return `/w/${workspaceSlug}/instances`;
+    }
+    if (area === "workspace" && item.label === "workspace.nav.billing") {
+      return `/w/${workspaceSlug}/billing`;
+    }
     if (area === "workspace" && item.label === "workspace.nav.members") {
       return `/w/${workspaceSlug}/members`;
     }
@@ -112,6 +118,16 @@ export function AppShell({ area, scope, workspaceSlug = "northstar", children }:
     }
     if (area === "platform" && index === 0) {
       return "/platform";
+    }
+    if (area === "platform") {
+      const platformRoutes: Partial<Record<MessageKey, string>> = {
+        "platform.nav.workspaces": "/platform/workspaces",
+        "platform.nav.plans": "/platform/plans",
+        "platform.nav.orders": "/platform/orders",
+        "platform.nav.instances": "/platform/instances",
+        "platform.nav.regions": "/platform/regions",
+      };
+      if (platformRoutes[item.label]) return platformRoutes[item.label]!;
     }
     if (area === "region" && index === 0) {
       return `/platform/regions/${scope ?? "region-local"}`;

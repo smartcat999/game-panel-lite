@@ -6,6 +6,14 @@ type WorkspaceID string
 type UserID string
 type IdentityID string
 type MembershipID string
+type PlanID string
+type PlanVersionID string
+type InstanceRevisionID string
+type PlacementID string
+type OrderID string
+type PaymentID string
+type EntitlementID string
+type BackupRequestID string
 type LogicalInstanceID string
 type RegionID string
 type RegionalDeploymentID string

@@ -21,6 +21,25 @@
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateRegionOperations"}}}},
         "responses": {"200": {"description": "Updated Platform Region", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PlatformRegion"}}}}}
       }
+    },
+    "/v1/platform/workspaces": {
+      "get": {"operationId": "listPlatformWorkspaces", "responses": {"200": {"description": "All Workspaces", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/Workspace"}}}}}}}
+    },
+    "/v1/platform/plans": {
+      "get": {"operationId": "listPlatformPlans", "responses": {"200": {"description": "All Plan versions", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/PlanVersion"}}}}}}}
+    },
+    "/v1/platform/orders": {
+      "get": {"operationId": "listPlatformOrders", "responses": {"200": {"description": "All Orders", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/Order"}}}}}}}
+    },
+    "/v1/platform/instances": {
+      "get": {"operationId": "listPlatformInstances", "responses": {"200": {"description": "All Logical Instances", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "./control-plane.openapi.json#/components/schemas/LogicalInstance"}}}}}}}
+    },
+    "/v1/platform/payments/verified": {
+      "post": {
+        "operationId": "activateVerifiedPayment",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VerifiedPayment"}}}},
+        "responses": {"200": {"description": "Verified payment activation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ActivationResult"}}}}}
+      }
     }
   },
   "components": {
@@ -36,6 +55,22 @@
       "UpdateRegionOperations": {
         "type": "object", "additionalProperties": false, "required": ["operationalState", "reason"],
         "properties": {"operationalState": {"type": "string", "enum": ["active", "maintenance", "disabled"]}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}
+      },
+      "VerifiedPayment": {
+        "type": "object", "additionalProperties": false, "required": ["orderId", "providerNotificationId", "verified"],
+        "properties": {"orderId": {"type": "string"}, "providerNotificationId": {"type": "string"}, "verified": {"type": "boolean"}}
+      },
+      "ActivationResult": {
+        "type": "object", "additionalProperties": false, "required": ["payment", "entitlement"],
+        "properties": {"payment": {"$ref": "#/components/schemas/Payment"}, "entitlement": {"$ref": "#/components/schemas/Entitlement"}}
+      },
+      "Payment": {
+        "type": "object", "additionalProperties": false, "required": ["id", "orderId", "providerNotificationId", "verifiedAt"],
+        "properties": {"id": {"type": "string"}, "orderId": {"type": "string"}, "providerNotificationId": {"type": "string"}, "verifiedAt": {"type": "string", "format": "date-time"}}
+      },
+      "Entitlement": {
+        "type": "object", "additionalProperties": false, "required": ["id", "workspaceId", "logicalInstanceId", "planVersionId", "effectiveAt", "expiresAt", "active"],
+        "properties": {"id": {"type": "string"}, "workspaceId": {"type": "string"}, "logicalInstanceId": {"type": "string"}, "planVersionId": {"type": "string"}, "effectiveAt": {"type": "string", "format": "date-time"}, "expiresAt": {"type": "string", "format": "date-time"}, "active": {"type": "boolean"}}
       }
     }
   }

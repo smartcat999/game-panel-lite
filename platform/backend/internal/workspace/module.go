@@ -81,6 +81,17 @@ func (m *Module) ListForUser(_ context.Context, userID contract.UserID) []Worksp
 	return result
 }
 
+func (m *Module) All(_ context.Context) []Workspace {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make([]Workspace, 0, len(m.workspaces))
+	for _, item := range m.workspaces {
+		result = append(result, item)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
+}
+
 func (m *Module) Select(ctx context.Context, userID contract.UserID, workspaceID contract.WorkspaceID) error {
 	if err := m.RequireMembership(ctx, userID, workspaceID); err != nil {
 		return err

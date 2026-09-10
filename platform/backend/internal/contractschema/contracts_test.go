@@ -46,20 +46,29 @@ func TestContractDocumentsParse(t *testing.T) {
 func TestOpenAPIV1CompatibilitySurface(t *testing.T) {
 	expected := map[string]map[string]string{
 		"control-plane.openapi.json": {
-			"GET /v1/session":                          "getSession",
-			"GET /v1/user-preferences":                 "getUserPreferences",
-			"PATCH /v1/user-preferences":               "updateUserPreferences",
-			"POST /v1/workspace-selection":             "selectWorkspace",
-			"GET /v1/workspaces":                       "listWorkspaces",
-			"GET /v1/workspaces/{workspaceId}/members": "listWorkspaceMembers",
-			"POST /v1/instances":                       "createLogicalInstance",
-			"GET /v1/instances/{logicalInstanceId}":    "getLogicalInstance",
-			"GET /v1/regions":                          "listRegions",
+			"GET /v1/session":                                         "getSession",
+			"GET /v1/user-preferences":                                "getUserPreferences",
+			"PATCH /v1/user-preferences":                              "updateUserPreferences",
+			"POST /v1/workspace-selection":                            "selectWorkspace",
+			"GET /v1/workspaces":                                      "listWorkspaces",
+			"GET /v1/workspaces/{workspaceId}/members":                "listWorkspaceMembers",
+			"POST /v1/instances":                                      "createLogicalInstance",
+			"GET /v1/instances/{logicalInstanceId}":                   "getLogicalInstance",
+			"GET /v1/regions":                                         "listRegions",
+			"GET /v1/plans":                                           "listPlanVersions",
+			"GET /v1/workspaces/{workspaceId}/instances":              "listWorkspaceInstances",
+			"GET /v1/workspaces/{workspaceId}/instances/{instanceId}": "getWorkspaceInstance",
+			"GET /v1/workspaces/{workspaceId}/orders":                 "listWorkspaceOrders",
 		},
 		"platform-operations.openapi.json": {
 			"GET /v1/platform/regions":              "listPlatformRegions",
 			"GET /v1/platform/regions/{regionId}":   "getPlatformRegion",
 			"PATCH /v1/platform/regions/{regionId}": "updatePlatformRegionOperations",
+			"GET /v1/platform/workspaces":           "listPlatformWorkspaces",
+			"GET /v1/platform/plans":                "listPlatformPlans",
+			"GET /v1/platform/orders":               "listPlatformOrders",
+			"GET /v1/platform/instances":            "listPlatformInstances",
+			"POST /v1/platform/payments/verified":   "activateVerifiedPayment",
 		},
 	}
 	for filename, operations := range expected {
