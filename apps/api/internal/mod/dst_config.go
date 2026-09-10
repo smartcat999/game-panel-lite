@@ -85,10 +85,21 @@ func localizedDSTModInfoCandidates(path, locale string) []string {
 }
 
 var dstTableAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*(?:local[ \t]+)?(descs|options|configs|vars|configuration_options)[ \t]*=[ \t]*\{`)
+var dstConfigExpressionAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*configuration_options[ \t]*=[ \t]*`)
+var dstLocaleBooleanAssignment = regexp.MustCompile(`(?m)(?:^|[\r\n])[ \t]*local[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(locale[ \t]*==[^\r\n]+)`)
 
 func ParseDSTConfigOptions(source, locale string) ([]DSTConfigOption, error) {
 	source = selectDSTLocale(source, locale)
-	env := map[string]luaValue{"L": {scalar: strings.HasPrefix(strings.ToLower(strings.TrimSpace(locale)), "zh")}}
+	wantedLocale := strings.ToLower(strings.TrimSpace(locale))
+	if separator := strings.IndexAny(wantedLocale, "-_"); separator >= 0 {
+		wantedLocale = wantedLocale[:separator]
+	}
+	env := map[string]luaValue{"L": {scalar: wantedLocale == "zh"}}
+	for _, match := range dstLocaleBooleanAssignment.FindAllStringSubmatchIndex(source, -1) {
+		name := source[match[2]:match[3]]
+		condition := source[match[4]:match[5]]
+		env[name] = luaValue{scalar: localeConditionMatches(condition, wantedLocale)}
+	}
 	matches := dstTableAssignment.FindAllStringSubmatchIndex(source, -1)
 	for _, match := range matches {
 		name := source[match[2]:match[3]]
@@ -102,6 +113,16 @@ func ParseDSTConfigOptions(source, locale string) ([]DSTConfigOption, error) {
 			continue
 		}
 		env[name] = value
+	}
+	if _, ok := env["configuration_options"]; !ok {
+		if match := dstConfigExpressionAssignment.FindStringIndex(source); match != nil {
+			parser := newLuaTableParser(source[match[1]:], env)
+			value, err := parser.parseValue()
+			if err != nil {
+				return nil, fmt.Errorf("parse configuration_options: %w", err)
+			}
+			env["configuration_options"] = value
+		}
 	}
 	root, ok := env["configuration_options"].table()
 	if !ok {
