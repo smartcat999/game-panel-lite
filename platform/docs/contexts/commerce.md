@@ -1,21 +1,29 @@
 # Commerce
 
-Commerce records what a Workspace may buy and what paid authority currently exists.
+Commerce owns regional resource pricing, prepaid Workspace funds, measured usage, and immutable financial history.
 
 ## Language
 
-**Plan**:
-An immutable versioned offer containing price, billing period, Region availability, and resource specification.
-_Avoid_: Instance type
+**Price Book**:
+An immutable published version of regional resource unit prices and their effective time.
+_Avoid_: Plan, package
 
-**Order**:
-A time-limited request by a Workspace to purchase a specific Plan version for a specific Logical Instance.
-_Avoid_: Transaction
+**Quote**:
+A short-lived price calculation for one requested resource specification.
+_Avoid_: Order, invoice
 
-**Payment**:
-A verified provider notification that settles an Order.
-_Avoid_: Frontend callback
+**Wallet**:
+The Workspace-owned prepaid balance derived from immutable Ledger Entries.
+_Avoid_: Account balance, entitlement
 
-**Entitlement**:
-Time-bounded commercial authority for one Logical Instance to consume the resources defined by its purchased Plan.
-_Avoid_: Credits, permission
+**Ledger Entry**:
+An immutable credit or debit that changes one Wallet balance.
+_Avoid_: Mutable balance row, payment
+
+**Funding Authorization**:
+A short-lived decision that sufficient available funds permit a command to proceed.
+_Avoid_: Charge, entitlement
+
+**Usage Record**:
+An immutable measured interval for one billable resource owned by a Workspace.
+_Avoid_: Estimate, runtime status

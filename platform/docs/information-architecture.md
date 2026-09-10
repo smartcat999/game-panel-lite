@@ -6,17 +6,18 @@ The product has three operating areas. Authority controls whether an area is vis
 
 URL scope: `/w/:workspaceSlug`
 
-The top bar contains the product entry, Workspace switcher, search, notifications, and User menu. It does not contain a Region switcher. Region is a property of a resource and appears in create flows, filters, and resource details.
+The top bar contains the product entry, Workspace switcher, actionable notifications, and User menu. It does not contain global search or a Region switcher. Region is a property of a resource and appears in create flows, filters, and resource details.
 
 Primary navigation:
 
-- Overview
 - Instances
 - Backups
-- Activity
+- Operations
 - Billing
 - Members
 - Workspace settings
+
+The Workspace opens on Instances. Navigation does not display decorative resource counts.
 
 ## Platform Console
 
@@ -26,14 +27,16 @@ Platform Operators enter this area through an operating-area item in the User me
 
 Primary navigation:
 
-- Platform overview
 - Workspaces
 - Users
-- Plans
-- Orders and payments
+- Invitations
+- Credit grants
+- Price books
 - Logical instances
 - Regions
 - Audit
+
+The Platform Console opens on Regions and surfaces actionable failures without a decorative dashboard.
 
 ## Region Operations
 
@@ -41,7 +44,7 @@ URL scope: `/platform/regions/:regionId`
 
 Region Operations is nested under the Platform Console. A Region selector is local to the Region page header. Its navigation focuses on execution:
 
-- Overview
+- Health
 - Nodes
 - Deployments
 - Tasks

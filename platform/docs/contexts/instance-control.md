@@ -9,8 +9,12 @@ The global customer resource representing one game server throughout configurati
 _Avoid_: Container, regional instance
 
 **Instance Revision**:
-An immutable version of game configuration and deployable specification for a Logical Instance.
+An immutable version of resource specification, Provider release, and game configuration for a Logical Instance.
 _Avoid_: Mutable config row
+
+**Configuration Draft**:
+A mutable proposed configuration that has not yet become an Instance Revision.
+_Avoid_: Active configuration
 
 **Desired State**:
 The global requested lifecycle state of a Logical Instance.

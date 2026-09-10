@@ -16,6 +16,6 @@ _Avoid_: OAuth user
 The User-owned locale, color theme, time zone, and accessibility preferences.
 _Avoid_: Workspace setting
 
-**Platform Operator**:
-A User with explicit platform authority outside Workspace membership.
-_Avoid_: Super tenant, workspace owner
+**Credential**:
+A local password or second factor used by an Identity to authenticate.
+_Avoid_: User secret

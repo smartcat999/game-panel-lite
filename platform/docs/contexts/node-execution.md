@@ -16,8 +16,12 @@ _Avoid_: Global task
 The Node-local runtime realization of one Regional Deployment.
 _Avoid_: Logical Instance
 
+**Runtime Attempt**:
+One replaceable execution generation of a Workload whose identity is retained as observation provenance.
+_Avoid_: Logical Instance, customer server
+
 **Game Provider**:
-An adapter that validates and materializes game-specific configuration behind the platform's game interface.
+An adapter for one signed Provider release that validates and materializes game-specific configuration and capabilities behind the platform's game interface.
 _Avoid_: Runtime driver
 
 **Runtime Provider**:

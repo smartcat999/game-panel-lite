@@ -20,6 +20,10 @@ _Avoid_: Live utilization
 A durable, retryable command whose result is recorded before acknowledgement.
 _Avoid_: In-memory job
 
+**Endpoint Binding**:
+A Region-allocated public address, port, and transport that satisfies one Provider listener requirement.
+_Avoid_: User-configured port, container port
+
 **Region Operator**:
-A Platform Operator whose authority is scoped to one or more Regions.
+A Principal with a Region Operator Role Binding for one or more Regions.
 _Avoid_: Workspace administrator

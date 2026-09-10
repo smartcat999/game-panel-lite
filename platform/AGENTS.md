@@ -22,11 +22,16 @@ Retain the root repository's general safety, simplicity, Go quality, testing, an
 - Use Next.js, React, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, and restrained Framer Motion for the console.
 - Use PostgreSQL independently for the global plane and for each Region.
 - Use transactional outbox, durable inbox, idempotent handlers, versioned contracts, and at-least-once delivery.
+- Use NATS JetStream only as transport; PostgreSQL desired/observed state and Outbox/Inbox remain authoritative.
 - A Region owns multiple Nodes. Do not add a Cell layer.
 - A tenant User chooses a Region. Only the regional scheduler chooses a Node.
 - Keep bounded contexts behind small module interfaces. A module cannot access another module's repository or tables.
 - Production SQL must not contain JOIN. Query by indexed IDs in bounded batches and compose in Go, or maintain an asynchronous read model.
 - Do not commit secrets, machine-specific paths, or external provider credentials.
+- Keep HTTP handlers free of authentication and authorization logic. Route filters authenticate, resolve stored resource scope, and batch-check typed Actions through the Authorization module.
+- Use built-in Role -> Permission -> Binding authorization. Do not add administrator flags, a custom policy DSL, per-resource authorization queries, or an authorization microservice in V1.
+- Keep request work short. External I/O runs as durable idempotent Operations with leases, bounded retries, and reconciliation.
+- Allow workload access to the public internet while isolating platform management networks and host control surfaces.
 
 ## Product and UI
 
@@ -35,6 +40,7 @@ Retain the root repository's general safety, simplicity, Go quality, testing, an
 - Locale and light/dark/system theme are User Preferences and work from the first frontend phase.
 - Do not mix languages in a rendered session or branch copy inline by locale.
 - Follow `DESIGN.md`; legacy screenshots and CSS are not references.
+- Treat `docs/v1-rebaseline.md` as the current product baseline. Plans, Orders, Payments, Entitlements, public password registration, World management, user-selected ports, and user-selected Nodes are outside V1.
 
 ## Delivery
 

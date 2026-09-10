@@ -1,6 +1,6 @@
 # Workspace
 
-A Workspace is the user-facing form of the tenant boundary. All customer resources and commercial ownership belong to exactly one Workspace.
+A Workspace is the user-facing customer boundary. All customer resources, quotas, and prepaid funds belong to exactly one Workspace.
 
 ## Language
 
@@ -12,10 +12,6 @@ _Avoid_: Organization, project, tenant account
 The isolation property of a Workspace, used only when discussing security or data partitioning.
 _Avoid_: A second resource beside Workspace
 
-**Membership**:
-The relationship that grants a User a role in one Workspace.
-_Avoid_: Workspace user
-
-**Workspace Role**:
-Owner, Administrator, Operator, Billing, or Viewer authority within one Workspace.
-_Avoid_: Platform role
+**Workspace Invitation**:
+A time-limited request for a User to receive a Workspace Role Binding.
+_Avoid_: Platform invitation, membership email

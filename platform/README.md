@@ -17,5 +17,5 @@ No legacy route, page, style, tenant model, order model, database model, handler
 - `docs/`: architecture, product interaction model, decisions, and delivery plan
 - `CONTEXT-MAP.md`: canonical domain language and ownership map
 
-Start with [the development plan](docs/development-plan.md). Do not scaffold product code before completing its Phase 1 acceptance checks.
+Read [the hosted V1 rebaseline](docs/v1-rebaseline.md), then follow [the development plan](docs/development-plan.md). The rebaseline phases supersede the preserved historical phases and evidence.
 Production deployment, schema rollout, SLO, alerting, backup recovery, and Region isolation procedures are documented in [docs/production-operations.md](docs/production-operations.md).

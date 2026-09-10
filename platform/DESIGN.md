@@ -1,6 +1,6 @@
 # GamePanel Platform Design System
 
-This document governs the new `platform/frontend` implementation. The legacy frontend is not a visual reference.
+This document governs the new `platform/frontend` implementation. The selected new prototype governs visual treatment; legacy frontend code and styling are not references.
 
 ## Product character
 
@@ -12,8 +12,9 @@ GamePanel is a calm, precise operations product for game infrastructure. It shou
 - Support light, dark, and system themes from the first shell implementation.
 - Store theme and locale as User Preferences; use a local bootstrap value only to prevent first-paint flicker.
 - Use one language per rendered session. All visible copy, accessibility labels, validation messages, dates, and numbers use message catalogs and locale formatters.
-- Start with a neutral sans-serif interface and a monospace face only for identifiers, endpoints, logs, and measurements.
+- Self-host Inter and Noto Sans SC. Use monospace only for identifiers, endpoints, logs, versions, money, and measurements.
 - Use one restrained brand accent. Status colors communicate state and are not decoration.
+- Primary actions use near-black navy. Green communicates brand and success, purple mods, amber warning, and red failure or destructive action.
 
 ## Layout
 
@@ -21,6 +22,7 @@ GamePanel is a calm, precise operations product for game infrastructure. It shou
 - Mobile uses a compact header and navigation drawer while preserving the same information hierarchy.
 - Workspace Console, Platform Console, and Region Operations each have an explicit title and navigation model.
 - Dense operational pages use tables with visible labels, filters, pagination, empty states, and row-level actions.
+- Use compact 40px controls and 48-52px table rows. Each row has at most one state-dependent primary action and one overflow menu.
 - Forms group fields by user decision. Advanced infrastructure fields are absent from tenant workflows.
 
 ## Interaction
@@ -33,6 +35,7 @@ GamePanel is a calm, precise operations product for game infrastructure. It shou
 - Loading, empty, stale, partial, unavailable, forbidden, and failed states are designed for every data view.
 - Avoid unlabeled icon-only actions for consequential operations.
 - Avoid menu labels with tiny count badges. Put counts in the page content when they support a decision.
+- Present each fact once. Do not repeat configuration, endpoint, resource, or status summaries within one page.
 
 ## Visual constraints
 

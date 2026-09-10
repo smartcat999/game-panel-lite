@@ -5,16 +5,68 @@
 All new product work stays under `platform/`. The only required reading for a new session is:
 
 1. `platform/README.md`
-2. `platform/AGENTS.md`
-3. `platform/CONTEXT-MAP.md` and its linked contexts
-4. `platform/docs/architecture.md`
-5. `platform/docs/information-architecture.md`
-6. `platform/DESIGN.md`
-7. this plan
+2. `platform/docs/v1-rebaseline.md`
+3. `platform/AGENTS.md`
+4. `platform/CONTEXT-MAP.md` and its linked contexts
+5. `platform/docs/architecture.md`
+6. `platform/docs/information-architecture.md`
+7. `platform/DESIGN.md`
+8. this plan
 
 Do not read legacy UI or SaaS implementation unless the current task is explicitly the provider migration in Phase 6. Keep commits confined to one phase and record completed acceptance evidence in this file.
 
-## Phase 1 — contracts and executable architecture
+The original six phases below were completed against assumptions that the product review has superseded. Their evidence remains historical and cannot satisfy the rebaseline phases. The current product baseline is `docs/v1-rebaseline.md`.
+
+## Rebaseline Phase 1 — contracts and clickable product flow
+
+Deliver:
+
+- Replace Plan/Order/Payment/Entitlement contracts with Region Catalog, Price Book, Quote, Capacity Hold, Wallet, Ledger Entry, Usage Record, and Funding Authorization contracts.
+- Add GitHub sign-in, local credential, invitation, built-in Role Binding, typed Action, batch authorization, Operation, Endpoint Binding, Provider Manifest, configuration schema, and observability envelopes.
+- Build the complete Workspace create-to-operate flow as a clickable frontend prototype using contract fixtures, including failure, stale, forbidden, unsupported-capability, and insufficient-credit states.
+- Update architecture tests to reject administrator flags, handler-local authorization, per-resource authorization SQL loops, legacy commerce names in production code, and World-management routes.
+
+Acceptance:
+
+- Contract compatibility tests parse every HTTP and message schema and prove unknown configuration field types fail closed.
+- Authorization contract tests cover one Principal with Platform, Region, and Workspace bindings plus a 100-resource batch without per-resource SQL.
+- The prototype completes sign-in, invitation, credit receipt, create, configuration, conditional mods, quote, deploy progress, endpoint display, lifecycle action, logs, backup, restore, and low-balance stop.
+- Design review confirms the selected prototype visual language, compact density, no duplicate facts, no decorative counts, and no unsupported controls.
+- No backend production behavior is changed in this phase.
+
+## Rebaseline Phase 2 — identity and authorization
+
+Deliver GitHub OAuth, local credentials, sessions, Operator TOTP, invitations, the single Role Binding store, route filters, typed resource resolvers, and bounded batch decisions.
+
+Acceptance requires cross-Scope and cross-Workspace denial tests, no handler permission branches, constant authorization query count for a 100-resource batch, and complete session security checks.
+
+## Rebaseline Phase 3 — pricing, wallet, and resource catalog
+
+Deliver Region resource catalogs, immutable Price Books, Quotes, Capacity Holds, promotional credit grants, Wallet/Ledger, usage metering, and balance-exhaustion policy.
+
+Acceptance requires concurrent debit safety, immutable correction entries, price-version transitions, no negative balance, accurate stopped-resource charging, and no simulated payment UI.
+
+## Rebaseline Phase 4 — asynchronous instance delivery
+
+Deliver durable Operations, NATS JetStream transport, revised Outbox/Inbox contracts, idempotent step workers, Endpoint allocation, resource scheduling, readiness, and reconciliation.
+
+Acceptance requires broker outage recovery, duplicate and out-of-order delivery safety, crash-at-every-step recovery, automatic residual cleanup, and honest stable-versus-changeable endpoint display.
+
+## Rebaseline Phase 5 — provider-driven operation
+
+Deliver signed Provider contracts and fakes, generic configuration rendering, immutable revisions, explicit apply behavior, controlled mod catalog/lockfile contracts, instance-keyed logs and metrics, game console, and instance backup/same-Region restore without migrating legacy adapters.
+
+Acceptance requires zero game-specific frontend branches, schema and capability compatibility tests, preserved logs across fake Runtime replacement, conditional game metrics, and complete provider-neutral flows against contract fixtures.
+
+## Rebaseline Phase 6 — hardening and replacement deployment
+
+Migrate the Terraria, tModLoader, and Docker adapters only through the accepted Phase 5 interfaces. Deliver security and failure tests, production migrations, SLOs, runbooks, um773 deployment, smoke tests, and reversible cutover from the old deployment without importing old business models.
+
+Acceptance requires all checks green, fresh-schema deployment, one complete Terraria and tModLoader flow, rollback instructions, verified login/create/operate/backup flow on um773, and removal of the old deployment only after the new health and browser checks pass.
+
+## Superseded implementation history
+
+### Historical Phase 1 — contracts and executable architecture
 
 Deliver:
 
@@ -33,7 +85,7 @@ Acceptance:
 - Frontend displays a locale-aware, theme-aware empty shell for the three operating areas.
 - No production source imports a legacy path.
 
-## Phase 2 — User, Workspace, and authority
+### Historical Phase 2 — User, Workspace, and authority
 
 Deliver:
 
@@ -50,7 +102,7 @@ Acceptance:
 - Workspace roles cannot access Platform Console; Platform authority does not manufacture Workspace membership.
 - Authorization integration tests cover cross-Workspace ID attempts.
 
-## Phase 3 — global product and instance control
+### Historical Phase 3 — global product and instance control
 
 Deliver:
 
@@ -68,7 +120,7 @@ Acceptance:
 - Request-path SQL uses indexed single-table and bounded batch queries only.
 - UI covers pending payment, waiting for Region, running, stopped, failed, stale, and forbidden states in both locales and themes.
 
-## Phase 4 — Region control and scheduling
+### Historical Phase 4 — Region control and scheduling
 
 Deliver:
 
@@ -85,7 +137,7 @@ Acceptance:
 - A Region continues reconciling existing deployments during a simulated global outage.
 - Region Operations clearly separates global Logical Instance context from regional execution ownership.
 
-## Phase 5 — Node Agent and backup path
+### Historical Phase 5 — Node Agent and backup path
 
 Deliver:
 
@@ -101,7 +153,7 @@ Acceptance:
 - Backup bytes bypass the Control Plane and restore works within the owning Region.
 - Cross-Region migration remains absent from the critical path.
 
-## Phase 6 — provider migration and production hardening
+### Historical Phase 6 — provider migration and production hardening
 
 Deliver:
 
@@ -143,6 +195,7 @@ Acceptance:
 ## Progress evidence
 
 - 2026-09-07: architecture, domain language, console information architecture, clean design foundation, and six-phase plan established. Product code has intentionally not been scaffolded before Phase 1 review.
+- 2026-09-10: Product and architecture review replaced plan-based checkout with custom regional resources and a prepaid Wallet/Ledger, established GitHub-first identity and one-table Role Binding authorization, made operations asynchronous through PostgreSQL Outbox/Inbox and NATS JetStream, pinned observability to Logical Instance identity, removed World management from V1, and selected the compact professional prototype as the visual reference. The rebaseline phases above now govern further work; all earlier phase evidence below is historical only.
 - 2026-09-10: Phase 1 accepted. The isolated `platform/backend` Go module compiles the Control Plane, Region Controller, and Node Agent, and live probes returned healthy responses from all three processes. Versioned OpenAPI documents cover session, User Preferences, Workspace selection, Logical Instance create/read, the Region catalog, and Platform Region operations; four v1 event schemas cover deployment desired, entitlement changed, deployment observed, and backup observed. `go test ./...` parses all contract documents, preserves the required v1 API and message surface, round-trips typed identities, and proves the architecture rules reject deliberate legacy imports, cross-context repository imports, and SQL `JOIN` while the production tree passes. The independent Next.js console renders locale-aware and theme-aware Workspace, Platform, and Region Operations shells; browser checks covered English, Simplified Chinese, dark theme, 390 px navigation, all three routes, and a zero-error console. Final checks passed: `gofmt`, `go test ./...`, `go vet ./...`, three-binary `go build`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, and `docker compose config --quiet`.
 - 2026-09-10: Phase 2 accepted. Identity owns User, sign-in Identity, User Preferences, session restoration, and explicit Platform Operator authority; Workspace separately owns Workspace, Membership, Workspace Role, and per-User selection. Integration tests prove one User can switch between two Workspaces without another User's selected scope changing, Workspace members cannot enter Platform APIs, Platform Operators gain no synthetic Workspace membership, and cross-Workspace member IDs return `403`. The member endpoint reads Memberships by Workspace ID, batches User IDs through the Identity module interface, and composes the response in Go without SQL `JOIN`; the global PostgreSQL migration adds indexed single-context tables. The console consumes the expanded v1 contract through TanStack Query with Workspace-scoped keys, provides a functional Workspace switcher, scoped member management, Account preferences, and an explicit Platform Console entry. Browser integration against the Go Control Plane verified Workspace selection persistence, member role isolation, preference writes, server-side locale restoration before protected rendering, and a zero-error console. Final checks passed: `gofmt`, `go test ./...`, `go vet ./...`, three-binary `go build`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
 - 2026-09-10: Phase 3 accepted. The Global Control Plane now has separate Region Directory, Commerce, Instance Control, and Messaging modules with immutable Plan versions, versioned Instance Revisions and Placements, pending Orders, verified Payments, time-bounded Entitlements, transactional outbox writes, and idempotent inbox handling. PostgreSQL adapters keep module tables private, use indexed single-table point/list queries and bounded ID batches, and compose related records in Go without SQL `JOIN`. A real PostgreSQL integration test forces a late Order constraint failure after Instance insertion and proves full rollback; it also proves checkout command replay returns the original Instance and Order, unentitled Instances cannot write deployment authority, verified payment redelivery creates one Payment and Entitlement, outbox writes remain exactly-once by message type and identity, and inbox redelivery invokes its handler once. Workspace Console now provides instance list/create/detail and billing Orders, while Platform Console provides Workspaces, immutable Plans, Orders, Regions, and global Logical Instances. The customer create contract and screen expose Plan, Region, game version, and configuration but no Node. Playwright checks against the live Go API covered pending payment, waiting for Region, running, stopped, failed, stale, and simulated `403` states in English and Simplified Chinese under both light and dark themes, plus all Workspace and Platform resource views. Final checks passed: PostgreSQL-backed `go test ./... -count=1`, `go vet ./...`, `go test -race ./...`, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
