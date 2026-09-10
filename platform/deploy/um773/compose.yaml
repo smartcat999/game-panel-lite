@@ -1,0 +1,93 @@
+name: gamepanel-platform
+
+services:
+  control-plane:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    image: gamepanel-platform-backend:${GAMEPANEL_RELEASE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      GAMEPANEL_HTTP_ADDR: 0.0.0.0:8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  region-controller:
+    image: gamepanel-platform-backend:${GAMEPANEL_RELEASE_TAG:-local}
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/region-controller"]
+    environment:
+      GAMEPANEL_HTTP_ADDR: 0.0.0.0:8081
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    depends_on:
+      control-plane:
+        condition: service_healthy
+
+  node-agent:
+    image: gamepanel-platform-backend:${GAMEPANEL_RELEASE_TAG:-local}
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/node-agent"]
+    environment:
+      GAMEPANEL_HTTP_ADDR: 0.0.0.0:8082
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8082/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    depends_on:
+      region-controller:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    image: gamepanel-platform-web:${GAMEPANEL_RELEASE_TAG:-local}
+    restart: unless-stopped
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      GAMEPANEL_CONTROL_PLANE_URL: http://control-plane:8080
+      GAMEPANEL_REGION_CONTROL_URL: http://region-controller:8081
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      region-controller:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${GAMEPANEL_PUBLIC_PORT:-3005}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    depends_on:
+      web:
+        condition: service_healthy
+
+networks:
+  default:
+    name: gamepanel-platform
