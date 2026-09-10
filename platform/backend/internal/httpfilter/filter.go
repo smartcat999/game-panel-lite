@@ -42,6 +42,7 @@ const (
 	ResourceRegion    ResourceType = "region"
 	ResourceWorkspace ResourceType = "workspace"
 	ResourceInstance  ResourceType = "instance"
+	ResourceOperation ResourceType = "operation"
 	ResourceBackup    ResourceType = "backup"
 )
 

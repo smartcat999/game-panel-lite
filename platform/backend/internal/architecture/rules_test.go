@@ -50,7 +50,7 @@ func TestRebaselineNewSourcePassesRules(t *testing.T) {
 	_, currentFile, _, _ := runtime.Caller(0)
 	backendRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
 	var files []SourceFile
-	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/httpfilter", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql"} {
+	for _, relative := range []string{"internal/accessapi", "internal/authentication", "internal/authorization", "internal/billing", "internal/billingapi", "internal/deliveryapi", "internal/deliverycontrol", "internal/deliveryworker", "internal/eventtransport", "internal/httpfilter", "internal/messaging", "internal/regionaldelivery", "migrations/global/0005_identity_authorization_rebaseline.sql", "migrations/global/0006_resource_pricing_wallet.sql", "migrations/global/0007_async_delivery.sql", "migrations/region/0004_async_delivery.sql"} {
 		path := filepath.Join(backendRoot, relative)
 		info, err := os.Stat(path)
 		if err != nil {

@@ -2,10 +2,13 @@ package billing
 
 import (
 	"context"
+	"crypto/hmac"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/smartcat999/game-panel-lite/platform/backend/internal/persistence"
 )
 
 type PostgresStore struct {
@@ -143,6 +146,43 @@ func (s *PostgresStore) PutQuote(ctx context.Context, quote Quote) error {
 
 func (s *PostgresStore) QuoteByID(ctx context.Context, id string) (Quote, error) {
 	return scanQuote(s.database.QueryRowContext(ctx, quoteSelect+` WHERE id = $1`, id))
+}
+
+func (s *PostgresStore) AuthorizedQuote(ctx context.Context, query persistence.DBTX, workspaceID, quoteID string, now time.Time, signingKey []byte) (Quote, error) {
+	quote, err := scanQuote(query.QueryRowContext(ctx, quoteSelect+` WHERE id = $1 FOR UPDATE`, quoteID))
+	if err != nil {
+		return Quote{}, err
+	}
+	if quote.WorkspaceID != workspaceID {
+		return Quote{}, ErrQuoteScope
+	}
+	if !now.Before(quote.ExpiresAt) {
+		return Quote{}, ErrQuoteExpired
+	}
+	maximumDebit, ok := safeMultiply(quote.EstimatedHourlyMinor, 24)
+	if !ok || quote.Hold == nil || quote.Hold.Status != "held" || quote.Funding == nil || quote.Funding.MaximumDebitMinor != maximumDebit || quote.Funding.Currency != CurrencyCNY || !quote.Funding.ExpiresAt.Equal(quote.ExpiresAt) {
+		return Quote{}, ErrInsufficientFunds
+	}
+	expected := fundingSignature(signingKey, quote.ID, quote.WorkspaceID, maximumDebit, quote.ExpiresAt)
+	if !hmac.Equal([]byte(expected), []byte(quote.Funding.Signature)) {
+		return Quote{}, ErrInsufficientFunds
+	}
+	return quote, nil
+}
+
+func (s *PostgresStore) ConsumeHold(ctx context.Context, query persistence.DBTX, quoteID string) error {
+	result, err := query.ExecContext(ctx, `UPDATE resource_quotes SET hold_status = 'consumed' WHERE id = $1 AND hold_status = 'held'`, quoteID)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed != 1 {
+		return ErrInsufficientFunds
+	}
+	return nil
 }
 
 func (s *PostgresStore) CreateHold(ctx context.Context, quoteID, workspaceID string, now time.Time, maximumDebit int64, signature string) (Quote, error) {

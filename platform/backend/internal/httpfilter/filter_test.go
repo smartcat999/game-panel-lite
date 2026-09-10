@@ -159,7 +159,8 @@ func TestResourceTypesMapToOneAuthoritativeTable(t *testing.T) {
 	}{
 		{ResourceRegion, "FROM regions", authorization.ScopeRegion},
 		{ResourceWorkspace, "FROM workspaces", authorization.ScopeWorkspace},
-		{ResourceInstance, "FROM logical_instances", authorization.ScopeWorkspace},
+		{ResourceInstance, "FROM managed_instances", authorization.ScopeWorkspace},
+		{ResourceOperation, "FROM operations", authorization.ScopeWorkspace},
 		{ResourceBackup, "FROM backup_requests", authorization.ScopeWorkspace},
 	} {
 		query, scope, err := scopeQuery(test.resource)

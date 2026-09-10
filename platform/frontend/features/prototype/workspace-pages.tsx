@@ -74,7 +74,7 @@ function InstanceRow({ instance, workspaceSlug }: { instance: PrototypeInstance;
     <td><Link className="resource-name" href={`/w/${workspaceSlug}/instances/${instance.id}`}>{instance.name}</Link>{instance.stale ? <span className="stale-tag">状态延迟</span> : null}</td>
     <td><StateBadge state={instance.state} /></td>
     <td><span className={cn("provider-tag", instance.supportsMods && "provider-modded")}>{instance.provider} {instance.version}</span></td>
-    <td>{instance.endpoint ? <code>{instance.endpoint}</code> : <span className="muted-text">分配中</span>}</td>
+    <td><EndpointSummary instance={instance} /></td>
     <td><strong>{instance.memoryMiB / 1024} GB</strong><span className="cell-secondary"> · {instance.cpuMilli / 1000} vCPU</span></td>
     <td>{instance.region}</td>
     <td><div className="row-actions">
@@ -84,6 +84,11 @@ function InstanceRow({ instance, workspaceSlug }: { instance: PrototypeInstance;
       <Link aria-label="打开实例" href={`/w/${workspaceSlug}/instances/${instance.id}`}><ChevronRight size={17} /></Link>
     </div></td>
   </tr>;
+}
+
+function EndpointSummary({ instance }: { instance: PrototypeInstance }) {
+  if (!instance.endpoint) return <span className="muted-text">分配中</span>;
+  return <span className="endpoint-summary"><code>{instance.endpoint}</code><span>{instance.transports.join("/")} · {instance.endpointStability === "may-change" ? "可能变化" : "固定"}</span></span>;
 }
 
 type WizardValues = Record<string, string | number | boolean | string[]>;
@@ -227,7 +232,7 @@ export function InstanceDetailPage({ workspaceSlug, instanceId }: { workspaceSlu
   return <>
     <section className="instance-header">
       <Link className="breadcrumb" href={`/w/${workspaceSlug}/instances`}><ChevronLeft size={15} />实例</Link>
-      <div className="instance-title-row"><div><h1>{instance.name}</h1><StateBadge state={instance.state} />{instance.endpoint ? <code>{instance.endpoint}</code> : null}</div><div className="header-actions">
+      <div className="instance-title-row"><div><h1>{instance.name}</h1><StateBadge state={instance.state} /><EndpointSummary instance={instance} /></div><div className="header-actions">
         <button aria-label="复制地址" onClick={() => navigator.clipboard?.writeText(instance.endpoint ?? "")} type="button"><Clipboard size={17} /></button>
         <button aria-label="重启" onClick={() => setInstanceState(instance.id, "starting")} type="button"><RefreshCw size={17} /></button>
         {instance.state === "stopped" ? <button aria-label="启动" onClick={() => setInstanceState(instance.id, "running")} type="button"><Play size={17} /></button> : <button aria-label="停止" onClick={() => setInstanceState(instance.id, "stopped")} type="button"><Square size={16} /></button>}
@@ -249,8 +254,6 @@ function OverviewTab({ instance }: { instance: PrototypeInstance }) {
     <Review label="游戏" value={`${instance.provider} ${instance.version}`} />
     <Review label="区域" value={instance.region} />
     <Review label="规格" value={`${instance.cpuMilli / 1000} vCPU · ${instance.memoryMiB / 1024} GB · ${instance.diskGiB} GB`} />
-    <Review label="Endpoint" value={instance.endpoint ?? "分配中"} />
-    <Review label="协议" value={instance.transports.join(" / ")} />
     {instance.players ? <Review label="玩家" value={`${instance.players.current} / ${instance.players.maximum}`} /> : <Review label="玩家" value="Provider 未提供" />}
   </div></section>;
 }

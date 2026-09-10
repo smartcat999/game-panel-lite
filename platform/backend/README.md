@@ -19,7 +19,11 @@ The rebaseline access API is enabled when the Control Plane has a global Postgre
 - `GAMEPANEL_GITHUB_REDIRECT_URL`
 - `GAMEPANEL_TOTP_KEY_BASE64`, a base64-encoded 32-byte AES key
 - `GAMEPANEL_FUNDING_SIGNING_KEY_BASE64`, a separate base64-encoded key containing at least 32 bytes
+- `GAMEPANEL_DELIVERY_AUTHORITY_KEY_BASE64`, a separate base64-encoded key containing at least 32 bytes
+- `GAMEPANEL_NATS_URL`, which enables the PostgreSQL Outbox/Inbox delivery workers over JetStream
 
 Session cookies are Secure by default. `GAMEPANEL_INSECURE_COOKIES=true` is only for local HTTP development. Apply global migrations in numeric order before enabling the access API.
+
+The Region Controller requires `GAMEPANEL_REGION_DATABASE_URL`, `GAMEPANEL_REGION_ID`, `GAMEPANEL_NATS_URL`, and the same delivery authority key. JetStream transports at-least-once messages only; Global and Region PostgreSQL remain authoritative. Apply Global migration `0007` and Region migration `0004` before enabling the workers.
 
 Authentication data and authorization data remain separate. The only persisted authorization policy table is `authorization_role_bindings`; built-in roles, typed actions, and permission sets live in Go. Route filters authenticate, load a resource's authoritative Scope in one bounded query, and evaluate all decisions in memory.

@@ -12,6 +12,7 @@ export type PrototypeInstance = {
   version: string;
   region: string;
   endpoint?: string;
+  endpointStability?: "stable" | "may-change";
   transports: Array<"TCP" | "UDP">;
   cpuMilli: number;
   memoryMiB: number;
@@ -30,7 +31,7 @@ export type PrototypeBackup = {
   state: "ready" | "restoring";
 };
 
-type NewInstance = Omit<PrototypeInstance, "id" | "state" | "endpoint" | "transports"> & {
+type NewInstance = Omit<PrototypeInstance, "id" | "state" | "endpoint" | "endpointStability" | "transports"> & {
   serverName: string;
   maxPlayers: number;
   password: string;
@@ -52,10 +53,10 @@ type PrototypeContextValue = {
 };
 
 const initialInstances: PrototypeInstance[] = [
-  { id: "lin_terraria01", name: "terraria-hardcore-01", state: "running", provider: "Terraria", version: "1.4.4.9", region: "华东 1", endpoint: "192.168.2.4:31777", transports: ["TCP"], cpuMilli: 2000, memoryMiB: 4096, diskGiB: 20, players: { current: 12, maximum: 16 }, supportsMods: false },
-  { id: "lin_modded03", name: "calamity-infernum-03", state: "running", provider: "tModLoader", version: "2025.06", region: "华东 1", endpoint: "192.168.2.4:31779", transports: ["TCP"], cpuMilli: 3000, memoryMiB: 6144, diskGiB: 35, players: { current: 6, maximum: 12 }, supportsMods: true },
-  { id: "lin_casual02", name: "terraria-casual-02", state: "stopped", provider: "Terraria", version: "1.4.4.9", region: "华北 1", endpoint: "192.168.2.4:31778", transports: ["TCP"], cpuMilli: 1000, memoryMiB: 2048, diskGiB: 15, supportsMods: false },
-  { id: "lin_builder04", name: "builder-creative-04", state: "running", provider: "Terraria", version: "1.4.4.9", region: "华东 1", endpoint: "192.168.2.4:31780", transports: ["TCP"], cpuMilli: 1000, memoryMiB: 2048, diskGiB: 12, supportsMods: false, stale: true },
+  { id: "lin_terraria01", name: "terraria-hardcore-01", state: "running", provider: "Terraria", version: "1.4.4.9", region: "华东 1", endpoint: "play.east.example:31777", endpointStability: "stable", transports: ["TCP", "UDP"], cpuMilli: 2000, memoryMiB: 4096, diskGiB: 20, players: { current: 12, maximum: 16 }, supportsMods: false },
+  { id: "lin_modded03", name: "calamity-infernum-03", state: "running", provider: "tModLoader", version: "2025.06", region: "华东 1", endpoint: "play.east.example:31779", endpointStability: "stable", transports: ["TCP"], cpuMilli: 3000, memoryMiB: 6144, diskGiB: 35, players: { current: 6, maximum: 12 }, supportsMods: true },
+  { id: "lin_casual02", name: "terraria-casual-02", state: "stopped", provider: "Terraria", version: "1.4.4.9", region: "华北 1", endpoint: "203.0.113.18", endpointStability: "stable", transports: ["UDP"], cpuMilli: 1000, memoryMiB: 2048, diskGiB: 15, supportsMods: false },
+  { id: "lin_builder04", name: "builder-creative-04", state: "running", provider: "Terraria", version: "1.4.4.9", region: "华东 1", endpoint: "192.168.2.4:31780", endpointStability: "may-change", transports: ["TCP"], cpuMilli: 1000, memoryMiB: 2048, diskGiB: 12, supportsMods: false, stale: true },
 ];
 
 const PrototypeContext = createContext<PrototypeContextValue | null>(null);
@@ -102,6 +103,7 @@ export function PrototypeProvider({ children }: { children: React.ReactNode }) {
       ...instance,
       state,
       endpoint: state === "running" && !instance.endpoint ? `192.168.2.4:${31800 + index}` : instance.endpoint,
+      endpointStability: state === "running" && !instance.endpoint ? "may-change" : instance.endpointStability,
     } : instance)),
     createBackup: (instanceId) => setBackups((current) => [{ id: `bkp_${Date.now()}`, instanceId, label: "手动备份", size: "处理中", createdAt: "刚刚", state: "ready" }, ...current]),
     restoreBackup: (id) => {

@@ -15,11 +15,20 @@ type Postgres struct{ db *sql.DB }
 func NewPostgres(db *sql.DB) *Postgres { return &Postgres{db: db} }
 
 func (p *Postgres) InsertOutbox(ctx context.Context, query persistence.DBTX, message OutboxMessage) error {
+	return p.InsertOutboxTo(ctx, query, GlobalOutbox, message)
+}
+
+func (p *Postgres) InsertOutboxTo(ctx context.Context, query persistence.DBTX, scope OutboxScope, message OutboxMessage) error {
 	payload, err := json.Marshal(message.Payload)
 	if err != nil {
 		return err
 	}
-	_, err = query.ExecContext(ctx, `INSERT INTO global_outbox (id, message_type, schema_version, idempotency_key, payload, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (message_type, idempotency_key) DO NOTHING`, message.ID, message.MessageType, message.SchemaVersion, message.IdempotencyKey, payload, message.CreatedAt)
+	table := "global_outbox"
+	if scope == RegionOutbox {
+		table = "regional_outbox"
+	}
+	statement := `INSERT INTO ` + table + ` (id, message_type, schema_version, idempotency_key, payload, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (message_type, idempotency_key) DO NOTHING`
+	_, err = query.ExecContext(ctx, statement, message.ID, message.MessageType, message.SchemaVersion, message.IdempotencyKey, payload, message.CreatedAt)
 	return err
 }
 

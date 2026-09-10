@@ -189,7 +189,11 @@ func (m *Module) LedgerEntries(ctx context.Context, workspaceID string, limit in
 }
 
 func (m *Module) signFunding(quoteID, workspaceID string, maximumDebit int64, expiresAt time.Time) string {
-	digest := hmac.New(sha256.New, m.signingKey)
+	return fundingSignature(m.signingKey, quoteID, workspaceID, maximumDebit, expiresAt)
+}
+
+func fundingSignature(signingKey []byte, quoteID, workspaceID string, maximumDebit int64, expiresAt time.Time) string {
+	digest := hmac.New(sha256.New, signingKey)
 	fmt.Fprintf(digest, "%s\x00%s\x00%d\x00%d", quoteID, workspaceID, maximumDebit, expiresAt.Unix())
 	return hex.EncodeToString(digest.Sum(nil))
 }

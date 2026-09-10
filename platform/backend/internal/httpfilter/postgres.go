@@ -51,7 +51,9 @@ func scopeQuery(resourceType ResourceType) (string, authorization.ScopeType, err
 	case ResourceWorkspace:
 		return `SELECT id, id FROM workspaces WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
 	case ResourceInstance:
-		return `SELECT id, workspace_id FROM logical_instances WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
+		return `SELECT id, workspace_id FROM managed_instances WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
+	case ResourceOperation:
+		return `SELECT id, workspace_id FROM operations WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
 	case ResourceBackup:
 		return `SELECT id, workspace_id FROM backup_requests WHERE id = ANY($1)`, authorization.ScopeWorkspace, nil
 	default:
