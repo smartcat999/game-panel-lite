@@ -3,6 +3,7 @@ package productionseed
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -136,7 +137,7 @@ func ensureWorkspace(ctx context.Context, database *sql.DB) error {
 }
 
 func ensureRegion(ctx context.Context, database *sql.DB) error {
-	result, err := database.ExecContext(ctx, `INSERT INTO regions (id,code,name,available,created_at) VALUES ($1,'asia-east','Asia East',true,$2) ON CONFLICT (id) DO NOTHING`, RegionID, seedTime)
+	result, err := database.ExecContext(ctx, `INSERT INTO regions (id,code,name,localized_names,available,created_at) VALUES ($1,'asia-east','Asia East','{"zh-CN":"亚洲东部","en":"Asia East"}'::jsonb,true,$2) ON CONFLICT (id) DO NOTHING`, RegionID, seedTime)
 	if err != nil {
 		return err
 	}
@@ -145,11 +146,13 @@ func ensureRegion(ctx context.Context, database *sql.DB) error {
 		return err
 	}
 	var code, name string
+	var names []byte
 	var available bool
-	if err := database.QueryRowContext(ctx, `SELECT code,name,available FROM regions WHERE id=$1`, RegionID).Scan(&code, &name, &available); err != nil {
+	if err := database.QueryRowContext(ctx, `SELECT code,name,localized_names,available FROM regions WHERE id=$1`, RegionID).Scan(&code, &name, &names, &available); err != nil {
 		return err
 	}
-	if code != "asia-east" || name != "Asia East" || !available {
+	var localizedNames map[string]string
+	if json.Unmarshal(names, &localizedNames) != nil || code != "asia-east" || name != "Asia East" || localizedNames["zh-CN"] != "亚洲东部" || localizedNames["en"] != "Asia East" || !available {
 		return errors.New("immutable Region differs from production seed")
 	}
 	return nil

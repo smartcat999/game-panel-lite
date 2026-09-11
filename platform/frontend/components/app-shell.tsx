@@ -29,58 +29,61 @@ import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { api, type Workspace } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type Area = "workspace" | "platform" | "region";
 type NavItem = { label: string; href: string; icon: LucideIcon };
+type Translate = ReturnType<typeof useI18n>["t"];
 
-function workspaceNavigation(slug: string): Array<{ group: string; items: NavItem[] }> {
+function workspaceNavigation(slug: string, t: Translate): Array<{ group: string; items: NavItem[] }> {
   return [
-    { group: "计算", items: [{ label: "实例", href: `/w/${slug}/instances`, icon: Server }] },
-    { group: "数据", items: [{ label: "备份", href: `/w/${slug}/backups`, icon: Archive }] },
-    { group: "工作区", items: [{ label: "账单", href: `/w/${slug}/billing`, icon: CircleDollarSign }] },
+    { group: t("nav.compute"), items: [{ label: t("nav.instances"), href: `/w/${slug}/instances`, icon: Server }] },
+    { group: t("nav.data"), items: [{ label: t("nav.backups"), href: `/w/${slug}/backups`, icon: Archive }] },
+    { group: t("nav.workspace"), items: [{ label: t("nav.billing"), href: `/w/${slug}/billing`, icon: CircleDollarSign }] },
   ];
 }
 
-const platformNavigation: Array<{ group: string; items: NavItem[] }> = [
-  { group: "平台", items: [
-    { label: "区域", href: "/platform/regions", icon: Network },
-    { label: "实例", href: "/platform/instances", icon: Boxes },
-    { label: "工作区", href: "/platform/workspaces", icon: Building2 },
-    { label: "用户", href: "/platform/users", icon: Users },
+function platformNavigation(t: Translate): Array<{ group: string; items: NavItem[] }> { return [
+  { group: t("nav.platform"), items: [
+    { label: t("nav.regions"), href: "/platform/regions", icon: Network },
+    { label: t("nav.instances"), href: "/platform/instances", icon: Boxes },
+    { label: t("nav.workspaces"), href: "/platform/workspaces", icon: Building2 },
+    { label: t("nav.users"), href: "/platform/users", icon: Users },
   ] },
-  { group: "商业", items: [
-    { label: "额度发放", href: "/platform/credit-grants", icon: CircleDollarSign },
-    { label: "价格表", href: "/platform/price-books", icon: Database },
+  { group: t("nav.commerce"), items: [
+    { label: t("nav.creditGrants"), href: "/platform/credit-grants", icon: CircleDollarSign },
+    { label: t("nav.priceBooks"), href: "/platform/price-books", icon: Database },
   ] },
-  { group: "安全", items: [{ label: "审计", href: "/platform/audit", icon: ShieldCheck }] },
-];
+  { group: t("nav.security"), items: [{ label: t("nav.audit"), href: "/platform/audit", icon: ShieldCheck }] },
+]; }
 
-function regionNavigation(regionId: string): Array<{ group: string; items: NavItem[] }> {
+function regionNavigation(regionId: string, t: Translate): Array<{ group: string; items: NavItem[] }> {
   return [
-    { group: "区域", items: [
-      { label: "节点", href: `/platform/regions/${regionId}/nodes`, icon: Server },
-      { label: "部署", href: `/platform/regions/${regionId}/deployments`, icon: Boxes },
-      { label: "任务", href: `/platform/regions/${regionId}/tasks`, icon: ListChecks },
-      { label: "容量", href: `/platform/regions/${regionId}/capacity`, icon: Gauge },
-      { label: "存储", href: `/platform/regions/${regionId}/storage`, icon: HardDrive },
-      { label: "监控", href: `/platform/regions/${regionId}/monitoring`, icon: Bell },
+    { group: t("nav.regions"), items: [
+      { label: t("nav.nodes"), href: `/platform/regions/${regionId}/nodes`, icon: Server },
+      { label: t("nav.deployments"), href: `/platform/regions/${regionId}/deployments`, icon: Boxes },
+      { label: t("nav.tasks"), href: `/platform/regions/${regionId}/tasks`, icon: ListChecks },
+      { label: t("nav.capacity"), href: `/platform/regions/${regionId}/capacity`, icon: Gauge },
+      { label: t("nav.storage"), href: `/platform/regions/${regionId}/storage`, icon: HardDrive },
+      { label: t("nav.monitoring"), href: `/platform/regions/${regionId}/monitoring`, icon: Bell },
     ] },
   ];
 }
 
 export function AppShell({ area, scope, workspaceSlug = "ember", children }: { area: Area; scope?: string; workspaceSlug?: string; children: ReactNode }) {
+  const { t } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("/workspaces"), enabled: area === "workspace" });
-  const scopeName = area === "workspace" ? workspaces.data?.find((workspace) => workspace.slug === workspaceSlug)?.name ?? workspaceSlug : area === "platform" ? "平台管理" : scope ?? "cn-east-1";
-  const groups = area === "workspace" ? workspaceNavigation(workspaceSlug) : area === "platform" ? platformNavigation : regionNavigation(scope ?? "cn-east-1");
+  const scopeName = area === "workspace" ? workspaces.data?.find((workspace) => workspace.slug === workspaceSlug)?.name ?? workspaceSlug : area === "platform" ? t("shell.platformConsole") : scope ?? "cn-east-1";
+  const groups = area === "workspace" ? workspaceNavigation(workspaceSlug, t) : area === "platform" ? platformNavigation(t) : regionNavigation(scope ?? "cn-east-1", t);
 
   const sidebar = (
     <>
       <div className="sidebar-title">
-        <span>{area === "workspace" ? "WORKSPACE" : area === "platform" ? "PLATFORM" : "REGION"}</span>
-        <button aria-label="收起导航" type="button"><Menu size={15} /></button>
+        <span>{area === "workspace" ? t("shell.workspace") : area === "platform" ? t("shell.platform") : t("shell.region")}</span>
+        <button aria-label={t("shell.collapseNavigation")} type="button"><Menu size={15} /></button>
       </div>
       <div className="sidebar-groups">
         {groups.map((group) => (
@@ -101,28 +104,28 @@ export function AppShell({ area, scope, workspaceSlug = "ember", children }: { a
     <div className="prototype-shell">
       <header className="prototype-topbar">
         <div className="topbar-brand">
+          <button aria-label={t("shell.navigation")} className="mobile-nav-trigger" onClick={() => setMobileOpen(true)} type="button"><Menu size={18} /></button>
           <Image alt="GamePanel" height={28} src="/icon.svg" width={28} />
           <span className="topbar-divider" />
           <button className="workspace-switcher" type="button"><span className="online-dot" /><span className="workspace-name">{scopeName}</span><ChevronDown size={14} /></button>
         </div>
         <div className="topbar-tools">
-          <button aria-label="文档" type="button"><BookOpen size={17} /></button>
-          <button aria-label="通知" className="notification" type="button"><Bell size={18} /><span /></button>
+          <button aria-label={t("shell.documentation")} type="button"><BookOpen size={17} /></button>
+          <button aria-label={t("shell.notifications")} className="notification" type="button"><Bell size={18} /><span /></button>
           <span className="topbar-divider" />
           <details className="account-menu">
-            <summary><span className="avatar">GP</span><span>账户</span><ChevronDown size={14} /></summary>
+            <summary><span className="avatar">GP</span><span>{t("shell.account")}</span><ChevronDown size={14} /></summary>
             <div className="menu-popover">
-              <Link href="/account"><UserRound size={15} />账户设置</Link>
-              <Link href="/platform"><ShieldCheck size={15} />平台管理</Link>
-              <Link href="/login">退出登录</Link>
+              <Link href="/account"><UserRound size={15} />{t("shell.accountSettings")}</Link>
+              <Link href="/platform"><ShieldCheck size={15} />{t("shell.platformConsole")}</Link>
+              <Link href="/login">{t("shell.signOut")}</Link>
             </div>
           </details>
         </div>
       </header>
 
-      <button className="mobile-nav-trigger" onClick={() => setMobileOpen(true)} type="button"><Menu size={18} />导航</button>
       <aside className="prototype-sidebar">{sidebar}</aside>
-      {mobileOpen ? <div className="mobile-nav-overlay" onClick={() => setMobileOpen(false)}><aside onClick={(event) => event.stopPropagation()}><Button aria-label="关闭导航" className="mobile-nav-close" onClick={() => setMobileOpen(false)} size="icon" variant="quiet"><X size={18} /></Button>{sidebar}</aside></div> : null}
+      {mobileOpen ? <div className="mobile-nav-overlay" onClick={() => setMobileOpen(false)}><aside onClick={(event) => event.stopPropagation()}><Button aria-label={t("shell.closeNavigation")} className="mobile-nav-close" onClick={() => setMobileOpen(false)} size="icon" variant="quiet"><X size={18} /></Button>{sidebar}</aside></div> : null}
       <main className="prototype-main">{children}</main>
     </div>
   );

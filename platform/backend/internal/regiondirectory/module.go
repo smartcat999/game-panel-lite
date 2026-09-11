@@ -14,6 +14,7 @@ type Region struct {
 	ID        contract.RegionID `json:"id"`
 	Code      string            `json:"code"`
 	Name      string            `json:"name"`
+	Names     map[string]string `json:"names,omitempty"`
 	Available bool              `json:"available"`
 }
 

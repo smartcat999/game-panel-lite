@@ -529,7 +529,7 @@ func cloneListeners(source []ListenerRequirement) []ListenerRequirement {
 }
 
 func cloneModLock(source []ModLockEntry) []ModLockEntry {
-	return append([]ModLockEntry(nil), source...)
+	return append([]ModLockEntry{}, source...)
 }
 
 type rowScanner interface{ Scan(...any) error }

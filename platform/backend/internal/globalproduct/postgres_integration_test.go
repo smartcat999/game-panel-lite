@@ -170,7 +170,7 @@ func openPostgresTestDatabase(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	_, filename, _, _ := runtime.Caller(0)
-	for _, name := range []string{"0002_product_instance_messaging.sql", "0003_deployment_summaries.sql", "0004_backup_requests.sql"} {
+	for _, name := range []string{"0002_product_instance_messaging.sql", "0003_deployment_summaries.sql", "0004_backup_requests.sql", "0010_region_localizations.sql"} {
 		migration, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "global", name))
 		if err != nil {
 			t.Fatal(err)

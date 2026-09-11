@@ -12,7 +12,7 @@ func insertRevision(ctx context.Context, query persistence.DBTX, revision Revisi
 	if err != nil {
 		return err
 	}
-	modLock, err := json.Marshal(revision.ModLock)
+	modLock, err := json.Marshal(cloneModLock(revision.ModLock))
 	if err != nil {
 		return err
 	}
@@ -41,6 +41,7 @@ func revisionByID(ctx context.Context, query persistence.DBTX, revisionID string
 	if err := json.Unmarshal(modLock, &revision.ModLock); err != nil {
 		return Revision{}, err
 	}
+	revision.ModLock = cloneModLock(revision.ModLock)
 	return revision, nil
 }
 

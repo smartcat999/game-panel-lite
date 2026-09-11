@@ -58,7 +58,7 @@ func validateManifest(manifest Manifest) error {
 		return ErrInvalidManifest
 	}
 	for name, field := range manifest.ConfigurationSchema.Properties {
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(field.Title) == "" || !validField(field) {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(field.Title) == "" || !validField(field) || !validFieldLocalizations(field) {
 			return ErrInvalidManifest
 		}
 	}
@@ -69,7 +69,7 @@ func validateManifest(manifest Manifest) error {
 	}
 	sections := make(map[string]bool, len(manifest.UISchema.Sections))
 	for _, section := range manifest.UISchema.Sections {
-		if section.ID == "" || section.Title == "" || sections[section.ID] {
+		if section.ID == "" || section.Title == "" || sections[section.ID] || !validTextLocalizations(section.Localizations) {
 			return ErrInvalidManifest
 		}
 		sections[section.ID] = true
@@ -138,6 +138,39 @@ func validField(field Field) bool {
 		}
 	}
 	return field.Type != "enum" || len(field.Enum) > 0
+}
+
+func validFieldLocalizations(field Field) bool {
+	for locale, localization := range field.Localizations {
+		if strings.TrimSpace(locale) == "" || strings.TrimSpace(localization.Title) == "" {
+			return false
+		}
+		if localization.Default != nil {
+			if err := validateValue(field, localization.Default); err != nil {
+				return false
+			}
+		}
+		if len(localization.EnumLabels) > 0 {
+			if field.Type != "enum" || len(localization.EnumLabels) != len(field.Enum) {
+				return false
+			}
+			for _, option := range field.Enum {
+				if strings.TrimSpace(localization.EnumLabels[fmt.Sprint(option)]) == "" {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func validTextLocalizations(localizations map[string]string) bool {
+	for locale, value := range localizations {
+		if strings.TrimSpace(locale) == "" || strings.TrimSpace(value) == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func validControl(fieldType, control string) bool {

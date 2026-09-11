@@ -160,7 +160,7 @@ func (s Services) listWorkspaces(response http.ResponseWriter, request *http.Req
 }
 
 func (s Services) listRegions(response http.ResponseWriter, request *http.Request) {
-	rows, err := s.Database.QueryContext(request.Context(), `SELECT id,code,name,available FROM regions WHERE available=true ORDER BY code LIMIT 100`)
+	rows, err := s.Database.QueryContext(request.Context(), `SELECT id,code,name,localized_names,available FROM regions WHERE available=true ORDER BY code LIMIT 100`)
 	if err != nil {
 		writeError(response, http.StatusInternalServerError, "regions_unavailable")
 		return
@@ -169,12 +169,18 @@ func (s Services) listRegions(response http.ResponseWriter, request *http.Reques
 	result := make([]map[string]any, 0)
 	for rows.Next() {
 		var id, code, name string
+		var names []byte
 		var available bool
-		if err := rows.Scan(&id, &code, &name, &available); err != nil {
+		if err := rows.Scan(&id, &code, &name, &names, &available); err != nil {
 			writeError(response, http.StatusInternalServerError, "regions_unavailable")
 			return
 		}
-		result = append(result, map[string]any{"id": id, "code": code, "name": name, "available": available})
+		var localizedNames map[string]string
+		if err := json.Unmarshal(names, &localizedNames); err != nil {
+			writeError(response, http.StatusInternalServerError, "regions_unavailable")
+			return
+		}
+		result = append(result, map[string]any{"id": id, "code": code, "name": name, "names": localizedNames, "available": available})
 	}
 	writeJSON(response, http.StatusOK, result)
 }

@@ -26,17 +26,25 @@ const (
 )
 
 type Field struct {
-	Type          string        `json:"type"`
-	Title         string        `json:"title"`
-	Description   string        `json:"description,omitempty"`
-	ApplyBehavior ApplyBehavior `json:"applyBehavior"`
-	Default       any           `json:"default,omitempty"`
-	Minimum       *float64      `json:"minimum,omitempty"`
-	Maximum       *float64      `json:"maximum,omitempty"`
-	Enum          []any         `json:"enum,omitempty"`
-	Pattern       string        `json:"pattern,omitempty"`
-	MinLength     *int          `json:"minLength,omitempty"`
-	MaxLength     *int          `json:"maxLength,omitempty"`
+	Type          string                       `json:"type"`
+	Title         string                       `json:"title"`
+	Description   string                       `json:"description,omitempty"`
+	Localizations map[string]FieldLocalization `json:"localizations,omitempty"`
+	ApplyBehavior ApplyBehavior                `json:"applyBehavior"`
+	Default       any                          `json:"default,omitempty"`
+	Minimum       *float64                     `json:"minimum,omitempty"`
+	Maximum       *float64                     `json:"maximum,omitempty"`
+	Enum          []any                        `json:"enum,omitempty"`
+	Pattern       string                       `json:"pattern,omitempty"`
+	MinLength     *int                         `json:"minLength,omitempty"`
+	MaxLength     *int                         `json:"maxLength,omitempty"`
+}
+
+type FieldLocalization struct {
+	Title       string            `json:"title"`
+	Description string            `json:"description,omitempty"`
+	Default     any               `json:"default,omitempty"`
+	EnumLabels  map[string]string `json:"enumLabels,omitempty"`
 }
 
 type ConfigurationSchema struct {
@@ -46,9 +54,10 @@ type ConfigurationSchema struct {
 }
 
 type UISection struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Order int    `json:"order"`
+	ID            string            `json:"id"`
+	Title         string            `json:"title"`
+	Localizations map[string]string `json:"localizations,omitempty"`
+	Order         int               `json:"order"`
 }
 
 type Visibility struct {

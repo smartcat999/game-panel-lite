@@ -86,9 +86,26 @@ Acceptance:
 - Desktop columns progressively reduce by decision value on narrow widths without shrinking typography or requiring horizontal scrolling for the primary task.
 - `gofmt`, backend tests and architecture checks, frontend lint, typecheck, build, Playwright accessibility/browser checks, and `git diff --check` pass before the 7.1 evidence and commit are recorded.
 
-### 7.2 Create instance
+### 7.2 Create instance and Provider configuration
 
-Deliver and acceptance will be refined only after 7.1 is accepted. The slice must preserve custom resource specifications, Provider-defined configuration and conditional mod steps, system-assigned Endpoint behavior, and the no-duplicate-information rule.
+Deliver:
+
+- Converge the accepted shell into one compact creation flow: Basic Information, custom Resource Specification, Provider-defined Game Configuration, conditional Mods, and Review. Do not add a second cancel action, decorative helper copy, package/plan selection, or a configuration summary outside Review.
+- Render customer resource units as vCPU, GB memory, and GB disk while deriving minimum, maximum, and step constraints from the selected Region Catalog. Keep milli-CPU and MiB conversion internal to the versioned API boundary.
+- Continue to derive configuration fields, types, ordering, conditions, defaults, and controlled Mod dependencies entirely from the verified Provider Manifest. Game identity must not select frontend components or validation branches.
+- Create and display the short-lived Quote before Review. Show estimated hourly and 24-hour cost, current available balance, and an actionable insufficient-balance state; submit the exact reviewed Quote with a stable idempotency key.
+- Mention system-assigned connection information once in Review. Port, transport, bandwidth, Node, and dedicated-IP controls remain absent.
+- Remove fixed empty panel height and preserve compact loading, field validation, Quote failure, submission failure, keyboard, and narrow-screen states.
+- Reuse the same Provider-driven renderer for an existing instance's configuration. Normalize historical empty Mod locks, show synchronized versus dirty state, and never enable apply before a meaningful change.
+
+Acceptance:
+
+- The real Terraria path completes Basic Information, custom resources, Provider configuration, Review, Quote, create submission, and Operation navigation; the real tModLoader path inserts the conditional Mods step and resolves transitive dependencies.
+- Changing Provider or Region refreshes manifest/catalog-backed controls and invalidates any earlier Quote. Invalid names, out-of-catalog resources, required Provider fields, unavailable capacity, expired/failed Quote, and insufficient 24-hour balance cannot be submitted.
+- Browser tests prove customer-visible vCPU/GB units convert exactly to the contracted milli-CPU/MiB payload, the reviewed Quote ID is the submitted Quote ID, retry uses one stable idempotency key, and no unsupported networking field exists.
+- At 1440px and 1920px the flow matches the accepted compact professional form language; at 390px controls, progress, Review, and actions remain usable without horizontal overflow or duplicate facts.
+- Product Design QA records source and implementation comparisons with no open P0/P1/P2 issue. `gofmt`, backend contract/architecture checks, frontend lint, typecheck, build, focused Playwright accessibility/browser checks, and `git diff --check` pass before the 7.2 evidence and commit are recorded.
+- Existing-instance configuration renders the complete localized Manifest without a game-specific branch, survives a legacy `null` Mod lock, keeps its action reachable without covering mobile fields, and reports no serious axe violation or browser page error.
 
 ### 7.3 Instance detail
 
@@ -223,6 +240,8 @@ Acceptance:
 ```
 
 ## Progress evidence
+
+- 2026-09-11: Rebaseline Phase 7.2 accepted by the user. Creation is now a compact Basic Information, custom Resource Specification, Provider Configuration, conditional Mods, and Review flow. Customer units remain vCPU/GB while exact milli-CPU/MiB conversion stays at the API boundary; Region Catalog bounds, localized Provider defaults and enum labels, required markers, capacity, Wallet balance, short-lived Quote identity, and stable retry idempotency all drive submission. Unsupported port, transport, bandwidth, Node, dedicated-IP, package, duplicate cancel, duplicate summary, and Quote-expiry presentation remain absent. Existing-instance configuration reuses the same Provider Manifest renderer, normalizes historical `null` Mod locks, distinguishes synchronized and dirty states, and avoids mobile action overlap. Product Design comparisons at 1440px, 1920px, and 390px record no remaining P0/P1/P2 issue; focused browser tests cover Terraria, conditional tModLoader dependencies, insufficient balance, English and Simplified Chinese, legacy revisions, keyboard behavior, no horizontal overflow, no serious axe findings, and no page errors. Final checks passed: `gofmt`, PostgreSQL- and NATS-backed `go test ./... -count=1`, focused `go test -race`, `go vet ./...`, `go build ./...`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, focused Playwright checks, and `git diff --check`.
 
 - 2026-09-11: Rebaseline Phase 7.1 accepted by the user. The Workspace instance list now consumes an explicit versioned display contract and shows only name, truthful lifecycle state, game/version, Provider-declared Endpoint facts, custom resource specification, localized Region name, and whole-row detail navigation. Provider Release and Region metadata are fetched in bounded ID batches and composed in Go without SQL `JOIN`; the frontend contains no game-name display branch or production demo data. Loading, empty, long-name, running, stopped, pending, failed, IP-only, TCP/UDP, multi-Endpoint, keyboard-navigation, 1440px, 1920px, and 390px states were verified. Product Design full and focused comparisons record no remaining P0/P1/P2 issue in `platform/frontend/design-qa.md`; axe found and drove a WCAG-AA success-color correction. Final local checks passed: `gofmt`, PostgreSQL- and NATS-backed `go test ./... -count=1`, focused `go test -race`, `go vet ./...`, `go build ./...`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, the two Phase 7.1 Playwright checks, and `git diff --check`.
 

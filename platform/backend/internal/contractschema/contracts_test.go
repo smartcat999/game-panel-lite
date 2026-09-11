@@ -144,6 +144,11 @@ func TestProviderConfigurationTypesFailClosed(t *testing.T) {
 	if got := stringSlice(t, applyBehavior["enum"], "apply behavior enum"); strings.Join(got, ",") != strings.Join(wantApply, ",") {
 		t.Fatalf("apply behavior must fail closed: got %v", got)
 	}
+	localizations := object(t, properties["localizations"], "ConfigurationFieldSchema localizations")
+	localizedValues := object(t, localizations["additionalProperties"], "ConfigurationFieldSchema localized values")
+	if localizedValues["$ref"] != "#/components/schemas/ConfigurationFieldLocalization" {
+		t.Fatalf("configuration localizations must use the versioned localization schema: %v", localizedValues)
+	}
 }
 
 func TestAuthorizationContractSupportsScopedHundredResourceBatch(t *testing.T) {

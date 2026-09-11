@@ -51,8 +51,8 @@ func Modules() Environment {
 	})
 	regionID := contract.RegionID("reg_asia_east")
 	regions := regiondirectory.New([]regiondirectory.Region{
-		{ID: regionID, Code: "asia-east", Name: "Asia East", Available: true},
-		{ID: "reg_europe_west", Code: "europe-west", Name: "Europe West", Available: true},
+		{ID: regionID, Code: "asia-east", Name: "Asia East", Names: map[string]string{"zh-CN": "亚洲东部", "en": "Asia East"}, Available: true},
+		{ID: "reg_europe_west", Code: "europe-west", Name: "Europe West", Names: map[string]string{"zh-CN": "欧洲西部", "en": "Europe West"}, Available: true},
 	})
 	commerceModule := commerce.New([]commerce.PlanVersion{{
 		ID: "plv_standard_1", PlanID: "pln_standard", Version: 1, Name: "Standard",
