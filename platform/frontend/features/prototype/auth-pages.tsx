@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Check, Github, KeyRound, Lock, ShieldCheck, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Cloud, Github, KeyRound, Lock, ShieldCheck, Sparkles, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,7 +26,7 @@ export function LoginPage() {
 
   const signIn = async () => {
     if (!username.trim()) {
-      setError("请输入管理员账号");
+      setError("请输入账号或用户名");
       return;
     }
     if (!password) {
@@ -78,7 +78,7 @@ export function LoginPage() {
       });
       window.location.assign(result.authorizationUrl);
     } catch {
-      setError("GitHub OAuth 登录尚未配置，请使用本地管理员账号登录");
+      setError("GitHub 快捷登录尚未开启，请使用平台账号登录");
       setBusy(false);
     }
   };
@@ -96,7 +96,7 @@ export function LoginPage() {
             className="inline-flex items-center gap-1.5 text-xs text-zinc-400 transition hover:text-emerald-400"
           >
             <ArrowLeft className="size-3.5" />
-            <span>返回产品介绍官网</span>
+            <span>返回云平台官网</span>
           </Link>
         </div>
 
@@ -106,7 +106,7 @@ export function LoginPage() {
           <div className="flex items-center gap-3 border-b border-white/[0.08] pb-5">
             <div className="flex size-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-1.5 shadow-sm shadow-emerald-500/20">
               <Image
-                alt="GamePanel"
+                alt="GamePanel Cloud"
                 height={36}
                 src="/avatar.svg"
                 width={36}
@@ -115,23 +115,23 @@ export function LoginPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-white tracking-tight">GamePanel Lite</span>
+                <span className="font-bold text-white tracking-tight">GamePanel Cloud</span>
                 <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400">
-                  SELF-HOSTED
+                  SaaS PLATFORM
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">游戏服务器控制台登录</p>
+              <p className="text-xs text-zinc-400">游戏服务器云端托管控制台</p>
             </div>
           </div>
 
           <div className="mt-6 mb-5">
             <h1 className="text-lg font-bold text-white tracking-tight">
-              {mustChange ? "首次登录安全设置" : "管理员身份验证"}
+              {mustChange ? "初次登录安全重置" : "登录云控制台"}
             </h1>
             <p className="mt-1 text-xs text-zinc-400">
               {mustChange
-                ? "请为初始管理员账号设置高强度密码以继续"
-                : "输入本地管理凭证以管理游戏服务器实例"}
+                ? "请为账号设置高强度密码以保护工作区"
+                : "输入凭证进入您的小队工作区管理游戏云服"}
             </p>
           </div>
 
@@ -144,7 +144,7 @@ export function LoginPage() {
               }}
             >
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-zinc-300">设置新管理员密码</label>
+                <label className="text-xs font-semibold text-zinc-300">设置新密码</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 size-4 text-zinc-500" />
                   <input
@@ -164,7 +164,7 @@ export function LoginPage() {
                 type="submit"
                 className="h-10 w-full bg-emerald-500 font-bold text-zinc-950 hover:bg-emerald-400"
               >
-                {busy ? "正在保存..." : "保存密码并进入控制台"}
+                {busy ? "正在保存..." : "保存新密码并进入控制台"}
                 <ArrowRight className="size-4 ml-1" />
               </Button>
             </form>
@@ -178,7 +178,7 @@ export function LoginPage() {
             >
               {/* Username Field */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-zinc-300">管理员账号 / 用户名</label>
+                <label className="text-xs font-semibold text-zinc-300">账号 / 邮箱 / 用户名</label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 size-4 text-zinc-500" />
                   <input
@@ -195,7 +195,7 @@ export function LoginPage() {
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-zinc-300">登录密码</label>
-                  <span className="text-[11px] text-zinc-500">自托管本地账户</span>
+                  <span className="text-[11px] text-zinc-500">平台安全验证</span>
                 </div>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-3 size-4 text-zinc-500" />
@@ -216,7 +216,7 @@ export function LoginPage() {
                 type="submit"
                 className="mt-1 h-10 w-full bg-emerald-500 font-bold text-zinc-950 shadow-md shadow-emerald-500/25 hover:bg-emerald-400 active:scale-[0.98]"
               >
-                {busy ? "正在验证凭据..." : "登录控制台"}
+                {busy ? "正在验证凭据..." : "登录云控制台"}
                 <ArrowRight className="size-4 ml-1" />
               </Button>
             </form>
@@ -247,15 +247,15 @@ export function LoginPage() {
                 className="h-10 w-full border border-white/[0.1] bg-[#0a0e17] text-zinc-300 hover:border-white/[0.2] hover:bg-[#121927] hover:text-white"
               >
                 <Github className="size-4 mr-1.5" />
-                使用 GitHub 授权登录
+                使用 GitHub 快捷登录
               </Button>
             </>
           )}
 
-          {/* Security Note */}
+          {/* Platform Note */}
           <div className="mt-6 flex items-center justify-center gap-1.5 border-t border-white/[0.06] pt-4 text-center text-[11px] text-zinc-500">
-            <ShieldCheck className="size-3.5 text-emerald-400" />
-            <span>自托管私有实例 · 数据与密码仅保存在本地</span>
+            <Cloud className="size-3.5 text-emerald-400" />
+            <span>GamePanel Cloud · 高可用多可用区游戏托管平台</span>
           </div>
         </section>
       </div>
@@ -269,20 +269,20 @@ export function InvitationPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#080c14] p-4 sm:p-6">
       <section className="w-full max-w-[400px] overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0e1420] p-7 text-center shadow-2xl shadow-black/80">
         <div className="flex items-center gap-3 border-b border-white/[0.08] pb-5 text-left">
-          <Image alt="GamePanel" height={32} src="/avatar.svg" width={32} className="pixelated" />
-          <strong className="text-white font-bold">GamePanel Lite</strong>
+          <Image alt="GamePanel Cloud" height={32} src="/avatar.svg" width={32} className="pixelated" />
+          <strong className="text-white font-bold">GamePanel Cloud</strong>
         </div>
         <div className="mx-auto mt-6 flex size-12 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
           <Check size={24} />
         </div>
         <div className="mt-4 mb-5">
           <h1 className="text-lg font-bold text-white">{invited ? "已加入工作区" : "工作区邀请"}</h1>
-          <p className="text-xs text-zinc-400 mt-1">管理员邀请你加入 Ember Realms 服务器工作区</p>
+          <p className="text-xs text-zinc-400 mt-1">管理员邀请你加入 Ember Realms 游戏服务器工作区</p>
         </div>
         <dl className="mb-5 overflow-hidden rounded-lg border border-white/[0.08] bg-[#080c14] text-left text-xs">
           <div className="flex justify-between border-b border-white/[0.08] p-3">
-            <dt className="text-zinc-500">角色权限</dt>
-            <dd className="font-semibold text-zinc-200">工作区运维</dd>
+            <dt className="text-zinc-500">工作区角色</dt>
+            <dd className="font-semibold text-zinc-200">小队运维员</dd>
           </div>
           <div className="flex justify-between p-3">
             <dt className="text-zinc-500">登录账号</dt>
