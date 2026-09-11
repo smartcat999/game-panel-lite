@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://gamepanel.dev/contracts/events/v1/wallet-exhausted.schema.json", "title": "wallet.exhausted.v1",
-  "type": "object", "additionalProperties": false, "required": ["schemaVersion", "messageId", "messageType", "occurredAt", "idempotencyKey", "payload"],
-  "properties": {
-    "schemaVersion": {"const": "v1"}, "messageId": {"type": "string"}, "messageType": {"const": "wallet.exhausted.v1"}, "occurredAt": {"type": "string", "format": "date-time"}, "idempotencyKey": {"type": "string", "minLength": 8},
-    "payload": {"type": "object", "additionalProperties": false, "required": ["workspaceId", "ledgerSequence", "exhaustedAt"], "properties": {"workspaceId": {"type": "string"}, "ledgerSequence": {"type": "integer", "minimum": 1}, "exhaustedAt": {"type": "string", "format": "date-time"}}}
-  }
-}
