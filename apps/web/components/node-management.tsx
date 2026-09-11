@@ -25,12 +25,14 @@ import {
   updateComputeNode,
   deleteComputeNode,
   pingComputeNode,
-  getNodeJoinCommand
+  getNodeJoinCommand,
+  getObservabilityMetrics
 } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
 import type { ComputeNode, NodeJoinCommand } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { dashboardNodeMetrics } from "@/lib/dashboard-metrics";
 import { Button, Input } from "@/components/ui";
 
 function NodeAction({ danger = false, disabled, icon, label, onClick }: { danger?: boolean; disabled?: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
@@ -85,6 +87,13 @@ export function NodeManagement() {
     queryKey: ["compute-nodes"],
     queryFn: listComputeNodes,
     refetchInterval: 10000
+  });
+  const metricsQuery = useQuery({
+    queryKey: ["observability-metrics"],
+    queryFn: getObservabilityMetrics,
+    retry: false,
+    refetchInterval: 10000,
+    staleTime: 5000
   });
 
   const createMutation = useMutation({
@@ -191,7 +200,7 @@ export function NodeManagement() {
                   <th className="w-24 px-3 py-2 font-medium">{isZh ? "状态" : "Status"}</th>
                   <th className="w-36 px-3 py-2 font-medium">CPU</th>
                   <th className="w-40 px-3 py-2 font-medium">{isZh ? "内存" : "Memory"}</th>
-                  <th className="w-24 px-3 py-2 font-medium">{isZh ? "实例" : "Instances"}</th>
+                  <th className="w-24 px-3 py-2 font-medium">{isZh ? "运行实例" : "Running"}</th>
                   <th className="w-24 px-3 py-2 font-medium">{isZh ? "延迟" : "Latency"}</th>
                   <th className="w-60 px-4 py-2 text-right font-medium">{isZh ? "操作" : "Actions"}</th>
                 </tr>
@@ -199,9 +208,10 @@ export function NodeManagement() {
               <tbody className="divide-y divide-panel-line">
                 {nodes.map((node) => {
                   const isOnline = node.status === "online";
-                  const cpuUsage = node.cpuUsagePercent !== undefined ? `${node.cpuUsagePercent.toFixed(0)}%` : "—";
-                  const memoryUsage = node.memoryTotalMb > 0
-                    ? `${(node.memoryUsedMb / 1024).toFixed(1)} / ${(node.memoryTotalMb / 1024).toFixed(1)} GB`
+                  const liveMetrics = dashboardNodeMetrics(node, metricsQuery.data?.host);
+                  const cpuUsage = liveMetrics.cpuUsagePercent !== null ? `${liveMetrics.cpuUsagePercent.toFixed(0)}%` : "—";
+                  const memoryUsage = liveMetrics.memoryUsedMb !== null && liveMetrics.memoryTotalMb > 0
+                    ? `${(liveMetrics.memoryUsedMb / 1024).toFixed(1)} / ${(liveMetrics.memoryTotalMb / 1024).toFixed(1)} GB`
                     : "—";
                   const latency = node.isLocal ? "0 ms" : node.pingLatencyMs ? `${node.pingLatencyMs} ms` : "—";
                   return (
@@ -224,9 +234,9 @@ export function NodeManagement() {
                           {isOnline ? (isZh ? "在线" : "Online") : (isZh ? "离线" : "Offline")}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-slate-300">{cpuUsage} <span className="text-slate-500">/ {node.cpuCores || "—"} {isZh ? "核" : "cores"}</span></td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">{cpuUsage} <span className="text-slate-500">/ {liveMetrics.cpuCores || "—"} {isZh ? "核" : "cores"}</span></td>
                       <td className="px-3 py-2.5 font-mono text-slate-300">{memoryUsage}</td>
-                      <td className="px-3 py-2.5 font-mono text-slate-300">{node.runningCount}</td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">{liveMetrics.runningCount ?? "—"}</td>
                       <td className="px-3 py-2.5 font-mono text-slate-300">{latency}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">
