@@ -37,8 +37,20 @@ describe("dashboardNodeMetrics", () => {
       cpuCores: 4,
       cpuUsagePercent: 47.4,
       memoryTotalMb: 8192,
-      memoryUsedMb: 5018
+      memoryUsedMb: 5018,
+      runningCount: 2
     });
+  });
+
+  it("uses the live workload count instead of the stored server total for the local node", () => {
+    expect(dashboardNodeMetrics({ ...localNode, runningCount: 8 }, {
+      runningWorkloads: 2,
+      cpuCores: 2,
+      totalCpuPercent: 45,
+      totalMemoryMb: 5018,
+      memoryLimitMb: 7800,
+      storageUsedBytes: 0
+    })).toMatchObject({ runningCount: 2 });
   });
 
   it("keeps heartbeat metrics for remote nodes", () => {
@@ -61,7 +73,8 @@ describe("dashboardNodeMetrics", () => {
       cpuCores: 2,
       cpuUsagePercent: 23,
       memoryTotalMb: 7800,
-      memoryUsedMb: 3072
+      memoryUsedMb: 3072,
+      runningCount: 0
     });
   });
 
@@ -77,7 +90,8 @@ describe("dashboardNodeMetrics", () => {
       cpuCores: 2,
       cpuUsagePercent: null,
       memoryTotalMb: 7800,
-      memoryUsedMb: null
+      memoryUsedMb: null,
+      runningCount: null
     });
   });
 });

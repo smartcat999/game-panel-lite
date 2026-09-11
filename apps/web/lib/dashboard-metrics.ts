@@ -11,6 +11,7 @@ export type DashboardNodeMetrics = {
   cpuUsagePercent: number | null;
   memoryTotalMb: number;
   memoryUsedMb: number | null;
+  runningCount: number | null;
 };
 
 export function dashboardResourceTotals(servers: GameServerResource[]): DashboardResourceTotals {
@@ -29,7 +30,8 @@ export function dashboardNodeMetrics(node: ComputeNode, localHost?: HostStats): 
       cpuCores: localHost.cpuCores || node.cpuCores,
       cpuUsagePercent: clampPercent(localHost.totalCpuPercent),
       memoryTotalMb: localHost.memoryLimitMb || node.memoryTotalMb,
-      memoryUsedMb: Math.max(0, localHost.totalMemoryMb)
+      memoryUsedMb: Math.max(0, localHost.totalMemoryMb),
+      runningCount: Math.max(0, localHost.runningWorkloads)
     };
   }
 
@@ -38,7 +40,8 @@ export function dashboardNodeMetrics(node: ComputeNode, localHost?: HostStats): 
     cpuCores: node.cpuCores,
     cpuUsagePercent: hasFreshHeartbeat && typeof node.cpuUsagePercent === "number" ? clampPercent(node.cpuUsagePercent) : null,
     memoryTotalMb: node.memoryTotalMb,
-    memoryUsedMb: hasFreshHeartbeat && typeof node.memoryUsedMb === "number" ? Math.max(0, node.memoryUsedMb) : null
+    memoryUsedMb: hasFreshHeartbeat && typeof node.memoryUsedMb === "number" ? Math.max(0, node.memoryUsedMb) : null,
+    runningCount: hasFreshHeartbeat ? Math.max(0, node.runningCount || 0) : null
   };
 }
 
