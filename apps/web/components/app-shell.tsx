@@ -430,10 +430,10 @@ function AppChrome({ children }: { children: ReactNode }) {
 
 function pageAllowed(pathname: string, canAccessGameAssets: boolean, canCreateServer: boolean, canEditSettings: boolean) {
   if (pathname.startsWith("/servers/new")) return canCreateServer;
-  if (pathname.startsWith("/settings") || pathname.startsWith("/versions")) {
+  if (pathname.startsWith("/settings")) {
     return canEditSettings;
   }
-  if (["/games", "/mods", "/presets", "/worlds", "/backups"].some((path) => pathname.startsWith(path))) {
+  if (["/games", "/versions", "/mods", "/presets", "/worlds", "/backups"].some((path) => pathname.startsWith(path))) {
     return canAccessGameAssets;
   }
   if (pathname.startsWith("/activity")) return canAccessGameAssets;

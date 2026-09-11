@@ -21,15 +21,20 @@ import { cn } from "@/lib/utils";
 // Dynamically import ReactECharts with SSR disabled for clean Next.js client hydration
 const ReactECharts = dynamic(() => import("echarts-for-react"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-[520px] w-full items-center justify-center bg-[#050811] text-slate-500">
-      <span className="flex items-center gap-2 font-mono text-xs animate-pulse">
+  loading: () => <TopologyLoading />
+});
+
+function TopologyLoading() {
+  const { locale } = useI18n();
+  return (
+    <div className="flex h-[420px] w-full items-center justify-center bg-[#050811] text-slate-500">
+      <span className="flex items-center gap-2 text-xs animate-pulse">
         <Activity className="size-4 text-emerald-400" />
-        加载集群拓扑渲染引擎 (Loading Topology Canvas Engine)...
+        {locale.startsWith("zh") ? "正在加载网络拓扑..." : "Loading network topology..."}
       </span>
     </div>
-  )
-});
+  );
+}
 
 type TopologyChartNode = Record<string, unknown> & {
   id: string;
@@ -89,7 +94,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
     // 1. Ingress Node (Root Left)
     chartNodes.push({
       id: "node_ingress",
-      name: isZh ? "全球玩家客户端群\n(Internet Ingress)" : "Player Ingress\n(Internet Ingress)",
+      name: isZh ? "玩家接入" : "Player Ingress",
       category: 0,
       x: 80,
       y: 280,
@@ -111,8 +116,8 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
       },
       rawMeta: {
         type: "ingress",
-        protocol: "TCP/UDP Stream",
-        activeClients: totalRunning > 0 ? "在线就绪" : "就绪",
+        protocol: "TCP/UDP",
+        activeClients: totalRunning > 0 ? (isZh ? "在线" : "Active") : (isZh ? "就绪" : "Ready"),
         desc: isZh ? "外部公网直连与游戏客户端流量入口" : "Public internet game client entry"
       }
     });
@@ -144,7 +149,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
         type: "gateway",
         publicHost,
         portRange: "7777 - 65535",
-        status: "Active (NAT-Traversing Stream Proxy)",
+        status: isZh ? "运行中" : "Active",
         desc: isZh ? "主控边缘流量网关，自动接管全双工 TCP 字节流反向透传" : "Edge gateway proxying full-duplex TCP stream tunnels"
       }
     });
@@ -162,7 +167,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
       },
       label: {
         show: true,
-        formatter: "公网流量",
+        formatter: isZh ? "公网流量" : "Public traffic",
         fontSize: 10,
         color: "#a5b4fc"
       }
@@ -193,7 +198,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
 
       chartNodes.push({
         id: nodeKey,
-        name: `${node.name}\n(${node.region || (isLocal ? "Local" : "Remote")})`,
+        name: `${node.name}\n${node.region || (isLocal ? (isZh ? "本机" : "Local") : (isZh ? "远程" : "Remote"))}`,
         category: isLocal ? 2 : 3,
         x: 520,
         y: yOffset,
@@ -215,12 +220,12 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
         rawMeta: {
           type: "compute_node",
           name: node.name,
-          region: node.region || "Local Host",
+          region: node.region || (isZh ? "本机" : "Local"),
           isLocal,
-          status: isOnline ? "Online 🟢" : "Offline 🔴",
-          latency: node.pingLatencyMs ? `${node.pingLatencyMs}ms` : (isLocal ? "0ms (Local)" : "Unknown"),
-          cores: node.cpuCores ? `${node.cpuCores} Cores` : "Auto",
-          desc: isLocal ? "主控宿主机 Docker 运行时" : "分布式远程计算节点 (Worker Agent)"
+          status: isOnline ? (isZh ? "在线" : "Online") : (isZh ? "离线" : "Offline"),
+          latency: node.pingLatencyMs ? `${node.pingLatencyMs}ms` : (isLocal ? "0ms" : (isZh ? "未知" : "Unknown")),
+          cores: node.cpuCores ? `${node.cpuCores} ${isZh ? "核" : "cores"}` : (isZh ? "自动" : "Auto"),
+          desc: isLocal ? (isZh ? "主控宿主机" : "Local control host") : (isZh ? "远程计算节点" : "Remote compute node")
         }
       });
 
@@ -228,7 +233,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
       chartLinks.push({
         source: "node_gateway",
         target: nodeKey,
-        value: isLocal ? "Direct Bridge" : "Reverse Tunnel",
+        value: isLocal ? (isZh ? "本地直连" : "Direct") : (isZh ? "反向隧道" : "Reverse Tunnel"),
         lineStyle: {
           width: 2.5,
           color: isLocal ? "#10b981" : "#06b6d4",
@@ -237,7 +242,9 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
         },
         label: {
           show: true,
-          formatter: isLocal ? "本地直连" : `反向隧道 ${node.pingLatencyMs ? node.pingLatencyMs + "ms" : ""}`,
+          formatter: isLocal
+            ? (isZh ? "本地直连" : "Direct")
+            : `${isZh ? "反向隧道" : "Reverse tunnel"} ${node.pingLatencyMs ? node.pingLatencyMs + "ms" : ""}`,
           fontSize: 9,
           color: isLocal ? "#6ee7b7" : "#67e8f9"
         }
@@ -286,9 +293,9 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
             name: srv.name,
             provider: srv.providerKey,
             port: joinPort,
-            status: isRunning ? "Running 🟢" : "Stopped ⚪",
+            status: isRunning ? (isZh ? "运行中" : "Running") : (isZh ? "已停止" : "Stopped"),
             publicAddress: `${publicHost}:${joinPort}`,
-            desc: `游戏服务容器 (${srv.providerKey})`
+            desc: isZh ? `游戏服务器容器（${srv.providerKey}）` : `Game server container (${srv.providerKey})`
           }
         });
 
@@ -327,11 +334,11 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
             if (m.type === "ingress") {
               return `
                 <div style="font-family: sans-serif; min-width: 180px;">
-                  <div style="color: #818cf8; font-weight: bold; margin-bottom: 4px;">🌐 全球玩家接入层 (Ingress)</div>
+                  <div style="color: #818cf8; font-weight: bold; margin-bottom: 4px;">🌐 ${isZh ? "玩家接入" : "Player Ingress"}</div>
                   <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">${m.desc}</div>
                   <div style="border-top: 1px solid #334155; padding-top: 6px; font-size: 11px; font-family: monospace;">
-                    <div>传输协议: <span style="color: #f1f5f9;">${m.protocol}</span></div>
-                    <div>活跃状态: <span style="color: #4ade80;">${m.activeClients}</span></div>
+                    <div>${isZh ? "传输协议" : "Protocol"}: <span style="color: #f1f5f9;">${m.protocol}</span></div>
+                    <div>${isZh ? "状态" : "Status"}: <span style="color: #4ade80;">${m.activeClients}</span></div>
                   </div>
                 </div>
               `;
@@ -342,9 +349,9 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
                   <div style="color: #38bdf8; font-weight: bold; margin-bottom: 4px;">⚡ GameTraffic Gateway</div>
                   <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">${m.desc}</div>
                   <div style="border-top: 1px solid #334155; padding-top: 6px; font-size: 11px; font-family: monospace;">
-                    <div>公网出口: <span style="color: #38bdf8; font-weight: bold;">${m.publicHost}</span></div>
-                    <div>端口转发池: <span style="color: #f1f5f9;">${m.portRange}</span></div>
-                    <div>网关状态: <span style="color: #4ade80;">${m.status}</span></div>
+                    <div>${isZh ? "公网出口" : "Public host"}: <span style="color: #38bdf8; font-weight: bold;">${m.publicHost}</span></div>
+                    <div>${isZh ? "端口范围" : "Port range"}: <span style="color: #f1f5f9;">${m.portRange}</span></div>
+                    <div>${isZh ? "状态" : "Status"}: <span style="color: #4ade80;">${m.status}</span></div>
                   </div>
                 </div>
               `;
@@ -352,12 +359,12 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
             if (m.type === "compute_node") {
               return `
                 <div style="font-family: sans-serif; min-width: 200px;">
-                  <div style="color: #22d3ee; font-weight: bold; margin-bottom: 4px;">🛰️ 计算节点: ${m.name}</div>
+                  <div style="color: #22d3ee; font-weight: bold; margin-bottom: 4px;">🛰️ ${isZh ? "计算节点" : "Compute Node"}: ${m.name}</div>
                   <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">${m.desc}</div>
                   <div style="border-top: 1px solid #334155; padding-top: 6px; font-size: 11px; font-family: monospace;">
-                    <div>地理区域: <span style="color: #f1f5f9;">${m.region}</span></div>
-                    <div>心跳延迟: <span style="color: #4ade80; font-weight: bold;">${m.latency}</span></div>
-                    <div>节点状态: <span style="color: #f1f5f9;">${m.status}</span></div>
+                    <div>${isZh ? "区域" : "Region"}: <span style="color: #f1f5f9;">${m.region}</span></div>
+                    <div>${isZh ? "延迟" : "Latency"}: <span style="color: #4ade80; font-weight: bold;">${m.latency}</span></div>
+                    <div>${isZh ? "状态" : "Status"}: <span style="color: #f1f5f9;">${m.status}</span></div>
                   </div>
                 </div>
               `;
@@ -365,11 +372,11 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
             if (m.type === "workload") {
               return `
                 <div style="font-family: sans-serif; min-width: 200px;">
-                  <div style="color: #4ade80; font-weight: bold; margin-bottom: 4px;">🎮 游戏服务器: ${m.name}</div>
+                  <div style="color: #4ade80; font-weight: bold; margin-bottom: 4px;">🎮 ${isZh ? "游戏服务器" : "Game Server"}: ${m.name}</div>
                   <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">${m.desc}</div>
                   <div style="border-top: 1px solid #334155; padding-top: 6px; font-size: 11px; font-family: monospace;">
-                    <div>直连地址: <span style="color: #38bdf8; font-weight: bold;">${m.publicAddress}</span></div>
-                    <div>运行状态: <span style="color: #f1f5f9;">${m.status}</span></div>
+                    <div>${isZh ? "直连地址" : "Address"}: <span style="color: #38bdf8; font-weight: bold;">${m.publicAddress}</span></div>
+                    <div>${isZh ? "状态" : "Status"}: <span style="color: #f1f5f9;">${m.status}</span></div>
                   </div>
                 </div>
               `;
@@ -455,19 +462,19 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
                   <Network className="size-4" />
                 </span>
                 <h2 className="text-sm font-bold tracking-tight text-white">
-                  {isZh ? "分布式集群网络与流量拓扑 (Live Graph Engine)" : "Distributed Network & Traffic Topology"}
+                  {isZh ? "网络拓扑" : "Network Topology"}
                 </h2>
               </>
             ) : null}
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 text-[10px] font-mono text-emerald-400">
               <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {nodes.length} Nodes · {totalRunning} Active Workloads
+              {isZh ? `${nodes.length} 个节点 · ${totalRunning} 个运行实例` : `${nodes.length} nodes · ${totalRunning} running instances`}
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-400">
             {isZh
-              ? "基于专业拓扑图引擎，实时渲染玩家 Ingress ➜ Gateway 透明流代理 ➜ 多节点反向隧道 ➜ 容器端口全双工数据流"
-              : "Live visual pipeline of player ingress, Gateway streaming proxies, compute nodes, and container workloads."}
+              ? "查看玩家入口、网关、计算节点和游戏实例之间的连接关系。"
+              : "View connections between player ingress, the gateway, compute nodes, and game instances."}
           </p>
         </div>
 
@@ -481,7 +488,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
                 layoutMode === "hierarchical" ? "bg-slate-800 text-sky-300" : "text-slate-400 hover:text-slate-200"
               )}
             >
-              分层架构视图
+              {isZh ? "分层视图" : "Hierarchy"}
             </button>
             <button
               onClick={() => setLayoutMode("force")}
@@ -490,35 +497,35 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
                 layoutMode === "force" ? "bg-slate-800 text-emerald-300" : "text-slate-400 hover:text-slate-200"
               )}
             >
-              力导向引力视图
+              {isZh ? "自由布局" : "Free Layout"}
             </button>
           </div>
 
           <div className="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1">
             <button
               onClick={handleZoomIn}
-              title="放大 (Zoom In)"
+              title={isZh ? "放大" : "Zoom in"}
               className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
             >
               <ZoomIn className="size-3.5" />
             </button>
             <button
               onClick={handleZoomOut}
-              title="缩小 (Zoom Out)"
+              title={isZh ? "缩小" : "Zoom out"}
               className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
             >
               <ZoomOut className="size-3.5" />
             </button>
             <button
               onClick={handleResetZoom}
-              title="重置视图 (Reset)"
+              title={isZh ? "重置视图" : "Reset view"}
               className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
             >
               <RefreshCw className="size-3.5" />
             </button>
             <button
               onClick={() => setFullscreen(!fullscreen)}
-              title="全屏切换 (Fullscreen)"
+              title={isZh ? "切换全屏" : "Toggle fullscreen"}
               className="p-1.5 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
             >
               {fullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
@@ -544,7 +551,7 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
             echartsRef.current = instance;
           }}
           option={chartOption}
-          style={{ height: fullscreen ? "calc(100vh - 140px)" : "540px", width: "100%" }}
+          style={{ height: fullscreen ? "calc(100vh - 140px)" : "420px", width: "100%" }}
           opts={{ renderer: "canvas" }}
         />
 
@@ -553,23 +560,23 @@ export function TrafficTopology({ showTitle = true }: TrafficTopologyProps) {
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-indigo-400" />
-              玩家直连流
+              {isZh ? "玩家接入" : "Player ingress"}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-sky-400" />
-              Gateway 转发
+              {isZh ? "网关转发" : "Gateway"}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-cyan-400" />
-              NAT 穿透反向隧道
+              {isZh ? "反向隧道" : "Reverse tunnel"}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-emerald-400" />
-              运行容器
+              {isZh ? "运行实例" : "Running instance"}
             </span>
           </div>
           <span className="font-mono text-[10px] text-slate-500">
-            支持鼠标滚轮缩放、画布平移拖拽与节点力导向互动
+            {isZh ? "滚轮缩放 · 拖动画布" : "Scroll to zoom · drag to pan"}
           </span>
         </div>
       </div>

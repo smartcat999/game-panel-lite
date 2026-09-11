@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Archive, Bookmark, Box, Gamepad2, Globe2, PackageCheck, Settings } from "lucide-react";
+import { Archive, Bookmark, Box, Gamepad2, Globe2, PackageCheck } from "lucide-react";
 import type { ComponentType } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -54,22 +54,11 @@ export function GameAssetsSubNav() {
 
   const items: SubNavItem[] = [
     { href: "/games", label: isZh ? "游戏服务端库" : "Game Library", icon: Gamepad2 },
+    { href: "/versions", label: isZh ? "游戏运行镜像" : "Runtime Images", icon: PackageCheck },
     { href: "/mods", label: isZh ? "创意工坊模组" : "Mod Workshop", icon: Box },
     { href: "/presets", label: isZh ? "配置预设模版" : "Presets", icon: Bookmark },
     { href: "/worlds", label: isZh ? "世界地图存档" : "Worlds", icon: Globe2 },
     { href: "/backups", label: isZh ? "快照与备份中心" : "Backups", icon: Archive }
-  ];
-
-  return <SubNav items={items} />;
-}
-
-export function SettingsSubNav() {
-  const { locale } = useI18n();
-  const isZh = locale === "zh";
-
-  const items: SubNavItem[] = [
-    { href: "/settings", label: isZh ? "控制台基本设置" : "General Settings", icon: Settings },
-    { href: "/versions", label: isZh ? "系统版本与更新" : "Version & Updates", icon: PackageCheck }
   ];
 
   return <SubNav items={items} />;
