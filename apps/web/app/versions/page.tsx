@@ -33,16 +33,11 @@ export default function VersionsPage() {
   const providers = (gamesQuery.data ?? []).flatMap((game) => game.providers).sort(compareProviderPriority);
   const supportedProviders = providers.filter((provider) => provider.runtimeImage?.status !== "unsupported");
   const unsupportedProviders = providers.filter((provider) => provider.runtimeImage?.status === "unsupported");
-  const attentionCount = supportedProviders.filter((provider) => provider.runtimeImage?.status !== "ready").length;
-  const summary = locale === "zh"
-    ? `${supportedProviders.length} 个运行镜像 · ${attentionCount > 0 ? `${attentionCount} 个需要处理` : "全部为最新"}`
-    : `${supportedProviders.length} runtime images · ${attentionCount > 0 ? `${attentionCount} need attention` : "all up to date"}`;
 
   return (
     <>
       <PageHeader
         title={t("versionManagementTitle")}
-        description={summary}
         action={(
           <Button variant="secondary" onClick={() => gamesQuery.refetch()} disabled={gamesQuery.isFetching}>
             <RefreshCw aria-hidden="true" className={cn("size-4", gamesQuery.isFetching && "animate-spin motion-reduce:animate-none")} />
