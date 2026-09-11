@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, Eye, EyeOff, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Settings2, Share2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
+import { Ban, Braces, Check, CheckCircle2, Clock, Copy, Cpu, ExternalLink, FileText, KeyRound, Megaphone, MemoryStick, Moon, MoreHorizontal, Package, Pencil, Plug, Power, RotateCcw, Save, Send, Settings2, Sun, Sunrise, Terminal, Trash2, Upload, UserX, Users, Waves, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
@@ -36,7 +36,6 @@ import {
   getModConfig,
   getGameServer,
   getRuntimeStats,
-  getServerJoinInfo,
   getSettings,
   listComputeNodes,
   listGames,
@@ -73,7 +72,6 @@ import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstConfiguredWorkshopIds, dstModScope, isServerAssignableMod, mergeConfiguredWorkshopMods, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateDSTGameModePayload, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
-import { serverInviteText, serverJoinAddress, serverJoinPassword } from "@/lib/server-join";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
 import type { Backup, DSTModConfiguration, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
@@ -199,12 +197,6 @@ export default function ServerDetailPage() {
   const shareQuery = useQuery({ queryKey: ["server-share", id], queryFn: () => getServerShare(id), enabled: Boolean(canManageShares && serverResource), retry: false });
   const runtimeStatsQuery = useQuery({ queryKey: ["runtime-stats"], queryFn: getRuntimeStats, enabled: Boolean(serverResource), retry: false, staleTime: 30_000 });
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: getSettings, staleTime: 5 * 60 * 1000, retry: false });
-  const joinInfoQuery = useQuery({
-    queryKey: ["server-join-info", id],
-    queryFn: () => getServerJoinInfo(id),
-    enabled: Boolean(serverResource),
-    retry: false
-  });
   const [copied, setCopied] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
   const [command, setCommand] = useState("");
@@ -660,10 +652,6 @@ export default function ServerDetailPage() {
 
   const status = gameServerStatus(serverResource);
   const playersOnline = serverResource.status.playersOnline ?? 0;
-  const joinPort = joinInfoQuery.data?.port ?? gameServerJoinPort(serverResource);
-  const invite = joinInfoQuery.data?.inviteText ?? serverInviteText(serverResource);
-  const joinAddress = joinInfoQuery.data?.address ?? serverJoinAddress(serverResource);
-  const joinPassword = joinInfoQuery.data?.password ?? serverJoinPassword(serverResource);
   const share = shareQuery.data;
   const savedShareIncludePassword = share?.includePassword ?? false;
   const sharePath = share?.sharePath ?? "";
@@ -736,14 +724,16 @@ export default function ServerDetailPage() {
           server={serverResource}
           publicHost={settingsQuery.data?.publicHost}
           canControl={canControlServer}
+          cpuPercent={statsQuery.data?.cpuPercent}
           disabled={gameUpdateActive || worldRegenerationActive}
+          memoryMb={statsQuery.data?.memoryMb}
           onAction={(action) => serverAction.mutate(action)}
           onOpenShare={canManageShares ? openShareDialog : undefined}
+          shareEnabled={Boolean(share?.enabled)}
         />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="min-w-0">
+      <div className="mt-4 min-w-0">
           {renderTabs ? (
             <div className="mb-4 flex gap-2 overflow-x-auto rounded-lg border border-panel-line bg-panel-card px-3 py-3" role="tablist" aria-label={serverResource.name}>
               {tabs.map((tab) => (
@@ -952,27 +942,6 @@ export default function ServerDetailPage() {
             />
           )}
           </div>
-        </div>
-
-        <aside className="hidden space-y-4 xl:sticky xl:top-24 xl:block xl:self-start" data-testid="server-detail-side-panel">
-          <JoinServerPanel
-            copied={copied}
-            invite={invite}
-            joinAddress={joinAddress}
-            joinPassword={joinPassword}
-            joinPort={joinPort}
-            onCopy={copy}
-          />
-          <ShareServerPanel
-            enabled={Boolean(share?.enabled)}
-            onOpen={openShareDialog}
-          />
-          <RuntimeMonitorCard
-            cpuPercent={statsQuery.data?.cpuPercent}
-            memoryMb={statsQuery.data?.memoryMb}
-            resource={serverResource}
-          />
-        </aside>
       </div>
 
       {canManageShares ? <ShareServerDialog
@@ -1285,93 +1254,6 @@ function ResourceLimitsCard({
         </div>
       )}
     </Card>
-  );
-}
-
-function RuntimeMonitorCard({
-  cpuPercent,
-  memoryMb,
-  resource
-}: {
-  cpuPercent?: number;
-  memoryMb?: number;
-  resource: GameServerResource;
-}) {
-  const { t } = useI18n();
-  const running = gameServerStatus(resource) === "running";
-  const cpuLimitCores = resource.spec.resources?.cpuLimitCores ?? 0;
-  const memoryLimitMb = resource.spec.resources?.memoryLimitMb ?? 0;
-  const memoryPercent = running && memoryMb !== undefined && memoryLimitMb > 0
-    ? memoryMb / memoryLimitMb * 100
-    : undefined;
-
-  return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-semibold">{t("runtimeOverview")}</h2>
-          <p className="mt-1 text-xs text-slate-400">{t("runtimeOverviewHint")}</p>
-        </div>
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-panel-green/30 bg-panel-green/10 text-panel-green">
-          <Activity aria-hidden="true" className="size-4" />
-        </span>
-      </div>
-      <div className="mt-4 space-y-2.5">
-        <RuntimeMonitorMetric
-          icon={<Cpu aria-hidden="true" className="size-4" />}
-          label={t("cpu")}
-          value={running && cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : t("notRunning")}
-          hint={formatCpuLimitLabel(cpuLimitCores, t)}
-          percent={running && cpuPercent !== undefined ? cpuPercent : undefined}
-        />
-        <RuntimeMonitorMetric
-          icon={<MemoryStick aria-hidden="true" className="size-4" />}
-          label={t("memory")}
-          value={running && memoryMb !== undefined ? `${memoryMb} MB` : t("notRunning")}
-          hint={formatMemoryLimitLabel(memoryLimitMb, t)}
-          percent={memoryPercent}
-          tone="neutral"
-        />
-      </div>
-    </Card>
-  );
-}
-
-function RuntimeMonitorMetric({
-  hint,
-  icon,
-  label,
-  percent,
-  tone = "green",
-  value
-}: {
-  hint: string;
-  icon: ReactNode;
-  label: string;
-  percent?: number;
-  tone?: "green" | "neutral";
-  value: string;
-}) {
-  const accentClass = tone === "neutral" ? "text-slate-300" : "text-panel-green";
-  const barClass = tone === "neutral" ? "bg-slate-400" : "bg-panel-green";
-  return (
-    <div className="rounded-md border border-panel-line bg-slate-950/35 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={accentClass}>{icon}</span>
-          <span className="text-xs text-slate-400">{label}</span>
-        </div>
-        <div className="min-w-0 text-right">
-          <p className="truncate font-mono text-sm font-semibold text-slate-100">{value}</p>
-          <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p>
-        </div>
-      </div>
-      {percent !== undefined ? (
-        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
-          <div className={cn("h-full rounded-full", barClass)} style={{ width: `${Math.max(3, Math.min(percent, 100))}%` }} />
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -3209,70 +3091,6 @@ function ResourceRow({ actions, className, meta, title }: { title: ReactNode; me
 
 
 
-function JoinServerPanel({
-  copied,
-  invite,
-  joinAddress,
-  joinPassword,
-  joinPort,
-  onCopy
-}: {
-  copied: string;
-  invite: string;
-  joinAddress: string;
-  joinPassword: string;
-  joinPort: number;
-  onCopy: (label: string, value: string) => void | Promise<void>;
-}) {
-  const { t } = useI18n();
-  const endpoint = `${joinAddress}:${joinPort}`;
-  return (
-    <Card className="p-4">
-      <h2 className="font-semibold">{t("joinServer")}</h2>
-      <CopyRow className="mt-3" label={t("serverAddress")} value={endpoint} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
-      <CopyRow className="mt-2" label={t("password")} value={joinPassword || t("none")} secret={Boolean(joinPassword)} copied={copied} copiedLabel={t("copied")} copyLabel={t("copy")} onCopy={onCopy} />
-      <div className="mt-3">
-        <Button className="w-full px-2 text-xs" variant="secondary" onClick={() => void onCopy("Invite", invite)}>
-          <Copy aria-hidden="true" />
-          {copied === "Invite" ? t("copied") : t("actionCopyInvite")}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-function ShareServerPanel({ enabled, onOpen }: { enabled: boolean; onOpen: () => void }) {
-  const { t } = useI18n();
-  return (
-    <Card className="p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-panel-line bg-slate-950/45 text-panel-green">
-          <Share2 aria-hidden="true" className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold">{t("shareServer")}</h2>
-            <span className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium",
-              enabled
-                ? "border-panel-green/30 bg-panel-green/10 text-panel-green"
-                : "border-panel-line bg-slate-950/45 text-slate-400"
-            )}>
-              <span className="size-1.5 rounded-full bg-current" />
-              {enabled ? t("sharePageEnabled") : t("sharePageDisabled")}
-            </span>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-slate-400">{t("shareServerDescription")}</p>
-        </div>
-      </div>
-      <Button className="mt-3 w-full text-xs" variant="secondary" onClick={onOpen}>
-        <Share2 aria-hidden="true" className="size-3.5" />
-        {t("manageShareServer")}
-      </Button>
-    </Card>
-  );
-}
-
 function ShareServerDialog({
   copied,
   open,
@@ -3364,49 +3182,6 @@ function ShareServerDialog({
     />
   );
 }
-
-function CopyRow({
-  className,
-  copied,
-  copiedLabel,
-  copyLabel,
-  label,
-  onCopy,
-  secret = false,
-  value
-}: {
-  className?: string;
-  copied: string;
-  copiedLabel: string;
-  copyLabel: string;
-  label: string;
-  onCopy: (label: string, value: string) => void;
-  secret?: boolean;
-  value: string;
-}) {
-  const { t } = useI18n();
-  const [revealed, setRevealed] = useState(false);
-  return (
-    <div className={cn("flex items-center justify-between gap-3 rounded-md border border-panel-line bg-slate-950/50 px-3 py-2", className)}>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-400">{label}</p>
-        <p className="truncate text-sm">{secret && !revealed ? "••••••••" : value}</p>
-      </div>
-      <div className="flex shrink-0 gap-1">
-        {secret ? (
-          <Button aria-label={revealed ? t("hideSensitiveValue", { label }) : t("showSensitiveValue", { label })} className="size-8 p-0" variant="ghost" onClick={() => setRevealed((val) => !val)}>
-            {revealed ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
-          </Button>
-        ) : null}
-        <Button className="h-8 px-2 text-xs" variant="secondary" onClick={() => onCopy(label, value)}>
-          {copied === label ? copiedLabel : copyLabel}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-
 
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
