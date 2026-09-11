@@ -266,18 +266,20 @@ export function ServerLobbyBanner({
             className="flex items-center gap-1.5 rounded-lg border border-panel-green/30 bg-panel-green/10 px-3.5 py-1.5 text-xs font-bold text-panel-green transition hover:bg-panel-green/20"
           >
             {copiedInvite ? <Check className="size-3.5 text-panel-green" /> : <Share2 className="size-3.5" />}
-            <span>{copiedInvite ? (isZh ? "加入信息已复制" : "Join Info Copied") : (isZh ? "复制加入信息" : "Copy Join Info")}</span>
+            <span>{copiedInvite ? (isZh ? "邀请已复制！" : "Copied!") : (isZh ? "一键复制开黑群邀请" : "Copy Invite")}</span>
           </button>
 
           {onOpenShare ? (
             <button
               type="button"
               onClick={onOpenShare}
+              aria-label={isZh
+                ? `公开玩家邀请页，${shareEnabled ? "已开启" : "未开启"}`
+                : `Public Share, ${shareEnabled ? "enabled" : "disabled"}`}
               className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
             >
               <span className={shareEnabled ? "size-1.5 rounded-full bg-panel-green" : "size-1.5 rounded-full bg-slate-500"} />
-              <span>{isZh ? "管理公开分享" : "Manage Sharing"}</span>
-              <span className="text-slate-500">{shareEnabled ? (isZh ? "已开启" : "On") : (isZh ? "未开启" : "Off")}</span>
+              <span>{isZh ? "公开玩家邀请页" : "Public Share"}</span>
             </button>
           ) : null}
         </div>
