@@ -13,6 +13,7 @@ import (
 type Store interface {
 	Put(context.Context, Manifest) error
 	ByID(context.Context, string) (Manifest, error)
+	ByIDs(context.Context, []string) ([]Manifest, error)
 	List(context.Context, int) ([]Manifest, error)
 }
 
@@ -62,6 +63,39 @@ func (r *Registry) Verified(ctx context.Context, id string) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return manifest, nil
+}
+
+func (r *Registry) VerifiedByIDs(ctx context.Context, ids []string) (map[string]Manifest, error) {
+	unique := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			return nil, ErrInvalidManifest
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) > 100 {
+		return nil, ErrInvalidManifest
+	}
+	items, err := r.store.ByIDs(ctx, unique)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]Manifest, len(items))
+	for _, item := range items {
+		if err := verifyManifest(item, r.key); err != nil {
+			return nil, err
+		}
+		result[item.ProviderReleaseID] = item
+	}
+	if len(result) != len(unique) {
+		return nil, ErrInvalidManifest
+	}
+	return result, nil
 }
 
 func (r *Registry) List(ctx context.Context, limit int) ([]Manifest, error) {

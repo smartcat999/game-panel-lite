@@ -38,6 +38,18 @@ func (s *MemoryStore) ByID(_ context.Context, id string) (Manifest, error) {
 	return item, nil
 }
 
+func (s *MemoryStore) ByIDs(_ context.Context, ids []string) ([]Manifest, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]Manifest, 0, len(ids))
+	for _, id := range ids {
+		if item, ok := s.items[id]; ok {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
 func (s *MemoryStore) List(_ context.Context, limit int) ([]Manifest, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -64,6 +64,36 @@ Migrate the Terraria, tModLoader, and Docker adapters only through the accepted 
 
 Acceptance requires all checks green, fresh-schema deployment, one complete Terraria and tModLoader flow, rollback instructions, verified login/create/operate/backup flow on um773, and removal of the old deployment only after the new health and browser checks pass.
 
+## Rebaseline Phase 7 — core workflow UI convergence
+
+Deliver the accepted prototype's compact, professional visual language through one verified vertical workflow without restoring unsupported or decorative information. Work in acceptance order: 7.1 Instance list, 7.2 Create instance, then 7.3 Instance detail. Each slice is reviewed locally, committed independently, and deployed to um773 only after its visual and functional acceptance.
+
+### 7.1 Instance list
+
+Deliver:
+
+- Align the complete Workspace shell, contextual page bar, typography, color tokens, borders, radii, spacing, and table density with the selected instance-list prototype.
+- Present only Name, user-facing Status, Game and Version, primary Endpoint plus additional-binding count, Resource Specification, localized Region, and one detail-navigation affordance.
+- Return a versioned list display model from the Control Plane. Resolve Provider releases and Regions by bounded ID batches and compose the response in Go without SQL `JOIN`; frontend code must not branch on game identity or expose internal Region IDs.
+- Make the complete row a mouse and keyboard navigation target. Preserve loading, empty, processing, failed, long-name, multiple-Endpoint, and responsive states without production-only fixtures or hidden smoke-data rules.
+- Preserve the accepted product differences from the visual reference: no decorative resource counts, unreliable player or ping metrics, duplicate quick actions, user-selected ports, or unsupported navigation.
+
+Acceptance:
+
+- Contract and handler tests prove the list display model is complete, bounded, Provider-neutral, and composed without SQL `JOIN` or per-instance metadata queries.
+- Browser tests cover loading or delayed data, empty state, normal, processing, failed, long-name, IP-only, changeable and multiple Endpoint presentation, whole-row keyboard navigation, and detail navigation.
+- Screenshots at 1440 px and 1920 px are compared with the selected prototype; intentional product differences are documented and no actionable P0, P1, or P2 visual differences remain.
+- Desktop columns progressively reduce by decision value on narrow widths without shrinking typography or requiring horizontal scrolling for the primary task.
+- `gofmt`, backend tests and architecture checks, frontend lint, typecheck, build, Playwright accessibility/browser checks, and `git diff --check` pass before the 7.1 evidence and commit are recorded.
+
+### 7.2 Create instance
+
+Deliver and acceptance will be refined only after 7.1 is accepted. The slice must preserve custom resource specifications, Provider-defined configuration and conditional mod steps, system-assigned Endpoint behavior, and the no-duplicate-information rule.
+
+### 7.3 Instance detail
+
+Deliver and acceptance will be refined only after 7.2 is accepted. The slice must keep lifecycle, configuration, console, logs, and backups attached to Logical Instance identity and expose only Provider-supported capabilities.
+
 ## Superseded implementation history
 
 ### Historical Phase 1 — contracts and executable architecture
@@ -193,6 +223,8 @@ Acceptance:
 ```
 
 ## Progress evidence
+
+- 2026-09-11: Rebaseline Phase 7.1 accepted by the user. The Workspace instance list now consumes an explicit versioned display contract and shows only name, truthful lifecycle state, game/version, Provider-declared Endpoint facts, custom resource specification, localized Region name, and whole-row detail navigation. Provider Release and Region metadata are fetched in bounded ID batches and composed in Go without SQL `JOIN`; the frontend contains no game-name display branch or production demo data. Loading, empty, long-name, running, stopped, pending, failed, IP-only, TCP/UDP, multi-Endpoint, keyboard-navigation, 1440px, 1920px, and 390px states were verified. Product Design full and focused comparisons record no remaining P0/P1/P2 issue in `platform/frontend/design-qa.md`; axe found and drove a WCAG-AA success-color correction. Final local checks passed: `gofmt`, PostgreSQL- and NATS-backed `go test ./... -count=1`, focused `go test -race`, `go vet ./...`, `go build ./...`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, the two Phase 7.1 Playwright checks, and `git diff --check`.
 
 - 2026-09-10: Rebaseline Phase 2 follow-up verified that every administrator-issued one-time password carries an explicit 24-hour expiry and is rejected at the boundary instant unless changed earlier; PostgreSQL persists the expiry with the credential.
 

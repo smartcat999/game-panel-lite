@@ -73,6 +73,33 @@ func TestManifestVerificationFailsClosed(t *testing.T) {
 	}
 }
 
+func TestVerifiedByIDsDeduplicatesAndRequiresEveryRelease(t *testing.T) {
+	store := NewMemoryStore()
+	registry := NewRegistry(store, []byte("provider-signing-key-012345678901"))
+	first, err := registry.Publish(context.Background(), fixtureManifest(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondManifest := fixtureManifest()
+	secondManifest.ProviderReleaseID = "gpr_fixture_v3"
+	secondManifest.ReleaseVersion = "3.0.0"
+	second, err := registry.Publish(context.Background(), secondManifest, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := registry.VerifiedByIDs(context.Background(), []string{second.ProviderReleaseID, first.ProviderReleaseID, first.ProviderReleaseID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 || items[first.ProviderReleaseID].DisplayName != "Fixture Game" || items[second.ProviderReleaseID].ReleaseVersion != "3.0.0" {
+		t.Fatalf("items=%#v", items)
+	}
+	if _, err := registry.VerifiedByIDs(context.Background(), []string{"gpr_missing"}); !errors.Is(err, ErrInvalidManifest) {
+		t.Fatalf("missing release error=%v", err)
+	}
+}
+
 func TestSchemaMigrationMustBeExplicit(t *testing.T) {
 	manifest := fixtureManifest()
 	if mode, err := MigrationMode(manifest, 1, 2); err != nil || mode != "manual" {

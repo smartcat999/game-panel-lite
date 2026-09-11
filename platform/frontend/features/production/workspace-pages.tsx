@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { api, idempotencyKey, type Backup, type ConfigurationField, type Instance, type LogEntry, type Operation, type ProviderManifest, type ProviderSummary, type Region, type RegionCatalog, type Revision, type Wallet, type Workspace } from "@/lib/api";
+import { api, idempotencyKey, type Backup, type ConfigurationField, type Instance, type InstanceListItem, type LogEntry, type Operation, type ProviderManifest, type ProviderSummary, type Region, type RegionCatalog, type Revision, type Wallet, type Workspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type Values = Record<string, unknown>;
@@ -28,31 +28,45 @@ function ErrorNotice({ text }: { text: string }) { return <div className="inline
 
 function StateBadge({ state }: { state: string }) {
   const normalized = state === "ready" || state === "running" ? "running" : state === "stopped" ? "stopped" : state === "failed" ? "failed" : "starting";
-  const labels: Record<string, string> = { running: "运行中", stopped: "已停止", starting: "处理中", failed: "失败" };
-  return <span className={cn("state-badge", `state-${normalized}`)}><span />{labels[normalized]}</span>;
+  const labels: Record<string, string> = { running: "运行中", stopped: "已停止", pending: "等待部署", starting: "启动中", stopping: "停止中", failed: "失败", unknown: "状态未知" };
+  return <span className={cn("state-badge", `state-${normalized}`)}><span />{labels[state] ?? labels[normalized]}</span>;
 }
 
-function primaryEndpoint(instance: Instance) { return instance.endpoints?.find((item) => item.primary) ?? instance.endpoints?.[0]; }
+function primaryEndpoint(instance: Pick<Instance, "endpoints">) { return instance.endpoints?.find((item) => item.primary) ?? instance.endpoints?.[0]; }
 
-function EndpointSummary({ instance }: { instance: Instance }) {
+function EndpointSummary({ instance }: { instance: Pick<Instance, "endpoints" | "observedState"> }) {
   const endpoint = primaryEndpoint(instance);
-  if (!endpoint) return <span className="muted-text">分配中</span>;
-  return <span className="endpoint-summary"><code>{endpoint.displayAddress}</code><span>{endpoint.transports.join("/").toUpperCase()} · {endpoint.stability === "stable" ? "固定" : "可能变化"}</span></span>;
+  if (!endpoint) return <span className="muted-text">{instance.observedState === "pending" || instance.observedState === "starting" ? "等待分配" : "未分配"}</span>;
+  const additional = instance.endpoints.length - 1;
+  return <span className="endpoint-summary"><span className="endpoint-primary"><code>{endpoint.displayAddress}</code>{additional > 0 ? <span className="endpoint-count">+{additional}</span> : null}</span><span className="endpoint-meta">{endpoint.transports.join("/").toUpperCase()} · {endpoint.stability === "stable" ? "固定" : "可能变化"}</span></span>;
 }
 
 export function InstanceListPage({ workspaceSlug }: { workspaceSlug: string }) {
   const { workspace, isLoading, error: workspaceError } = useWorkspace(workspaceSlug);
-  const instances = useQuery({ queryKey: ["instances", workspace?.id], enabled: Boolean(workspace), queryFn: () => api<Instance[]>(`/workspaces/${workspace!.id}/instances`) });
-  if (isLoading) return <Loading />;
-  if (workspaceError || !workspace) return <ErrorNotice text="工作区不存在或暂时不可用" />;
+  const instances = useQuery({ queryKey: ["instances", workspace?.id], enabled: Boolean(workspace), queryFn: () => api<InstanceListItem[]>(`/workspaces/${workspace!.id}/instances`) });
   return <>
     <PageHeader title="实例" actions={<Button asChild><Link href={`/w/${workspaceSlug}/instances/new`}><Plus size={16} />创建实例</Link></Button>} />
-    {instances.error ? <ErrorNotice text="实例列表暂时不可用" /> : null}
-    <section className="table-panel" aria-label="实例列表"><table className="dense-table"><thead><tr><th>名称</th><th>状态</th><th>游戏</th><th>Endpoint</th><th>资源</th><th>区域</th><th><span className="sr-only">打开</span></th></tr></thead><tbody>
-      {instances.data?.map((instance) => <tr className={instance.observedState === "stopped" ? "muted-row" : undefined} key={instance.id}><td><Link className="resource-name" href={`/w/${workspaceSlug}/instances/${instance.id}`}>{instance.name}</Link></td><td><StateBadge state={instance.observedState} /></td><td><span className="provider-tag">{instance.gameVersion}</span></td><td><EndpointSummary instance={instance} /></td><td><strong>{instance.resourceSpec.memoryMiB / 1024} GB</strong><span className="cell-secondary"> · {instance.resourceSpec.cpuMilli / 1000} vCPU</span></td><td>{instance.regionId}</td><td><Link aria-label="打开实例" href={`/w/${workspaceSlug}/instances/${instance.id}`}><ChevronRight size={17} /></Link></td></tr>)}
-      {instances.data?.length === 0 ? <tr><td className="compact-empty" colSpan={7}>暂无实例</td></tr> : null}
+    {workspaceError || !isLoading && !workspace ? <ErrorNotice text="工作区不存在或暂时不可用" /> : instances.error ? <ErrorNotice text="实例列表暂时不可用" /> : null}
+    <section className="table-panel instance-list-panel" aria-busy={isLoading || instances.isLoading} aria-label="实例列表"><table className="dense-table instance-table"><thead><tr><th>名称</th><th>状态</th><th>游戏与版本</th><th>Endpoint</th><th>规格</th><th>区域</th><th><span className="sr-only">进入详情</span></th></tr></thead><tbody>
+      {isLoading || instances.isLoading ? <InstanceListSkeleton /> : null}
+      {instances.data?.map((instance) => <tr className={cn("instance-row", instance.observedState === "stopped" && "muted-row")} key={instance.id}><td className="instance-name-cell"><Link aria-label={`打开实例 ${instance.name}`} className="resource-name instance-row-link" href={`/w/${workspaceSlug}/instances/${instance.id}`} title={instance.name}>{instance.name}</Link></td><td><StateBadge state={instance.observedState} /></td><td><span className="game-summary"><strong>{instance.game.displayName}</strong><code>{instance.game.version}</code></span></td><td><EndpointSummary instance={instance} /></td><td className="resource-spec"><strong>{formatMemory(instance.resourceSpec.memoryMiB)}</strong><span>{formatCPU(instance.resourceSpec.cpuMilli)}</span></td><td className="region-name">{instance.region.displayName}</td><td className="row-chevron"><ChevronRight aria-hidden="true" size={17} /></td></tr>)}
+      {!isLoading && !instances.isLoading && instances.data?.length === 0 ? <tr><td className="compact-empty" colSpan={7}>暂无实例</td></tr> : null}
     </tbody></table></section>
   </>;
+}
+
+function formatMemory(memoryMiB: number) {
+  const gibibytes = memoryMiB / 1024;
+  return `${Number.isInteger(gibibytes) ? gibibytes : gibibytes.toFixed(1)} GB`;
+}
+
+function formatCPU(cpuMilli: number) {
+  const cpu = cpuMilli / 1000;
+  return `${Number.isInteger(cpu) ? cpu : cpu.toFixed(1)} vCPU`;
+}
+
+function InstanceListSkeleton() {
+  return <>{[0, 1, 2].map((row) => <tr className="skeleton-row" key={row} aria-hidden="true">{["wide", "short", "medium", "wide", "short", "medium", "icon"].map((width, column) => <td key={`${row}-${column}`}><span className={`skeleton skeleton-${width}`} /></td>)}</tr>)}</>;
 }
 
 export function CreateInstancePage({ workspaceSlug }: { workspaceSlug: string }) {

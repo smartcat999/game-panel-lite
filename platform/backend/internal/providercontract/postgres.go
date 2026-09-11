@@ -58,6 +58,30 @@ func (s *PostgresStore) ByID(ctx context.Context, id string) (Manifest, error) {
 	return manifest, nil
 }
 
+func (s *PostgresStore) ByIDs(ctx context.Context, ids []string) ([]Manifest, error) {
+	if len(ids) == 0 {
+		return []Manifest{}, nil
+	}
+	rows, err := s.database.QueryContext(ctx, "SELECT manifest FROM provider_releases WHERE id=ANY($1) ORDER BY id LIMIT 100", ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]Manifest, 0, len(ids))
+	for rows.Next() {
+		var encoded []byte
+		if err := rows.Scan(&encoded); err != nil {
+			return nil, err
+		}
+		var manifest Manifest
+		if err := json.Unmarshal(encoded, &manifest); err != nil {
+			return nil, err
+		}
+		result = append(result, manifest)
+	}
+	return result, rows.Err()
+}
+
 func (s *PostgresStore) List(ctx context.Context, limit int) ([]Manifest, error) {
 	rows, err := s.database.QueryContext(ctx, "SELECT manifest FROM provider_releases ORDER BY game_key,release_version,id LIMIT $1", limit)
 	if err != nil {

@@ -1,6 +1,7 @@
 package workspaceapi
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -211,7 +212,130 @@ func (s Services) getMods(response http.ResponseWriter, request *http.Request) {
 
 func (s Services) listInstances(response http.ResponseWriter, request *http.Request) {
 	items, err := s.Delivery.ListInstances(request.Context(), request.PathValue("workspaceId"), queryLimit(request, 100))
-	respondResult(response, items, err)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, "instances_unavailable")
+		return
+	}
+	providerIDs := make([]string, 0, len(items))
+	regionIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		providerIDs = append(providerIDs, item.ProviderReleaseID)
+		regionIDs = append(regionIDs, item.RegionID)
+	}
+	providers, err := s.Providers.VerifiedByIDs(request.Context(), providerIDs)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, "instances_unavailable")
+		return
+	}
+	regions, err := regionListMetadataByIDs(request.Context(), s.Database, regionIDs)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, "instances_unavailable")
+		return
+	}
+	result, err := composeInstanceList(items, providers, regions)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, "instances_unavailable")
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
+}
+
+func composeInstanceList(items []deliverycontrol.Instance, providers map[string]providercontract.Manifest, regions map[string]instanceRegionMetadata) ([]instanceListItem, error) {
+	result := make([]instanceListItem, 0, len(items))
+	for _, item := range items {
+		provider, providerFound := providers[item.ProviderReleaseID]
+		region, regionFound := regions[item.RegionID]
+		if !providerFound || !regionFound {
+			return nil, errors.New("instance list metadata missing")
+		}
+		result = append(result, instanceListItem{
+			ID:            item.ID,
+			WorkspaceID:   item.WorkspaceID,
+			Name:          item.Name,
+			DesiredState:  item.DesiredState,
+			ObservedState: item.ObservedState,
+			ResourceSpec:  item.ResourceSpec,
+			Endpoints:     item.EndpointBindings,
+			Game: instanceGameMetadata{
+				ProviderReleaseID: item.ProviderReleaseID,
+				Key:               provider.GameKey,
+				DisplayName:       provider.DisplayName,
+				Version:           item.GameVersion,
+			},
+			Region:    region,
+			CreatedAt: item.CreatedAt,
+			UpdatedAt: item.UpdatedAt,
+		})
+	}
+	return result, nil
+}
+
+type instanceListItem struct {
+	ID            string                            `json:"id"`
+	WorkspaceID   string                            `json:"workspaceId"`
+	Name          string                            `json:"name"`
+	DesiredState  string                            `json:"desiredState"`
+	ObservedState string                            `json:"observedState"`
+	Game          instanceGameMetadata              `json:"game"`
+	Endpoints     []deliverycontrol.EndpointBinding `json:"endpoints"`
+	ResourceSpec  billing.ResourceSpec              `json:"resourceSpec"`
+	Region        instanceRegionMetadata            `json:"region"`
+	CreatedAt     time.Time                         `json:"createdAt"`
+	UpdatedAt     time.Time                         `json:"updatedAt"`
+}
+
+type instanceGameMetadata struct {
+	ProviderReleaseID string `json:"providerReleaseId"`
+	Key               string `json:"key"`
+	DisplayName       string `json:"displayName"`
+	Version           string `json:"version"`
+}
+
+type instanceRegionMetadata struct {
+	ID          string `json:"id"`
+	Code        string `json:"code"`
+	DisplayName string `json:"displayName"`
+}
+
+func regionListMetadataByIDs(ctx context.Context, database *sql.DB, ids []string) (map[string]instanceRegionMetadata, error) {
+	unique := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			return nil, errors.New("empty region id")
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return map[string]instanceRegionMetadata{}, nil
+	}
+	if len(unique) > 100 {
+		return nil, errors.New("too many region ids")
+	}
+	rows, err := database.QueryContext(ctx, `SELECT id,code,name FROM regions WHERE id=ANY($1) ORDER BY id LIMIT 100`, unique)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]instanceRegionMetadata, len(unique))
+	for rows.Next() {
+		var item instanceRegionMetadata
+		if err := rows.Scan(&item.ID, &item.Code, &item.DisplayName); err != nil {
+			return nil, err
+		}
+		result[item.ID] = item
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(result) != len(unique) {
+		return nil, errors.New("region metadata missing")
+	}
+	return result, nil
 }
 
 func (s Services) getInstance(response http.ResponseWriter, request *http.Request) {

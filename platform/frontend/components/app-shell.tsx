@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import {
   Archive,
   Bell,
@@ -27,6 +28,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { api, type Workspace } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type Area = "workspace" | "platform" | "region";
@@ -70,7 +72,8 @@ function regionNavigation(regionId: string): Array<{ group: string; items: NavIt
 export function AppShell({ area, scope, workspaceSlug = "ember", children }: { area: Area; scope?: string; workspaceSlug?: string; children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-  const scopeName = area === "workspace" ? "Ember Realms" : area === "platform" ? "平台管理" : scope ?? "cn-east-1";
+  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => api<Workspace[]>("/workspaces"), enabled: area === "workspace" });
+  const scopeName = area === "workspace" ? workspaces.data?.find((workspace) => workspace.slug === workspaceSlug)?.name ?? workspaceSlug : area === "platform" ? "平台管理" : scope ?? "cn-east-1";
   const groups = area === "workspace" ? workspaceNavigation(workspaceSlug) : area === "platform" ? platformNavigation : regionNavigation(scope ?? "cn-east-1");
 
   const sidebar = (
@@ -100,7 +103,7 @@ export function AppShell({ area, scope, workspaceSlug = "ember", children }: { a
         <div className="topbar-brand">
           <Image alt="GamePanel" height={28} src="/icon.svg" width={28} />
           <span className="topbar-divider" />
-          <button className="workspace-switcher" type="button"><span className="online-dot" />{scopeName}<ChevronDown size={14} /></button>
+          <button className="workspace-switcher" type="button"><span className="online-dot" /><span className="workspace-name">{scopeName}</span><ChevronDown size={14} /></button>
         </div>
         <div className="topbar-tools">
           <button aria-label="文档" type="button"><BookOpen size={17} /></button>

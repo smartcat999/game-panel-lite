@@ -26,6 +26,16 @@ func TestPostgresProviderReleaseIsImmutableAndVerified(t *testing.T) {
 	if _, err := registry.Verified(context.Background(), published.ProviderReleaseID); err != nil {
 		t.Fatal(err)
 	}
+	second := fixtureManifest()
+	second.ProviderReleaseID = "gpr_fixture_v3"
+	second.ReleaseVersion = "3.0.0"
+	if _, err := registry.Publish(context.Background(), second, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	batch, err := registry.VerifiedByIDs(context.Background(), []string{second.ProviderReleaseID, published.ProviderReleaseID})
+	if err != nil || len(batch) != 2 {
+		t.Fatalf("batch=%#v err=%v", batch, err)
+	}
 	changed := fixtureManifest()
 	changed.DisplayName = "Changed"
 	if _, err := registry.Publish(context.Background(), changed, time.Now().UTC()); !errors.Is(err, ErrImmutableRelease) {
