@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Globe, KeyRound, Laptop, Lock, Moon, Palette, Shield, Sun, User, X } from "lucide-react";
+import { Check, Globe, KeyRound, Laptop, Lock, Moon, Palette, Shield, User, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,17 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export function AccountModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AccountModal({
+  open,
+  onClose,
+  initialTab = "preferences",
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialTab?: "preferences" | "security" | "profile";
+}) {
   const { locale } = useI18n();
-  const [activeTab, setActiveTab] = useState<"preferences" | "security" | "profile">("preferences");
+  const [activeTab, setActiveTab] = useState<"preferences" | "security" | "profile">(initialTab);
   const [currentTheme, setCurrentTheme] = useState("dark");
   const [selectedLocale, setSelectedLocale] = useState(locale);
 
@@ -21,19 +29,27 @@ export function AccountModal({ open, onClose }: { open: boolean; onClose: () => 
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
+    if (open) {
+      setActiveTab(initialTab);
+    }
+  }, [open, initialTab]);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      const theme = localStorage.getItem("gamepanel.theme") ?? "dark";
-      setCurrentTheme(theme);
+      setCurrentTheme("dark");
+      localStorage.setItem("gamepanel.theme", "dark");
+      document.cookie = "gamepanel.theme=dark; path=/; max-age=31536000";
+      document.documentElement.dataset.theme = "dark";
     }
   }, [open]);
 
   if (!open) return null;
 
-  const handleThemeChange = (theme: "dark" | "light" | "system") => {
+  const handleThemeChange = (theme: "dark" | "midnight") => {
     setCurrentTheme(theme);
     document.cookie = `gamepanel.theme=${theme}; path=/; max-age=31536000`;
     localStorage.setItem("gamepanel.theme", theme);
-    document.documentElement.dataset.theme = theme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme;
+    document.documentElement.dataset.theme = "dark";
   };
 
   const handleLocaleChange = (lang: "zh-CN" | "en") => {
@@ -216,7 +232,7 @@ export function AccountModal({ open, onClose }: { open: boolean; onClose: () => 
                   <p className="text-[11px] text-zinc-400">
                     {locale === "zh-CN" ? "为控制台切换暗夜石墨色或明亮主题" : "Choose your favorite theme mode"}
                   </p>
-                  <div className="grid grid-cols-3 gap-3 pt-1">
+                  <div className="grid grid-cols-2 gap-3 pt-1">
                     <button
                       type="button"
                       onClick={() => handleThemeChange("dark")}
@@ -228,35 +244,21 @@ export function AccountModal({ open, onClose }: { open: boolean; onClose: () => 
                       )}
                     >
                       <Moon size={16} />
-                      <span>{locale === "zh-CN" ? "深色暗夜" : "Dark"}</span>
+                      <span>{locale === "zh-CN" ? "深色暗夜 (默认)" : "Dark Charcoal"}</span>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => handleThemeChange("light")}
+                      onClick={() => handleThemeChange("midnight")}
                       className={cn(
                         "flex flex-col items-center justify-center p-3 rounded-xl border gap-2 text-xs font-medium transition-all",
-                        currentTheme === "light"
-                          ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-semibold"
-                          : "bg-white/[0.02] border-white/[0.08] text-zinc-400 hover:bg-white/[0.05]"
-                      )}
-                    >
-                      <Sun size={16} />
-                      <span>{locale === "zh-CN" ? "浅色明亮" : "Light"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleThemeChange("system")}
-                      className={cn(
-                        "flex flex-col items-center justify-center p-3 rounded-xl border gap-2 text-xs font-medium transition-all",
-                        currentTheme === "system"
+                        currentTheme === "midnight"
                           ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-semibold"
                           : "bg-white/[0.02] border-white/[0.08] text-zinc-400 hover:bg-white/[0.05]"
                       )}
                     >
                       <Laptop size={16} />
-                      <span>{locale === "zh-CN" ? "跟随系统" : "System"}</span>
+                      <span>{locale === "zh-CN" ? "极黑石墨 (OLED)" : "OLED Black"}</span>
                     </button>
                   </div>
                 </div>

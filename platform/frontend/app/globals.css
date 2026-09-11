@@ -26,30 +26,32 @@
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
+:root,
+:root[data-theme="dark"],
 :root[data-theme="light"] {
-  color-scheme: light;
-  --background: #f6f8fb;
-  --surface: #ffffff;
-  --surface-subtle: #f8fafc;
-  --surface-card: #ffffff;
-  --surface-card-hover: #f1f5f9;
-  --foreground: #172033;
-  --muted-foreground: #59687e;
-  --faint-foreground: #68778c;
-  --border: #dfe6ef;
-  --border-strong: #cdd7e5;
-  --interactive: #eef2f7;
-  --primary: #0b1428;
-  --primary-hover: #17223a;
-  --primary-foreground: #ffffff;
-  --focus: #1f8f73;
-  --success: #087a5d;
-  --success-bg: #eafbf4;
-  --warning: #b97508;
-  --warning-bg: #fff7e7;
-  --danger: #c53c3c;
-  --danger-bg: #fff0f0;
-  --shadow: 0 1px 2px rgb(15 23 42 / 4%), 0 3px 10px rgb(15 23 42 / 2.5%);
+  color-scheme: dark;
+  --background: #080c14;
+  --surface: #0f1624;
+  --surface-subtle: #0e1420;
+  --surface-card: #0f1624;
+  --surface-card-hover: #131b2c;
+  --foreground: #f3f4f6;
+  --muted-foreground: #9ca3af;
+  --faint-foreground: #6b7280;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --interactive: rgba(255, 255, 255, 0.05);
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-foreground: #080c14;
+  --focus: #10b981;
+  --success: #34d399;
+  --success-bg: rgba(16, 185, 129, 0.1);
+  --warning: #fbbf24;
+  --warning-bg: rgba(245, 158, 11, 0.08);
+  --danger: #f87171;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 * { box-sizing: border-box; }
@@ -133,8 +135,8 @@ code, pre, .resource-name, .provider-tag { font-family: "SFMono-Regular", Consol
 .nav-item-active svg { color: #536780; }
 
 .prototype-main { grid-column: 2; grid-row: 2; min-width: 0; }
-.page-bar { display: flex; min-height: 52px; align-items: center; justify-content: space-between; padding: 7px 9px 7px 16px; border-radius: 11px; }
-.page-bar h1 { margin: 0; font-size: 16px; font-weight: 750; letter-spacing: -.015em; }
+.page-bar { display: flex; min-height: 52px; align-items: center; justify-content: space-between; padding: 7px 9px 7px 16px; border-radius: 11px; background: var(--surface); border: 1px solid var(--border); color: var(--foreground); }
+.page-bar h1 { margin: 0; font-size: 16px; font-weight: 750; letter-spacing: -.015em; color: var(--foreground); }
 .page-actions, .inline-controls { display: flex; align-items: center; gap: 8px; }
 .page-actions a { color: var(--primary-foreground); }
 .table-panel {
@@ -176,8 +178,8 @@ code, pre, .resource-name, .provider-tag { font-family: "SFMono-Regular", Consol
 .endpoint-primary code { color: var(--foreground); font-size: 12px; }
 .endpoint-meta { color: var(--faint-foreground); font-size: 10px; font-weight: 550; letter-spacing: .015em; }
 .endpoint-count { padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground); font-size: 10px; font-weight: 650; }
-.provider-tag { padding: 2px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--interactive); color: #5f6e84; font-size: 12px; }
-.provider-modded { border-color: #e6cffb; background: #faf2ff; color: #8b3fd0; }
+.provider-tag { padding: 2px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--interactive); color: var(--muted-foreground); font-size: 12px; }
+.provider-modded { border-color: rgba(168, 85, 247, 0.3); background: rgba(168, 85, 247, 0.12); color: #c084fc; }
 .stale-tag, .role-tag { margin-left: 8px; padding: 2px 6px; border-radius: 5px; background: var(--warning-bg); color: var(--warning); font-size: 10px; font-weight: 650; }
 .state-badge { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-foreground); font-size: 12px; font-weight: 650; }
 .state-badge > span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }

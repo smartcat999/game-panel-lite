@@ -11,7 +11,9 @@ import {
   CircleDollarSign,
   Database,
   Gauge,
+  Globe,
   HardDrive,
+  KeyRound,
   ListChecks,
   LogOut,
   Menu,
@@ -19,7 +21,6 @@ import {
   Server,
   Settings,
   ShieldCheck,
-  UserRound,
   Users,
   X,
   type LucideIcon,
@@ -109,6 +110,7 @@ export function AppShell({
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [accountModalTab, setAccountModalTab] = useState<"preferences" | "security" | "profile">("preferences");
   const pathname = usePathname();
 
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -265,61 +267,89 @@ export function AppShell({
         <button
           type="button"
           onClick={() => setUserMenuOpen(!userMenuOpen)}
-          className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/[0.05] transition-colors group text-left"
+          className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-all group text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center text-[10px] font-bold text-white shadow-sm shrink-0">
-              GP
+            {/* Old UI Terraria Pixel Player Avatar */}
+            <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/50 p-0.5 bg-[#151c2a] flex items-center justify-center shrink-0 shadow-sm group-hover:border-emerald-400 transition-colors">
+              <img src="/avatar.svg" alt="Avatar" className="w-full h-full rounded-full object-cover" />
             </div>
             <div className="min-w-0 flex flex-col">
-              <span className="text-xs font-semibold text-zinc-200 group-hover:text-white truncate">
-                Admin Operator
+              <span className="text-xs font-semibold text-zinc-100 group-hover:text-white truncate">
+                admin
               </span>
-              <span className="text-[10.5px] text-zinc-400 truncate">Pro Node</span>
+              <span className="text-[10px] text-emerald-400 font-medium tracking-tight truncate">
+                超级管理员 (ADMIN)
+              </span>
             </div>
           </div>
           <Settings className="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 transition-colors shrink-0" />
         </button>
 
-        {/* User Flyout Menu */}
+        {/* User Flyout Menu - matching old UI structure */}
         {userMenuOpen && (
-          <div className="absolute bottom-[calc(100%+4px)] left-3 right-3 z-50 p-1.5 rounded-xl bg-[#12161f] border border-white/[0.12] shadow-2xl backdrop-blur-xl">
-            <div className="px-2.5 py-1.5 border-b border-white/[0.06] mb-1">
-              <p className="text-xs font-semibold text-zinc-200">Operator Console</p>
-              <p className="text-[10.5px] text-zinc-400 truncate">admin@gamepanel.internal</p>
+          <div className="absolute bottom-[calc(100%+6px)] left-3 right-3 z-50 p-1.5 rounded-xl bg-[#121622] border border-white/[0.12] shadow-2xl backdrop-blur-xl animate-in fade-in-50 zoom-in-95 duration-100">
+            {/* Header with avatar & role badge */}
+            <div className="flex items-center gap-3 p-2.5 border-b border-white/[0.06] mb-1">
+              <div className="w-9 h-9 rounded-full overflow-hidden border border-emerald-500/60 p-0.5 bg-[#151c2a] shrink-0 shadow">
+                <img src="/avatar.svg" alt="Avatar" className="w-full h-full rounded-full object-cover" />
+              </div>
+              <div className="min-w-0 flex flex-col">
+                <span className="text-xs font-bold text-white truncate">admin</span>
+                <span className="text-[10.5px] text-emerald-400 font-medium">超级管理员 (ADMIN)</span>
+              </div>
             </div>
 
             <div className="space-y-0.5">
+              {/* 语言偏好 */}
               <button
                 type="button"
                 onClick={() => {
                   setUserMenuOpen(false);
+                  setAccountModalTab("preferences");
                   setAccountModalOpen(true);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-white/[0.05] hover:text-white transition-colors text-left"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-zinc-200 hover:bg-white/[0.06] hover:text-white transition-colors text-left"
               >
-                <UserRound className="w-3.5 h-3.5 text-zinc-400" />
-                {t("shell.accountSettings")}
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                <span>语言偏好</span>
               </button>
 
-              <Link
-                href="/platform"
-                onClick={() => setUserMenuOpen(false)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-white/[0.05] hover:text-white transition-colors"
+              {/* 账号安全 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  setAccountModalTab("security");
+                  setAccountModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-zinc-200 hover:bg-white/[0.06] hover:text-white transition-colors text-left"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                {t("shell.platformConsole")}
-              </Link>
+                <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                <span>账号安全</span>
+              </button>
+
+              {area === "workspace" && (
+                <Link
+                  href="/platform"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-zinc-200 hover:bg-white/[0.06] hover:text-white transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>平台控制台</span>
+                </Link>
+              )}
 
               <div className="my-1 border-t border-white/[0.06]" />
 
+              {/* 退出登录 */}
               <Link
                 href="/login"
                 onClick={() => setUserMenuOpen(false)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors"
+                className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                {t("shell.signOut")}
+                <span>退出登录</span>
               </Link>
             </div>
           </div>
@@ -343,8 +373,8 @@ export function AppShell({
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span className="text-xs font-semibold text-white">{scopeName}</span>
         </div>
-        <div className="w-6 h-6 rounded bg-emerald-600/30 text-emerald-400 text-xs flex items-center justify-center font-bold font-mono">
-          GP
+        <div className="w-7 h-7 rounded-full overflow-hidden border border-emerald-500/50 p-0.5 bg-[#151c2a] flex items-center justify-center">
+          <img src="/avatar.svg" alt="Avatar" className="w-full h-full rounded-full object-cover" />
         </div>
       </header>
 
@@ -385,7 +415,11 @@ export function AppShell({
       </main>
 
       {/* Interactive Account Settings Modal (Profile, Security, Preferences/Language) */}
-      <AccountModal open={accountModalOpen} onClose={() => setAccountModalOpen(false)} />
+      <AccountModal
+        open={accountModalOpen}
+        onClose={() => setAccountModalOpen(false)}
+        initialTab={accountModalTab}
+      />
     </div>
   );
 }
