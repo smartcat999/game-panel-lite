@@ -9,9 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]",
-        secondary: "border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--interactive)]",
-        quiet: "text-[var(--muted-foreground)] hover:bg-[var(--interactive)] hover:text-[var(--foreground)]",
+        default: "bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98]",
+        secondary: "border border-white/[0.1] bg-[#0e1420] hover:bg-[#131b2c] text-zinc-200 hover:text-white transition-all",
+        quiet: "text-zinc-400 hover:bg-white/[0.05] hover:text-white transition-all",
+        danger: "bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition-all",
       },
       size: {
         default: "h-9 px-3",

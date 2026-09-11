@@ -15,7 +15,7 @@ const preferenceBootstrap = `(() => {
     const locale = localStorage.getItem("gamepanel.locale");
     const theme = localStorage.getItem("gamepanel.theme");
     document.documentElement.lang = locale === "zh-CN" ? "zh-CN" : "en";
-    document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
   } catch (_) {}
 })();`;
 
@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const cookieStore = await cookies();
   const locale = cookieStore.get("gamepanel.locale")?.value === "en" ? "en" : "zh-CN";
   const themeCookie = cookieStore.get("gamepanel.theme")?.value;
-  const theme = themeCookie === "dark" ? "dark" : "light";
+  const theme = themeCookie === "light" ? "light" : "dark";
   const timeZone = cookieStore.get("gamepanel.timeZone")?.value ?? "Asia/Shanghai";
   return (
     <html lang={locale} data-theme={theme} suppressHydrationWarning>
