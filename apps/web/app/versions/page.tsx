@@ -10,13 +10,15 @@ import { providerDisplayName } from "@/lib/provider-display";
 import { formatRuntimeInstallError } from "@/lib/runtime-errors";
 import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from "@/lib/runtime-image";
 import { cn } from "@/lib/utils";
-import { SettingsSubNav } from "@/components/sub-nav";
+import { GameAssetsSubNav } from "@/components/sub-nav";
+import { usePermissions } from "@/lib/permissions";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
-const imageVersionGridColumns = "md:grid-cols-[minmax(0,1.8fr)_minmax(0,.9fr)_minmax(0,.9fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_6.5rem]";
+const imageVersionGridColumns = "md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.15fr)_6.5rem]";
 
 export default function VersionsPage() {
   const { locale, t } = useI18n();
+  const { canManageSystem } = usePermissions();
   const queryClient = useQueryClient();
   const gamesQuery = useQuery({
     queryKey: ["games"],
@@ -31,11 +33,16 @@ export default function VersionsPage() {
   const providers = (gamesQuery.data ?? []).flatMap((game) => game.providers).sort(compareProviderPriority);
   const supportedProviders = providers.filter((provider) => provider.runtimeImage?.status !== "unsupported");
   const unsupportedProviders = providers.filter((provider) => provider.runtimeImage?.status === "unsupported");
+  const attentionCount = supportedProviders.filter((provider) => provider.runtimeImage?.status !== "ready").length;
+  const summary = locale === "zh"
+    ? `${supportedProviders.length} 个运行镜像 · ${attentionCount > 0 ? `${attentionCount} 个需要处理` : "全部为最新"}`
+    : `${supportedProviders.length} runtime images · ${attentionCount > 0 ? `${attentionCount} need attention` : "all up to date"}`;
 
   return (
     <>
       <PageHeader
         title={t("versionManagementTitle")}
+        description={summary}
         action={(
           <Button variant="secondary" onClick={() => gamesQuery.refetch()} disabled={gamesQuery.isFetching}>
             <RefreshCw aria-hidden="true" className={cn("size-4", gamesQuery.isFetching && "animate-spin motion-reduce:animate-none")} />
@@ -43,7 +50,7 @@ export default function VersionsPage() {
           </Button>
         )}
       />
-      <SettingsSubNav />
+      <GameAssetsSubNav />
       {gamesQuery.isError ? (
         <Card className="flex items-start gap-3 p-4 text-sm text-panel-gold">
           <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
@@ -57,8 +64,7 @@ export default function VersionsPage() {
             <Card className="overflow-hidden p-0">
               <div className={cn("hidden gap-4 border-b border-panel-line bg-slate-950/30 px-5 py-3 text-xs font-medium text-slate-500 md:grid", imageVersionGridColumns)}>
                 <span>{t("versionManagementProvider")}</span>
-                <span>{t("versionManagementInstalledImageVersion")}</span>
-                <span>{t("versionManagementTargetImageVersion")}</span>
+                <span>{t("version")}</span>
                 <span>{t("versionManagementImageStatus")}</span>
                 <span>{t("versionManagementImageUpdatedAt")}</span>
                 <span className="sr-only">{t("actions")}</span>
@@ -70,6 +76,7 @@ export default function VersionsPage() {
                     locale={locale}
                     provider={provider}
                     busy={prepareMutation.isPending && prepareMutation.variables?.providerKey === provider.key}
+                    canInstall={canManageSystem}
                     error={prepareMutation.isError && prepareMutation.variables?.providerKey === provider.key ? formatRuntimeInstallError(prepareMutation.error, t) : ""}
                     onPrepare={() => prepareMutation.mutate({ providerKey: provider.key, version: provider.recommendedVersion })}
                   />
@@ -96,12 +103,14 @@ export default function VersionsPage() {
 
 function ImageVersionRow({
   busy,
+  canInstall,
   error,
   locale,
   onPrepare,
   provider
 }: {
   busy: boolean;
+  canInstall: boolean;
   error: string;
   locale: "zh" | "en";
   onPrepare: () => void;
@@ -121,21 +130,23 @@ function ImageVersionRow({
       : t("versionManagementInstallAction");
 
   return (
-    <div className="px-5 py-4">
+    <div className="px-5 py-3">
       <div className={cn("grid gap-4 md:items-center", imageVersionGridColumns)}>
         <div className="min-w-0">
           <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p>
-          <p className="mt-1 truncate font-mono text-xs text-slate-500" title={status?.image}>{status?.image || "—"}</p>
+          <p className="mt-0.5 truncate font-mono text-[11px] text-slate-500" title={status?.image}>{status?.image || "—"}</p>
         </div>
-        <ImageVersionValue label={t("versionManagementInstalledImageVersion")} value={status?.installedVersion || "—"} />
-        <ImageVersionValue label={t("versionManagementTargetImageVersion")} value={status?.targetVersion || provider.recommendedVersion || "—"} />
+        <ImageVersionComparison
+          current={status?.installedVersion || "—"}
+          target={status?.targetVersion || provider.recommendedVersion || "—"}
+        />
         <div>
           <span className="mb-1 block text-xs text-slate-500 md:hidden">{t("versionManagementImageStatus")}</span>
           <RuntimeImageBadge status={displayStatus} />
         </div>
         <ImageVersionValue label={t("versionManagementImageUpdatedAt")} value={formatImageTime(status?.updatedAt, locale, t("none"))} />
         <div className="flex justify-end">
-          {actionable || preparing ? (
+          {canInstall && (actionable || preparing) ? (
             <Button
               type="button"
               variant={status?.status === "update_available" ? "primary" : "secondary"}
@@ -155,6 +166,17 @@ function ImageVersionRow({
         </div>
       ) : null}
       {error ? <p className="mt-3 text-xs text-red-300" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
+function ImageVersionComparison({ current, target }: { current: string; target: string }) {
+  const changed = current !== "—" && target !== "—" && current !== target;
+  return (
+    <div className="min-w-0 font-mono text-sm">
+      <span className="text-slate-300">{current}</span>
+      {changed ? <span className="ml-2 text-panel-gold">→ {target}</span> : null}
+      {current === "—" && target !== "—" ? <span className="ml-2 text-slate-500">→ {target}</span> : null}
     </div>
   );
 }

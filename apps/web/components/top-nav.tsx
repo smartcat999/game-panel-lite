@@ -48,7 +48,8 @@ export function TopNav() {
         pathname.startsWith("/mods") ||
         pathname.startsWith("/presets") ||
         pathname.startsWith("/worlds") ||
-        pathname.startsWith("/backups")
+        pathname.startsWith("/backups") ||
+        pathname.startsWith("/versions")
     }] : []),
     ...(canAccessGameAssets ? [{
       href: "/activity",
@@ -60,7 +61,7 @@ export function TopNav() {
       href: "/settings",
       title: isZh ? "系统、节点与集群设置" : "System & Cluster Settings",
       icon: Settings,
-      active: pathname.startsWith("/settings") || pathname.startsWith("/versions")
+      active: pathname.startsWith("/settings")
     }] : [])
   ];
 

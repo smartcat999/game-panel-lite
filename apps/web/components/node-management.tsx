@@ -11,8 +11,6 @@ import {
   Trash2,
   Copy,
   Check,
-  Cpu,
-  HardDrive,
   Globe,
   Radio,
   Sparkles,
@@ -34,6 +32,23 @@ import type { ComputeNode, NodeJoinCommand } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
+
+function NodeAction({ danger = false, disabled, icon, label, onClick }: { danger?: boolean; disabled?: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-7 items-center gap-1 rounded px-2 text-[11px] font-medium transition disabled:opacity-50",
+        danger ? "text-slate-500 hover:bg-rose-950/40 hover:text-rose-400" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
 
 export function NodeManagement() {
   const { locale, t } = useI18n();
@@ -142,203 +157,93 @@ export function NodeManagement() {
 
   return (
     <div className="space-y-4">
-      {/* Top Banner */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-lg border border-panel-green/40 bg-panel-green/10 text-panel-green">
-              <Server className="size-4" />
-            </span>
-            <h2 className="text-sm font-bold text-white">
-              {isZh ? "分布式计算节点集群 (Compute Nodes)" : "Compute Nodes Cluster"}
-            </h2>
+      <div className="overflow-hidden rounded-lg border border-panel-line bg-panel-card">
+        <div className="flex flex-col gap-3 border-b border-panel-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2.5">
+            <Server className="size-4 text-panel-green" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-white">{isZh ? "计算节点" : "Compute Nodes"}</h2>
+            <span className="text-xs text-slate-500">{nodes.length}</span>
           </div>
-          <p className="mt-1 text-xs text-slate-400">
-            {isZh
-              ? "支持纳管多台远程 VPS / 物理机节点，创建游戏服务器时可自由选择部署位置。"
-              : "Manage remote VPS and bare-metal nodes. Deploy game servers across different machines."}
-          </p>
+          {canManageNodes ? (
+            <Button
+              className="h-8 shrink-0 text-xs"
+              onClick={() => {
+                setFormError(null);
+                setIsAddModalOpen(true);
+              }}
+            >
+              <Plus className="size-3.5" />
+              {isZh ? "接入新节点" : "Add Node"}
+            </Button>
+          ) : null}
         </div>
-        {canManageNodes && (
-          <Button
-            onClick={() => {
-              setFormError(null);
-              setIsAddModalOpen(true);
-            }}
-            className="bg-panel-green text-slate-950 font-bold hover:bg-panel-green/90 h-8 text-xs shrink-0"
-          >
-            <Plus className="mr-1.5 size-3.5" />
-            {isZh ? "接入新节点" : "Add Worker Node"}
-          </Button>
+
+        {isLoading ? (
+          <div className="p-6 text-center text-xs text-slate-500">{isZh ? "正在加载节点..." : "Loading nodes..."}</div>
+        ) : nodes.length === 0 ? (
+          <div className="p-6 text-center text-xs text-slate-500">{isZh ? "暂无可用节点" : "No compute nodes available."}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse text-left text-xs">
+              <thead className="bg-slate-950/35 text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-medium">{isZh ? "节点" : "Node"}</th>
+                  <th className="w-24 px-3 py-2 font-medium">{isZh ? "状态" : "Status"}</th>
+                  <th className="w-36 px-3 py-2 font-medium">CPU</th>
+                  <th className="w-40 px-3 py-2 font-medium">{isZh ? "内存" : "Memory"}</th>
+                  <th className="w-24 px-3 py-2 font-medium">{isZh ? "实例" : "Instances"}</th>
+                  <th className="w-24 px-3 py-2 font-medium">{isZh ? "延迟" : "Latency"}</th>
+                  <th className="w-60 px-4 py-2 text-right font-medium">{isZh ? "操作" : "Actions"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-panel-line">
+                {nodes.map((node) => {
+                  const isOnline = node.status === "online";
+                  const cpuUsage = node.cpuUsagePercent !== undefined ? `${node.cpuUsagePercent.toFixed(0)}%` : "—";
+                  const memoryUsage = node.memoryTotalMb > 0
+                    ? `${(node.memoryUsedMb / 1024).toFixed(1)} / ${(node.memoryTotalMb / 1024).toFixed(1)} GB`
+                    : "—";
+                  const latency = node.isLocal ? "0 ms" : node.pingLatencyMs ? `${node.pingLatencyMs} ms` : "—";
+                  return (
+                    <tr key={node.id} className="hover:bg-slate-950/25">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-100">{node.name}</span>
+                          {node.isLocal ? <span className="rounded bg-panel-green/12 px-1.5 py-0.5 text-[10px] text-panel-green">{isZh ? "本机" : "Local"}</span> : null}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
+                          <Globe className="size-3" aria-hidden="true" />
+                          <span>{node.region || (isZh ? "未设置区域" : "No region")}</span>
+                          <span>·</span>
+                          <span>{node.publicIp || node.host}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={cn("inline-flex items-center gap-1.5", isOnline ? "text-panel-green" : "text-rose-400")}>
+                          <span className="size-1.5 rounded-full bg-current" />
+                          {isOnline ? (isZh ? "在线" : "Online") : (isZh ? "离线" : "Offline")}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">{cpuUsage} <span className="text-slate-500">/ {node.cpuCores || "—"} {isZh ? "核" : "cores"}</span></td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">{memoryUsage}</td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">{node.runningCount}</td>
+                      <td className="px-3 py-2.5 font-mono text-slate-300">{latency}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          {!node.isLocal ? <NodeAction icon={<Terminal className="size-3" />} label={isZh ? "接入指令" : "Join Command"} onClick={() => openJoinModal(node)} /> : null}
+                          {canManageNodes ? <NodeAction icon={<Pencil className="size-3" />} label={isZh ? "编辑" : "Edit"} onClick={() => openEditModal(node)} /> : null}
+                          <NodeAction disabled={pingMutation.isPending} icon={<Activity className="size-3" />} label={isZh ? "探活" : "Ping"} onClick={() => pingMutation.mutate(node.id)} />
+                          {!node.isLocal && canManageNodes ? <NodeAction danger icon={<Trash2 className="size-3" />} label={isZh ? "删除" : "Delete"} onClick={() => setDeletingNode(node)} /> : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
-
-      {/* Nodes Grid */}
-      {isLoading ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-8 text-center text-xs text-slate-500">
-          {isZh ? "正在加载节点集群..." : "Loading nodes..."}
-        </div>
-      ) : nodes.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-8 text-center text-xs text-slate-500">
-          {isZh ? "暂无可用节点" : "No compute nodes available."}
-        </div>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {nodes.map((node) => {
-            const isOnline = node.status === "online";
-            const hasHardwareInfo = node.cpuCores > 0 && node.memoryTotalMb > 0;
-            const memoryPercent = node.memoryTotalMb > 0 ? Math.min(100, Math.round((node.memoryUsedMb / node.memoryTotalMb) * 100)) : 0;
-            return (
-              <div
-                key={node.id}
-                className={cn(
-                  "flex flex-col justify-between rounded-xl border bg-slate-950/60 p-4 transition",
-                  node.isLocal ? "border-panel-green/40 shadow-sm" : isOnline ? "border-slate-800 hover:border-slate-700" : "border-red-900/30 bg-red-950/10"
-                )}
-              >
-                <div>
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2.5">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-white truncate max-w-[150px]">{node.name}</span>
-                        {node.isLocal && (
-                          <span className="rounded bg-panel-green/15 px-1.5 py-0.2 text-[10px] font-bold text-panel-green">
-                            {isZh ? "本机主控" : "Master"}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
-                        <span className="flex items-center gap-1 font-mono">
-                          <Globe className="size-3 text-slate-500" />
-                          {node.region || "Global"}
-                        </span>
-                        <span className="text-slate-600">·</span>
-                        <span className="font-mono text-slate-400 truncate max-w-[110px]">{node.publicIp || node.host}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold",
-                        isOnline ? "bg-emerald-500/15 text-emerald-400" : "bg-rose-500/15 text-rose-400"
-                      )}>
-                        <span className={cn("size-1.5 rounded-full", isOnline ? "bg-emerald-400 animate-pulse" : "bg-rose-400")} />
-                        {isOnline ? (node.pingLatencyMs ? `${node.pingLatencyMs}ms` : (isZh ? "在线" : "Online")) : (isZh ? "离线" : "Offline")}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Hardware & Usage Metrics */}
-                  <div className="mt-3 space-y-2 text-xs">
-                    {hasHardwareInfo ? (
-                      <>
-                        {/* CPU metric */}
-                        <div>
-                          <div className="flex justify-between text-[11px] text-slate-400">
-                            <span className="flex items-center gap-1">
-                              <Cpu className="size-3 text-panel-green" />
-                              <span>{isZh ? "CPU 算力" : "CPU Quota"}</span>
-                            </span>
-                            <span className="font-mono text-slate-300">
-                              {node.cpuCores} {isZh ? "核" : "Cores"} {node.cpuUsagePercent ? `(${node.cpuUsagePercent.toFixed(0)}%)` : ""}
-                            </span>
-                          </div>
-                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-900 border border-slate-800">
-                            <div
-                              className="h-full bg-panel-green transition-all"
-                              style={{ width: `${node.cpuUsagePercent ? Math.min(100, Math.max(5, node.cpuUsagePercent)) : 15}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Memory metric */}
-                        <div>
-                          <div className="flex justify-between text-[11px] text-slate-400">
-                            <span className="flex items-center gap-1">
-                              <HardDrive className="size-3 text-sky-400" />
-                              <span>{isZh ? "内存分配" : "Memory"}</span>
-                            </span>
-                            <span className="font-mono text-slate-300">
-                              {(node.memoryUsedMb / 1024).toFixed(1)}G / {(node.memoryTotalMb / 1024).toFixed(0)}G ({memoryPercent}%)
-                            </span>
-                          </div>
-                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-900 border border-slate-800">
-                            <div
-                              className={cn("h-full transition-all", memoryPercent > 85 ? "bg-rose-500" : memoryPercent > 65 ? "bg-panel-gold" : "bg-sky-400")}
-                              style={{ width: `${Math.max(5, memoryPercent)}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Workloads & Info */}
-                        <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400 font-mono">
-                          <span>{isZh ? `运行服务: ${node.runningCount} 个` : `Active: ${node.runningCount}`}</span>
-                          {node.dockerVersion && <span>Docker {node.dockerVersion}</span>}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="rounded-lg border border-slate-800/80 bg-slate-900/30 p-2.5 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
-                        <Sparkles className="size-3 text-panel-green shrink-0 animate-pulse" />
-                        <span>{isZh ? "等待 Agent 首次心跳采集硬件规格..." : "Awaiting agent hardware sync..."}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions Footer */}
-                <div className="mt-3.5 flex items-center justify-between border-t border-slate-800/80 pt-2.5">
-                  <div className="flex items-center gap-1">
-                    {!node.isLocal && (
-                      <button
-                        type="button"
-                        onClick={() => openJoinModal(node)}
-                        title={isZh ? "查看接入指令" : "View Join Command"}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-900 hover:text-white transition"
-                      >
-                        <Terminal className="size-3 text-sky-400" />
-                        <span>{isZh ? "指令" : "Command"}</span>
-                      </button>
-                    )}
-                    {canManageNodes && (
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(node)}
-                        title={isZh ? "编辑基础信息" : "Edit Node Info"}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-900 hover:text-white transition"
-                      >
-                        <Pencil className="size-3 text-panel-gold" />
-                        <span>{isZh ? "编辑" : "Edit"}</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => pingMutation.mutate(node.id)}
-                      disabled={pingMutation.isPending}
-                      title={isZh ? "测速探活" : "Ping & Health Check"}
-                      className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-900 hover:text-white transition"
-                    >
-                      <Activity className="size-3 text-panel-green" />
-                      <span>{isZh ? "探活" : "Ping"}</span>
-                    </button>
-                  </div>
-
-                  {!node.isLocal && canManageNodes && (
-                    <button
-                      type="button"
-                      onClick={() => setDeletingNode(node)}
-                      className="rounded p-1 text-slate-500 hover:bg-red-950/40 hover:text-red-400 transition"
-                      title={isZh ? "删除节点" : "Delete Node"}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* Add Node Modal */}
       {isAddModalOpen && (

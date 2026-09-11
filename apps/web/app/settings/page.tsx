@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, ExternalLink, Globe2, LockKeyhole, RefreshCw, RotateCcw, Save, ServerCog, ShieldCheck, Wrench } from "lucide-react";
+import { Check, Download, ExternalLink, Globe2, LockKeyhole, Network, RefreshCw, RotateCcw, Save, ServerCog, ShieldCheck, Wrench } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
@@ -26,7 +26,6 @@ import { cn } from "@/lib/utils";
 import { NodeSettingsPanel } from "@/components/node-settings-panel";
 import { UserManagement } from "@/components/user-management";
 import { TrafficTopology } from "@/components/traffic-topology";
-import { SettingsSubNav } from "@/components/sub-nav";
 import { Users, Server } from "lucide-react";
 import { usePermissions } from "@/lib/permissions";
 
@@ -41,6 +40,7 @@ export default function SettingsPage() {
   const [imageRegion, setImageRegion] = useState<ImageRegion | null>(null);
   const [notice, setNotice] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("basic");
+  const [topologyOpen, setTopologyOpen] = useState(false);
   const settingsTabs: { icon: ReactNode; key: SettingsTab; label: string }[] = [
     { key: "basic", label: t("settingsTabBasic"), icon: <ServerCog className="size-4" /> },
     { key: "team", label: t("settingsTabTeam"), icon: <Users className="size-4" /> },
@@ -102,7 +102,6 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title={t("settingsTitle")} />
-      <SettingsSubNav />
 
       {notice ? (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-end md:inset-x-auto md:bottom-auto md:right-6 md:top-24">
@@ -127,13 +126,12 @@ export default function SettingsPage() {
 
       {activeTab === "basic" ? <form onSubmit={submit}>
         <Card className="overflow-hidden">
-          <div className="border-b border-panel-line px-5 py-4 md:px-6">
+          <div className="border-b border-panel-line px-5 py-3 md:px-6">
             <h2 className="font-semibold text-white">{t("basicSettings")}</h2>
-            <p className="mt-1 text-sm text-slate-400">{t("basicSettingsDescription")}</p>
           </div>
 
           <SettingRow label={t("publicHostTitle")} description={t("publicHostDescription")}>
-            <div className="w-full max-w-xl">
+            <div className="w-full max-w-2xl">
               <Input
                 aria-describedby="public-host-hint"
                 aria-invalid={Boolean(publicHostError)}
@@ -146,17 +144,17 @@ export default function SettingsPage() {
                   setNotice(null);
                 }}
               />
-              <p id="public-host-hint" className={cn("mt-2 text-xs", publicHostError ? "text-red-300" : "text-slate-500")}>
+              <p id="public-host-hint" className={cn("mt-1.5 text-xs", publicHostError ? "text-red-300" : "text-slate-500")}>
                 {publicHostError || t("publicHostInputHint")}
               </p>
             </div>
           </SettingRow>
 
           <SettingRow label={t("imageRegion")} description={t("imageRegionDescription")} badge={t("restartPanelRequired")}>
-            <div className="w-full max-w-xl">
+            <div className="w-full max-w-2xl">
               <fieldset disabled={!canEditSettings || settings.isLoading || saveSettings.isPending}>
                 <legend className="sr-only">{t("imageRegion")}</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid overflow-hidden rounded-md border border-panel-line bg-slate-950/35 sm:grid-cols-2">
                   <RegionOption
                     checked={imageRegionValue === "global"}
                     description="Docker Hub"
@@ -181,7 +179,7 @@ export default function SettingsPage() {
                   />
                 </div>
               </fieldset>
-              <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-slate-500">
+              <div className="mt-2 flex min-w-0 items-center gap-2 text-xs text-slate-500">
                 <Globe2 aria-hidden="true" className="size-4 shrink-0" />
                 <span>{t("resolvedGameImageSource")}</span>
                 <code className="min-w-0 truncate text-slate-300" title={resolvedRegistry}>{resolvedRegistry}</code>
@@ -206,9 +204,15 @@ export default function SettingsPage() {
 
       {activeTab === "team" ? <UserManagement /> : null}
       {activeTab === "nodes" ? (
-        <div className="space-y-6">
-          <TrafficTopology />
+        <div className="space-y-4">
           <NodeSettingsPanel />
+          <div className="flex justify-end">
+            <Button type="button" variant="secondary" onClick={() => setTopologyOpen((value) => !value)}>
+              <Network aria-hidden="true" className="size-4" />
+              {topologyOpen ? t("settingsHideTopology") : t("settingsViewTopology")}
+            </Button>
+          </div>
+          {topologyOpen ? <TrafficTopology /> : null}
         </div>
       ) : null}
       {activeTab === "access" ? <HTTPSSettings onNotice={setNotice} /> : null}
@@ -272,6 +276,7 @@ function DeploymentMaintenance({ onNotice }: { onNotice: (notice: { message: str
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold text-white">{t("deploymentTitle")}</h2>
               {data ? <Badge className={data.manager === "standalone" ? "bg-slate-800 text-slate-300" : data.healthy ? "bg-panel-green/12 text-panel-green" : "bg-panel-gold/12 text-panel-gold"}>{data.manager === "standalone" ? t("deploymentStandalone") : data.healthy ? t("deploymentHealthy") : t("deploymentNeedsAttention")}</Badge> : null}
+              {data ? <span className="text-xs text-slate-500">{t("lastChecked")}: {checkedAt}</span> : null}
             </div>
             <p className="mt-1 text-sm text-slate-400">{t("deploymentDescription")}</p>
             {data?.manager === "standalone" ? <p className="mt-1 text-xs text-slate-500">{t("deploymentStandaloneHint")}</p> : null}
@@ -291,14 +296,14 @@ function DeploymentMaintenance({ onNotice }: { onNotice: (notice: { message: str
           <div className="px-5 py-5 text-sm text-panel-gold md:px-6">{t("deploymentUnavailable")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] table-fixed border-collapse text-left text-sm">
+            <table className="w-full min-w-[560px] table-fixed border-collapse text-left text-sm">
               <thead className="bg-slate-950/45 text-xs text-slate-500">
-                <tr><th className="w-48 px-5 py-2.5 md:px-6">{t("deploymentService")}</th><th className="w-32 px-3 py-2.5">{t("status")}</th><th className="px-3 py-2.5">{t("deploymentImage")}</th><th className="w-44 px-5 py-2.5 text-right md:px-6">{t("lastChecked")}</th></tr>
+                <tr><th className="w-48 px-5 py-2.5 md:px-6">{t("deploymentService")}</th><th className="w-32 px-3 py-2.5">{t("status")}</th><th className="px-3 py-2.5">{t("deploymentImage")}</th></tr>
               </thead>
               <tbody className="divide-y divide-panel-line">
                 {(data?.services ?? []).map((service) => {
                   const running = service.state === "running" && service.health !== "unhealthy";
-                  return <tr key={service.name}><td className="px-5 py-3 font-medium text-slate-200 md:px-6">{deploymentServiceLabel(service.name, t)}</td><td className="px-3 py-3"><span className={cn("inline-flex items-center gap-1.5", running ? "text-panel-green" : "text-panel-gold")}><span className={cn("size-1.5 rounded-full", running ? "bg-panel-green" : "bg-panel-gold")} />{running ? t("statusRunning") : deploymentStateLabel(service.state, t)}</span></td><td className="truncate px-3 py-3 font-mono text-xs text-slate-500" title={service.image}>{service.image || "—"}</td><td className="px-5 py-3 text-right text-xs text-slate-500 md:px-6">{checkedAt}</td></tr>;
+                  return <tr key={service.name}><td className="px-5 py-2.5 font-medium text-slate-200 md:px-6">{deploymentServiceLabel(service.name, t)}</td><td className="px-3 py-2.5"><span className={cn("inline-flex items-center gap-1.5", running ? "text-panel-green" : "text-panel-gold")}><span className={cn("size-1.5 rounded-full", running ? "bg-panel-green" : "bg-panel-gold")} />{running ? t("statusRunning") : deploymentStateLabel(service.state, t)}</span></td><td className="truncate px-3 py-2.5 font-mono text-xs text-slate-500" title={service.image}>{service.image || "—"}</td></tr>;
                 })}
               </tbody>
             </table>
@@ -601,13 +606,13 @@ function UpdateValue({ hint, label, value }: { hint?: string; label: string; val
 
 function SettingRow({ badge, children, description, label }: { badge?: string; children: ReactNode; description: string; label: string }) {
   return (
-    <div className="grid gap-4 border-b border-panel-line px-5 py-5 last:border-b-0 md:grid-cols-[minmax(220px,0.75fr)_minmax(360px,1.25fr)] md:gap-8 md:px-6">
+    <div className="grid gap-3 border-b border-panel-line px-5 py-4 last:border-b-0 md:grid-cols-[minmax(220px,0.65fr)_minmax(420px,1.35fr)] md:items-start md:gap-8 md:px-6">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-medium text-slate-200">{label}</h3>
           {badge ? <Badge className="bg-panel-gold/12 text-panel-gold">{badge}</Badge> : null}
         </div>
-        <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">{description}</p>
+        <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">{description}</p>
       </div>
       <div className="flex min-w-0 md:justify-end">{children}</div>
     </div>
@@ -617,20 +622,20 @@ function SettingRow({ badge, children, description, label }: { badge?: string; c
 function RegionOption({ checked, description, label, name, onChange, value }: { checked: boolean; description: string; label: string; name: string; onChange: () => void; value: string }) {
   return (
     <label className={cn(
-      "relative flex min-h-16 cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition",
-      "hover:border-slate-600 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-panel-green/50",
-      checked ? "border-panel-green/65 bg-panel-green/8" : "border-panel-line bg-slate-950/35"
+      "relative flex min-h-11 cursor-pointer items-center gap-2.5 px-3 py-2 transition first:border-b sm:first:border-b-0 sm:first:border-r",
+      "border-panel-line hover:bg-slate-900/60 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-panel-green/50",
+      checked ? "bg-panel-green/10 text-white" : "text-slate-300"
     )}>
       <input className="sr-only" type="radio" checked={checked} name={name} value={value} onChange={onChange} />
       <span className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded-full border",
+        "flex size-4 shrink-0 items-center justify-center rounded-full border",
         checked ? "border-panel-green bg-panel-green text-slate-950" : "border-slate-600"
       )}>
-        {checked ? <Check aria-hidden="true" className="size-3.5" strokeWidth={3} /> : null}
+        {checked ? <Check aria-hidden="true" className="size-3" strokeWidth={3} /> : null}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-slate-100">{label}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">{description}</span>
+        <span className="text-sm font-medium">{label}</span>
+        <span className="ml-1.5 text-xs text-slate-500">{description}</span>
       </span>
     </label>
   );

@@ -64,6 +64,7 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
       title: isZh ? "游戏与数字资产" : "Game Assets & Mods",
       items: [
         { href: "/games", label: isZh ? "游戏库" : "Game Library", desc: isZh ? "支持的原生与模组服务端" : "Supported games & engines", icon: Gamepad2 },
+        { href: "/versions", label: isZh ? "游戏运行镜像" : "Runtime Images", desc: isZh ? "安装和更新服务器运行环境" : "Install and update server runtimes", icon: PackageCheck },
         { href: "/mods", label: isZh ? "模组工坊" : "Mod Workshop", desc: isZh ? "Steam 创意工坊与自定义模组" : "Workshop items & custom modpacks", icon: Box },
         { href: "/presets", label: isZh ? "配置预设" : "Configuration Presets", desc: isZh ? "一键快速配置模版" : "One-click configuration templates", icon: Bookmark },
         { href: "/worlds", label: isZh ? "世界地图" : "World Archives", desc: isZh ? "游戏存档与地图文件管理" : "Saves & map files management", icon: Globe2 },
@@ -73,8 +74,7 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
     ...(canEditSettings ? [{
       title: isZh ? "系统与集群管理" : "Cluster & System",
       items: [
-        { href: "/settings", label: isZh ? "控制台设置" : "Settings & Fleet", desc: isZh ? "团队 RBAC、计算节点与安全" : "Team RBAC, compute nodes & security", icon: Settings },
-        { href: "/versions", label: isZh ? "版本与更新" : "Version & Updates", desc: isZh ? "系统固件与升级通道" : "System release & channels", icon: PackageCheck }
+        { href: "/settings", label: isZh ? "控制台设置" : "Settings & Fleet", desc: isZh ? "团队、节点、安全与控制台维护" : "Team, nodes, security, and maintenance", icon: Settings }
       ]
     }] : [])
   ];
