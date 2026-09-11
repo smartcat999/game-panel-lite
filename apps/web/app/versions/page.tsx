@@ -14,10 +14,10 @@ import { GameAssetsSubNav } from "@/components/sub-nav";
 import { usePermissions } from "@/lib/permissions";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
-const imageVersionGridColumns = "md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.15fr)_6.5rem]";
+const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_6.5rem]";
 
 export default function VersionsPage() {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const { canManageSystem } = usePermissions();
   const queryClient = useQueryClient();
   const gamesQuery = useQuery({
@@ -36,15 +36,7 @@ export default function VersionsPage() {
 
   return (
     <>
-      <PageHeader
-        title={t("versionManagementTitle")}
-        action={(
-          <Button variant="secondary" onClick={() => gamesQuery.refetch()} disabled={gamesQuery.isFetching}>
-            <RefreshCw aria-hidden="true" className={cn("size-4", gamesQuery.isFetching && "animate-spin motion-reduce:animate-none")} />
-            {t("refresh")}
-          </Button>
-        )}
-      />
+      <PageHeader title={t("versionManagementTitle")} />
       <GameAssetsSubNav />
       {gamesQuery.isError ? (
         <Card className="flex items-start gap-3 p-4 text-sm text-panel-gold">
@@ -57,18 +49,26 @@ export default function VersionsPage() {
         <div className="space-y-4">
           {supportedProviders.length > 0 ? (
             <Card className="overflow-hidden p-0">
-              <div className={cn("hidden gap-4 border-b border-panel-line bg-slate-950/30 px-5 py-3 text-xs font-medium text-slate-500 md:grid", imageVersionGridColumns)}>
-                <span>{t("versionManagementProvider")}</span>
-                <span>{t("version")}</span>
-                <span>{t("versionManagementImageStatus")}</span>
-                <span>{t("versionManagementImageUpdatedAt")}</span>
-                <span className="sr-only">{t("actions")}</span>
+              <div className={cn("flex justify-end gap-4 border-b border-panel-line bg-slate-950/30 px-4 py-2.5 text-xs font-medium text-slate-500 md:grid md:items-center", imageVersionGridColumns)}>
+                <span className="hidden md:block">{t("versionManagementProvider")}</span>
+                <span className="hidden md:block">{t("version")}</span>
+                <span className="hidden md:block">{t("versionManagementImageStatus")}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="size-7 justify-self-end"
+                  aria-label={t("refresh")}
+                  title={t("refresh")}
+                  onClick={() => gamesQuery.refetch()}
+                  disabled={gamesQuery.isFetching}
+                >
+                  <RefreshCw aria-hidden="true" className={cn("size-3.5", gamesQuery.isFetching && "animate-spin motion-reduce:animate-none")} />
+                </Button>
               </div>
               <div className="divide-y divide-panel-line">
                 {supportedProviders.map((provider) => (
                   <ImageVersionRow
                     key={provider.key}
-                    locale={locale}
                     provider={provider}
                     busy={prepareMutation.isPending && prepareMutation.variables?.providerKey === provider.key}
                     canInstall={canManageSystem}
@@ -100,14 +100,12 @@ function ImageVersionRow({
   busy,
   canInstall,
   error,
-  locale,
   onPrepare,
   provider
 }: {
   busy: boolean;
   canInstall: boolean;
   error: string;
-  locale: "zh" | "en";
   onPrepare: () => void;
   provider: ProviderCatalog;
 }) {
@@ -125,7 +123,7 @@ function ImageVersionRow({
       : t("versionManagementInstallAction");
 
   return (
-    <div className="px-5 py-3">
+    <div className="px-4 py-2.5">
       <div className={cn("grid gap-4 md:items-center", imageVersionGridColumns)}>
         <div className="min-w-0">
           <p className="font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p>
@@ -139,7 +137,6 @@ function ImageVersionRow({
           <span className="mb-1 block text-xs text-slate-500 md:hidden">{t("versionManagementImageStatus")}</span>
           <RuntimeImageBadge status={displayStatus} />
         </div>
-        <ImageVersionValue label={t("versionManagementImageUpdatedAt")} value={formatImageTime(status?.updatedAt, locale, t("none"))} />
         <div className="flex justify-end">
           {canInstall && (actionable || preparing) ? (
             <Button
@@ -172,15 +169,6 @@ function ImageVersionComparison({ current, target }: { current: string; target: 
       <span className="text-slate-300">{current}</span>
       {changed ? <span className="ml-2 text-panel-gold">→ {target}</span> : null}
       {current === "—" && target !== "—" ? <span className="ml-2 text-slate-500">→ {target}</span> : null}
-    </div>
-  );
-}
-
-function ImageVersionValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <span className="mb-1 block text-xs text-slate-500 md:hidden">{label}</span>
-      <span className="block truncate text-sm text-slate-300" title={value}>{value}</span>
     </div>
   );
 }
@@ -228,11 +216,4 @@ function compareProviderPriority(left: ProviderCatalog, right: ProviderCatalog) 
     }
   };
   return priority(left) - priority(right) || left.name.localeCompare(right.name);
-}
-
-function formatImageTime(value: string | undefined, locale: "zh" | "en", fallback: string) {
-  if (!value) return fallback;
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return fallback;
-  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en", { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
 }
