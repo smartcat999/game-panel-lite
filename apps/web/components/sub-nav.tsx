@@ -30,7 +30,7 @@ export function SubNav({ items, className }: { items: SubNavItem[]; className?: 
             className={cn(
               "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition whitespace-nowrap",
               isActive
-                ? "bg-slate-800 text-slate-100 shadow-xs ring-1 ring-white/10 font-semibold"
+                ? "bg-slate-800 text-slate-100 shadow-xs ring-1 ring-white/10"
                 : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
             )}
           >
@@ -54,11 +54,11 @@ export function GameAssetsSubNav() {
 
   const items: SubNavItem[] = [
     { href: "/games", label: isZh ? "游戏服务端库" : "Game Library", icon: Gamepad2 },
-    { href: "/versions", label: isZh ? "游戏运行镜像" : "Runtime Images", icon: PackageCheck },
     { href: "/mods", label: isZh ? "创意工坊模组" : "Mod Workshop", icon: Box },
     { href: "/presets", label: isZh ? "配置预设模版" : "Presets", icon: Bookmark },
     { href: "/worlds", label: isZh ? "世界地图存档" : "Worlds", icon: Globe2 },
-    { href: "/backups", label: isZh ? "快照与备份中心" : "Backups", icon: Archive }
+    { href: "/backups", label: isZh ? "快照与备份中心" : "Backups", icon: Archive },
+    { href: "/versions", label: isZh ? "游戏运行镜像" : "Runtime Images", icon: PackageCheck }
   ];
 
   return <SubNav items={items} />;
