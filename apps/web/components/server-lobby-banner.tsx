@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock3, Copy, ExternalLink, Eye, EyeOff, KeyRound, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
+import { Check, Clock3, Copy, Cpu, Eye, EyeOff, KeyRound, MemoryStick, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
 import { ServerGameArt } from "@/components/server-game-art";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { useToast } from "@/components/toast-context";
@@ -31,18 +31,24 @@ export function ServerLobbyBanner({
   server,
   publicHost,
   canControl = true,
+  cpuPercent,
   disabled,
+  memoryMb,
   onAction,
-  onOpenShare
+  onOpenShare,
+  shareEnabled = false
 }: {
   server: GameServerResource;
   publicHost?: string;
   canControl?: boolean;
+  cpuPercent?: number;
   disabled?: boolean;
+  memoryMb?: number;
   onAction: (action: "start" | "stop" | "restart") => void;
   onOpenShare?: () => void;
+  shareEnabled?: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const isZh = locale.startsWith("zh");
   const toast = useToast();
 
@@ -57,6 +63,20 @@ export function ServerLobbyBanner({
   const host = publicHost || (typeof window !== "undefined" ? window.location.hostname : "127.0.0.1");
   const joinAddress = `${host}:${port}`;
   const password = gameServerPassword(server);
+  const cpuLimitCores = server.spec.resources?.cpuLimitCores ?? 0;
+  const memoryLimitMb = server.spec.resources?.memoryLimitMb ?? 0;
+  const cpuLimit = cpuLimitCores > 0 ? t("cpuCoresValue", { cores: cpuLimitCores }) : t("unlimited");
+  const memoryLimit = memoryLimitMb > 0 ? t("memoryGbValue", { gb: memoryLimitMb / 1024 }) : t("unlimited");
+  const memoryPercent = memoryMb !== undefined && memoryLimitMb > 0 ? memoryMb / memoryLimitMb * 100 : undefined;
+
+  const metricTone = (percent?: number) => percent !== undefined && percent >= 95
+    ? "text-rose-400"
+    : percent !== undefined && percent >= 80
+      ? "text-panel-gold"
+      : "text-slate-300";
+  const formatMemory = (value: number) => value >= 1024
+    ? `${(value / 1024).toFixed(value >= 10240 ? 0 : 1)} GB`
+    : `${Math.round(value)} MB`;
 
   const displayServer = { gameKey: server.gameKey, providerKey: server.providerKey, mode };
 
@@ -127,6 +147,29 @@ export function ServerLobbyBanner({
                   </span>
                 </>
               ) : null}
+              <span>·</span>
+              {isRunning ? (
+                <>
+                  <span className="inline-flex items-center gap-1">
+                    <Cpu className="size-3" aria-hidden="true" />
+                    <span>{t("cpu")}</span>
+                    <strong className={metricTone(cpuPercent)}>{cpuPercent !== undefined ? `${cpuPercent.toFixed(1)}%` : "--"}</strong>
+                    <span>/ {cpuLimit}</span>
+                  </span>
+                  <span>·</span>
+                  <span className="inline-flex items-center gap-1">
+                    <MemoryStick className="size-3" aria-hidden="true" />
+                    <span>{t("memory")}</span>
+                    <strong className={metricTone(memoryPercent)}>{memoryMb !== undefined ? formatMemory(memoryMb) : "--"}</strong>
+                    <span>/ {memoryLimit}</span>
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-slate-400">
+                  <Cpu className="size-3" aria-hidden="true" />
+                  <span>{t("resourceLimits")}: {cpuLimit} · {memoryLimit}</span>
+                </span>
+              )}
               <span>·</span>
               <span className="text-slate-400">
                 {isZh ? "创建于" : "Created"}: {new Date(server.createdAt).toLocaleDateString()}
@@ -223,7 +266,7 @@ export function ServerLobbyBanner({
             className="flex items-center gap-1.5 rounded-lg border border-panel-green/30 bg-panel-green/10 px-3.5 py-1.5 text-xs font-bold text-panel-green transition hover:bg-panel-green/20"
           >
             {copiedInvite ? <Check className="size-3.5 text-panel-green" /> : <Share2 className="size-3.5" />}
-            <span>{copiedInvite ? (isZh ? "邀请已复制！" : "Copied!") : (isZh ? "一键复制开黑群邀请" : "Copy Invite")}</span>
+            <span>{copiedInvite ? (isZh ? "加入信息已复制" : "Join Info Copied") : (isZh ? "复制加入信息" : "Copy Join Info")}</span>
           </button>
 
           {onOpenShare ? (
@@ -232,8 +275,9 @@ export function ServerLobbyBanner({
               onClick={onOpenShare}
               className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
             >
-              <ExternalLink className="size-3.5 text-slate-400" />
-              <span>{isZh ? "公开玩家邀请页" : "Public Share"}</span>
+              <span className={shareEnabled ? "size-1.5 rounded-full bg-panel-green" : "size-1.5 rounded-full bg-slate-500"} />
+              <span>{isZh ? "管理公开分享" : "Manage Sharing"}</span>
+              <span className="text-slate-500">{shareEnabled ? (isZh ? "已开启" : "On") : (isZh ? "未开启" : "Off")}</span>
             </button>
           ) : null}
         </div>

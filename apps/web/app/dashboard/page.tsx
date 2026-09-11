@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
-  CircleAlert,
   Cpu,
   Gamepad2,
   Globe,
@@ -28,6 +27,7 @@ import { getPlatformMonitoring } from "@/features/monitoring/api";
 import { formatActivityEvent } from "@/lib/activity-display";
 import { isWorldOrBackupEventType } from "@/lib/feature-flags";
 import { gameServerStatus } from "@/lib/game-server-resource";
+import { dashboardNodeMetrics, dashboardResourceTotals } from "@/lib/dashboard-metrics";
 import { localizeRelativeTime, useI18n } from "@/lib/i18n";
 import { getObservabilityMetrics, getSettings, listActivity, listBackups, listComputeNodes, listGameServers, listWorlds } from "@/lib/api";
 import { usePermissions } from "@/lib/permissions";
@@ -77,11 +77,10 @@ export default function DashboardPage() {
   const worlds = worldsQuery.data ?? [];
 
   const running = servers.filter((server) => gameServerStatus(server) === "running");
-  const unhealthy = servers.filter((server) => gameServerStatus(server) === "errored");
   const stopped = servers.filter((server) => gameServerStatus(server) === "stopped").length;
 
-  const totalAllocatedCores = servers.reduce((acc, s) => acc + (s.spec?.resources?.cpuLimitCores || 2), 0);
-  const totalAllocatedRAM = servers.reduce((acc, s) => acc + (s.spec?.resources?.memoryLimitMb || 2048), 0);
+  const allocatedResources = dashboardResourceTotals(servers);
+  const onlineNodes = nodes.filter((node) => node.status === "online").length;
 
   const statusData = [
     {
@@ -93,24 +92,26 @@ export default function DashboardPage() {
     },
     {
       color: "#38bdf8",
-      label: isZh ? "已分配资源" : "Allocated Pool",
-      value: totalAllocatedCores,
-      subLabel: isZh ? `${Math.round(totalAllocatedRAM / 1024)} GB 内存` : `${Math.round(totalAllocatedRAM / 1024)} GB RAM`,
+      label: isZh ? "资源限制" : "Resource Limits",
+      value: allocatedResources.cpuCores,
+      subLabel: allocatedResources.cpuCores > 0 || allocatedResources.memoryMb > 0
+        ? (isZh ? `${formatMemoryGb(allocatedResources.memoryMb)} GB 内存` : `${formatMemoryGb(allocatedResources.memoryMb)} GB RAM`)
+        : (isZh ? "未设置上限" : "Unlimited"),
       icon: <Cpu className="size-4" />
     },
     {
       color: "#f59e0b",
-      label: isZh ? "世界地图存档" : "World Saves",
-      value: worlds.length,
-      subLabel: isZh ? `${backups.length} 个备份` : `${backups.length} Backups`,
+      label: isZh ? "备份与世界" : "Backups & Worlds",
+      value: backups.length + worlds.length,
+      subLabel: isZh ? `${backups.length} 备份 · ${worlds.length} 世界` : `${backups.length} backups · ${worlds.length} worlds`,
       icon: <Globe className="size-4" />
     },
     {
-      color: unhealthy.length > 0 ? "#f87171" : "#10b981",
-      label: isZh ? "系统运行状态" : "Cluster Health",
-      value: unhealthy.length > 0 ? unhealthy.length : 100,
-      subLabel: unhealthy.length > 0 ? (isZh ? "需关注" : "Attention") : (isZh ? "全部正常" : "100% Normal"),
-      icon: <CircleAlert className="size-4" />
+      color: onlineNodes === nodes.length ? "#10b981" : "#f87171",
+      label: isZh ? "在线节点" : "Online Nodes",
+      value: onlineNodes,
+      subLabel: isZh ? `共 ${nodes.length} 个节点` : `${nodes.length} total`,
+      icon: <Server className="size-4" />
     }
   ];
 
@@ -159,14 +160,14 @@ export default function DashboardPage() {
       {/* 2. Top Modern Micro-Capsule KPIs */}
       <ServerStatusKpis data={statusData} />
 
-      {/* 2.5 集群各节点独立监控透视 */}
+      {/* 2.5 Compute nodes */}
       {nodes.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Server className="size-4 text-sky-400" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                {isZh ? "集群各节点独立监控透视" : "Cluster Compute Nodes"}
+              <h3 className="text-sm font-bold text-slate-200">
+                {isZh ? "计算节点" : "Compute Nodes"}
               </h3>
             </div>
             <Link href="/settings" className="text-[11px] text-slate-400 hover:text-panel-green flex items-center gap-1 transition">
@@ -175,74 +176,38 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             {nodes.map((node) => {
               const nodeServers = servers.filter((s) => (node.isLocal && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === node.id);
               const runningServers = nodeServers.filter((s) => gameServerStatus(s) === "running");
               const isOnline = node.status === "online";
-              const memoryTotalGB = node.memoryTotalMb ? (node.memoryTotalMb / 1024).toFixed(1) : "—";
-              const memoryUsedGB = node.memoryUsedMb ? (node.memoryUsedMb / 1024).toFixed(1) : "—";
-              const memoryPercent = (node.memoryTotalMb && node.memoryUsedMb)
-                ? Math.min(100, Math.round((node.memoryUsedMb / node.memoryTotalMb) * 100))
-                : 0;
+              const nodeMetrics = dashboardNodeMetrics(node, metricsQuery.data?.host);
+              const memoryTotalGB = formatOptionalMemoryGb(nodeMetrics.memoryTotalMb);
+              const memoryUsedGB = formatOptionalMemoryGb(nodeMetrics.memoryUsedMb);
+              const cpuPercent = formatOptionalPercent(nodeMetrics.cpuUsagePercent);
 
               return (
                 <div
                   key={node.id}
-                  className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 space-y-3 hover:border-slate-700 transition"
+                  className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 hover:border-slate-700 transition"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className={cn("size-2 rounded-full shrink-0", isOnline ? "bg-emerald-400 animate-pulse" : "bg-slate-500")} />
+                      <span className={cn("size-2 rounded-full shrink-0", isOnline ? "bg-emerald-400" : "bg-slate-500")} />
                       <span className="font-semibold text-sm text-slate-100 truncate">{node.name}</span>
                     </div>
-                    {node.region ? (
-                      <span className="rounded bg-slate-900 border border-slate-800 px-1.5 py-0.2 text-[10px] text-slate-400 font-mono">
-                        {node.region}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    {/* CPU 使用率 */}
-                    <div>
-                      <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                        <span>CPU ({node.cpuCores || "—"} 核心)</span>
-                        <span className="font-mono text-slate-200">{(node.cpuUsagePercent ?? 0).toFixed(1)}%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                        <div
-                          className={cn("h-full rounded-full transition-all", (node.cpuUsagePercent ?? 0) > 85 ? "bg-red-500" : (node.cpuUsagePercent ?? 0) > 60 ? "bg-amber-400" : "bg-panel-green")}
-                          style={{ width: `${Math.min(100, Math.max(2, node.cpuUsagePercent ?? 0))}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* 内存使用率 */}
-                    <div>
-                      <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                        <span>内存 ({memoryUsedGB} / {memoryTotalGB} GB)</span>
-                        <span className="font-mono text-slate-200">{memoryPercent}%</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-                        <div
-                          className={cn("h-full rounded-full transition-all", memoryPercent > 85 ? "bg-red-500" : memoryPercent > 60 ? "bg-amber-400" : "bg-sky-400")}
-                          style={{ width: `${Math.min(100, Math.max(2, memoryPercent))}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="text-slate-500 text-[11px]">
-                      {runningServers.length} / {nodeServers.length} 运行中
-                    </span>
                     <Link
                       href={`/servers?node=${node.id}`}
-                      className="text-[11px] text-panel-green hover:underline flex items-center gap-0.5 font-medium"
+                      className="text-slate-500 hover:text-panel-green transition"
+                      aria-label={isZh ? `查看 ${node.name} 的游戏服务器` : `View servers on ${node.name}`}
                     >
-                      {isZh ? "查看游戏服务器" : "View Servers"} <ArrowRight className="size-2.5" />
+                      <ChevronRight className="size-4" />
                     </Link>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 divide-x divide-slate-800 text-xs">
+                    <NodeMetric label={`CPU · ${nodeMetrics.cpuCores || "—"}${isZh ? " 核" : " cores"}`} value={cpuPercent} />
+                    <NodeMetric label={isZh ? "内存" : "Memory"} value={`${memoryUsedGB} / ${memoryTotalGB} GB`} />
+                    <NodeMetric label={isZh ? "房间" : "Servers"} value={`${runningServers.length} / ${nodeServers.length}`} />
                   </div>
                 </div>
               );
@@ -414,7 +379,7 @@ export default function DashboardPage() {
                   onChange={(e) => setSelectedMonitorNodeId(e.target.value)}
                   className="h-7 rounded-md border border-slate-800 bg-slate-900 px-2 text-xs text-slate-200 focus:border-panel-green focus:outline-none"
                 >
-                  <option value="node-local">🖥️ 主控本机 (Local)</option>
+                  <option value="node-local">{isZh ? "🖥️ 主控本机" : "🖥️ Local controller"}</option>
                   {nodes.filter(n => !n.isLocal).map(n => (
                     <option key={n.id} value={n.id}>
                       🟢 {n.name} ({n.region || "Worker"})
@@ -453,21 +418,24 @@ export default function DashboardPage() {
           {(() => {
             const activeNode = nodes.find(n => n.id === selectedMonitorNodeId) ?? nodes[0];
             if (!activeNode) return null;
-            const memoryTotalGB = activeNode.memoryTotalMb ? (activeNode.memoryTotalMb / 1024).toFixed(1) : "—";
-            const memoryUsedGB = activeNode.memoryUsedMb ? (activeNode.memoryUsedMb / 1024).toFixed(1) : "—";
-            const cpuPercent = (activeNode.cpuUsagePercent ?? 0).toFixed(1);
+            const activeMetrics = dashboardNodeMetrics(activeNode, metricsQuery.data?.host);
+            const memoryTotalGB = formatOptionalMemoryGb(activeMetrics.memoryTotalMb);
+            const memoryUsedGB = formatOptionalMemoryGb(activeMetrics.memoryUsedMb);
+            const cpuPercent = formatOptionalPercent(activeMetrics.cpuUsagePercent);
             return (
               <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5 text-xs font-mono">
                 <div>
-                  <span className="text-[10px] text-slate-500 block">当前节点</span>
+                  <span className="text-[10px] text-slate-500 block">{isZh ? "当前节点" : "Current node"}</span>
                   <span className="text-slate-200 font-medium truncate block">{activeNode.name}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">CPU 使用率 ({activeNode.cpuCores || "—"} 核)</span>
-                  <span className="text-panel-green font-semibold">{cpuPercent}%</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    {isZh ? `CPU 使用率 (${activeMetrics.cpuCores || "—"} 核)` : `CPU usage (${activeMetrics.cpuCores || "—"} cores)`}
+                  </span>
+                  <span className="text-panel-green font-semibold">{cpuPercent}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 block">内存已用</span>
+                  <span className="text-[10px] text-slate-500 block">{isZh ? "内存已用" : "Memory used"}</span>
                   <span className="text-sky-300 font-semibold">{memoryUsedGB} / {memoryTotalGB} GB</span>
                 </div>
               </div>
@@ -558,6 +526,27 @@ function QuickDockCard({
       </div>
     </Link>
   );
+}
+
+function NodeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 px-2 first:pl-0 last:pr-0">
+      <span className="block truncate text-[10px] text-slate-500">{label}</span>
+      <span className="mt-0.5 block truncate font-mono font-semibold text-slate-200">{value}</span>
+    </div>
+  );
+}
+
+function formatMemoryGb(memoryMb: number) {
+  return Number((memoryMb / 1024).toFixed(1)).toLocaleString();
+}
+
+function formatOptionalMemoryGb(memoryMb: number | null) {
+  return memoryMb === null || memoryMb <= 0 ? "—" : formatMemoryGb(memoryMb);
+}
+
+function formatOptionalPercent(percent: number | null) {
+  return percent === null ? "—" : `${percent.toFixed(1)}%`;
 }
 
 function serverPriority(a: GameServerResource, b: GameServerResource) {
