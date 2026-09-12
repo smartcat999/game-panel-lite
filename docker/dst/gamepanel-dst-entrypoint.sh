@@ -14,6 +14,7 @@ DST_STEAM_APP_ID="${DST_STEAM_APP_ID:-343050}"
 STEAMCMD_BIN="${DST_STEAMCMD_BIN:-/usr/games/steamcmd}"
 LEGACY_WORKSHOP_FALLBACK="${DST_LEGACY_WORKSHOP_FALLBACK:-1}"
 WORKSHOP_DETAILS_ENDPOINT="${DST_WORKSHOP_DETAILS_ENDPOINT:-https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/}"
+WORKSHOP_REFRESH_ATTEMPTS="${DST_WORKSHOP_REFRESH_ATTEMPTS:-6}"
 
 record_installed_build() {
   local manifest="${SERVER_DIR}/steamapps/appmanifest_${DST_STEAM_APP_ID}.acf"
@@ -282,22 +283,21 @@ sync_server_mods() {
   if [[ "${MOD_SYNC_MODE}" == "refresh" ]]; then
     local refresh_dir="${UGC_DIR}.refresh"
     local previous_dir="${UGC_DIR}.previous"
-    rm -rf "${refresh_dir}"
     echo "Refreshing all ${configured_count} GamePanel DST server mods..."
-    if ! download_server_mods "${refresh_dir}"; then
-      echo "DST Workshop refresh failed; keeping the previous cache." >&2
-      rm -rf "${refresh_dir}"
-      if [[ -z "$(missing_workshop_ids "${UGC_DIR}")" ]]; then
-        echo "Continuing with the previous verified GamePanel DST Workshop cache."
-        return 0
+    local attempt missing=""
+    for ((attempt = 1; attempt <= WORKSHOP_REFRESH_ATTEMPTS; attempt++)); do
+      echo "DST Workshop refresh attempt ${attempt}/${WORKSHOP_REFRESH_ATTEMPTS}..."
+      if ! download_server_mods "${refresh_dir}"; then
+        echo "DST Workshop refresh attempt ${attempt} failed; preserving downloaded files for retry." >&2
       fi
-      exit 1
-    fi
-    local missing
-    missing="$(missing_workshop_ids "${refresh_dir}")"
+      missing="$(missing_workshop_ids "${refresh_dir}")"
+      if [[ -z "${missing}" ]]; then
+        break
+      fi
+      echo "DST Workshop refresh attempt ${attempt} incomplete; missing IDs: ${missing//$'\n'/, }" >&2
+    done
     if [[ -n "${missing}" ]]; then
       echo "DST Workshop refresh failed; missing IDs: ${missing//$'\n'/, }" >&2
-      rm -rf "${refresh_dir}"
       if [[ -z "$(missing_workshop_ids "${UGC_DIR}")" ]]; then
         echo "Continuing with the previous verified GamePanel DST Workshop cache."
         return 0
@@ -338,7 +338,7 @@ start_shard() {
   local bin
   bin="$(server_bin)"
   cd "${SERVER_DIR}/bin64" 2>/dev/null || cd "${SERVER_DIR}/bin"
-  "${bin}" \
+  exec "${bin}" \
     -persistent_storage_root "${PERSISTENT_ROOT}" \
     -conf_dir "${CONF_DIR}" \
     -cluster "${CLUSTER_NAME}" \
@@ -356,12 +356,38 @@ terminate_children() {
   fi
 }
 
+shutdown_children() {
+  trap - TERM INT
+  echo "Gracefully stopping DST shards..."
+  if [[ -n "${master_pid:-}" ]]; then
+    kill "${master_pid}" 2>/dev/null || true
+    wait "${master_pid}" 2>/dev/null || true
+  fi
+  if [[ -n "${caves_pid:-}" ]]; then
+    kill "${caves_pid}" 2>/dev/null || true
+    wait "${caves_pid}" 2>/dev/null || true
+  fi
+  echo "DST shards stopped."
+  exit 0
+}
+
+wait_for_any_shard() {
+  while kill -0 "${master_pid}" 2>/dev/null && kill -0 "${caves_pid}" 2>/dev/null; do
+    sleep 1
+  done
+  if ! kill -0 "${master_pid}" 2>/dev/null; then
+    wait "${master_pid}"
+    return $?
+  fi
+  wait "${caves_pid}"
+}
+
 update_server_game
 ensure_cluster_layout
 sync_server_mods
 install_native_workshop_manifest "${UGC_DIR}" >/dev/null
 install_legacy_mod_links
-trap terminate_children TERM INT
+trap shutdown_children TERM INT
 
 if [[ -f "${CLUSTER_DIR}/Caves/server.ini" ]]; then
   echo "Starting DST Caves shard..."
@@ -370,15 +396,21 @@ if [[ -f "${CLUSTER_DIR}/Caves/server.ini" ]]; then
 fi
 
 echo "Starting DST Master shard..."
+start_shard "Master" &
+master_pid="$!"
 if [[ -n "${caves_pid:-}" ]]; then
-  start_shard "Master" &
-  master_pid="$!"
-  wait -n "${master_pid}" "${caves_pid}"
+  set +e
+  wait_for_any_shard
   exit_code="$?"
+  set -e
   terminate_children
   wait "${master_pid}" 2>/dev/null || true
   wait "${caves_pid}" 2>/dev/null || true
   exit "${exit_code}"
 fi
 
-start_shard "Master"
+set +e
+wait "${master_pid}"
+exit_code="$?"
+set -e
+exit "${exit_code}"

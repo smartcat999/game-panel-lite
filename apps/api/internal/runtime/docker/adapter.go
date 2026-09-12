@@ -129,7 +129,7 @@ func (a *Adapter) StartWorkload(ctx context.Context, runtimeID string) error {
 }
 
 func (a *Adapter) StopWorkload(ctx context.Context, runtimeID string) error {
-	timeout := 15
+	timeout := 60
 	return a.client.ContainerStop(ctx, runtimeID, container.StopOptions{Timeout: &timeout})
 }
 
