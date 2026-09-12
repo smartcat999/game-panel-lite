@@ -2,11 +2,14 @@ package dst
 
 import (
 	"archive/zip"
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestDSTEntrypointReusesCompleteWorkshopCacheOnStart(t *testing.T) {
@@ -81,6 +84,43 @@ func TestDSTEntrypointPreservesOldCacheWhenRefreshIsIncomplete(t *testing.T) {
 	}
 	if got := readTestFile(t, filepath.Join(dataDir, "ugc_mods", "old-cache")); got != "old" {
 		t.Fatalf("expected old cache to remain intact, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "ugc_mods.refresh")); err != nil {
+		t.Fatalf("expected partial refresh cache to be preserved: %v", err)
+	}
+}
+
+func TestDSTEntrypointRetriesIncompleteWorkshopRefresh(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, false)
+	t.Setenv("FAKE_DOWNLOAD_ONE_PER_ATTEMPT", "1")
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("expected retry to complete refresh: %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "DST Workshop refresh attempt 2/6") {
+		t.Fatalf("expected a second refresh attempt, got:\n%s", output)
+	}
+	for _, id := range []string{"111", "222"} {
+		if _, err := os.Stat(filepath.Join(dataDir, "ugc_mods", "content", "322330", id, "modinfo.lua")); err != nil {
+			t.Fatalf("expected retried mod %s: %v", id, err)
+		}
+	}
+}
+
+func TestDSTEntrypointResumesPreservedWorkshopRefresh(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, false)
+	writeTestFile(t, filepath.Join(dataDir, "ugc_mods.refresh", "content", "322330", "111", "modinfo.lua"), "partial")
+	t.Setenv("FAKE_DOWNLOAD_IDS", "222")
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("expected preserved refresh to resume: %v\n%s", err, output)
+	}
+	for _, id := range []string{"111", "222"} {
+		if _, err := os.Stat(filepath.Join(dataDir, "ugc_mods", "content", "322330", id, "modinfo.lua")); err != nil {
+			t.Fatalf("expected resumed mod %s: %v", id, err)
+		}
 	}
 }
 
@@ -179,6 +219,54 @@ func TestDSTEntrypointFiltersKnownNativeWorkshopNoise(t *testing.T) {
 	}
 }
 
+func TestDSTEntrypointStopsMasterBeforeCaves(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, false)
+	writeTestFile(t, filepath.Join(dataDir, "dst", "GamePanelLite", "Caves", "server.ini"), "[NETWORK]\nserver_port = 11000\n")
+	for _, id := range []string{"111", "222"} {
+		writeTestFile(t, filepath.Join(dataDir, "ugc_mods", "content", "322330", id, "modinfo.lua"), "cached")
+	}
+	t.Setenv("FAKE_SHARDS_BLOCK", "1")
+
+	cmd := dstEntrypointCommand(root, dataDir, script, "reuse")
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(dataDir, "fake-server.log")
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		content, _ := os.ReadFile(logPath)
+		if strings.Contains(string(content), "start:Master") && strings.Contains(string(content), "start:Caves") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("entrypoint did not exit cleanly: %v\n%s", err, output.String())
+		}
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("entrypoint did not finish graceful shutdown")
+	}
+
+	log := readTestFile(t, logPath)
+	masterStopped := strings.Index(log, "stop:Master")
+	cavesStopped := strings.Index(log, "stop:Caves")
+	if masterStopped < 0 || cavesStopped < 0 || masterStopped > cavesStopped {
+		t.Fatalf("expected Master to stop before Caves, got:\n%s", log)
+	}
+}
+
 func dstEntrypointFixture(t *testing.T, downloaderCreatesMods bool) (string, string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -208,12 +296,33 @@ if [[ " $* " == *" -only_update_server_mods "* ]]; then
     printf '%s\n' 'src/clientdll/contentupdatecontext.cpp (2037) : Install library folder not found' >&2
     printf '%s\n' 'native downloader diagnostic' >&2
   fi
-  if [[ "${FAKE_DOWNLOAD_MODS:-0}" == "1" ]]; then
-    for id in 111 222; do
+  download_ids="${FAKE_DOWNLOAD_IDS:-}"
+  if [[ "${FAKE_DOWNLOAD_ONE_PER_ATTEMPT:-0}" == "1" ]]; then
+    attempt_file="${DST_PERSISTENT_ROOT}/fake-download-attempt"
+    attempt=0
+    [[ ! -f "${attempt_file}" ]] || attempt="$(cat "${attempt_file}")"
+    attempt=$((attempt + 1))
+    printf '%s' "${attempt}" > "${attempt_file}"
+    if [[ "${attempt}" == "1" ]]; then download_ids="111"; else download_ids="222"; fi
+  elif [[ "${FAKE_DOWNLOAD_MODS:-0}" == "1" ]]; then
+    download_ids="111 222"
+  fi
+  if [[ -n "${download_ids}" ]]; then
+    for id in ${download_ids}; do
       mkdir -p "${ugc}/content/322330/${id}"
       printf 'mod' > "${ugc}/content/322330/${id}/modinfo.lua"
     done
   fi
+fi
+if [[ "${FAKE_SHARDS_BLOCK:-0}" == "1" ]]; then
+  shard=""
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-shard" ]]; then shard="$2"; break; fi
+    shift
+  done
+  trap 'printf "stop:%s\\n" "${shard}" >> "${DST_PERSISTENT_ROOT}/fake-server.log"; exit 0' TERM
+  printf 'start:%s\n' "${shard}" >> "${DST_PERSISTENT_ROOT}/fake-server.log"
+  while true; do sleep 1; done
 fi
 `
 	writeTestFile(t, filepath.Join(root, "server", "bin64", "dontstarve_dedicated_server_nullrenderer_x64"), fake)
@@ -256,6 +365,12 @@ EOF
 
 func runDSTEntrypoint(t *testing.T, root, dataDir, script, mode string) (string, error) {
 	t.Helper()
+	cmd := dstEntrypointCommand(root, dataDir, script, mode)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
+func dstEntrypointCommand(root, dataDir, script, mode string) *exec.Cmd {
 	cmd := exec.Command("bash", script)
 	cmd.Env = append(os.Environ(),
 		"DST_ROOT_DIR="+root,
@@ -266,8 +381,7 @@ func runDSTEntrypoint(t *testing.T, root, dataDir, script, mode string) (string,
 		"DST_GAME_UPDATE_MODE="+mode,
 		"DST_STEAMCMD_BIN="+filepath.Join(root, "fake-steamcmd"),
 	)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
+	return cmd
 }
 
 func writeTestFile(t *testing.T, path, content string) {
