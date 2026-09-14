@@ -159,10 +159,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                 <Gamepad2 className="size-4" />
               </div>
               <span className="font-bold tracking-tight">GamePanel <span className="text-panel-green font-mono text-xs">Lite</span></span>
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-panel-green opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-panel-green" />
-              </span>
             </Link>
 
             {/* Cluster Fleet Interactive Popover Hub */}
