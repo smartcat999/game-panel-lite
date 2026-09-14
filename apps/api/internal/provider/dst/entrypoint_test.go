@@ -275,6 +275,9 @@ func TestDSTEntrypointRoutesConsoleCommandsToSelectedShard(t *testing.T) {
 	}
 	t.Setenv("FAKE_CAPTURE_CONSOLE", "1")
 	cmd := dstEntrypointCommand(root, dataDir, script, "reuse")
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -295,12 +298,14 @@ func TestDSTEntrypointRoutesConsoleCommandsToSelectedShard(t *testing.T) {
 	for time.Now().Before(deadline) {
 		master, _ := os.ReadFile(filepath.Join(dataDir, "console-Master.log"))
 		caves, _ := os.ReadFile(filepath.Join(dataDir, "console-Caves.log"))
-		if strings.Contains(string(master), "c_save()") && strings.Contains(string(caves), `c_countprefabs("spider")`) {
+		if strings.Contains(string(master), "c_save()") && strings.Contains(string(caves), `c_countprefabs("spider")`) &&
+			strings.Contains(output.String(), "GamePanel DST console command sent to Master.") &&
+			strings.Contains(output.String(), "GamePanel DST console command sent to Caves.") {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("commands were not routed to their shards: master=%q caves=%q", readTestFile(t, filepath.Join(dataDir, "console-Master.log")), readTestFile(t, filepath.Join(dataDir, "console-Caves.log")))
+	t.Fatalf("commands were not routed to their shards: master=%q caves=%q output=%q", readTestFile(t, filepath.Join(dataDir, "console-Master.log")), readTestFile(t, filepath.Join(dataDir, "console-Caves.log")), output.String())
 }
 
 func dstEntrypointFixture(t *testing.T, downloaderCreatesMods bool) (string, string, string) {

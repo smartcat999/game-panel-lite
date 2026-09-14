@@ -373,10 +373,14 @@ route_console_commands() {
       command="${line}"
     fi
     case "${target}" in
-      master) printf '%s\n' "${command}" >&4 ;;
+      master)
+        printf '%s\n' "${command}" >&4
+        echo "GamePanel DST console command sent to Master."
+        ;;
       caves)
         if [[ -n "${caves_pid:-}" ]]; then
           printf '%s\n' "${command}" >&5
+          echo "GamePanel DST console command sent to Caves."
         else
           echo "Rejected DST console command: caves shard is not running." >&2
         fi
