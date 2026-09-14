@@ -1,8 +1,22 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Archive, Check, ChevronLeft, ChevronRight, History, Megaphone, RotateCcw, Save, Send, Terminal, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  Archive,
+  Check,
+  ChevronDown,
+  Copy,
+  CornerDownLeft,
+  History,
+  Megaphone,
+  RotateCcw,
+  Save,
+  Send,
+  Terminal,
+  X
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui";
 import { createBackup, sendServerCommand } from "@/lib/api";
 import { gameServerStatus } from "@/lib/game-server-resource";
@@ -13,64 +27,187 @@ import type { GameServerResource } from "@/lib/types";
 
 type Shard = "master" | "caves";
 type CommandKind = "command" | "save" | "backup" | "rollback" | "announce";
-type CommandRecord = { id: string; command: string; kind: CommandKind; shard: Shard; status: "queued" | "completed" | "failed"; time: string };
+type CommandRecord = {
+  id: string;
+  command: string;
+  kind: CommandKind;
+  shard: Shard;
+  status: "queued" | "completed" | "failed";
+  time: string;
+};
 
-export function DSTConsoleDrawer({ open, server, onClose }: { open: boolean; server: GameServerResource; onClose: () => void }) {
+export function DSTConsoleDrawer({
+  open,
+  server,
+  onClose
+}: {
+  open: boolean;
+  server: GameServerResource;
+  onClose: () => void;
+}) {
   const { locale } = useI18n();
   const queryClient = useQueryClient();
   const isZh = locale.startsWith("zh");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [activeTab, setActiveTab] = useState<"actions" | "terminal">("actions");
   const [shard, setShard] = useState<Shard>("master");
   const [command, setCommand] = useState("");
-  const [announce, setAnnounce] = useState("");
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  const [announceText, setAnnounceText] = useState("");
   const [rollbackDepth, setRollbackDepth] = useState(1);
-  const [mode, setMode] = useState<"idle" | "announce" | "rollback">("idle");
-  const [view, setView] = useState<"operations" | "advanced">("operations");
+  const [expandedAction, setExpandedAction] = useState<"none" | "rollback" | "announce">("none");
   const [records, setRecords] = useState<CommandRecord[]>([]);
-  const cavesEnabled = providerConfigValue(server.spec.config, "caves.enabled") === true;
-  const running = gameServerStatus(server) === "running";
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const copy = useMemo(() => isZh ? {
-    title: "服务器控制台", context: "DST 分片指令", master: "地上", caves: "洞穴", masterHint: "Master", cavesHint: "Caves",
-    target: "执行目标", unavailable: "服务器停止时无法执行指令", actions: "常用操作", save: "保存进度", saveHint: "让游戏立即写入内部存档",
-    backup: "创建完整备份", backupHint: "归档地上与洞穴的当前存档",
-    rollback: "回滚存档", rollbackHint: "按游戏快照回退世界进度", announce: "发送公告", announceHint: "向在线玩家广播一条消息",
-    advanced: "高级指令", advancedHint: "Lua 指令将原样发送到当前分片", placeholder: "输入 Lua 控制台指令", execute: "执行指令",
-    recent: "最近操作", empty: "本次打开控制台后尚无操作", queued: "已投递", completed: "已创建", failed: "失败", depth: "回滚快照数", message: "公告内容", cluster: "完整集群",
-    reviewRollback: "回滚会中断当前世界进度，请确认快照数。", confirmRollback: "确认回滚", sendAnnouncement: "发送公告",
-    advancedView: "高级指令", back: "返回常用操作", close: "关闭控制台", commandFailed: "指令投递失败"
-  } : {
-    title: "Server console", context: "DST shard commands", master: "Surface", caves: "Caves", masterHint: "Master", cavesHint: "Caves",
-    target: "Command target", unavailable: "Start the server before sending commands", actions: "Common operations", save: "Save progress", saveHint: "Ask the game to write its internal save now",
-    backup: "Create full backup", backupHint: "Archive the current surface and caves saves",
-    rollback: "Roll back", rollbackHint: "Return the world to an earlier game snapshot", announce: "Broadcast", announceHint: "Send a message to online players",
-    advanced: "Advanced command", advancedHint: "Lua is sent literally to the selected shard", placeholder: "Enter a Lua console command", execute: "Run command",
-    recent: "Recent operations", empty: "No operations since opening the console", queued: "Queued", completed: "Created", failed: "Failed", depth: "Snapshots to roll back", message: "Announcement text", cluster: "Full cluster",
-    reviewRollback: "Rollback interrupts current world progress. Check the snapshot count.", confirmRollback: "Confirm rollback", sendAnnouncement: "Send broadcast",
-    advancedView: "Advanced command", back: "Back to operations", close: "Close console", commandFailed: "Command dispatch failed"
-  }, [isZh]);
+  const cavesEnabled = providerConfigValue(server.spec.config, "caves.enabled") === true;
+  const status = gameServerStatus(server);
+  const running = status === "running";
+
+  const copy = useMemo(
+    () =>
+      isZh
+        ? {
+            title: "控制台",
+            tabActions: "常用操作",
+            tabTerminal: "终端",
+            master: "地上世界",
+            caves: "洞穴世界",
+            cavesDisabled: "洞穴未启用",
+            unavailable: "服务器停止运行",
+            save: "保存进度",
+            backup: "完整备份",
+            rollback: "快照回滚",
+            announce: "全服公告",
+            snapshotsUnit: "个快照",
+            confirmRollback: "确认回滚",
+            announcePlaceholder: "输入广播消息内容...",
+            sendAnnouncement: "发送",
+            recentTitle: "最近操作",
+            clearHistory: "清空",
+            emptyHistory: "暂无操作记录",
+            queued: "已投递",
+            completed: "完成",
+            failed: "失败",
+            commandFailed: "执行失败"
+          }
+        : {
+            title: "Console",
+            tabActions: "Actions",
+            tabTerminal: "Terminal",
+            master: "Master",
+            caves: "Caves",
+            cavesDisabled: "Caves disabled",
+            unavailable: "Server is stopped",
+            save: "Save",
+            backup: "Backup",
+            rollback: "Rollback",
+            announce: "Broadcast",
+            snapshotsUnit: "snapshots",
+            confirmRollback: "Confirm Rollback",
+            announcePlaceholder: "Announcement text...",
+            sendAnnouncement: "Send",
+            recentTitle: "Recent",
+            clearHistory: "Clear",
+            emptyHistory: "No activity",
+            queued: "Queued",
+            completed: "Done",
+            failed: "Failed",
+            commandFailed: "Failed"
+          },
+    [isZh]
+  );
+
+  const commandHistory = useMemo(() => {
+    return records.filter((r) => r.kind === "command").map((r) => r.command);
+  }, [records]);
 
   const mutation = useMutation({
-    mutationFn: ({ value, target, kind }: { value: string; target: Shard; kind: CommandKind }) => sendServerCommand(server.id, value, target).then((result) => ({ result, value, target, kind })),
+    mutationFn: ({ value, target, kind }: { value: string; target: Shard; kind: CommandKind }) =>
+      sendServerCommand(server.id, value, target).then((result) => ({ result, value, target, kind })),
     onSuccess: ({ result, value, target, kind }) => {
-      setRecords((current) => [{ id: result.id, command: value, kind, shard: target, status: "queued", time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) } as CommandRecord, ...current].slice(0, 8));
-      setCommand("");
-      setAnnounce("");
-      setMode("idle");
+      setRecords((current) => [
+        {
+          id: result.id || crypto.randomUUID(),
+          command: value,
+          kind,
+          shard: target,
+          status: "queued",
+          time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+          })
+        } as CommandRecord,
+        ...current
+      ].slice(0, 30));
+      if (kind === "command") {
+        setCommand("");
+        setHistoryIndex(null);
+      }
+      if (kind === "announce") {
+        setAnnounceText("");
+        setExpandedAction("none");
+      }
+      if (kind === "rollback") {
+        setExpandedAction("none");
+      }
     },
     onError: (_error, variables) => {
-      setRecords((current) => [{ id: crypto.randomUUID(), command: variables.value, kind: variables.kind, shard: variables.target, status: "failed", time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) } as CommandRecord, ...current].slice(0, 8));
+      setRecords((current) => [
+        {
+          id: crypto.randomUUID(),
+          command: variables.value,
+          kind: variables.kind,
+          shard: variables.target,
+          status: "failed",
+          time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+          })
+        } as CommandRecord,
+        ...current
+      ].slice(0, 30));
     }
   });
 
   const backupMutation = useMutation({
     mutationFn: () => createBackup(server.id),
     onSuccess: async (backup) => {
-      setRecords((current) => [{ id: backup.id, command: backup.name, kind: "backup", shard: "master", status: "completed", time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) } as CommandRecord, ...current].slice(0, 8));
+      setRecords((current) => [
+        {
+          id: backup.id,
+          command: backup.name,
+          kind: "backup",
+          shard: "master",
+          status: "completed",
+          time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+          })
+        } as CommandRecord,
+        ...current
+      ].slice(0, 30));
       await queryClient.invalidateQueries({ queryKey: ["backups"] });
     },
     onError: () => {
-      setRecords((current) => [{ id: crypto.randomUUID(), command: copy.backup, kind: "backup", shard: "master", status: "failed", time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", { hour: "2-digit", minute: "2-digit" }) } as CommandRecord, ...current].slice(0, 8));
+      setRecords((current) => [
+        {
+          id: crypto.randomUUID(),
+          command: copy.backup,
+          kind: "backup",
+          shard: "master",
+          status: "failed",
+          time: new Date().toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+          })
+        } as CommandRecord,
+        ...current
+      ].slice(0, 30));
     }
   });
 
@@ -88,8 +225,10 @@ export function DSTConsoleDrawer({ open, server, onClose }: { open: boolean; ser
   }, [cavesEnabled, shard]);
 
   useEffect(() => {
-    if (view === "advanced") window.requestAnimationFrame(() => inputRef.current?.focus());
-  }, [view]);
+    if (activeTab === "terminal") {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [activeTab]);
 
   if (!open) return null;
 
@@ -98,73 +237,431 @@ export function DSTConsoleDrawer({ open, server, onClose }: { open: boolean; ser
     if (!running || !next || mutation.isPending) return;
     mutation.mutate({ value: next, target, kind });
   };
-  const submitCommand = (event: FormEvent) => {
+
+  const handleTerminalSubmit = (event: FormEvent) => {
     event.preventDefault();
     dispatch(command, "command");
   };
-  const shardLabel = (value: Shard) => value === "master" ? copy.master : copy.caves;
-  const recordLabel = (record: CommandRecord) => record.kind === "command" ? copy.advanced : record.kind === "save" ? copy.save : record.kind === "backup" ? copy.backup : record.kind === "rollback" ? copy.rollback : copy.announce;
-  const history = (
-    <section className="px-5 py-4">
-      <div className="mb-2.5 flex items-center gap-2 text-xs font-medium text-slate-400"><History aria-hidden="true" className="size-3.5" />{copy.recent}</div>
-      {records.length === 0 ? <p className="rounded-lg border border-dashed border-panel-line px-3 py-5 text-center text-xs text-slate-600">{copy.empty}</p> : <ol className="space-y-1">{records.map((record) => <li className="flex items-start gap-2 rounded-md px-2 py-2 text-xs hover:bg-slate-900/60" key={record.id}><span className="w-10 shrink-0 font-mono text-slate-600">{record.time}</span><span className="min-w-0 flex-1"><span className="mb-0.5 block text-[11px] text-slate-500">{record.kind === "backup" ? (isZh ? "完整集群" : "Full cluster") : shardLabel(record.shard)} · {recordLabel(record)}</span><code className="block truncate text-slate-300" title={record.command}>{record.command}</code></span><span className={record.status === "failed" ? "text-red-300" : "text-panel-green"}>{record.status === "queued" ? copy.queued : record.status === "completed" ? copy.completed : copy.failed}</span></li>)}</ol>}
-    </section>
-  );
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (commandHistory.length === 0) return;
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const nextIndex = historyIndex === null ? 0 : Math.min(historyIndex + 1, commandHistory.length - 1);
+      setHistoryIndex(nextIndex);
+      setCommand(commandHistory[nextIndex] || "");
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (historyIndex !== null) {
+        const nextIndex = historyIndex - 1;
+        if (nextIndex < 0) {
+          setHistoryIndex(null);
+          setCommand("");
+        } else {
+          setHistoryIndex(nextIndex);
+          setCommand(commandHistory[nextIndex] || "");
+        }
+      }
+    }
+  };
+
+  const copyCommand = (record: CommandRecord) => {
+    navigator.clipboard.writeText(record.command);
+    setCopiedId(record.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const shardLabel = (value: Shard) => (value === "master" ? copy.master : copy.caves);
+  const recordScope = (record: CommandRecord) =>
+    record.kind === "backup" || record.kind === "rollback" || record.kind === "announce"
+      ? isZh ? "完整集群" : "Full cluster"
+      : shardLabel(record.shard);
+
+  const quickSnippets = [
+    "c_save()",
+    "c_countprefabs('world')",
+    "c_supergodmode()",
+    "c_listallplayers()"
+  ];
 
   return (
-    <aside aria-label={copy.title} className="fixed bottom-0 right-0 top-14 z-40 flex w-full flex-col border-l border-panel-line bg-[#0a0f18] shadow-[-8px_0_24px_rgba(0,0,0,0.28)] sm:w-[420px]" role="complementary">
-      <header className="flex h-[68px] shrink-0 items-center justify-between border-b border-panel-line px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-panel-green/25 bg-panel-green/10 text-panel-green"><Terminal aria-hidden="true" className="size-4" /></span>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-slate-100">{copy.title}</h2>
-            <p className="mt-0.5 truncate text-xs text-slate-500">{server.name} · {copy.context}</p>
+    <aside
+      aria-label={copy.title}
+      className="fixed bottom-0 right-0 top-14 z-40 flex w-full flex-col border-l border-[#1b2434] bg-[#090e17] shadow-[-12px_0_36px_rgba(0,0,0,0.55)] sm:w-[400px]"
+      role="complementary"
+    >
+      {/* Header (Compact 46px) */}
+      <header className="flex h-11 shrink-0 items-center justify-between border-b border-[#1b2434] px-3.5 bg-[#0b121e]">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex size-6 shrink-0 items-center justify-center rounded-md border border-panel-green/30 bg-panel-green/10 text-panel-green">
+            <Terminal className="size-3" />
           </div>
+          <span className="text-xs font-semibold text-slate-100">{copy.title}</span>
+          <span className="text-slate-600">·</span>
+          <span className="truncate text-xs text-slate-400">{server.name}</span>
         </div>
-        <button aria-label={copy.close} className="flex size-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-800 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-panel-green/50" onClick={onClose} type="button"><X aria-hidden="true" className="size-4" /></button>
+        <button
+          aria-label={isZh ? "关闭控制台" : "Close console"}
+          className="flex size-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-800 hover:text-white"
+          onClick={onClose}
+          type="button"
+        >
+          <X className="size-3.5" />
+        </button>
       </header>
 
+      {/* Shard Selector & Tab Row (Compact 38px) */}
+      <div className={cn("flex items-center gap-2 border-b border-[#1b2434] bg-[#070b13] px-3.5 py-1.5", activeTab === "terminal" ? "justify-between" : "justify-end")}>
+        {/* Shard pills */}
+        {activeTab === "terminal" ? <div className="flex items-center rounded-lg border border-slate-800/80 bg-slate-950/80 p-0.5">
+          <button
+            type="button"
+            onClick={() => setShard("master")}
+            className={cn(
+              "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition",
+              shard === "master"
+                ? "bg-panel-green/15 text-panel-green font-semibold"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", shard === "master" ? "bg-panel-green" : "bg-slate-600")} />
+            <span>{copy.master}</span>
+          </button>
+          <button
+            type="button"
+            disabled={!cavesEnabled}
+            onClick={() => cavesEnabled && setShard("caves")}
+            title={!cavesEnabled ? copy.cavesDisabled : undefined}
+            className={cn(
+              "flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition disabled:opacity-30 disabled:cursor-not-allowed",
+              shard === "caves"
+                ? "bg-panel-green/15 text-panel-green font-semibold"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", shard === "caves" ? "bg-panel-green" : "bg-slate-600")} />
+            <span>{copy.caves}</span>
+          </button>
+        </div> : null}
+
+        {/* Mode tabs */}
+        <div className="flex items-center rounded-lg border border-slate-800/80 bg-slate-950/80 p-0.5">
+          <button
+            type="button"
+            onClick={() => setActiveTab("actions")}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs font-medium transition",
+              activeTab === "actions"
+                ? "bg-slate-800 text-slate-100"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            {copy.tabActions}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("terminal")}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs font-medium transition",
+              activeTab === "terminal"
+                ? "bg-slate-800 text-slate-100"
+                : "text-slate-400 hover:text-slate-200"
+            )}
+          >
+            {copy.tabTerminal}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Area */}
       <div className="flex-1 overflow-y-auto">
-        {view === "operations" ? <>
-          <section className="border-b border-panel-line px-5 py-4">
-            {mode === "idle" ? <>
-              <div className="mb-2 flex items-center justify-between"><p className="text-xs font-medium text-slate-400">{copy.actions}</p><button className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-200" onClick={() => setView("advanced")} type="button">{copy.advancedView}<ChevronRight className="size-3.5" /></button></div>
-              <div className="divide-y divide-panel-line rounded-lg border border-panel-line bg-slate-950/35">
-                <ConsoleAction icon={<Save className="size-4" />} label={copy.save} hint={copy.saveHint} meta={copy.master} disabled={!running || mutation.isPending} onClick={() => dispatch("c_save()", "save", "master")} />
-                <ConsoleAction icon={<Archive className="size-4" />} label={copy.backup} hint={copy.backupHint} meta={copy.cluster} disabled={backupMutation.isPending} onClick={() => backupMutation.mutate()} />
-                <ConsoleAction icon={<RotateCcw className="size-4" />} label={copy.rollback} hint={copy.rollbackHint} meta={copy.cluster} disabled={!running || mutation.isPending} tone="warning" onClick={() => setMode("rollback")} />
-                <ConsoleAction icon={<Megaphone className="size-4" />} label={copy.announce} hint={copy.announceHint} meta={copy.cluster} disabled={!running || mutation.isPending} onClick={() => setMode("announce")} />
+        {!running && (
+          <div className="m-3 flex items-center gap-2 rounded-lg border border-panel-gold/30 bg-panel-gold/10 px-3 py-2 text-xs text-panel-gold">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            <span>{copy.unavailable}</span>
+          </div>
+        )}
+
+        {activeTab === "actions" ? (
+          <div className="p-3.5 space-y-2">
+            {/* Quick Actions 2x2 Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={!running || mutation.isPending}
+                onClick={() => dispatch("c_save()", "save", "master")}
+                className="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-left transition hover:border-panel-green/40 hover:bg-slate-800/70 disabled:opacity-40"
+              >
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-panel-green/10 text-panel-green">
+                  <Save className="size-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-xs font-medium text-slate-200 truncate">{copy.save}</span>
+                  <span className="block font-mono text-[10px] text-slate-500">c_save()</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                disabled={backupMutation.isPending}
+                onClick={() => backupMutation.mutate()}
+                className="flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2.5 text-left transition hover:border-indigo-500/40 hover:bg-slate-800/70 disabled:opacity-40"
+              >
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-400">
+                  <Archive className="size-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-xs font-medium text-slate-200 truncate">{copy.backup}</span>
+                  <span className="block font-mono text-[10px] text-slate-500">tar.gz</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Rollback Collapsible */}
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedAction(expandedAction === "rollback" ? "none" : "rollback")}
+                className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-800/70 transition"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-panel-gold/10 text-panel-gold">
+                    <RotateCcw className="size-3.5" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-200">{copy.rollback}</span>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-slate-500 transition-transform",
+                    expandedAction === "rollback" && "rotate-180 text-panel-gold"
+                  )}
+                />
+              </button>
+
+              {expandedAction === "rollback" && (
+                <div className="border-t border-slate-800 bg-slate-950/80 p-2.5 space-y-2">
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[1, 2, 3, 5].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setRollbackDepth(count)}
+                        className={cn(
+                          "rounded border py-1 text-xs font-medium transition text-center",
+                          rollbackDepth === count
+                            ? "border-panel-gold bg-panel-gold/20 text-panel-gold font-bold"
+                            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
+                        )}
+                      >
+                        {count} {copy.snapshotsUnit}
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="gold"
+                    className="w-full h-7 text-xs font-medium"
+                    disabled={!running || mutation.isPending}
+                    onClick={() => dispatch(`c_rollback(${rollbackDepth})`, "rollback", "master")}
+                  >
+                    {copy.confirmRollback}
+                    {isZh
+                      ? `（${rollbackDepth} ${copy.snapshotsUnit}）`
+                      : ` (${rollbackDepth} ${copy.snapshotsUnit})`}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Announcement Collapsible */}
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedAction(expandedAction === "announce" ? "none" : "announce")}
+                className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-800/70 transition"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-sky-500/10 text-sky-400">
+                    <Megaphone className="size-3.5" />
+                  </div>
+                  <span className="text-xs font-medium text-slate-200">{copy.announce}</span>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 text-slate-500 transition-transform",
+                    expandedAction === "announce" && "rotate-180 text-sky-400"
+                  )}
+                />
+              </button>
+
+              {expandedAction === "announce" && (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    dispatch(`TheNet:SystemMessage(${JSON.stringify(announceText.trim())})`, "announce", "master");
+                  }}
+                  className="border-t border-slate-800 bg-slate-950/80 p-2.5 flex items-center gap-1.5"
+                >
+                  <input
+                    className="h-8 flex-1 rounded-md border border-slate-800 bg-slate-950 px-2.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-500"
+                    onChange={(event) => setAnnounceText(event.target.value)}
+                    placeholder={copy.announcePlaceholder}
+                    value={announceText}
+                    autoFocus
+                  />
+                  <Button
+                    className="h-8 px-3 text-xs font-medium bg-sky-500 hover:bg-sky-400 text-slate-950 shrink-0"
+                    disabled={!running || !announceText.trim() || mutation.isPending}
+                    type="submit"
+                  >
+                    <Send className="size-3" />
+                    <span>{copy.sendAnnouncement}</span>
+                  </Button>
+                </form>
+              )}
+            </div>
+
+            {(mutation.error instanceof Error || backupMutation.error instanceof Error) && (
+              <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-300">
+                {copy.commandFailed}: {(mutation.error instanceof Error ? mutation.error : backupMutation.error)?.message}
               </div>
-            </> : mode === "rollback" ? <div>
-              <button className="mb-4 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-100" onClick={() => setMode("idle")} type="button"><ChevronLeft className="size-3.5" />{copy.back}</button>
-              <div className="flex items-start gap-3 rounded-lg border border-panel-gold/25 bg-panel-gold/10 p-3"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-panel-gold" /><div><p className="text-sm font-medium text-panel-gold">{copy.rollback}</p><p className="mt-1 text-xs leading-5 text-slate-400">{copy.reviewRollback}</p></div></div>
-              <label className="mt-4 block text-xs text-slate-400">{copy.depth}<input className="mt-1.5 h-10 w-full rounded-md border border-panel-line bg-slate-950 px-3 font-mono text-sm text-slate-100 outline-none focus:border-panel-gold" max={5} min={1} onChange={(event) => setRollbackDepth(Number(event.target.value))} type="number" value={rollbackDepth} /></label>
-              <Button className="mt-3 w-full" disabled={mutation.isPending} onClick={() => dispatch(`c_rollback(${rollbackDepth})`, "rollback", "master")} type="button" variant="gold">{copy.confirmRollback}</Button>
-            </div> : <div>
-              <button className="mb-4 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-100" onClick={() => setMode("idle")} type="button"><ChevronLeft className="size-3.5" />{copy.back}</button>
-              <p className="text-sm font-medium text-slate-100">{copy.announce}</p><p className="mt-1 text-xs text-slate-500">{copy.announceHint}</p>
-              <form className="mt-4" onSubmit={(event) => { event.preventDefault(); dispatch(`TheNet:SystemMessage(${JSON.stringify(announce.trim())})`, "announce", "master"); }}><input aria-label={copy.message} autoFocus className="h-10 w-full rounded-md border border-panel-line bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-400 focus:border-panel-green" onChange={(event) => setAnnounce(event.target.value)} placeholder={copy.message} value={announce} /><Button className="mt-3 w-full" disabled={!announce.trim() || mutation.isPending} type="submit">{copy.sendAnnouncement}</Button></form>
-            </div>}
-            {(mutation.error instanceof Error || backupMutation.error instanceof Error) && <p className="mt-3 text-xs text-red-300">{copy.commandFailed}: {(mutation.error instanceof Error ? mutation.error : backupMutation.error)?.message}</p>}
-          </section>
-          {history}
-        </> : <>
-          <section className="border-b border-panel-line px-5 py-5">
-            <button className="mb-4 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-100" onClick={() => setView("operations")} type="button"><ChevronLeft className="size-3.5" />{copy.back}</button>
-            <div className="mb-2.5 flex items-center justify-between"><p className="text-xs font-medium text-slate-400">{copy.target}</p><span className={cn("inline-flex items-center gap-1.5 text-xs", running ? "text-panel-green" : "text-slate-500")}><span className={cn("size-1.5 rounded-full", running ? "bg-panel-green" : "bg-slate-600")} />{running ? (isZh ? "可执行" : "Ready") : (isZh ? "已停止" : "Stopped")}</span></div>
-            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={copy.target}>{(["master", "caves"] as const).map((value) => { const disabled = value === "caves" && !cavesEnabled; return <button key={value} aria-checked={shard === value} disabled={disabled} onClick={() => setShard(value)} role="radio" type="button" className={cn("flex min-w-0 items-center justify-between rounded-lg border px-3 py-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-panel-green/50 disabled:cursor-not-allowed disabled:opacity-35", shard === value ? "border-panel-green/45 bg-panel-green/10 text-slate-100" : "border-panel-line bg-slate-950/50 text-slate-400 hover:border-slate-700 hover:text-slate-200")}><span><span className="block text-sm font-medium">{shardLabel(value)}</span><span className="mt-0.5 block font-mono text-[11px] text-slate-500">{value === "master" ? copy.masterHint : copy.cavesHint}</span></span>{shard === value && <Check aria-hidden="true" className="size-4 shrink-0 text-panel-green" />}</button>; })}</div>
-            {!running && <p className="mt-2.5 text-xs text-panel-gold">{copy.unavailable}</p>}
-            <p className="mt-5 text-sm font-medium text-slate-100">{copy.advanced}</p><p className="mt-1 text-xs leading-5 text-slate-500">{copy.advancedHint}</p>
-            <form className="mt-4 flex items-center gap-2" onSubmit={submitCommand}><span className="font-mono text-sm text-panel-green">›</span><input ref={inputRef} aria-label={copy.placeholder} className="h-10 min-w-0 flex-1 rounded-md border border-panel-line bg-slate-950 px-3 font-mono text-sm text-slate-100 outline-none placeholder:text-slate-400 focus:border-panel-green" disabled={!running || mutation.isPending} onChange={(event) => setCommand(event.target.value.replace(/[\r\n]/g, ""))} placeholder={copy.placeholder} value={command} /><Button aria-label={copy.execute} className="size-10 shrink-0 px-0" disabled={!running || !command.trim() || mutation.isPending} type="submit"><Send aria-hidden="true" className="size-4" /></Button></form>
-            {mutation.error instanceof Error && <p className="mt-2 text-xs text-red-300">{copy.commandFailed}: {mutation.error.message}</p>}
-          </section>
-          {history}
-        </>}
+            )}
+          </div>
+        ) : (
+          /* Terminal Tab (Compact) */
+          <div className="p-3.5 space-y-2.5">
+            <div className="flex flex-wrap gap-1">
+              {quickSnippets.map((snippet) => (
+                <button
+                  key={snippet}
+                  type="button"
+                  onClick={() => {
+                    setCommand(snippet);
+                    inputRef.current?.focus();
+                  }}
+                  className="rounded border border-slate-800 bg-slate-900 px-2 py-0.5 font-mono text-[11px] text-slate-300 hover:border-panel-green/40 hover:text-white transition"
+                >
+                  {snippet}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleTerminalSubmit} className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 focus-within:border-panel-green/60">
+              <span className="font-mono text-xs text-panel-green font-bold select-none">›</span>
+              <input
+                ref={inputRef}
+                className="h-7 min-w-0 flex-1 bg-transparent font-mono text-xs text-slate-100 outline-none placeholder:text-slate-600"
+                disabled={!running || mutation.isPending}
+                onChange={(event) => setCommand(event.target.value.replace(/[\r\n]/g, ""))}
+                onKeyDown={handleKeyDown}
+                placeholder="c_save(), c_countprefabs()..."
+                value={command}
+              />
+              <Button
+                type="submit"
+                className="size-7 shrink-0 p-0"
+                disabled={!running || !command.trim() || mutation.isPending}
+              >
+                <CornerDownLeft className="size-3" />
+              </Button>
+            </form>
+
+            {mutation.error instanceof Error && (
+              <div className="rounded border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-300">
+                {copy.commandFailed}: {mutation.error.message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* History Stream (Compact Single-line items) */}
+        <div className="border-t border-[#1b2434] px-3.5 py-2.5 bg-[#080d16]">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+              <History aria-hidden="true" className="size-3 text-panel-green" />
+              <span>{copy.recentTitle}</span>
+              {records.length > 0 && (
+                <span className="font-mono text-[10px] text-slate-500">({records.length})</span>
+              )}
+            </div>
+            {records.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setRecords([])}
+                className="text-[10px] text-slate-500 hover:text-slate-300 transition"
+              >
+                {copy.clearHistory}
+              </button>
+            )}
+          </div>
+
+          {records.length === 0 ? (
+            <div className="py-4 text-center text-xs text-slate-600">
+              {copy.emptyHistory}
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {records.map((record) => (
+                <div
+                  key={record.id}
+                  className="group flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-slate-900/70 transition"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-mono text-[10px] text-slate-500 shrink-0">{record.time}</span>
+                    <span
+                      className={cn(
+                        "rounded px-1 text-[9px] font-mono shrink-0",
+                        record.kind === "backup"
+                          ? "bg-indigo-500/10 text-indigo-400"
+                          : record.kind === "rollback"
+                            ? "bg-amber-500/10 text-amber-400"
+                            : record.kind === "announce"
+                              ? "bg-sky-500/10 text-sky-400"
+                              : record.shard === "master"
+                                ? "bg-panel-green/10 text-panel-green"
+                                : "bg-amber-500/10 text-amber-400"
+                      )}
+                    >
+                      {recordScope(record)}
+                    </span>
+                    <code className="truncate font-mono text-[11px] text-slate-300" title={record.command}>
+                      {record.command}
+                    </code>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium",
+                        record.status === "failed" ? "text-red-400" : "text-panel-green"
+                      )}
+                    >
+                      {record.status === "queued"
+                        ? copy.queued
+                        : record.status === "completed"
+                          ? copy.completed
+                          : copy.failed}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyCommand(record)}
+                      aria-label={isZh ? "复制指令" : "Copy command"}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-white transition"
+                    >
+                      {copiedId === record.id ? (
+                        <Check className="size-2.5 text-panel-green" />
+                      ) : (
+                        <Copy className="size-2.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );
-}
-
-function ConsoleAction({ disabled, hint, icon, label, meta, onClick, tone = "default" }: { disabled: boolean; hint: string; icon: ReactNode; label: string; meta: string; onClick: () => void; tone?: "default" | "warning" }) {
-  return <button className="group flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-slate-900/65 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-panel-green/50 disabled:cursor-not-allowed disabled:opacity-45" disabled={disabled} onClick={onClick} type="button"><span className={cn("flex size-8 shrink-0 items-center justify-center rounded-md border", tone === "warning" ? "border-panel-gold/25 bg-panel-gold/10 text-panel-gold" : "border-slate-700 bg-slate-900 text-slate-300 group-hover:text-panel-green")}>{icon}</span><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="block text-sm font-medium text-slate-200">{label}</span><span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500">{meta}</span></span><span className="mt-0.5 block truncate text-xs text-slate-500">{hint}</span></span><ChevronRight aria-hidden="true" className="size-4 shrink-0 text-slate-600" /></button>;
 }

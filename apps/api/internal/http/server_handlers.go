@@ -146,7 +146,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	h.gameUpdateJobsMu.Lock()
 	defer h.gameUpdateJobsMu.Unlock()
-	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
+	if h.gameUpdateCreationLocked(r.Context()) || h.runtimeImagePrepareActive() {
 		writeError(w, http.StatusConflict, "a game update task is in progress")
 		return
 	}

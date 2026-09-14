@@ -46,13 +46,31 @@ export function ProviderConfigEditor({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "modified">("all");
 
+  const isDst = providerKey === "dont-starve-together";
+  const [activeShard, setActiveShard] = useState<"master" | "caves">("master");
+
   const baseFields = useMemo(() => fields.filter((field) => !isAdvancedProviderConfigField(providerKey, field)), [fields, providerKey]);
   const cavesEnabled = providerConfigValue(payload, "caves.enabled") === true;
-  const advancedFields = useMemo(
+
+  // Filter advanced fields according to provider and selected shard
+  const advancedFields = useMemo(() => {
+    return fields.filter((field) => {
+      if (!isAdvancedProviderConfigField(providerKey, field)) return false;
+      if (!isDst) return true;
+      if (activeShard === "caves") {
+        return cavesEnabled && (field.name.startsWith("caves.overrides.") || field.group?.includes(".caves."));
+      }
+      return !field.name.startsWith("caves.overrides.") && !field.group?.includes(".caves.");
+    });
+  }, [activeShard, cavesEnabled, fields, isDst, providerKey]);
+
+  const allAdvancedFields = useMemo(
     () => fields.filter((field) => isAdvancedProviderConfigField(providerKey, field) && (cavesEnabled || !field.name.startsWith("caves.overrides."))),
     [cavesEnabled, fields, providerKey]
   );
-  const modifiedCount = advancedFields.filter((field) => isProviderFieldModified(payload, field)).length;
+  const modifiedCount = allAdvancedFields.filter((field) => isProviderFieldModified(payload, field)).length;
+  const currentShardModifiedCount = advancedFields.filter((field) => isProviderFieldModified(payload, field)).length;
+
   const groups = useMemo(() => Array.from(new Set(advancedFields.map((field) => field.group).filter((group): group is string => Boolean(group)))), [advancedFields]);
   const [activeGroup, setActiveGroup] = useState(groups[0] ?? "");
 
@@ -64,7 +82,14 @@ export function ProviderConfigEditor({
     setActiveView("basic");
     setQuery("");
     setFilter("all");
+    setActiveShard("master");
   }, [providerKey]);
+
+  useEffect(() => {
+    if (!cavesEnabled && activeShard === "caves") {
+      setActiveShard("master");
+    }
+  }, [cavesEnabled, activeShard]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase(locale === "zh" ? "zh-CN" : "en-US");
   const matchedFields = advancedFields.filter((field) => {
@@ -78,61 +103,170 @@ export function ProviderConfigEditor({
 
   return (
     <div className="mt-4 space-y-4">
-      {advancedFields.length > 0 ? (
-        <div role="tablist" aria-label={t("gameSettingsViews")} className="inline-flex rounded-md border border-panel-line bg-slate-950/50 p-1">
-          {(["basic", "advanced"] as const).map((view) => (
-            <button
-              key={view}
-              type="button"
-              role="tab"
-              aria-selected={activeView === view}
-              className={cn("flex h-8 items-center gap-2 rounded px-3 text-xs font-medium transition", activeView === view ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:text-slate-300")}
-              onClick={() => setActiveView(view)}
-            >
-              {t(view === "basic" ? "basicGameSettings" : "advancedGameSettings")}
-              {view === "advanced" && modifiedCount > 0 ? (
-                <span aria-label={t("modifiedSettingsCount", { count: modifiedCount })} className="min-w-5 rounded bg-panel-green/15 px-1.5 py-0.5 text-center text-[10px] tabular-nums text-panel-green">{modifiedCount}</span>
-              ) : null}
-            </button>
-          ))}
+      {allAdvancedFields.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-1">
+          {/* Left: View Switcher (Basic / Advanced) */}
+          <div role="tablist" aria-label={t("gameSettingsViews")} className="inline-flex rounded-lg border border-panel-line bg-slate-950/80 p-0.5 shadow-sm">
+            {(["basic", "advanced"] as const).map((view) => (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={activeView === view}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition",
+                  activeView === view ? "bg-slate-800 text-slate-100 shadow-sm" : "text-slate-400 hover:text-slate-200"
+                )}
+                onClick={() => setActiveView(view)}
+              >
+                <span>{t(view === "basic" ? "basicGameSettings" : "advancedGameSettings")}</span>
+                {view === "advanced" && modifiedCount > 0 ? (
+                  <span aria-label={t("modifiedSettingsCount", { count: modifiedCount })} className="min-w-4 rounded-full bg-panel-green/20 px-1.5 py-0.5 text-center text-[10px] font-bold tabular-nums text-panel-green">
+                    {modifiedCount}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: Shard Switcher (For DST in Advanced View) */}
+          {activeView === "advanced" && isDst && (
+            <div className="inline-flex items-center rounded-lg border border-panel-line bg-slate-950/80 p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveShard("master");
+                  setQuery("");
+                }}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition",
+                  activeShard === "master"
+                    ? "bg-panel-green/15 text-panel-green font-semibold shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                <span className={cn("size-1.5 rounded-full", activeShard === "master" ? "bg-panel-green" : "bg-slate-600")} />
+                <span>{t("dstShardMaster")}</span>
+              </button>
+              <button
+                type="button"
+                disabled={!cavesEnabled}
+                onClick={() => {
+                  if (cavesEnabled) {
+                    setActiveShard("caves");
+                    setQuery("");
+                  }
+                }}
+                title={!cavesEnabled ? t("dstShardCavesDisabled") : undefined}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition disabled:opacity-30 disabled:cursor-not-allowed",
+                  activeShard === "caves"
+                    ? "bg-panel-green/15 text-panel-green font-semibold shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                <span className={cn("size-1.5 rounded-full", activeShard === "caves" ? "bg-panel-green" : "bg-slate-600")} />
+                <span>{t("dstShardCaves")}</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : null}
 
       {activeView === "advanced" && advancedFields.length > 0 ? (
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center justify-end gap-2 pb-3">
-            <label className="relative min-w-52 flex-1 sm:max-w-72">
-              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
-              <Input className="w-full pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchGameSettings")} />
-            </label>
-            <div className="flex rounded-md border border-panel-line bg-slate-950 p-0.5">
-              {(["all", "modified"] as const).map((value) => (
-                <button key={value} type="button" className={cn("rounded px-2.5 py-1.5 text-xs font-medium transition", filter === value ? "bg-slate-800 text-slate-100" : "text-slate-500 hover:text-slate-300")} onClick={() => setFilter(value)}>
-                  {t(value === "all" ? "allSettings" : "modifiedSettings")}
-                </button>
-              ))}
+        <div className="min-w-0 rounded-lg border border-panel-line bg-slate-950/40 p-3">
+          {/* Top-right action toolbar (Unified, compact, gamer-aesthetic) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-panel-line/70">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-300">
+                {isDst
+                  ? activeShard === "master"
+                    ? t("dstShardMaster")
+                    : t("dstShardCaves")
+                  : t("advancedGameSettings")}
+              </span>
+              {currentShardModifiedCount > 0 && (
+                <span className="rounded-full bg-panel-green/15 border border-panel-green/30 px-2 py-0.5 text-[10px] font-semibold text-panel-green font-mono">
+                  {currentShardModifiedCount} {locale.startsWith("zh") ? "项已更改" : "modified"}
+                </span>
+              )}
             </div>
-            {modifiedCount > 0 && onRestoreDefaults ? (
-              <Button type="button" variant="ghost" className="h-9 px-2.5 text-xs text-slate-400" disabled={disabled} onClick={() => onRestoreDefaults(advancedFields)}>
-                <RotateCcw aria-hidden="true" className="size-3.5" />
-                {t("restoreDefaultConfiguration")}
-              </Button>
-            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search */}
+              <div className="relative w-44 sm:w-56">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
+                <Input
+                  className="h-7 w-full pl-8 text-xs bg-slate-900 border-panel-line"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t("searchGameSettings")}
+                />
+              </div>
+
+              {/* All / Modified Pill */}
+              <div className="inline-flex rounded-md border border-panel-line bg-slate-900 p-0.5">
+                {(["all", "modified"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={cn(
+                      "h-6 rounded px-2 text-xs font-medium transition",
+                      filter === value ? "bg-slate-800 text-slate-100 font-semibold" : "text-slate-400 hover:text-slate-200"
+                    )}
+                    onClick={() => setFilter(value)}
+                  >
+                    {t(value === "all" ? "allSettings" : "modifiedSettings")}
+                  </button>
+                ))}
+              </div>
+
+              {/* Restore Defaults */}
+              {currentShardModifiedCount > 0 && onRestoreDefaults && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-slate-400 hover:text-white"
+                  disabled={disabled}
+                  onClick={() => onRestoreDefaults(advancedFields)}
+                >
+                  <RotateCcw aria-hidden="true" className="size-3 text-slate-400" />
+                  <span>{t("restoreDefault")}</span>
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="border-t border-panel-line lg:grid lg:grid-cols-[160px_minmax(0,1fr)]">
+          <div className="pt-3 lg:grid lg:grid-cols-[160px_minmax(0,1fr)]">
             <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line py-1.5 lg:block lg:border-b-0 lg:border-r lg:pr-2.5">
               {groups.map((group) => {
                 const count = advancedFields.filter((field) => field.group === group && isProviderFieldModified(payload, field)).length;
                 return (
-                  <button key={group} type="button" className={cn("flex shrink-0 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition lg:mb-1 lg:w-full font-medium", activeGroup === group && !normalizedQuery ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200")} onClick={() => { setQuery(""); setActiveGroup(group); }}>
+                  <button
+                    key={group}
+                    type="button"
+                    className={cn(
+                      "flex shrink-0 items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition lg:mb-1 lg:w-full font-medium",
+                      activeGroup === group && !normalizedQuery
+                        ? "bg-slate-800 text-white font-semibold"
+                        : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+                    )}
+                    onClick={() => {
+                      setQuery("");
+                      setActiveGroup(group);
+                    }}
+                  >
                     <span className="truncate">{groupLabel(group, locale, t)}</span>
-                    {count > 0 ? <span className="text-[10px] font-bold text-panel-green bg-panel-green/15 px-1.5 py-0.2 rounded">{count}</span> : null}
+                    {count > 0 ? (
+                      <span className="text-[10px] font-bold text-panel-green bg-panel-green/15 px-1.5 py-0.2 rounded">
+                        {count}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
             </nav>
-            <div className="min-w-0 py-2.5 lg:pl-3.5">
+            <div className="min-w-0 py-2 lg:pl-3.5">
               {visibleGroups.map((group) => {
                 const groupFields = matchedFields.filter((field) => field.group === group);
                 const effect = dstConfigGroupEffect(providerKey, group);
@@ -141,7 +275,7 @@ export function ProviderConfigEditor({
                   <section key={group} className="mb-4 last:mb-0">
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h5 className="text-xs font-bold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                        <h5 className="text-xs font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
                         {surface === "server" && effect ? (
                           <span className={cn(
                             "rounded px-1.5 py-0.2 text-[10px] font-medium",
@@ -224,7 +358,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     : 0;
   const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
   return (
-    <div className={cn("min-w-0 rounded-lg border bg-slate-950/50 px-2.5 py-2 transition hover:border-slate-700", error ? "border-red-400/60" : "border-slate-800")}>
+    <div className={cn("min-w-0 rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700", error ? "border-red-400/60" : "border-slate-800")}>
       {field.type === "boolean" ? (
         <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-7 w-full items-center justify-between gap-2.5 text-left outline-none transition disabled:opacity-50" onClick={() => onChange(field, !checked)}>
           <span className="text-xs font-semibold text-slate-200">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
@@ -254,8 +388,18 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         </>
       ) : field.type === "select" ? (
         <LabeledControl field={field} label={label}>
-          <select id={`provider-field-${field.name}`} className="h-8.5 w-full rounded-lg border border-slate-800 bg-slate-900 px-2.5 text-xs text-slate-100 outline-none focus:border-panel-green cursor-pointer" disabled={disabled} value={String(value ?? "")} onChange={(event) => onChange(field, event.target.value)}>
-            {(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{providerOptionLabel(field, option.value, option.label, t)}</option>)}
+          <select
+            id={`provider-field-${field.name}`}
+            className="h-8.5 w-full cursor-pointer rounded-lg border border-slate-800 bg-slate-900 px-2.5 text-xs text-slate-100 outline-none focus:border-panel-green"
+            disabled={disabled}
+            value={String(value ?? "")}
+            onChange={(event) => onChange(field, event.target.value)}
+          >
+            {(field.options ?? []).map((option) => (
+              <option key={option.value} value={option.value}>
+                {providerOptionLabel(field, option.value, option.label, t)}
+              </option>
+            ))}
           </select>
         </LabeledControl>
       ) : field.type === "password" ? (

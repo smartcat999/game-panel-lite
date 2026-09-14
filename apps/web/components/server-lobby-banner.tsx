@@ -182,18 +182,18 @@ export function ServerLobbyBanner({
 
         {/* Right: Quick Action Controls */}
         {canControl ? <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onOpenConsole ? (
+            <button
+              type="button"
+              onClick={onOpenConsole}
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+            >
+              <Terminal className="size-4 text-panel-green" />
+              <span>{isZh ? "打开控制台" : "Open Console"}</span>
+            </button>
+          ) : null}
           {isRunning ? (
             <>
-              {onOpenConsole ? (
-                <button
-                  type="button"
-                  onClick={onOpenConsole}
-                  className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
-                >
-                  <Terminal className="size-4 text-panel-green" />
-                  <span>{isZh ? "打开控制台" : "Open Console"}</span>
-                </button>
-              ) : null}
               <button
                 type="button"
                 disabled={disabled}

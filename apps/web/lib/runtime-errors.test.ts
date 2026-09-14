@@ -20,6 +20,7 @@ describe("runtime error display", () => {
     );
     expect(classifyRuntimeError("Docker runtime unavailable: cannot connect to Docker daemon")).toBe("runtimeDockerUnavailable");
     expect(classifyRuntimeError("Bind for 0.0.0.0:7778 failed: port is already allocated")).toBe("runtimePortAlreadyUsed");
+    expect(classifyRuntimeError("a game update task is in progress")).toBe("gameMaintenanceInProgress");
   });
 
   it("keeps form validation errors product-specific in the create flow", () => {

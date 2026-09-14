@@ -115,6 +115,62 @@ func TestCreateTModLoaderServerPersistsDesiredModIDs(t *testing.T) {
 	}
 }
 
+func TestCreateServerIgnoresActiveProviderVersionCheck(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	now := time.Now()
+	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{
+		ID:          "palworld-version-check",
+		InstanceID:  "provider:palworld",
+		ProviderKey: domain.ProviderPalworld,
+		Operation:   domain.GameUpdateOperationCheck,
+		Status:      domain.GameUpdateJobRunning,
+		Stage:       domain.GameUpdateStageRefreshingMetadata,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", strings.NewReader(`{
+		"name":"DST During Version Check",
+		"providerKey":"dont-starve-together",
+		"version":"v2026.08.14",
+		"config":{"clusterName":"DST During Version Check","clusterToken":"test-token","gameMode":"endless","maxPlayers":6,"port":10999,"enableCaves":true}
+	}`)))
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected provider version check not to block server creation, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestCreateServerRejectsActiveGameUpdate(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	now := time.Now()
+	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{
+		ID:          "palworld-update",
+		InstanceID:  "server-under-update",
+		ProviderKey: domain.ProviderPalworld,
+		Operation:   domain.GameUpdateOperationApply,
+		Status:      domain.GameUpdateJobRunning,
+		Stage:       domain.GameUpdateStageInstalling,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", strings.NewReader(`{
+		"name":"Blocked DST",
+		"providerKey":"dont-starve-together",
+		"version":"v2026.08.14",
+		"config":{"clusterName":"Blocked DST","clusterToken":"test-token","gameMode":"endless","maxPlayers":6,"port":10999,"enableCaves":true}
+	}`)))
+	if recorder.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected active game update to block server creation, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestStartTModLoaderServerNormalizesOldDockerTagVersion(t *testing.T) {
 	adapter := newCaptureCreateAdapter()
 	router, db, cfg := newTestRouterWithAdapter(t, adapter)

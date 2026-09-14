@@ -1055,6 +1055,21 @@ func (h *Handler) gameUpdateRuntimeLocked(ctx context.Context) bool {
 	return h.maintenanceRuntimeLocked(ctx)
 }
 
+func (h *Handler) gameUpdateCreationLocked(ctx context.Context) bool {
+	jobs, err := h.store.ListActiveGameUpdateJobs(ctx)
+	if err != nil {
+		return true
+	}
+	for _, job := range jobs {
+		isVersionCheck := job.Operation == domain.GameUpdateOperationCheck || (job.Operation == "" && job.Stage == domain.GameUpdateStageRefreshingMetadata)
+		if !isVersionCheck {
+			return true
+		}
+	}
+	worldJobs, err := h.store.ListActiveWorldRegenerationJobs(ctx)
+	return err != nil || len(worldJobs) > 0
+}
+
 func (h *Handler) maintenanceRuntimeLocked(ctx context.Context) bool {
 	jobs, err := h.store.ListActiveGameUpdateJobs(ctx)
 	if err != nil || len(jobs) > 0 {

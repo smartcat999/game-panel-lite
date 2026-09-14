@@ -501,7 +501,7 @@ function MinecraftRules({
 }
 
 // -------------------------------------------------------------
-// 3. DST 饥荒联机版专属规则面板 (双层洞穴分片 / 游戏模式 / 无人暂停)
+// 3. DST 饥荒联机版专属规则面板 (地上与洞穴世界 / 游戏模式 / 无人暂停)
 // -------------------------------------------------------------
 function DSTRules({
   draft,
@@ -592,14 +592,14 @@ function DSTRules({
           <div className="flex items-center gap-2">
             <Zap className="size-4 text-panel-green" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-white">
-              {isZh ? "双层世界与洞穴分片" : "World Topology & Caves"}
+              {isZh ? "地上与洞穴世界" : "Surface & Caves"}
             </h4>
           </div>
 
           <div className="flex items-center justify-between py-2 border-b border-slate-800">
             <div>
-              <p className="text-xs text-slate-200 font-bold">{isZh ? "开启地下洞穴分片 (Caves)" : "Enable Caves Shard"}</p>
-              <p className="text-[11px] text-slate-400">{isZh ? "打通地面与地下世界，解锁远古祭坛与洞穴生物" : "Ground + Underworld double shards"}</p>
+              <p className="text-xs text-slate-200 font-bold">{isZh ? "开启洞穴世界" : "Enable Caves"}</p>
+              <p className="text-[11px] text-slate-400">{isZh ? "连通地上与洞穴世界，解锁远古祭坛与洞穴生物" : "Connect the surface and caves to unlock ruins and cave creatures"}</p>
             </div>
             <input
               type="checkbox"
