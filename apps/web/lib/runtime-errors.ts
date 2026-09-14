@@ -70,6 +70,9 @@ export function classifyRuntimeError(message: string): MessageKey | undefined {
   ) {
     return "runtimePortAlreadyUsed";
   }
+  if (normalized.includes("a game update task is in progress")) {
+    return "gameMaintenanceInProgress";
+  }
   return undefined;
 }
 

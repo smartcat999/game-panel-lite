@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock3, Copy, Cpu, Eye, EyeOff, KeyRound, MemoryStick, Play, RotateCcw, Share2, Square, Zap } from "lucide-react";
+import { Check, Clock3, Copy, Cpu, Eye, EyeOff, KeyRound, MemoryStick, Play, RotateCcw, Share2, Square, Terminal, Zap } from "lucide-react";
 import { ServerGameArt } from "@/components/server-game-art";
 import { ServerModeBadge, ServerStatusBadge } from "@/components/server-badges";
 import { useToast } from "@/components/toast-context";
@@ -35,6 +35,7 @@ export function ServerLobbyBanner({
   disabled,
   memoryMb,
   onAction,
+  onOpenConsole,
   onOpenShare,
   shareEnabled = false
 }: {
@@ -45,6 +46,7 @@ export function ServerLobbyBanner({
   disabled?: boolean;
   memoryMb?: number;
   onAction: (action: "start" | "stop" | "restart") => void;
+  onOpenConsole?: () => void;
   onOpenShare?: () => void;
   shareEnabled?: boolean;
 }) {
@@ -180,6 +182,16 @@ export function ServerLobbyBanner({
 
         {/* Right: Quick Action Controls */}
         {canControl ? <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onOpenConsole ? (
+            <button
+              type="button"
+              onClick={onOpenConsole}
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-xs font-bold text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-panel-green/50"
+            >
+              <Terminal className="size-4 text-panel-green" />
+              <span>{isZh ? "打开控制台" : "Open Console"}</span>
+            </button>
+          ) : null}
           {isRunning ? (
             <>
               <button

@@ -18,6 +18,7 @@ import (
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -111,6 +112,62 @@ func TestCreateTModLoaderServerPersistsDesiredModIDs(t *testing.T) {
 	}
 	if server.Spec.DesiredState != domain.DesiredRunning {
 		t.Fatalf("expected created server desired state running, got %q", server.Spec.DesiredState)
+	}
+}
+
+func TestCreateServerIgnoresActiveProviderVersionCheck(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	now := time.Now()
+	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{
+		ID:          "palworld-version-check",
+		InstanceID:  "provider:palworld",
+		ProviderKey: domain.ProviderPalworld,
+		Operation:   domain.GameUpdateOperationCheck,
+		Status:      domain.GameUpdateJobRunning,
+		Stage:       domain.GameUpdateStageRefreshingMetadata,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", strings.NewReader(`{
+		"name":"DST During Version Check",
+		"providerKey":"dont-starve-together",
+		"version":"v2026.08.14",
+		"config":{"clusterName":"DST During Version Check","clusterToken":"test-token","gameMode":"endless","maxPlayers":6,"port":10999,"enableCaves":true}
+	}`)))
+	if recorder.Code != stdhttp.StatusCreated {
+		t.Fatalf("expected provider version check not to block server creation, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestCreateServerRejectsActiveGameUpdate(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	now := time.Now()
+	if err := db.CreateGameUpdateJob(context.Background(), &domain.GameUpdateJob{
+		ID:          "palworld-update",
+		InstanceID:  "server-under-update",
+		ProviderKey: domain.ProviderPalworld,
+		Operation:   domain.GameUpdateOperationApply,
+		Status:      domain.GameUpdateJobRunning,
+		Stage:       domain.GameUpdateStageInstalling,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", strings.NewReader(`{
+		"name":"Blocked DST",
+		"providerKey":"dont-starve-together",
+		"version":"v2026.08.14",
+		"config":{"clusterName":"Blocked DST","clusterToken":"test-token","gameMode":"endless","maxPlayers":6,"port":10999,"enableCaves":true}
+	}`)))
+	if recorder.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected active game update to block server creation, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -1000,6 +1057,42 @@ func TestRunningServerCommandAndLogsRequireAttachedRuntime(t *testing.T) {
 	}
 	if adapter.logsContainer != "" || adapter.created != 0 {
 		t.Fatalf("expected logs path to avoid runtime repair, got logs=%q created=%d", adapter.logsContainer, adapter.created)
+	}
+}
+
+func TestDSTServerCommandRoutesToRequestedShard(t *testing.T) {
+	adapter := newCommandCaptureAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("dst-console", cfg.DataDir)
+	server.GameKey = domain.GameDST
+	server.ProviderKey = domain.ProviderDST
+	server.Status = domain.StatusRunning
+	server.ContainerID = "container-dst-console"
+	server.ConfigPayload = dst.NewProvider().DefaultConfigPayload()
+	server.ConfigPayload["caves"] = map[string]any{"enabled": true}
+	createTestServer(t, db, server)
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(
+		stdhttp.MethodPost,
+		"/api/servers/"+server.ID+"/command",
+		bytes.NewBufferString(`{"command":"c_countprefabs(\"spider\")","target":"caves"}`),
+	))
+	if response.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected command 202, got %d: %s", response.Code, response.Body.String())
+	}
+	if !reflect.DeepEqual(adapter.commands, []string{"__GAMEPANEL_DST_CONSOLE__:caves:Y19jb3VudHByZWZhYnMoInNwaWRlciIp"}) {
+		t.Fatalf("expected encoded caves command, got %+v", adapter.commands)
+	}
+	var payload struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.ID == "" || payload.Status != "queued" {
+		t.Fatalf("expected queued operation response, got %+v", payload)
 	}
 }
 

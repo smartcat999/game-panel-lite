@@ -267,6 +267,42 @@ func TestDSTEntrypointStopsMasterBeforeCaves(t *testing.T) {
 	}
 }
 
+func TestDSTEntrypointRoutesConsoleCommandsToSelectedShard(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, false)
+	writeTestFile(t, filepath.Join(dataDir, "dst", "GamePanelLite", "Caves", "server.ini"), "[NETWORK]\nserver_port = 11000\n")
+	for _, id := range []string{"111", "222"} {
+		writeTestFile(t, filepath.Join(dataDir, "ugc_mods", "content", "322330", id, "modinfo.lua"), "cached")
+	}
+	t.Setenv("FAKE_CAPTURE_CONSOLE", "1")
+	cmd := dstEntrypointCommand(root, dataDir, script, "reuse")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+
+	if _, err := stdin.Write([]byte("__GAMEPANEL_DST_CONSOLE__:master:Y19zYXZlKCk=\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stdin.Write([]byte("__GAMEPANEL_DST_CONSOLE__:caves:Y19jb3VudHByZWZhYnMoInNwaWRlciIp\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		master, _ := os.ReadFile(filepath.Join(dataDir, "console-Master.log"))
+		caves, _ := os.ReadFile(filepath.Join(dataDir, "console-Caves.log"))
+		if strings.Contains(string(master), "c_save()") && strings.Contains(string(caves), `c_countprefabs("spider")`) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("commands were not routed to their shards: master=%q caves=%q", readTestFile(t, filepath.Join(dataDir, "console-Master.log")), readTestFile(t, filepath.Join(dataDir, "console-Caves.log")))
+}
+
 func dstEntrypointFixture(t *testing.T, downloaderCreatesMods bool) (string, string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -323,6 +359,16 @@ if [[ "${FAKE_SHARDS_BLOCK:-0}" == "1" ]]; then
   trap 'printf "stop:%s\\n" "${shard}" >> "${DST_PERSISTENT_ROOT}/fake-server.log"; exit 0' TERM
   printf 'start:%s\n' "${shard}" >> "${DST_PERSISTENT_ROOT}/fake-server.log"
   while true; do sleep 1; done
+fi
+if [[ "${FAKE_CAPTURE_CONSOLE:-0}" == "1" ]]; then
+  shard=""
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-shard" ]]; then shard="$2"; break; fi
+    shift
+  done
+  while IFS= read -r line; do
+    printf '%s\n' "${line}" >> "${DST_PERSISTENT_ROOT}/console-${shard}.log"
+  done
 fi
 `
 	writeTestFile(t, filepath.Join(root, "server", "bin64", "dontstarve_dedicated_server_nullrenderer_x64"), fake)

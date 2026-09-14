@@ -146,7 +146,7 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 	h.gameUpdateJobsMu.Lock()
 	defer h.gameUpdateJobsMu.Unlock()
-	if h.gameUpdateRuntimeLocked(r.Context()) || h.runtimeImagePrepareActive() {
+	if h.gameUpdateCreationLocked(r.Context()) || h.runtimeImagePrepareActive() {
 		writeError(w, http.StatusConflict, "a game update task is in progress")
 		return
 	}
@@ -394,6 +394,7 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	var payload struct {
 		Command string `json:"command"`
+		Target  string `json:"target,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -408,17 +409,38 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "command is too long")
 		return
 	}
+	if strings.ContainsAny(command, "\r\n\x00") {
+		writeError(w, http.StatusBadRequest, "command must be a single line")
+		return
+	}
+	gameProvider, ok := h.provider.Get(server.ProviderKey)
+	if !ok || !gameProvider.Capabilities().ConsoleCommands {
+		writeError(w, http.StatusBadRequest, "console commands are not supported by this server")
+		return
+	}
+	runtimeCommand := command
+	if commandProvider, ok := gameProvider.(provider.ConsoleCommandProvider); ok {
+		runtimeCommand, err = commandProvider.ConsoleCommand(server, command, payload.Target)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else if strings.TrimSpace(payload.Target) != "" {
+		writeError(w, http.StatusBadRequest, "console targets are not supported by this server")
+		return
+	}
 	if server.Status.Phase != domain.PhaseRunning {
 		writeError(w, http.StatusConflict, "server must be running to send commands")
 		return
 	}
+	operationID := uuid.NewString()
 	if server.NodeID != "" && server.NodeID != "node-local" {
 		task := domain.NodeTask{
-			ID:        uuid.NewString(),
+			ID:        operationID,
 			NodeID:    server.NodeID,
 			ServerID:  server.ID,
 			Action:    domain.NodeTaskAction("exec_command"),
-			Payload:   command,
+			Payload:   runtimeCommand,
 			Status:    domain.TaskPending,
 			CreatedAt: time.Now().UTC(),
 			UpdatedAt: time.Now().UTC(),
@@ -427,7 +449,8 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to dispatch command task: "+err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+		h.recordActivity(r.Context(), server.ID, "server.command.queued", fmt.Sprintf("Queued console command for %s", server.Name), map[string]any{"serverId": server.ID, "target": strings.TrimSpace(payload.Target)})
+		writeJSON(w, http.StatusAccepted, map[string]string{"id": operationID, "status": "queued"})
 		return
 	}
 	server, err = h.requireResourceRuntimeAttached(r.Context(), server)
@@ -435,11 +458,12 @@ func (h *Handler) sendServerCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	if err := h.runtime.SendCommandWorkload(r.Context(), server.Status.RuntimeID, command); err != nil {
+	if err := h.runtime.SendCommandWorkload(r.Context(), server.Status.RuntimeID, runtimeCommand); err != nil {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+	h.recordActivity(r.Context(), server.ID, "server.command.queued", fmt.Sprintf("Queued console command for %s", server.Name), map[string]any{"serverId": server.ID, "target": strings.TrimSpace(payload.Target)})
+	writeJSON(w, http.StatusAccepted, map[string]string{"id": operationID, "status": "queued"})
 }
 
 func (h *Handler) deleteServer(w http.ResponseWriter, r *http.Request) {

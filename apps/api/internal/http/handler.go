@@ -226,7 +226,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Put("/api/servers/{id}/game-update/auto-check", h.updateGameUpdateAutoCheck)
 		r.Get("/api/servers/{id}/world-regeneration", h.getWorldRegeneration)
 		r.Post("/api/servers/{id}/world-regeneration", h.regenerateWorld)
-		r.Post("/api/servers/{id}/command", h.sendServerCommand)
+		r.With(h.requirePermission(domain.PermissionServerConfigure, "member role required")).Post("/api/servers/{id}/command", h.sendServerCommand)
 		r.With(h.requireAdmin).Delete("/api/servers/{id}", h.deleteServer)
 		r.With(h.requirePermission(domain.PermissionServerConfigure, "member role required")).Get("/api/servers/{id}/logs", h.serverLogs)
 		r.With(h.requirePermission(domain.PermissionServerConfigure, "member role required")).Get("/api/servers/{id}/logs/snapshot", h.serverLogSnapshot)

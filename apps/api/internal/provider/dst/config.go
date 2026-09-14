@@ -56,7 +56,7 @@ func configSchema() []domain.ProviderConfigField {
 		{Name: "gameplay.pauseWhenEmpty", Label: "无人时暂停", Type: "boolean", Default: true},
 		{Name: "gameplay.consoleEnabled", Label: "启用控制台", Type: "boolean", Default: true},
 		{Name: "world.preset", Label: "世界预设", Type: "select", Required: true, Default: "forest_default", Options: []domain.ProviderConfigFieldOption{{Value: "forest_default", Label: "默认森林"}, {Value: "forest_classic", Label: "经典森林"}, {Value: "forest_survival", Label: "生存森林"}}},
-		{Name: "caves.enabled", Label: "启用洞穴", Type: "boolean", Default: false, Help: "创建额外洞穴分片配置。"},
+		{Name: "caves.enabled", Label: "启用洞穴", Type: "boolean", Default: false, Help: "创建洞穴世界配置。"},
 	}
 	fields = append(fields, worldOptionFields("world", "forest")...)
 	fields = append(fields, worldOptionFields("caves", "cave")...)

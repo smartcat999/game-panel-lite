@@ -189,7 +189,7 @@ function ProviderRuntimeRow({
         </div>
         <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p>
         <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
-        {preparing ? <RuntimeInstallProgress /> : null}
+        {preparing ? <RuntimeInstallProgress status={displayStatus} /> : null}
         {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
@@ -219,14 +219,31 @@ function ProviderRuntimeRow({
   );
 }
 
-function RuntimeInstallProgress() {
+function RuntimeInstallProgress({ status }: { status?: RuntimeImageStatus }) {
+  const progress = Math.max(0, Math.min(100, status?.progress ?? 0));
+  const hasProgress = progress > 0;
   return (
-    <div
-      aria-label="Runtime install progress"
-      className="relative mt-3 h-1.5 w-full max-w-2xl overflow-hidden rounded-full bg-slate-800/80"
-      role="progressbar"
-    >
-      <div className="runtime-install-indeterminate absolute inset-y-0 left-0 w-20 rounded-full bg-sky-300/90" />
+    <div className="mt-3 flex w-full max-w-2xl items-center gap-3">
+      <div
+        aria-label="Runtime install progress"
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={hasProgress ? progress : undefined}
+        className="relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800/80"
+        role="progressbar"
+      >
+        {hasProgress ? (
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-sky-300 transition-[width] duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        ) : (
+          <div className="runtime-install-indeterminate absolute inset-y-0 left-0 w-20 rounded-full bg-sky-300/90" />
+        )}
+      </div>
+      <span className="w-9 shrink-0 text-right font-mono text-[11px] tabular-nums text-sky-300">
+        {hasProgress ? `${progress}%` : "—"}
+      </span>
     </div>
   );
 }

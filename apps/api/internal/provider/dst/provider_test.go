@@ -14,8 +14,8 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	if provider.GameKey() != domain.GameDST || provider.Key() != domain.ProviderDST {
 		t.Fatalf("unexpected provider identity: %s %s", provider.GameKey(), provider.Key())
 	}
-	if provider.Capabilities().ConsoleCommands {
-		t.Fatal("DST console commands should not be exposed in the first provider slice")
+	if !provider.Capabilities().ConsoleCommands {
+		t.Fatal("DST console commands should be exposed through the shard-aware runtime")
 	}
 	if !provider.Capabilities().SaveSnapshots || !provider.Capabilities().Backups || !provider.Capabilities().WorldRegeneration {
 		t.Fatalf("expected save and backup support, got %+v", provider.Capabilities())
@@ -64,6 +64,37 @@ func TestProviderCatalogMetadata(t *testing.T) {
 	}
 	if names["workshopIds"] {
 		t.Fatalf("workshop IDs should be managed from the mod library, not the config schema: %+v", provider.ConfigSchema())
+	}
+}
+
+func TestConsoleCommandTargetsConfiguredShard(t *testing.T) {
+	provider := NewProvider()
+	config := defaultConfig()
+	config.Caves = &DSTCaveConfig{Enabled: true}
+	server := domain.GameServer{Spec: domain.ServerSpec{Config: payloadFromConfig(config)}}
+
+	master, err := provider.ConsoleCommand(server, "c_save()", "master")
+	if err != nil || master != "__GAMEPANEL_DST_CONSOLE__:master:Y19zYXZlKCk=" {
+		t.Fatalf("unexpected master command %q: %v", master, err)
+	}
+	caves, err := provider.ConsoleCommand(server, "c_countprefabs(\"spider\")", "caves")
+	if err != nil || !strings.HasPrefix(caves, "__GAMEPANEL_DST_CONSOLE__:caves:") {
+		t.Fatalf("unexpected caves command %q: %v", caves, err)
+	}
+}
+
+func TestConsoleCommandRejectsUnavailableTarget(t *testing.T) {
+	provider := NewProvider()
+	config := defaultConfig()
+	config.Caves = nil
+	server := domain.GameServer{Spec: domain.ServerSpec{Config: payloadFromConfig(config)}}
+	if _, err := provider.ConsoleCommand(server, "c_save()", "caves"); err == nil {
+		t.Fatal("expected disabled caves target to be rejected")
+	}
+	config.Gameplay.ConsoleEnabled = false
+	server.Spec.Config = payloadFromConfig(config)
+	if _, err := provider.ConsoleCommand(server, "c_save()", "master"); err == nil {
+		t.Fatal("expected disabled console to be rejected")
 	}
 }
 
