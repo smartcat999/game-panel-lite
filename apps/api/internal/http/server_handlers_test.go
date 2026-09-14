@@ -18,6 +18,7 @@ import (
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	modsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/mod"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -1000,6 +1001,42 @@ func TestRunningServerCommandAndLogsRequireAttachedRuntime(t *testing.T) {
 	}
 	if adapter.logsContainer != "" || adapter.created != 0 {
 		t.Fatalf("expected logs path to avoid runtime repair, got logs=%q created=%d", adapter.logsContainer, adapter.created)
+	}
+}
+
+func TestDSTServerCommandRoutesToRequestedShard(t *testing.T) {
+	adapter := newCommandCaptureAdapter()
+	router, db, cfg := newTestRouterWithAdapter(t, adapter)
+	server := testServer("dst-console", cfg.DataDir)
+	server.GameKey = domain.GameDST
+	server.ProviderKey = domain.ProviderDST
+	server.Status = domain.StatusRunning
+	server.ContainerID = "container-dst-console"
+	server.ConfigPayload = dst.NewProvider().DefaultConfigPayload()
+	server.ConfigPayload["caves"] = map[string]any{"enabled": true}
+	createTestServer(t, db, server)
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(
+		stdhttp.MethodPost,
+		"/api/servers/"+server.ID+"/command",
+		bytes.NewBufferString(`{"command":"c_countprefabs(\"spider\")","target":"caves"}`),
+	))
+	if response.Code != stdhttp.StatusAccepted {
+		t.Fatalf("expected command 202, got %d: %s", response.Code, response.Body.String())
+	}
+	if !reflect.DeepEqual(adapter.commands, []string{"__GAMEPANEL_DST_CONSOLE__:caves:Y19jb3VudHByZWZhYnMoInNwaWRlciIp"}) {
+		t.Fatalf("expected encoded caves command, got %+v", adapter.commands)
+	}
+	var payload struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.ID == "" || payload.Status != "queued" {
+		t.Fatalf("expected queued operation response, got %+v", payload)
 	}
 }
 

@@ -888,16 +888,17 @@ export async function gameServerAction(id: string, action: "start" | "stop" | "r
   return gameServerResourceFromApi(server);
 }
 
-export async function sendServerCommand(id: string, command: string) {
+export async function sendServerCommand(id: string, command: string, target?: "master" | "caves") {
   const response = await apiFetch(`${API_BASE}/api/servers/${id}/command`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ command })
+    body: JSON.stringify({ command, target })
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to send command");
   }
+  return (await response.json()) as { id: string; status: "queued" };
 }
 
 export async function listWorlds(): Promise<World[]> {

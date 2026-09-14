@@ -1,6 +1,7 @@
 package dst
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -93,7 +94,7 @@ func (Provider) Description() string {
 }
 func (Provider) Capabilities() domain.ProviderCapabilities {
 	return domain.ProviderCapabilities{
-		ConsoleCommands:   false,
+		ConsoleCommands:   true,
 		PlayerList:        false,
 		KickPlayer:        false,
 		BanPlayer:         false,
@@ -103,6 +104,28 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 		Versions:          true,
 		WorldRegeneration: true,
 	}
+}
+
+func (Provider) ConsoleCommand(server domain.GameServer, command, target string) (string, error) {
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	if !config.Gameplay.ConsoleEnabled {
+		return "", fmt.Errorf("DST console is disabled in the server configuration")
+	}
+	target = strings.ToLower(strings.TrimSpace(target))
+	if target == "" {
+		target = "master"
+	}
+	switch target {
+	case "master":
+	case "caves":
+		if config.Caves == nil || !config.Caves.Enabled {
+			return "", fmt.Errorf("caves shard is not enabled")
+		}
+	default:
+		return "", fmt.Errorf("unsupported DST console target %q", target)
+	}
+	payload := base64.StdEncoding.EncodeToString([]byte(command))
+	return "__GAMEPANEL_DST_CONSOLE__:" + target + ":" + payload, nil
 }
 
 func (p Provider) WorldRegenerationPlan(server domain.GameServer) (domain.WorldRegenerationPlan, error) {

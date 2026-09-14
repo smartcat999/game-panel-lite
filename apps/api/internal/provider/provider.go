@@ -44,6 +44,12 @@ type WorldRegenerationProvider interface {
 	WorldRegenerationPlan(domain.GameServer) (domain.WorldRegenerationPlan, error)
 }
 
+// ConsoleCommandProvider translates a provider-level console target into the
+// literal payload understood by that provider's runtime image.
+type ConsoleCommandProvider interface {
+	ConsoleCommand(domain.GameServer, string, string) (string, error)
+}
+
 type PlayerListProvider interface {
 	PlayerListCommand(domain.GameServer) string
 	ParsePlayerListOutput([]string) []domain.Player

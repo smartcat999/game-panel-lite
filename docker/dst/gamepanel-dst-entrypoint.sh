@@ -347,7 +347,49 @@ start_shard() {
     -ugc_directory "${UGC_DIR}"
 }
 
+setup_console_router() {
+  master_console_fifo="/tmp/gamepanel-dst-master-console"
+  caves_console_fifo="/tmp/gamepanel-dst-caves-console"
+  rm -f "${master_console_fifo}" "${caves_console_fifo}"
+  mkfifo "${master_console_fifo}" "${caves_console_fifo}"
+  exec 3<&0
+  exec 4<>"${master_console_fifo}"
+  exec 5<>"${caves_console_fifo}"
+}
+
+route_console_commands() {
+  local line target payload command
+  while IFS= read -r line; do
+    if [[ "${line}" == __GAMEPANEL_DST_CONSOLE__:*:* ]]; then
+      target="${line#__GAMEPANEL_DST_CONSOLE__:}"
+      payload="${target#*:}"
+      target="${target%%:*}"
+      if ! command="$(printf '%s' "${payload}" | base64 -d 2>/dev/null)"; then
+        echo "Rejected malformed GamePanel DST console payload." >&2
+        continue
+      fi
+    else
+      target="master"
+      command="${line}"
+    fi
+    case "${target}" in
+      master) printf '%s\n' "${command}" >&4 ;;
+      caves)
+        if [[ -n "${caves_pid:-}" ]]; then
+          printf '%s\n' "${command}" >&5
+        else
+          echo "Rejected DST console command: caves shard is not running." >&2
+        fi
+        ;;
+      *) echo "Rejected DST console command for unknown shard ${target}." >&2 ;;
+    esac
+  done
+}
+
 terminate_children() {
+  if [[ -n "${console_router_pid:-}" ]]; then
+    kill "${console_router_pid}" 2>/dev/null || true
+  fi
   if [[ -n "${caves_pid:-}" ]]; then
     kill "${caves_pid}" 2>/dev/null || true
   fi
@@ -359,6 +401,9 @@ terminate_children() {
 shutdown_children() {
   trap - TERM INT
   echo "Gracefully stopping DST shards..."
+  if [[ -n "${console_router_pid:-}" ]]; then
+    kill "${console_router_pid}" 2>/dev/null || true
+  fi
   if [[ -n "${master_pid:-}" ]]; then
     kill "${master_pid}" 2>/dev/null || true
     wait "${master_pid}" 2>/dev/null || true
@@ -387,17 +432,20 @@ ensure_cluster_layout
 sync_server_mods
 install_native_workshop_manifest "${UGC_DIR}" >/dev/null
 install_legacy_mod_links
+setup_console_router
 trap shutdown_children TERM INT
 
 if [[ -f "${CLUSTER_DIR}/Caves/server.ini" ]]; then
   echo "Starting DST Caves shard..."
-  start_shard "Caves" &
+  start_shard "Caves" <"${caves_console_fifo}" &
   caves_pid="$!"
 fi
 
 echo "Starting DST Master shard..."
-start_shard "Master" &
+start_shard "Master" <"${master_console_fifo}" &
 master_pid="$!"
+route_console_commands <&3 &
+console_router_pid="$!"
 if [[ -n "${caves_pid:-}" ]]; then
   set +e
   wait_for_any_shard

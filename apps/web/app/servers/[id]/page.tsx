@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { secretSeedKeyFor, terrariaInternalPort, terrariaSecretSeeds, terrariaSeedModeCodes } from "@gamepanel-lite/shared";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DSTConsoleDrawer } from "@/components/dst-console-drawer";
 import { GameUpdateCard } from "@/components/game-update-card";
 import { WorldRegenerationAction } from "@/components/world-regeneration-card";
 import { PlayersPanel } from "@/components/players-panel";
@@ -138,6 +139,7 @@ export default function ServerDetailPage() {
   const [gameUpdateActivity, setGameUpdateActivity] = useState<"checking" | "updating" | null>(null);
   const [worldRegenerationActive, setWorldRegenerationActive] = useState(false);
   const [worldRegenerationDialogOpen, setWorldRegenerationDialogOpen] = useState(false);
+  const [dstConsoleOpen, setDSTConsoleOpen] = useState(false);
   const handleGameUpdateActiveChange = useCallback((active: boolean, updateStatus?: string) => {
     setGameUpdateActive(active);
     setGameUpdateActivity(active ? updateStatus === "checking" ? "checking" : "updating" : null);
@@ -607,6 +609,7 @@ export default function ServerDetailPage() {
   const supportsDirectModUpload = Boolean(modUploadAccept);
   const workshopUnsupported = isArmArchitecture(dockerStatusQuery.data?.architecture);
   const isZh = locale.startsWith("zh");
+  const isDST = serverResource?.providerKey === "dont-starve-together";
   const tabs: { id: TabId; label: string }[] = useMemo(() => {
     const overviewTab = { id: "overview" as const, label: isZh ? "🎮 服务器大厅" : t("tabOverview") };
     if (isViewer) return [overviewTab];
@@ -616,12 +619,12 @@ export default function ServerDetailPage() {
     { id: "config", label: isZh ? "⚙️ 游戏配置" : t("tabConfig") },
     ...(capabilities.mods ? [{ id: "mods" as const, label: isZh ? "📦 模组管理" : t("tabMods") }] : []),
     ...(visibleCapabilities.saveSnapshots ? [{ id: "worlds" as const, label: isZh ? "🌍 世界地图" : t("tabWorlds") }] : []),
-    ...(capabilities.consoleCommands ? [{ id: "console" as const, label: isZh ? "📟 控制台与日志" : t("tabConsole") }] : []),
-    ...(!capabilities.consoleCommands ? [{ id: "logs" as const, label: isZh ? "📟 运行日志" : t("tabLogs") }] : []),
+    ...(capabilities.consoleCommands && !isDST ? [{ id: "console" as const, label: isZh ? "📟 控制台与日志" : t("tabConsole") }] : []),
+    ...(!capabilities.consoleCommands || isDST ? [{ id: "logs" as const, label: isZh ? "📟 运行日志" : t("tabLogs") }] : []),
     ...(capabilities.playerList ? [{ id: "players" as const, label: isZh ? "👥 在线玩家" : t("tabPlayers") }] : []),
     ...(serverResource?.providerKey === "palworld" ? [{ id: "version" as const, label: t("tabVersion") }] : [])
     ];
-  }, [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isViewer, isZh, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
+  }, [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isDST, isViewer, isZh, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
   useEffect(() => {
     if (serverResource && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
@@ -728,10 +731,12 @@ export default function ServerDetailPage() {
           disabled={gameUpdateActive || worldRegenerationActive}
           memoryMb={statsQuery.data?.memoryMb}
           onAction={(action) => serverAction.mutate(action)}
+          onOpenConsole={isDST && capabilities.consoleCommands ? () => setDSTConsoleOpen(true) : undefined}
           onOpenShare={canManageShares ? openShareDialog : undefined}
           shareEnabled={Boolean(share?.enabled)}
         />
       </div>
+      {isDST ? <DSTConsoleDrawer open={dstConsoleOpen} server={serverResource} onClose={() => setDSTConsoleOpen(false)} /> : null}
 
       <div className="mt-4 min-w-0">
           {renderTabs ? (
