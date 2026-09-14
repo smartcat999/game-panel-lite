@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Download, ExternalLink, Globe2, LockKeyhole, Network, RefreshCw, RotateCcw, Save, ServerCog, ShieldCheck, Wrench } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input, ToastNotice } from "@/components/ui";
@@ -32,6 +32,10 @@ import { usePermissions } from "@/lib/permissions";
 type ImageRegion = "global" | "cn";
 type SettingsTab = "basic" | "team" | "nodes" | "access" | "maintenance";
 
+function isSettingsTab(value: string): value is SettingsTab {
+  return ["basic", "team", "nodes", "access", "maintenance"].includes(value);
+}
+
 export default function SettingsPage() {
   const { t } = useI18n();
   const { canEditSettings } = usePermissions();
@@ -48,6 +52,13 @@ export default function SettingsPage() {
     { key: "access", label: t("settingsTabAccess"), icon: <LockKeyhole className="size-4" /> },
     { key: "maintenance", label: t("settingsTabMaintenance"), icon: <Wrench className="size-4" /> }
   ];
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    if (requestedTab && isSettingsTab(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, []);
 
   const savedPublicHost = settings.data?.publicHost ?? "";
   const savedImageRegion: ImageRegion = settings.data?.imageRegion === "cn" ? "cn" : "global";

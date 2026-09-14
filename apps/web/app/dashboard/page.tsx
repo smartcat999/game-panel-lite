@@ -170,7 +170,7 @@ export default function DashboardPage() {
                 {isZh ? "计算节点" : "Compute Nodes"}
               </h3>
             </div>
-            <Link href="/settings" className="text-[11px] text-slate-400 hover:text-panel-green flex items-center gap-1 transition">
+            <Link href="/settings?tab=nodes" className="text-[11px] text-slate-400 hover:text-panel-green flex items-center gap-1 transition">
               <span>{isZh ? "节点集群管理" : "Manage Nodes"}</span>
               <ChevronRight className="size-3" />
             </Link>
