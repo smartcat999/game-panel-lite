@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, ExternalLink, Gauge, HardDrive, MemoryStick, Network, RadioTower, Server } from "lucide-react";
@@ -31,9 +31,14 @@ type MonitoringSection = "overview" | "host" | "events";
 const severityOptions = ["all", "error", "warning", "success", "info"] as const;
 const eventTypeOptions = ["all", "server", "mod", "player", "settings", "system"] as const;
 const monitoringRange = "15m";
-const monitoringStep = "30s";
 const monitoringRefreshMs = 15_000;
 const monitoringRefreshLabel = "15s";
+const monitoringWindows = [
+  { label: "15m", range: "15m", step: "30s" },
+  { label: "1h", range: "1h", step: "1m" },
+  { label: "6h", range: "6h", step: "5m" },
+  { label: "24h", range: "24h", step: "15m" }
+] as const;
 
 export default function ActivityPage() {
   const { t } = useI18n();
@@ -42,11 +47,13 @@ export default function ActivityPage() {
   const [eventType, setEventType] = useState<FilterValue>("all");
   const [game, setGame] = useState<FilterValue>("all");
   const [section, setSection] = useState<MonitoringSection>("overview");
+  const [windowIndex, setWindowIndex] = useState(0);
+  const activeWindow = monitoringWindows[windowIndex] ?? monitoringWindows[0];
 
   const overviewQuery = useQuery({ queryKey: ["monitoring-overview"], queryFn: getMonitoringOverview, retry: false, refetchInterval: monitoringRefreshMs });
   const loadQuery = useQuery({ queryKey: ["monitoring-server-load"], queryFn: getServerLoad, retry: false, enabled: section === "overview" || section === "events", refetchInterval: section === "overview" ? monitoringRefreshMs : false });
   const eventsQuery = useQuery({ queryKey: ["monitoring-events", severity, eventType, game], queryFn: () => getMonitoringEvents({ severity, type: eventType, game, limit: 100 }), retry: false, enabled: section === "events", refetchInterval: section === "events" ? 30000 : false });
-  const platformQuery = useQuery({ queryKey: ["monitoring-platform", monitoringRange], queryFn: () => getPlatformMonitoring(monitoringRange, monitoringStep), retry: false, enabled: section === "overview" || section === "host", refetchInterval: section === "overview" || section === "host" ? monitoringRefreshMs : false });
+  const platformQuery = useQuery({ queryKey: ["monitoring-platform", activeWindow.range, activeWindow.step], queryFn: () => getPlatformMonitoring(activeWindow.range, activeWindow.step), retry: false, enabled: section === "overview" || section === "host", refetchInterval: section === "overview" || section === "host" ? monitoringRefreshMs : false });
 
   const visibleEvents = useMemo(() => (eventsQuery.data?.events ?? []).filter((event) => !isWorldOrBackupEventType(event.type)), [eventsQuery.data?.events]);
   const events = useMemo(() => filterEvents(visibleEvents, search), [visibleEvents, search]);
@@ -86,30 +93,33 @@ export default function ActivityPage() {
         ) : null}
 
         {section === "host" ? (
-          <>
-            <section className="grid gap-4 md:grid-cols-2">
-              <MetricGroupHeader
-                title={t("nodeResourceTitle")}
-                description={t("nodeResourceDescription")}
-                meta={<MonitoringCadence />}
-              />
-              <MonitoringChartCard color="#7dd3fc" icon={<Server aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeCpu} />
-              <MonitoringChartCard color="#a873ff" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeMemory} />
-              <DiskCapacityPanel series={platformQuery.data?.series.nodeDisk} />
-              <MonitoringChartCard color="#59d46f" icon={<Network aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeNetwork} />
-            </section>
-
-            <details className="rounded-lg border border-panel-line bg-panel-card">
-              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-200">{t("monitoringPlatformDiagnostics")}</summary>
-              <div className="space-y-4 border-t border-panel-line p-4">
-                <section className="grid gap-4 md:grid-cols-2">
-                  <MonitoringChartCard color="#7dd3fc" icon={<ChartIcon type="requests" />} range={platformQuery.data?.range} series={platformQuery.data?.series.requests} />
-                  <MonitoringChartCard color="#ff6b6b" icon={<Gauge aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.latencyP95} />
-                </section>
-                <PlatformHealth services={platformQuery.data?.services ?? []} topRoutes={platformQuery.data?.topRoutes ?? []} />
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">{t("nodeResourceTitle")}</h2>
+                <p className="mt-1 text-xs text-slate-500">{t("nodeResourceDescription")}</p>
               </div>
-            </details>
-          </>
+              <MonitoringWindowPicker activeIndex={windowIndex} onChange={setWindowIndex} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MonitoringChartCard compact color="#38bdf8" icon={<Server aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeCpu} />
+              <MonitoringChartCard compact color="#a78bfa" icon={<MemoryStick aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeMemory} />
+              <MonitoringChartCard compact color="#f4c95d" icon={<HardDrive aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeDisk} />
+              <MonitoringChartCard compact color="#59d46f" icon={<Network aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.nodeNetwork} />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-panel-line pt-5">
+              <h2 className="text-sm font-semibold text-slate-100">{t("monitoringPlatformDiagnostics")}</h2>
+              <MonitoringCadence range={activeWindow.label} />
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <MonitoringChartCard compact color="#38bdf8" icon={<ChartIcon type="requests" />} range={platformQuery.data?.range} series={platformQuery.data?.series.requests} />
+              <MonitoringChartCard compact color="#fb7185" icon={<Gauge aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.latencyP95} />
+              <MonitoringChartCard compact color="#59d46f" icon={<RadioTower aria-hidden="true" className="size-4" />} range={platformQuery.data?.range} series={platformQuery.data?.series.sse} />
+            </div>
+            <PlatformHealth services={platformQuery.data?.services ?? []} topRoutes={platformQuery.data?.topRoutes ?? []} />
+          </section>
         ) : null}
 
         {section === "events" ? (
@@ -251,12 +261,34 @@ function OverviewStatusStrip({ overview }: { overview?: MonitoringOverviewRespon
   );
 }
 
-function MonitoringCadence() {
+function MonitoringCadence({ range = monitoringRange }: { range?: string }) {
   const { t } = useI18n();
   return (
     <div className="flex flex-wrap gap-2">
-      <TechBadge label={t("monitoringRange")} value={monitoringRange} />
+      <TechBadge label={t("monitoringRange")} value={range} />
       <TechBadge label={t("monitoringRefresh")} value={monitoringRefreshLabel} />
+    </div>
+  );
+}
+
+function MonitoringWindowPicker({ activeIndex, onChange }: { activeIndex: number; onChange: (index: number) => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-panel-line bg-slate-950/55 p-1" role="group" aria-label={t("monitoringRange")}>
+      {monitoringWindows.map((item, index) => (
+        <button
+          key={item.range}
+          type="button"
+          aria-pressed={activeIndex === index}
+          className={cn(
+            "h-8 rounded-md px-3 font-mono text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/50",
+            activeIndex === index ? "bg-slate-700 text-white" : "text-slate-500 hover:bg-slate-900 hover:text-slate-200"
+          )}
+          onClick={() => onChange(index)}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -367,31 +399,6 @@ function AttentionPanel({ dataConnected, failedTargets, resourceAlerts, rows }: 
   );
 }
 
-function DiskCapacityPanel({ series }: { series?: MetricSeries }) {
-  const { t } = useI18n();
-  const value = series?.currentValue;
-  const percent = Math.max(0, Math.min(100, value ?? 0));
-  const severity = value == null ? "unknown" : percent >= 95 ? "critical" : percent >= 85 ? "warning" : "normal";
-  return (
-    <div className="rounded-lg border border-panel-line bg-panel-card p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <HardDrive aria-hidden="true" className="size-4 text-panel-green" />
-          <h3 className="text-sm font-semibold text-slate-100">{t("metricTitleNodeDisk")}</h3>
-        </div>
-        <span className={cn("font-mono text-2xl font-semibold", severity === "critical" ? "text-red-300" : severity === "warning" ? "text-panel-gold" : "text-slate-100")}>{value == null ? "—" : `${value.toFixed(1)}%`}</span>
-      </div>
-      <div className="mt-8 h-2 overflow-hidden rounded-full bg-slate-800">
-        <div className={cn("h-full rounded-full", severity === "critical" ? "bg-red-400" : severity === "warning" ? "bg-panel-gold" : "bg-panel-green")} style={{ width: `${percent}%` }} />
-      </div>
-      <div className="mt-3 flex justify-between text-xs text-slate-500">
-        <span>{t("monitoringDiskUsed")}</span>
-        <span>{severity === "unknown" ? t("unavailable") : severity === "normal" ? t("healthHealthy") : severity === "critical" ? t("healthCritical") : t("healthWarning")}</span>
-      </div>
-    </div>
-  );
-}
-
 function AttentionServerRow({ row }: { row: ServerLoadRow }) {
   const { t } = useI18n();
   return (
@@ -419,20 +426,6 @@ function TechBadge({ label, value }: { label: string; value: string }) {
       <span className="text-slate-500">{label}</span>
       <span className="font-mono font-medium text-slate-200">{value}</span>
     </span>
-  );
-}
-
-function MetricGroupHeader({ description, meta, title }: { description: string; meta?: ReactNode; title: string }) {
-  return (
-    <div className="rounded-lg border border-panel-line bg-slate-950/35 px-4 py-3 md:col-span-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-100">{title}</h2>
-          <p className="mt-1 text-xs text-slate-500">{description}</p>
-        </div>
-        {meta ? <div className="flex flex-wrap gap-2">{meta}</div> : null}
-      </div>
-    </div>
   );
 }
 
