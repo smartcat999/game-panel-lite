@@ -105,31 +105,37 @@ export function MonitoringChartCard({ color = "#59d46f", compact = false, icon, 
   const current = series?.currentValue;
   const helperText = emptyText(series?.emptyReason, t);
   return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            {icon ? <span className="text-panel-green">{icon}</span> : null}
-            <h3 className="truncate text-sm font-semibold text-slate-100">{metricTitle(series, t)}</h3>
-          </div>
-          {helperText ? <p className="mt-1 text-xs text-slate-500">{helperText}</p> : null}
+    <Card className={cn("overflow-hidden", compact ? "p-0" : "p-4")}>
+      <div className={cn(compact && "px-4 pt-4")}>
+        <div className="flex items-center gap-2 text-slate-400">
+          {icon ? <span style={{ color }}>{icon}</span> : null}
+          <h3 className="truncate text-xs font-medium uppercase tracking-wide">{metricTitle(series, t)}</h3>
         </div>
-        <p className="shrink-0 font-mono text-2xl font-semibold text-slate-100">{current == null ? "—" : formatValue(current, unit)}</p>
+        <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
+          <p className={cn("min-w-0 truncate font-mono font-semibold leading-none text-slate-100", compact ? "text-2xl" : "text-3xl")}>
+            {current == null ? "—" : formatValue(current, unit)}
+          </p>
+          <div className="flex shrink-0 gap-4 text-right text-[11px]">
+            <MetricFoot inline label={t("metricAvg")} value={series?.avg == null ? "—" : formatValue(series.avg, unit)} />
+            <MetricFoot inline label={t("metricPeak")} value={series?.max == null ? "—" : formatValue(series.max, unit)} />
+          </div>
+        </div>
+        {helperText ? <p className="mt-1 text-xs text-slate-500">{helperText}</p> : null}
       </div>
-      <div className={cn("mt-4 rounded-md border border-panel-line bg-slate-950/35 p-2", compact ? "h-44" : "h-56")}>
-        {points.length > 0 ? <MetricChart color={color} points={points} range={range} series={series} /> : <EmptyMetric reason={series?.emptyReason} />}
+      <div className={cn("mt-3", compact ? "h-24 px-1" : "h-52")}>
+        {points.length > 0 ? <MetricChart color={color} compact={compact} points={points} range={range} series={series} /> : <EmptyMetric reason={series?.emptyReason} />}
       </div>
-      <div className={cn("mt-3 grid grid-cols-4 gap-3 text-xs", compact && "hidden 2xl:grid")}>
-        <MetricFoot label={t("metricAvg")} value={series?.avg == null ? "—" : formatValue(series.avg, unit)} />
-        <MetricFoot label={t("metricPeak")} value={series?.max == null ? "—" : formatValue(series.max, unit)} />
-        <MetricFoot label={t("metricSamples")} value={String(points.length)} />
-        <MetricFoot label={t("metricLimit")} value={series?.threshold == null ? "—" : formatValue(series.threshold, unit)} />
+      <div className={cn("flex items-center justify-between border-t border-panel-line text-[11px] text-slate-500", compact ? "px-4 py-2" : "mt-3 px-1 pt-3")}>
+        <span>{t("metricSamples")} <span className="font-mono text-slate-300">{points.length}</span></span>
+        {series?.threshold == null ? null : (
+          <span>{t("metricLimit")} <span className="font-mono text-slate-300">{formatValue(series.threshold, unit)}</span></span>
+        )}
       </div>
     </Card>
   );
 }
 
-function MetricChart({ color, points, range, series }: { color: string; points: MetricPoint[]; range?: MonitoringRange; series?: MetricSeries }) {
+function MetricChart({ color, compact, points, range, series }: { color: string; compact: boolean; points: MetricPoint[]; range?: MonitoringRange; series?: MetricSeries }) {
   const unit = series?.unit ?? "";
   const type = series?.chartType === "bar" ? "bar" : "line";
   const data = points.map((point) => [point.timestamp, Number(point.value.toFixed(3))]);
@@ -138,7 +144,7 @@ function MetricChart({ color, points, range, series }: { color: string; points: 
   const option: EChartsOption = {
     backgroundColor: "transparent",
     animation: false,
-    grid: { left: 48, right: 16, top: 18, bottom: 30 },
+    grid: compact ? { left: 8, right: 8, top: 8, bottom: 4 } : { left: 48, right: 16, top: 18, bottom: 30 },
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "cross", lineStyle: { color: "#64748b", width: 1 } },
@@ -151,17 +157,19 @@ function MetricChart({ color, points, range, series }: { color: string; points: 
       type: "time",
       min: xAxisRange?.min,
       max: xAxisRange?.max,
-      axisLabel: { color: "#74839a", hideOverlap: true },
-      axisLine: { lineStyle: { color: "#2b3544" } },
+      axisLabel: { show: !compact, color: "#74839a", hideOverlap: true },
+      axisLine: { show: !compact, lineStyle: { color: "#2b3544" } },
       axisTick: { show: false },
-      splitLine: { show: true, lineStyle: { color: "rgba(100,116,139,0.14)" } }
+      splitLine: { show: !compact, lineStyle: { color: "rgba(100,116,139,0.14)" } }
     },
     yAxis: {
       type: "value",
       min: 0,
       max: yAxisMax,
-      axisLabel: { color: "#74839a", formatter: (value: number) => formatValue(value, unit) },
-      splitLine: { lineStyle: { color: "rgba(100,116,139,0.18)" } }
+      axisLabel: { show: !compact, color: "#74839a", formatter: (value: number) => formatValue(value, unit) },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: compact ? "rgba(100,116,139,0.12)" : "rgba(100,116,139,0.18)" } }
     },
     series: [
       {
@@ -171,7 +179,7 @@ function MetricChart({ color, points, range, series }: { color: string; points: 
         symbol: "circle",
         symbolSize: 5,
         showSymbol: false,
-        lineStyle: { color, width: 2 },
+        lineStyle: { color, width: compact ? 1.75 : 2 },
         itemStyle: { color },
         areaStyle: series?.chartType === "area" ? { color: `${color}24` } : undefined,
         markLine: series?.threshold == null ? undefined : {
@@ -211,11 +219,11 @@ function EmptyMetric({ reason }: { reason?: string }) {
   return <div className="flex h-full items-center justify-center text-sm text-slate-500">{emptyText(reason, t) ?? t("monitoringNoSamples")}</div>;
 }
 
-function MetricFoot({ label, value }: { label: string; value: string }) {
+function MetricFoot({ inline = false, label, value }: { inline?: boolean; label: string; value: string }) {
   return (
-    <div>
+    <div className={cn(inline && "min-w-0")}>
       <p className="text-slate-600">{label}</p>
-      <p className="mt-1 truncate font-mono text-slate-300">{value}</p>
+      <p className={cn("truncate font-mono text-slate-300", inline ? "mt-0.5" : "mt-1")}>{value}</p>
     </div>
   );
 }
@@ -738,6 +746,7 @@ function formatValue(value: number, unit: string) {
   if (unit === "MB") return `${rounded} MB`;
   if (unit === "ms") return `${rounded} ms`;
   if (unit === "s") return formatDuration(Number(value.toFixed(0)));
+  if (unit === "connections") return String(rounded);
   return unit ? `${rounded} ${unit}` : String(rounded);
 }
 
