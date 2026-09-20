@@ -746,6 +746,7 @@ function formatValue(value: number, unit: string) {
   if (unit === "MB") return `${rounded} MB`;
   if (unit === "ms") return `${rounded} ms`;
   if (unit === "s") return formatDuration(Number(value.toFixed(0)));
+  if (unit === "connections") return String(rounded);
   return unit ? `${rounded} ${unit}` : String(rounded);
 }
 
