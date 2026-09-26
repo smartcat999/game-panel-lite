@@ -2267,9 +2267,15 @@ function ModsTab({
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-white">{t("detailModActions")}</h2>
-        <p className="mt-1 text-sm text-slate-400">{t("serverModsCombinedHint")}</p>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-white">{t("detailModActions")}</h2>
+          <p className="mt-1 text-sm text-slate-400">{t("serverModsCombinedHint")}</p>
+        </div>
+        <Button className="w-full sm:w-auto" onClick={() => setInstallerOpen(true)} disabled={blocked}>
+          <Package aria-hidden="true" />
+          {t("installMods")}
+        </Button>
       </div>
       <div className="space-y-4">
         {libraryError ? <p className="text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
@@ -2281,13 +2287,7 @@ function ModsTab({
 
         {activeSection === "installed" ? (
           <div aria-labelledby={supportsModConfigs ? "installed-mods-tab" : undefined} id="installed-mods-panel" role={supportsModConfigs ? "tabpanel" : undefined}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              {sectionTabs}
-              <Button onClick={() => setInstallerOpen(true)} disabled={blocked}>
-                <Package aria-hidden="true" />
-                {t("installMods")}
-              </Button>
-            </div>
+            {sectionTabs ? <div className="mb-4">{sectionTabs}</div> : null}
             <div className="rounded-lg border border-panel-line bg-slate-950/35">
               {isError ? <p className="px-4 py-4 text-sm text-panel-gold">{t("modsApiUnavailable")}</p> : null}
               {!isError && isLoading ? <p className="px-4 py-4 text-sm text-slate-400">{t("loading")}</p> : null}
