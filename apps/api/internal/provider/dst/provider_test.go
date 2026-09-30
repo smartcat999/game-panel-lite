@@ -500,3 +500,65 @@ func TestGameModesApplyMatchingDeathRules(t *testing.T) {
 		})
 	}
 }
+
+func TestDSTBackupSubtree(t *testing.T) {
+	provider := NewProvider()
+	subtree := provider.BackupSubtree(domain.GameServer{})
+	if subtree != "dst" {
+		t.Fatalf("expected BackupSubtree to return 'dst', got %q", subtree)
+	}
+}
+
+func TestDSTPlayerManagement(t *testing.T) {
+	provider := NewProvider()
+
+	if provider.PlayerListCommand(domain.GameServer{}) != "c_listallplayers()" {
+		t.Fatalf("expected c_listallplayers(), got %q", provider.PlayerListCommand(domain.GameServer{}))
+	}
+
+	rawLog := `
+[00:01:23]: [Join Announcement] Wilson joined the game.
+[00:01:25]: [1] (KU_12345678) Wilson <wilson>
+[00:01:30]: [2] (KU_87654321) Wendy <wendy>
+[00:01:35]: Client authenticated: (KU_abcdefgh) Wolfgang
+`
+	players := provider.ParsePlayerListOutput(strings.Split(rawLog, "\n"))
+	if len(players) != 3 {
+		t.Fatalf("expected 3 players, got %d: %+v", len(players), players)
+	}
+
+	if players[0].UserID != "KU_12345678" || players[0].Name != "Wilson" || players[0].Character != "wilson" {
+		t.Fatalf("unexpected player 0: %+v", players[0])
+	}
+	if players[1].UserID != "KU_87654321" || players[1].Name != "Wendy" || players[1].Character != "wendy" {
+		t.Fatalf("unexpected player 1: %+v", players[1])
+	}
+	if players[2].UserID != "KU_abcdefgh" || players[2].Name != "Wolfgang" {
+		t.Fatalf("unexpected player 2: %+v", players[2])
+	}
+
+	kickCmd := provider.KickCommand("KU_12345678")
+	if kickCmd != `TheNet:Kick("KU_12345678")` {
+		t.Fatalf("unexpected kick command: %s", kickCmd)
+	}
+
+	banCmd := provider.BanCommand("KU_12345678")
+	if banCmd != `TheNet:Ban("KU_12345678")` {
+		t.Fatalf("unexpected ban command: %s", banCmd)
+	}
+
+	nameKick := provider.KickCommand("Wilson")
+	if !strings.Contains(nameKick, "TheNet:GetClientTable()") {
+		t.Fatalf("unexpected name kick command: %s", nameKick)
+	}
+
+	event, ok := provider.ParsePlayerLogEvent("[Join Announcement] Wilson joined the game.")
+	if !ok || event != domain.PlayerJoined {
+		t.Fatalf("expected join event, got %v (%t)", event, ok)
+	}
+
+	event, ok = provider.ParsePlayerLogEvent("[Leave Announcement] Wendy left.")
+	if !ok || event != domain.PlayerLeft {
+		t.Fatalf("expected leave event, got %v (%t)", event, ok)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -95,15 +96,92 @@ func (Provider) Description() string {
 func (Provider) Capabilities() domain.ProviderCapabilities {
 	return domain.ProviderCapabilities{
 		ConsoleCommands:   true,
-		PlayerList:        false,
-		KickPlayer:        false,
-		BanPlayer:         false,
+		PlayerList:        true,
+		KickPlayer:        true,
+		BanPlayer:         true,
 		SaveSnapshots:     true,
 		Backups:           true,
 		Mods:              true,
 		Versions:          true,
 		WorldRegeneration: true,
 	}
+}
+
+func (Provider) BackupSubtree(domain.GameServer) string {
+	return "dst"
+}
+
+func (Provider) PlayerListCommand(domain.GameServer) string {
+	return "c_listallplayers()"
+}
+
+var (
+	dstPlayerRowRegex  = regexp.MustCompile(`\[\d+\]\s*\((KU_[a-zA-Z0-9_-]+)\)\s*([^<]+?)(?:\s*<([a-zA-Z0-9_-]+)>)?\s*$`)
+	dstClientAuthRegex = regexp.MustCompile(`Client authenticated:\s*\((KU_[a-zA-Z0-9_-]+)\)\s*(.+)`)
+)
+
+func (Provider) ParsePlayerListOutput(lines []string) []domain.Player {
+	players := make([]domain.Player, 0)
+	seen := make(map[string]bool)
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		if match := dstPlayerRowRegex.FindStringSubmatch(line); len(match) > 1 {
+			userId := match[1]
+			name := strings.TrimSpace(match[2])
+			character := ""
+			if len(match) > 3 {
+				character = strings.TrimSpace(match[3])
+			}
+			if !seen[userId] {
+				seen[userId] = true
+				players = append(players, domain.Player{
+					Name:      name,
+					UserID:    userId,
+					Character: character,
+				})
+			}
+		} else if match := dstClientAuthRegex.FindStringSubmatch(line); len(match) > 2 {
+			userId := match[1]
+			name := strings.TrimSpace(match[2])
+			if !seen[userId] {
+				seen[userId] = true
+				players = append(players, domain.Player{
+					Name:   name,
+					UserID: userId,
+				})
+			}
+		}
+	}
+	return players
+}
+
+func (Provider) KickCommand(player string) string {
+	player = strings.TrimSpace(player)
+	if strings.HasPrefix(player, "KU_") {
+		return fmt.Sprintf(`TheNet:Kick(%q)`, player)
+	}
+	return fmt.Sprintf(`for _, v in ipairs(TheNet:GetClientTable()) do if v.name == %q or v.userid == %q then TheNet:Kick(v.userid) end end`, player, player)
+}
+
+func (Provider) BanCommand(player string) string {
+	player = strings.TrimSpace(player)
+	if strings.HasPrefix(player, "KU_") {
+		return fmt.Sprintf(`TheNet:Ban(%q)`, player)
+	}
+	return fmt.Sprintf(`for _, v in ipairs(TheNet:GetClientTable()) do if v.name == %q or v.userid == %q then TheNet:Ban(v.userid) end end`, player, player)
+}
+
+func (Provider) ParsePlayerLogEvent(line string) (domain.PlayerLogEvent, bool) {
+	if strings.Contains(line, "[Join Announcement]") || strings.Contains(line, "Client authenticated:") {
+		return domain.PlayerJoined, true
+	}
+	if strings.Contains(line, "[Leave Announcement]") {
+		return domain.PlayerLeft, true
+	}
+	return "", false
 }
 
 func (Provider) ConsoleCommand(server domain.GameServer, command, target string) (string, error) {

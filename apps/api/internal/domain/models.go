@@ -19,7 +19,10 @@ type WorldRegenerationJobStatus string
 type WorldRegenerationJobStage string
 
 type Player struct {
-	Name string `json:"name,omitempty"`
+	Name      string `json:"name,omitempty"`
+	UserID    string `json:"userId,omitempty"`
+	Character string `json:"character,omitempty"`
+	IsHost    bool   `json:"isHost,omitempty"`
 }
 
 type PlayerLogEvent string

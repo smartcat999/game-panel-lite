@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -59,7 +60,7 @@ func (h *Handler) createBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, dataDir)
+	path, size, err := h.createInstanceBackupArchive(r.Context(), server, dataDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -212,7 +213,7 @@ func (h *Handler) createServerSaveSnapshot(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).Create(server.ID, dataDir)
+	path, size, err := h.createInstanceBackupArchive(r.Context(), server, dataDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -396,4 +397,18 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	h.recordActivity(r.Context(), item.InstanceID, "backup.deleted", fmt.Sprintf("Deleted backup %s", item.FileName), activityBackupPayload(item, nil))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) createInstanceBackupArchive(ctx context.Context, server domain.GameServer, dataDir string) (string, int64, error) {
+	svc := backupsvc.NewService(h.cfg.DataDir)
+	if h.provider != nil {
+		if gameProvider, ok := h.provider.Get(server.ProviderKey); ok {
+			if subtreeProvider, ok := gameProvider.(provider.BackupSubtreeProvider); ok {
+				if subtree := subtreeProvider.BackupSubtree(server); strings.TrimSpace(subtree) != "" {
+					return svc.CreateSubtree(server.ID, dataDir, subtree)
+				}
+			}
+		}
+	}
+	return svc.Create(server.ID, dataDir)
 }
