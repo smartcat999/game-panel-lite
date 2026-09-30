@@ -116,13 +116,15 @@ func (Provider) PlayerListCommand(domain.GameServer) string {
 }
 
 var (
-	dstPlayerRowRegex  = regexp.MustCompile(`\[\d+\]\s*\((KU_[a-zA-Z0-9_-]+)\)\s*([^<]+?)(?:\s*<([a-zA-Z0-9_-]+)>)?\s*$`)
-	dstClientAuthRegex = regexp.MustCompile(`Client authenticated:\s*\((KU_[a-zA-Z0-9_-]+)\)\s*(.+)`)
+	dstPlayerRowRegex    = regexp.MustCompile(`\[\d+\]\s*\((KU_[a-zA-Z0-9_-]+)\)\s*([^<]+?)(?:\s*<([a-zA-Z0-9_-]+)>)?\s*$`)
+	dstClientAuthRegex   = regexp.MustCompile(`Client authenticated:\s*\((KU_[a-zA-Z0-9_-]+)\)\s*(.+)`)
+	dstClientLeaveRegex  = regexp.MustCompile(`Client disconnected:\s*\((KU_[a-zA-Z0-9_-]+)\)`)
+	dstAnnouncementLeave = regexp.MustCompile(`\[Leave Announcement\]\s*([^.]+?)\s*(?:left|left the game)`)
 )
 
 func (Provider) ParsePlayerListOutput(lines []string) []domain.Player {
 	players := make([]domain.Player, 0)
-	seen := make(map[string]bool)
+	seen := make(map[string]int)
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
 		if line == "" {
@@ -135,8 +137,13 @@ func (Provider) ParsePlayerListOutput(lines []string) []domain.Player {
 			if len(match) > 3 {
 				character = strings.TrimSpace(match[3])
 			}
-			if !seen[userId] {
-				seen[userId] = true
+			if idx, ok := seen[userId]; ok {
+				players[idx].Name = name
+				if character != "" {
+					players[idx].Character = character
+				}
+			} else {
+				seen[userId] = len(players)
 				players = append(players, domain.Player{
 					Name:      name,
 					UserID:    userId,
@@ -146,12 +153,36 @@ func (Provider) ParsePlayerListOutput(lines []string) []domain.Player {
 		} else if match := dstClientAuthRegex.FindStringSubmatch(line); len(match) > 2 {
 			userId := match[1]
 			name := strings.TrimSpace(match[2])
-			if !seen[userId] {
-				seen[userId] = true
+			if idx, ok := seen[userId]; ok {
+				players[idx].Name = name
+			} else {
+				seen[userId] = len(players)
 				players = append(players, domain.Player{
 					Name:   name,
 					UserID: userId,
 				})
+			}
+		} else if match := dstClientLeaveRegex.FindStringSubmatch(line); len(match) > 1 {
+			userId := match[1]
+			if idx, ok := seen[userId]; ok {
+				players = append(players[:idx], players[idx+1:]...)
+				delete(seen, userId)
+				for i := idx; i < len(players); i++ {
+					seen[players[i].UserID] = i
+				}
+			}
+		} else if match := dstAnnouncementLeave.FindStringSubmatch(line); len(match) > 1 {
+			leaveName := strings.TrimSpace(match[1])
+			for i := 0; i < len(players); i++ {
+				if players[i].Name == leaveName {
+					uid := players[i].UserID
+					players = append(players[:i], players[i+1:]...)
+					delete(seen, uid)
+					for j := i; j < len(players); j++ {
+						seen[players[j].UserID] = j
+					}
+					break
+				}
 			}
 		}
 	}

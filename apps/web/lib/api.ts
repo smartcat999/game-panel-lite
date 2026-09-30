@@ -1547,8 +1547,9 @@ export async function restoreServerSave(serverId: string, saveId: string): Promi
   await readPayload<{ status: string }>(response, "Unable to restore save snapshot");
 }
 
-export async function listServerPlayers(id: string): Promise<ServerPlayerListResponse> {
-  const response = await apiFetch(`${API_BASE}/api/servers/${id}/players`, { cache: "no-store" });
+export async function listServerPlayers(id: string, force?: boolean): Promise<ServerPlayerListResponse> {
+  const url = force ? `${API_BASE}/api/servers/${id}/players?force=true` : `${API_BASE}/api/servers/${id}/players`;
+  const response = await apiFetch(url, { cache: "no-store" });
   return readPayload<ServerPlayerListResponse>(response, "Unable to load players");
 }
 

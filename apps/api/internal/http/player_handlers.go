@@ -47,15 +47,35 @@ func (h *Handler) listServerPlayers(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": []domain.Player{}})
 		return
 	}
-	lines, err := h.recentServerLogLines(r.Context(), server)
-	if err != nil {
-		h.logger.Warn("failed to read player log output", "server", server.ID, "error", err)
-		writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": []domain.Player{}})
-		return
+
+	force := r.URL.Query().Get("force") == "true"
+	if !force && h.playerSyncer != nil {
+		if cached, found := h.playerSyncer.GetCachedPlayers(server.ID); found {
+			writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": cached})
+			return
+		}
 	}
-	players := playerProvider.ParsePlayerListOutput(lines)
+
+	var players []domain.Player
+	if h.playerSyncer != nil {
+		if p, err := h.playerSyncer.SyncServer(r.Context(), server); err == nil {
+			players = p
+		}
+	}
 	if players == nil {
-		players = []domain.Player{}
+		lines, err := h.recentServerLogLines(r.Context(), server)
+		if err != nil {
+			h.logger.Warn("failed to read player log output", "server", server.ID, "error", err)
+			writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": []domain.Player{}})
+			return
+		}
+		players = playerProvider.ParsePlayerListOutput(lines)
+		if players == nil {
+			players = []domain.Player{}
+		}
+		if h.playerSyncer != nil {
+			h.playerSyncer.SetCachedPlayers(server.ID, players)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"supported": true, "players": players})
 }
@@ -110,6 +130,9 @@ func (h *Handler) kickServerPlayer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
+	if h.playerSyncer != nil {
+		h.playerSyncer.RemovePlayer(server.ID, player)
+	}
 	h.recordActivity(r.Context(), server.ID, "player.kicked", fmt.Sprintf("Kicked player %s from %s", player, server.Name), activityPlayerPayload(server, player))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "kicked", "player": player})
 }
@@ -143,6 +166,9 @@ func (h *Handler) banServerPlayer(w http.ResponseWriter, r *http.Request) {
 	if err := h.runtime.SendCommandWorkload(r.Context(), server.Status.RuntimeID, command); err != nil {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
+	}
+	if h.playerSyncer != nil {
+		h.playerSyncer.RemovePlayer(server.ID, player)
 	}
 	h.recordActivity(r.Context(), server.ID, "player.banned", fmt.Sprintf("Banned player %s from %s", player, server.Name), activityPlayerPayload(server, player))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "banned", "player": player})

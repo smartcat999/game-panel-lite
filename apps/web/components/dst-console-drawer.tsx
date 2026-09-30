@@ -41,18 +41,32 @@ type CommandRecord = {
 
 const KNOWN_DST_CHARACTERS = new Set([
   "wilson",
-  "wendy",
-  "wolfgang",
-  "wx78",
   "willow",
-  "woodie",
+  "wolfgang",
+  "wendy",
+  "wx78",
   "wickerbottom",
-  "maxwell"
+  "woodie",
+  "wes",
+  "maxwell",
+  "waxwell",
+  "wigfrid",
+  "webber",
+  "warly",
+  "wormwood",
+  "winona",
+  "wortox",
+  "wurt",
+  "walter",
+  "wanda"
 ]);
 
 function getCharacterImage(character?: string): string | null {
   if (!character) return null;
   const normalized = character.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (normalized === "waxwell") {
+    return "/images/dst/characters/maxwell.png";
+  }
   if (KNOWN_DST_CHARACTERS.has(normalized)) {
     return `/images/dst/characters/${normalized}.png`;
   }
@@ -206,6 +220,20 @@ export function DSTConsoleDrawer({
     return playersQuery.data?.players ?? [];
   }, [playersQuery.data?.players]);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleManualRefresh = async () => {
+    if (!running) return;
+    setIsRefreshing(true);
+    try {
+      const res = await listServerPlayers(server.id, true);
+      queryClient.setQueryData(["servers", server.id, "players"], res);
+    } catch {
+      // ignore
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const filteredPlayers = useMemo(() => {
     if (!playerSearch.trim()) return rawPlayers;
     const q = playerSearch.trim().toLowerCase();
@@ -350,11 +378,11 @@ export function DSTConsoleDrawer({
   const lastRecord = records[0];
 
   const quickSnippets = [
-    { label: "保存世界", cmd: "c_save()" },
-    { label: "统计对象", cmd: "c_countprefabs('world')" },
-    { label: "管理员模式", cmd: "c_supergodmode()" },
-    { label: "玩家列表", cmd: "c_listallplayers()" },
-    { label: "客户端表", cmd: "TheNet:GetClientTable()" }
+    { label: isZh ? "统计对象" : "Count Objects", cmd: "c_countprefabs('world')" },
+    { label: isZh ? "管理员模式" : "Super Godmode", cmd: "c_supergodmode()" },
+    { label: isZh ? "重载世界" : "Reset World", cmd: "c_reset()" },
+    { label: isZh ? "客户端网络表" : "Client Table", cmd: "TheNet:GetClientTable()" },
+    { label: isZh ? "全服公告模板" : "System Message", cmd: 'TheNet:SystemMessage("Server Announcement")' }
   ];
 
   return (
@@ -493,10 +521,11 @@ export function DSTConsoleDrawer({
               <button
                 type="button"
                 title={copy.refresh}
-                onClick={() => playersQuery.refetch()}
-                className="size-6 flex items-center justify-center rounded border border-slate-800 bg-slate-950 text-slate-400 hover:text-white transition text-xs"
+                disabled={isRefreshing || playersQuery.isFetching}
+                onClick={handleManualRefresh}
+                className="size-6 flex items-center justify-center rounded border border-slate-800 bg-slate-950 text-slate-400 hover:text-white transition text-xs disabled:opacity-50"
               >
-                <RefreshCw className={cn("size-3", playersQuery.isFetching && "animate-spin")} />
+                <RefreshCw className={cn("size-3", (playersQuery.isFetching || isRefreshing) && "animate-spin")} />
               </button>
               <button
                 type="button"

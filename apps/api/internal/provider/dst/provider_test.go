@@ -561,4 +561,11 @@ func TestDSTPlayerManagement(t *testing.T) {
 	if !ok || event != domain.PlayerLeft {
 		t.Fatalf("expected leave event, got %v (%t)", event, ok)
 	}
+
+	// Test leave and disconnect removal in ParsePlayerListOutput
+	logWithLeaves := rawLog + "\n[00:02:00]: [Leave Announcement] Wendy left.\n[00:02:10]: Client disconnected: (KU_abcdefgh)\n"
+	remaining := provider.ParsePlayerListOutput(strings.Split(logWithLeaves, "\n"))
+	if len(remaining) != 1 || remaining[0].UserID != "KU_12345678" {
+		t.Fatalf("expected only Wilson remaining after Wendy and Wolfgang left, got %+v", remaining)
+	}
 }

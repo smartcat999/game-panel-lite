@@ -16,6 +16,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/metrics"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/monitoring"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/observability"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/player"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -36,6 +37,7 @@ type Handler struct {
 	observability  *observability.CachedService
 	systemUpdate   *systemupdate.Service
 	gateway        *gateway.StreamGateway
+	playerSyncer   *player.Syncer
 
 	agentLogsMu   sync.RWMutex
 	agentLogs     map[string][]string
@@ -94,6 +96,13 @@ func NewHandler(
 	handler.observability = observability.NewCachedService(observability.NewService(store, adapter), handler.runtimeStatusAvailable, 5*time.Second)
 	handler.systemUpdate = systemupdate.New(cfg.ReleaseManifestURL, cfg.UpdaterURL, cfg.UpdaterToken, 8*time.Second)
 	return handler
+}
+
+func (h *Handler) WithPlayerSyncer(syncer *player.Syncer) *Handler {
+	if h != nil {
+		h.playerSyncer = syncer
+	}
+	return h
 }
 
 func (h *Handler) Start(ctx context.Context) {
