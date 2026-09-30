@@ -201,4 +201,3 @@ func TestSyncerPlayerCache(t *testing.T) {
 		t.Fatal("expected cache to be cleared")
 	}
 }
-

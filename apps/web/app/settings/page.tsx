@@ -30,10 +30,10 @@ import { Users, Server } from "lucide-react";
 import { usePermissions } from "@/lib/permissions";
 
 type ImageRegion = "global" | "cn";
-type SettingsTab = "basic" | "team" | "nodes" | "access" | "maintenance";
+type SettingsTab = "basic" | "team" | "nodes" | "access" | "maintenance" | "updates";
 
 function isSettingsTab(value: string): value is SettingsTab {
-  return ["basic", "team", "nodes", "access", "maintenance"].includes(value);
+  return ["basic", "team", "nodes", "access", "maintenance", "updates"].includes(value);
 }
 
 export default function SettingsPage() {
@@ -50,7 +50,8 @@ export default function SettingsPage() {
     { key: "team", label: t("settingsTabTeam"), icon: <Users className="size-4" /> },
     { key: "nodes", label: t("settingsTabNodes"), icon: <Server className="size-4" /> },
     { key: "access", label: t("settingsTabAccess"), icon: <LockKeyhole className="size-4" /> },
-    { key: "maintenance", label: t("settingsTabMaintenance"), icon: <Wrench className="size-4" /> }
+    { key: "maintenance", label: t("settingsTabMaintenance"), icon: <Wrench className="size-4" /> },
+    { key: "updates", label: t("settingsTabUpdates"), icon: <Download className="size-4" /> }
   ];
 
   useEffect(() => {
@@ -227,7 +228,8 @@ export default function SettingsPage() {
         </div>
       ) : null}
       {activeTab === "access" ? <HTTPSSettings onNotice={setNotice} /> : null}
-      {activeTab === "maintenance" ? <><DeploymentMaintenance onNotice={setNotice} /><PanelUpdateCard onNotice={setNotice} /></> : null}
+      {activeTab === "maintenance" ? <DeploymentMaintenance onNotice={setNotice} /> : null}
+      {activeTab === "updates" ? <PanelUpdateCard onNotice={setNotice} /> : null}
     </>
   );
 }
@@ -521,7 +523,7 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
 
   return (
     <>
-      <Card className="mt-5 overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-panel-line px-5 py-4 sm:flex-row sm:items-start sm:justify-between md:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

@@ -95,6 +95,10 @@ func NewHandler(
 	}
 	handler.observability = observability.NewCachedService(observability.NewService(store, adapter), handler.runtimeStatusAvailable, 5*time.Second)
 	handler.systemUpdate = systemupdate.New(cfg.ReleaseManifestURL, cfg.UpdaterURL, cfg.UpdaterToken, 8*time.Second)
+	if cfg.ReleaseManifestFallbackURL != "" {
+		handler.systemUpdate.SetFallbackURLs(cfg.ReleaseManifestFallbackURL)
+	}
+	handler.restoreCachedSystemUpdate(context.Background())
 	return handler
 }
 

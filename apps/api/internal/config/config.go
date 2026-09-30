@@ -7,22 +7,23 @@ import (
 )
 
 type Config struct {
-	Host                   string
-	Port                   string
-	DataDir                string
-	DBPath                 string
-	DockerHost             string
-	PublicHost             string
-	ProviderCatalogPath    string
-	ImageRegion            string
-	ImageRegistry          string
-	ImageTag               string
-	PrometheusURL          string
-	PrometheusQueryTimeout time.Duration
-	ReleaseManifestURL     string
-	SystemUpdateInterval   time.Duration
-	UpdaterURL             string
-	UpdaterToken           string
+	Host                       string
+	Port                       string
+	DataDir                    string
+	DBPath                     string
+	DockerHost                 string
+	PublicHost                 string
+	ProviderCatalogPath        string
+	ImageRegion                string
+	ImageRegistry              string
+	ImageTag                   string
+	PrometheusURL              string
+	PrometheusQueryTimeout     time.Duration
+	ReleaseManifestURL         string
+	ReleaseManifestFallbackURL string
+	SystemUpdateInterval       time.Duration
+	UpdaterURL                 string
+	UpdaterToken               string
 }
 
 func Load() Config {
@@ -43,22 +44,23 @@ func Load() Config {
 		}
 	}
 	return Config{
-		Host:                   value("GAMEPANEL_HOST", "0.0.0.0"),
-		Port:                   value("GAMEPANEL_PORT", "4000"),
-		DataDir:                value("GAMEPANEL_DATA_DIR", "./data"),
-		DBPath:                 value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
-		DockerHost:             dockerHost,
-		PublicHost:             value("GAMEPANEL_PUBLIC_HOST", ""),
-		ProviderCatalogPath:    value("GAMEPANEL_PROVIDER_CATALOG_PATH", "./config/providers.json"),
-		ImageRegion:            value("GAMEPANEL_IMAGE_REGION", "global"),
-		ImageRegistry:          value("GAMEPANEL_IMAGE_REGISTRY", "smartcat99999"),
-		ImageTag:               value("GAMEPANEL_IMAGE_TAG", "v0.2.16"),
-		PrometheusURL:          value("GAMEPANEL_PROMETHEUS_URL", ""),
-		PrometheusQueryTimeout: queryTimeout,
-		ReleaseManifestURL:     value("GAMEPANEL_RELEASE_MANIFEST_URL", "https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json"),
-		SystemUpdateInterval:   updateInterval,
-		UpdaterURL:             value("GAMEPANEL_UPDATER_URL", ""),
-		UpdaterToken:           value("GAMEPANEL_UPDATER_TOKEN", ""),
+		Host:                       value("GAMEPANEL_HOST", "0.0.0.0"),
+		Port:                       value("GAMEPANEL_PORT", "4000"),
+		DataDir:                    value("GAMEPANEL_DATA_DIR", "./data"),
+		DBPath:                     value("GAMEPANEL_DB_PATH", "./data/gamepanel.db"),
+		DockerHost:                 dockerHost,
+		PublicHost:                 value("GAMEPANEL_PUBLIC_HOST", ""),
+		ProviderCatalogPath:        value("GAMEPANEL_PROVIDER_CATALOG_PATH", "./config/providers.json"),
+		ImageRegion:                value("GAMEPANEL_IMAGE_REGION", "global"),
+		ImageRegistry:              value("GAMEPANEL_IMAGE_REGISTRY", "smartcat99999"),
+		ImageTag:                   value("GAMEPANEL_IMAGE_TAG", "v0.2.17"),
+		PrometheusURL:              value("GAMEPANEL_PROMETHEUS_URL", ""),
+		PrometheusQueryTimeout:     queryTimeout,
+		ReleaseManifestURL:         value("GAMEPANEL_RELEASE_MANIFEST_URL", "https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json"),
+		ReleaseManifestFallbackURL: value("GAMEPANEL_RELEASE_MANIFEST_FALLBACK_URL", "https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@main/release/manifest.json"),
+		SystemUpdateInterval:       updateInterval,
+		UpdaterURL:                 value("GAMEPANEL_UPDATER_URL", ""),
+		UpdaterToken:               value("GAMEPANEL_UPDATER_TOKEN", ""),
 	}
 }
 

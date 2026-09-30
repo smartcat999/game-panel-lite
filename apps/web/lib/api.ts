@@ -52,6 +52,11 @@ export async function getApiHealth(): Promise<{ status: string }> {
   return (await response.json()) as { status: string };
 }
 
+export async function getSystemVersion(): Promise<{ version: string; commit?: string; buildDate?: string }> {
+  const response = await apiFetch(`${API_BASE}/api/version`, { cache: "no-store" });
+  return readPayload<{ version: string; commit?: string; buildDate?: string }>(response, "Unable to load system version");
+}
+
 export async function getAuthBootstrap(): Promise<AuthBootstrap> {
   const response = await apiFetch(`${API_BASE}/api/auth/bootstrap`, { cache: "no-store" });
   return readPayload<AuthBootstrap>(response, "Unable to load auth state");
