@@ -75,9 +75,16 @@ export type GameCatalogEntry = {
   providers: ProviderCatalog[];
 };
 
+export type ServerPlayer = {
+  name?: string;
+  userId?: string;
+  character?: string;
+  isHost?: boolean;
+};
+
 export type ServerPlayerListResponse = {
   supported: boolean;
-  players: Array<{ name?: string }>;
+  players: ServerPlayer[];
 };
 
 export type GameUpdateJobStatus = "queued" | "running" | "succeeded" | "failed";

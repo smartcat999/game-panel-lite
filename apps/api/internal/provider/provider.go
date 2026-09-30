@@ -40,6 +40,10 @@ type SaveMetadataProvider interface {
 	SaveDisplayName() string
 }
 
+type BackupSubtreeProvider interface {
+	BackupSubtree(domain.GameServer) string
+}
+
 type WorldRegenerationProvider interface {
 	WorldRegenerationPlan(domain.GameServer) (domain.WorldRegenerationPlan, error)
 }

@@ -275,6 +275,7 @@ func TestDSTEntrypointRoutesConsoleCommandsToSelectedShard(t *testing.T) {
 	}
 	t.Setenv("FAKE_CAPTURE_CONSOLE", "1")
 	cmd := dstEntrypointCommand(root, dataDir, script, "reuse")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
@@ -285,7 +286,13 @@ func TestDSTEntrypointRoutesConsoleCommandsToSelectedShard(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	defer func() {
+		_ = stdin.Close()
+		if cmd.Process != nil {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			_ = cmd.Wait()
+		}
+	}()
 
 	if _, err := stdin.Write([]byte("__GAMEPANEL_DST_CONSOLE__:master:Y19zYXZlKCk=\n")); err != nil {
 		t.Fatal(err)
