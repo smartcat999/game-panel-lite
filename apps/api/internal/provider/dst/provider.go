@@ -112,11 +112,11 @@ func (Provider) BackupSubtree(domain.GameServer) string {
 }
 
 func (Provider) PlayerListCommand(domain.GameServer) string {
-	return "c_listallplayers()"
+	return `for i, v in ipairs(TheNet:GetClientTable()) do if v.performance == nil then print(string.format("[%d] (%s) %s <%s> [admin:%s]", i, v.userid, v.name, v.prefab or "", tostring(v.admin == true))) end end`
 }
 
 var (
-	dstPlayerRowRegex    = regexp.MustCompile(`\[\d+\]\s*\((KU_[a-zA-Z0-9_-]+)\)\s*([^<]+?)(?:\s*<([a-zA-Z0-9_-]+)>)?\s*$`)
+	dstPlayerRowRegex    = regexp.MustCompile(`\[\d+\]\s*\((KU_[a-zA-Z0-9_-]+)\)\s*([^<\[]+?)(?:\s*<([a-zA-Z0-9_-]+)>)?(?:\s*\[admin:(true|false)\])?\s*$`)
 	dstClientAuthRegex   = regexp.MustCompile(`Client authenticated:\s*\((KU_[a-zA-Z0-9_-]+)\)\s*(.+)`)
 	dstClientLeaveRegex  = regexp.MustCompile(`Client disconnected:\s*\((KU_[a-zA-Z0-9_-]+)\)`)
 	dstAnnouncementLeave = regexp.MustCompile(`\[Leave Announcement\]\s*([^.]+?)\s*(?:left|left the game)`)
@@ -137,10 +137,14 @@ func (Provider) ParsePlayerListOutput(lines []string) []domain.Player {
 			if len(match) > 3 {
 				character = strings.TrimSpace(match[3])
 			}
+			isHost := len(match) > 4 && match[4] == "true"
 			if idx, ok := seen[userId]; ok {
 				players[idx].Name = name
 				if character != "" {
 					players[idx].Character = character
+				}
+				if isHost {
+					players[idx].IsHost = true
 				}
 			} else {
 				seen[userId] = len(players)
@@ -148,6 +152,7 @@ func (Provider) ParsePlayerListOutput(lines []string) []domain.Player {
 					Name:      name,
 					UserID:    userId,
 					Character: character,
+					IsHost:    isHost,
 				})
 			}
 		} else if match := dstClientAuthRegex.FindStringSubmatch(line); len(match) > 2 {

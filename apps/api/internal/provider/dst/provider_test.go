@@ -512,14 +512,14 @@ func TestDSTBackupSubtree(t *testing.T) {
 func TestDSTPlayerManagement(t *testing.T) {
 	provider := NewProvider()
 
-	if provider.PlayerListCommand(domain.GameServer{}) != "c_listallplayers()" {
-		t.Fatalf("expected c_listallplayers(), got %q", provider.PlayerListCommand(domain.GameServer{}))
+	if !strings.Contains(provider.PlayerListCommand(domain.GameServer{}), "TheNet:GetClientTable()") {
+		t.Fatalf("expected PlayerListCommand to use TheNet:GetClientTable(), got %q", provider.PlayerListCommand(domain.GameServer{}))
 	}
 
 	rawLog := `
 [00:01:23]: [Join Announcement] Wilson joined the game.
-[00:01:25]: [1] (KU_12345678) Wilson <wilson>
-[00:01:30]: [2] (KU_87654321) Wendy <wendy>
+[00:01:25]: [1] (KU_12345678) Wilson <wilson> [admin:true]
+[00:01:30]: [2] (KU_87654321) Wendy <wendy> [admin:false]
 [00:01:35]: Client authenticated: (KU_abcdefgh) Wolfgang
 `
 	players := provider.ParsePlayerListOutput(strings.Split(rawLog, "\n"))
@@ -527,10 +527,10 @@ func TestDSTPlayerManagement(t *testing.T) {
 		t.Fatalf("expected 3 players, got %d: %+v", len(players), players)
 	}
 
-	if players[0].UserID != "KU_12345678" || players[0].Name != "Wilson" || players[0].Character != "wilson" {
+	if players[0].UserID != "KU_12345678" || players[0].Name != "Wilson" || players[0].Character != "wilson" || !players[0].IsHost {
 		t.Fatalf("unexpected player 0: %+v", players[0])
 	}
-	if players[1].UserID != "KU_87654321" || players[1].Name != "Wendy" || players[1].Character != "wendy" {
+	if players[1].UserID != "KU_87654321" || players[1].Name != "Wendy" || players[1].Character != "wendy" || players[1].IsHost {
 		t.Fatalf("unexpected player 1: %+v", players[1])
 	}
 	if players[2].UserID != "KU_abcdefgh" || players[2].Name != "Wolfgang" {

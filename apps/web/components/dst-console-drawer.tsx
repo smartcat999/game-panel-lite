@@ -124,7 +124,9 @@ export function DSTConsoleDrawer({
               `确定要将玩家 ${name} ${id ? `(${id})` : ""} 踢出当前房间吗？`,
             confirmBanTitle: "确认封禁玩家",
             confirmBanMsg: (name: string, id?: string) =>
-              `确定要将玩家 ${name} ${id ? `(${id})` : ""} 加入黑名单并踢出吗？`
+              `确定要将玩家 ${name} ${id ? `(${id})` : ""} 加入黑名单并踢出吗？`,
+            hostCannotKick: "房主/管理员不可踢出",
+            hostCannotBan: "房主/管理员不可封禁"
           }
         : {
             title: "Console",
@@ -143,6 +145,8 @@ export function DSTConsoleDrawer({
             hostBadge: "Host",
             kick: "Kick",
             ban: "Ban",
+            hostCannotKick: "Host/Admin cannot be kicked",
+            hostCannotBan: "Host/Admin cannot be banned",
             noPlayers: "No players currently online",
             noMatchingPlayers: "No matching players found",
             manyPlayersHint: (count: number) => `Scroll to view all ${count} online players`,
@@ -566,15 +570,19 @@ export function DSTConsoleDrawer({
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
+                            disabled={player.isHost}
                             onClick={() => setConfirmModal({ type: "kick", player })}
-                            className="px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-[11px] text-slate-300 hover:bg-slate-700 transition"
+                            className="px-2 py-0.5 rounded border border-slate-700 bg-slate-800 text-[11px] text-slate-300 hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-800"
+                            title={player.isHost ? copy.hostCannotKick : undefined}
                           >
                             {copy.kick}
                           </button>
                           <button
                             type="button"
+                            disabled={player.isHost}
                             onClick={() => setConfirmModal({ type: "ban", player })}
-                            className="px-2 py-0.5 rounded border border-red-900/40 bg-red-950/40 text-[11px] text-red-400 hover:bg-red-900/50 transition"
+                            className="px-2 py-0.5 rounded border border-red-900/40 bg-red-950/40 text-[11px] text-red-400 hover:bg-red-900/50 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-red-950/40"
+                            title={player.isHost ? copy.hostCannotBan : undefined}
                           >
                             {copy.ban}
                           </button>

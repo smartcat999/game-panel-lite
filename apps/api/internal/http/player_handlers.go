@@ -120,6 +120,16 @@ func (h *Handler) kickServerPlayer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server must be running to kick players")
 		return
 	}
+	if h.playerSyncer != nil {
+		if cached, found := h.playerSyncer.GetCachedPlayers(server.ID); found {
+			for _, p := range cached {
+				if (p.UserID == player || p.Name == player) && p.IsHost {
+					writeError(w, http.StatusBadRequest, "cannot kick server host or admin")
+					return
+				}
+			}
+		}
+	}
 	server, err = h.requireResourceRuntimeAttached(r.Context(), server)
 	if err != nil {
 		writeError(w, statusCodeForRuntimeError(err), err.Error())
@@ -156,6 +166,16 @@ func (h *Handler) banServerPlayer(w http.ResponseWriter, r *http.Request) {
 	if server.Status.Phase != domain.PhaseRunning {
 		writeError(w, http.StatusConflict, "server must be running to ban players")
 		return
+	}
+	if h.playerSyncer != nil {
+		if cached, found := h.playerSyncer.GetCachedPlayers(server.ID); found {
+			for _, p := range cached {
+				if (p.UserID == player || p.Name == player) && p.IsHost {
+					writeError(w, http.StatusBadRequest, "cannot ban server host or admin")
+					return
+				}
+			}
+		}
 	}
 	server, err = h.requireResourceRuntimeAttached(r.Context(), server)
 	if err != nil {

@@ -197,7 +197,9 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
                 <span className="flex shrink-0 items-center gap-2">
                   <Button
                     variant="ghost"
-                    className="gap-1 px-2.5 py-1 text-xs text-panel-gold hover:text-panel-gold hover:bg-amber-500/10"
+                    disabled={player.isHost}
+                    className="gap-1 px-2.5 py-1 text-xs text-panel-gold hover:text-panel-gold hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={player.isHost ? (isZh ? "房主/管理员不可踢出" : "Host/admin cannot be kicked") : undefined}
                     onClick={() => setPending({ player: targetId, playerName: name, kind: "kick" })}
                   >
                     <UserX aria-hidden="true" className="size-3.5" />
@@ -205,7 +207,9 @@ export function PlayersPanel({ serverId }: { serverId: string }) {
                   </Button>
                   <Button
                     variant="ghost"
-                    className="gap-1 px-2.5 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    disabled={player.isHost}
+                    className="gap-1 px-2.5 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={player.isHost ? (isZh ? "房主/管理员不可封禁" : "Host/admin cannot be banned") : undefined}
                     onClick={() => setPending({ player: targetId, playerName: name, kind: "ban" })}
                   >
                     <Ban aria-hidden="true" className="size-3.5" />
