@@ -470,6 +470,7 @@ export function CreateServerWizard() {
   const [appliedWorldConfigId, setAppliedWorldConfigId] = useState("");
   const [appliedConfigPresetId, setAppliedConfigPresetId] = useState("");
   const [appliedGameQueryKey, setAppliedGameQueryKey] = useState("");
+  const [activeQuickTemplateId, setActiveQuickTemplateId] = useState("");
   const [selectedModIds, setSelectedModIds] = useState<string[]>([]);
   const [selectedModPackId, setSelectedModPackId] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState("node-local");
@@ -617,6 +618,7 @@ export function CreateServerWizard() {
     const nextProvider = game.providers.find((provider) => provider.key === preferredProviderKey) ?? game.providers.find((provider) => provider.recommended) ?? game.providers[0];
     if (!nextProvider) return;
     setSelectedProviderKey(nextProvider.key);
+    setActiveQuickTemplateId("");
     if (game.key === "terraria") {
       chooseMode(nextProvider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
@@ -640,6 +642,7 @@ export function CreateServerWizard() {
   };
   const chooseProvider = (provider: ProviderCatalog) => {
     setSelectedProviderKey(provider.key);
+    setActiveQuickTemplateId("");
     if (provider.key === "terraria-tmodloader" || provider.key === "terraria-vanilla") {
       chooseMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
     } else {
@@ -671,6 +674,7 @@ export function CreateServerWizard() {
     const game = games.find((item) => item.key === preset.gameKey);
     const provider = game?.providers.find((item) => item.key === preset.providerKey);
     if (!game || !provider) return;
+    setActiveQuickTemplateId("");
     setSelectedGameKey(game.key);
     setSelectedProviderKey(provider.key);
     setMode(provider.key === "terraria-tmodloader" ? "tmodloader" : "vanilla");
@@ -689,62 +693,149 @@ export function CreateServerWizard() {
     setStep(1);
   };
 
-  const applyQuickPlayTemplate = (templateId: string) => {
+  const applyQuickPlayTemplate = (templateId: string, targetGameKey?: string) => {
     const isZh = locale.startsWith("zh");
-    const game = games.find((g) => g.key === selectedGameKey) ?? games[0];
+    const targetKey = targetGameKey || selectedGameKey;
+    const game = (targetGameKey ? games.find((g) => g.key === targetKey) : null) ?? games.find((g) => g.key === selectedGameKey) ?? games[0];
     if (!game) return;
 
     if (game.key === "palworld") {
-      const provider = game.providers[0];
+      const provider = game.providers.find((p) => p.key === "palworld") ?? game.providers[0];
       if (provider) {
-        chooseGame(game);
-        chooseProvider(provider);
+        chooseGame(game, provider.key);
+        const localizedGameName = gameDisplayName(game.key, game.name, t);
+        const names = createGameDefaultNames(localizedGameName, locale);
+        const basePayload = createDefaultProviderConfigPayload(provider, createProviderDefaultOverrides(names, game.key, locale));
         if (templateId === "t1") {
-          setProviderConfigPayload({ expRate: 3, captureRate: 2, eggHatchingTime: 0, deathPenalty: "None", maxPlayers: 4, serverName: "Palworld 4人休闲起号车" });
+          setProviderConfigPayload({
+            ...basePayload,
+            expRate: 3,
+            captureRate: 2,
+            eggHatchingTime: 0,
+            deathPenalty: "None",
+            maxPlayers: 4,
+            serverName: isZh ? "Palworld 4人休闲起号车" : "Palworld 4-Player Casual"
+          });
           setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+          setActiveQuickTemplateId("t1");
           toast.success(isZh ? "已套用【4人休闲起号车】" : "Applied 4-Player Casual Preset", isZh ? "3倍经验 + 2倍抓宠 + 秒孵蛋 + 不掉落" : "3x Exp + 2x Capture + Instant Hatch");
         } else if (templateId === "t2") {
-          setProviderConfigPayload({ expRate: 1, captureRate: 1, deathPenalty: "All", pvp: true, enableInvaderEnemy: true, maxPlayers: 8, serverName: "Palworld 8人公会硬核车" });
+          setProviderConfigPayload({
+            ...basePayload,
+            expRate: 1,
+            captureRate: 1,
+            deathPenalty: "All",
+            pvp: true,
+            enableInvaderEnemy: true,
+            maxPlayers: 8,
+            serverName: isZh ? "Palworld 8人公会硬核车" : "Palworld 8-Player Hardcore"
+          });
           setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          setActiveQuickTemplateId("t2");
           toast.success(isZh ? "已套用【8人公会硬核车】" : "Applied 8-Player Hardcore Preset", isZh ? "全掉落 + 开启入侵与PVP" : "Drop All + PvP + Raids");
         } else {
-          setProviderConfigPayload({ expRate: 2, captureRate: 1.5, deathPenalty: "Item", baseCampWorkerMaxNum: 20, maxPlayers: 16, serverName: "Palworld 16人旗舰公会服" });
+          setProviderConfigPayload({
+            ...basePayload,
+            expRate: 2,
+            captureRate: 1.5,
+            deathPenalty: "Item",
+            baseCampWorkerMaxNum: 20,
+            maxPlayers: 16,
+            serverName: isZh ? "Palworld 16人旗舰公会服" : "Palworld 16-Player Guild"
+          });
           setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+          setActiveQuickTemplateId("t3");
           toast.success(isZh ? "已套用【16人旗舰公会服】" : "Applied 16-Player Guild Preset", isZh ? "8核 16G + 20帕鲁据点" : "8 Cores 16GB High Capacity");
         }
       }
     } else if (game.key === "minecraft") {
       const provider = game.providers[0];
       if (provider) {
-        chooseGame(game);
-        chooseProvider(provider);
+        chooseGame(game, provider.key);
+        const localizedGameName = gameDisplayName(game.key, game.name, t);
+        const names = createGameDefaultNames(localizedGameName, locale);
+        const basePayload = createDefaultProviderConfigPayload(provider, createProviderDefaultOverrides(names, game.key, locale));
         if (templateId === "t1") {
-          setProviderConfigPayload({ gameMode: "survival", difficulty: "normal", onlineMode: true, maxPlayers: 4, serverName: "Minecraft 4人纯净生存车" });
+          setProviderConfigPayload({
+            ...basePayload,
+            gameMode: "survival",
+            difficulty: "normal",
+            onlineMode: true,
+            maxPlayers: 4,
+            serverName: isZh ? "Minecraft 4人纯净生存车" : "Minecraft 4-Player Survival"
+          });
           setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+          setActiveQuickTemplateId("t1");
           toast.success(isZh ? "已套用【4人纯净生存车】" : "Applied 4-Player Survival Preset");
         } else if (templateId === "t2") {
-          setProviderConfigPayload({ gameMode: "creative", difficulty: "peaceful", onlineMode: true, maxPlayers: 8, serverName: "Minecraft 8人建筑创造服" });
+          setProviderConfigPayload({
+            ...basePayload,
+            gameMode: "creative",
+            difficulty: "peaceful",
+            onlineMode: true,
+            maxPlayers: 8,
+            serverName: isZh ? "Minecraft 8人建筑创造服" : "Minecraft 8-Player Creative"
+          });
           setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          setActiveQuickTemplateId("t2");
           toast.success(isZh ? "已套用【8人建筑创造服】" : "Applied 8-Player Creative Preset");
         } else {
-          setProviderConfigPayload({ gameMode: "survival", difficulty: "hard", onlineMode: true, maxPlayers: 16, serverName: "Minecraft 极限挑战服" });
+          setProviderConfigPayload({
+            ...basePayload,
+            gameMode: "survival",
+            difficulty: "hard",
+            onlineMode: true,
+            maxPlayers: 16,
+            serverName: isZh ? "Minecraft 极限挑战服" : "Minecraft Hardcore Preset"
+          });
           setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+          setActiveQuickTemplateId("t3");
           toast.success(isZh ? "已套用【极限挑战服】" : "Applied Hardcore Preset");
         }
       }
     } else if (game.key === "dont-starve-together") {
       const provider = game.providers[0];
       if (provider) {
-        chooseGame(game);
-        chooseProvider(provider);
+        chooseGame(game, provider.key);
+        const localizedGameName = gameDisplayName(game.key, game.name, t);
+        const names = createGameDefaultNames(localizedGameName, locale);
+        const basePayload = createDefaultProviderConfigPayload(provider, createProviderDefaultOverrides(names, game.key, locale));
         if (templateId === "t1") {
-          setProviderConfigPayload({ "gameplay.gameMode": "survival", "caves.enabled": true, "gameplay.pauseWhenEmpty": true, "gameplay.maxPlayers": 4, "identity.serverName": "DST 4人纯净双层洞穴车" });
+          setProviderConfigPayload({
+            ...basePayload,
+            "gameplay.gameMode": "survival",
+            "caves.enabled": true,
+            "gameplay.pauseWhenEmpty": true,
+            "gameplay.maxPlayers": 4,
+            "identity.serverName": isZh ? "DST 4人纯净双层洞穴车" : "DST 4-Player Caves"
+          });
           setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+          setActiveQuickTemplateId("t1");
           toast.success(isZh ? "已套用【4人双层洞穴车】" : "Applied 4-Player Caves Preset");
-        } else {
-          setProviderConfigPayload({ "gameplay.gameMode": "endless", "caves.enabled": true, "gameplay.pauseWhenEmpty": true, "gameplay.maxPlayers": 8, "identity.serverName": "DST 8人无尽不散车" });
+        } else if (templateId === "t2") {
+          setProviderConfigPayload({
+            ...basePayload,
+            "gameplay.gameMode": "endless",
+            "caves.enabled": true,
+            "gameplay.pauseWhenEmpty": true,
+            "gameplay.maxPlayers": 8,
+            "identity.serverName": isZh ? "DST 8人无尽不散车" : "DST 8-Player Endless"
+          });
           setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          setActiveQuickTemplateId("t2");
           toast.success(isZh ? "已套用【8人无尽不散车】" : "Applied 8-Player Endless Preset");
+        } else {
+          setProviderConfigPayload({
+            ...basePayload,
+            "gameplay.gameMode": "survival",
+            "caves.enabled": true,
+            "gameplay.pauseWhenEmpty": true,
+            "gameplay.maxPlayers": 16,
+            "identity.serverName": isZh ? "DST 16人大型公会服" : "DST 16-Player Guild Server"
+          });
+          setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+          setActiveQuickTemplateId("t3");
+          toast.success(isZh ? "已套用【16人大型公会服】" : "Applied 16-Player Guild Preset");
         }
       }
     } else {
@@ -754,25 +845,34 @@ export function CreateServerWizard() {
       const tmodProvider = terrariaGame?.providers.find((p) => p.key === "terraria-tmodloader") ?? terrariaGame?.providers[0];
 
       if (templateId === "t1" && vanillaProvider) {
-        chooseGame(terrariaGame);
-        chooseProvider(vanillaProvider);
+        chooseGame(terrariaGame, vanillaProvider.key);
         choosePreset("friends-casual");
         setConfig((prev) => ({ ...prev, serverName: isZh ? "Terraria 好友联机车" : "Terraria Friends Room" }));
         setResourceLimits({ cpuLimitCores: 2, memoryLimitMb: 4096 });
+        setActiveQuickTemplateId("t1");
         toast.success(isZh ? "已套用【4人好友轻量纯净车】模版" : "Applied 4-Player Friends Preset");
       } else if (templateId === "t2" && tmodProvider) {
-        chooseGame(terrariaGame);
-        chooseProvider(tmodProvider);
+        chooseGame(terrariaGame, tmodProvider.key);
         choosePreset("expert-adventure");
         setConfig((prev) => ({ ...prev, serverName: isZh ? "Calamity 灾厄开黑团" : "Calamity Modded Group" }));
         setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+        setActiveQuickTemplateId("t2");
         toast.success(isZh ? "已套用【8人灾厄模组团】模版" : "Applied 8-Player Modded Preset");
+      } else if (templateId === "master" || templateId === "t3") {
+        if (vanillaProvider) {
+          chooseGame(terrariaGame, vanillaProvider.key);
+          choosePreset("master-challenge");
+          setConfig((prev) => ({ ...prev, serverName: isZh ? "Terraria 大师开荒车" : "Terraria Master Guild" }));
+          setResourceLimits({ cpuLimitCores: 4, memoryLimitMb: 8192 });
+          setActiveQuickTemplateId("t3");
+          toast.success(isZh ? "已套用【泰拉瑞亚 大师开荒】模版" : "Applied Terraria Master Preset");
+        }
       } else if (vanillaProvider) {
-        chooseGame(terrariaGame);
-        chooseProvider(vanillaProvider);
+        chooseGame(terrariaGame, vanillaProvider.key);
         choosePreset("building-world");
         setConfig((prev) => ({ ...prev, serverName: isZh ? "Terraria 公会万人迷" : "Terraria Guild Server" }));
         setResourceLimits({ cpuLimitCores: 8, memoryLimitMb: 16384 });
+        setActiveQuickTemplateId("t3");
         toast.success(isZh ? "已套用【16人公会万人迷】模版" : "Applied 16-Player Guild Preset");
       }
     }
@@ -790,7 +890,7 @@ export function CreateServerWizard() {
     if (selectedGameKey || games.length === 0 || appliedConfigPresetId || selectedWorldId) return;
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("game") || params.get("presetId") || params.get("worldId")) return;
+      if (params.get("game") || params.get("preset") || params.get("presetId") || params.get("worldId")) return;
     }
     const defaultGame = games.find((game) => game.status === "available") ?? games[0];
     if (defaultGame) {
@@ -815,14 +915,63 @@ export function CreateServerWizard() {
   }, [appliedConfigPresetId, appliedGameQueryKey, games, selectedWorldId]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const presetId = new URLSearchParams(window.location.search).get("presetId");
-    if (!presetId || appliedConfigPresetId === presetId || games.length === 0 || configPresets.length === 0) return;
-    const preset = configPresets.find((item) => item.id === presetId);
-    if (!preset) return;
-    applyConfigPreset(preset);
-    setAppliedConfigPresetId(presetId);
-  }, [appliedConfigPresetId, configPresets, games.length]);
+    if (typeof window === "undefined" || games.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const presetParam = params.get("preset") || params.get("presetId");
+    if (!presetParam || appliedConfigPresetId === presetParam) return;
+
+    // 1. Check if it's a saved database preset (by ID or exact name)
+    const savedPreset = configPresets.find(
+      (item) => item.id === presetParam || item.name.toLowerCase() === presetParam.toLowerCase()
+    );
+    if (savedPreset) {
+      applyConfigPreset(savedPreset);
+      setAppliedConfigPresetId(presetParam);
+      return;
+    }
+    if (configPresetsQuery.isLoading) {
+      return;
+    }
+
+    // 2. Built-in quick preset aliases from Dashboard or URL
+    if (presetParam === "palworld-casual") {
+      applyQuickPlayTemplate("t1", "palworld");
+      setAppliedConfigPresetId(presetParam);
+      return;
+    }
+    if (presetParam === "minecraft-vanilla") {
+      applyQuickPlayTemplate("t1", "minecraft");
+      setAppliedConfigPresetId(presetParam);
+      return;
+    }
+    if (presetParam === "dst-caves") {
+      applyQuickPlayTemplate("t1", "dont-starve-together");
+      setAppliedConfigPresetId(presetParam);
+      return;
+    }
+    if (presetParam === "terraria-master") {
+      applyQuickPlayTemplate("master", "terraria");
+      setAppliedConfigPresetId(presetParam);
+      return;
+    }
+
+    // 3. Terraria built-in preset keys
+    const terrariaPresetKeys: PresetKey[] = ["friends-casual", "building-world", "expert-adventure", "master-challenge"];
+    if (terrariaPresetKeys.includes(presetParam as PresetKey)) {
+      const terrariaGame = games.find((g) => g.key === "terraria");
+      if (terrariaGame) {
+        if (presetParam === "master-challenge") {
+          applyQuickPlayTemplate("master", "terraria");
+        } else if (presetParam === "expert-adventure") {
+          applyQuickPlayTemplate("t2", "terraria");
+        } else {
+          applyQuickPlayTemplate("t1", "terraria");
+        }
+        setAppliedConfigPresetId(presetParam);
+        return;
+      }
+    }
+  }, [appliedConfigPresetId, configPresets, configPresetsQuery.isLoading, games]);
 
   useEffect(() => {
     if (!showWorldAndBackupFeatures) return;
@@ -983,7 +1132,12 @@ export function CreateServerWizard() {
                     <button
                       type="button"
                       onClick={() => applyQuickPlayTemplate("t1")}
-                      className="flex flex-col justify-between rounded-lg border border-panel-line bg-slate-900/80 p-3 text-left transition hover:border-panel-green hover:bg-panel-green/10 group focus:outline-none focus:ring-1 focus:ring-panel-green"
+                      className={cn(
+                        "flex flex-col justify-between rounded-lg border p-3 text-left transition group focus:outline-none focus:ring-1 focus:ring-panel-green",
+                        activeQuickTemplateId === "t1"
+                          ? "border-panel-green bg-panel-green/15 ring-1 ring-panel-green shadow-sm shadow-panel-green/10"
+                          : "border-panel-line bg-slate-900/80 hover:border-panel-green hover:bg-panel-green/10"
+                      )}
                     >
                       <div>
                         <div className="flex items-center justify-between">
@@ -993,7 +1147,7 @@ export function CreateServerWizard() {
                           </span>
                           <span className="text-[10px] text-slate-500 font-mono">2C / 4GB</span>
                         </div>
-                        <p className="mt-1.5 text-xs font-semibold text-white group-hover:text-panel-green transition">
+                        <p className={cn("mt-1.5 text-xs font-semibold transition", activeQuickTemplateId === "t1" ? "text-panel-green" : "text-white group-hover:text-panel-green")}>
                           {selectedGameKey === "palworld"
                             ? (locale.startsWith("zh") ? "4人休闲起号车" : "4-Player Casual")
                             : selectedGameKey === "minecraft"
@@ -1012,8 +1166,10 @@ export function CreateServerWizard() {
                             : (locale.startsWith("zh") ? "经典难度 · 中型世界 · 即开即玩" : "Classic Medium World · Instant Play")}
                         </p>
                       </div>
-                      <span className="mt-3 inline-flex items-center text-[10px] font-medium text-panel-green group-hover:underline">
-                        {locale.startsWith("zh") ? "套用模版 →" : "Apply →"}
+                      <span className={cn("mt-3 inline-flex items-center text-[10px] font-medium text-panel-green", activeQuickTemplateId === "t1" ? "font-bold" : "group-hover:underline")}>
+                        {activeQuickTemplateId === "t1"
+                          ? (locale.startsWith("zh") ? "✓ 已套用模版" : "✓ Applied")
+                          : (locale.startsWith("zh") ? "套用模版 →" : "Apply →")}
                       </span>
                     </button>
 
@@ -1021,7 +1177,12 @@ export function CreateServerWizard() {
                     <button
                       type="button"
                       onClick={() => applyQuickPlayTemplate("t2")}
-                      className="flex flex-col justify-between rounded-lg border border-purple-500/30 bg-slate-900/80 p-3 text-left transition hover:border-purple-400 hover:bg-purple-950/20 group focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      className={cn(
+                        "flex flex-col justify-between rounded-lg border p-3 text-left transition group focus:outline-none focus:ring-1 focus:ring-purple-400",
+                        activeQuickTemplateId === "t2"
+                          ? "border-purple-400 bg-purple-950/40 ring-1 ring-purple-400 shadow-sm shadow-purple-500/10"
+                          : "border-purple-500/30 bg-slate-900/80 hover:border-purple-400 hover:bg-purple-950/20"
+                      )}
                     >
                       <div>
                         <div className="flex items-center justify-between">
@@ -1031,7 +1192,7 @@ export function CreateServerWizard() {
                           </span>
                           <span className="text-[10px] text-slate-500 font-mono">4C / 8GB</span>
                         </div>
-                        <p className="mt-1.5 text-xs font-semibold text-white group-hover:text-purple-300 transition">
+                        <p className={cn("mt-1.5 text-xs font-semibold transition", activeQuickTemplateId === "t2" ? "text-purple-300" : "text-white group-hover:text-purple-300")}>
                           {selectedGameKey === "palworld"
                             ? (locale.startsWith("zh") ? "8人公会硬核车" : "8-Player Hardcore")
                             : selectedGameKey === "minecraft"
@@ -1050,8 +1211,10 @@ export function CreateServerWizard() {
                             : (locale.startsWith("zh") ? "tModLoader · 专家大型世界" : "tModLoader · Expert Large World")}
                         </p>
                       </div>
-                      <span className="mt-3 inline-flex items-center text-[10px] font-medium text-purple-400 group-hover:underline">
-                        {locale.startsWith("zh") ? "套用模版 →" : "Apply →"}
+                      <span className={cn("mt-3 inline-flex items-center text-[10px] font-medium text-purple-400", activeQuickTemplateId === "t2" ? "font-bold" : "group-hover:underline")}>
+                        {activeQuickTemplateId === "t2"
+                          ? (locale.startsWith("zh") ? "✓ 已套用模版" : "✓ Applied")
+                          : (locale.startsWith("zh") ? "套用模版 →" : "Apply →")}
                       </span>
                     </button>
 
@@ -1059,31 +1222,46 @@ export function CreateServerWizard() {
                     <button
                       type="button"
                       onClick={() => applyQuickPlayTemplate("t3")}
-                      className="flex flex-col justify-between rounded-lg border border-panel-line bg-slate-900/80 p-3 text-left transition hover:border-panel-gold hover:bg-panel-gold/10 group focus:outline-none focus:ring-1 focus:ring-panel-gold"
+                      className={cn(
+                        "flex flex-col justify-between rounded-lg border p-3 text-left transition group focus:outline-none focus:ring-1 focus:ring-panel-gold",
+                        (activeQuickTemplateId === "t3" || activeQuickTemplateId === "master")
+                          ? "border-panel-gold bg-panel-gold/20 ring-1 ring-panel-gold shadow-sm shadow-panel-gold/10"
+                          : "border-panel-line bg-slate-900/80 hover:border-panel-gold hover:bg-panel-gold/10"
+                      )}
                     >
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-panel-gold">
                             <Zap className="size-3" />
-                            {locale.startsWith("zh") ? "高配旗舰服" : "High Spec Guild"}
+                            {selectedGameKey === "terraria"
+                              ? (locale.startsWith("zh") ? "大师开荒" : "Master Mode")
+                              : (locale.startsWith("zh") ? "高配旗舰服" : "High Spec Guild")}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-mono">8C / 16GB</span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {selectedGameKey === "terraria" ? "4C / 8GB" : "8C / 16GB"}
+                          </span>
                         </div>
-                        <p className="mt-1.5 text-xs font-semibold text-white group-hover:text-panel-gold transition">
+                        <p className={cn("mt-1.5 text-xs font-semibold transition", (activeQuickTemplateId === "t3" || activeQuickTemplateId === "master") ? "text-panel-gold" : "text-white group-hover:text-panel-gold")}>
                           {selectedGameKey === "palworld"
                             ? (locale.startsWith("zh") ? "16人旗舰公会服" : "16-Player Guild")
                             : selectedGameKey === "minecraft"
                             ? (locale.startsWith("zh") ? "16人极限挑战服" : "16-Player Hardcore")
-                            : (locale.startsWith("zh") ? "16人公会旗舰服" : "16-Player Guild")}
+                            : selectedGameKey === "dont-starve-together"
+                            ? (locale.startsWith("zh") ? "16人大型公会服" : "16-Player Guild")
+                            : (locale.startsWith("zh") ? "泰拉瑞亚 大师开荒车" : "Terraria Master Challenge")}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
                           {selectedGameKey === "palworld"
                             ? (locale.startsWith("zh") ? "2倍经验 · 掉落物品 · 20帕鲁据点" : "2x Exp · 20 Pals Per Base")
+                            : selectedGameKey === "terraria"
+                            ? (locale.startsWith("zh") ? "大师难度 · 大型世界 · 挑战硬核首领" : "Master Difficulty · Large World · Hardcore Bosses")
                             : (locale.startsWith("zh") ? "高防算力 · 高频快照备份" : "High Spec · Frequent Backups")}
                         </p>
                       </div>
-                      <span className="mt-3 inline-flex items-center text-[10px] font-medium text-panel-gold group-hover:underline">
-                        {locale.startsWith("zh") ? "套用模版 →" : "Apply →"}
+                      <span className={cn("mt-3 inline-flex items-center text-[10px] font-medium text-panel-gold", (activeQuickTemplateId === "t3" || activeQuickTemplateId === "master") ? "font-bold" : "group-hover:underline")}>
+                        {(activeQuickTemplateId === "t3" || activeQuickTemplateId === "master")
+                          ? (locale.startsWith("zh") ? "✓ 已套用模版" : "✓ Applied")
+                          : (locale.startsWith("zh") ? "套用模版 →" : "Apply →")}
                       </span>
                     </button>
                   </div>
