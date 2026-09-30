@@ -1027,6 +1027,23 @@ paths:
       responses:
         "200":
           description: Backup list
+  /api/servers/{id}/backup-policy:
+    get:
+      summary: Get server backup policy
+      responses:
+        "200":
+          description: Server backup policy
+        "404":
+          description: Server not found
+    put:
+      summary: Update server backup policy
+      responses:
+        "200":
+          description: Updated server backup policy
+        "400":
+          description: Invalid backup policy
+        "404":
+          description: Server not found
   /api/servers/{id}/backups:
     post:
       summary: Create manual backup

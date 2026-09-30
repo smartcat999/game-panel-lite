@@ -204,6 +204,15 @@ export type ServerResourceSpec = {
     env?: string[];
     cmd?: string[];
   };
+  backupPolicy?: BackupPolicy;
+};
+
+export type BackupPolicy = {
+  enabled: boolean;
+  intervalHours: number;
+  retentionCount: number;
+  lastRunAt?: string;
+  nextRunAt?: string;
 };
 
 export type ServerCondition = {

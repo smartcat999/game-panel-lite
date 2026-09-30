@@ -299,3 +299,91 @@ func TestBackupSourceMutationsPruneMissingFiles(t *testing.T) {
 		t.Fatalf("expected missing backup record pruned after restore miss, got err=%v", err)
 	}
 }
+
+func TestBackupPolicyEndpointsAndScheduler(t *testing.T) {
+	router, db, cfg := newTestRouter(t)
+	server := testServer("auto-backup-server", cfg.DataDir)
+	server.Status = domain.StatusRunning
+	if err := os.MkdirAll(server.DataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(server.DataDir, "serverconfig.txt")
+	if err := os.WriteFile(configPath, []byte("auto-backup-test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	createTestServer(t, db, server)
+
+	// GET default policy
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, httptest.NewRequest(stdhttp.MethodGet, "/api/servers/auto-backup-server/backup-policy", nil))
+	if getRec.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	var policy domain.BackupPolicy
+	if err := json.Unmarshal(getRec.Body.Bytes(), &policy); err != nil {
+		t.Fatal(err)
+	}
+	if policy.IntervalHours != 6 || policy.RetentionCount != 7 {
+		t.Fatalf("expected default 6h and 7 retention, got %+v", policy)
+	}
+
+	// PUT invalid policy
+	badPutRec := httptest.NewRecorder()
+	badBody := `{"enabled": true, "intervalHours": 0, "retentionCount": 5}`
+	router.ServeHTTP(badPutRec, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/auto-backup-server/backup-policy", strings.NewReader(badBody)))
+	if badPutRec.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected 400 for bad interval, got %d", badPutRec.Code)
+	}
+
+	// PUT valid policy
+	putRec := httptest.NewRecorder()
+	goodBody := `{"enabled": true, "intervalHours": 2, "retentionCount": 2}`
+	router.ServeHTTP(putRec, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/auto-backup-server/backup-policy", strings.NewReader(goodBody)))
+	if putRec.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", putRec.Code, putRec.Body.String())
+	}
+	if err := json.Unmarshal(putRec.Body.Bytes(), &policy); err != nil {
+		t.Fatal(err)
+	}
+	if !policy.Enabled || policy.IntervalHours != 2 || policy.RetentionCount != 2 || policy.NextRunAt == nil {
+		t.Fatalf("expected enabled 2h / 2 retention with nextRunAt, got %+v", policy)
+	}
+
+	// Verify server spec in DB
+	updatedServer, err := db.GetGameServer(context.Background(), "auto-backup-server")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updatedServer.Spec.BackupPolicy.Enabled {
+		t.Fatalf("expected server spec policy enabled, got %+v", updatedServer.Spec.BackupPolicy)
+	}
+
+	// Test retention pruning: 3 auto backups and 1 manual backup
+	b1 := domain.Backup{ID: "auto-1", InstanceID: "auto-backup-server", FileName: "auto-1.zip", Type: "Auto", CreatedAt: time.Now().Add(-3 * time.Hour)}
+	b2 := domain.Backup{ID: "auto-2", InstanceID: "auto-backup-server", FileName: "auto-2.zip", Type: "Auto", CreatedAt: time.Now().Add(-2 * time.Hour)}
+	b3 := domain.Backup{ID: "auto-3", InstanceID: "auto-backup-server", FileName: "auto-3.zip", Type: "Auto", CreatedAt: time.Now().Add(-1 * time.Hour)}
+	manual := domain.Backup{ID: "manual-1", InstanceID: "auto-backup-server", FileName: "manual-1.zip", Type: "Manual", CreatedAt: time.Now().Add(-4 * time.Hour)}
+	for _, b := range []*domain.Backup{&b1, &b2, &b3, &manual} {
+		if err := db.CreateBackup(context.Background(), b); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h := &Handler{store: db, cfg: cfg}
+	h.pruneScheduledBackups(context.Background(), "auto-backup-server", 2)
+
+	// Oldest auto-1 should be pruned, auto-2 and auto-3 remain
+	if _, err := db.GetBackup(context.Background(), "auto-1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected auto-1 to be pruned, got err=%v", err)
+	}
+	if _, err := db.GetBackup(context.Background(), "auto-2"); err != nil {
+		t.Fatalf("expected auto-2 to remain, got err=%v", err)
+	}
+	if _, err := db.GetBackup(context.Background(), "auto-3"); err != nil {
+		t.Fatalf("expected auto-3 to remain, got err=%v", err)
+	}
+	// Manual backup should never be pruned
+	if _, err := db.GetBackup(context.Background(), "manual-1"); err != nil {
+		t.Fatalf("expected manual backup to never be pruned, got err=%v", err)
+	}
+}

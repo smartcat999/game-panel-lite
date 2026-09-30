@@ -55,6 +55,14 @@ type ServerRuntimeSpec struct {
 	ModSyncMode string   `json:"modSyncMode,omitempty"`
 }
 
+type BackupPolicy struct {
+	Enabled        bool       `json:"enabled"`
+	IntervalHours  int        `json:"intervalHours"`
+	RetentionCount int        `json:"retentionCount"`
+	LastRunAt      *time.Time `json:"lastRunAt,omitempty"`
+	NextRunAt      *time.Time `json:"nextRunAt,omitempty"`
+}
+
 type ServerSpec struct {
 	Generation      int                `json:"generation"`
 	DesiredState    ServerDesiredState `json:"desiredState"`
@@ -66,6 +74,7 @@ type ServerSpec struct {
 	Resources       ServerResources    `json:"resources,omitempty"`
 	Network         ServerNetworkSpec  `json:"network,omitempty"`
 	Runtime         ServerRuntimeSpec  `json:"runtime,omitempty"`
+	BackupPolicy    BackupPolicy       `json:"backupPolicy,omitempty"`
 }
 
 type ServerRuntimeStatus struct {

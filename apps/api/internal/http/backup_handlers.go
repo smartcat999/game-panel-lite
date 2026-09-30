@@ -2,11 +2,13 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -411,4 +413,246 @@ func (h *Handler) createInstanceBackupArchive(ctx context.Context, server domain
 		}
 	}
 	return svc.Create(server.ID, dataDir)
+}
+
+const (
+	backupSchedulerStartWait = 15 * time.Second
+	backupSchedulerScanEvery = 1 * time.Minute
+)
+
+func (h *Handler) getServerBackupPolicy(w http.ResponseWriter, r *http.Request) {
+	server, err := h.store.GetGameServer(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	policy := server.Spec.BackupPolicy
+	if policy.IntervalHours <= 0 {
+		policy.IntervalHours = 6
+	}
+	if policy.RetentionCount <= 0 {
+		policy.RetentionCount = 7
+	}
+	writeJSON(w, http.StatusOK, policy)
+}
+
+type updateBackupPolicyPayload struct {
+	Enabled        bool `json:"enabled"`
+	IntervalHours  int  `json:"intervalHours"`
+	RetentionCount int  `json:"retentionCount"`
+}
+
+func (h *Handler) updateServerBackupPolicy(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	unlock := h.lockServerMutation(id)
+	defer unlock()
+
+	server, err := h.store.GetGameServer(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	var payload updateBackupPolicyPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if payload.IntervalHours < 1 || payload.IntervalHours > 168 {
+		writeError(w, http.StatusBadRequest, "intervalHours must be between 1 and 168")
+		return
+	}
+	if payload.RetentionCount < 1 || payload.RetentionCount > 50 {
+		writeError(w, http.StatusBadRequest, "retentionCount must be between 1 and 50")
+		return
+	}
+
+	server.Spec.BackupPolicy.Enabled = payload.Enabled
+	server.Spec.BackupPolicy.IntervalHours = payload.IntervalHours
+	server.Spec.BackupPolicy.RetentionCount = payload.RetentionCount
+
+	now := time.Now().UTC()
+	if payload.Enabled {
+		if server.Spec.BackupPolicy.LastRunAt != nil {
+			next := server.Spec.BackupPolicy.LastRunAt.Add(time.Duration(payload.IntervalHours) * time.Hour)
+			server.Spec.BackupPolicy.NextRunAt = &next
+		} else {
+			next := now.Add(time.Duration(payload.IntervalHours) * time.Hour)
+			server.Spec.BackupPolicy.NextRunAt = &next
+		}
+	} else {
+		server.Spec.BackupPolicy.NextRunAt = nil
+	}
+	server.UpdatedAt = now
+
+	if err := h.store.SaveGameServer(r.Context(), &server); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	h.recordActivity(r.Context(), server.ID, "backup.policy.updated", fmt.Sprintf("Updated backup policy for %s (enabled: %v, interval: %dh, retention: %d)", server.Name, payload.Enabled, payload.IntervalHours, payload.RetentionCount))
+	writeJSON(w, http.StatusOK, server.Spec.BackupPolicy)
+}
+
+func (h *Handler) runAutomaticBackupScheduler(ctx context.Context) {
+	timer := time.NewTimer(backupSchedulerStartWait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-timer.C:
+	}
+	ticker := time.NewTicker(backupSchedulerScanEvery)
+	defer ticker.Stop()
+	for {
+		if err := h.scanAutomaticBackups(ctx, time.Now().UTC()); err != nil && h.logger != nil {
+			h.logger.Warn("scan automatic backups", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (h *Handler) scanAutomaticBackups(ctx context.Context, now time.Time) error {
+	servers, err := h.store.ListGameServers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, server := range servers {
+		if !server.Spec.BackupPolicy.Enabled {
+			continue
+		}
+		if h.provider != nil {
+			gameProvider, ok := h.provider.Get(server.ProviderKey)
+			if ok && !gameProvider.Capabilities().Backups {
+				continue
+			}
+		}
+		// Auto backup only runs when the game server is actively running
+		if server.Status.Phase != domain.PhaseRunning && server.Status.ActualState != domain.ActualRunning {
+			continue
+		}
+
+		intervalHours := server.Spec.BackupPolicy.IntervalHours
+		if intervalHours <= 0 {
+			intervalHours = 6
+		}
+		retentionCount := server.Spec.BackupPolicy.RetentionCount
+		if retentionCount <= 0 {
+			retentionCount = 7
+		}
+		interval := time.Duration(intervalHours) * time.Hour
+
+		isDue := false
+		if server.Spec.BackupPolicy.LastRunAt == nil {
+			if server.Spec.BackupPolicy.NextRunAt != nil {
+				isDue = now.After(*server.Spec.BackupPolicy.NextRunAt) || now.Equal(*server.Spec.BackupPolicy.NextRunAt)
+			} else if now.Sub(server.CreatedAt) >= 5*time.Minute {
+				isDue = true
+			}
+		} else {
+			isDue = now.Sub(*server.Spec.BackupPolicy.LastRunAt) >= interval
+		}
+
+		if !isDue {
+			continue
+		}
+
+		if h.gameUpdateLocked(ctx, server.ID) {
+			continue
+		}
+
+		if err := h.executeScheduledBackup(ctx, server, now, interval, retentionCount); err != nil {
+			if h.logger != nil {
+				h.logger.Error("failed to execute scheduled backup", "serverId", server.ID, "error", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (h *Handler) executeScheduledBackup(ctx context.Context, server domain.GameServer, now time.Time, interval time.Duration, retentionCount int) error {
+	unlock := h.lockServerMutation(server.ID)
+	defer unlock()
+
+	current, err := h.store.GetGameServer(ctx, server.ID)
+	if err != nil {
+		return err
+	}
+	if !current.Spec.BackupPolicy.Enabled {
+		return nil
+	}
+	if current.Status.Phase != domain.PhaseRunning && current.Status.ActualState != domain.ActualRunning {
+		return nil
+	}
+
+	dataDir, err := serverDataDir(current)
+	if err != nil {
+		return err
+	}
+
+	path, size, err := h.createInstanceBackupArchive(ctx, current, dataDir)
+	if err != nil {
+		return err
+	}
+
+	item := domain.Backup{
+		ID:         uuid.NewString(),
+		InstanceID: current.ID,
+		FileName:   filepath.Base(path),
+		WorldName:  serverWorldName(current),
+		SizeBytes:  size,
+		Type:       "Auto",
+		CreatedAt:  now,
+	}
+	if err := h.store.CreateBackup(ctx, &item); err != nil {
+		return err
+	}
+
+	next := now.Add(interval)
+	current.Spec.BackupPolicy.LastRunAt = &now
+	current.Spec.BackupPolicy.NextRunAt = &next
+	current.UpdatedAt = now
+	if err := h.store.SaveGameServer(ctx, &current); err != nil {
+		return err
+	}
+
+	h.recordActivity(ctx, current.ID, "backup.scheduled.created", fmt.Sprintf("Created scheduled backup %s for %s", item.FileName, current.Name), activityBackupPayload(item, &current))
+
+	h.pruneScheduledBackups(ctx, current.ID, retentionCount)
+	return nil
+}
+
+func (h *Handler) pruneScheduledBackups(ctx context.Context, serverID string, retentionCount int) {
+	if retentionCount <= 0 {
+		retentionCount = 7
+	}
+	backups, err := h.store.ListBackupsByInstance(ctx, serverID)
+	if err != nil {
+		return
+	}
+	var scheduled []domain.Backup
+	for _, b := range backups {
+		if b.Type == "Auto" || b.Type == "Scheduled" {
+			scheduled = append(scheduled, b)
+		}
+	}
+	if len(scheduled) <= retentionCount {
+		return
+	}
+	sort.Slice(scheduled, func(i, j int) bool {
+		return scheduled[i].CreatedAt.After(scheduled[j].CreatedAt)
+	})
+
+	toDelete := scheduled[retentionCount:]
+	svc := backupsvc.NewService(h.cfg.DataDir)
+	for _, b := range toDelete {
+		if path, err := svc.Path(b.InstanceID, b.FileName); err == nil {
+			_ = os.Remove(path)
+		}
+		_ = h.store.DeleteBackup(ctx, b.ID)
+		h.recordActivity(ctx, serverID, "backup.scheduled.pruned", fmt.Sprintf("Pruned scheduled backup %s (retention: %d)", b.FileName, retentionCount))
+	}
 }
