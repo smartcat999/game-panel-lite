@@ -1,7 +1,7 @@
 import type { TerrariaConfig } from "@gamepanel-lite/shared";
 import { getApiBaseUrl } from "./api-base";
 import type { Locale } from "./i18n";
-import type { ActivityEvent, AuthBootstrap, Backup, ComputeNode, ConfigPreset, DSTModConfiguration, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+import type { ActivityEvent, AuthBootstrap, Backup, BackupPolicy, ComputeNode, ConfigPreset, DSTModConfiguration, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
 
 const API_BASE = getApiBaseUrl();
 const DOCKER_CHECK_TIMEOUT_MS = 5000;
@@ -1035,6 +1035,31 @@ export async function deleteBackup(id: string) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Unable to delete backup");
   }
+}
+
+export async function getServerBackupPolicy(serverId: string): Promise<BackupPolicy> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/backup-policy`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to fetch backup policy");
+  }
+  return (await response.json()) as BackupPolicy;
+}
+
+export async function updateServerBackupPolicy(
+  serverId: string,
+  payload: { enabled: boolean; intervalHours: number; retentionCount: number }
+): Promise<BackupPolicy> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/backup-policy`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errorData.error ?? "Unable to update backup policy");
+  }
+  return (await response.json()) as BackupPolicy;
 }
 
 export function backupDownloadUrl(id: string) {

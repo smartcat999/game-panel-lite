@@ -39,39 +39,7 @@ type CommandRecord = {
   time: string;
 };
 
-const KNOWN_DST_CHARACTERS = new Set([
-  "wilson",
-  "willow",
-  "wolfgang",
-  "wendy",
-  "wx78",
-  "wickerbottom",
-  "woodie",
-  "wes",
-  "maxwell",
-  "waxwell",
-  "wigfrid",
-  "webber",
-  "warly",
-  "wormwood",
-  "winona",
-  "wortox",
-  "wurt",
-  "walter",
-  "wanda"
-]);
-
-function getCharacterImage(character?: string): string | null {
-  if (!character) return null;
-  const normalized = character.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (normalized === "waxwell") {
-    return "/images/dst/characters/maxwell.png";
-  }
-  if (KNOWN_DST_CHARACTERS.has(normalized)) {
-    return `/images/dst/characters/${normalized}.png`;
-  }
-  return null;
-}
+import { getDSTCharacterDisplayName, getDSTCharacterImage } from "@/lib/dst-characters";
 
 export function DSTConsoleDrawer({
   open,
@@ -548,7 +516,8 @@ export function DSTConsoleDrawer({
                   </div>
                 ) : (
                   filteredPlayers.map((player, idx) => {
-                    const charImg = getCharacterImage(player.character);
+                    const charImg = getDSTCharacterImage(player.character);
+                    const charName = getDSTCharacterDisplayName(player.character, isZh);
                     const playerName = player.name || `Player ${idx + 1}`;
                     return (
                       <div
@@ -559,7 +528,7 @@ export function DSTConsoleDrawer({
                           {charImg ? (
                             <Image
                               src={charImg}
-                              alt={player.character || "DST Character"}
+                              alt={charName || player.character || "DST Character"}
                               width={28}
                               height={28}
                               className="size-7 rounded-full object-cover border border-slate-700 bg-slate-900 shrink-0"
@@ -571,6 +540,12 @@ export function DSTConsoleDrawer({
                           )}
 
                           <span className="font-medium text-slate-200 truncate">{playerName}</span>
+
+                          {charName && (
+                            <span className="text-[10px] font-medium bg-purple-500/15 text-purple-300 px-1 rounded border border-purple-500/30 shrink-0">
+                              {charName}
+                            </span>
+                          )}
 
                           {player.userId && (
                             <span

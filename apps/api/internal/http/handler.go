@@ -116,6 +116,7 @@ func (h *Handler) Start(ctx context.Context) {
 	h.startGameUpdateWorker(func() { h.recoverInterruptedWorldRegenerations(ctx, startedAt) })
 	h.startGameUpdateWorker(func() { h.runAutomaticGameUpdateChecks(ctx) })
 	go h.runAutomaticSystemUpdateChecks(ctx)
+	go h.runAutomaticBackupScheduler(ctx)
 }
 
 func (h *Handler) WaitForGameUpdates(ctx context.Context) error {
@@ -248,6 +249,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.With(h.requirePermission(domain.PermissionWorldManage, "member role required")).Get("/api/worlds/{id}/download", h.downloadWorld)
 		r.Delete("/api/worlds/{id}", h.deleteWorld)
 		r.With(h.requirePermission(domain.PermissionBackupManage, "member role required")).Get("/api/backups", h.listBackups)
+		r.With(h.requirePermission(domain.PermissionBackupManage, "member role required")).Get("/api/servers/{id}/backup-policy", h.getServerBackupPolicy)
+		r.With(h.requirePermission(domain.PermissionBackupManage, "member role required")).Put("/api/servers/{id}/backup-policy", h.updateServerBackupPolicy)
 		r.Post("/api/servers/{id}/world-snapshots", h.createWorldSnapshot)
 		r.Post("/api/servers/{id}/backups", h.createBackup)
 		r.With(h.requirePermission(domain.PermissionBackupManage, "member role required")).Get("/api/backups/{id}/download", h.downloadBackup)
