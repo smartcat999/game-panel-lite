@@ -70,7 +70,8 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 	dockerMonitor.Refresh(context.Background())
 	appCtx, cancel := context.WithCancel(context.Background())
 	go dockerMonitor.Start(appCtx, 10*time.Second)
-	go player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger).Start(appCtx, 30*time.Second)
+	playerSyncer := player.NewSyncer(db, registry, switchableRuntime, cfg).WithLogger(logger)
+	go playerSyncer.Start(appCtx, 15*time.Second)
 	streamGateway := gateway.NewStreamGateway(logger)
 	go func() {
 		<-appCtx.Done()
@@ -90,7 +91,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		return dockerruntime.NewAdapter(host)
 	}
 	apiMetrics := metrics.NewRegistry()
-	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway)
+	handler := apihttp.NewHandler(cfg, logger, db, registry, switchableRuntime, dockerMonitor, dockerFactory, apiMetrics, streamGateway).WithPlayerSyncer(playerSyncer)
 	handler.Start(appCtx)
 
 	router := chi.NewRouter()

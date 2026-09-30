@@ -172,3 +172,33 @@ func TestRunOnceUpdatesPalworldCountFromPlayerLogging(t *testing.T) {
 		t.Fatalf("expected one Palworld player online, got %d", updated.Status.PlayersOnline)
 	}
 }
+
+func TestSyncerPlayerCache(t *testing.T) {
+	syncer := NewSyncer(nil, nil, nil, config.Config{})
+	if _, ok := syncer.GetCachedPlayers("s1"); ok {
+		t.Fatal("expected cold cache to miss")
+	}
+
+	players := []domain.Player{
+		{Name: "Wilson", UserID: "KU_1", Character: "wilson"},
+		{Name: "Wendy", UserID: "KU_2", Character: "wendy"},
+	}
+	syncer.SetCachedPlayers("s1", players)
+
+	cached, ok := syncer.GetCachedPlayers("s1")
+	if !ok || len(cached) != 2 {
+		t.Fatalf("expected 2 cached players, got %v (%t)", cached, ok)
+	}
+
+	syncer.RemovePlayer("s1", "KU_1")
+	cached, ok = syncer.GetCachedPlayers("s1")
+	if !ok || len(cached) != 1 || cached[0].UserID != "KU_2" {
+		t.Fatalf("expected only Wendy remaining, got %+v", cached)
+	}
+
+	syncer.ClearServer("s1")
+	if _, ok := syncer.GetCachedPlayers("s1"); ok {
+		t.Fatal("expected cache to be cleared")
+	}
+}
+
