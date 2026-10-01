@@ -18,6 +18,7 @@ import { useI18n, type Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Button, Input } from "@/components/ui";
 import { TopNav } from "@/components/top-nav";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { AppsDrawer } from "@/components/apps-drawer";
 import { ClusterStatusPill } from "@/components/cluster-status-pill";
 import { ClusterFleetPopover } from "@/components/cluster-fleet-popover";
@@ -149,28 +150,28 @@ function AppChrome({ children }: { children: ReactNode }) {
       {/* Top Global Command Header */}
       <header className="sticky top-0 z-50 h-14 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-xl px-3 sm:px-6 lg:px-8">
         <div className="flex h-full items-center justify-between gap-2 sm:gap-4">
-          {/* Left: Brand + Standalone Host Badge */}
+          {/* Left: Brand */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/dashboard"
-              className="flex items-center gap-2 text-sm font-bold tracking-tight text-white hover:opacity-90 transition"
+              className="flex items-center gap-2 text-sm font-bold tracking-tight text-white hover:opacity-90 transition shrink-0"
             >
               <div className="flex size-7 items-center justify-center rounded-lg bg-panel-green/15 text-panel-green border border-panel-green/30 shadow-xs">
                 <Gamepad2 className="size-4" />
               </div>
-              <span className="font-bold tracking-tight">GamePanel <span className="hidden sm:inline text-panel-green font-mono text-xs">Lite</span></span>
+              <span className="font-bold tracking-tight">GamePanel <span className="text-panel-green font-mono text-xs">Lite</span></span>
             </Link>
-
-            {/* Cluster Fleet Interactive Popover Hub */}
-            <ClusterFleetPopover />
           </div>
 
-          {/* Right: Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Main Icon Navigation (Positioned on the right) */}
+          {/* Right: Cluster Fleet Popover + TopNav + Cluster Status Pill + Apps Drawer + Profile */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Cluster Fleet Interactive Popover Hub */}
+            <ClusterFleetPopover />
+
+            {/* Main Icon Navigation (Positioned on the right, hidden on mobile) */}
             <TopNav />
 
-            <div className="h-4 w-px bg-slate-800/80 hidden sm:block" />
+            <div className="h-4 w-px bg-slate-800/80 hidden xl:block" />
 
             {/* Cluster Real-Time Metrics Mini-Pill */}
             <ClusterStatusPill />
@@ -266,12 +267,15 @@ function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main Content Area */}
-      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 md:pb-6">
         {pageAllowed(pathname, canAccessGameAssets, canCreateServer, canEditSettings) ? children : <PermissionDenied />}
       </main>
 
       {/* Apps and Quick Navigation Drawer */}
       <AppsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileBottomNav />
 
       {/* Account Settings Dialog */}
       {accountOpen && (

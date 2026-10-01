@@ -163,7 +163,7 @@ export function ClusterFleetPopover() {
 
       {/* 下拉面板 (实心高对比背景，杜绝透明穿透与重叠) */}
       {isOpen && (
-        <div className="absolute left-0 top-12 z-[100] w-84 sm:w-96 rounded-xl border border-slate-700 bg-[#0d131f] p-4 text-slate-200 shadow-2xl shadow-black/90 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 sm:left-0 top-12 z-[100] w-[calc(100vw-24px)] max-w-sm sm:w-96 rounded-xl border border-slate-700 bg-[#0d131f] p-4 text-slate-200 shadow-2xl shadow-black/90 animate-in fade-in zoom-in-95 duration-150">
           {/* Header 标题栏 */}
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2">

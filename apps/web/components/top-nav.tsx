@@ -66,7 +66,7 @@ export function TopNav() {
   ];
 
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="hidden md:flex items-center gap-1">
       {navItems.map((item) => {
         const Icon = item.icon;
         return (
