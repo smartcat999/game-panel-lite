@@ -122,19 +122,20 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      <label className="mb-5 block sm:hidden">
-        <span className="sr-only">{t("settingsSections")}</span>
-        <select
-          aria-label={t("settingsSections")}
-          className="h-11 w-full rounded-md border border-panel-line bg-panel-card px-3 text-sm font-medium text-slate-100 outline-none focus:border-panel-green focus:ring-2 focus:ring-panel-green/20"
-          value={activeTab}
-          onChange={(event) => setActiveTab(event.target.value as SettingsTab)}
-        >
-          {settingsTabs.map((tab) => <option key={tab.key} value={tab.key}>{tab.label}</option>)}
-        </select>
-      </label>
-      <nav aria-label={t("settingsSections")} className="mb-5 hidden overflow-x-auto border-b border-panel-line sm:flex">
-        {settingsTabs.map((tab) => <SettingsTabButton key={tab.key} active={activeTab === tab.key} icon={tab.icon} label={tab.label} onClick={() => setActiveTab(tab.key)} />)}
+      <nav
+        aria-label={t("settingsSections")}
+        className="mb-6 flex items-center gap-1.5 overflow-x-auto border-b border-slate-800/80 pb-3 scrollbar-none"
+      >
+        {settingsTabs.map((tab) => (
+          <SettingsTabButton
+            key={tab.key}
+            active={activeTab === tab.key}
+            badge={tab.key === "updates" ? "v0.2.17" : undefined}
+            icon={tab.icon}
+            label={tab.label}
+            onClick={() => setActiveTab(tab.key)}
+          />
+        ))}
       </nav>
 
       {activeTab === "basic" ? <form onSubmit={submit}>
@@ -235,18 +236,45 @@ export default function SettingsPage() {
   );
 }
 
-function SettingsTabButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+function SettingsTabButton({
+  active,
+  badge,
+  icon,
+  label,
+  onClick
+}: {
+  active: boolean;
+  badge?: string;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-panel-green/40",
-        active ? "border-panel-green text-white" : "border-transparent text-slate-500 hover:text-slate-200"
+        "flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-xs sm:text-sm font-medium transition-all whitespace-nowrap",
+        active
+          ? "bg-slate-800 text-white shadow-xs ring-1 ring-white/10"
+          : "text-slate-400 hover:bg-slate-900/60 hover:text-slate-200"
       )}
       type="button"
       onClick={onClick}
     >
-      {icon}<span>{label}</span>
+      <span className={cn(active ? "text-panel-green" : "text-slate-400")}>{icon}</span>
+      <span>{label}</span>
+      {badge ? (
+        <span
+          className={cn(
+            "rounded-full px-1.5 py-0.2 text-[10px] font-mono font-bold uppercase transition",
+            active
+              ? "bg-panel-green/20 text-panel-green border border-panel-green/30"
+              : "bg-slate-800 text-slate-400"
+          )}
+        >
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -622,7 +650,7 @@ function UpdateValue({ hint, label, value }: { hint?: string; label: string; val
 
 function SettingRow({ badge, children, description, label }: { badge?: string; children: ReactNode; description: string; label: string }) {
   return (
-    <div className="grid gap-3 border-b border-panel-line px-5 py-4 last:border-b-0 md:grid-cols-[minmax(220px,0.65fr)_minmax(420px,1.35fr)] md:items-start md:gap-8 md:px-6">
+    <div className="grid gap-3 border-b border-panel-line px-4 py-4 sm:px-5 md:px-6 last:border-b-0 md:grid-cols-[minmax(220px,0.65fr)_minmax(420px,1.35fr)] md:items-start md:gap-8">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-medium text-slate-200">{label}</h3>
@@ -630,7 +658,7 @@ function SettingRow({ badge, children, description, label }: { badge?: string; c
         </div>
         <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">{description}</p>
       </div>
-      <div className="flex min-w-0 md:justify-end">{children}</div>
+      <div className="w-full flex min-w-0 md:justify-end">{children}</div>
     </div>
   );
 }

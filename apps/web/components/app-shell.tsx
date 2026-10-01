@@ -147,10 +147,10 @@ function AppChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#070b12] text-slate-100 selection:bg-panel-green/30">
       {/* Top Global Command Header */}
-      <header className="sticky top-0 z-50 h-14 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-full items-center justify-between gap-4">
+      <header className="sticky top-0 z-50 h-14 border-b border-slate-800/80 bg-[#090d16]/95 backdrop-blur-xl px-3 sm:px-6 lg:px-8">
+        <div className="flex h-full items-center justify-between gap-2 sm:gap-4">
           {/* Left: Brand + Standalone Host Badge */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/dashboard"
               className="flex items-center gap-2 text-sm font-bold tracking-tight text-white hover:opacity-90 transition"
@@ -158,7 +158,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               <div className="flex size-7 items-center justify-center rounded-lg bg-panel-green/15 text-panel-green border border-panel-green/30 shadow-xs">
                 <Gamepad2 className="size-4" />
               </div>
-              <span className="font-bold tracking-tight">GamePanel <span className="text-panel-green font-mono text-xs">Lite</span></span>
+              <span className="font-bold tracking-tight">GamePanel <span className="hidden sm:inline text-panel-green font-mono text-xs">Lite</span></span>
             </Link>
 
             {/* Cluster Fleet Interactive Popover Hub */}
@@ -166,7 +166,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           </div>
 
           {/* Right: Pure Icon TopNav + Cluster Status Pill + Apps Drawer + Profile */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* Main Icon Navigation (Positioned on the right) */}
             <TopNav />
 
@@ -266,7 +266,7 @@ function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       {/* Main Content Area */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {pageAllowed(pathname, canAccessGameAssets, canCreateServer, canEditSettings) ? children : <PermissionDenied />}
       </main>
 

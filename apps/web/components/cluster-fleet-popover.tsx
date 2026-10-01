@@ -142,13 +142,18 @@ export function ClusterFleetPopover() {
         </span>
 
         <span className="font-semibold tracking-tight">
-          {hasOfflineNode
-            ? isZh
-              ? `${onlineNodes.length}/${totalNodeCount} 节点在线`
-              : `${onlineNodes.length}/${totalNodeCount} Nodes Online`
-            : isZh
-            ? `${totalNodeCount} 个节点在线`
-            : `${totalNodeCount} Nodes Online`}
+          <span className="hidden sm:inline">
+            {hasOfflineNode
+              ? isZh
+                ? `${onlineNodes.length}/${totalNodeCount} 节点在线`
+                : `${onlineNodes.length}/${totalNodeCount} Nodes Online`
+              : isZh
+              ? `${totalNodeCount} 个节点在线`
+              : `${totalNodeCount} Nodes Online`}
+          </span>
+          <span className="sm:hidden font-mono text-[11px]">
+            {hasOfflineNode ? `${onlineNodes.length}/${totalNodeCount}` : `${totalNodeCount}节点`}
+          </span>
         </span>
 
         <ChevronDown

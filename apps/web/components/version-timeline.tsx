@@ -213,13 +213,13 @@ export function VersionTimeline({ currentVersion = "v0.2.17" }: VersionTimelineP
       {/* Dual Column Layout */}
       <div className="flex flex-col lg:flex-row gap-5 items-start">
         {/* Left Column: Timeline Navigation */}
-        <div className="w-full lg:w-80 shrink-0 rounded-xl border border-panel-line bg-panel-card/70 p-4 backdrop-blur-xs">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-2 flex items-center justify-between">
+        <div className="w-full lg:w-80 shrink-0 rounded-xl border border-panel-line bg-panel-card/70 p-3 sm:p-4 backdrop-blur-xs">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 sm:mb-3 px-1 sm:px-2 flex items-center justify-between">
             <span>发布历史 (Timeline)</span>
             <span className="text-[10px] text-panel-green font-mono">STABLE</span>
           </div>
 
-          <div className="relative pl-3 space-y-2 before:absolute before:left-[19px] before:top-3 before:bottom-3 before:w-px before:bg-slate-800">
+          <div className="relative flex flex-row lg:flex-col overflow-x-auto lg:overflow-visible gap-2 pb-2 lg:pb-0 scrollbar-none before:hidden lg:before:block lg:pl-3 lg:space-y-2 before:absolute before:left-[19px] before:top-3 before:bottom-3 before:w-px before:bg-slate-800">
             {RELEASES_DATA.map((rel) => {
               const active = rel.version === selectedRelease.version;
               const isCurrent = rel.version === currentVersion;
@@ -230,16 +230,16 @@ export function VersionTimeline({ currentVersion = "v0.2.17" }: VersionTimelineP
                   type="button"
                   onClick={() => setSelectedVersionTag(rel.version)}
                   className={cn(
-                    "relative flex w-full flex-col items-start rounded-lg p-3 text-left transition-all",
+                    "relative flex w-60 sm:w-64 lg:w-full shrink-0 flex-col items-start rounded-lg p-2.5 sm:p-3 text-left transition-all",
                     active
                       ? "bg-slate-900 border border-panel-green/40 shadow-xs"
-                      : "hover:bg-slate-900/50 border border-transparent text-slate-400 hover:text-slate-200"
+                      : "hover:bg-slate-900/50 border border-slate-800/60 lg:border-transparent text-slate-400 hover:text-slate-200"
                   )}
                 >
-                  {/* Timeline Dot */}
+                  {/* Timeline Dot (Desktop only) */}
                   <span
                     className={cn(
-                      "absolute -left-[16px] top-4.5 size-2 rounded-full transition-all",
+                      "hidden lg:block absolute -left-[16px] top-4.5 size-2 rounded-full transition-all",
                       active
                         ? "bg-panel-green ring-4 ring-panel-green/20 scale-125"
                         : "bg-slate-700 hover:bg-slate-500"
@@ -281,7 +281,7 @@ export function VersionTimeline({ currentVersion = "v0.2.17" }: VersionTimelineP
         </div>
 
         {/* Right Column: Version Details Panel */}
-        <div className="flex-1 w-full min-w-0 rounded-xl border border-panel-line bg-panel-card p-5 md:p-6 space-y-6">
+        <div className="flex-1 w-full min-w-0 rounded-xl border border-panel-line bg-panel-card p-4 sm:p-5 md:p-6 space-y-5 sm:space-y-6">
           {/* Version Header Card */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-panel-line/80 pb-5">
             <div className="space-y-1">

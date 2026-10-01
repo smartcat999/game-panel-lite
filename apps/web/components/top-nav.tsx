@@ -76,13 +76,14 @@ export function TopNav() {
             title={item.title}
             aria-label={item.title}
             className={cn(
-              "group relative flex size-9 items-center justify-center rounded-lg transition-all",
+              "group relative flex size-8 sm:size-9 items-center justify-center rounded-lg transition-all",
               item.active
                 ? "bg-slate-800/90 text-panel-green shadow-xs ring-1 ring-white/10"
-                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200",
+              item.href === "/activity" && "hidden sm:flex"
             )}
           >
-            <Icon className={cn("size-4 transition-transform group-hover:scale-110", item.active ? "text-panel-green" : "text-slate-400 group-hover:text-slate-200")} />
+            <Icon className={cn("size-3.5 sm:size-4 transition-transform group-hover:scale-110", item.active ? "text-panel-green" : "text-slate-400 group-hover:text-slate-200")} />
 
             {/* Active Glow Indicator */}
             {item.active && (
