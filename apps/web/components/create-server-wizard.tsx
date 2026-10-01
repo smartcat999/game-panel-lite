@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, Flame, Gamepad2, Globe, Hammer, Package, Search, Settings2, Sparkles, X, Zap } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useToast } from "@/components/toast-context";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
@@ -470,6 +470,7 @@ export function CreateServerWizard() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [step, setStep] = useState(0);
+  const stepperRef = useRef<HTMLDivElement>(null);
   const [selectedGameKey, setSelectedGameKey] = useState("");
   const [selectedProviderKey, setSelectedProviderKey] = useState<ProviderKey>("terraria-vanilla");
   const [mode, setMode] = useState<"vanilla" | "tmodloader">(defaultCreateServerMode);
@@ -1014,6 +1015,14 @@ export function CreateServerWizard() {
     }
   }, [step, stepIds.length]);
 
+  useEffect(() => {
+    if (!stepperRef.current) return;
+    const activeButton = stepperRef.current.querySelector<HTMLElement>('[data-active="true"]');
+    if (activeButton) {
+      activeButton.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+  }, [step]);
+
   return (
     <Card className="overflow-hidden border-slate-800 bg-slate-950/80 shadow-2xl rounded-2xl w-full min-w-0">
       <div className="grid min-h-[580px] lg:grid-cols-[220px_1fr] min-w-0 w-full">
@@ -1092,7 +1101,10 @@ export function CreateServerWizard() {
           </div>
 
             {/* Compact Stepper */}
-            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1 min-w-0 w-full no-scrollbar">
+            <div
+              ref={stepperRef}
+              className="mt-3.5 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1 min-w-0 w-full no-scrollbar"
+            >
               {stepIds.map((stepId, index) => {
                 const labelKey = stepLabelKeys[stepId];
                 const isCurrent = index === step;
@@ -1101,23 +1113,24 @@ export function CreateServerWizard() {
                   <button
                     key={labelKey}
                     type="button"
+                    data-active={isCurrent}
                     onClick={() => setStep(index)}
                     className={cn(
-                      "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition shrink-0",
+                      "flex h-8 shrink-0 sm:flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-bold transition whitespace-nowrap",
                       isCurrent
-                        ? "bg-panel-green text-slate-950 shadow-sm"
+                        ? "bg-panel-green text-slate-950 shadow-sm font-black"
                         : isPassed
                         ? "bg-slate-900 text-slate-200 hover:bg-slate-800"
                         : "text-slate-500 hover:text-slate-400"
                     )}
                   >
                     <span className={cn(
-                      "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
+                      "flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
                       isCurrent ? "bg-slate-950 text-panel-green" : isPassed ? "bg-panel-green/20 text-panel-green" : "bg-slate-800 text-slate-500"
                     )}>
                       {isPassed ? <Check className="size-2.5" /> : index + 1}
                     </span>
-                    <span>{t(labelKey)}</span>
+                    <span className="whitespace-nowrap">{t(labelKey)}</span>
                   </button>
                 );
               })}
