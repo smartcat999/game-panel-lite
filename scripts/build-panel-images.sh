@@ -5,16 +5,18 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 builder="${GAMEPANEL_BUILDX_BUILDER:-my-builder}"
 platform="${GAMEPANEL_BUILD_PLATFORM:-linux/amd64}"
 registry="${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}"
+aliyun_registry="${GAMEPANEL_ALIYUN_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}"
 version="${GAMEPANEL_IMAGE_TAG:-v0.2.17}"
 output="--load"
 
 usage() {
-  echo "Usage: $0 [--registry REGISTRY] [--version VERSION] [--builder BUILDER] [--platform PLATFORM] [--push|--load]"
+  echo "Usage: $0 [--registry REGISTRY] [--aliyun-registry REGISTRY] [--version VERSION] [--builder BUILDER] [--platform PLATFORM] [--push|--load]"
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --registry) registry="$2"; shift 2 ;;
+    --aliyun-registry) aliyun_registry="$2"; shift 2 ;;
     --version) version="$2"; shift 2 ;;
     --builder) builder="$2"; shift 2 ;;
     --platform) platform="$2"; shift 2 ;;
@@ -34,17 +36,26 @@ commit="$(git -C "$root_dir" rev-parse --short=12 HEAD)"
 build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 common=(buildx build --builder "$builder" --platform "$platform" "$output")
 
+api_tags=("-t" "$registry/game-panel-lite-api:$version")
+if [[ "$output" == "--push" && -n "$aliyun_registry" ]]; then
+  api_tags+=("-t" "$aliyun_registry/game-panel-lite-api:$version")
+fi
+
 docker "${common[@]}" \
   --build-arg "GAMEPANEL_VERSION=$version" \
   --build-arg "GAMEPANEL_COMMIT=$commit" \
   --build-arg "GAMEPANEL_BUILD_TIME=$build_time" \
   -f "$root_dir/docker/api/Dockerfile" \
-  -t "$registry/game-panel-lite-api:$version" \
+  "${api_tags[@]}" \
   "$root_dir"
 
 for component in web exporter updater agent; do
+  component_tags=("-t" "$registry/game-panel-lite-$component:$version")
+  if [[ "$output" == "--push" && -n "$aliyun_registry" ]]; then
+    component_tags+=("-t" "$aliyun_registry/game-panel-lite-$component:$version")
+  fi
   docker "${common[@]}" \
     -f "$root_dir/docker/$component/Dockerfile" \
-    -t "$registry/game-panel-lite-$component:$version" \
+    "${component_tags[@]}" \
     "$root_dir"
 done
