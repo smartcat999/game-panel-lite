@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Clock, Download, History, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { Camera, Clock, Download, History, Loader2, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useToast } from "@/components/toast-context";
+import { saveBlob } from "@/lib/download";
 import {
   createBackup,
   deleteBackup,
@@ -131,7 +132,8 @@ export function ServerTimeMachine({ server }: ServerTimeMachineProps) {
   const handleDownload = async (b: Backup) => {
     try {
       setDownloadingId(b.id);
-      await downloadBackupFile(b.id);
+      const blob = await downloadBackupFile(b.id);
+      saveBlob(blob, b.name);
       toast.success(isZh ? "开始下载存档文件" : "Download started");
     } catch (err) {
       toast.error(isZh ? "下载失败" : "Download failed", err instanceof Error ? err.message : "");
@@ -417,9 +419,13 @@ export function ServerTimeMachine({ server }: ServerTimeMachineProps) {
                       disabled={downloadingId === b.id}
                       onClick={() => handleDownload(b)}
                       title={isZh ? "下载存档文件到本地" : "Download file"}
-                      className="flex size-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-950/80 text-slate-400 hover:text-white hover:border-slate-700 transition"
+                      className="flex size-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-950/80 text-slate-400 hover:text-white hover:border-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Download className="size-3.5" />
+                      {downloadingId === b.id ? (
+                        <Loader2 className="size-3.5 animate-spin text-panel-green" />
+                      ) : (
+                        <Download className="size-3.5" />
+                      )}
                     </button>
 
                     <button

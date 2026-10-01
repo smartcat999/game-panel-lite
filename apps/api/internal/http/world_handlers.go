@@ -103,6 +103,7 @@ func (h *Handler) downloadWorld(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "world file not found on disk")
 		return
 	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", item.FileName))
 	http.ServeFile(w, r, path)
 }
 
