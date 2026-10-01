@@ -18,7 +18,9 @@ import {
   X
 } from "lucide-react";
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui";
+import { getSystemVersion } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
@@ -33,6 +35,8 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
   const { locale } = useI18n();
   const isZh = locale === "zh";
   const { canAccessGameAssets, canCreateServer, canEditSettings } = usePermissions();
+  const versionQuery = useQuery({ queryKey: ["system-version"], queryFn: getSystemVersion, staleTime: 60_000 });
+  const versionText = versionQuery.data?.version ? `GamePanel Lite ${versionQuery.data.version}` : "GamePanel Lite";
 
   // Close on ESC
   useEffect(() => {
@@ -154,7 +158,7 @@ export function AppsDrawer({ open, onClose }: AppsDrawerProps) {
 
         {/* Footer */}
         <div className="border-t border-slate-800 pt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-          <span>GamePanel Lite v0.3.2</span>
+          <span>{versionText}</span>
           <span>Press ESC or ⌘B to close</span>
         </div>
       </div>

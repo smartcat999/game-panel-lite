@@ -131,3 +131,81 @@ func TestCompareVersions(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckFallbackURL(t *testing.T) {
+	service := New("https://primary.example/manifest.json", "", "", time.Second)
+	service.SetFallbackURLs("https://fallback.example/manifest.json")
+	service.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host == "primary.example" {
+			return jsonResponse(http.StatusGatewayTimeout, "gateway timeout"), nil
+		}
+		if r.URL.Host == "fallback.example" {
+			return jsonResponse(http.StatusOK, `{"schemaVersion":1,"channel":"stable","version":"v1.4.0"}`), nil
+		}
+		return jsonResponse(http.StatusNotFound, `{}`), nil
+	})
+	service.current.Version = "v1.2.0"
+	status, err := service.Check(context.Background(), true, 24)
+	if err != nil {
+		t.Fatalf("expected fallback check to succeed, got %v", err)
+	}
+	if status.Latest == nil || status.Latest.Version != "v1.4.0" {
+		t.Fatalf("expected v1.4.0 from fallback, got %#v", status.Latest)
+	}
+}
+
+func TestCheck304NotModified(t *testing.T) {
+	service := New("https://updates.example/manifest.json", "", "", time.Second)
+	first := true
+	service.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if first {
+			first = false
+			resp := jsonResponse(http.StatusOK, `{"schemaVersion":1,"channel":"stable","version":"v1.5.0"}`)
+			resp.Header.Set("ETag", `"etag-123"`)
+			return resp, nil
+		}
+		if r.Header.Get("If-None-Match") != `"etag-123"` {
+			t.Errorf("expected If-None-Match: \"etag-123\", got %q", r.Header.Get("If-None-Match"))
+		}
+		return jsonResponse(http.StatusNotModified, ""), nil
+	})
+	service.current.Version = "v1.0.0"
+	status1, err := service.Check(context.Background(), true, 24)
+	if err != nil {
+		t.Fatalf("first check: %v", err)
+	}
+	if status1.Latest == nil || status1.Latest.Version != "v1.5.0" {
+		t.Fatalf("expected v1.5.0, got %#v", status1)
+	}
+
+	// Force time advance to bypass the 15s throttle
+	service.checkedAt = time.Now().Add(-20 * time.Second)
+
+	status2, err := service.Check(context.Background(), true, 24)
+	if err != nil {
+		t.Fatalf("second check: %v", err)
+	}
+	if status2.Latest == nil || status2.Latest.Version != "v1.5.0" {
+		t.Fatalf("expected v1.5.0 preserved after 304, got %#v", status2)
+	}
+}
+
+func TestRestoreCache(t *testing.T) {
+	service := New("https://updates.example/manifest.json", "", "", time.Second)
+	cachedTime := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	service.RestoreCache(&Manifest{
+		SchemaVersion: 1,
+		Channel:       "stable",
+		Version:       "v1.6.0",
+	}, cachedTime, `"etag-456"`)
+
+	manifest, checkedAt, etag := service.CachedSnapshot()
+	if manifest == nil || manifest.Version != "v1.6.0" || !checkedAt.Equal(cachedTime) || etag != `"etag-456"` {
+		t.Fatalf("unexpected cached snapshot: manifest=%#v checkedAt=%v etag=%q", manifest, checkedAt, etag)
+	}
+
+	status := service.Status(context.Background(), true, 24)
+	if status.Latest == nil || status.Latest.Version != "v1.6.0" {
+		t.Fatalf("expected restored version v1.6.0 in status, got %#v", status)
+	}
+}

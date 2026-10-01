@@ -103,14 +103,17 @@ type Status struct {
 
 type Service struct {
 	manifestURL  string
+	fallbackURLs []string
 	updaterURL   string
 	updaterToken string
 	client       *http.Client
 	current      buildinfo.Info
 
 	mu         sync.RWMutex
+	checkMu    sync.Mutex
 	latest     *Manifest
 	checkedAt  time.Time
+	etag       string
 	checkError string
 }
 
@@ -127,47 +130,138 @@ func New(manifestURL, updaterURL, updaterToken string, timeout time.Duration) *S
 	}
 }
 
+func (s *Service) SetFallbackURLs(urls ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cleaned := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if trimmed := strings.TrimSpace(u); trimmed != "" {
+			cleaned = append(cleaned, trimmed)
+		}
+	}
+	s.fallbackURLs = cleaned
+}
+
+func (s *Service) RestoreCache(manifest *Manifest, checkedAt time.Time, etag string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if manifest != nil && manifest.Version != "" {
+		s.latest = manifest
+		s.checkedAt = checkedAt
+		s.etag = etag
+	}
+}
+
+func (s *Service) CachedSnapshot() (manifest *Manifest, checkedAt time.Time, etag string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.latest, s.checkedAt, s.etag
+}
+
 func (s *Service) Check(ctx context.Context, autoCheck bool, intervalHours int) (Status, error) {
-	if s.manifestURL == "" {
+	s.checkMu.Lock()
+	defer s.checkMu.Unlock()
+
+	// Short-circuit if checked recently (within 15 seconds) to avoid spamming external services
+	s.mu.RLock()
+	if !s.checkedAt.IsZero() && time.Since(s.checkedAt) < 15*time.Second && s.checkError == "" && s.latest != nil {
+		s.mu.RUnlock()
+		return s.snapshot(autoCheck, intervalHours, nil), nil
+	}
+	s.mu.RUnlock()
+
+	urls := make([]string, 0, 1+len(s.fallbackURLs))
+	if s.manifestURL != "" {
+		urls = append(urls, s.manifestURL)
+	}
+	s.mu.RLock()
+	urls = append(urls, s.fallbackURLs...)
+	s.mu.RUnlock()
+
+	if len(urls) == 0 {
 		err := errors.New("release manifest URL is not configured")
 		s.setCheckError(err)
 		return s.snapshot(autoCheck, intervalHours, nil), err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.manifestURL, nil)
+
+	var (
+		manifest    Manifest
+		lastErr     error
+		notModified bool
+		newEtag     string
+	)
+
+	for _, targetURL := range urls {
+		m, etag, modified, err := s.fetchManifest(ctx, targetURL)
+		if err == nil {
+			if !modified {
+				notModified = true
+				lastErr = nil
+				break
+			}
+			manifest = m
+			newEtag = etag
+			lastErr = nil
+			break
+		}
+		lastErr = err
+	}
+
+	if lastErr != nil && !notModified {
+		s.setCheckError(lastErr)
+		return s.snapshot(autoCheck, intervalHours, nil), lastErr
+	}
+
+	s.mu.Lock()
+	s.checkedAt = time.Now().UTC()
+	s.checkError = ""
+	if !notModified {
+		s.latest = &manifest
+		if newEtag != "" {
+			s.etag = newEtag
+		}
+	}
+	s.mu.Unlock()
+
+	return s.snapshot(autoCheck, intervalHours, nil), nil
+}
+
+func (s *Service) fetchManifest(ctx context.Context, targetURL string) (Manifest, string, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return s.snapshot(autoCheck, intervalHours, nil), err
+		return Manifest{}, "", false, err
 	}
 	req.Header.Set("Accept", "application/json")
+	s.mu.RLock()
+	etag := s.etag
+	s.mu.RUnlock()
+	if etag != "" {
+		req.Header.Set("If-None-Match", etag)
+	}
+
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.setCheckError(err)
-		return s.snapshot(autoCheck, intervalHours, nil), err
+		return Manifest{}, "", false, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("release manifest returned HTTP %d", resp.StatusCode)
-		s.setCheckError(err)
-		return s.snapshot(autoCheck, intervalHours, nil), err
+
+	if resp.StatusCode == http.StatusNotModified {
+		return Manifest{}, etag, false, nil
 	}
+	if resp.StatusCode != http.StatusOK {
+		return Manifest{}, "", false, fmt.Errorf("release manifest returned HTTP %d", resp.StatusCode)
+	}
+
 	var manifest Manifest
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes))
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&manifest); err != nil {
-		err = fmt.Errorf("invalid release manifest: %w", err)
-		s.setCheckError(err)
-		return s.snapshot(autoCheck, intervalHours, nil), err
+		return Manifest{}, "", false, fmt.Errorf("invalid release manifest: %w", err)
 	}
 	if manifest.SchemaVersion != 1 || !validVersion(manifest.Version) {
-		err = errors.New("release manifest has an unsupported schema or version")
-		s.setCheckError(err)
-		return s.snapshot(autoCheck, intervalHours, nil), err
+		return Manifest{}, "", false, errors.New("release manifest has an unsupported schema or version")
 	}
-	s.mu.Lock()
-	s.latest = &manifest
-	s.checkedAt = time.Now().UTC()
-	s.checkError = ""
-	s.mu.Unlock()
-	return s.snapshot(autoCheck, intervalHours, nil), nil
+	return manifest, resp.Header.Get("ETag"), true, nil
 }
 
 func (s *Service) Status(ctx context.Context, autoCheck bool, intervalHours int) Status {

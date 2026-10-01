@@ -106,6 +106,7 @@ func (h *Handler) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "backup file not found on disk")
 		return
 	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", item.FileName))
 	http.ServeFile(w, r, path)
 }
 
@@ -255,6 +256,7 @@ func (h *Handler) downloadServerSave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "save snapshot file not found on disk")
 		return
 	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", item.FileName))
 	http.ServeFile(w, r, path)
 }
 

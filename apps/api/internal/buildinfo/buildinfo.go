@@ -3,7 +3,7 @@ package buildinfo
 import "runtime"
 
 var (
-	Version   = "v0.2.16"
+	Version   = "v0.2.17"
 	Commit    = "unknown"
 	BuildTime = "unknown"
 )

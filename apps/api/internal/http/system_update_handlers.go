@@ -6,10 +6,57 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/systemupdate"
 )
 
-const systemUpdateAutoCheckSetting = "systemUpdateAutoCheck"
+const (
+	systemUpdateAutoCheckSetting      = "systemUpdateAutoCheck"
+	systemUpdateCachedManifestSetting = "systemUpdateCachedManifest"
+	systemUpdateCachedAtSetting       = "systemUpdateCachedAt"
+	systemUpdateCachedEtagSetting     = "systemUpdateCachedEtag"
+)
+
+func (h *Handler) restoreCachedSystemUpdate(ctx context.Context) {
+	if h.store == nil || h.systemUpdate == nil {
+		return
+	}
+	manifestJSON, err := h.store.GetSetting(ctx, systemUpdateCachedManifestSetting)
+	if err != nil || strings.TrimSpace(manifestJSON) == "" {
+		return
+	}
+	var manifest systemupdate.Manifest
+	if err := json.Unmarshal([]byte(manifestJSON), &manifest); err != nil {
+		return
+	}
+	cachedAtStr, _ := h.store.GetSetting(ctx, systemUpdateCachedAtSetting)
+	var cachedAt time.Time
+	if cachedAtStr != "" {
+		cachedAt, _ = time.Parse(time.RFC3339, cachedAtStr)
+	}
+	etag, _ := h.store.GetSetting(ctx, systemUpdateCachedEtagSetting)
+	h.systemUpdate.RestoreCache(&manifest, cachedAt, etag)
+}
+
+func (h *Handler) persistSystemUpdateSnapshot(ctx context.Context) {
+	if h.store == nil || h.systemUpdate == nil {
+		return
+	}
+	manifest, checkedAt, etag := h.systemUpdate.CachedSnapshot()
+	if manifest != nil {
+		if data, err := json.Marshal(manifest); err == nil {
+			_ = h.store.SetSetting(ctx, systemUpdateCachedManifestSetting, string(data))
+		}
+	}
+	if !checkedAt.IsZero() {
+		_ = h.store.SetSetting(ctx, systemUpdateCachedAtSetting, checkedAt.Format(time.RFC3339))
+	}
+	if etag != "" {
+		_ = h.store.SetSetting(ctx, systemUpdateCachedEtagSetting, etag)
+	}
+}
 
 func (h *Handler) systemUpdatePreferences(ctx context.Context) (bool, int) {
 	enabled := true
@@ -27,7 +74,18 @@ func (h *Handler) systemUpdatePreferences(ctx context.Context) (bool, int) {
 
 func (h *Handler) getSystemUpdate(w http.ResponseWriter, r *http.Request) {
 	enabled, hours := h.systemUpdatePreferences(r.Context())
-	writeJSON(w, http.StatusOK, h.systemUpdate.Status(r.Context(), enabled, hours))
+	status := h.systemUpdate.Status(r.Context(), enabled, hours)
+	// If never checked before and auto check is enabled, trigger background check
+	if enabled && status.CheckedAt == "" && status.CheckError == "" {
+		go func() {
+			checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if _, err := h.systemUpdate.Check(checkCtx, enabled, hours); err == nil {
+				h.persistSystemUpdateSnapshot(checkCtx)
+			}
+		}()
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (h *Handler) checkSystemUpdate(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +95,7 @@ func (h *Handler) checkSystemUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, status)
 		return
 	}
+	h.persistSystemUpdateSnapshot(r.Context())
 	writeJSON(w, http.StatusOK, status)
 }
 
@@ -145,10 +204,22 @@ func (h *Handler) runAutomaticSystemUpdateChecks(ctx context.Context) {
 			h.logger.Warn("automatic panel update check failed", "error", err)
 			return
 		}
+		h.persistSystemUpdateSnapshot(ctx)
 		if status.UpdateAvailable && status.Latest != nil {
 			h.recordActivity(context.Background(), "", "system.update.available", fmt.Sprintf("GamePanel Lite %s is available", status.Latest.Version), map[string]any{"version": status.Latest.Version})
 		}
 	}
+
+	// Run initial check shortly after startup (5s) so the panel doesn't wait 24h to show the latest release
+	initialTimer := time.NewTimer(5 * time.Second)
+	defer initialTimer.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-initialTimer.C:
+		check()
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

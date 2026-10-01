@@ -102,11 +102,11 @@ export function ProviderConfigEditor({
   if (fields.length === 0) return <p className="mt-4 text-sm text-slate-500">{t("none")}</p>;
 
   return (
-    <div className="mt-4 space-y-4">
+    <div className="mt-4 space-y-4 min-w-0 w-full">
       {allAdvancedFields.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-1">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-1 min-w-0 w-full">
           {/* Left: View Switcher (Basic / Advanced) */}
-          <div role="tablist" aria-label={t("gameSettingsViews")} className="inline-flex rounded-lg border border-panel-line bg-slate-950/80 p-0.5 shadow-sm">
+          <div role="tablist" aria-label={t("gameSettingsViews")} className="inline-flex rounded-lg border border-panel-line bg-slate-950/80 p-0.5 shadow-sm shrink-0">
             {(["basic", "advanced"] as const).map((view) => (
               <button
                 key={view}
@@ -131,7 +131,7 @@ export function ProviderConfigEditor({
 
           {/* Right: Shard Switcher (For DST in Advanced View) */}
           {activeView === "advanced" && isDst && (
-            <div className="inline-flex items-center rounded-lg border border-panel-line bg-slate-950/80 p-0.5 shadow-sm">
+            <div className="inline-flex items-center rounded-lg border border-panel-line bg-slate-950/80 p-0.5 shadow-sm shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -174,11 +174,11 @@ export function ProviderConfigEditor({
       ) : null}
 
       {activeView === "advanced" && advancedFields.length > 0 ? (
-        <div className="min-w-0 rounded-lg border border-panel-line bg-slate-950/40 p-3">
+        <div className="min-w-0 rounded-lg border border-panel-line bg-slate-950/40 p-2.5 sm:p-3 w-full overflow-hidden">
           {/* Top-right action toolbar (Unified, compact, gamer-aesthetic) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-panel-line/70">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-slate-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-panel-line/70 min-w-0 w-full">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs font-medium text-slate-300 truncate">
                 {isDst
                   ? activeShard === "master"
                     ? t("dstShardMaster")
@@ -186,15 +186,15 @@ export function ProviderConfigEditor({
                   : t("advancedGameSettings")}
               </span>
               {currentShardModifiedCount > 0 && (
-                <span className="rounded-full bg-panel-green/15 border border-panel-green/30 px-2 py-0.5 text-[10px] font-semibold text-panel-green font-mono">
+                <span className="rounded-full bg-panel-green/15 border border-panel-green/30 px-2 py-0.5 text-[10px] font-semibold text-panel-green font-mono shrink-0">
                   {currentShardModifiedCount} {locale.startsWith("zh") ? "项已更改" : "modified"}
                 </span>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 w-full sm:w-auto">
               {/* Search */}
-              <div className="relative w-44 sm:w-56">
+              <div className="relative flex-1 min-w-[130px] sm:w-56 sm:flex-initial">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
                 <Input
                   className="h-7 w-full pl-8 text-xs bg-slate-900 border-panel-line"
@@ -205,7 +205,7 @@ export function ProviderConfigEditor({
               </div>
 
               {/* All / Modified Pill */}
-              <div className="inline-flex rounded-md border border-panel-line bg-slate-900 p-0.5">
+              <div className="inline-flex rounded-md border border-panel-line bg-slate-900 p-0.5 shrink-0">
                 {(["all", "modified"] as const).map((value) => (
                   <button
                     key={value}
@@ -226,7 +226,7 @@ export function ProviderConfigEditor({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-7 px-2 text-xs text-slate-400 hover:text-white"
+                  className="h-7 px-2 text-xs text-slate-400 hover:text-white shrink-0"
                   disabled={disabled}
                   onClick={() => onRestoreDefaults(advancedFields)}
                 >
@@ -237,8 +237,8 @@ export function ProviderConfigEditor({
             </div>
           </div>
 
-          <div className="pt-3 lg:grid lg:grid-cols-[160px_minmax(0,1fr)]">
-            <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line py-1.5 lg:block lg:border-b-0 lg:border-r lg:pr-2.5">
+          <div className="pt-3 lg:grid lg:grid-cols-[160px_minmax(0,1fr)] min-w-0 w-full">
+            <nav aria-label={t("settingsCategories")} className="flex gap-1 overflow-x-auto border-b border-panel-line py-1.5 lg:block lg:border-b-0 lg:border-r lg:pr-2.5 min-w-0 w-full no-scrollbar">
               {groups.map((group) => {
                 const count = advancedFields.filter((field) => field.group === group && isProviderFieldModified(payload, field)).length;
                 return (
@@ -258,7 +258,7 @@ export function ProviderConfigEditor({
                   >
                     <span className="truncate">{groupLabel(group, locale, t)}</span>
                     {count > 0 ? (
-                      <span className="text-[10px] font-bold text-panel-green bg-panel-green/15 px-1.5 py-0.2 rounded">
+                      <span className="text-[10px] font-bold text-panel-green bg-panel-green/15 px-1.5 py-0.2 rounded shrink-0">
                         {count}
                       </span>
                     ) : null}
@@ -266,26 +266,26 @@ export function ProviderConfigEditor({
                 );
               })}
             </nav>
-            <div className="min-w-0 py-2 lg:pl-3.5">
+            <div className="min-w-0 py-2 lg:pl-3.5 w-full">
               {visibleGroups.map((group) => {
                 const groupFields = matchedFields.filter((field) => field.group === group);
                 const effect = dstConfigGroupEffect(providerKey, group);
                 if (groupFields.length === 0) return null;
                 return (
-                  <section key={group} className="mb-4 last:mb-0">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <section key={group} className="mb-4 last:mb-0 min-w-0 w-full">
+                    <div className="mb-2 flex items-center justify-between gap-2 min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h5 className="text-xs font-semibold text-slate-200">{groupLabel(group, locale, t)}</h5>
+                        <h5 className="text-xs font-semibold text-slate-200 truncate">{groupLabel(group, locale, t)}</h5>
                         {surface === "server" && effect ? (
                           <span className={cn(
-                            "rounded px-1.5 py-0.2 text-[10px] font-medium",
+                            "rounded px-1.5 py-0.2 text-[10px] font-medium shrink-0",
                             effect === "worldgen" ? "bg-panel-gold/15 text-panel-gold" : "bg-slate-800 text-slate-400"
                           )}>
                             {t(effect === "worldgen" ? "worldGenerationAppliesOnRegenerate" : "worldSettingsApplyAfterRestart")}
                           </span>
                         ) : null}
                       </div>
-                      <span className="text-[10px] text-slate-500 font-mono">{t("settingsCount", { count: groupFields.length })}</span>
+                      <span className="text-[10px] text-slate-500 font-mono shrink-0">{t("settingsCount", { count: groupFields.length })}</span>
                     </div>
                     {surface === "server" && effect === "worldgen" && onRegenerateWorld && !normalizedQuery ? (
                       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-panel-gold/25 bg-panel-gold/5 px-3 py-1.5">
@@ -358,10 +358,10 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     : 0;
   const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
   return (
-    <div className={cn("min-w-0 rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700", error ? "border-red-400/60" : "border-slate-800")}>
+    <div className={cn("min-w-0 w-full rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700 overflow-hidden", error ? "border-red-400/60" : "border-slate-800")}>
       {field.type === "boolean" ? (
         <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-7 w-full items-center justify-between gap-2.5 text-left outline-none transition disabled:opacity-50" onClick={() => onChange(field, !checked)}>
-          <span className="text-xs font-semibold text-slate-200">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
+          <span className="text-xs font-semibold text-slate-200 truncate">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
           <span aria-hidden="true" className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", checked ? "bg-panel-green" : "bg-slate-700")}>
             <span className={cn("absolute left-0.5 top-0.5 size-3 rounded-full bg-white transition-transform", checked ? "translate-x-3" : "translate-x-0")} />
           </span>
@@ -369,21 +369,21 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
       ) : isRangeSlider ? (
         <>
           <div className="mb-1 flex min-h-4 items-center">
-            <label className="text-[11px] font-semibold text-slate-300" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
+            <label className="text-[11px] font-semibold text-slate-300 truncate" htmlFor={`provider-field-${field.name}`}>{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</label>
           </div>
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2.5 text-[10px] tabular-nums text-slate-500">
-          <span className="pb-0.5">{field.min}</span>
-          <div className="relative min-w-0 pt-5" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
-            <output
-              aria-hidden="true"
-              className="pointer-events-none absolute top-0 min-w-6 -translate-x-1/2 rounded bg-slate-800 px-1 py-0.2 text-center text-[10px] font-bold tabular-nums text-slate-100"
-              style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
-            >
-              {numericValue}
-            </output>
-            <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range block w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
-          </div>
-          <span className="pb-0.5">{field.max}</span>
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2 text-[10px] tabular-nums text-slate-500 min-w-0 w-full">
+            <span className="pb-0.5 shrink-0">{field.min}</span>
+            <div className="relative min-w-0 pt-5" style={{ "--range-fill": `${clampedRangeFill}%` } as CSSProperties}>
+              <output
+                aria-hidden="true"
+                className="pointer-events-none absolute top-0 min-w-6 -translate-x-1/2 rounded bg-slate-800 px-1 py-0.2 text-center text-[10px] font-bold tabular-nums text-slate-100"
+                style={{ left: `clamp(1.25rem, ${clampedRangeFill}%, calc(100% - 1.25rem))` }}
+              >
+                {numericValue}
+              </output>
+              <input id={`provider-field-${field.name}`} aria-label={label} className="resource-range block w-full" type="range" min={field.min} max={field.max} step={field.step ?? 1} value={numericValue} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+            </div>
+            <span className="pb-0.5 shrink-0">{field.max}</span>
           </div>
         </>
       ) : field.type === "select" ? (
@@ -411,8 +411,8 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
           <Input id={`provider-field-${field.name}`} className="h-8.5 w-full bg-slate-900 border-slate-800 text-xs px-2.5 focus:border-panel-green" type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} step={field.step ?? 1} value={field.type === "number" ? Number(value ?? 0) : String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
         </LabeledControl>
       )}
-      {help ? <p className="mt-1 text-[10px] leading-tight text-slate-500">{help}</p> : null}
-      {error ? <p className="mt-1 text-[10px] font-medium text-red-300">{error}</p> : null}
+      {help ? <p className="mt-1 text-[10px] leading-tight text-slate-500 break-words">{help}</p> : null}
+      {error ? <p className="mt-1 text-[10px] font-medium text-red-300 break-words">{error}</p> : null}
     </div>
   );
 }
