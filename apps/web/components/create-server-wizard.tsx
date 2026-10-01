@@ -288,7 +288,25 @@ function validateCreateConfig({
     }
     if (field.type === "number") {
       const numberValue = typeof value === "number" ? value : Number(value);
-      if (!Number.isFinite(numberValue) || numberValue < 1) errors[field.name] = t("positiveNumberFieldError", { field: label });
+      if (!Number.isFinite(numberValue)) {
+        errors[field.name] = t("requiredFieldError", { field: label });
+        continue;
+      }
+      const min = typeof field.min === "number" ? field.min : 1;
+      if (numberValue < min) {
+        if (min === 0) {
+          errors[field.name] = t("nonNegativeNumberFieldError", { field: label });
+        } else if (min === 1) {
+          errors[field.name] = t("positiveNumberFieldError", { field: label });
+        } else {
+          errors[field.name] = t("minNumberFieldError", { field: label, min });
+        }
+        continue;
+      }
+      if (typeof field.max === "number" && numberValue > field.max) {
+        errors[field.name] = `${label} 不能大于 ${field.max}`;
+        continue;
+      }
       continue;
     }
     if (!String(value ?? "").trim()) {
@@ -997,8 +1015,8 @@ export function CreateServerWizard() {
   }, [step, stepIds.length]);
 
   return (
-    <Card className="overflow-hidden border-slate-800 bg-slate-950/80 shadow-2xl rounded-2xl">
-      <div className="grid min-h-[580px] lg:grid-cols-[220px_1fr]">
+    <Card className="overflow-hidden border-slate-800 bg-slate-950/80 shadow-2xl rounded-2xl w-full min-w-0">
+      <div className="grid min-h-[580px] lg:grid-cols-[220px_1fr] min-w-0 w-full">
         <aside className="hidden border-r border-slate-800 bg-slate-950/50 p-4 lg:flex lg:flex-col lg:gap-3.5 shrink-0">
           <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-md">
             {selectedGameArt.imageSrc ? (
@@ -1059,7 +1077,7 @@ export function CreateServerWizard() {
           </div>
         </aside>
 
-        <div className="p-4 sm:p-6">
+        <div className="p-3.5 sm:p-6 min-w-0 w-full overflow-hidden">
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-xl font-bold text-white tracking-tight">{t("createWizardTitle")}</h1>
             <Link
@@ -1074,7 +1092,7 @@ export function CreateServerWizard() {
           </div>
 
             {/* Compact Stepper */}
-            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1">
+            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1 min-w-0 w-full no-scrollbar">
               {stepIds.map((stepId, index) => {
                 const labelKey = stepLabelKeys[stepId];
                 const isCurrent = index === step;
@@ -1720,10 +1738,10 @@ function ConfigStep({
   if (gameKey !== "terraria") {
     const providerFields = provider?.configSchema ?? [];
     return (
-      <div>
+      <div className="space-y-3 min-w-0 w-full">
         <ConfigStepHeader />
-        <div className="mt-3">
-          <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3.5 space-y-3">
+        <div className="mt-3 min-w-0 w-full">
+          <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:p-4 space-y-3 min-w-0 w-full overflow-hidden">
             <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2">
               <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
                 <Gamepad2 aria-hidden="true" className="size-3.5" />
