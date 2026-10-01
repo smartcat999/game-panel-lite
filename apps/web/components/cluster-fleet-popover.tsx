@@ -14,6 +14,7 @@ import {
   Server,
   Settings,
   Terminal,
+  X,
   Zap
 } from "lucide-react";
 import { listComputeNodes, listGameServers, getObservabilityMetrics, getNodeJoinCommand, createComputeNode } from "@/lib/api";
@@ -40,6 +41,7 @@ export function ClusterFleetPopover() {
   const [generatedJoinData, setGeneratedJoinData] = useState<{ dockerCommand: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const mobileCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -94,9 +96,10 @@ export function ClusterFleetPopover() {
   // Close popover on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (popoverRef.current && popoverRef.current.contains(target)) return;
+      if (mobileCardRef.current && mobileCardRef.current.contains(target)) return;
+      setIsOpen(false);
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
@@ -108,6 +111,164 @@ export function ClusterFleetPopover() {
   const hasOfflineNode = nodes.length > 0 && onlineNodes.length < nodes.length;
   const isAllHealthy = !hasOfflineNode;
   const totalNodeCount = Math.max(nodes.length, 1);
+
+  const renderPopoverBody = () => (
+    <>
+      {/* Header 标题栏 */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/15 text-panel-green border border-emerald-500/30">
+            <Server className="size-3.5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-white tracking-wide">
+              {isZh ? "计算节点总览" : "Compute Nodes Overview"}
+            </h4>
+            <p className="text-[10px] text-slate-400 font-mono">
+              {isZh
+                ? `${onlineNodes.length}/${nodes.length} 个节点在线 · ${runningServers.length}/${servers.length} 个实例运行中`
+                : `${onlineNodes.length}/${nodes.length} online · ${runningServers.length}/${servers.length} running`}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {canEditSettings ? (
+            <Link
+              href="/settings?tab=nodes"
+              onClick={() => setIsOpen(false)}
+              className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:text-white transition"
+              title={isZh ? "节点管理设置" : "Node Settings"}
+            >
+              <Settings className="size-3.5" />
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="flex sm:hidden size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:text-white transition"
+            aria-label="Close"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 实时系统指标条 */}
+      <div className="grid grid-cols-3 gap-2 py-3 border-b border-slate-800 font-mono text-center">
+        <div className="rounded-lg bg-slate-950 border border-slate-800/80 p-2">
+          <p className="text-[10px] text-slate-400">{isZh ? "CPU 使用率" : "CPU USAGE"}</p>
+          <p className="text-sm font-bold text-sky-300 mt-0.5">{cpuPercent}%</p>
+        </div>
+        <div className="rounded-lg bg-slate-950 border border-slate-800/80 p-2">
+          <p className="text-[10px] text-slate-400">{isZh ? "内存占用" : "MEM USED"}</p>
+          <p className="text-sm font-bold text-purple-300 mt-0.5">{memUsedGB} GB</p>
+        </div>
+        <div className="rounded-lg bg-slate-950 border border-slate-800/80 p-2">
+          <p className="text-[10px] text-slate-400">{isZh ? "运行中实例" : "RUNNING"}</p>
+          <p className="text-sm font-bold text-panel-green mt-0.5">{runningServers.length}</p>
+        </div>
+      </div>
+
+      {/* 节点列表 */}
+      <div className="py-3 space-y-2">
+        <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 px-0.5">
+          <span>{isZh ? "节点分布" : "Node Distribution"}</span>
+          <span className="text-[10px] text-slate-500">{nodes.length} {isZh ? "个节点" : "nodes"}</span>
+        </div>
+
+        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+          {nodes.map((n) => {
+            const nodeServers = servers.filter(
+              (s) => (n.isLocal && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === n.id
+            );
+            const nodeRunning = nodeServers.filter((s) => gameServerStatus(s) === "running").length;
+            const isOnline = n.status === "online" || n.isLocal;
+
+            return (
+              <div
+                key={n.id}
+                onClick={() => {
+                  setIsOpen(false);
+                  router.push(`/servers?node=${n.id}`);
+                }}
+                className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 hover:border-emerald-500/50 p-2.5 transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-300 group-hover:text-emerald-400">
+                    {n.isLocal ? <Server className="size-3.5" /> : <Zap className="size-3.5" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("size-1.5 rounded-full shrink-0", isOnline ? "bg-emerald-400" : "bg-slate-500")} />
+                      <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">
+                        {n.name}
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                      {n.region ? `${n.region} · ` : ""}
+                      {nodeRunning > 0 ? (
+                        <span className="text-emerald-400">{nodeRunning} 个运行中</span>
+                      ) : (
+                        <span>0 个运行</span>
+                      )}
+                      {" · "}{nodeServers.length} 个实例
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 font-mono text-[11px]">
+                  {n.pingLatencyMs ? (
+                    <span className="text-sky-400 bg-sky-950 border border-sky-800/60 rounded px-1.5 py-0.5 text-[10px]">
+                      {n.pingLatencyMs}ms
+                    </span>
+                  ) : (
+                    <span className="text-slate-500 text-[10px]">
+                      {n.isLocal ? "主控" : "Agent"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 底部快捷操作 */}
+      <div className="pt-2 border-t border-slate-800">
+        <div className={cn("grid gap-2", canManageNodes ? "grid-cols-2" : "grid-cols-1")}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsOpen(false);
+              setTopologyOpen(true);
+            }}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 hover:border-slate-700 py-2 text-xs font-medium text-slate-300 hover:text-white transition"
+          >
+            <Network className="size-3.5 text-panel-green" />
+            <span>{isZh ? "网络拓扑" : "Topology"}</span>
+          </button>
+
+          {canManageNodes ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setNewNodeName(`Worker-Node-${nodes.length}`);
+                setNewNodeRegion("");
+                setGeneratedJoinData(null);
+                setJoinModalOpen(true);
+              }}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950 hover:bg-emerald-900 py-2 text-xs font-medium text-emerald-300 hover:text-white transition shadow-xs"
+            >
+              <Plus className="size-3.5" />
+              <span>{isZh ? "添加节点" : "Add Node"}</span>
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div ref={popoverRef} className="relative inline-flex items-center">
@@ -161,152 +322,27 @@ export function ClusterFleetPopover() {
         />
       </button>
 
-      {/* 下拉面板 (实心高对比背景，杜绝透明穿透与重叠) */}
+      {/* 移动端全屏遮罩 + 居中浮层 (createPortal 挂载到 body，100% 杜绝屏幕边缘截断) */}
+      {mounted && isOpen && createPortal(
+        <div className="sm:hidden">
+          <div
+            className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-2xs animate-in fade-in duration-150"
+            onClick={() => setIsOpen(false)}
+          />
+          <div
+            ref={mobileCardRef}
+            className="fixed inset-x-3.5 top-16 z-[130] mx-auto max-w-sm rounded-xl border border-slate-700 bg-[#0d131f] p-4 text-slate-200 shadow-2xl shadow-black/90 animate-in fade-in zoom-in-95 duration-150"
+          >
+            {renderPopoverBody()}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 桌面端正常相对定位下拉框 (无遮罩) */}
       {isOpen && (
-        <div className="absolute right-0 sm:left-0 top-12 z-[100] w-[calc(100vw-24px)] max-w-sm sm:w-96 rounded-xl border border-slate-700 bg-[#0d131f] p-4 text-slate-200 shadow-2xl shadow-black/90 animate-in fade-in zoom-in-95 duration-150">
-          {/* Header 标题栏 */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <div className="flex items-center gap-2">
-              <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-500/15 text-panel-green border border-emerald-500/30">
-                <Server className="size-3.5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white tracking-wide">
-                  {isZh ? "计算节点总览" : "Compute Nodes Overview"}
-                </h4>
-                <p className="text-[10px] text-slate-400 font-mono">
-                  {isZh
-                    ? `${onlineNodes.length}/${nodes.length} 个节点在线 · ${runningServers.length}/${servers.length} 个实例运行中`
-                    : `${onlineNodes.length}/${nodes.length} online · ${runningServers.length}/${servers.length} running`}
-                </p>
-              </div>
-            </div>
-
-            {canEditSettings ? (
-              <Link
-                href="/settings"
-                onClick={() => setIsOpen(false)}
-                className="flex size-7 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:text-white transition"
-                title={isZh ? "节点管理设置" : "Node Settings"}
-              >
-                <Settings className="size-3.5" />
-              </Link>
-            ) : null}
-          </div>
-
-          {/* 实时系统指标条 */}
-          <div className="grid grid-cols-3 gap-2 py-3 border-b border-slate-800 font-mono text-center">
-            <div className="rounded-lg bg-slate-950 border border-slate-800/80 p-2">
-              <p className="text-[10px] text-slate-400">{isZh ? "CPU 使用率" : "CPU USAGE"}</p>
-              <p className="text-sm font-bold text-sky-300 mt-0.5">{cpuPercent}%</p>
-            </div>
-            <div className="rounded-lg bg-slate-950 border border-slate-800/80 p-2">
-              <p className="text-[10px] text-slate-400">{isZh ? "内存占用" : "MEM USED"}</p>
-              <p className="text-sm font-bold text-purple-300 mt-0.5">{memUsedGB} GB</p>
-            </div>
-            <div className="rounded-lg bg-slate-950 border border-slate-800/80 p-2">
-              <p className="text-[10px] text-slate-400">{isZh ? "运行中实例" : "RUNNING"}</p>
-              <p className="text-sm font-bold text-panel-green mt-0.5">{runningServers.length}</p>
-            </div>
-          </div>
-
-          {/* 节点列表 */}
-          <div className="py-3 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 px-0.5">
-              <span>{isZh ? "节点分布" : "Node Distribution"}</span>
-              <span className="text-[10px] text-slate-500">{nodes.length} {isZh ? "个节点" : "nodes"}</span>
-            </div>
-
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
-              {nodes.map((n) => {
-                const nodeServers = servers.filter(
-                  (s) => (n.isLocal && (!s.nodeId || s.nodeId === "node-local")) || s.nodeId === n.id
-                );
-                const nodeRunning = nodeServers.filter((s) => gameServerStatus(s) === "running").length;
-                const isOnline = n.status === "online" || n.isLocal;
-
-                return (
-                  <div
-                    key={n.id}
-                    onClick={() => {
-                      setIsOpen(false);
-                      router.push(`/servers?node=${n.id}`);
-                    }}
-                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 hover:border-emerald-500/50 p-2.5 transition cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-300 group-hover:text-emerald-400">
-                        {n.isLocal ? <Server className="size-3.5" /> : <Zap className="size-3.5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("size-1.5 rounded-full shrink-0", isOnline ? "bg-emerald-400" : "bg-slate-500")} />
-                          <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-white">
-                            {n.name}
-                          </p>
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-mono truncate">
-                          {n.region ? `${n.region} · ` : ""}
-                          {nodeRunning > 0 ? (
-                            <span className="text-emerald-400">{nodeRunning} 个运行中</span>
-                          ) : (
-                            <span>0 个运行</span>
-                          )}
-                          {" · "}{nodeServers.length} 个实例
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0 font-mono text-[11px]">
-                      {n.pingLatencyMs ? (
-                        <span className="text-sky-400 bg-sky-950 border border-sky-800/60 rounded px-1.5 py-0.5 text-[10px]">
-                          {n.pingLatencyMs}ms
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 text-[10px]">
-                          {n.isLocal ? "主控" : "Agent"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 底部快捷操作 */}
-          <div className="pt-2 border-t border-slate-800">
-            <div className={cn("grid gap-2", canManageNodes ? "grid-cols-2" : "grid-cols-1")}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOpen(false);
-                  setTopologyOpen(true);
-                }}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 hover:bg-slate-900 hover:border-slate-700 py-2 text-xs font-medium text-slate-300 hover:text-white transition"
-              >
-                <Network className="size-3.5 text-panel-green" />
-                <span>{isZh ? "网络拓扑" : "Topology"}</span>
-              </button>
-
-              {canManageNodes ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsOpen(false);
-                    setNewNodeName(`Worker-Node-${nodes.length}`);
-                    setNewNodeRegion("");
-                    setGeneratedJoinData(null);
-                    setJoinModalOpen(true);
-                  }}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950 hover:bg-emerald-900 py-2 text-xs font-medium text-emerald-300 hover:text-white transition shadow-xs"
-                >
-                  <Plus className="size-3.5" />
-                  <span>{isZh ? "添加节点" : "Add Node"}</span>
-                </button>
-              ) : null}
-            </div>
-          </div>
+        <div className="hidden sm:block absolute right-0 top-12 z-[100] w-96 rounded-xl border border-slate-700 bg-[#0d131f] p-4 text-slate-200 shadow-2xl shadow-black/90 animate-in fade-in zoom-in-95 duration-150">
+          {renderPopoverBody()}
         </div>
       )}
 
