@@ -119,7 +119,7 @@ export default function DashboardPage() {
   const featuredServers = [...servers].sort(serverPriority).slice(0, 6);
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 min-w-0 w-full">
       {/* 1. Commander Hero Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -357,27 +357,27 @@ export default function DashboardPage() {
       </section>
 
       {/* 5. Bottom Two Wings: Compact Telemetry + Live Audit Events */}
-      <div className="grid gap-6 lg:grid-cols-2 pt-2">
+      <div className="grid gap-6 lg:grid-cols-2 pt-2 min-w-0 w-full">
         {/* Left Wing: Telemetry Performance Trend */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
-              <Activity className="size-4 text-panel-green" />
-              <h3 className="text-sm font-bold text-white">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 sm:p-5 space-y-4 min-w-0 w-full overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <Activity className="size-4 text-panel-green shrink-0" />
+              <h3 className="text-sm font-bold text-white truncate">
                 {isZh ? "节点资源实时监控" : "Node Resource Monitor"}
               </h3>
-              <span className="rounded bg-panel-green/10 px-1.5 py-0.5 text-[10px] font-mono text-panel-green">
+              <span className="rounded bg-panel-green/10 px-1.5 py-0.5 text-[10px] font-mono text-panel-green shrink-0">
                 Live
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
               {/* Node Selector */}
               {nodes.length > 1 && (
                 <select
                   value={selectedMonitorNodeId}
                   onChange={(e) => setSelectedMonitorNodeId(e.target.value)}
-                  className="h-7 rounded-md border border-slate-800 bg-slate-900 px-2 text-xs text-slate-200 focus:border-panel-green focus:outline-none"
+                  className="h-7 rounded-md border border-slate-800 bg-slate-900 px-2 text-xs text-slate-200 focus:border-panel-green focus:outline-none max-w-[140px] truncate"
                 >
                   <option value="node-local">{isZh ? "🖥️ 主控本机" : "🖥️ Local controller"}</option>
                   {nodes.filter(n => !n.isLocal).map(n => (
@@ -388,25 +388,25 @@ export default function DashboardPage() {
                 </select>
               )}
 
-              <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900 p-0.5 text-xs">
+              <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900 p-0.5 text-xs shrink-0">
                 <button
                   type="button"
                   onClick={() => setMetricKey("nodeCpu")}
-                  className={cn("px-2 py-0.5 rounded", metricKey === "nodeCpu" ? "bg-slate-800 text-white font-bold" : "text-slate-400")}
+                  className={cn("px-2 py-0.5 rounded transition", metricKey === "nodeCpu" ? "bg-slate-800 text-white font-bold" : "text-slate-400")}
                 >
                   CPU
                 </button>
                 <button
                   type="button"
                   onClick={() => setMetricKey("nodeMemory")}
-                  className={cn("px-2 py-0.5 rounded", metricKey === "nodeMemory" ? "bg-slate-800 text-white font-bold" : "text-slate-400")}
+                  className={cn("px-2 py-0.5 rounded transition", metricKey === "nodeMemory" ? "bg-slate-800 text-white font-bold" : "text-slate-400")}
                 >
                   {isZh ? "内存" : "RAM"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMetricKey("nodeNetwork")}
-                  className={cn("px-2 py-0.5 rounded", metricKey === "nodeNetwork" ? "bg-slate-800 text-white font-bold" : "text-slate-400")}
+                  className={cn("px-2 py-0.5 rounded transition", metricKey === "nodeNetwork" ? "bg-slate-800 text-white font-bold" : "text-slate-400")}
                 >
                   {isZh ? "网络" : "Net"}
                 </button>
@@ -423,20 +423,20 @@ export default function DashboardPage() {
             const memoryUsedGB = formatOptionalMemoryGb(activeMetrics.memoryUsedMb);
             const cpuPercent = formatOptionalPercent(activeMetrics.cpuUsagePercent);
             return (
-              <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5 text-xs font-mono">
-                <div>
-                  <span className="text-[10px] text-slate-500 block">{isZh ? "当前节点" : "Current node"}</span>
+              <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5 text-xs font-mono min-w-0">
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-500 block truncate">{isZh ? "当前节点" : "Current node"}</span>
                   <span className="text-slate-200 font-medium truncate block">{activeNode.name}</span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">
-                    {isZh ? `CPU 使用率 (${activeMetrics.cpuCores || "—"} 核)` : `CPU usage (${activeMetrics.cpuCores || "—"} cores)`}
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-500 block truncate">
+                    {isZh ? `CPU (${activeMetrics.cpuCores || "—"}核)` : `CPU (${activeMetrics.cpuCores || "—"}c)`}
                   </span>
-                  <span className="text-panel-green font-semibold">{cpuPercent}</span>
+                  <span className="text-panel-green font-semibold truncate block">{cpuPercent}</span>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 block">{isZh ? "内存已用" : "Memory used"}</span>
-                  <span className="text-sky-300 font-semibold">{memoryUsedGB} / {memoryTotalGB} GB</span>
+                <div className="min-w-0">
+                  <span className="text-[10px] text-slate-500 block truncate">{isZh ? "内存已用" : "Memory used"}</span>
+                  <span className="text-sky-300 font-semibold truncate block">{memoryUsedGB} / {memoryTotalGB} GB</span>
                 </div>
               </div>
             );
@@ -450,16 +450,17 @@ export default function DashboardPage() {
         </div>
 
         {/* Right Wing: Live Audit & Snapshots Pulse */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <History className="size-4 text-sky-400" />
-              <h3 className="text-sm font-bold text-white">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3.5 sm:p-5 space-y-4 min-w-0 w-full overflow-hidden">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <History className="size-4 text-sky-400 shrink-0" />
+              <h3 className="text-sm font-bold text-white truncate">
                 {isZh ? "近期备份与操作日志" : "Recent Backups & Events"}
               </h3>
             </div>
-            <Link href="/activity" className="inline-flex items-center gap-1 text-xs text-panel-green hover:underline">
-              <span>{isZh ? "查看全部活动" : "All Events"}</span>
+            <Link href="/activity" className="inline-flex items-center gap-1 text-xs text-panel-green hover:underline shrink-0">
+              <span className="hidden sm:inline">{isZh ? "查看全部活动" : "All Events"}</span>
+              <span className="sm:hidden">{isZh ? "全部" : "All"}</span>
               <ChevronRight className="size-3" />
             </Link>
           </div>

@@ -80,11 +80,11 @@ export function ResourceTrendChart({
     backgroundColor: "transparent",
     color: [color],
     grid: {
-      bottom: 24,
+      bottom: 20,
       containLabel: true,
-      left: 12,
-      right: 16,
-      top: 20
+      left: 6,
+      right: 10,
+      top: 16
     },
     tooltip: {
       trigger: "axis",
@@ -193,7 +193,11 @@ export function ResourceTrendChart({
     ]
   };
 
-  return <ReactECharts notMerge option={option} opts={{ renderer: "canvas" }} style={{ height, width: "100%" }} />;
+  return (
+    <div className="w-full min-w-0 overflow-hidden">
+      <ReactECharts notMerge option={option} opts={{ renderer: "canvas" }} style={{ height, width: "100%" }} />
+    </div>
+  );
 }
 
 export function MetricSparkline({
