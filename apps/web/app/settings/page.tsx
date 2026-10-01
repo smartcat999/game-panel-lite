@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Button, Card, Input, ToastNotice } from "@/components/ui";
+import { VersionTimeline } from "@/components/version-timeline";
 import {
   applySystemUpdate,
   checkSystemUpdate,
@@ -589,6 +590,8 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
           <div className="border-t border-panel-line px-5 py-3 text-sm text-panel-gold md:px-6">{t("panelUpdateUpdaterUnavailable")}</div>
         ) : null}
       </Card>
+
+      <VersionTimeline currentVersion={data?.current.version ?? "v0.2.17"} />
 
       <ConfirmDialog
         busy={install.isPending}
