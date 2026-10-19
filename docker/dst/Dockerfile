@@ -8,11 +8,14 @@ RUN --mount=type=cache,id=gamepanel-dst-steam-library,target=/var/cache/dst,shar
     echo "Building DST runtime ${DST_IMAGE_VERSION}" \
     && installed=0 \
     && for attempt in 1 2 3; do \
-         if /usr/games/steamcmd +force_install_dir /var/cache/dst +login anonymous +app_update 343050 validate +quit; then \
+         if /usr/games/steamcmd +force_install_dir /var/cache/dst +login anonymous +app_update 343050 validate +quit \
+            && grep -Eq '"StateFlags"[[:space:]]+"4"' /var/cache/dst/steamapps/appmanifest_343050.acf; then \
            installed=1; \
            break; \
          fi; \
-         echo "DST image install attempt ${attempt} failed" >&2; \
+         echo "DST image install attempt ${attempt} failed; retrying with a fresh Steam manifest" >&2; \
+         rm -f /var/cache/dst/steamapps/appmanifest_343050.acf; \
+         rm -rf /var/cache/dst/steamapps/downloading/343050; \
        done \
     && test "${installed}" = "1" \
     && test -x /var/cache/dst/bin64/dontstarve_dedicated_server_nullrenderer_x64 \
