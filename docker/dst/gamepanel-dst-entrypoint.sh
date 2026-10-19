@@ -15,6 +15,8 @@ STEAMCMD_BIN="${DST_STEAMCMD_BIN:-/usr/games/steamcmd}"
 LEGACY_WORKSHOP_FALLBACK="${DST_LEGACY_WORKSHOP_FALLBACK:-1}"
 WORKSHOP_DETAILS_ENDPOINT="${DST_WORKSHOP_DETAILS_ENDPOINT:-https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/}"
 WORKSHOP_REFRESH_ATTEMPTS="${DST_WORKSHOP_REFRESH_ATTEMPTS:-6}"
+GAME_UPDATE_STRICT="${DST_GAME_UPDATE_STRICT:-0}"
+STEAM_LOG_DIR="${DST_STEAM_LOG_DIR:-${HOME:-${ROOT_DIR}}/.local/share/Steam/logs}"
 
 record_installed_build() {
   local manifest="${SERVER_DIR}/steamapps/appmanifest_${DST_STEAM_APP_ID}.acf"
@@ -24,6 +26,21 @@ record_installed_build() {
   [[ -n "${build_id}" ]] || return 0
   mkdir -p "${PERSISTENT_ROOT}/.gamepanel"
   printf '%s\n' "${build_id}" >"${PERSISTENT_ROOT}/.gamepanel/dst-build-id"
+}
+
+steam_update_blocked_by_stale_manifest() {
+  local content_log="${STEAM_LOG_DIR}/content_log.txt"
+  [[ -f "${content_log}" ]] || return 1
+  tail -n 400 "${content_log}" 2>/dev/null | grep -q "Failed to get manifest request code"
+}
+
+quarantine_stale_manifest() {
+  local manifest="${SERVER_DIR}/steamapps/appmanifest_${DST_STEAM_APP_ID}.acf"
+  local backup="${manifest}.gamepanel-stale-$(date -u +%Y%m%dT%H%M%SZ)"
+  [[ -f "${manifest}" ]] || return 0
+  mv "${manifest}" "${backup}"
+  rm -rf "${SERVER_DIR}/steamapps/downloading/${DST_STEAM_APP_ID}"
+  echo "DST Steam manifest is stale or inaccessible; re-downloading app ${DST_STEAM_APP_ID} from scratch (previous manifest: ${backup})." >&2
 }
 
 update_server_game() {
@@ -36,7 +53,7 @@ update_server_game() {
     exit 1
   fi
 
-  local attempt
+  local attempt repaired=0
   echo "Checking for DST game updates before restart..."
   for attempt in 1 2 3; do
     if "${STEAMCMD_BIN}" \
@@ -49,9 +66,24 @@ update_server_game() {
       return 0
     fi
     echo "DST game update attempt ${attempt} failed." >&2
+    # Steam keeps old build manifests behind a license check. When the local
+    # app manifest points at a build anonymous login can no longer request, the
+    # delta update aborts forever with "Access Denied" and state 0x6. Dropping
+    # the stale manifest forces SteamCMD to re-download the current public
+    # build, which anonymous accounts can still access.
+    if [[ "${repaired}" -eq 0 ]] && steam_update_blocked_by_stale_manifest; then
+      repaired=1
+      quarantine_stale_manifest
+    fi
   done
-  echo "DST game update failed after 3 attempts; the server will not start with stale files." >&2
-  exit 1
+
+  if [[ "${GAME_UPDATE_STRICT}" == "1" ]]; then
+    echo "DST game update failed after ${attempt} attempts; the server will not start with stale files (DST_GAME_UPDATE_STRICT=1)." >&2
+    exit 1
+  fi
+  echo "DST game update failed after ${attempt} attempts; starting the installed DST build instead so the server stays available." >&2
+  record_installed_build
+  return 0
 }
 
 server_bin() {

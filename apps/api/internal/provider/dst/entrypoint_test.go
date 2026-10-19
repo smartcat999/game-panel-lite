@@ -71,6 +71,75 @@ func TestDSTEntrypointRefreshesAllWorkshopModsOnRestart(t *testing.T) {
 	}
 }
 
+func TestDSTEntrypointReplacesStaleSteamManifestOnAccessDenied(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, true)
+	t.Setenv("FAKE_STEAMCMD_FAIL_MODE", "stale_manifest")
+	t.Setenv("DST_STEAM_LOG_DIR", filepath.Join(root, "steamlogs"))
+	staleManifest := filepath.Join(root, "server", "steamapps", "appmanifest_343050.acf")
+	writeTestFile(t, staleManifest, "\"AppState\"\n{\n  \"StateFlags\" \"6\"\n  \"buildid\" \"24700372\"\n}\n")
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("expected stale manifest recovery to succeed: %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "re-downloading app 343050 from scratch") {
+		t.Fatalf("expected stale manifest quarantine message, got:\n%s", output)
+	}
+	if !strings.Contains(output, "DST game files are up to date.") {
+		t.Fatalf("expected the retry to update DST game files, got:\n%s", output)
+	}
+	manifest := readTestFile(t, staleManifest)
+	if !strings.Contains(manifest, "\"buildid\" \"25643504\"") {
+		t.Fatalf("expected the re-downloaded manifest, got %q", manifest)
+	}
+	if got := strings.TrimSpace(readTestFile(t, filepath.Join(dataDir, ".gamepanel", "dst-build-id"))); got != "25643504" {
+		t.Fatalf("expected the refreshed build marker, got %q", got)
+	}
+	steamLog := readTestFile(t, filepath.Join(dataDir, "fake-steamcmd.log"))
+	if got := strings.Count(steamLog, "+app_update 343050"); got != 2 {
+		t.Fatalf("expected one failed update and one full re-download, got %d attempts:\n%s", got, steamLog)
+	}
+}
+
+func TestDSTEntrypointStartsInstalledBuildWhenUpdateKeepsFailing(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, true)
+	t.Setenv("FAKE_STEAMCMD_FAIL_MODE", "always")
+	manifest := filepath.Join(root, "server", "steamapps", "appmanifest_343050.acf")
+	writeTestFile(t, manifest, "\"AppState\"\n{\n  \"StateFlags\" \"4\"\n  \"buildid\" \"24700372\"\n}\n")
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err != nil {
+		t.Fatalf("expected update failure to keep the server available: %v\n%s", err, output)
+	}
+	if !strings.Contains(output, "starting the installed DST build instead") {
+		t.Fatalf("expected installed-build fallback message, got:\n%s", output)
+	}
+	if !strings.Contains(output, "DST game update attempt 3 failed.") {
+		t.Fatalf("expected three update attempts, got:\n%s", output)
+	}
+	if got := strings.TrimSpace(readTestFile(t, filepath.Join(dataDir, ".gamepanel", "dst-build-id"))); got != "24700372" {
+		t.Fatalf("expected the installed build marker, got %q", got)
+	}
+	if log := readTestFile(t, filepath.Join(dataDir, "fake-server.log")); !strings.Contains(log, "-persistent_storage_root") {
+		t.Fatalf("expected the installed DST build to start, got %q", log)
+	}
+}
+
+func TestDSTEntrypointStrictModeRefusesStaleBuild(t *testing.T) {
+	root, dataDir, script := dstEntrypointFixture(t, true)
+	t.Setenv("FAKE_STEAMCMD_FAIL_MODE", "always")
+	t.Setenv("DST_GAME_UPDATE_STRICT", "1")
+	writeTestFile(t, filepath.Join(root, "server", "steamapps", "appmanifest_343050.acf"), "\"AppState\"\n{\n  \"StateFlags\" \"4\"\n  \"buildid\" \"24700372\"\n}\n")
+
+	output, err := runDSTEntrypoint(t, root, dataDir, script, "refresh")
+	if err == nil {
+		t.Fatalf("expected strict mode to refuse starting stale files, got:\n%s", output)
+	}
+	if !strings.Contains(output, "DST_GAME_UPDATE_STRICT=1") {
+		t.Fatalf("expected strict mode hint, got:\n%s", output)
+	}
+}
+
 func TestDSTEntrypointPreservesOldCacheWhenRefreshIsIncomplete(t *testing.T) {
 	root, dataDir, script := dstEntrypointFixture(t, false)
 	writeTestFile(t, filepath.Join(dataDir, "ugc_mods", "old-cache"), "old")
@@ -390,13 +459,28 @@ fi
 	fakeSteamCMD := `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "${DST_PERSISTENT_ROOT}/fake-steamcmd.log"
+manifest="${DST_ROOT_DIR}/server/steamapps/appmanifest_343050.acf"
+build_id=24700372
+case "${FAKE_STEAMCMD_FAIL_MODE:-}" in
+  always)
+    exit 1
+    ;;
+  stale_manifest)
+    if [[ -f "${manifest}" ]]; then
+      mkdir -p "${DST_STEAM_LOG_DIR}"
+      printf '[2026-10-19 13:04:22] CDepotDownloadMgr::BYldRequestDepotManifest(App: 343050, Depot: 343052, Manifest: 3802424534343984195, branch: ): Failed to get manifest request code, '"'"'Access Denied'"'"'\n' >> "${DST_STEAM_LOG_DIR}/content_log.txt"
+      exit 1
+    fi
+    build_id=25643504
+    ;;
+esac
 mkdir -p "${DST_ROOT_DIR}/server/steamapps"
-cat > "${DST_ROOT_DIR}/server/steamapps/appmanifest_343050.acf" <<'EOF'
+cat > "${manifest}" <<EOF
 "AppState"
 {
   "appid" "343050"
   "StateFlags" "4"
-  "buildid" "24700372"
+  "buildid" "${build_id}"
 }
 EOF
 `
