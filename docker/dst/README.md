@@ -10,9 +10,9 @@ Build this image for `linux/amd64`:
 scripts/build-game-images.sh dst --platform linux/amd64 --load
 ```
 
-By default this loads the runtime image as `smartcat99999/dst-server:latest`, matching the image namespace used by the other GamePanel Lite runtime images.
+The build script tags the image with the dated runtime version (for example `smartcat99999/dst-server:v2026.10.19`), matching the version listed in `config/providers.json`.
 
-Steam app `343050` supports anonymous SteamCMD installation, but Steam can temporarily return `Missing configuration` during image builds. To keep builds reproducible and avoid personal Steam credentials, the Dockerfile copies the preinstalled server files from a digest-pinned `webhippie/dst` image, then runs them with GamePanel Lite's own unprivileged runtime and entrypoint.
+Steam app `343050` supports anonymous SteamCMD installation. The Dockerfile installs it from the official `steamcmd/steamcmd` image and keeps the Steam library in a build cache, so rebuilds are fast. Steam can temporarily return `Missing configuration` on first install, and it can refuse manifest requests for a build cached from an older image. The install step therefore retries, and it drops a stale `appmanifest_343050.acf` before failing the build.
 
 Docker buildx is supported. The build script passes `--platform` and `--builder` through to buildx, the same as the other runtime images. On Apple Silicon or other arm hosts, make sure the active buildx builder has an amd64 node. If the builder falls back to local QEMU emulation, SteamCMD can exit with a segmentation fault before the DST server files are downloaded.
 
