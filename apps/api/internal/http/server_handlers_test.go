@@ -631,7 +631,7 @@ func TestCreateDSTServerUsesDSTRuntimeSpec(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected async start to create runtime container")
 	}
-	if spec.Image != "smartcat99999/dst-server:v2026.08.14" {
+	if spec.Image != "smartcat99999/dst-server:v2026.10.19" {
 		t.Fatalf("expected DST image, got %q", spec.Image)
 	}
 	if spec.Port != 10999 || spec.Options.PortProtocol != "udp" {

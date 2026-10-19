@@ -2,7 +2,7 @@
 
 ARG STEAMCMD_IMAGE=steamcmd/steamcmd@sha256:aed94b9fa7322488a36f97d0842cd0df1d73d79d592ea0b6f39b3a8fba7076de
 FROM ${STEAMCMD_IMAGE} AS installer
-ARG DST_IMAGE_VERSION=v2026.08.14
+ARG DST_IMAGE_VERSION=v2026.10.19
 
 RUN --mount=type=cache,id=gamepanel-dst-steam-library,target=/var/cache/dst,sharing=locked \
     echo "Building DST runtime ${DST_IMAGE_VERSION}" \
