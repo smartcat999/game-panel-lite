@@ -130,7 +130,7 @@ export default function SettingsPage() {
           <SettingsTabButton
             key={tab.key}
             active={activeTab === tab.key}
-            badge={tab.key === "updates" ? "v0.2.17" : undefined}
+            badge={tab.key === "updates" ? "v0.2.18" : undefined}
             icon={tab.icon}
             label={tab.label}
             onClick={() => setActiveTab(tab.key)}
@@ -619,7 +619,7 @@ function PanelUpdateCard({ onNotice }: { onNotice: (notice: { message: string; t
         ) : null}
       </Card>
 
-      <VersionTimeline currentVersion={data?.current.version ?? "v0.2.17"} />
+      <VersionTimeline currentVersion={data?.current.version ?? "v0.2.18"} />
 
       <ConfirmDialog
         busy={install.isPending}

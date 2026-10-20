@@ -39,6 +39,39 @@ export interface ReleaseVersion {
 
 export const RELEASES_DATA: ReleaseVersion[] = [
   {
+    version: "v0.2.18",
+    channel: "stable",
+    date: "2026-10-20",
+    tagline: "饥荒运行时更新自愈 · v2026.10.19 镜像 · 更新失败可用性兜底",
+    security: {
+      dataMigration: "存档无需迁移",
+      serverInterruption: "游戏服不中断",
+      configCompatibility: "配置全兼容",
+      hotReload: "极速热升级"
+    },
+    features: [
+      {
+        title: "饥荒 v2026.10.19 运行时镜像",
+        desc: "新增内置最新饥荒联机版服务端构建的日期版本镜像，新服务器默认使用该版本，旧版本继续保留可用于回滚。"
+      }
+    ],
+    bugFixes: [
+      {
+        title: "饥荒更新 Access Denied 自愈",
+        desc: "当 Steam 拒绝旧构建的 depot manifest 时，入口脚本会自动隔离陈旧 appmanifest 并重新下载当前构建，解决 state 0x6 导致重启永久失败的问题。"
+      },
+      {
+        title: "更新失败可用性兜底",
+        desc: "多次更新失败后默认启动已安装版本而不是直接退出，避免服务器完全不可用；需要严格拒绝旧文件时可设置 DST_GAME_UPDATE_STRICT=1。"
+      },
+      {
+        title: "运行时镜像构建缓存修复",
+        desc: "镜像构建过程中同样会清理构建缓存里的陈旧 Steam manifest，避免因缓存导致的构建失败。"
+      }
+    ],
+    compareUrl: "https://github.com/smartcat999/game-panel-lite/compare/v0.2.17...v0.2.18"
+  },
+  {
     version: "v0.2.17",
     channel: "stable",
     date: "2026-10-01",
@@ -188,7 +221,7 @@ interface VersionTimelineProps {
 
 const defaultRelease: ReleaseVersion = RELEASES_DATA[0] as ReleaseVersion;
 
-export function VersionTimeline({ currentVersion = "v0.2.17" }: VersionTimelineProps) {
+export function VersionTimeline({ currentVersion = "v0.2.18" }: VersionTimelineProps) {
   const [selectedVersionTag, setSelectedVersionTag] = useState<string>(defaultRelease.version);
 
   const selectedRelease: ReleaseVersion =

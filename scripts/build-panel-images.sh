@@ -6,7 +6,7 @@ builder="${GAMEPANEL_BUILDX_BUILDER:-my-builder}"
 platform="${GAMEPANEL_BUILD_PLATFORM:-linux/amd64}"
 registry="${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}"
 aliyun_registry="${GAMEPANEL_ALIYUN_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}"
-version="${GAMEPANEL_IMAGE_TAG:-v0.2.17}"
+version="${GAMEPANEL_IMAGE_TAG:-v0.2.18}"
 output="--load"
 
 usage() {
