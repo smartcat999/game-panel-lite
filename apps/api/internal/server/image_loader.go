@@ -45,7 +45,10 @@ func (l *RuntimeImageLoader) EnsureImage(ctx context.Context, server domain.Game
 	}
 	archivePath, err := l.runtimeInstallArchivePath(server.ProviderKey, server.Spec.Version, image)
 	if err != nil {
-		return err
+		archivePath, err = l.runtimeInstallArchiveForImage(server.ProviderKey, image, err)
+		if err != nil {
+			return err
+		}
 	}
 	if err := l.runtime.LoadImageArchive(ctx, archivePath); err != nil {
 		return fmt.Errorf("load server runtime image from local archive: %w", err)
@@ -57,6 +60,33 @@ func (l *RuntimeImageLoader) EnsureImage(ctx context.Context, server domain.Game
 		return fmt.Errorf("load server runtime image from local archive failed")
 	}
 	return nil
+}
+
+// Game-file versions can share one runtime image. After reinstalling the latest
+// runtime, use its archive rather than looking for an old game-version archive.
+func (l *RuntimeImageLoader) runtimeInstallArchiveForImage(providerKey domain.ProviderKey, image string, originalErr error) (string, error) {
+	directory := filepath.Join(l.dataDir, "runtime-installs", safeRuntimeInstallPathPart(string(providerKey)))
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return "", originalErr
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(directory, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var marker runtimeInstallMarker
+		if json.Unmarshal(data, &marker) != nil || marker.Image != image || marker.Version == "" || safeRuntimeInstallPathPart(marker.Version)+".json" != entry.Name() {
+			continue
+		}
+		if path, err := l.runtimeInstallArchivePath(providerKey, marker.Version, image); err == nil {
+			return path, nil
+		}
+	}
+	return "", originalErr
 }
 
 func (l *RuntimeImageLoader) runtimeInstallArchivePath(providerKey domain.ProviderKey, version string, image string) (string, error) {

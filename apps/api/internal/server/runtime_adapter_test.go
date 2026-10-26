@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -90,5 +91,13 @@ func TestRuntimeAdapterClientMapsLifecycleCalls(t *testing.T) {
 	}
 	if status.State != domain.ActualRunning {
 		t.Fatalf("expected actual running, got %q", status.State)
+	}
+}
+
+func TestRuntimeAdapterClientMapsMissingContainerForRecreation(t *testing.T) {
+	adapter := &captureWorkloadRuntime{status: domain.WorkloadStatus{State: domain.ActualMissing}}
+	_, err := NewRuntimeAdapterClient(adapter).Inspect(context.Background(), "removed-by-uninstall")
+	if !errors.Is(err, ErrWorkloadNotFound) {
+		t.Fatalf("missing container must trigger recreation: %v", err)
 	}
 }

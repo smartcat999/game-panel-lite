@@ -100,6 +100,7 @@ func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain
 					TargetVersion: version,
 					UpdatedAt:     time.Now(),
 				}
+				providerCatalog.Versions = latestRuntimeVersions(gameProvider)
 				continue
 			}
 			status := h.runtimeInstallStatus(ctx, runtimeInstallRef{ProviderKey: providerCatalog.Key, Version: version, Image: image})
@@ -127,6 +128,7 @@ func (h *Handler) attachRuntimeImageStatuses(ctx context.Context, games []domain
 				}
 			}
 			providerCatalog.RuntimeImage = status
+			providerCatalog.Versions = latestRuntimeVersions(gameProvider)
 		}
 	}
 }
@@ -139,7 +141,9 @@ func (h *Handler) gameVersions(w http.ResponseWriter, r *http.Request) {
 	}
 	versions := map[domain.ProviderKey][]string{}
 	for _, item := range game.Providers {
-		versions[item.Key] = item.Versions
+		if p, ok := h.provider.Get(item.Key); ok {
+			versions[item.Key] = latestRuntimeVersions(p)
+		}
 	}
 	writeJSON(w, http.StatusOK, versions)
 }

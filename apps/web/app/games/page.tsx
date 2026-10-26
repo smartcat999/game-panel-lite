@@ -16,6 +16,7 @@ import { isRuntimeImagePreparing, isRuntimeImageReady, runtimeImageLabelKey, run
 import { cn } from "@/lib/utils";
 import type { GameCatalogEntry, ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 import { usePermissions } from "@/lib/permissions";
+import { RuntimeImageUninstall } from "@/components/runtime-image-uninstall";
 
 import { GameAssetsSubNav } from "@/components/sub-nav";
 
@@ -193,7 +194,8 @@ function ProviderRuntimeRow({
         {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {canInstall ? <RuntimeImageUninstall provider={provider} disabled={preparing} /> : null}
         {ready && canCreateServer ? (
           <Link
             href={`/servers/new?game=${encodeURIComponent(game.key)}&provider=${encodeURIComponent(provider.key)}${provider.recommendedVersion ? `&version=${encodeURIComponent(provider.recommendedVersion)}` : ""}`}

@@ -64,6 +64,13 @@ func (s *SwitchableAdapter) LoadImageArchive(ctx context.Context, path string) e
 	return fmt.Errorf("runtime adapter does not support local image archives")
 }
 
+func (s *SwitchableAdapter) RemoveImage(ctx context.Context, image string, stopped []ImageRemovalTarget) error {
+	if remover, ok := s.current().(ImageRemover); ok {
+		return remover.RemoveImage(ctx, image, stopped)
+	}
+	return fmt.Errorf("runtime adapter does not support image removal")
+}
+
 func (s *SwitchableAdapter) CheckGameUpdate(ctx context.Context, request GameUpdateRequest) (GameUpdateResult, error) {
 	executor, ok := s.current().(GameUpdateExecutor)
 	if !ok {

@@ -139,6 +139,9 @@ func (a *Adapter) RemoveWorkload(ctx context.Context, runtimeID string) error {
 
 func (a *Adapter) InspectWorkload(ctx context.Context, runtimeID string) (domain.WorkloadStatus, error) {
 	status, err := a.inspectContainerState(ctx, runtimeID)
+	if client.IsErrNotFound(err) {
+		return domain.WorkloadStatus{RuntimeID: runtimeID, State: domain.ActualMissing}, nil
+	}
 	if err != nil {
 		return domain.WorkloadStatus{}, err
 	}

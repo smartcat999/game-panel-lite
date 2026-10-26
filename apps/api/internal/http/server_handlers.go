@@ -208,6 +208,10 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported provider version")
 		return
 	}
+	if gameProvider.ImageFor(payload.Version) != gameProvider.Image() {
+		writeError(w, http.StatusBadRequest, "only the latest runtime image can be installed")
+		return
+	}
 	modIDs := uniqueNonEmptyStrings(payload.ModIDs)
 	if len(modIDs) > 0 && !providerSupportsMods(payload.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "mods are not supported for this provider")
@@ -318,9 +322,11 @@ func (h *Handler) startServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
-	if err := h.syncDSTModsBeforeLifecycle(r.Context(), id); err != nil {
+	if err := h.prepareServerStart(r.Context(), id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "server not found")
+		} else if errors.Is(err, errLatestRuntimeNotInstalled) {
+			writeError(w, http.StatusConflict, err.Error())
 		} else {
 			writeError(w, http.StatusInternalServerError, err.Error())
 		}
@@ -362,9 +368,11 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "server maintenance is in progress")
 		return
 	}
-	if err := h.syncDSTModsBeforeLifecycle(r.Context(), id); err != nil {
+	if err := h.prepareServerStart(r.Context(), id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "server not found")
+		} else if errors.Is(err, errLatestRuntimeNotInstalled) {
+			writeError(w, http.StatusConflict, err.Error())
 		} else {
 			writeError(w, http.StatusInternalServerError, err.Error())
 		}
@@ -379,10 +387,16 @@ func (h *Handler) restartServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, server)
 }
 
-func (h *Handler) syncDSTModsBeforeLifecycle(ctx context.Context, id string) error {
+func (h *Handler) prepareServerStart(ctx context.Context, id string) error {
 	server, err := h.store.GetGameServer(ctx, id)
-	if err != nil || server.ProviderKey != domain.ProviderDST {
+	if err != nil {
 		return err
+	}
+	if err := h.useLatestRuntimeForRestore(ctx, &server); err != nil {
+		return err
+	}
+	if server.ProviderKey != domain.ProviderDST {
+		return nil
 	}
 	if err := h.syncDSTDesiredWorkshopConfig(ctx, &server); err != nil {
 		return err
