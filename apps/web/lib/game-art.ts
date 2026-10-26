@@ -1,4 +1,4 @@
-import { Bird, Blocks, Flame, Leaf, type LucideIcon } from "lucide-react";
+import { Bird, Blocks, Flame, Leaf, Skull, type LucideIcon } from "lucide-react";
 
 export type GameArtConfig = {
   /** Image src when available, otherwise uses gradient + icon */
@@ -19,6 +19,12 @@ const terrariaArt: GameArtConfig = {
 };
 
 export const gameArtConfig: Record<string, GameArtConfig> = {
+  "seven-days-to-die": {
+    imageSrc: "/images/seven-days-to-die-cover.jpg",
+    gradient: "from-red-950/50 via-slate-950/20 to-slate-950/50",
+    icon: Skull,
+    alt: "7 Days to Die",
+  },
   terraria: terrariaArt,
   "terraria-vanilla": terrariaArt,
   "terraria-tmodloader": terrariaArt,

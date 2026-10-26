@@ -1,5 +1,13 @@
 package domain
 
+type SteamUpdateConfig struct {
+	AppID                string
+	InstallDir           string
+	Executable           string
+	BackupSubtree        string
+	MinimumFreeDiskBytes int64
+}
+
 type WorkloadResources struct {
 	CPULimitCores float64 `json:"cpuLimitCores,omitempty"`
 	MemoryLimitMB int     `json:"memoryLimitMb,omitempty"`
@@ -38,6 +46,7 @@ type WorkloadSpec struct {
 type ProviderRuntimeConfig struct {
 	Port            int             `json:"port,omitempty"`
 	AdditionalPorts []int           `json:"additionalPorts,omitempty"`
+	PortBindings    []WorkloadPort  `json:"portBindings,omitempty"`
 	Protocol        string          `json:"protocol,omitempty"`
 	ConfigText      string          `json:"configText,omitempty"`
 	Options         WorkloadOptions `json:"options,omitempty"`

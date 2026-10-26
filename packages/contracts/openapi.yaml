@@ -1380,10 +1380,10 @@ components:
           $ref: "#/components/schemas/ResourceLimits"
     ProviderKey:
       type: string
-      enum: [terraria-vanilla, terraria-tmodloader, minecraft-java, palworld, dst]
+      enum: [terraria-vanilla, terraria-tmodloader, minecraft-java, palworld, dst, seven-days-to-die]
     GameKey:
       type: string
-      enum: [terraria, minecraft, palworld, dst]
+      enum: [terraria, minecraft, palworld, dst, seven-days-to-die]
     ServerDesiredState:
       type: string
       enum: [running, stopped, deleted]

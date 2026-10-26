@@ -329,11 +329,11 @@ function formatCheckedAt(value: string | undefined, locale: "zh" | "en", fallbac
   }).format(timestamp);
 }
 
-function gameUpdateFailureMessage(error: string | undefined, locale: "zh" | "en", t: (key: MessageKey) => string) {
+function gameUpdateFailureMessage(error: string | undefined, locale: "zh" | "en", t: (key: MessageKey, params?: Record<string, string | number>) => string) {
   if (!error) return t("gameUpdateFailureDetail");
   if (locale === "en") return error;
   const normalized = error.toLowerCase();
-  if (normalized.includes("disk space")) return t("gameUpdateFailureDisk");
+  if (normalized.includes("disk space")) return t("gameUpdateFailureDisk", { required: error?.match(/at least (\d+) GiB/i)?.[1] ?? "8" });
   if (normalized.includes("memory")) return t("gameUpdateFailureMemory");
   if (normalized.includes("health")) return t("gameUpdateFailureHealth");
   if (normalized.includes("interrupted")) return t("gameUpdateFailureInterrupted");

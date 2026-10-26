@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/go-connections/nat"
+
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
 
@@ -106,6 +108,24 @@ func TestNatPortMapsIncludesAdditionalUdpPort(t *testing.T) {
 	}
 	if got := ports["11000/udp"]; len(got) != 1 || got[0].HostPort != "11000" {
 		t.Fatalf("expected Caves UDP mapping, got %v", got)
+	}
+}
+
+func TestNatPortsPreserveSameNumberTCPAndUDP(t *testing.T) {
+	spec := runtime.ContainerSpec{Port: 26900, HostPort: 30000, Options: runtime.ContainerOptions{PortProtocol: "tcp"}, AdditionalPorts: []runtime.ContainerPort{
+		{Port: 26900, HostPort: 30000, Protocol: "udp"}, {Port: 26901, HostPort: 30001, Protocol: "udp"}, {Port: 26902, HostPort: 30002, Protocol: "udp"},
+	}}
+	bindings, exposed := natPortMaps(spec), natPortSets(spec)
+	if len(bindings) != 4 || len(exposed) != 4 {
+		t.Fatalf("protocols collapsed: %+v %+v", bindings, exposed)
+	}
+	for _, key := range []string{"26900/tcp", "26900/udp", "26901/udp", "26902/udp"} {
+		if _, ok := exposed[nat.Port(key)]; !ok {
+			t.Fatalf("missing %s", key)
+		}
+		if len(bindings[nat.Port(key)]) != 1 {
+			t.Fatalf("missing binding %s", key)
+		}
 	}
 }
 

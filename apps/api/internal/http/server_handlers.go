@@ -106,19 +106,30 @@ func (h *Handler) updateServerConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if validator, ok := gameProvider.(provider.ConfigUpdateValidator); ok {
+		if err := validator.ValidateConfigUpdate(server.Spec.Config, configPayload); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
 	summary, err := providerConfigSummary(gameProvider, configPayload)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	requestedPort := server.Spec.Network.HostPort
 	if payload.HostPort != nil {
-		hostPort, err := h.resolveHostPort(r.Context(), *payload.HostPort, server.ID)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		server.Spec.Network.HostPort = hostPort
+		requestedPort = *payload.HostPort
 	}
+	candidate := server
+	candidate.Spec.Config = configPayload
+	candidate.Spec.Network.Port = summary.Port
+	hostPort, err := h.resolveProviderHostPort(r.Context(), requestedPort, candidate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	server.Spec.Network.HostPort = hostPort
 	if payload.Resources != nil {
 		resources, err := normalizeResourceLimits(*payload.Resources)
 		if err != nil {
@@ -220,7 +231,7 @@ func (h *Handler) createServer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	hostPort, err := h.resolveHostPort(r.Context(), payload.HostPort, "")
+	hostPort, err := h.resolveProviderHostPort(r.Context(), payload.HostPort, domain.GameServer{ProviderKey: payload.ProviderKey, Spec: domain.ServerSpec{Config: configPayload, Network: domain.ServerNetworkSpec{Port: summary.Port}}})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

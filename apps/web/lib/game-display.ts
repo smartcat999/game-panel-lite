@@ -2,6 +2,7 @@ import type { MessageKey } from "./i18n";
 import type { GameKey } from "./types";
 
 const gameNameKeys: Partial<Record<string, MessageKey>> = {
+  "seven-days-to-die": "gameNameSevenDays",
   terraria: "gameNameTerraria",
   palworld: "gameNamePalworld",
   "dont-starve-together": "gameNameDST",
@@ -9,6 +10,7 @@ const gameNameKeys: Partial<Record<string, MessageKey>> = {
 };
 
 const gameDescKeys: Partial<Record<string, MessageKey>> = {
+  "seven-days-to-die": "gameDescSevenDays",
   terraria: "gameDescTerraria",
   palworld: "gameDescPalworld",
   "dont-starve-together": "gameDescDST",

@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	serverctrl "github.com/smartcat999/game-panel-lite/apps/api/internal/server"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/store"
@@ -57,9 +58,9 @@ func (h *Handler) getGameUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := gameUpdateView{
-		Supported:        server.ProviderKey == domain.ProviderPalworld,
+		Supported:        h.supportsSteamUpdates(server.ProviderKey),
 		Status:           "unknown",
-		AutoCheckEnabled: server.ProviderKey == domain.ProviderPalworld,
+		AutoCheckEnabled: h.supportsSteamUpdates(server.ProviderKey),
 		AutoCheckHours:   int(gameUpdateAutoCheckInterval / time.Hour),
 	}
 	if !view.Supported {
@@ -71,7 +72,8 @@ func (h *Handler) getGameUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	installedBuildID, installedErr := installedServerBuildID(server, palworldSteamAppID)
+	updateConfig, _ := h.steamUpdateConfig(server.ProviderKey)
+	installedBuildID, installedErr := installedServerBuildID(server, updateConfig.AppID)
 	if installedErr == nil {
 		view.InstalledBuildID = installedBuildID
 	}
@@ -114,7 +116,7 @@ func (h *Handler) updateGameUpdateAutoCheck(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if server.ProviderKey != domain.ProviderPalworld {
+	if !h.supportsSteamUpdates(server.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "automatic game update checks are not supported for this provider")
 		return
 	}
@@ -138,7 +140,7 @@ func (h *Handler) updateGameUpdateAutoCheck(w http.ResponseWriter, r *http.Reque
 
 func (h *Handler) updateProviderGameUpdateAutoCheck(w http.ResponseWriter, r *http.Request) {
 	providerKey := domain.ProviderKey(chi.URLParam(r, "providerKey"))
-	if providerKey != domain.ProviderPalworld {
+	if !h.supportsSteamUpdates(providerKey) {
 		writeError(w, http.StatusBadRequest, "automatic game update checks are not supported for this provider")
 		return
 	}
@@ -174,7 +176,7 @@ func (h *Handler) checkGameUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) checkProviderGameUpdate(w http.ResponseWriter, r *http.Request) {
 	providerKey := domain.ProviderKey(chi.URLParam(r, "providerKey"))
-	if providerKey != domain.ProviderPalworld {
+	if !h.supportsSteamUpdates(providerKey) {
 		writeError(w, http.StatusBadRequest, "game version checks are not supported for this provider")
 		return
 	}
@@ -242,7 +244,14 @@ func (h *Handler) scanAutomaticGameUpdateChecks(ctx context.Context, now time.Ti
 	if len(worldJobs) > 0 {
 		return nil
 	}
-	for _, providerKey := range []domain.ProviderKey{domain.ProviderPalworld} {
+	for _, gameProvider := range h.provider.List() {
+		providerKey := gameProvider.Key()
+		if !h.supportsSteamUpdates(providerKey) {
+			continue
+		}
+		if h.runtime.ImageStatus(ctx, gameProvider.Image()).Status != runtime.ImageStatusReady {
+			continue
+		}
 		enabled, err := h.gameUpdateAutoCheckEnabled(ctx, providerKey)
 		if err != nil {
 			return err
@@ -370,7 +379,7 @@ func (h *Handler) gameUpdateServer(w http.ResponseWriter, r *http.Request) (doma
 		writeError(w, http.StatusNotFound, "server not found")
 		return server, false
 	}
-	if server.ProviderKey != domain.ProviderPalworld {
+	if !h.supportsSteamUpdates(server.ProviderKey) {
 		writeError(w, http.StatusBadRequest, "game updates are not supported for this provider")
 		return server, false
 	}
@@ -458,14 +467,11 @@ func (h *Handler) providerGameUpdateCheckRequest(providerKey domain.ProviderKey,
 	if !ok {
 		return runtime.GameUpdateRequest{}, fmt.Errorf("provider %s is unavailable", providerKey)
 	}
-	appID := ""
-	switch providerKey {
-	case domain.ProviderPalworld:
-		appID = palworldSteamAppID
-	default:
+	updateConfig, ok := h.steamUpdateConfig(providerKey)
+	if !ok {
 		return runtime.GameUpdateRequest{}, fmt.Errorf("game version checks are not implemented for provider %s", providerKey)
 	}
-	return runtime.GameUpdateRequest{JobID: jobID, RuntimeID: providerGameUpdateScope(providerKey), Image: gameProvider.Image(), AppID: appID}, nil
+	return runtime.GameUpdateRequest{JobID: jobID, RuntimeID: providerGameUpdateScope(providerKey), Image: gameProvider.Image(), AppID: updateConfig.AppID, InstallDir: updateConfig.InstallDir, Executable: updateConfig.Executable}, nil
 }
 
 func installedServerBuildID(server domain.GameServer, appID string) (string, error) {
@@ -501,8 +507,17 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameJob(&job, fmt.Errorf("inspect available disk space: %w", err))
 		return
 	}
-	if availableDisk < minGameUpdateFreeDiskBytes {
-		h.failGameJob(&job, fmt.Errorf("at least 8 GiB of free disk space is required for a safe game update"))
+	updateConfig, supported := h.steamUpdateConfig(server.ProviderKey)
+	if !supported {
+		h.failGameJob(&job, fmt.Errorf("game updates are unsupported"))
+		return
+	}
+	minDisk := minGameUpdateFreeDiskBytes
+	if updateConfig.MinimumFreeDiskBytes > minDisk {
+		minDisk = updateConfig.MinimumFreeDiskBytes
+	}
+	if availableDisk < minDisk {
+		h.failGameJob(&job, fmt.Errorf("at least %d GiB of free disk space is required for a safe game update", minDisk/(1024*1024*1024)))
 		return
 	}
 	h.updateGameJob(&job, domain.GameUpdateJobRunning, domain.GameUpdateStageStopping, 5, "")
@@ -530,12 +545,12 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		return
 	}
 	h.updateGameJob(&job, domain.GameUpdateJobRunning, domain.GameUpdateStageBackingUp, 10, "")
-	savedDir := filepath.Join(dataDir, "Pal", "Saved")
+	savedDir := filepath.Join(dataDir, updateConfig.BackupSubtree)
 	if err := os.MkdirAll(savedDir, 0o755); err != nil {
-		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("prepare Palworld save directory: %w", err))
+		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("prepare game save directory: %w", err))
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).CreateSubtree(server.ID, dataDir, filepath.Join("Pal", "Saved"))
+	path, size, err := backupsvc.NewService(h.cfg.DataDir).CreateSubtree(server.ID, dataDir, updateConfig.BackupSubtree)
 	if err != nil {
 		h.failGameUpdateApply(ctx, server, &job, err)
 		return
@@ -551,8 +566,8 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("recheck available disk space after backup: %w", err))
 		return
 	}
-	if availableDisk < minGameUpdateFreeDiskBytes {
-		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("at least 8 GiB of free disk space is required after the save backup"))
+	if availableDisk < minDisk {
+		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("at least %d GiB of free disk space is required after the save backup", minDisk/(1024*1024*1024)))
 		return
 	}
 	request, err := h.gameUpdateRequest(server, job.ID)
@@ -610,7 +625,27 @@ func (h *Handler) gameUpdateRequest(server domain.GameServer, jobID string) (run
 	if runtimeID == "" {
 		runtimeID = "gamepanel-" + server.ID
 	}
-	return runtime.GameUpdateRequest{JobID: jobID, RuntimeID: runtimeID, Image: image, DataDir: dataDir, AppID: palworldSteamAppID}, nil
+	updateConfig, ok := h.steamUpdateConfig(server.ProviderKey)
+	if !ok {
+		return runtime.GameUpdateRequest{}, fmt.Errorf("game updates are unsupported")
+	}
+	return runtime.GameUpdateRequest{JobID: jobID, RuntimeID: runtimeID, Image: image, DataDir: dataDir, AppID: updateConfig.AppID, InstallDir: updateConfig.InstallDir, Executable: updateConfig.Executable}, nil
+}
+
+func (h *Handler) steamUpdateConfig(key domain.ProviderKey) (domain.SteamUpdateConfig, bool) {
+	p, ok := h.provider.Get(key)
+	if !ok {
+		return domain.SteamUpdateConfig{}, false
+	}
+	updater, ok := p.(provider.SteamUpdateProvider)
+	if !ok {
+		return domain.SteamUpdateConfig{}, false
+	}
+	return updater.SteamUpdateConfig(), true
+}
+func (h *Handler) supportsSteamUpdates(key domain.ProviderKey) bool {
+	_, ok := h.steamUpdateConfig(key)
+	return ok
 }
 func (h *Handler) updateGameJob(job *domain.GameUpdateJob, status domain.GameUpdateJobStatus, stage domain.GameUpdateJobStage, progress int, errorText string) error {
 	if progress < job.Progress && (status == domain.GameUpdateJobQueued || status == domain.GameUpdateJobRunning) {

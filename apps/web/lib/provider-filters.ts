@@ -10,6 +10,7 @@ const fallbackProviderLabels: Record<string, string> = {
   "terraria-vanilla": "Terraria",
   "terraria-tmodloader": "tModLoader",
   palworld: "Palworld",
+  "seven-days-to-die": "7 Days to Die",
   "dont-starve-together": "Don't Starve Together",
   minecraft: "Minecraft Java"
 };

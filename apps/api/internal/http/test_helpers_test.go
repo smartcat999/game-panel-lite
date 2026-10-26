@@ -24,6 +24,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/sevendaystodie"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 	serverctrl "github.com/smartcat999/game-panel-lite/apps/api/internal/server"
@@ -100,7 +101,7 @@ func newTestRouterWithAdapterAndInstallMarkers(t *testing.T, adapter runtime.Ada
 	runtimeAdapter := runtime.NewSwitchableAdapter(adapter)
 	monitor := runtime.NewDockerMonitor(runtimeAdapter)
 	monitor.Refresh(context.Background())
-	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider(), minecraft.NewProvider())
+	registry := provider.NewRegistry(terraria.NewVanillaProvider(), terraria.NewTModLoaderProvider(), palworld.NewProvider(), dst.NewProvider(), minecraft.NewProvider(), sevendaystodie.NewProvider())
 	handler := NewHandler(
 		cfg,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),

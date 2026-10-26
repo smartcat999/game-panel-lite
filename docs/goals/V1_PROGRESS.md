@@ -114,3 +114,52 @@
 - Grouped common world generation, seasons, resources, creatures, threats, cave environment, cave resources, and cave threats using progressive disclosure.
 - Added Chinese and English labels, numeric limits, known override validation, and forest/cave Lua rendering tests.
 - Verified with Go tests/vet and frontend tests/lint/typecheck/production build.
+
+## 2026-10-26 — 7 Days to Die vanilla support (issue #161)
+
+- Added the vanilla `seven-days-to-die` Provider, catalog entry, official Steam
+  cover, bilingual configuration and join instructions. Creation skips the mod
+  step when the selected Provider has no mod support.
+- Added explicit mixed-protocol Provider ports and adjacent host-port
+  reservations, including collision and overflow checks on creation/configuration.
+- Added a prebuilt amd64 runtime with persistent game files and `userdata` saves.
+  Managed XML is merged into the installed game's shipped defaults. Ordinary
+  restarts do not run SteamCMD. The runtime base initializes SteamCMD before
+  installing its 64-bit Steam client library.
+- Used the 3.x `SandboxCode` mechanism instead of obsolete difficulty, blood moon
+  and loot XML properties. Users copy a code from the matching game version.
+- Kept existing world identity read-only to prevent accidentally selecting a new
+  save. Manual backups require a stopped server and contain only `userdata`.
+  Restore extracts first, then replaces that subtree, preserving runtime files
+  and removing world regions created after backup. Scheduled live backups are
+  disabled for this Provider until a save-command path is available.
+- Generalized Steam update metadata, install paths, executable permission repair,
+  save backups and disk preflight through Provider declarations. Palworld retains
+  its existing update behavior; seven-days-to-die requires 25 GiB free disk.
+- Verification: related Go Provider/server/runtime/HTTP/backup tests, full Go vet,
+  121 frontend tests, TypeScript and application-directory ESLint checks passed.
+  Python config-merge and shell syntax checks and the final production frontend
+  build passed. The amd64 runtime base built successfully on um773.
+- Browser verification used an isolated local API/database and mocked only the
+  image-ready response. Chinese/English creation, configuration/review and form
+  submission succeeded. This does not verify actual game startup or player joins.
+- Full `go test -mod=mod ./...` encountered pre-existing invalid-Docker-host
+  state-transition timeouts in `internal/app`; the same failure was reproduced
+  from an unmodified `main` snapshot. Full frontend lint also includes unrelated,
+  pre-existing untracked screenshot scripts; application directories pass.
+- Runtime verification: after correcting the host's persistent Steam routing,
+  a complete amd64 image built on um773 (Steam Build ID `25661908`, game
+  `V 3.3.0 b18`). The local Buildx client could not reach Docker Hub's token
+  endpoint, so the build ran from um773's own client.
+- Actual startup exposed the obsolete `SaveGameFolder` property, which 3.3.0
+  rejects. Removed it and added a regression assertion; saves use
+  `UserDataFolder/Saves`. Related Go tests and Provider vet passed again.
+- An isolated, loopback-only 2-CPU/6-GiB instance reached `StartGame done` and
+  EOS registration, persisted its save under `userdata/Saves`, and saved/exited
+  with code 0 on SIGINT. A replacement container reused that volume and loaded
+  the existing save directory without downloading or reseeding game files.
+- EOS connectivity remains intermittent: some starts timed out before world
+  loading; retrying succeeded. A Steam game-server logon timeout also occurred.
+  Client joining, player progress across restart, actual game updates and
+  dependable external-service connectivity still require verification before
+  release. Both isolated test instances were stopped after verification.

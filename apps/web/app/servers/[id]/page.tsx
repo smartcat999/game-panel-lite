@@ -622,19 +622,19 @@ export default function ServerDetailPage() {
     ...(capabilities.consoleCommands && !isDST ? [{ id: "console" as const, label: isZh ? "📟 控制台与日志" : t("tabConsole") }] : []),
     ...(!capabilities.consoleCommands || isDST ? [{ id: "logs" as const, label: isZh ? "📟 运行日志" : t("tabLogs") }] : []),
     ...(capabilities.playerList ? [{ id: "players" as const, label: isZh ? "👥 在线玩家" : t("tabPlayers") }] : []),
-    ...(serverResource?.providerKey === "palworld" ? [{ id: "version" as const, label: t("tabVersion") }] : [])
+    ...(providerCatalog?.gameVersion?.supported ? [{ id: "version" as const, label: t("tabVersion") }] : [])
     ];
-  }, [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isDST, isViewer, isZh, serverResource?.providerKey, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
+  }, [capabilities.consoleCommands, capabilities.mods, capabilities.playerList, isDST, isViewer, isZh, providerCatalog?.gameVersion?.supported, visibleCapabilities.backups, visibleCapabilities.saveSnapshots, t]);
   useEffect(() => {
     if (serverResource && !tabs.some((tab) => tab.id === activeTab)) {
       setActiveTab("overview");
     }
   }, [activeTab, serverResource, tabs]);
   useEffect(() => {
-    if (serverResource?.providerKey === "palworld" && new URLSearchParams(window.location.search).get("tab") === "version") {
+    if (providerCatalog?.gameVersion?.supported && new URLSearchParams(window.location.search).get("tab") === "version") {
       setActiveTab("version");
     }
-  }, [serverResource?.providerKey]);
+  }, [providerCatalog?.gameVersion?.supported]);
   useEffect(() => {
     if (shareQuery.data) {
       setShareIncludePassword(shareQuery.data.includePassword);
@@ -865,7 +865,7 @@ export default function ServerDetailPage() {
           {activeTab === "players" && capabilities.playerList && (
             <PlayersPanel serverId={serverResource.id} />
           )}
-          {!isViewer && serverResource.providerKey === "palworld" ? (
+          {!isViewer && providerCatalog?.gameVersion?.supported ? (
             <div className={activeTab === "version" ? "" : "hidden"}>
               <GameUpdateCard
                 playersOnline={playersOnline}
@@ -913,7 +913,7 @@ export default function ServerDetailPage() {
           ) : null}
           {activeTab === "backups" && visibleCapabilities.backups && (
             <div className="space-y-6">
-              <ServerTimeMachine server={serverResource} />
+              <ServerTimeMachine server={serverResource} backupRequiresStop={capabilities.backupRequiresStop} />
             </div>
           )}
           {activeTab === "mods" && capabilities.mods && (

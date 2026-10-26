@@ -29,7 +29,7 @@ exec /home/steam/steamcmd/steamcmd.sh +login anonymous +app_info_update 1 +app_i
 echo GAMEPANEL_UPDATE_PHASE=refreshing_metadata
 /home/steam/steamcmd/steamcmd.sh +login anonymous +app_info_update 1 +app_info_print "$GAMEPANEL_APP_ID" +quit
 echo GAMEPANEL_UPDATE_PHASE=applying
-manifest="/palworld/steamapps/appmanifest_${GAMEPANEL_APP_ID}.acf"
+manifest="${GAMEPANEL_INSTALL_DIR}/steamapps/appmanifest_${GAMEPANEL_APP_ID}.acf"
 stale_manifest="${manifest}.gamepanel-stale"
 original_manifest="${manifest}.gamepanel-original"
 original_manifest_tmp="${original_manifest}.tmp"
@@ -45,8 +45,8 @@ finish_update() {
     rm -f "$original_manifest"
   fi
   rm -f "$stale_manifest" "$original_manifest_tmp"
-  if [ -f /palworld/PalServer.sh ]; then
-    chmod +x /palworld/PalServer.sh || true
+  if [ -f "$GAMEPANEL_INSTALL_DIR/$GAMEPANEL_EXECUTABLE" ]; then
+    chmod +x "$GAMEPANEL_INSTALL_DIR/$GAMEPANEL_EXECUTABLE" || true
   fi
   trap - EXIT
   exit "$status"
@@ -63,7 +63,7 @@ if [ -f "$manifest" ]; then
 fi
 mutation_started=1
 run_update() {
-  /home/steam/steamcmd/steamcmd.sh +force_install_dir /palworld +login anonymous +app_update "$GAMEPANEL_APP_ID" validate +quit
+  /home/steam/steamcmd/steamcmd.sh +force_install_dir "$GAMEPANEL_INSTALL_DIR" +login anonymous +app_update "$GAMEPANEL_APP_ID" validate +quit
 }
 manifest_ready() {
   [ -f "$manifest" ] && grep -Eq '^[[:space:]]*"StateFlags"[[:space:]]+"4"[[:space:]]*$' "$manifest"
@@ -81,7 +81,7 @@ if ! run_update || ! manifest_ready; then
   rm -f "$stale_manifest"
 fi
 echo GAMEPANEL_UPDATE_PHASE=finalizing
-chmod +x /palworld/PalServer.sh
+chmod +x "$GAMEPANEL_INSTALL_DIR/$GAMEPANEL_EXECUTABLE"
 echo GAMEPANEL_UPDATE_PHASE=complete
 `
 )
@@ -124,6 +124,7 @@ func validateGameUpdateCheckRequest(request runtime.GameUpdateRequest) error {
 }
 
 func (a *Adapter) ApplyGameUpdate(ctx context.Context, request runtime.GameUpdateRequest, onProgress runtime.GameUpdateProgressFunc) (runtime.GameUpdateResult, error) {
+	request = gameUpdateDefaults(request)
 	dataDir, err := validateGameUpdateRequest(request)
 	if err != nil {
 		return runtime.GameUpdateResult{}, err
@@ -168,6 +169,10 @@ func validateInstalledBuild(installed, target string) error {
 }
 
 func validateGameUpdateRequest(request runtime.GameUpdateRequest) (string, error) {
+	request = gameUpdateDefaults(request)
+	if !regexp.MustCompile(`^/[a-zA-Z0-9_/-]+$`).MatchString(request.InstallDir) || strings.Contains(request.InstallDir, "..") || request.InstallDir == "/" || filepath.Base(request.Executable) != request.Executable || request.Executable == "." || request.Executable == "" {
+		return "", fmt.Errorf("invalid game update installation paths")
+	}
 	if strings.TrimSpace(request.JobID) == "" || containerNameClean.ReplaceAllString(request.JobID, "") != request.JobID {
 		return "", fmt.Errorf("invalid game update job ID")
 	}
@@ -214,12 +219,16 @@ func (a *Adapter) runGameUpdater(
 	}
 	containerName := fmt.Sprintf("gamepanel-updater-%s-%d", namePart, time.Now().UnixNano())
 	resources := gameUpdaterResources(readOnly)
+	request = gameUpdateDefaults(request)
 	mounts := gameUpdaterMounts(dataDir, readOnly)
+	if len(mounts) > 0 {
+		mounts[0].Target = request.InstallDir
+	}
 	resp, err := a.client.ContainerCreate(ctx, &container.Config{
 		Image:      request.Image,
 		Entrypoint: []string{"/bin/sh", "-lc"},
 		Cmd:        []string{script},
-		Env:        []string{"GAMEPANEL_APP_ID=" + request.AppID},
+		Env:        []string{"GAMEPANEL_APP_ID=" + request.AppID, "GAMEPANEL_INSTALL_DIR=" + request.InstallDir, "GAMEPANEL_EXECUTABLE=" + request.Executable},
 		User:       "0:0",
 		Tty:        true,
 		Labels: map[string]string{
@@ -309,6 +318,17 @@ func (a *Adapter) runGameUpdater(
 		}
 	}
 	return output.String(), fmt.Errorf("controlled game updater exited without a status")
+}
+
+// Retain compatibility with existing persisted Palworld update requests.
+func gameUpdateDefaults(request runtime.GameUpdateRequest) runtime.GameUpdateRequest {
+	if request.InstallDir == "" {
+		request.InstallDir = "/palworld"
+	}
+	if request.Executable == "" {
+		request.Executable = "PalServer.sh"
+	}
+	return request
 }
 
 // Metadata checks still need SteamCMD to obtain the public branch Build ID,
