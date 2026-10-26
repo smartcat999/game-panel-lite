@@ -39,6 +39,35 @@ export interface ReleaseVersion {
 
 export const RELEASES_DATA: ReleaseVersion[] = [
   {
+    version: "v0.2.19",
+    channel: "stable",
+    date: "2026-10-26",
+    tagline: "七日杀原版服务端 · 中英文配置 · 独立存档备份与恢复",
+    security: {
+      dataMigration: "现有存档无需迁移",
+      serverInterruption: "现有游戏服无需重启",
+      configCompatibility: "现有配置兼容",
+      hotReload: "控制面重启生效"
+    },
+    features: [
+      {
+        title: "七日杀原版服务端",
+        desc: "新增 Linux AMD64 运行镜像、中英文建服与配置、连接信息和游戏版本更新入口，使用 3.x SandboxCode 配置沙盒规则。"
+      },
+      {
+        title: "七日杀存档保护",
+        desc: "固定已有世界标识，停服备份仅包含游戏存档，恢复时替换存档目录，避免混入备份之后的世界数据。"
+      }
+    ],
+    improvements: [
+      {
+        title: "七日杀网络与运行要求",
+        desc: "支持 TCP/UDP 和相邻端口预留。服务端需要稳定连接 Steam 与 EOS；模组与控制台功能暂不提供。"
+      }
+    ],
+    compareUrl: "https://github.com/smartcat999/game-panel-lite/compare/v0.2.18...v0.2.19"
+  },
+  {
     version: "v0.2.18",
     channel: "stable",
     date: "2026-10-20",
@@ -221,7 +250,7 @@ interface VersionTimelineProps {
 
 const defaultRelease: ReleaseVersion = RELEASES_DATA[0] as ReleaseVersion;
 
-export function VersionTimeline({ currentVersion = "v0.2.18" }: VersionTimelineProps) {
+export function VersionTimeline({ currentVersion = "v0.2.19" }: VersionTimelineProps) {
   const [selectedVersionTag, setSelectedVersionTag] = useState<string>(defaultRelease.version);
 
   const selectedRelease: ReleaseVersion =
