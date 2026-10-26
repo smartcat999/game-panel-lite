@@ -6,6 +6,14 @@ export type Locale = "zh" | "en";
 
 const messages = {
   zh: {
+    runtimeUninstall: "卸载镜像",
+    runtimeUninstalling: "正在卸载…",
+    runtimeLatestOnly: "仅支持最新运行镜像，请刷新游戏库后重试。",
+    runtimeUninstallTitle: "卸载运行镜像？",
+    runtimeUninstallDescription: "将卸载「{name}」的运行镜像、历史镜像缓存和已停止服务器的旧容器。存储卷、存档、配置、模组和备份均保留，重新安装最新镜像后可继续使用原服务器。",
+    runtimeUninstallInUseServers: "以下服务器仍在运行、启动中或尚未确认停止，无法卸载：{servers}",
+    runtimeUninstallInUseContainer: "仍有运行中或不属于此面板的容器依赖此镜像，无法卸载。",
+    runtimeUninstallStorageUnsafe: "容器含有无法自动重新挂载的存储，暂不能卸载。现有容器和存储卷已保留。",
     gameNameSevenDays: "七日杀",
     gameDescSevenDays: "搜集物资、建造基地，与好友抵挡血月尸潮。",
     reviewSevenDaysJoinInstruction: "在七日杀中选择加入游戏 → 连接 IP，输入服务器地址和端口。",
@@ -1616,6 +1624,14 @@ const messages = {
     manageBackupsInBackupsPage: "请在备份页面查看和管理真实备份。"
   },
   en: {
+    runtimeUninstall: "Uninstall image",
+    runtimeUninstalling: "Uninstalling…",
+    runtimeLatestOnly: "Only the latest runtime image is supported. Refresh the Game Library and try again.",
+    runtimeUninstallTitle: "Uninstall runtime image?",
+    runtimeUninstallDescription: "Uninstall {name}'s runtime images, historical image cache and stopped servers' old containers. Volumes, saves, configuration, mods and backups are kept. Reinstall the latest image to continue using the existing servers.",
+    runtimeUninstallInUseServers: "These servers are running, starting, or not confirmed stopped. Cannot uninstall: {servers}",
+    runtimeUninstallInUseContainer: "A running container or one outside this panel still depends on this image. Cannot uninstall.",
+    runtimeUninstallStorageUnsafe: "The container has storage that cannot be automatically reattached. Its container and volumes have been kept; uninstall is blocked.",
     gameNameSevenDays: "7 Days to Die",
     gameDescSevenDays: "Scavenge, build a base and survive blood moon hordes with friends.",
     reviewSevenDaysJoinInstruction: "In 7 Days to Die, open Join a Game → Connect to IP and enter the server address and port.",

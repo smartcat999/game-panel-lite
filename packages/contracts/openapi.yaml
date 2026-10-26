@@ -171,10 +171,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DockerStatus"
+  /api/runtime/images:
+    delete:
+      summary: Uninstall a provider's runtime images and historical cache (administrator only)
+      description: Refuses running, starting or unconfirmed servers and foreign containers. Removes authorized stopped local containers only when their persistent mounts can be recreated from the original instance directory, then removes catalog and historical installations without force. Never removes server records, data, volumes, mods or backups. Reinstalling the latest runtime allows existing stopped servers to resume with their original data. Mutually exclusive with runtime installation and game updates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [providerKey]
+              properties:
+                providerKey:
+                  $ref: "#/components/schemas/ProviderKey"
+      responses:
+        "200":
+          description: Runtime image uninstalled (also succeeds when already absent)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeImageStatus"
+        "400":
+          description: Missing provider key or invalid JSON
+        "401":
+          description: Authentication required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Provider not found
+        "409":
+          description: Active or unsafe image dependency, maintenance is active, or Docker refuses removal
+        "500":
+          description: Unable to remove installation files or read server records
+        "503":
+          description: Docker runtime is unavailable
   /api/runtime/images/prepare:
     post:
       summary: Queue runtime image preparation
-      description: Pulls and archives one provider runtime image asynchronously. Heavy runtime-image and game-update tasks are mutually exclusive.
+      description: Pulls and archives the latest provider runtime image asynchronously. Historical image requests are rejected; game-file versions that share one image use one canonical latest installation. Unused historical installations are cleaned up after success; active dependencies are retained. Heavy runtime-image and game-update tasks are mutually exclusive.
       requestBody:
         required: true
         content:

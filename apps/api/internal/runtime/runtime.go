@@ -139,6 +139,18 @@ type ImageArchiveManager interface {
 	LoadImageArchive(ctx context.Context, path string) error
 }
 
+// ImageRemovalTarget identifies a stopped server whose container can be rebuilt
+// from its persistent instance directory after reinstalling the image.
+type ImageRemovalTarget struct {
+	ServerID string
+	DataDir  string
+}
+
+// ImageRemover must never force container removal or delete mounted volumes.
+type ImageRemover interface {
+	RemoveImage(ctx context.Context, image string, stopped []ImageRemovalTarget) error
+}
+
 const (
 	ImageStatusReady       = "ready"
 	ImageStatusMissing     = "missing"

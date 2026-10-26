@@ -163,3 +163,38 @@
   Client joining, player progress across restart, actual game updates and
   dependable external-service connectivity still require verification before
   release. Both isolated test instances were stopped after verification.
+
+### 2026-10-27: Runtime image uninstall (local implementation)
+
+- Added administrator-only uninstall actions to Game Library and Runtime Images,
+  with shared confirmation UI and Chinese/English messages.
+- Uninstalls the provider runtime and its historical images, installation archives,
+  temporary archives and markers without force. Does not remove instance data,
+  volumes, mods or backups. Installs and new servers offer the latest runtime only.
+- Running, starting and unconfirmed servers block uninstall. Confirmed stopped
+  local instances may have their old containers removed without force or volume
+  deletion. All dependencies and persistent mounts are checked before any removal;
+  unknown storage or foreign containers block cleanup. Instance records are kept.
+  Installation/game-update locks prevent concurrent maintenance.
+- Corrected missing-container state translation so the reconciler recreates the
+  saved workload after reinstall. Restoring a stopped instance switches its runtime
+  reference to the latest installed image while keeping its data directory, world,
+  configuration and mods. No historical-runtime selector is offered.
+- Providers with several game-file versions sharing one runtime use one canonical
+  latest image archive. Old archives are cleaned after installation where safe;
+  running dependencies are retained rather than forcibly stopped.
+- Regression coverage verifies saved world and backup bytes remain intact, failed
+  removal preserves installation files, unknown providers cannot escape cache
+  directories, running shared-image dependencies are protected, and stopped instances
+  retain their world, configuration, mods, install sentinel and database records.
+- An opt-in real-Docker regression passed on um773 with a tiny isolated fixture:
+  stop, remove old container/image, verify original files, install a new latest
+  image, recreate using the same mount and resume the existing day-49 save.
+- Full Go tests/vet, 122 frontend tests, typecheck, application-source lint and
+  production build passed. Full frontend lint remains blocked by pre-existing
+  untracked scripts under apps/web/scripts; these were not changed.
+- Local Playwright API-fixture checks passed for confirmation, referencing-server
+  errors, successful uninstall state refresh and the English Runtime Images entry.
+  The latest-only flow also passed: provider-level uninstall has no version
+  selector, and reinstall requests the recommended latest runtime version.
+- Not deployed or released. v0.2.19 remains a draft pending user validation.

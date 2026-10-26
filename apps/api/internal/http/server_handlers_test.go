@@ -135,7 +135,6 @@ func TestCreateServerIgnoresActiveProviderVersionCheck(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(stdhttp.MethodPost, "/api/servers", strings.NewReader(`{
 		"name":"DST During Version Check",
 		"providerKey":"dont-starve-together",
-		"version":"v2026.08.14",
 		"config":{"clusterName":"DST During Version Check","clusterToken":"test-token","gameMode":"endless","maxPlayers":6,"port":10999,"enableCaves":true}
 	}`)))
 	if recorder.Code != stdhttp.StatusCreated {

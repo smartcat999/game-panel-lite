@@ -16,7 +16,7 @@ func (h *Handler) presets(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) versions(w http.ResponseWriter, r *http.Request) {
 	out := map[string][]string{}
 	for _, provider := range h.provider.List() {
-		out[string(provider.Key())] = provider.Versions()
+		out[string(provider.Key())] = latestRuntimeVersions(provider)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

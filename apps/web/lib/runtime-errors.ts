@@ -2,6 +2,15 @@ import type { MessageKey } from "./i18n";
 
 export type RuntimeErrorTranslator = (key: MessageKey, params?: Record<string, string | number>) => string;
 
+export function formatRuntimeUninstallError(error: unknown, t: RuntimeErrorTranslator) {
+  const message = errorMessage(error);
+  const prefix = "runtime image is used by servers: ";
+  if (message.startsWith(prefix)) return t("runtimeUninstallInUseServers", { servers: message.slice(prefix.length) });
+  if (message.includes("runtime image is used by a container")) return t("runtimeUninstallInUseContainer");
+  if (message.includes("runtime container storage cannot be safely reattached")) return t("runtimeUninstallStorageUnsafe");
+  return formatRuntimeInstallError(error, t);
+}
+
 export function formatRuntimeInstallError(error: unknown, t: RuntimeErrorTranslator) {
   const message = errorMessage(error);
   const key = classifyRuntimeError(message);
@@ -31,6 +40,7 @@ export function classifyRuntimeError(message: string): MessageKey | undefined {
   if (!normalized) {
     return undefined;
   }
+  if (normalized.includes("only the latest runtime image")) return "runtimeLatestOnly";
   if (
     normalized.includes("server runtime is not installed") ||
     normalized.includes("runtime image archive is missing") ||

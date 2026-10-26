@@ -12,9 +12,10 @@ import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from 
 import { cn } from "@/lib/utils";
 import { GameAssetsSubNav } from "@/components/sub-nav";
 import { usePermissions } from "@/lib/permissions";
+import { RuntimeImageUninstall } from "@/components/runtime-image-uninstall";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
-const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_6.5rem]";
+const imageVersionGridColumns = "md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_12rem]";
 
 export default function VersionsPage() {
   const { t } = useI18n();
@@ -137,7 +138,8 @@ function ImageVersionRow({
           <span className="mb-1 block text-xs text-slate-500 md:hidden">{t("versionManagementImageStatus")}</span>
           <RuntimeImageBadge status={displayStatus} />
         </div>
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-2">
+          {canInstall ? <RuntimeImageUninstall provider={provider} disabled={preparing} /> : null}
           {canInstall && (actionable || preparing) ? (
             <Button
               type="button"

@@ -53,7 +53,12 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	version := normalizeStoredProviderVersion(gameProvider, payload.Version)
+	requestedVersion := normalizeStoredProviderVersion(gameProvider, payload.Version)
+	if gameProvider.ImageFor(requestedVersion) != gameProvider.Image() {
+		writeError(w, http.StatusBadRequest, "only the latest runtime image can be installed")
+		return
+	}
+	version := normalizeStoredProviderVersion(gameProvider, "")
 	image := gameProvider.ImageFor(version)
 	ref := runtimeInstallRef{ProviderKey: payload.ProviderKey, Version: version, Image: image}
 	h.gameUpdateJobsMu.Lock()
@@ -131,6 +136,7 @@ func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 				h.logger.Warn("runtime install marker write failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
 			}
 		} else {
+			h.cleanupOldRuntimeImages(ctx, ref)
 			status.Status = runtime.ImageStatusReady
 			status.Progress = 100
 			if h.logger != nil {

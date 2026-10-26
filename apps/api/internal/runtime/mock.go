@@ -26,6 +26,8 @@ func (m *MockAdapter) PrepareImage(context.Context, string) error {
 	return nil
 }
 
+func (m *MockAdapter) RemoveImage(context.Context, string, []ImageRemovalTarget) error { return nil }
+
 func (m *MockAdapter) SaveImageArchive(_ context.Context, image string, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

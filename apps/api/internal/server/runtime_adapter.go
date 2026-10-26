@@ -32,5 +32,9 @@ func (c *RuntimeAdapterClient) Remove(ctx context.Context, runtimeID string) err
 }
 
 func (c *RuntimeAdapterClient) Inspect(ctx context.Context, runtimeID string) (domain.WorkloadStatus, error) {
-	return c.adapter.InspectWorkload(ctx, runtimeID)
+	status, err := c.adapter.InspectWorkload(ctx, runtimeID)
+	if err == nil && status.State == domain.ActualMissing {
+		return status, ErrWorkloadNotFound
+	}
+	return status, err
 }

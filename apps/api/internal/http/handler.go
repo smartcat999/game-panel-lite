@@ -211,6 +211,7 @@ func (h *Handler) Register(r chi.Router) {
 			monitoring.NewPrometheusClient(h.cfg.PrometheusURL, h.cfg.PrometheusQueryTimeout, h.apiMetrics),
 		)).Register(r, h.requirePermission(domain.PermissionServerConfigure, "member role required"))
 		r.With(h.requireAdmin).Post("/api/runtime/images/prepare", h.prepareRuntimeImage)
+		r.With(h.requireAdmin).Delete("/api/runtime/images", h.uninstallRuntimeImage)
 		r.Get("/api/settings", h.getSettings)
 		r.With(h.requireAdmin).Put("/api/settings/public-host", h.updatePublicHost)
 		r.With(h.requireAdmin).Put("/api/settings/image-region", h.updateImageRegion)

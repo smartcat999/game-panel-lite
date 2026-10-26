@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -34,6 +35,84 @@ func (a *Adapter) ImageStatus(ctx context.Context, image string) domain.RuntimeI
 
 func (a *Adapter) PrepareImage(ctx context.Context, image string) error {
 	return a.ensureImage(ctx, image)
+}
+
+func (a *Adapter) RemoveImage(ctx context.Context, image string, stopped []runtime.ImageRemovalTarget) error {
+	inspected, _, err := a.client.ImageInspectWithRaw(ctx, image)
+	if client.IsErrNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	containers, err := a.client.ContainerList(ctx, types.ContainerListOptions{
+		All: true, Filters: filters.NewArgs(filters.Arg("ancestor", inspected.ID)),
+	})
+	if err != nil {
+		return err
+	}
+	allowed := make(map[string]runtime.ImageRemovalTarget, len(stopped))
+	for _, target := range stopped {
+		allowed["/gamepanel-"+target.ServerID] = target
+	}
+	// Check every dependent container before removing any of them. Only known,
+	// stopped instances with reconstructable persistent mounts may be removed.
+	var removable []string
+	for _, item := range containers {
+		if item.ImageID != inspected.ID {
+			return fmt.Errorf("runtime image is used by a container")
+		}
+		current, err := a.client.ContainerInspect(ctx, item.ID)
+		if client.IsErrNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		target, ok := allowed[current.Name]
+		if !ok || current.State == nil || current.State.Running || current.State.Paused || current.State.Restarting ||
+			(current.State.Status != "exited" && current.State.Status != "created") {
+			return fmt.Errorf("runtime image is used by a container")
+		}
+		if !imageRemovalMountsSafe(current.Mounts, target.DataDir) {
+			return fmt.Errorf("runtime container storage cannot be safely reattached")
+		}
+		removable = append(removable, current.ID)
+	}
+	for _, id := range removable {
+		err := a.client.ContainerRemove(ctx, id, types.ContainerRemoveOptions{Force: false, RemoveVolumes: false})
+		if err != nil && !client.IsErrNotFound(err) {
+			return err
+		}
+	}
+	_, err = a.client.ImageRemove(ctx, image, types.ImageRemoveOptions{Force: false, PruneChildren: false})
+	if client.IsErrNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+func imageRemovalMountsSafe(mounts []types.MountPoint, dataDir string) bool {
+	if !filepath.IsAbs(dataDir) {
+		return false
+	}
+	found := false
+	for _, mount := range mounts {
+		if mount.Type == "tmpfs" {
+			continue
+		}
+		// All persistent mounts must be recreated by the normal workload
+		// builder. Unknown/anonymous volumes are left attached to their container.
+		if mount.Type != "bind" || !filepath.IsAbs(mount.Source) {
+			return false
+		}
+		rel, err := filepath.Rel(dataDir, mount.Source)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return false
+		}
+		found = true
+	}
+	return found
 }
 
 func (a *Adapter) PrepareImageWithProgress(ctx context.Context, image string, onProgress runtime.ImagePrepareProgressFunc) error {

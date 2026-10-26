@@ -173,6 +173,15 @@ export async function prepareRuntimeImage(providerKey: ProviderKey, version?: st
   return readPayload<RuntimeImageStatus>(response, "Unable to install server runtime");
 }
 
+export async function uninstallRuntimeImage(providerKey: ProviderKey): Promise<RuntimeImageStatus> {
+  const response = await apiFetch(`${API_BASE}/api/runtime/images`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ providerKey })
+  });
+  return readPayload<RuntimeImageStatus>(response, "Unable to uninstall server runtime");
+}
+
 export async function checkProviderGameUpdate(providerKey: ProviderKey): Promise<GameUpdateJob> {
   const response = await apiFetch(`${API_BASE}/api/providers/${providerKey}/game-update/check`, { method: "POST" });
   return readPayload<GameUpdateJob>(response, "Unable to check the provider game version");
