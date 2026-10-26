@@ -145,7 +145,7 @@ func (h *Handler) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, dataDir); err != nil {
+	if err := h.restoreInstanceBackupArchive(resource, item, dataDir); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -301,7 +301,7 @@ func (h *Handler) restoreServerSave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := backupsvc.NewService(h.cfg.DataDir).Restore(item.InstanceID, item.FileName, dataDir); err != nil {
+	if err := h.restoreInstanceBackupArchive(resource, item, dataDir); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -407,6 +407,9 @@ func (h *Handler) createInstanceBackupArchive(ctx context.Context, server domain
 	svc := backupsvc.NewService(h.cfg.DataDir)
 	if h.provider != nil {
 		if gameProvider, ok := h.provider.Get(server.ProviderKey); ok {
+			if gameProvider.Capabilities().BackupRequiresStop && (isGameServerLockedForMutation(server) || server.Status.ActualState == domain.ActualRunning) {
+				return "", 0, fmt.Errorf("stop the server before creating a consistent save backup")
+			}
 			if subtreeProvider, ok := gameProvider.(provider.BackupSubtreeProvider); ok {
 				if subtree := subtreeProvider.BackupSubtree(server); strings.TrimSpace(subtree) != "" {
 					return svc.CreateSubtree(server.ID, dataDir, subtree)
@@ -415,6 +418,16 @@ func (h *Handler) createInstanceBackupArchive(ctx context.Context, server domain
 		}
 	}
 	return svc.Create(server.ID, dataDir)
+}
+
+func (h *Handler) restoreInstanceBackupArchive(server domain.GameServer, item domain.Backup, dataDir string) error {
+	svc := backupsvc.NewService(h.cfg.DataDir)
+	if gameProvider, ok := h.provider.Get(server.ProviderKey); ok {
+		if restoreProvider, ok := gameProvider.(provider.ReplacementRestoreProvider); ok {
+			return svc.RestoreSubtree(item.InstanceID, item.FileName, dataDir, restoreProvider.RestoreSubtree(server))
+		}
+	}
+	return svc.Restore(item.InstanceID, item.FileName, dataDir)
 }
 
 const (
@@ -461,6 +474,10 @@ func (h *Handler) updateServerBackupPolicy(w http.ResponseWriter, r *http.Reques
 	}
 	if payload.IntervalHours < 1 || payload.IntervalHours > 168 {
 		writeError(w, http.StatusBadRequest, "intervalHours must be between 1 and 168")
+		return
+	}
+	if gameProvider, ok := h.provider.Get(server.ProviderKey); ok && gameProvider.Capabilities().BackupRequiresStop && payload.Enabled {
+		writeError(w, http.StatusBadRequest, "automatic live backups are not supported for this provider; stop the server and create a manual backup")
 		return
 	}
 	if payload.RetentionCount < 1 || payload.RetentionCount > 50 {

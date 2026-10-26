@@ -17,7 +17,9 @@ func (h *Handler) allocateHostPort(ctx context.Context, excludeInstanceID string
 	used := map[int]bool{}
 	for _, s := range servers {
 		if s.ID != excludeInstanceID && s.Spec.Network.HostPort > 0 {
-			used[s.Spec.Network.HostPort] = true
+			for _, port := range h.serverHostPorts(s) {
+				used[port] = true
+			}
 		}
 	}
 	port := 7777
@@ -126,9 +128,90 @@ func (h *Handler) ensureHostPortAvailable(ctx context.Context, hostPort int, exc
 		return err
 	}
 	for _, server := range servers {
-		if server.ID != excludeInstanceID && server.Spec.Network.HostPort == hostPort {
-			return fmt.Errorf("external port %d is already used", hostPort)
+		if server.ID != excludeInstanceID {
+			for _, port := range h.serverHostPorts(server) {
+				if port == hostPort {
+					return fmt.Errorf("external port %d is already used", hostPort)
+				}
+			}
 		}
 	}
 	return nil
+}
+
+func (h *Handler) serverHostPorts(server domain.GameServer) []int {
+	ports := []int{server.Spec.Network.HostPort}
+	if h.provider == nil {
+		return ports
+	}
+	p, ok := h.provider.Get(server.ProviderKey)
+	if !ok {
+		return ports
+	}
+	rp, ok := p.(provider.ResourceRuntimeProvider)
+	if !ok {
+		return ports
+	}
+	config, err := rp.RuntimeConfigForResource(server)
+	if err != nil {
+		return ports
+	}
+	for _, port := range config.AdditionalPorts {
+		ports = append(ports, server.Spec.Network.HostPort+port-config.Port)
+	}
+	for _, port := range config.PortBindings {
+		ports = append(ports, server.Spec.Network.HostPort+port.Port-config.Port)
+	}
+	return ports
+}
+
+// Reserve every port in the provider's network plan, including adjacent ports.
+// The existing caller lock serializes creation/config changes with maintenance.
+func (h *Handler) resolveProviderHostPort(ctx context.Context, requested int, server domain.GameServer) (int, error) {
+	if requested != 0 && (requested < 1024 || requested > 65535) {
+		return 0, fmt.Errorf("external port must be between 1024 and 65535")
+	}
+	first := requested
+	if first == 0 {
+		first = 7777
+	}
+	servers, err := h.store.ListGameServers(ctx)
+	if err != nil {
+		return 0, err
+	}
+	used := map[int]bool{}
+	for _, existing := range servers {
+		if existing.ID == server.ID {
+			continue
+		}
+		for _, port := range h.serverHostPorts(existing) {
+			used[port] = true
+		}
+	}
+	server.Spec.Network.HostPort = 0
+	offsets := h.serverHostPorts(server)
+	for candidate := first; candidate <= 65535; candidate++ {
+		available := true
+		for _, offset := range offsets {
+			port := candidate + offset
+			if port < 1024 || port > 65535 {
+				available = false
+				break
+			}
+			if used[port] {
+				if requested != 0 {
+					return 0, fmt.Errorf("external port %d is already used", port)
+				}
+				available = false
+				break
+			}
+		}
+		if available {
+			return candidate, nil
+		}
+		if requested != 0 {
+			return 0, fmt.Errorf("external port range exceeds 65535")
+		}
+	}
+	return 0, fmt.Errorf("no available host port range")
 }

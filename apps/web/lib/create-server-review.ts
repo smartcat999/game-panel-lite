@@ -25,6 +25,8 @@ export function createReviewInvitePreview({
 
 function reviewGameName(gameKey?: GameKey) {
   switch (gameKey) {
+    case "seven-days-to-die":
+      return "7 Days to Die";
     case "palworld":
       return "Palworld";
     case "dont-starve-together":
@@ -41,6 +43,8 @@ function reviewGameName(gameKey?: GameKey) {
 
 export function reviewJoinInstructionKey(gameKey?: GameKey): MessageKey {
   switch (gameKey) {
+    case "seven-days-to-die":
+      return "reviewSevenDaysJoinInstruction";
     case "palworld":
       return "reviewPalworldJoinInstruction";
     case "dont-starve-together":

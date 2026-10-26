@@ -68,6 +68,13 @@ func (b *ProviderWorkloadBuilder) BuildWorkloadSpec(ctx context.Context, server 
 			Protocol: runtimeConfig.Protocol,
 		})
 	}
+	for _, port := range runtimeConfig.PortBindings {
+		additionalPorts = append(additionalPorts, domain.WorkloadPort{
+			Port:     port.Port,
+			HostPort: server.Spec.Network.HostPort + (port.Port - runtimeConfig.Port),
+			Protocol: port.Protocol,
+		})
+	}
 	return domain.WorkloadSpec{
 		ServerID: server.ID,
 		Name:     server.Name,

@@ -11,6 +11,7 @@ export type ProviderCapabilities = {
   whitelist: boolean;
   saveSnapshots: boolean;
   backups: boolean;
+  backupRequiresStop?: boolean;
   mods: boolean;
   versions: boolean;
   worldRegeneration?: boolean;
@@ -24,7 +25,8 @@ export type ProviderConfigField = {
   required: boolean;
   default?: unknown;
   help?: string;
-  options?: Array<{ value: string; label: string }>;
+  helpEn?: string;
+  options?: Array<{ value: string; label: string; labelEn?: string }>;
   min?: number;
   max?: number;
   step?: number;

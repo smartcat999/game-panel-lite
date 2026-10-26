@@ -16,15 +16,18 @@ import {
   updateServerBackupPolicy
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { gameServerStatus } from "@/lib/game-server-resource";
 import type { Backup, GameServerResource } from "@/lib/types";
 
 interface ServerTimeMachineProps {
   server: GameServerResource;
+  backupRequiresStop?: boolean;
 }
 
-export function ServerTimeMachine({ server }: ServerTimeMachineProps) {
+export function ServerTimeMachine({ server, backupRequiresStop = false }: ServerTimeMachineProps) {
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
+  const backupBlocked = backupRequiresStop && gameServerStatus(server) !== "stopped";
   const toast = useToast();
   const client = useQueryClient();
 
@@ -157,13 +160,13 @@ export function ServerTimeMachine({ server }: ServerTimeMachineProps) {
             </span>
           </div>
           <p className="text-xs text-slate-400">
-            {isZh ? "保存当前世界状态，支持随时一键回档还原" : "Create safe world points and restore anytime."}
+            {backupRequiresStop ? (isZh ? "请先停止服务器，待世界保存完成后创建备份。" : "Stop the server before backing up its saved world.") : (isZh ? "保存当前世界状态，支持随时一键回档还原" : "Create safe world points and restore anytime.")}
           </p>
         </div>
 
         <button
           type="button"
-          disabled={snapshotMutation.isPending}
+          disabled={snapshotMutation.isPending || backupBlocked}
           onClick={() => snapshotMutation.mutate()}
           className="flex items-center justify-center gap-2 rounded-xl border border-panel-green/40 bg-panel-green/15 px-4 py-2.5 text-xs font-bold text-panel-green shadow-xs transition hover:bg-panel-green/25 active:scale-95 disabled:opacity-50 shrink-0"
         >
@@ -173,7 +176,7 @@ export function ServerTimeMachine({ server }: ServerTimeMachineProps) {
       </div>
 
       {/* Auto-Backup Policy Settings Card */}
-      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5 space-y-4">
+      {!backupRequiresStop && <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 sm:p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -306,8 +309,7 @@ export function ServerTimeMachine({ server }: ServerTimeMachineProps) {
             </div>
           </div>
         </div>
-      </div>
-
+      </div>}
       {/* Snapshot Cards Timeline */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

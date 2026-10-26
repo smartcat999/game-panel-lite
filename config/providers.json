@@ -5,6 +5,10 @@
     "cn": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite"
   },
   "providers": {
+    "seven-days-to-die": {
+      "imageTemplate": "{registry}/seven-days-to-die:{version}",
+      "versions": ["v3.3.0"]
+    },
     "terraria-vanilla": {
       "imageTemplate": "{registry}/terraria-vanilla:{version}",
       "versions": ["1.4.5.8", "1.4.5.7", "1.4.5.6"]

@@ -28,16 +28,17 @@ type Player struct {
 type PlayerLogEvent string
 
 type ProviderCapabilities struct {
-	ConsoleCommands   bool `json:"consoleCommands"`
-	PlayerList        bool `json:"playerList"`
-	KickPlayer        bool `json:"kickPlayer"`
-	BanPlayer         bool `json:"banPlayer"`
-	Whitelist         bool `json:"whitelist"`
-	SaveSnapshots     bool `json:"saveSnapshots"`
-	Backups           bool `json:"backups"`
-	Mods              bool `json:"mods"`
-	Versions          bool `json:"versions"`
-	WorldRegeneration bool `json:"worldRegeneration"`
+	ConsoleCommands    bool `json:"consoleCommands"`
+	PlayerList         bool `json:"playerList"`
+	KickPlayer         bool `json:"kickPlayer"`
+	BanPlayer          bool `json:"banPlayer"`
+	Whitelist          bool `json:"whitelist"`
+	SaveSnapshots      bool `json:"saveSnapshots"`
+	Backups            bool `json:"backups"`
+	BackupRequiresStop bool `json:"backupRequiresStop,omitempty"`
+	Mods               bool `json:"mods"`
+	Versions           bool `json:"versions"`
+	WorldRegeneration  bool `json:"worldRegeneration"`
 }
 
 type ProviderConfigField struct {
@@ -49,6 +50,7 @@ type ProviderConfigField struct {
 	Default  any                         `json:"default,omitempty"`
 	Options  []ProviderConfigFieldOption `json:"options,omitempty"`
 	Help     string                      `json:"help,omitempty"`
+	HelpEn   string                      `json:"helpEn,omitempty"`
 	Min      *float64                    `json:"min,omitempty"`
 	Max      *float64                    `json:"max,omitempty"`
 	Step     *float64                    `json:"step,omitempty"`
@@ -56,8 +58,9 @@ type ProviderConfigField struct {
 }
 
 type ProviderConfigFieldOption struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
+	Value   string `json:"value"`
+	Label   string `json:"label"`
+	LabelEn string `json:"labelEn,omitempty"`
 }
 
 type ProviderConfigSummary struct {
@@ -119,16 +122,18 @@ type ProviderVersionStatus struct {
 }
 
 const (
-	GameTerraria  GameKey = "terraria"
-	GamePalworld  GameKey = "palworld"
-	GameDST       GameKey = "dont-starve-together"
-	GameMinecraft GameKey = "minecraft"
+	GameTerraria       GameKey = "terraria"
+	GamePalworld       GameKey = "palworld"
+	GameDST            GameKey = "dont-starve-together"
+	GameMinecraft      GameKey = "minecraft"
+	GameSevenDaysToDie GameKey = "seven-days-to-die"
 
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
 	ProviderPalworld           ProviderKey = "palworld"
 	ProviderDST                ProviderKey = "dont-starve-together"
 	ProviderMinecraft          ProviderKey = "minecraft"
+	ProviderSevenDaysToDie     ProviderKey = "seven-days-to-die"
 
 	StatusCreating   ServerStatus = "creating"
 	StatusStarting   ServerStatus = "starting"

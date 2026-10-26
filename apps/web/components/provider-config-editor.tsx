@@ -47,6 +47,8 @@ export function ProviderConfigEditor({
   const [filter, setFilter] = useState<"all" | "modified">("all");
 
   const isDst = providerKey === "dont-starve-together";
+  const worldIdentityFields = new Set(["worldName", "gameWorld", "worldGenSeed", "worldGenSize"]);
+  const fieldDisabled = (field: ProviderConfigField) => disabled || (surface === "server" && providerKey === "seven-days-to-die" && worldIdentityFields.has(field.name));
   const [activeShard, setActiveShard] = useState<"master" | "caves">("master");
 
   const baseFields = useMemo(() => fields.filter((field) => !isAdvancedProviderConfigField(providerKey, field)), [fields, providerKey]);
@@ -300,7 +302,7 @@ export function ProviderConfigEditor({
                     ) : null}
                     <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                       {groupFields.map((field) => (
-                        <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+                        <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
                       ))}
                     </div>
                   </section>
@@ -315,7 +317,7 @@ export function ProviderConfigEditor({
           {/* Text and Select Controls (2-column compact grid) */}
           <div className="grid gap-2.5 sm:grid-cols-2">
             {baseFields.filter((f) => f.type !== "boolean").map((field) => (
-              <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+              <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
             ))}
           </div>
 
@@ -327,7 +329,7 @@ export function ProviderConfigEditor({
               </p>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {baseFields.filter((f) => f.type === "boolean").map((field) => (
-                  <ConfigField key={field.name} disabled={disabled} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+                  <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
                 ))}
               </div>
             </div>
@@ -348,7 +350,11 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
   payload: ProviderConfigPayload;
   slider: boolean;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  if (locale === "en") {
+    label = field.labelEn ?? label;
+    help = field.helpEn ?? help;
+  }
   const value = providerConfigValue(payload, field.name);
   const checked = value === true;
   const numericValue = Number(value ?? field.default ?? 0);
@@ -397,7 +403,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
           >
             {(field.options ?? []).map((option) => (
               <option key={option.value} value={option.value}>
-                {providerOptionLabel(field, option.value, option.label, t)}
+                {locale === "en" && option.labelEn ? option.labelEn : providerOptionLabel(field, option.value, option.label, t)}
               </option>
             ))}
           </select>

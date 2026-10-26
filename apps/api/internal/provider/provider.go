@@ -28,6 +28,10 @@ type ConfigSummaryProvider interface {
 	ConfigSummary(map[string]any) (domain.ProviderConfigSummary, error)
 }
 
+type ConfigUpdateValidator interface {
+	ValidateConfigUpdate(current, next map[string]any) error
+}
+
 type ResourceRuntimeProvider interface {
 	RuntimeConfigForResource(domain.GameServer) (domain.ProviderRuntimeConfig, error)
 }
@@ -42,6 +46,18 @@ type SaveMetadataProvider interface {
 
 type BackupSubtreeProvider interface {
 	BackupSubtree(domain.GameServer) string
+}
+
+// ReplacementRestoreProvider requests an exact save-directory restore rather
+// than overlaying files, which would retain world regions created after backup.
+type ReplacementRestoreProvider interface {
+	RestoreSubtree(domain.GameServer) string
+}
+
+// SteamUpdateProvider describes a Steam installation owned by a provider.
+// Paths are container paths or paths relative to the instance data directory.
+type SteamUpdateProvider interface {
+	SteamUpdateConfig() domain.SteamUpdateConfig
 }
 
 type WorldRegenerationProvider interface {
@@ -110,6 +126,13 @@ func (r *Registry) List() []GameProvider {
 
 func (r *Registry) Games() []domain.GameCatalogEntry {
 	games := map[domain.GameKey]domain.GameCatalogEntry{
+		domain.GameSevenDaysToDie: {
+			Key:         domain.GameSevenDaysToDie,
+			Name:        "7 Days to Die",
+			Description: "Zombie survival, crafting and base defense for friends.",
+			Status:      "planned",
+			CoverImage:  "seven-days-to-die",
+		},
 		domain.GameTerraria: {
 			Key:         domain.GameTerraria,
 			Name:        "Terraria",

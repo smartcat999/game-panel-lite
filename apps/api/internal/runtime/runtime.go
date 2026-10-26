@@ -75,11 +75,13 @@ type ImagePrepareProgressFunc func(ImagePrepareProgress)
 // caller-provided command: each runtime implementation owns the fixed updater
 // command it runs.
 type GameUpdateRequest struct {
-	JobID     string
-	RuntimeID string
-	Image     string
-	DataDir   string
-	AppID     string
+	JobID      string
+	RuntimeID  string
+	Image      string
+	DataDir    string
+	AppID      string
+	InstallDir string
+	Executable string
 }
 
 type GameUpdateResult struct {

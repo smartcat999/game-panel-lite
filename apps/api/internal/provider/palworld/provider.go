@@ -69,6 +69,9 @@ func (Provider) Capabilities() domain.ProviderCapabilities {
 	}
 }
 func (Provider) SaveDisplayName() string { return "save" }
+func (Provider) SteamUpdateConfig() domain.SteamUpdateConfig {
+	return domain.SteamUpdateConfig{AppID: "2394010", InstallDir: "/palworld", Executable: "PalServer.sh", BackupSubtree: "Pal/Saved"}
+}
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
 	return configSchema()
 }

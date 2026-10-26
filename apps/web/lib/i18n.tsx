@@ -6,6 +6,9 @@ export type Locale = "zh" | "en";
 
 const messages = {
   zh: {
+    gameNameSevenDays: "七日杀",
+    gameDescSevenDays: "搜集物资、建造基地，与好友抵挡血月尸潮。",
+    reviewSevenDaysJoinInstruction: "在七日杀中选择加入游戏 → 连接 IP，输入服务器地址和端口。",
     searchActivity: "搜索活动...",
     search: "搜索",
     searchServers: "搜索服务器...",
@@ -613,7 +616,7 @@ const messages = {
     gameUpdateCheckFailed: "检查更新失败，请稍后重试。",
     gameUpdateApplyFailed: "无法开始更新，请检查任务状态后重试。",
     gameUpdateFailureDetail: "更新任务未能完成，请查看活动记录或服务器日志后重试。",
-    gameUpdateFailureDisk: "可用磁盘空间不足。请至少释放 8 GiB 后重试。",
+    gameUpdateFailureDisk: "可用磁盘空间不足。请确认至少有 {required} GiB 空闲空间后重试。",
     gameUpdateFailureMemory: "可用内存不足。请先停止其他游戏服务器或降低资源占用。",
     gameUpdateFailureHealth: "游戏文件已处理，但服务器启动后的健康检查未通过。请检查服务端日志。",
     gameUpdateFailureInterrupted: "更新曾被面板重启中断，服务器已保持安全状态。请重新检查任务状态。",
@@ -1613,6 +1616,9 @@ const messages = {
     manageBackupsInBackupsPage: "请在备份页面查看和管理真实备份。"
   },
   en: {
+    gameNameSevenDays: "7 Days to Die",
+    gameDescSevenDays: "Scavenge, build a base and survive blood moon hordes with friends.",
+    reviewSevenDaysJoinInstruction: "In 7 Days to Die, open Join a Game → Connect to IP and enter the server address and port.",
     searchActivity: "Search activity...",
     search: "Search",
     searchServers: "Search servers...",
@@ -2221,7 +2227,7 @@ const messages = {
     gameUpdateCheckFailed: "Unable to check for updates. Try again shortly.",
     gameUpdateApplyFailed: "Unable to start the update. Review task status and try again.",
     gameUpdateFailureDetail: "The update task did not complete. Review activity or server logs, then try again.",
-    gameUpdateFailureDisk: "There is not enough free disk space. Free at least 8 GiB, then try again.",
+    gameUpdateFailureDisk: "There is not enough free disk space. Ensure at least {required} GiB is available, then try again.",
     gameUpdateFailureMemory: "There is not enough available memory. Stop another game server or reduce resource usage.",
     gameUpdateFailureHealth: "Game files were processed, but the server did not pass its startup health check. Review the server logs.",
     gameUpdateFailureInterrupted: "The update was interrupted by a panel restart. The server remains in a safe state; check the task again.",

@@ -8,6 +8,7 @@ export type GameFilterOption = {
 };
 
 const providerGameMap: Record<string, GameKey> = {
+  "seven-days-to-die": "seven-days-to-die",
   "terraria-vanilla": "terraria",
   "terraria-tmodloader": "terraria",
   palworld: "palworld",
@@ -16,6 +17,7 @@ const providerGameMap: Record<string, GameKey> = {
 };
 
 const fallbackGameLabels: Record<string, string> = {
+  "seven-days-to-die": "7 Days to Die",
   terraria: "Terraria",
   palworld: "Palworld",
   "dont-starve-together": "Don't Starve Together",

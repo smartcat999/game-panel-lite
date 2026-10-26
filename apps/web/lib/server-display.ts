@@ -10,6 +10,7 @@ const providerLabels: Record<string, ServerDisplayProvider> = {
   "terraria-vanilla": { label: "Terraria", tone: "green" },
   "terraria-tmodloader": { label: "tModLoader", tone: "purple" },
   palworld: { label: "Palworld", tone: "sky" },
+  "seven-days-to-die": { label: "7 Days to Die", tone: "amber" },
   "dont-starve-together": { label: "Don't Starve Together", tone: "amber" },
   minecraft: { label: "Minecraft Java", tone: "green" }
 };

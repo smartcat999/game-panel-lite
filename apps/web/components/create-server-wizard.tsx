@@ -260,12 +260,14 @@ function providerFieldHelp(field: ProviderConfigField, t: (key: MessageKey, valu
 function validateCreateConfig({
   config,
   gameKey,
+  locale,
   provider,
   providerConfigPayload,
   t
 }: {
   config: TerrariaConfig;
   gameKey: string;
+  locale: string;
   provider?: ProviderCatalog;
   providerConfigPayload: ProviderConfigPayload;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -281,7 +283,7 @@ function validateCreateConfig({
   for (const field of provider?.configSchema ?? []) {
     if (!field.required) continue;
     const value = providerConfigValue(providerConfigPayload, field.name);
-    const label = providerFieldLabel(field, t);
+    const label = locale === "en" && field.labelEn ? field.labelEn : providerFieldLabel(field, t);
     if (field.type === "boolean") {
       if (value !== true) errors[field.name] = t("requiredAgreementError", { field: label });
       continue;
@@ -367,12 +369,12 @@ function providerJoinPassword(payload: ProviderConfigPayload) {
   return stringPayloadValue(payload, "password") || stringPayloadValue(payload, "identity.password") || stringPayloadValue(payload, "serverPassword");
 }
 
-function providerReviewValue(field: ProviderConfigField, value: unknown, t: (key: MessageKey, values?: Record<string, string | number>) => string): string {
+function providerReviewValue(field: ProviderConfigField, value: unknown, t: (key: MessageKey, values?: Record<string, string | number>) => string, locale?: string): string {
   if (field.type === "boolean") return value === true ? t("enabled") : t("disabled");
   if (field.type === "password") return String(value ?? "").trim() ? t("enabled") : t("none");
   if (field.type === "select") {
     const option = field.options?.find((item) => item.value === value);
-    return option ? providerOptionLabel(field, option.value, option.label, t) : String(value ?? "");
+    return option ? (locale === "en" && option.labelEn ? option.labelEn : providerOptionLabel(field, option.value, option.label, t)) : String(value ?? "");
   }
   return String(value ?? "");
 }
@@ -444,9 +446,9 @@ function createReviewConfigModel({
     .filter((field) => !isAdvancedProviderConfigField(provider?.key ?? "", field))
     .map((field): ReviewConfigField | null => {
       const value = providerConfigValue(providerConfigPayload, field.name);
-      const formatted = providerReviewValue(field, value, t);
+      const formatted = providerReviewValue(field, value, t, locale);
       if (!field.required && field.type !== "boolean" && formatted.trim() === "") return null;
-      return { label: providerFieldLabel(field, t), value: formatted };
+      return { label: locale === "en" && field.labelEn ? field.labelEn : providerFieldLabel(field, t), value: formatted };
     })
     .filter((field): field is ReviewConfigField => Boolean(field));
 
@@ -510,7 +512,7 @@ export function CreateServerWizard() {
   const SelectedGameIcon = selectedGameArt.icon;
   const selectedProvider = selectedGame?.providers.find((provider) => provider.key === selectedProviderKey) ?? selectedGame?.providers.find((provider) => provider.recommended) ?? selectedGame?.providers[0];
   const providerKey = selectedProvider?.key ?? selectedProviderKey;
-  const stepIds: StepId[] = ["setup", "config", "resources", "mods", "review"];
+  const stepIds: StepId[] = ["setup", "config", "resources", ...(selectedProvider?.capabilities.mods ? ["mods" as const] : []), "review"];
   const availableVersions = versionsQuery.data?.[providerKey] ?? [];
   const selectedVersion = availableVersions.includes(version) ? version : availableVersions[0] || "";
   const allWorlds = showWorldAndBackupFeatures ? worldsQuery.data ?? [] : [];
@@ -538,6 +540,7 @@ export function CreateServerWizard() {
     const errors = validateCreateConfig({
       config,
       gameKey: selectedGameKey,
+      locale,
       provider: selectedProvider,
       providerConfigPayload,
       t

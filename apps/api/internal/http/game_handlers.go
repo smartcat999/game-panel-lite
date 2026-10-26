@@ -46,7 +46,7 @@ func (h *Handler) attachProviderVersionStatuses(ctx context.Context, games []dom
 		for providerIndex := range games[gameIndex].Providers {
 			item := &games[gameIndex].Providers[providerIndex]
 			item.GameVersion = domain.ProviderVersionStatus{Status: "unsupported"}
-			if item.Key != domain.ProviderPalworld {
+			if !h.supportsSteamUpdates(item.Key) {
 				continue
 			}
 			item.GameVersion = domain.ProviderVersionStatus{Supported: true, Status: "unknown", AutoCheckEnabled: true, AutoCheckHours: int(gameUpdateAutoCheckInterval / time.Hour)}

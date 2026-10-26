@@ -340,7 +340,7 @@ func (h *Handler) workshopSyncUnsupported() bool {
 }
 
 func (h *Handler) providerRuntimeUnsupported(providerKey domain.ProviderKey) bool {
-	if providerKey != domain.ProviderDST || h.dockerMonitor == nil {
+	if (providerKey != domain.ProviderDST && providerKey != domain.ProviderSevenDaysToDie) || h.dockerMonitor == nil {
 		return false
 	}
 	architecture := strings.ToLower(strings.TrimSpace(h.dockerMonitor.Status().Architecture))
@@ -349,7 +349,7 @@ func (h *Handler) providerRuntimeUnsupported(providerKey domain.ProviderKey) boo
 
 func (h *Handler) requireProviderRuntimeSupported(providerKey domain.ProviderKey) error {
 	if h.providerRuntimeUnsupported(providerKey) {
-		return fmt.Errorf("Don't Starve Together server runtime is currently supported only on amd64 Docker hosts")
+		return fmt.Errorf("%s server runtime is currently supported only on amd64 Docker hosts", providerKey)
 	}
 	return nil
 }

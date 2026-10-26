@@ -189,3 +189,69 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 	}
 	return nil
 }
+
+// RestoreSubtree replaces only the provider-owned save subtree. Extract first,
+// then move the old save aside so a failed extraction cannot damage live data.
+func (s *Service) RestoreSubtree(instanceID, fileName, targetDir, subtree string) error {
+	clean := filepath.Clean(subtree)
+	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("invalid restore subtree")
+	}
+	archivePath, err := s.Path(instanceID, fileName)
+	if err != nil {
+		return err
+	}
+	archive, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer archive.Close()
+	for _, entry := range archive.File {
+		name := filepath.Clean(filepath.FromSlash(entry.Name))
+		if name != clean && !strings.HasPrefix(name, clean+string(filepath.Separator)) {
+			return fmt.Errorf("backup contains files outside save subtree")
+		}
+	}
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return err
+	}
+	staging, err := os.MkdirTemp(targetDir, ".gamepanel-restore-")
+	if err != nil {
+		return err
+	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.RemoveAll(staging)
+		}
+	}()
+	if err := s.Restore(instanceID, fileName, staging); err != nil {
+		return err
+	}
+	next := filepath.Join(staging, clean)
+	if err := os.MkdirAll(next, 0755); err != nil {
+		return err
+	}
+	target := filepath.Join(targetDir, clean)
+	previous := filepath.Join(staging, "previous-save")
+	moved := false
+	if _, err := os.Lstat(target); err == nil {
+		if err := os.Rename(target, previous); err != nil {
+			return err
+		}
+		moved = true
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(next, target); err != nil {
+		if moved {
+			if rollbackErr := os.Rename(previous, target); rollbackErr != nil {
+				// Preserve the recovery copy if returning it to its path failed.
+				cleanup = false
+				return fmt.Errorf("restore failed: %v; recovery copy at %s: %w", err, previous, rollbackErr)
+			}
+		}
+		return err
+	}
+	return nil
+}

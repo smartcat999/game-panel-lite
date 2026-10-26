@@ -6,7 +6,7 @@ usage() {
 Build GamePanel Lite game runtime images.
 
 Usage:
-  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld] [options]
+  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld|seven-days-to-die] [options]
 
 Targets:
   all           Build vanilla Terraria and tModLoader images. Default.
@@ -14,6 +14,7 @@ Targets:
   tmodloader    Build only tModLoader images.
   dst           Build only Don't Starve Together images. linux/amd64 only.
   palworld      Build only the Palworld dedicated server image.
+  seven-days-to-die Build the vanilla 7 Days to Die image. linux/amd64 only.
 
 Options:
   --registry NAME       Image namespace. Default: smartcat99999
@@ -85,7 +86,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$target" in
-  all|vanilla|tmodloader|dst|palworld) ;;
+  all|vanilla|tmodloader|dst|palworld|seven-days-to-die) ;;
   *)
     echo "Unknown target: $target" >&2
     usage >&2
@@ -169,6 +170,16 @@ build_palworld() {
 }
 
 cd "$root_dir"
+
+if [[ "$target" == "seven-days-to-die" ]]; then
+  if [[ -n "$platform" && "$platform" != "linux/amd64" ]]; then
+    echo "7 Days to Die currently supports linux/amd64 only." >&2
+    exit 1
+  fi
+  if [[ -z "$platform" ]]; then buildx_args+=(--platform linux/amd64); fi
+  docker "${buildx_args[@]}" -f docker/seven-days-to-die/Dockerfile \
+    -t "${registry}/seven-days-to-die:v3.3.0" "${root_dir}"
+fi
 
 if [[ "$target" == "all" || "$target" == "vanilla" ]]; then
   build_vanilla "1.4.5.6" "1456"
