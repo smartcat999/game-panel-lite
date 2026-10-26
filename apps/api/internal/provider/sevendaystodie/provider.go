@@ -156,7 +156,7 @@ func renderConfig(c Config) (string, error) {
 		{"ServerPort", strconv.Itoa(c.Port)}, {"ServerMaxPlayerCount", strconv.Itoa(c.MaxPlayers)},
 		{"ServerVisibility", c.ServerVisibility}, {"ServerDisabledNetworkProtocols", "SteamNetworking"},
 		{"GameWorld", c.GameWorld}, {"GameName", c.WorldName}, {"WorldGenSeed", c.WorldGenSeed}, {"WorldGenSize", strconv.Itoa(c.WorldGenSize)},
-		{"UserDataFolder", "/data/userdata"}, {"SaveGameFolder", "/data/userdata/Saves"},
+		{"UserDataFolder", "/data/userdata"},
 		{"EACEnabled", strconv.FormatBool(c.EACEnabled)}, {"PlayerKillingMode", c.PlayerKillingMode}, {"SandboxCode", c.SandboxCode},
 		{"TelnetEnabled", "false"}, {"WebDashboardEnabled", "false"}, {"ServerAllowCrossplay", "false"},
 	}

@@ -147,6 +147,19 @@
   state-transition timeouts in `internal/app`; the same failure was reproduced
   from an unmodified `main` snapshot. Full frontend lint also includes unrelated,
   pre-existing untracked screenshot scripts; application directories pass.
-- Runtime verification is pending: um773 builds reached Steam anonymous login
-  but returned `FAILED (No Connection)`. Actual startup, client joining, gameplay
-  save/restart and in-game update validation are required before release.
+- Runtime verification: after correcting the host's persistent Steam routing,
+  a complete amd64 image built on um773 (Steam Build ID `25661908`, game
+  `V 3.3.0 b18`). The local Buildx client could not reach Docker Hub's token
+  endpoint, so the build ran from um773's own client.
+- Actual startup exposed the obsolete `SaveGameFolder` property, which 3.3.0
+  rejects. Removed it and added a regression assertion; saves use
+  `UserDataFolder/Saves`. Related Go tests and Provider vet passed again.
+- An isolated, loopback-only 2-CPU/6-GiB instance reached `StartGame done` and
+  EOS registration, persisted its save under `userdata/Saves`, and saved/exited
+  with code 0 on SIGINT. A replacement container reused that volume and loaded
+  the existing save directory without downloading or reseeding game files.
+- EOS connectivity remains intermittent: some starts timed out before world
+  loading; retrying succeeded. A Steam game-server logon timeout also occurred.
+  Client joining, player progress across restart, actual game updates and
+  dependable external-service connectivity still require verification before
+  release. Both isolated test instances were stopped after verification.

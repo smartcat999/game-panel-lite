@@ -43,6 +43,9 @@ func TestConfigXMLAndNetwork(t *testing.T) {
 	if values["UserDataFolder"] != "/data/userdata" || values["GameName"] != "Friends" {
 		t.Fatalf("unstable save identity: %+v", values)
 	}
+	if _, exists := values["SaveGameFolder"]; exists {
+		t.Fatal("3.3 rejects SaveGameFolder; saves must use UserDataFolder/Saves")
+	}
 	if runtime.Protocol != "tcp" || len(runtime.PortBindings) != 3 || runtime.PortBindings[0].Port != 26900 || runtime.PortBindings[2].Port != 26902 || runtime.PortBindings[0].Protocol != "udp" {
 		t.Fatalf("invalid network: %+v", runtime)
 	}
