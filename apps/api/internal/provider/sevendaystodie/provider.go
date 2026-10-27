@@ -1,6 +1,7 @@
 package sevendaystodie
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -79,7 +80,13 @@ func payload(config Config) map[string]any {
 	_ = json.Unmarshal(data, &out)
 	return out
 }
-func (Provider) DefaultConfigPayload() map[string]any { return payload(defaultConfig()) }
+func (Provider) DefaultConfigPayload() map[string]any {
+	config := defaultConfig()
+	// Keep the legacy parse fallback for existing payloads without a seed.
+	// Generate defaults only for creation; normalization never changes an existing seed.
+	config.WorldGenSeed = rand.Text()[:16]
+	return payload(config)
+}
 func (Provider) NormalizeConfigPayload(input map[string]any) (map[string]any, error) {
 	config, err := parseConfig(input)
 	if err != nil {
@@ -122,10 +129,13 @@ func validateConfig(config Config) error {
 	if config.Port < 1024 || config.Port > 65533 {
 		return fmt.Errorf("game port must be between 1024 and 65533")
 	}
-	if config.GameWorld != "Navezgane" && config.GameWorld != "RWG" {
+	switch config.GameWorld {
+	case "Navezgane", "RWG", "Pregen06k01", "Pregen06k02", "Pregen08k01", "Pregen08k02":
+	default:
 		return fmt.Errorf("unsupported world type")
 	}
-	if config.WorldGenSize != 4096 && config.WorldGenSize != 6144 && config.WorldGenSize != 8192 {
+	// Retain 4K parsing for previously created saves; new UI choices follow the 3.3 template.
+	if config.WorldGenSize != 4096 && config.WorldGenSize != 6144 && config.WorldGenSize != 8192 && config.WorldGenSize != 10240 {
 		return fmt.Errorf("unsupported world size")
 	}
 	if config.ServerVisibility != "0" && config.ServerVisibility != "1" && config.ServerVisibility != "2" {
