@@ -1,0 +1,22 @@
+<!-- Extracted from Steam Build 25661908; full template SHA256 21dd90603e12c2aa88c73edf4d1c44ee1bc60358b94275259c4aa24970a8d879 -->
+<ServerSettings>
+  <property name="Region" value="NorthAmericaEast" />
+  <property name="Language" value="English" />
+  <property name="MaxSpawnedZombies" value="64" />
+  <property name="MaxSpawnedAnimals" value="50" />
+  <property name="ServerMaxAllowedViewDistance" value="12" />
+  <property name="ServerMaxWorldTransferSpeedKiBs" value="512" />
+  <property name="MaxQueuedMeshLayers" value="1000" />
+  <property name="DynamicMeshEnabled" value="true" />
+  <property name="DynamicMeshLandClaimOnly" value="true" />
+  <property name="DynamicMeshLandClaimBuffer" value="3" />
+  <property name="DynamicMeshMaxItemCache" value="3" />
+  <property name="LandClaimCount" value="5" />
+  <property name="LandClaimSize" value="41" />
+  <property name="LandClaimDeadZone" value="30" />
+  <property name="LandClaimExpiryTime" value="7" />
+  <property name="LandClaimDecayMode" value="0" />
+  <property name="LandClaimOnlineDurabilityModifier" value="4" />
+  <property name="LandClaimOfflineDurabilityModifier" value="4" />
+  <property name="LandClaimOfflineDelay" value="0" />
+</ServerSettings>

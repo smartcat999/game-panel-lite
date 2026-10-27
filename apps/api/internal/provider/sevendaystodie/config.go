@@ -4,7 +4,7 @@ import "github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 
 func (Provider) ConfigSchema() []domain.ProviderConfigField {
 	n := func(v float64) *float64 { return &v }
-	return []domain.ProviderConfigField{
+	fields := []domain.ProviderConfigField{
 		{Name: "serverName", Label: "服务器名称", LabelEn: "Server name", Type: "text", Required: true, Default: "7 Days to Die Server"},
 		{Name: "worldName", Label: "存档名称", LabelEn: "Save name", Type: "text", Required: true, Default: "Friends"},
 		{Name: "serverPassword", Label: "服务器密码", LabelEn: "Server password", Type: "password", Default: ""},
@@ -17,4 +17,5 @@ func (Provider) ConfigSchema() []domain.ProviderConfigField {
 		{Name: "eacEnabled", Label: "启用反作弊", LabelEn: "Enable anti-cheat", Type: "boolean", Default: true},
 		{Name: "sandboxCode", Label: "沙盒规则代码", LabelEn: "Sandbox code", Type: "text", Required: true, Default: "AAAJABJACJADJARFBNC", Help: "在游戏的新建游戏 → 沙盒选项中设置难度、血月和掉落等规则，复制代码并粘贴到这里。请使用相同游戏版本生成代码。", HelpEn: "Set difficulty, blood moons and loot in New Game → Sandbox Options, then copy the code here. Generate it with the same game version."},
 	}
+	return append(fields, advancedConfigSchema()...)
 }

@@ -83,6 +83,7 @@ export function providerConfigValue(payload: ProviderConfigPayload | undefined, 
 
 export function isAdvancedProviderConfigField(providerKey: string, field: ProviderConfigField): boolean {
   if (providerKey === "dont-starve-together") return Boolean(field.group);
+  if (providerKey === "seven-days-to-die") return Boolean(field.group) || field.name === "playerKillingMode";
   if (providerKey === "palworld") return Boolean(field.group && field.group !== "基础设置");
   return false;
 }

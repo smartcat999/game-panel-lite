@@ -13,5 +13,16 @@ export function sevenDaysCreationOverrides(): ProviderConfigPayload {
 }
 
 export function isSevenDaysFieldVisible(field: ProviderConfigField, payload: ProviderConfigPayload): boolean {
-  return !["worldGenSeed", "worldGenSize"].includes(field.name) || payload.gameWorld === "RWG";
+  if (["worldGenSeed", "worldGenSize"].includes(field.name)) return payload.gameWorld === "RWG";
+  if (["dynamicMeshLandClaimOnly", "dynamicMeshMaxItemCache", "dynamicMeshLandClaimBuffer"].includes(field.name) && payload.dynamicMeshEnabled === false) return false;
+  if (field.name === "dynamicMeshLandClaimBuffer" && payload.dynamicMeshLandClaimOnly === false) return false;
+  return true;
+}
+
+export type SevenDaysConfigSection = "basic" | "performance" | "landClaims";
+
+export function sevenDaysConfigSection(field: ProviderConfigField): SevenDaysConfigSection {
+  if (field.group === "sevenDays.performance") return "performance";
+  if (field.group === "sevenDays.landClaims" || field.name === "playerKillingMode") return "landClaims";
+  return "basic";
 }

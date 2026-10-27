@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSevenDaysWorldSeed, isSevenDaysFieldVisible, sevenDaysCreationOverrides } from "./seven-days-config";
+import { createSevenDaysWorldSeed, isSevenDaysFieldVisible, sevenDaysCreationOverrides, sevenDaysConfigSection } from "./seven-days-config";
 import { updateProviderConfigPayload } from "./provider-config";
 import type { ProviderConfigField } from "./types";
 
@@ -34,5 +34,32 @@ describe("Seven Days world configuration", () => {
   it("keeps discrete map size choices numeric in submitted configuration", () => {
     const next = updateProviderConfigPayload({}, sizeField, "10240");
     expect(next.worldGenSize).toBe(10240);
+  });
+});
+
+describe("Seven Days settings dependencies", () => {
+  const field = (name: string): ProviderConfigField => ({ name, label: name, type: "number", required: true });
+
+  it("hides inactive dynamic mesh controls without discarding their values", () => {
+    const payload = { dynamicMeshEnabled: false, dynamicMeshLandClaimOnly: true, dynamicMeshLandClaimBuffer: 5, dynamicMeshMaxItemCache: 2 };
+    for (const name of ["dynamicMeshLandClaimOnly", "dynamicMeshLandClaimBuffer", "dynamicMeshMaxItemCache"]) {
+      expect(isSevenDaysFieldVisible(field(name), payload)).toBe(false);
+    }
+    expect(isSevenDaysFieldVisible(field("maxSpawnedZombies"), payload)).toBe(true);
+    const enabled = { ...payload, dynamicMeshEnabled: true };
+    expect(isSevenDaysFieldVisible(field("dynamicMeshLandClaimBuffer"), enabled)).toBe(true);
+    expect(enabled.dynamicMeshLandClaimBuffer).toBe(5);
+    expect(isSevenDaysFieldVisible(field("dynamicMeshLandClaimBuffer"), { ...enabled, dynamicMeshLandClaimOnly: false })).toBe(false);
+  });
+});
+
+
+describe("Seven Days settings sections", () => {
+  it("keeps listing fields basic and groups PvP with multiplayer claim settings", () => {
+    const base = { name: "region", label: "Region", type: "select", required: true };
+    expect(sevenDaysConfigSection(base)).toBe("basic");
+    expect(sevenDaysConfigSection({ ...base, name: "playerKillingMode" })).toBe("landClaims");
+    expect(sevenDaysConfigSection({ ...base, name: "maxSpawnedZombies", group: "sevenDays.performance" })).toBe("performance");
+    expect(sevenDaysConfigSection({ ...base, name: "landClaimSize", group: "sevenDays.landClaims" })).toBe("landClaims");
   });
 });

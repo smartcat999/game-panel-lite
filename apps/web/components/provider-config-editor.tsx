@@ -2,7 +2,7 @@
 
 import { ExternalLink, RotateCcw, Search, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { createSevenDaysWorldSeed, isSevenDaysFieldVisible } from "@/lib/seven-days-config";
+import { createSevenDaysWorldSeed, isSevenDaysFieldVisible, sevenDaysConfigSection, type SevenDaysConfigSection } from "@/lib/seven-days-config";
 import { SecretInput } from "@/components/secret-input";
 import { Button, Input } from "@/components/ui";
 import { dstConfigGroupLabelKey } from "@/lib/dst-config";
@@ -103,6 +103,11 @@ export function ProviderConfigEditor({
   const visibleGroups = normalizedQuery ? groups.filter((group) => matchedFields.some((field) => field.group === group)) : activeGroup ? [activeGroup] : [];
 
   if (fields.length === 0) return <p className="mt-4 text-sm text-slate-500">{t("none")}</p>;
+
+  if (providerKey === "seven-days-to-die") {
+    return <SevenDaysConfigEditor disabled={disabled} errors={errors} fields={fields} onChange={onChange} onRestoreDefaults={onRestoreDefaults} payload={payload} surface={surface} />;
+  }
+
 
   return (
     <div className="mt-4 space-y-4 min-w-0 w-full">
@@ -341,6 +346,48 @@ export function ProviderConfigEditor({
   );
 }
 
+function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDefaults, payload, surface }: {
+  disabled: boolean;
+  errors: Record<string, string>;
+  fields: ProviderConfigField[];
+  onChange: (field: ProviderConfigField, value: ConfigValue) => void;
+  onRestoreDefaults?: (fields: ProviderConfigField[]) => void;
+  payload: ProviderConfigPayload;
+  surface: "create" | "server";
+}) {
+  const { locale } = useI18n();
+  const [section, setSection] = useState<SevenDaysConfigSection>("basic");
+  const isZh = locale === "zh";
+  const sections: { key: SevenDaysConfigSection; label: string }[] = [
+    { key: "basic", label: isZh ? "基础" : "Basic" },
+    { key: "performance", label: isZh ? "高级" : "Advanced" },
+    { key: "landClaims", label: isZh ? "多人" : "Multiplayer" }
+  ];
+  const sectionFields = fields.filter((field) => sevenDaysConfigSection(field) === section);
+  const visibleFields = sectionFields.filter((field) => isSevenDaysFieldVisible(field, payload) || Boolean(errors[field.name]));
+  const hasChanges = sectionFields.some((field) => isProviderFieldModified(payload, field));
+  return (
+    <div className="mt-3 min-w-0 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-panel-line pb-2">
+        <nav aria-label={isZh ? "七日杀设置分类" : "Seven Days settings categories"} className="flex min-w-0 flex-wrap gap-1">
+          {sections.map(({ key, label }) => {
+            const hasErrors = fields.some((field) => sevenDaysConfigSection(field) === key && Boolean(errors[field.name]));
+            return <button key={key} type="button" aria-pressed={section === key} onClick={() => setSection(key)} className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green", section === key ? "bg-slate-800 text-slate-100" : "text-slate-400 hover:text-white")}>
+              {label}
+              {hasErrors ? <span className="size-1.5 rounded-full bg-red-400" aria-label={isZh ? "有待修正的参数" : "Contains invalid settings"} /> : null}
+            </button>;
+          })}
+        </nav>
+        {section !== "basic" && onRestoreDefaults && hasChanges ? <button type="button" disabled={disabled} className="text-xs text-slate-400 hover:text-white disabled:opacity-40" onClick={() => onRestoreDefaults(sectionFields)}>{isZh ? "恢复本组默认" : "Reset section"}</button> : null}
+      </div>
+      <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", section !== "basic" && "xl:grid-cols-3")}>
+        {visibleFields.map((field) => <ConfigField key={field.name} disabled={disabled || (surface === "server" && ["worldName", "gameWorld", "worldGenSeed", "worldGenSize"].includes(field.name))} error={errors[field.name]} field={field} help={(isZh ? field.help : field.helpEn) ?? ""} label={(isZh ? field.label : field.labelEn) ?? field.label} onChange={onChange} payload={payload} slider={false} sevenDays />)}
+      </div>
+      {section === "landClaims" ? <p className="text-xs text-slate-400">{isZh ? "耐久倍率针对非盟友玩家的破坏；0 表示免疫此类伤害。" : "Durability multipliers protect against non-allied player damage; 0 prevents that damage."}</p> : null}
+    </div>
+  );
+}
+
 function ConfigField({ disabled, error, field, help, label, onChange, payload, slider, sevenDays = false }: {
   disabled: boolean;
   error?: string;
@@ -367,9 +414,9 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     : 0;
   const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
   return (
-    <div className={cn("min-w-0 w-full rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700 overflow-hidden", sevenDays && field.name === "sandboxCode" && "sm:col-span-2", error ? "border-red-400/60" : "border-slate-800")}>
+    <div className={cn("min-w-0 w-full rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700 overflow-hidden", sevenDays && field.name === "sandboxCode" && "col-span-full", error ? "border-red-400/60" : "border-slate-800")}>
       {field.type === "boolean" ? (
-        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-7 w-full items-center justify-between gap-2.5 text-left outline-none transition disabled:opacity-50" onClick={() => onChange(field, !checked)}>
+        <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className={cn("flex w-full items-center justify-between gap-2.5 text-left outline-none transition disabled:opacity-50", sevenDays ? "min-h-[62px]" : "min-h-7")} onClick={() => onChange(field, !checked)}>
           <span className="text-xs font-semibold text-slate-200 truncate">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
           <span aria-hidden="true" className={cn("relative h-4 w-7 shrink-0 rounded-full transition-colors", checked ? "bg-panel-green" : "bg-slate-700")}>
             <span className={cn("absolute left-0.5 top-0.5 size-3 rounded-full bg-white transition-transform", checked ? "translate-x-3" : "translate-x-0")} />

@@ -129,3 +129,50 @@ func TestSevenDaysSteamUpdateRequest(t *testing.T) {
 		t.Fatalf("unsafe metadata check: %+v %v", check, err)
 	}
 }
+
+func TestSevenDaysAdvancedConfigPersistsOnLegacyServer(t *testing.T) {
+	router, db, _ := newTestRouter(t)
+	server := domain.GameServer{
+		ID: "seven-settings", Name: "Legacy save", GameKey: domain.GameSevenDaysToDie, ProviderKey: domain.ProviderSevenDaysToDie,
+		Spec: domain.ServerSpec{DesiredState: domain.DesiredStopped, Generation: 1,
+			Config:  map[string]any{"worldName": "原有存档", "worldGenSeed": "GamePanelLite", "worldGenSize": 4096},
+			Network: domain.ServerNetworkSpec{Port: 26900, HostPort: 30000}},
+		Status: domain.ServerRuntimeStatus{ActualState: domain.ActualStopped, Phase: domain.PhaseStopped},
+	}
+	if err := db.CreateGameServer(context.Background(), &server); err != nil {
+		t.Fatal(err)
+	}
+	update := func(config map[string]any) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(map[string]any{"config": config})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodPut, "/api/servers/"+server.ID+"/config", bytes.NewReader(body)))
+		return response
+	}
+	response := update(map[string]any{"region": "Asia", "language": "Chinese", "serverMaxAllowedViewDistance": 8, "dynamicMeshEnabled": false, "landClaimOnlineDurabilityModifier": 0, "landClaimOfflineDurabilityModifier": 2})
+	if response.Code != stdhttp.StatusOK {
+		t.Fatalf("update: %d %s", response.Code, response.Body.String())
+	}
+	saved, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, want := range map[string]any{"region": "Asia", "language": "Chinese", "serverMaxAllowedViewDistance": float64(8), "dynamicMeshEnabled": false, "landClaimOnlineDurabilityModifier": float64(0), "landClaimOfflineDurabilityModifier": float64(2), "worldName": "原有存档", "worldGenSeed": "GamePanelLite", "worldGenSize": float64(4096)} {
+		if saved.Spec.Config[k] != want {
+			t.Errorf("%s: got %v want %v", k, saved.Spec.Config[k], want)
+		}
+	}
+	if _, ok := saved.Spec.Config["landClaimSize"]; ok {
+		t.Fatal("partial update invented an unmanaged setting")
+	}
+	if response := update(map[string]any{"serverMaxAllowedViewDistance": 13}); response.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("invalid view distance: %d", response.Code)
+	}
+	after, err := db.GetGameServer(context.Background(), server.ID)
+	if err != nil || after.Spec.Config["serverMaxAllowedViewDistance"] != float64(8) {
+		t.Fatal("failed update changed persisted settings")
+	}
+}
