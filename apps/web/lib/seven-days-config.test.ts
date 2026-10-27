@@ -55,9 +55,11 @@ describe("Seven Days settings dependencies", () => {
 
 
 describe("Seven Days settings sections", () => {
-  it("keeps listing fields basic and groups PvP with multiplayer claim settings", () => {
+  it("keeps listing fields in server settings and groups PvP with multiplayer claim settings", () => {
     const base = { name: "region", label: "Region", type: "select", required: true };
-    expect(sevenDaysConfigSection(base)).toBe("basic");
+    expect(sevenDaysConfigSection(base)).toBe("server");
+    expect(sevenDaysConfigSection({ ...base, name: "worldName" })).toBe("basic");
+    expect(sevenDaysConfigSection({ ...base, name: "cameraRestrictionMode", group: "sevenDays.advanced" })).toBe("performance");
     expect(sevenDaysConfigSection({ ...base, name: "playerKillingMode" })).toBe("landClaims");
     expect(sevenDaysConfigSection({ ...base, name: "maxSpawnedZombies", group: "sevenDays.performance" })).toBe("performance");
     expect(sevenDaysConfigSection({ ...base, name: "landClaimSize", group: "sevenDays.landClaims" })).toBe("landClaims");

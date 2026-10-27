@@ -3,6 +3,8 @@
 import { ExternalLink, RotateCcw, Search, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { createSevenDaysWorldSeed, isSevenDaysFieldVisible, sevenDaysConfigSection, type SevenDaysConfigSection } from "@/lib/seven-days-config";
+import { SevenDaysSandboxEditor } from "@/components/seven-days-sandbox-editor";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SecretInput } from "@/components/secret-input";
 import { Button, Input } from "@/components/ui";
 import { dstConfigGroupLabelKey } from "@/lib/dst-config";
@@ -357,15 +359,24 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
 }) {
   const { locale } = useI18n();
   const [section, setSection] = useState<SevenDaysConfigSection>("basic");
+  const [resetChange, setResetChange] = useState<{ field: ProviderConfigField; value: ConfigValue } | null>(null);
   const isZh = locale === "zh";
   const sections: { key: SevenDaysConfigSection; label: string }[] = [
     { key: "basic", label: isZh ? "基础" : "Basic" },
+    { key: "server", label: isZh ? "服务器" : "Server" },
     { key: "performance", label: isZh ? "高级" : "Advanced" },
     { key: "landClaims", label: isZh ? "多人" : "Multiplayer" }
   ];
   const sectionFields = fields.filter((field) => sevenDaysConfigSection(field) === section);
   const visibleFields = sectionFields.filter((field) => isSevenDaysFieldVisible(field, payload) || Boolean(errors[field.name]));
   const hasChanges = sectionFields.some((field) => isProviderFieldModified(payload, field));
+  const changeField = (field: ProviderConfigField, value: ConfigValue) => {
+    if (field.name === "maxChunkAge" && Number(value) >= 0) {
+      setResetChange({ field, value });
+      return;
+    }
+    onChange(field, value);
+  };
   return (
     <div className="mt-3 min-w-0 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-panel-line pb-2">
@@ -381,8 +392,9 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
         {section !== "basic" && onRestoreDefaults && hasChanges ? <button type="button" disabled={disabled} className="text-xs text-slate-400 hover:text-white disabled:opacity-40" onClick={() => onRestoreDefaults(sectionFields)}>{isZh ? "恢复本组默认" : "Reset section"}</button> : null}
       </div>
       <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", section !== "basic" && "xl:grid-cols-3")}>
-        {visibleFields.map((field) => <ConfigField key={field.name} disabled={disabled || (surface === "server" && ["worldName", "gameWorld", "worldGenSeed", "worldGenSize"].includes(field.name))} error={errors[field.name]} field={field} help={(isZh ? field.help : field.helpEn) ?? ""} label={(isZh ? field.label : field.labelEn) ?? field.label} onChange={onChange} payload={payload} slider={false} sevenDays />)}
+        {visibleFields.map((field) => <ConfigField key={field.name} disabled={disabled || (surface === "server" && ["worldName", "gameWorld", "worldGenSeed", "worldGenSize"].includes(field.name))} error={errors[field.name]} field={field} help={(isZh ? field.help : field.helpEn) ?? ""} label={(isZh ? field.label : field.labelEn) ?? field.label} onChange={changeField} payload={payload} slider={false} sevenDays />)}
       </div>
+      <ConfirmDialog eyebrow={isZh ? "世界数据" : "World data"} open={Boolean(resetChange)} title={isZh ? "启用区块重置？" : "Enable chunk reset?"} description={isZh ? "长时间未访问且未受保护的区块会重置，建造内容可能丢失。确认后仍需保存配置并重启服务器。" : "Unvisited, unprotected chunks will reset and builds may be lost. Save settings and restart to apply."} confirmLabel={isZh ? "确认设置" : "Confirm setting"} cancelLabel={isZh ? "取消" : "Cancel"} confirmVariant="danger" onCancel={() => setResetChange(null)} onConfirm={() => { if (resetChange) onChange(resetChange.field, resetChange.value); setResetChange(null); }} />
       {section === "landClaims" ? <p className="text-xs text-slate-400">{isZh ? "耐久倍率针对非盟友玩家的破坏；0 表示免疫此类伤害。" : "Durability multipliers protect against non-allied player damage; 0 prevents that damage."}</p> : null}
     </div>
   );
@@ -405,7 +417,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     label = field.labelEn ?? label;
     help = field.helpEn ?? help;
   }
-  const value = providerConfigValue(payload, field.name);
+  const value = providerConfigValue(payload, field.name) ?? (sevenDays ? field.default : undefined);
   const checked = value === true;
   const numericValue = Number(value ?? field.default ?? 0);
   const isRangeSlider = field.type === "number" && slider && field.min !== undefined && field.max !== undefined;
@@ -451,7 +463,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
             value={String(value ?? "")}
             onChange={(event) => onChange(field, event.target.value)}
           >
-            {disabled && value !== undefined && !field.options?.some((option) => option.value === String(value)) ? <option value={String(value)}>{String(value)}</option> : null}
+            {(disabled || sevenDays) && value !== undefined && !field.options?.some((option) => option.value === String(value)) ? <option value={String(value)}>{String(value)}</option> : null}
             {(field.options ?? []).map((option) => (
               <option key={option.value} value={option.value}>
                 {locale === "en" && option.labelEn ? option.labelEn : providerOptionLabel(field, option.value, option.label, t)}
@@ -470,8 +482,9 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
         </LabeledControl>
       ) : sevenDays && field.name === "sandboxCode" ? (
         <LabeledControl field={field} label={label}>
-          <div className="flex items-center gap-2">
-            <Input id={`provider-field-${field.name}`} className="h-8.5 min-w-0 bg-slate-900 px-2.5 font-mono text-xs" value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+          <div className="flex flex-wrap items-center gap-2">
+            <SevenDaysSandboxEditor code={String(value ?? "")} disabled={disabled} onChange={(code) => onChange(field, code)} />
+            <Input id={`provider-field-${field.name}`} className="h-8.5 min-w-0 flex-1 basis-40 bg-slate-900 px-2.5 font-mono text-xs" value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
             <button type="button" disabled={disabled || value === field.default} onClick={() => onChange(field, String(field.default ?? ""))} className="shrink-0 text-xs text-slate-300 hover:text-white disabled:opacity-40">
               {locale === "zh" ? "恢复默认" : "Reset"}
             </button>

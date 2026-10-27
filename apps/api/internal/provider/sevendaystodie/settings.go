@@ -12,6 +12,13 @@ import (
 // Optional settings preserve existing instance templates until explicitly configured.
 // Names/defaults verified against v3.3.0 Steam Build 25661908 serverconfig.xml.
 type advancedConfig struct {
+	MaxChunkAge                        *int    `json:"maxChunkAge,omitempty"`
+	BuildCreate                        *bool   `json:"buildCreate,omitempty"`
+	PersistentPlayerProfiles           *bool   `json:"persistentPlayerProfiles,omitempty"`
+	CameraRestrictionMode              *int    `json:"cameraRestrictionMode,omitempty"`
+	BedrollDeadZoneSize                *int    `json:"bedrollDeadZoneSize,omitempty"`
+	BedrollExpiryTime                  *int    `json:"bedrollExpiryTime,omitempty"`
+	PartySharedKillRange               *int    `json:"partySharedKillRange,omitempty"`
 	Region                             *string `json:"region,omitempty"`
 	Language                           *string `json:"language,omitempty"`
 	MaxSpawnedZombies                  *int    `json:"maxSpawnedZombies,omitempty"`
@@ -48,13 +55,20 @@ func advancedConfigSchema() []domain.ProviderConfigField {
 		{Name: "dynamicMeshLandClaimBuffer", Label: "征用区域缓冲（区块）", LabelEn: "Claim mesh radius (chunks)", Type: "number", Default: 3, Required: true, Group: "sevenDays.performance", Min: n(0), Step: n(1)},
 		{Name: "dynamicMeshMaxItemCache", Label: "同时处理网格数", LabelEn: "Concurrent dynamic mesh items", Type: "number", Default: 3, Required: true, Group: "sevenDays.performance", Min: n(0), Step: n(1), Help: "提高会增加内存占用。", HelpEn: "Higher values use more memory."},
 		{Name: "landClaimCount", Label: "每人征用块数量", LabelEn: "Claim blocks per player", Type: "number", Default: 5, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1)},
-		{Name: "landClaimSize", Label: "保护范围（物块）", LabelEn: "Claim size (blocks)", Type: "number", Default: 41, Required: true, Group: "sevenDays.landClaims", Min: n(1), Step: n(1)},
-		{Name: "landClaimDeadZone", Label: "保护区间距（物块）", LabelEn: "Claim separation (blocks)", Type: "number", Default: 30, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1), Help: "好友之间不受此间距限制。", HelpEn: "This separation does not apply between friends."},
-		{Name: "landClaimExpiryTime", Label: "征用权期限（现实天）", LabelEn: "Offline expiry (real days)", Type: "number", Default: 7, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1)},
-		{Name: "landClaimDecayMode", Label: "征用权衰减方式", LabelEn: "Offline decay", Type: "number", Default: 0, Required: true, Group: "sevenDays.landClaims", Min: n(0), Max: n(2), Step: n(1), Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "缓慢（线性）", LabelEn: "Slow (linear)"}, {Value: "1", Label: "快速（指数）", LabelEn: "Fast (exponential)"}, {Value: "2", Label: "到期前不衰减", LabelEn: "Full protection until expiry"}}},
-		{Name: "landClaimOnlineDurabilityModifier", Label: "在线耐久倍率", LabelEn: "Online durability multiplier", Type: "number", Default: 4, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1), Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "无限", LabelEn: "Infinite"}, {Value: "1", Label: "1 倍", LabelEn: "1x"}, {Value: "2", Label: "2 倍", LabelEn: "2x"}, {Value: "4", Label: "4 倍", LabelEn: "4x"}, {Value: "8", Label: "8 倍", LabelEn: "8x"}, {Value: "16", Label: "16 倍", LabelEn: "16x"}, {Value: "32", Label: "32 倍", LabelEn: "32x"}, {Value: "64", Label: "64 倍", LabelEn: "64x"}, {Value: "128", Label: "128 倍", LabelEn: "128x"}, {Value: "256", Label: "256 倍", LabelEn: "256x"}}},
-		{Name: "landClaimOfflineDurabilityModifier", Label: "离线耐久倍率", LabelEn: "Offline durability multiplier", Type: "number", Default: 4, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1), Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "无限", LabelEn: "Infinite"}, {Value: "1", Label: "1 倍", LabelEn: "1x"}, {Value: "2", Label: "2 倍", LabelEn: "2x"}, {Value: "4", Label: "4 倍", LabelEn: "4x"}, {Value: "8", Label: "8 倍", LabelEn: "8x"}, {Value: "16", Label: "16 倍", LabelEn: "16x"}, {Value: "32", Label: "32 倍", LabelEn: "32x"}, {Value: "64", Label: "64 倍", LabelEn: "64x"}, {Value: "128", Label: "128 倍", LabelEn: "128x"}, {Value: "256", Label: "256 倍", LabelEn: "256x"}}},
-		{Name: "landClaimOfflineDelay", Label: "离线切换延迟（分钟）", LabelEn: "Offline protection delay (minutes)", Type: "number", Default: 0, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1)},
+		{Name: "landClaimSize", Label: "所有权范围（物块）", LabelEn: "Claim size (blocks)", Type: "number", Default: 41, Required: true, Group: "sevenDays.landClaims", Min: n(1), Step: n(1)},
+		{Name: "landClaimDeadZone", Label: "死区距离（物块）", LabelEn: "Claim separation (blocks)", Type: "number", Default: 30, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1), Help: "好友之间不受此间距限制。", HelpEn: "This separation does not apply between friends."},
+		{Name: "landClaimExpiryTime", Label: "所有权期限（现实天）", LabelEn: "Offline expiry (real days)", Type: "number", Default: 7, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1)},
+		{Name: "landClaimDecayMode", Label: "所有权衰减模式", LabelEn: "Offline decay", Type: "number", Default: 0, Required: true, Group: "sevenDays.landClaims", Min: n(0), Max: n(2), Step: n(1), Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "缓慢（线性）", LabelEn: "Slow (linear)"}, {Value: "1", Label: "快速（指数）", LabelEn: "Fast (exponential)"}, {Value: "2", Label: "到期前不衰减", LabelEn: "Full protection until expiry"}}},
+		{Name: "landClaimOnlineDurabilityModifier", Label: "在线所有权生命值", LabelEn: "Online durability multiplier", Type: "number", Default: 4, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1), Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "无限", LabelEn: "Infinite"}, {Value: "1", Label: "1 倍", LabelEn: "1x"}, {Value: "2", Label: "2 倍", LabelEn: "2x"}, {Value: "4", Label: "4 倍", LabelEn: "4x"}, {Value: "8", Label: "8 倍", LabelEn: "8x"}, {Value: "16", Label: "16 倍", LabelEn: "16x"}, {Value: "32", Label: "32 倍", LabelEn: "32x"}, {Value: "64", Label: "64 倍", LabelEn: "64x"}, {Value: "128", Label: "128 倍", LabelEn: "128x"}, {Value: "256", Label: "256 倍", LabelEn: "256x"}}},
+		{Name: "landClaimOfflineDurabilityModifier", Label: "离线所有权生命值", LabelEn: "Offline durability multiplier", Type: "number", Default: 4, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1), Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "无限", LabelEn: "Infinite"}, {Value: "1", Label: "1 倍", LabelEn: "1x"}, {Value: "2", Label: "2 倍", LabelEn: "2x"}, {Value: "4", Label: "4 倍", LabelEn: "4x"}, {Value: "8", Label: "8 倍", LabelEn: "8x"}, {Value: "16", Label: "16 倍", LabelEn: "16x"}, {Value: "32", Label: "32 倍", LabelEn: "32x"}, {Value: "64", Label: "64 倍", LabelEn: "64x"}, {Value: "128", Label: "128 倍", LabelEn: "128x"}, {Value: "256", Label: "256 倍", LabelEn: "256x"}}},
+		{Name: "landClaimOfflineDelay", Label: "领地离线延迟（分钟）", LabelEn: "Offline protection delay (minutes)", Type: "number", Default: 0, Required: true, Group: "sevenDays.landClaims", Min: n(0), Step: n(1)},
+		{Name: "maxChunkAge", Label: "区块重置计时器", LabelEn: "Chunk reset time", Type: "number", Default: -1, Required: true, Group: "sevenDays.advanced", Options: []domain.ProviderConfigFieldOption{{Value: "-1", Label: "关闭", LabelEn: "Disabled"}, {Value: "10", Label: "10 日", LabelEn: "10 days"}, {Value: "20", Label: "20 日", LabelEn: "20 days"}, {Value: "30", Label: "30 日", LabelEn: "30 days"}, {Value: "40", Label: "40 日", LabelEn: "40 days"}, {Value: "50", Label: "50 日", LabelEn: "50 days"}, {Value: "75", Label: "75 日", LabelEn: "75 days"}, {Value: "100", Label: "100 日", LabelEn: "100 days"}}, Help: "按游戏内天数重置未访问且未受保护的区块，可能删除建造内容。", HelpEn: "Resets unvisited, unprotected chunks after in-game days; builds may be lost."},
+		{Name: "cameraRestrictionMode", Label: "限制镜头模式", LabelEn: "Camera restriction", Type: "number", Default: 0, Required: true, Group: "sevenDays.advanced", Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "关闭", LabelEn: "Disabled"}, {Value: "1", Label: "第一人称", LabelEn: "First person"}, {Value: "2", Label: "第三人称", LabelEn: "Third person"}}},
+		{Name: "bedrollDeadZoneSize", Label: "睡袋死区", LabelEn: "Bedroll deadzone", Type: "number", Default: 15, Required: true, Group: "sevenDays.landClaims", Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "关闭", LabelEn: "Disabled"}, {Value: "5", Label: "5 物块", LabelEn: "5 blocks"}, {Value: "15", Label: "15 物块", LabelEn: "15 blocks"}, {Value: "30", Label: "30 物块", LabelEn: "30 blocks"}}},
+		{Name: "bedrollExpiryTime", Label: "睡袋持续时间", LabelEn: "Bedroll duration", Type: "number", Default: 45, Required: true, Group: "sevenDays.landClaims", Options: []domain.ProviderConfigFieldOption{{Value: "3", Label: "3 日", LabelEn: "3 days"}, {Value: "7", Label: "7 日", LabelEn: "7 days"}, {Value: "15", Label: "15 日", LabelEn: "15 days"}, {Value: "30", Label: "30 日", LabelEn: "30 days"}, {Value: "45", Label: "45 日", LabelEn: "45 days"}, {Value: "60", Label: "60 日", LabelEn: "60 days"}}},
+		{Name: "partySharedKillRange", Label: "队伍共享杀戮范围", LabelEn: "Party shared kill range", Type: "number", Default: 100, Required: true, Group: "sevenDays.landClaims", Options: []domain.ProviderConfigFieldOption{{Value: "0", Label: "关闭", LabelEn: "Disabled"}, {Value: "100", Label: "100 米", LabelEn: "100 m"}, {Value: "500", Label: "500 米", LabelEn: "500 m"}, {Value: "1000", Label: "1000 米", LabelEn: "1000 m"}, {Value: "5000", Label: "5000 米", LabelEn: "5000 m"}, {Value: "10000", Label: "10000 米", LabelEn: "10000 m"}}},
+		{Name: "buildCreate", Label: "创造模式", LabelEn: "Creative mode", Type: "boolean", Default: false, Group: "sevenDays.advanced"},
+		{Name: "persistentPlayerProfiles", Label: "固定存档", LabelEn: "Persistent profiles", Type: "boolean", Default: false, Group: "sevenDays.advanced"},
 	}
 }
 
@@ -103,6 +117,18 @@ func validateAdvancedConfig(c advancedConfig) error {
 	if c.LandClaimDecayMode != nil && *c.LandClaimDecayMode > 2 {
 		return fmt.Errorf("land claim decay mode must be 0, 1 or 2")
 	}
+	if c.MaxChunkAge != nil && (*c.MaxChunkAge < -1 || *c.MaxChunkAge > math.MaxInt32) {
+		return fmt.Errorf("chunk reset time must be -1 or non-negative days")
+	}
+	if c.CameraRestrictionMode != nil && (*c.CameraRestrictionMode < 0 || *c.CameraRestrictionMode > 2) {
+		return fmt.Errorf("camera restriction must be 0, 1 or 2")
+	}
+	for _, value := range []*int{c.BedrollDeadZoneSize, c.BedrollExpiryTime, c.PartySharedKillRange} {
+		if value != nil && (*value < 0 || *value > math.MaxInt32) {
+			return fmt.Errorf("bedroll and party settings must be non-negative integers")
+		}
+	}
+
 	return nil
 }
 
@@ -116,6 +142,13 @@ func optionalProperty[T string | int | bool](name string, value *T) *property {
 func advancedProperties(c advancedConfig) []property {
 	var properties []property
 	for _, value := range []*property{
+		optionalProperty("MaxChunkAge", c.MaxChunkAge),
+		optionalProperty("BuildCreate", c.BuildCreate),
+		optionalProperty("PersistentPlayerProfiles", c.PersistentPlayerProfiles),
+		optionalProperty("CameraRestrictionMode", c.CameraRestrictionMode),
+		optionalProperty("BedrollDeadZoneSize", c.BedrollDeadZoneSize),
+		optionalProperty("BedrollExpiryTime", c.BedrollExpiryTime),
+		optionalProperty("PartySharedKillRange", c.PartySharedKillRange),
 		optionalProperty("Region", c.Region),
 		optionalProperty("Language", c.Language),
 		optionalProperty("MaxSpawnedZombies", c.MaxSpawnedZombies),

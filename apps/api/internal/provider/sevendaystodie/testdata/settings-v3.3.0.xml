@@ -19,4 +19,11 @@
   <property name="LandClaimOnlineDurabilityModifier" value="4" />
   <property name="LandClaimOfflineDurabilityModifier" value="4" />
   <property name="LandClaimOfflineDelay" value="0" />
+  <property name="MaxChunkAge" value="-1" />
+  <property name="CameraRestrictionMode" value="0" />
+  <property name="BedrollDeadZoneSize" value="15" />
+  <property name="BedrollExpiryTime" value="45" />
+  <property name="PartySharedKillRange" value="100" />
+  <property name="BuildCreate" value="false" />
+  <property name="PersistentPlayerProfiles" value="false" />
 </ServerSettings>

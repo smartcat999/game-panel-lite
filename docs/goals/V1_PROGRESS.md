@@ -352,3 +352,26 @@
   as integer options (0/1/2/4/8/16/32/64/128/256). Replaced the unverified decimal UI
   with those choices and integer validation; fractional input is rejected. Earlier
   decimal round-trip tests only established panel serialization, not game support.
+
+
+### Seven Days native menus and sandbox configuration
+
+- Matched the actual game's Basic / Server / Advanced / Multiplayer categories.
+  Added seven verified optional XML parameters for chunk reset, creative mode,
+  persistent profiles, camera restriction, bedrolls and party kill sharing.
+  Existing instances retain omitted settings and protected world identity.
+- Extracted 165 sandbox rules and 65 value sets from Steam build 25661908's
+  managed assembly, matched official Chinese/English labels, and implemented
+  the native version-A code format. The fixed-height editor has eight categories,
+  search and a draft/apply flow; other and unknown code blocks are preserved.
+- Added a reproducible, checksum-guarded extraction script and configuration
+  coverage inventory. No game binaries or full localization files are committed.
+- Enabling chunk reset requires confirmation. Single-parent sandbox dependencies
+  match the native setters; BloodMoonWarning remains editable because its
+  multiple-parent setter ordering has not been established.
+- Validation: 137 frontend tests, typecheck, scoped frontend lint and production
+  build; Go tests and vet; browser checks for categories, code application,
+  cancel protection, mobile overflow and Escape dismissal. The first full Go run
+  hit an existing Docker-host timeout test; isolated and full reruns passed.
+- Local implementation only. No production server was changed, and v0.2.19
+  remains unpublished. Client-side testing of every rule combination is pending.

@@ -45,7 +45,7 @@ func TestAdvancedSettingsMatchVerifiedGameTemplate(t *testing.T) {
 	}
 	rendered := configProperties(t, NewProvider().DefaultConfigPayload())
 	schema := advancedConfigSchema()
-	if len(doc.Properties) != 19 || len(schema) != len(doc.Properties) {
+	if len(doc.Properties) != 26 || len(schema) != len(doc.Properties) {
 		t.Fatal("settings do not match audited fixture")
 	}
 	for i, p := range doc.Properties {
@@ -74,7 +74,7 @@ func TestAdvancedSettingsPersistZeroFalseAndIntegerMultipliers(t *testing.T) {
 		"dynamicMeshEnabled": false, "dynamicMeshLandClaimOnly": false, "dynamicMeshLandClaimBuffer": 0,
 		"dynamicMeshMaxItemCache": 2, "landClaimCount": 0, "landClaimSize": 51, "landClaimDeadZone": 40,
 		"landClaimExpiryTime": 14, "landClaimDecayMode": 2, "landClaimOnlineDurabilityModifier": 0,
-		"landClaimOfflineDurabilityModifier": 2, "landClaimOfflineDelay": 15,
+		"landClaimOfflineDurabilityModifier": 2, "landClaimOfflineDelay": 15, "maxChunkAge": -1, "buildCreate": false, "persistentPlayerProfiles": true, "cameraRestrictionMode": 2, "bedrollDeadZoneSize": 0, "bedrollExpiryTime": 60, "partySharedKillRange": 500,
 	}
 	for k, v := range changes {
 		input[k] = v
@@ -131,6 +131,7 @@ func TestAdvancedSettingsRejectInvalidInputs(t *testing.T) {
 		field string
 		value any
 	}{
+		{"maxChunkAge", -2}, {"cameraRestrictionMode", 3}, {"bedrollDeadZoneSize", -1}, {"bedrollExpiryTime", -1}, {"partySharedKillRange", -1}, {"buildCreate", "false"},
 		{"region", "Atlantis"}, {"region", "asia"}, {"language", "  "}, {"language", "English\nChinese"}, {"language", strings.Repeat("x", 129)},
 		{"serverMaxAllowedViewDistance", 5}, {"serverMaxAllowedViewDistance", 13},
 		{"maxSpawnedZombies", -1}, {"maxSpawnedZombies", 1.5}, {"maxSpawnedAnimals", "50"},
