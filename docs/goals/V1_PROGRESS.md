@@ -375,3 +375,16 @@
   hit an existing Docker-host timeout test; isolated and full reruns passed.
 - Local implementation only. No production server was changed, and v0.2.19
   remains unpublished. Client-side testing of every rule combination is pending.
+
+
+### Runtime installation during Steam version checks
+
+- Reproduced Seven Days image installation returning HTTP 409 while an unrelated
+  Palworld metadata check is active. Installation incorrectly used the broad
+  maintenance lock, including read-only checks.
+- Reuse the existing creation-maintenance predicate for image preparation:
+  version checks may run concurrently; actual file updates and world regeneration
+  continue to block installation. Uninstall locking remains unchanged.
+- Added HTTP regression coverage for current/legacy version checks and file
+  updates; the two read-only cases failed before the fix and pass afterwards.
+- Validation: related HTTP tests, full Go tests and go vet pass. No frontend change.

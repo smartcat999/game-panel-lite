@@ -65,7 +65,9 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 	ref := runtimeInstallRef{ProviderKey: payload.ProviderKey, Version: version, Image: image}
 	h.gameUpdateJobsMu.Lock()
 	defer h.gameUpdateJobsMu.Unlock()
-	if h.gameUpdateRuntimeLocked(r.Context()) {
+	// Read-only Steam metadata checks do not conflict with pulling an image.
+	// File updates and world regeneration still hold the maintenance lock.
+	if h.gameUpdateCreationLocked(r.Context()) {
 		writeError(w, http.StatusConflict, "a game update task is in progress")
 		return
 	}

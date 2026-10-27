@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	stdhttp "net/http"
@@ -14,6 +15,49 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
 )
+
+func TestRuntimeInstallIgnoresReadOnlyVersionChecks(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		operation domain.GameUpdateOperation
+		stage     domain.GameUpdateJobStage
+		want      int
+	}{
+		{"provider version check", domain.GameUpdateOperationCheck, domain.GameUpdateStageRefreshingMetadata, stdhttp.StatusAccepted},
+		{"legacy version check", "", domain.GameUpdateStageRefreshingMetadata, stdhttp.StatusAccepted},
+		{"game file update", domain.GameUpdateOperationApply, domain.GameUpdateStageDownloading, stdhttp.StatusConflict},
+		{"legacy file update", "", domain.GameUpdateStageDownloading, stdhttp.StatusConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router, db, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
+			job := domain.GameUpdateJob{
+				ID: "palworld-task", InstanceID: providerGameUpdateScope(domain.ProviderPalworld), ProviderKey: domain.ProviderPalworld,
+				Operation: tc.operation, Stage: tc.stage, Status: domain.GameUpdateJobRunning,
+				CreatedAt: time.Now(), UpdatedAt: time.Now(),
+			}
+			if err := db.CreateGameUpdateJob(context.Background(), &job); err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(stdhttp.MethodPost, "/api/runtime/images/prepare", bytes.NewBufferString(`{"providerKey":"seven-days-to-die","version":"v3.3.0"}`)))
+			if response.Code != tc.want {
+				t.Fatalf("expected Seven Days install status %d during %s, got %d: %s", tc.want, tc.name, response.Code, response.Body.String())
+			}
+			if tc.want != stdhttp.StatusAccepted {
+				return
+			}
+			marker := filepath.Join(cfg.DataDir, "runtime-installs", "seven-days-to-die", "v3.3.0.json")
+			deadline := time.Now().Add(time.Second)
+			for time.Now().Before(deadline) {
+				if _, err := os.Stat(marker); err == nil {
+					return
+				}
+				time.Sleep(time.Millisecond)
+			}
+			t.Fatal("accepted installation did not write its marker")
+		})
+	}
+}
 
 func TestRuntimeInstallStateDoesNotBlockServerCreation(t *testing.T) {
 	router, _, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, false)
