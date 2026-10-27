@@ -400,3 +400,16 @@
   available without enabling destructive chunk reset or changing game defaults.
 - Added a schema contract regression that failed before the fix; provider/HTTP
   tests, full Go tests and go vet pass. No frontend code change is required.
+
+
+### Seven Days detail configuration visibility
+
+- Removed the unrelated curated Terraria rules block from Seven Days details;
+  unknown providers no longer fall back to Terraria controls.
+- Audited all 37 schema fields across Basic (5), Server (7), Advanced (13), and
+  Multiplayer (12), plus 165 sandbox options. Random seed/size remain conditional
+  on RWG, and inactive dynamic-mesh fields remain conditional on mesh settings.
+- Category controls now show visible field counts. Native advanced toggles precede
+  server performance fields. One concise hint explains fixed-map conditional
+  fields and existing-world identity protection without duplicating descriptions.
+- Frontend tests (137), typecheck, scoped lint and production build pass.

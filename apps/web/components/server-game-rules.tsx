@@ -23,8 +23,11 @@ export function ServerGameRules({
   const { locale } = useI18n();
   const isZh = locale.startsWith("zh");
 
-  const gameKey = server.gameKey || "terraria";
   const providerKey = server.providerKey;
+  const gameKey = server.gameKey || (providerKey.startsWith("terraria-") ? "terraria" : providerKey);
+  // Providers without a curated rules UI use their complete schema editor.
+  // Never fall back to Terraria controls for another game.
+  if (!["terraria-vanilla", "terraria-tmodloader", "palworld", "minecraft", "dont-starve-together"].includes(providerKey)) return null;
 
   return (
     <div className="space-y-6">
@@ -54,9 +57,9 @@ export function ServerGameRules({
           <MinecraftRules draft={draft} onChange={onChange} isZh={isZh} />
         ) : gameKey === "dont-starve-together" || providerKey === "dont-starve-together" ? (
           <DSTRules draft={draft} fields={providerFields} onChange={onChange} isZh={isZh} />
-        ) : (
+        ) : gameKey === "terraria" ? (
           <TerrariaRules draft={draft} onChange={onChange} isZh={isZh} />
-        )}
+        ) : null}
       </fieldset>
     </div>
   );

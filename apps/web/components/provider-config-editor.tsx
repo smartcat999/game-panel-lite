@@ -367,7 +367,8 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
     { key: "performance", label: isZh ? "高级" : "Advanced" },
     { key: "landClaims", label: isZh ? "多人" : "Multiplayer" }
   ];
-  const sectionFields = fields.filter((field) => sevenDaysConfigSection(field) === section);
+  const sectionFields = fields.filter((field) => sevenDaysConfigSection(field) === section)
+    .sort((a, b) => Number(a.group === "sevenDays.performance") - Number(b.group === "sevenDays.performance"));
   const visibleFields = sectionFields.filter((field) => isSevenDaysFieldVisible(field, payload) || Boolean(errors[field.name]));
   const hasChanges = sectionFields.some((field) => isProviderFieldModified(payload, field));
   const changeField = (field: ProviderConfigField, value: ConfigValue) => {
@@ -385,6 +386,7 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
             const hasErrors = fields.some((field) => sevenDaysConfigSection(field) === key && Boolean(errors[field.name]));
             return <button key={key} type="button" aria-pressed={section === key} onClick={() => setSection(key)} className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green", section === key ? "bg-slate-800 text-slate-100" : "text-slate-400 hover:text-white")}>
               {label}
+              <span aria-hidden="true" className="text-[10px] tabular-nums text-slate-500">{fields.filter((field) => sevenDaysConfigSection(field) === key && (isSevenDaysFieldVisible(field, payload) || Boolean(errors[field.name]))).length}</span>
               {hasErrors ? <span className="size-1.5 rounded-full bg-red-400" aria-label={isZh ? "有待修正的参数" : "Contains invalid settings"} /> : null}
             </button>;
           })}
@@ -394,6 +396,9 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
       <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", section !== "basic" && "xl:grid-cols-3")}>
         {visibleFields.map((field) => <ConfigField key={field.name} disabled={disabled || (surface === "server" && ["worldName", "gameWorld", "worldGenSeed", "worldGenSize"].includes(field.name))} error={errors[field.name]} field={field} help={(isZh ? field.help : field.helpEn) ?? ""} label={(isZh ? field.label : field.labelEn) ?? field.label} onChange={changeField} payload={payload} slider={false} sevenDays />)}
       </div>
+      {section === "basic" && (surface === "server" || payload.gameWorld !== "RWG") ? <p className="text-xs text-slate-400">{isZh
+        ? `${surface === "server" ? "存档与地图标识只读，避免切换已有世界。" : ""}${payload.gameWorld !== "RWG" ? "随机种子和尺寸仅在随机生成地图时显示。" : ""}`
+        : `${surface === "server" ? "Save and world identity are read-only to preserve the existing world. " : ""}${payload.gameWorld !== "RWG" ? "Seed and size are shown only for random worlds." : ""}`}</p> : null}
       <ConfirmDialog eyebrow={isZh ? "世界数据" : "World data"} open={Boolean(resetChange)} title={isZh ? "启用区块重置？" : "Enable chunk reset?"} description={isZh ? "长时间未访问且未受保护的区块会重置，建造内容可能丢失。确认后仍需保存配置并重启服务器。" : "Unvisited, unprotected chunks will reset and builds may be lost. Save settings and restart to apply."} confirmLabel={isZh ? "确认设置" : "Confirm setting"} cancelLabel={isZh ? "取消" : "Cancel"} confirmVariant="danger" onCancel={() => setResetChange(null)} onConfirm={() => { if (resetChange) onChange(resetChange.field, resetChange.value); setResetChange(null); }} />
       {section === "landClaims" ? <p className="text-xs text-slate-400">{isZh ? "耐久倍率针对非盟友玩家的破坏；0 表示免疫此类伤害。" : "Durability multipliers protect against non-allied player damage; 0 prevents that damage."}</p> : null}
     </div>
