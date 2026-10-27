@@ -64,8 +64,13 @@ type HostStats struct {
 }
 
 type ImagePrepareProgress struct {
-	Message  string
-	Progress int
+	Message         string
+	Progress        int
+	Phase           string
+	CurrentBytes    int64
+	TotalBytes      int64
+	BytesPerSecond  int64
+	CompletedLayers int
 }
 
 type ImagePrepareProgressFunc func(ImagePrepareProgress)
@@ -137,6 +142,10 @@ type ImageProgressPreparer interface {
 type ImageArchiveManager interface {
 	SaveImageArchive(ctx context.Context, image string, path string) error
 	LoadImageArchive(ctx context.Context, path string) error
+}
+
+type ImageArchiveProgressSaver interface {
+	SaveImageArchiveWithProgress(ctx context.Context, image string, path string, onProgress ImagePrepareProgressFunc) error
 }
 
 // ImageRemovalTarget identifies a stopped server whose container can be rebuilt

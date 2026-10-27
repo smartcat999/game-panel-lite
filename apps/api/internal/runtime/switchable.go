@@ -57,6 +57,13 @@ func (s *SwitchableAdapter) SaveImageArchive(ctx context.Context, image string, 
 	return fmt.Errorf("runtime adapter does not support local image archives")
 }
 
+func (s *SwitchableAdapter) SaveImageArchiveWithProgress(ctx context.Context, image, path string, onProgress ImagePrepareProgressFunc) error {
+	if saver, ok := s.current().(ImageArchiveProgressSaver); ok {
+		return saver.SaveImageArchiveWithProgress(ctx, image, path, onProgress)
+	}
+	return s.SaveImageArchive(ctx, image, path)
+}
+
 func (s *SwitchableAdapter) LoadImageArchive(ctx context.Context, path string) error {
 	if manager, ok := s.current().(ImageArchiveManager); ok {
 		return manager.LoadImageArchive(ctx, path)

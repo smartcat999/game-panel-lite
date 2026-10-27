@@ -1328,13 +1328,34 @@ components:
           type: string
         status:
           type: string
-          enum: [ready, missing, preparing, failed, unsupported]
+          enum: [ready, missing, update_available, preparing, failed, unsupported]
         message:
           type: string
         progress:
+          description: Current phase percentage only when totalBytes is known, or 100 after complete installation. Not an estimated overall percentage.
           type: integer
           minimum: 0
           maximum: 100
+        phase:
+          type: string
+          enum: [resolving, downloading, extracting, saving, finalizing, complete]
+        currentBytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Measured bytes for the current phase; download and extraction counters are independent.
+        totalBytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Omitted unless a reliable fixed total is known. Never inferred from partially discovered layers or image size.
+        bytesPerSecond:
+          type: integer
+          format: int64
+          minimum: 0
+        completedLayers:
+          type: integer
+          minimum: 0
         updatedAt:
           type: string
           format: date-time

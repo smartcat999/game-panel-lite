@@ -120,6 +120,10 @@ func (a *Adapter) PrepareImageWithProgress(ctx context.Context, image string, on
 }
 
 func (a *Adapter) SaveImageArchive(ctx context.Context, image string, path string) error {
+	return a.SaveImageArchiveWithProgress(ctx, image, path, nil)
+}
+
+func (a *Adapter) SaveImageArchiveWithProgress(ctx context.Context, image string, path string, onProgress runtime.ImagePrepareProgressFunc) error {
 	if strings.TrimSpace(image) == "" {
 		return fmt.Errorf("image is empty")
 	}
@@ -139,7 +143,8 @@ func (a *Adapter) SaveImageArchive(ctx context.Context, image string, path strin
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(file, reader)
+	counter := &imageArchiveWriter{ctx: ctx, writer: file, onProgress: onProgress}
+	_, copyErr := io.Copy(counter, reader)
 	closeErr := file.Close()
 	if copyErr != nil {
 		_ = os.Remove(tempPath)
@@ -149,7 +154,13 @@ func (a *Adapter) SaveImageArchive(ctx context.Context, image string, path strin
 		_ = os.Remove(tempPath)
 		return closeErr
 	}
-	return os.Rename(tempPath, path)
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	if onProgress != nil {
+		onProgress(runtime.ImagePrepareProgress{Phase: "saving", CurrentBytes: counter.written})
+	}
+	return nil
 }
 
 func (a *Adapter) LoadImageArchive(ctx context.Context, path string) error {
@@ -174,7 +185,7 @@ func (a *Adapter) ensureImage(ctx context.Context, image string) error {
 func (a *Adapter) ensureImageWithProgress(ctx context.Context, image string, onProgress runtime.ImagePrepareProgressFunc) error {
 	if _, _, err := a.client.ImageInspectWithRaw(ctx, image); err == nil {
 		if onProgress != nil {
-			onProgress(runtime.ImagePrepareProgress{Message: "image already installed", Progress: 100})
+			onProgress(runtime.ImagePrepareProgress{Phase: "finalizing"})
 		}
 		return nil
 	}
@@ -224,25 +235,22 @@ type imagePullEvent struct {
 	} `json:"progressDetail"`
 }
 
-type imagePullLayerProgress struct {
-	current int64
-	total   int64
-}
-
 func consumeImagePull(reader io.Reader) error {
 	return consumeImagePullWithProgress(reader, nil)
 }
 
 func consumeImagePullWithProgress(reader io.Reader, onProgress runtime.ImagePrepareProgressFunc) error {
 	decoder := json.NewDecoder(reader)
-	layers := map[string]imagePullLayerProgress{}
-	maxProgress := 0
+	tracker := imagePullTracker{layers: map[string]*imagePullLayerProgress{}}
+	var lastPhase string
+	var lastCompleted int
+	var lastReport time.Time
 	for {
 		var event imagePullEvent
 		if err := decoder.Decode(&event); err != nil {
 			if err == io.EOF {
 				if onProgress != nil {
-					onProgress(runtime.ImagePrepareProgress{Message: "image ready", Progress: 100})
+					onProgress(runtime.ImagePrepareProgress{Phase: "finalizing"})
 				}
 				return nil
 			}
@@ -257,56 +265,11 @@ func consumeImagePullWithProgress(reader io.Reader, onProgress runtime.ImagePrep
 		if onProgress == nil {
 			continue
 		}
-		message := strings.TrimSpace(event.Status)
-		if event.ID != "" {
-			message = strings.TrimSpace(strings.Join([]string{event.ID, event.Status}, " "))
-		}
-		if event.ProgressDetail.Total > 0 && event.ID != "" {
-			layers[event.ID] = imagePullLayerProgress{
-				current: event.ProgressDetail.Current,
-				total:   event.ProgressDetail.Total,
-			}
-			progress := aggregateImagePullProgress(layers)
-			if progress < maxProgress {
-				progress = maxProgress
-			} else {
-				maxProgress = progress
-			}
-			onProgress(runtime.ImagePrepareProgress{Message: message, Progress: progress})
-			continue
-		}
-		if message != "" {
-			onProgress(runtime.ImagePrepareProgress{Message: message, Progress: maxProgress})
+		now := time.Now()
+		progress := tracker.update(event, now)
+		if progress.Phase != lastPhase || progress.CompletedLayers != lastCompleted || now.Sub(lastReport) >= 250*time.Millisecond {
+			onProgress(progress)
+			lastPhase, lastCompleted, lastReport = progress.Phase, progress.CompletedLayers, now
 		}
 	}
-}
-
-func aggregateImagePullProgress(layers map[string]imagePullLayerProgress) int {
-	var current int64
-	var total int64
-	for _, layer := range layers {
-		if layer.total <= 0 {
-			continue
-		}
-		layerCurrent := layer.current
-		if layerCurrent < 0 {
-			layerCurrent = 0
-		}
-		if layerCurrent > layer.total {
-			layerCurrent = layer.total
-		}
-		current += layerCurrent
-		total += layer.total
-	}
-	if total <= 0 {
-		return 0
-	}
-	progress := int(float64(current) / float64(total) * 100)
-	if progress <= 0 && current > 0 {
-		return 1
-	}
-	if progress >= 100 {
-		return 99
-	}
-	return progress
 }

@@ -38,6 +38,11 @@ export type RuntimeImageStatus = {
   status: "ready" | "missing" | "update_available" | "preparing" | "failed" | "unsupported" | string;
   message?: string;
   progress?: number;
+  phase?: "resolving" | "downloading" | "extracting" | "saving" | "finalizing" | "complete";
+  currentBytes?: number;
+  totalBytes?: number;
+  bytesPerSecond?: number;
+  completedLayers?: number;
   installedVersion?: string;
   targetVersion?: string;
   updatedAt?: string;
