@@ -9,6 +9,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import { useToast } from "@/components/toast-context";
+import { isSevenDaysFieldVisible, sevenDaysCreationOverrides } from "@/lib/seven-days-config";
 import { ProviderConfigEditor } from "@/components/provider-config-editor";
 import { ResourceLimitSlider, formatCpuResourceLimit, formatMemoryResourceLimit } from "@/components/resource-limit-slider";
 import { useI18n, type MessageKey } from "@/lib/i18n";
@@ -225,6 +226,7 @@ function createProviderDefaultOverrides(names: ReturnType<typeof createGameDefau
       serverName: names.serverName
     };
   }
+  if (gameKey === "seven-days-to-die") Object.assign(overrides, sevenDaysCreationOverrides());
   return overrides;
 }
 
@@ -281,6 +283,7 @@ function validateCreateConfig({
   }
 
   for (const field of provider?.configSchema ?? []) {
+    if (provider?.key === "seven-days-to-die" && !isSevenDaysFieldVisible(field, providerConfigPayload)) continue;
     if (!field.required) continue;
     const value = providerConfigValue(providerConfigPayload, field.name);
     const label = locale === "en" && field.labelEn ? field.labelEn : providerFieldLabel(field, t);
@@ -443,7 +446,7 @@ function createReviewConfigModel({
   const providerFields = provider?.configSchema ?? [];
   const modifiedAdvancedCount = providerFields.filter((field) => isAdvancedProviderConfigField(provider?.key ?? "", field) && isProviderFieldModified(providerConfigPayload, field)).length;
   const fields = providerFields
-    .filter((field) => !isAdvancedProviderConfigField(provider?.key ?? "", field))
+    .filter((field) => !isAdvancedProviderConfigField(provider?.key ?? "", field) && (provider?.key !== "seven-days-to-die" || isSevenDaysFieldVisible(field, providerConfigPayload)))
     .map((field): ReviewConfigField | null => {
       const value = providerConfigValue(providerConfigPayload, field.name);
       const formatted = providerReviewValue(field, value, t, locale);
@@ -718,6 +721,7 @@ export function CreateServerWizard() {
   const applyQuickPlayTemplate = (templateId: string, targetGameKey?: string) => {
     const isZh = locale.startsWith("zh");
     const targetKey = targetGameKey || selectedGameKey;
+    if (targetKey === "seven-days-to-die") return;
     const game = (targetGameKey ? games.find((g) => g.key === targetKey) : null) ?? games.find((g) => g.key === selectedGameKey) ?? games[0];
     if (!game) return;
 
@@ -1142,8 +1146,8 @@ export function CreateServerWizard() {
             <motion.div key={step} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }} className="mt-4">
             {currentStepId === "setup" && (
               <div className="space-y-4">
-                {/* Quick Play Presets (For Beginners) */}
-                <div className="rounded-xl border border-panel-green/30 bg-slate-950/70 p-3.5 shadow-lg relative overflow-hidden">
+                {/* Only show presets for games with implemented templates. */}
+                {selectedGameKey !== "seven-days-to-die" && <div className="rounded-xl border border-panel-green/30 bg-slate-950/70 p-3.5 shadow-lg relative overflow-hidden">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Zap className="size-3.5 text-panel-gold animate-pulse shrink-0" />
@@ -1299,7 +1303,7 @@ export function CreateServerWizard() {
                       </span>
                     </button>
                   </div>
-                </div>
+                </div>}
 
                 <GameStep
                   games={games}
@@ -1758,6 +1762,7 @@ function ConfigStep({
         <ConfigStepHeader />
         <div className="mt-3 min-w-0 w-full">
           <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 sm:p-4 space-y-3 min-w-0 w-full overflow-hidden">
+            {gameKey !== "seven-days-to-die" && (
             <div className="flex items-center gap-2 border-b border-slate-800/80 pb-2">
               <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-panel-green">
                 <Gamepad2 aria-hidden="true" className="size-3.5" />
@@ -1766,6 +1771,7 @@ function ConfigStep({
                 <h3 className="text-xs font-bold text-slate-200">{t("gameConfiguration")}</h3>
               </div>
             </div>
+            )}
             <ProviderConfigEditor
               fields={providerFields}
               payload={providerConfigPayload}

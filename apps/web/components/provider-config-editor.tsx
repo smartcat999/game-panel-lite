@@ -1,7 +1,8 @@
 "use client";
 
-import { ExternalLink, RotateCcw, Search } from "lucide-react";
+import { ExternalLink, RotateCcw, Search, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { createSevenDaysWorldSeed, isSevenDaysFieldVisible } from "@/lib/seven-days-config";
 import { SecretInput } from "@/components/secret-input";
 import { Button, Input } from "@/components/ui";
 import { dstConfigGroupLabelKey } from "@/lib/dst-config";
@@ -51,7 +52,7 @@ export function ProviderConfigEditor({
   const fieldDisabled = (field: ProviderConfigField) => disabled || (surface === "server" && providerKey === "seven-days-to-die" && worldIdentityFields.has(field.name));
   const [activeShard, setActiveShard] = useState<"master" | "caves">("master");
 
-  const baseFields = useMemo(() => fields.filter((field) => !isAdvancedProviderConfigField(providerKey, field)), [fields, providerKey]);
+  const baseFields = useMemo(() => fields.filter((field) => !isAdvancedProviderConfigField(providerKey, field) && (providerKey !== "seven-days-to-die" || isSevenDaysFieldVisible(field, payload))), [fields, providerKey, payload]);
   const cavesEnabled = providerConfigValue(payload, "caves.enabled") === true;
 
   // Filter advanced fields according to provider and selected shard
@@ -302,7 +303,7 @@ export function ProviderConfigEditor({
                     ) : null}
                     <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                       {groupFields.map((field) => (
-                        <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+                        <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} sevenDays={providerKey === "seven-days-to-die"} />
                       ))}
                     </div>
                   </section>
@@ -317,7 +318,7 @@ export function ProviderConfigEditor({
           {/* Text and Select Controls (2-column compact grid) */}
           <div className="grid gap-2.5 sm:grid-cols-2">
             {baseFields.filter((f) => f.type !== "boolean").map((field) => (
-              <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+              <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} sevenDays={providerKey === "seven-days-to-die"} />
             ))}
           </div>
 
@@ -329,7 +330,7 @@ export function ProviderConfigEditor({
               </p>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {baseFields.filter((f) => f.type === "boolean").map((field) => (
-                  <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} />
+                  <ConfigField key={field.name} disabled={fieldDisabled(field)} error={errors[field.name]} field={field} help={fieldHelp(field)} label={fieldLabel(field)} onChange={onChange} payload={payload} slider={providerKey === "palworld"} sevenDays={providerKey === "seven-days-to-die"} />
                 ))}
               </div>
             </div>
@@ -340,7 +341,7 @@ export function ProviderConfigEditor({
   );
 }
 
-function ConfigField({ disabled, error, field, help, label, onChange, payload, slider }: {
+function ConfigField({ disabled, error, field, help, label, onChange, payload, slider, sevenDays = false }: {
   disabled: boolean;
   error?: string;
   field: ProviderConfigField;
@@ -349,8 +350,10 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
   payload: ProviderConfigPayload;
   slider: boolean;
+  sevenDays?: boolean;
 }) {
   const { locale, t } = useI18n();
+  if (sevenDays) label = field.label;
   if (locale === "en") {
     label = field.labelEn ?? label;
     help = field.helpEn ?? help;
@@ -364,7 +367,7 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
     : 0;
   const clampedRangeFill = Math.max(0, Math.min(100, rangeFill));
   return (
-    <div className={cn("min-w-0 w-full rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700 overflow-hidden", error ? "border-red-400/60" : "border-slate-800")}>
+    <div className={cn("min-w-0 w-full rounded-lg border bg-slate-950/50 px-2.5 py-1.5 transition hover:border-slate-700 overflow-hidden", sevenDays && field.name === "sandboxCode" && "sm:col-span-2", error ? "border-red-400/60" : "border-slate-800")}>
       {field.type === "boolean" ? (
         <button id={`provider-field-${field.name}`} type="button" role="switch" aria-checked={checked} aria-label={`${label}: ${checked ? t("enabled") : t("disabled")}`} disabled={disabled} className="flex min-h-7 w-full items-center justify-between gap-2.5 text-left outline-none transition disabled:opacity-50" onClick={() => onChange(field, !checked)}>
           <span className="text-xs font-semibold text-slate-200 truncate">{label}{field.required ? <span className="ml-1 text-panel-gold">*</span> : null}</span>
@@ -392,21 +395,44 @@ function ConfigField({ disabled, error, field, help, label, onChange, payload, s
             <span className="pb-0.5 shrink-0">{field.max}</span>
           </div>
         </>
-      ) : field.type === "select" ? (
+      ) : field.type === "select" || (sevenDays && Boolean(field.options?.length)) ? (
         <LabeledControl field={field} label={label}>
           <select
             id={`provider-field-${field.name}`}
-            className="h-8.5 w-full cursor-pointer rounded-lg border border-slate-800 bg-slate-900 px-2.5 text-xs text-slate-100 outline-none focus:border-panel-green"
+            className={cn("w-full cursor-pointer rounded-lg border border-slate-800 bg-slate-900 px-2.5 text-xs text-slate-100 outline-none focus:border-panel-green", sevenDays ? "h-10" : "h-8.5")}
             disabled={disabled}
             value={String(value ?? "")}
             onChange={(event) => onChange(field, event.target.value)}
           >
+            {disabled && value !== undefined && !field.options?.some((option) => option.value === String(value)) ? <option value={String(value)}>{String(value)}</option> : null}
             {(field.options ?? []).map((option) => (
               <option key={option.value} value={option.value}>
                 {locale === "en" && option.labelEn ? option.labelEn : providerOptionLabel(field, option.value, option.label, t)}
               </option>
             ))}
           </select>
+        </LabeledControl>
+      ) : sevenDays && field.name === "worldGenSeed" ? (
+        <LabeledControl field={field} label={label}>
+          <div className="flex items-center gap-1.5">
+            <Input id={`provider-field-${field.name}`} className="h-8.5 min-w-0 bg-slate-900 px-2.5 text-xs" value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+            <button type="button" disabled={disabled} onClick={() => onChange(field, createSevenDaysWorldSeed())} title={locale === "zh" ? "重新随机种子" : "Randomize seed"} aria-label={locale === "zh" ? "重新随机种子" : "Randomize seed"} className="flex size-10 shrink-0 items-center justify-center rounded-md border border-slate-700 text-slate-300 hover:text-white disabled:opacity-40">
+              <Shuffle aria-hidden="true" className="size-3.5" />
+            </button>
+          </div>
+        </LabeledControl>
+      ) : sevenDays && field.name === "sandboxCode" ? (
+        <LabeledControl field={field} label={label}>
+          <div className="flex items-center gap-2">
+            <Input id={`provider-field-${field.name}`} className="h-8.5 min-w-0 bg-slate-900 px-2.5 font-mono text-xs" value={String(value ?? "")} disabled={disabled} onChange={(event) => onChange(field, event.target.value)} />
+            <button type="button" disabled={disabled || value === field.default} onClick={() => onChange(field, String(field.default ?? ""))} className="shrink-0 text-xs text-slate-300 hover:text-white disabled:opacity-40">
+              {locale === "zh" ? "恢复默认" : "Reset"}
+            </button>
+          </div>
+          <a className="mt-1.5 inline-flex items-center gap-1 text-xs text-sky-400 hover:underline" href="https://7d2d.net/7-days-to-die-sandbox-code-generator" target="_blank" rel="noreferrer" title={locale === "zh" ? "第三方工具，请使用与服务器相同的游戏版本生成代码" : "Third-party tool. Generate codes for the same game version as your server."}>
+            {locale === "zh" ? "网页生成工具（第三方）" : "Web generator (third-party)"}
+            <ExternalLink aria-hidden="true" className="size-3" />
+          </a>
         </LabeledControl>
       ) : field.type === "password" ? (
         <LabeledControl field={field} label={label}>

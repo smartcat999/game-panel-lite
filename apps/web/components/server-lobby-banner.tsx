@@ -265,7 +265,7 @@ export function ServerLobbyBanner({
                 </button>
               </div>
             ) : (
-              <span className="text-slate-500 font-sans">{isZh ? "无密码 (公开)" : "None"}</span>
+              <span className="text-slate-500 font-sans">{isZh ? "无密码" : "None"}</span>
             )}
           </div>
         </div>

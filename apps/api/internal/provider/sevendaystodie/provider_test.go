@@ -93,7 +93,10 @@ func TestDefaultsRoundTripAndCapabilities(t *testing.T) {
 func TestConfigUpdatePreservesWorldIdentity(t *testing.T) {
 	p := NewProvider()
 	current := p.DefaultConfigPayload()
-	next := p.DefaultConfigPayload()
+	next, err := p.NormalizeConfigPayload(current)
+	if err != nil {
+		t.Fatal(err)
+	}
 	next["serverName"] = "Renamed server"
 	next["serverPassword"] = "new-password"
 	if err := p.ValidateConfigUpdate(current, next); err != nil {
@@ -111,6 +114,83 @@ func TestConfigUpdatePreservesWorldIdentity(t *testing.T) {
 		}
 		if err := p.ValidateConfigUpdate(current, changed); err == nil {
 			t.Fatalf("allowed changing save identity: %s", field)
+		}
+	}
+}
+
+func TestNewWorldSeedIsPersistedAndLegacySeedsArePreserved(t *testing.T) {
+	p := NewProvider()
+	input := p.DefaultConfigPayload()
+	input["gameWorld"] = "RWG"
+	first, err := p.NormalizeConfigPayload(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed, ok := first["worldGenSeed"].(string)
+	if !ok || len(seed) != 16 || seed == "GamePanelLite" {
+		t.Fatalf("expected generated seed, got %v", first["worldGenSeed"])
+	}
+	second, err := p.NormalizeConfigPayload(first)
+	if err != nil || second["worldGenSeed"] != seed {
+		t.Fatalf("seed changed after normalization: %v, %v", second, err)
+	}
+	for _, value := range []string{"", "GamePanelLite", "Friends-custom-seed"} {
+		input["worldGenSeed"] = value
+		normalized, err := p.NormalizeConfigPayload(input)
+		if err != nil || normalized["worldGenSeed"] != value {
+			t.Fatalf("existing seed changed: %v, %v", normalized, err)
+		}
+	}
+	delete(input, "worldGenSeed")
+	parsed, err := parseConfig(input)
+	if err != nil || parsed.WorldGenSeed != "GamePanelLite" {
+		t.Fatalf("legacy runtime fallback changed: %+v, %v", parsed, err)
+	}
+}
+
+func TestPackagedMapsAndTenKWorld(t *testing.T) {
+	p := NewProvider()
+	for _, name := range []string{"Navezgane", "RWG", "Pregen06k01", "Pregen06k02", "Pregen08k01", "Pregen08k02"} {
+		t.Run(name, func(t *testing.T) {
+			config := p.DefaultConfigPayload()
+			config["gameWorld"] = name
+			config["worldGenSize"] = 10240
+			config["worldGenSeed"] = "fixed"
+			if _, err := p.NormalizeConfigPayload(config); err != nil {
+				t.Fatal(err)
+			}
+			runtime, err := p.RuntimeConfigForResource(domain.GameServer{Spec: domain.ServerSpec{Config: config}})
+			if err != nil || !strings.Contains(runtime.Options.Files["gamepanel-serverconfig.xml"], `name="GameWorld" value="`+name+`"`) {
+				t.Fatalf("map not rendered: %v", err)
+			}
+		})
+	}
+	for _, name := range []string{"Playtesting", "Empty", "../Pregen06k01"} {
+		config := p.DefaultConfigPayload()
+		config["gameWorld"] = name
+		if err := p.ValidateConfigPayload(config); err == nil {
+			t.Fatalf("accepted unintended world %q", name)
+		}
+	}
+}
+
+func TestLegacyFourKSaveRemainsEditableWithoutChangingIdentity(t *testing.T) {
+	p := NewProvider()
+	current := p.DefaultConfigPayload()
+	current["worldGenSeed"] = "GamePanelLite"
+	current["worldGenSize"] = 4096
+	current["worldName"] = "旧的中文存档"
+	next, err := p.NormalizeConfigPayload(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next["serverPassword"] = "new-password"
+	if err := p.ValidateConfigUpdate(current, next); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range p.ConfigSchema() {
+		if field.Name == "worldGenSize" && (field.Min == nil || *field.Min != 6144 || field.Max == nil || *field.Max != 10240) {
+			t.Fatal("new-world choices must match the current template")
 		}
 	}
 }

@@ -276,3 +276,33 @@
   read-only game binaries, daemon-filesystem pull capacity estimation and a manual
   offline-export UI remain separate follow-up work. No deployment or release was
   performed, and v0.2.19 remains draft.
+
+## 2026-10-27 — Seven Days configuration usability, first batch
+
+- Added the four packaged Pregen maps and 10K RWG size. New UI choices follow
+  the v3.3 template (6K/8K/10K); parsing still accepts legacy 4K instances so
+  password edits and existing saves remain usable. Direct API normalization
+  retains that compatibility as well; this is not a claim that 4K is supported
+  by the current game build.
+- New wizard instances receive a safe internal save ID and a random seed once.
+  A seed can be rerolled before creation; backend creation defaults also generate
+  a seed. Normalization preserves even legacy blank seeds. Runtime reads keep the historical fallback for old
+  payloads with no seed. Existing world identity remains locked and Unicode
+  save names are not renamed.
+- Seed/size controls and review entries only appear for RWG. Size uses discrete
+  numeric choices. Sandbox code offers the same-version game instructions, an
+  explicitly third-party web generator link and reset to the shipped default.
+- Hidden incompatible Terraria quick templates on Seven Days creation and guarded
+  their handler. Removed the password-derived “public” label from join details;
+  clarified that listing visibility does not enforce address access.
+- No production deployment, game runtime rebuild or release is part of this batch.
+  Performance/region/land-claim settings, rule decoding and online automatic backup
+  remain follow-up work; v0.2.19 is not published.
+- Validation: full Go tests and vet passed (temporary local test listeners required
+  an unsandboxed run); 130 frontend tests, typecheck, application-source lint and
+  production build passed. Browser checks with mocked API data covered all fixed
+  maps, RWG seed preservation/reroll, 6K/8K/10K choices, sandbox reset, equal input
+  and select heights, and a 390px viewport without horizontal page overflow.
+  Full repository lint remains blocked by 155 existing errors in unrelated
+  untracked `apps/web/scripts/` and `docs/wechat/` files, which were left intact.
+  No actual game instances or third-party sandbox output were exercised.
