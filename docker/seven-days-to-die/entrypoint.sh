@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 mkdir -p /data/userdata/Saves
+python3 /opt/gamepanel/check_storage.py
 # Seed game files once. Never copy template data over an existing save.
 if [ ! -f /data/.gamepanel-installed ]; then
   # An explicit update may have installed the game before its first start.

@@ -179,6 +179,7 @@ function ProviderRuntimeRow({
           target: status?.targetVersion ?? provider.recommendedVersion ?? ""
         })
         : t("gameLibraryInstallHint");
+  const errorText = (installingProvider === provider.key ? installError : "") || (failed && status?.message ? formatRuntimeInstallError(status.message, t) : "");
   if (preparing) return (
     <div className="p-4">
       {showProviderTitle ? <p className="mb-2 text-sm font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p> : null}
@@ -194,9 +195,7 @@ function ProviderRuntimeRow({
           {provider.recommended && <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs text-panel-green">{t("recommended")}</span>}
         </div>
         {showProviderTitle ? <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p> : null}
-        <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
-        {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
-        {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
+        {errorText ? <p className="mt-2 text-xs text-panel-gold" role="alert">{errorText}</p> : <p className="mt-2 text-xs text-slate-500">{statusHint}</p>}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
         {canInstall ? <RuntimeImageUninstall provider={provider} disabled={preparing} /> : null}

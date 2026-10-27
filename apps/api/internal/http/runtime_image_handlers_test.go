@@ -2,14 +2,12 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	stdhttp "net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -142,7 +140,7 @@ func TestRuntimeInstallStateReportsUpdateWhenOlderVersionIsInstalled(t *testing.
 	t.Fatal("expected Palworld provider in catalog")
 }
 
-func TestRuntimeInstallStateUsesLocalArchiveWhenDockerImageIsMissing(t *testing.T) {
+func TestRuntimeInstallStateDoesNotTreatAnArchiveAsAnInstalledDockerImage(t *testing.T) {
 	router, _, _ := newTestRouterWithAdapter(t, missingImageAdapter{availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}})
 
 	recorder := httptest.NewRecorder()
@@ -164,8 +162,8 @@ func TestRuntimeInstallStateUsesLocalArchiveWhenDockerImageIsMissing(t *testing.
 				continue
 			}
 			found = true
-			if providerCatalog.RuntimeImage.Status != runtime.ImageStatusReady {
-				t.Fatalf("expected local marker and archive to mark runtime ready, got %+v", providerCatalog.RuntimeImage)
+			if providerCatalog.RuntimeImage.Status != runtime.ImageStatusMissing {
+				t.Fatalf("archive alone must not claim an installed Docker image: %+v", providerCatalog.RuntimeImage)
 			}
 		}
 	}
@@ -174,7 +172,7 @@ func TestRuntimeInstallStateUsesLocalArchiveWhenDockerImageIsMissing(t *testing.
 	}
 }
 
-func TestRuntimeInstallStateDoesNotTrustMarkerWhenArchiveIsMissing(t *testing.T) {
+func TestRuntimeInstallStateUsesVerifiedDockerImageWithoutArchive(t *testing.T) {
 	router, _, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, true)
 	archivePath := filepath.Join(cfg.DataDir, "runtime-images", "terraria-vanilla", "1.4.5.6.tar")
 	if err := os.Remove(archivePath); err != nil {
@@ -198,8 +196,8 @@ func TestRuntimeInstallStateDoesNotTrustMarkerWhenArchiveIsMissing(t *testing.T)
 			if providerCatalog.Key != domain.ProviderTerrariaVanilla {
 				continue
 			}
-			if providerCatalog.RuntimeImage.Status != runtime.ImageStatusMissing {
-				t.Fatalf("expected missing archive to make runtime missing, got %+v", providerCatalog.RuntimeImage)
+			if providerCatalog.RuntimeImage.Status != runtime.ImageStatusReady {
+				t.Fatalf("verified Docker image should not require an archive: %+v", providerCatalog.RuntimeImage)
 			}
 			return
 		}
@@ -207,7 +205,7 @@ func TestRuntimeInstallStateDoesNotTrustMarkerWhenArchiveIsMissing(t *testing.T)
 	t.Fatal("expected Terraria vanilla provider in catalog")
 }
 
-func TestRuntimeInstallStateDoesNotTrustMarkerWhenArchiveIsEmpty(t *testing.T) {
+func TestRuntimeInstallStateIgnoresAnEmptyOptionalArchive(t *testing.T) {
 	router, _, cfg := newTestRouterWithAdapterAndInstallMarkers(t, availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, true)
 	archivePath := filepath.Join(cfg.DataDir, "runtime-images", "terraria-vanilla", "1.4.5.6.tar")
 	if err := os.WriteFile(archivePath, nil, 0o644); err != nil {
@@ -231,11 +229,8 @@ func TestRuntimeInstallStateDoesNotTrustMarkerWhenArchiveIsEmpty(t *testing.T) {
 			if providerCatalog.Key != domain.ProviderTerrariaVanilla {
 				continue
 			}
-			if providerCatalog.RuntimeImage.Status != runtime.ImageStatusMissing {
-				t.Fatalf("expected empty archive to make runtime missing, got %+v", providerCatalog.RuntimeImage)
-			}
-			if providerCatalog.RuntimeImage.Message != "runtime image archive is empty" {
-				t.Fatalf("expected empty archive message, got %+v", providerCatalog.RuntimeImage)
+			if providerCatalog.RuntimeImage.Status != runtime.ImageStatusReady {
+				t.Fatalf("empty optional archive must not hide a verified image: %+v", providerCatalog.RuntimeImage)
 			}
 			return
 		}
@@ -277,91 +272,5 @@ func TestGameCatalogMarksDSTUnsupportedOnArmRuntime(t *testing.T) {
 	}
 	if got.Status != "unsupported" {
 		t.Fatalf("expected DST game detail to be unsupported on arm runtime, got %+v", got)
-	}
-}
-
-type measuredRuntimeAdapter struct {
-	availableMockAdapter
-	saving   chan struct{}
-	release  chan struct{}
-	failSave bool
-}
-
-func (a *measuredRuntimeAdapter) PrepareImageWithProgress(_ context.Context, _ string, report runtime.ImagePrepareProgressFunc) error {
-	report(runtime.ImagePrepareProgress{Phase: "downloading", CurrentBytes: 100})
-	report(runtime.ImagePrepareProgress{Phase: "extracting", CompletedLayers: 2})
-	return nil
-}
-func (a *measuredRuntimeAdapter) SaveImageArchiveWithProgress(ctx context.Context, image, path string, report runtime.ImagePrepareProgressFunc) error {
-	report(runtime.ImagePrepareProgress{Phase: "saving", CurrentBytes: 128})
-	close(a.saving)
-	select {
-	case <-a.release:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	if a.failSave {
-		return errors.New("archive write failed")
-	}
-	return a.SaveImageArchive(ctx, image, path)
-}
-
-func TestRuntimeInstallReportsSavingBytesBeforeSuccessOrFailure(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(map[bool]string{false: "success", true: "failure"}[fail], func(t *testing.T) {
-			adapter := &measuredRuntimeAdapter{availableMockAdapter: availableMockAdapter{MockAdapter: runtime.NewMockAdapter()}, saving: make(chan struct{}), release: make(chan struct{}), failSave: fail}
-			router, _, _ := newTestRouterWithAdapterAndInstallMarkers(t, adapter, false)
-			req := httptest.NewRecorder()
-			router.ServeHTTP(req, httptest.NewRequest(stdhttp.MethodPost, "/api/runtime/images/prepare", strings.NewReader(`{"providerKey":"terraria-vanilla"}`)))
-			if req.Code != stdhttp.StatusAccepted {
-				t.Fatalf("prepare: %d %s", req.Code, req.Body.String())
-			}
-			select {
-			case <-adapter.saving:
-			case <-time.After(3 * time.Second):
-				t.Fatal("save phase not reached")
-			}
-			readStatus := func() domain.RuntimeImageStatus {
-				t.Helper()
-				out := httptest.NewRecorder()
-				router.ServeHTTP(out, httptest.NewRequest(stdhttp.MethodGet, "/api/games", nil))
-				var games []domain.GameCatalogEntry
-				if err := json.Unmarshal(out.Body.Bytes(), &games); err != nil {
-					t.Fatal(err)
-				}
-				for _, g := range games {
-					for _, p := range g.Providers {
-						if p.Key == domain.ProviderTerrariaVanilla {
-							return p.RuntimeImage
-						}
-					}
-				}
-				t.Fatal("provider absent")
-				return domain.RuntimeImageStatus{}
-			}
-			got := readStatus()
-			close(adapter.release)
-			if got.Status != "preparing" || got.Phase != "saving" || got.CurrentBytes != 128 || got.Progress != 0 || got.TotalBytes != 0 {
-				t.Fatalf("unmeasured cache should not claim 95%%: %+v", got)
-			}
-			want := "ready"
-			if fail {
-				want = "failed"
-			}
-			deadline := time.Now().Add(3 * time.Second)
-			for time.Now().Before(deadline) {
-				got = readStatus()
-				if got.Status == want {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
-			if got.Status != want {
-				t.Fatalf("final state: %+v", got)
-			}
-			if fail && (got.Phase != "saving" || got.Progress == 100 || got.CurrentBytes != 128) {
-				t.Fatalf("failure falsely completed: %+v", got)
-			}
-		})
 	}
 }

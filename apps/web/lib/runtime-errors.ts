@@ -40,6 +40,7 @@ export function classifyRuntimeError(message: string): MessageKey | undefined {
   if (!normalized) {
     return undefined;
   }
+  if (normalized.includes("no space left on device") || normalized.includes("disk space is insufficient") || normalized.includes("insufficient disk space")) return "runtimeDiskSpaceInsufficient";
   if (normalized.includes("only the latest runtime image")) return "runtimeLatestOnly";
   if (
     normalized.includes("server runtime is not installed") ||

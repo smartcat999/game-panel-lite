@@ -252,8 +252,13 @@ func (h *Handler) useLatestRuntimeForRestore(ctx context.Context, server *domain
 	if server.Spec.Version == latest || p.ImageFor(server.Spec.Version) == image {
 		return nil
 	}
-	if h.runtimeInstallStatus(ctx, runtimeInstallRef{ProviderKey: p.Key(), Version: latest, Image: image}).Status != runtime.ImageStatusReady {
-		return errLatestRuntimeNotInstalled
+	ref := runtimeInstallRef{ProviderKey: p.Key(), Version: latest, Image: image}
+	installed := h.runtimeInstallStatus(ctx, ref)
+	if installed.Status != runtime.ImageStatusReady {
+		actual, _, registered := h.runtimeInstallMarkerStatusWithArchive(ctx, ref)
+		if installed.Status == runtime.ImageStatusPreparing || !registered || actual.Status != runtime.ImageStatusMissing {
+			return errLatestRuntimeNotInstalled
+		}
 	}
 	server.Spec.Version = latest
 	server.Spec.Generation++
@@ -261,6 +266,9 @@ func (h *Handler) useLatestRuntimeForRestore(ctx context.Context, server *domain
 	if err := h.store.SaveGameServer(ctx, server); err != nil {
 		return err
 	}
-	h.cleanupOldRuntimeImages(ctx, runtimeInstallRef{ProviderKey: p.Key(), Version: latest, Image: image})
+	// Keep the old runtime until the registered latest image has recovered.
+	if installed.Status == runtime.ImageStatusReady {
+		h.cleanupOldRuntimeImages(ctx, ref)
+	}
 	return nil
 }

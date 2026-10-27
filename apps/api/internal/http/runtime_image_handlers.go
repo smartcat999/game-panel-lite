@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
@@ -27,6 +28,7 @@ type runtimeInstallRef struct {
 }
 
 type runtimeInstallMarker struct {
+	Storage     string             `json:"storage,omitempty"`
 	ProviderKey domain.ProviderKey `json:"providerKey"`
 	Version     string             `json:"version"`
 	Image       string             `json:"image"`
@@ -108,22 +110,24 @@ func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 	fail := func(err error) {
 		status.Status = runtime.ImageStatusFailed
 		status.Message = err.Error()
+		if errors.Is(err, syscall.ENOSPC) || strings.Contains(strings.ToLower(err.Error()), "no space left on device") {
+			status.Message = "disk space is insufficient; free space and retry; existing images and server data are retained"
+		}
 		status.UpdatedAt = time.Now()
 		h.setRuntimeImageJob(status)
 		if h.logger != nil {
 			h.logger.Warn("runtime image installation failed", "image", ref.Image, "phase", status.Phase, "error", err)
 		}
 	}
-	if err := h.runtime.PrepareImageWithProgress(ctx, ref.Image, report); err != nil {
-		fail(err)
-		return
-	}
-	report(runtime.ImagePrepareProgress{Phase: "saving"})
-	if err := h.runtime.SaveImageArchiveWithProgress(ctx, ref.Image, h.runtimeInstallArchivePath(ref), report); err != nil {
+	if err := h.prepareRuntimeImageData(ctx, ref, report); err != nil {
 		fail(err)
 		return
 	}
 	report(runtime.ImagePrepareProgress{Phase: "finalizing"})
+	if verified := h.runtime.ImageStatus(ctx, ref.Image); verified.Status != runtime.ImageStatusReady {
+		fail(fmt.Errorf("runtime image verification failed"))
+		return
+	}
 	if err := h.writeRuntimeInstallMarker(ref); err != nil {
 		fail(err)
 		return
@@ -132,25 +136,61 @@ func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 	h.setRuntimeImageJob(domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusReady, Phase: "complete", Progress: 100, UpdatedAt: time.Now()})
 }
 
+// Old archives remain usable offline; new installations keep only Docker data.
+func (h *Handler) prepareRuntimeImageData(ctx context.Context, ref runtimeInstallRef, report runtime.ImagePrepareProgressFunc) error {
+	// The single installation job owns this exact cache path. No normal install
+	// writes archives now; clean only its abandoned file, never instance data.
+	temp := h.runtimeInstallArchivePath(ref) + ".tmp"
+	if stat, err := os.Lstat(temp); err == nil {
+		if !stat.Mode().IsRegular() {
+			return fmt.Errorf("runtime image temporary cache is invalid")
+		}
+		if err := os.Remove(temp); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if h.runtime.ImageStatus(ctx, ref.Image).Status == runtime.ImageStatusReady {
+		return nil
+	}
+	_, archive, registered := h.runtimeInstallMarkerStatusWithArchive(ctx, ref)
+	if registered && archive != "" && runtimeInstallArchiveStatus(ref.Image, archive).Status == runtime.ImageStatusReady {
+		report(runtime.ImagePrepareProgress{Phase: "extracting"})
+		_ = h.runtime.LoadImageArchive(ctx, archive)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if h.runtime.ImageStatus(ctx, ref.Image).Status == runtime.ImageStatusReady {
+			return nil
+		}
+	}
+	return h.runtime.PrepareImageWithProgress(ctx, ref.Image, report)
+}
+
 func (h *Handler) runtimeInstallStatus(ctx context.Context, ref runtimeInstallRef) domain.RuntimeImageStatus {
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusPreparing {
 		return job
 	}
-	if markerStatus, ok := h.runtimeInstallMarkerStatus(ref); ok {
+	markerStatus, registered := h.runtimeInstallMarkerStatus(ctx, ref)
+	if registered && markerStatus.Status == runtime.ImageStatusReady {
 		return markerStatus
 	}
 	if job, ok := h.getRuntimeImageJob(ref.Image); ok && job.Status == runtime.ImageStatusFailed {
 		return job
 	}
+	if registered {
+		return markerStatus
+	}
 	return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusMissing, Message: "runtime image is not installed", UpdatedAt: time.Now()}
 }
 
-func (h *Handler) runtimeInstallMarkerStatus(ref runtimeInstallRef) (domain.RuntimeImageStatus, bool) {
-	status, _, ok := h.runtimeInstallMarkerStatusWithArchive(ref)
+func (h *Handler) runtimeInstallMarkerStatus(ctx context.Context, ref runtimeInstallRef) (domain.RuntimeImageStatus, bool) {
+	status, _, ok := h.runtimeInstallMarkerStatusWithArchive(ctx, ref)
 	return status, ok
 }
 
-func (h *Handler) runtimeInstallMarkerStatusWithArchive(ref runtimeInstallRef) (domain.RuntimeImageStatus, string, bool) {
+func (h *Handler) runtimeInstallMarkerStatusWithArchive(ctx context.Context, ref runtimeInstallRef) (domain.RuntimeImageStatus, string, bool) {
 	path := h.runtimeInstallMarkerPath(ref)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -176,7 +216,20 @@ func (h *Handler) runtimeInstallMarkerStatusWithArchive(ref runtimeInstallRef) (
 	if err != nil {
 		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: err.Error(), UpdatedAt: time.Now()}, "", true
 	}
-	return runtimeInstallArchiveStatus(ref.Image, archivePath), archivePath, true
+	if marker.Storage != "" && marker.Storage != "docker" {
+		return domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusFailed, Message: "runtime install marker storage is invalid", UpdatedAt: time.Now()}, "", true
+	}
+	status := h.runtime.ImageStatus(ctx, ref.Image)
+	if status.Status == runtime.ImageStatusReady {
+		status.Phase = "complete"
+		if !marker.InstalledAt.IsZero() {
+			status.UpdatedAt = marker.InstalledAt
+		}
+	}
+	if status.Status == runtime.ImageStatusMissing {
+		status.Message = "server runtime image is missing; reinstall from Game Library"
+	}
+	return status, archivePath, true
 }
 
 func runtimeInstallArchiveStatus(image string, archivePath string) domain.RuntimeImageStatus {
@@ -208,7 +261,7 @@ func (h *Handler) writeRuntimeInstallMarker(ref runtimeInstallRef) error {
 		ProviderKey: ref.ProviderKey,
 		Version:     ref.Version,
 		Image:       ref.Image,
-		ArchivePath: h.runtimeInstallArchiveRelPath(ref),
+		Storage:     "docker",
 		InstalledAt: time.Now(),
 	}
 	data, err := json.MarshalIndent(marker, "", "  ")
@@ -216,7 +269,19 @@ func (h *Handler) writeRuntimeInstallMarker(ref runtimeInstallRef) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0o644)
+	file, err := os.CreateTemp(filepath.Dir(path), ".install-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err = file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }
 
 func (h *Handler) runtimeInstallMarkerPath(ref runtimeInstallRef) string {
@@ -238,6 +303,9 @@ func (h *Handler) runtimeInstallMarkerArchivePath(ref runtimeInstallRef, marker 
 	}
 	clean := filepath.Clean(archivePath)
 	if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("runtime install marker archive path is invalid")
+	}
+	if clean != h.runtimeInstallArchiveRelPath(ref) {
 		return "", fmt.Errorf("runtime install marker archive path is invalid")
 	}
 	return filepath.Join(h.cfg.DataDir, clean), nil

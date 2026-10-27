@@ -33,6 +33,12 @@ describe("runtime error display", () => {
     expect(classifyRuntimeError("a game update task is in progress")).toBe("gameMaintenanceInProgress");
   });
 
+  it("hides internal paths in disk-full failures", () => {
+    expect(formatRuntimeUninstallError(new Error("write /private/host/runtime-images/game.tar.tmp: no space left on device"), t)).toBe("runtimeDiskSpaceInsufficient");
+    expect(classifyRuntimeError("disk space is insufficient; free space and retry")).toBe("runtimeDiskSpaceInsufficient");
+    expect(classifyRuntimeError("Insufficient disk space: required 100, available 20")).toBe("runtimeDiskSpaceInsufficient");
+  });
+
   it("keeps form validation errors product-specific in the create flow", () => {
     expect(formatCreateServerError(new Error("admin password is required"), t)).toBe("requiredFieldError:adminPassword");
     expect(formatCreateServerError(new Error("eula must be accepted"), t)).toBe("requiredAgreementError:minecraftEulaAccepted");
