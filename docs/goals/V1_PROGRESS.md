@@ -388,3 +388,15 @@
 - Added HTTP regression coverage for current/legacy version checks and file
   updates; the two read-only cases failed before the fix and pass afterwards.
 - Validation: related HTTP tests, full Go tests and go vet pass. No frontend change.
+
+
+### Seven Days disabled numeric values in creation
+
+- Reproduced the default creation wizard rejecting MaxChunkAge=-1 and
+  CameraRestrictionMode=0 as non-positive values. The API schema omitted their
+  minimum bounds, so the generic wizard fell back to a minimum of one.
+- Declared the existing backend bounds for chunk reset, camera restriction,
+  bedroll deadzone/duration and party kill sharing. Valid disabled values remain
+  available without enabling destructive chunk reset or changing game defaults.
+- Added a schema contract regression that failed before the fix; provider/HTTP
+  tests, full Go tests and go vet pass. No frontend code change is required.
