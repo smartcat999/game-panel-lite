@@ -92,6 +92,11 @@ type RuntimeImageStatus struct {
 	Status           string    `json:"status"`
 	Message          string    `json:"message,omitempty"`
 	Progress         int       `json:"progress,omitempty"`
+	Phase            string    `json:"phase,omitempty"`
+	CurrentBytes     int64     `json:"currentBytes,omitempty"`
+	TotalBytes       int64     `json:"totalBytes,omitempty"`
+	BytesPerSecond   int64     `json:"bytesPerSecond,omitempty"`
+	CompletedLayers  int       `json:"completedLayers,omitempty"`
 	InstalledVersion string    `json:"installedVersion,omitempty"`
 	TargetVersion    string    `json:"targetVersion,omitempty"`
 	UpdatedAt        time.Time `json:"updatedAt,omitempty"`

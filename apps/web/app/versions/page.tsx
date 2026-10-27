@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/page-header";
 import { listGames, prepareRuntimeImage } from "@/lib/api";
@@ -12,6 +12,7 @@ import { isRuntimeImagePreparing, runtimeImageLabelKey, runtimeImageTone } from 
 import { cn } from "@/lib/utils";
 import { GameAssetsSubNav } from "@/components/sub-nav";
 import { usePermissions } from "@/lib/permissions";
+import { RuntimeInstallProgress } from "@/components/runtime-install-progress";
 import { RuntimeImageUninstall } from "@/components/runtime-image-uninstall";
 import type { ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 
@@ -134,31 +135,28 @@ function ImageVersionRow({
           current={status?.installedVersion || "—"}
           target={status?.targetVersion || provider.recommendedVersion || "—"}
         />
-        <div>
+        <div className={preparing ? "md:col-span-2" : undefined}>
           <span className="mb-1 block text-xs text-slate-500 md:hidden">{t("versionManagementImageStatus")}</span>
-          <RuntimeImageBadge status={displayStatus} />
+          {preparing ? <RuntimeInstallProgress status={displayStatus} /> : <RuntimeImageBadge status={displayStatus} />}
         </div>
-        <div className="flex items-center justify-end gap-2">
-          {canInstall ? <RuntimeImageUninstall provider={provider} disabled={preparing} /> : null}
-          {canInstall && (actionable || preparing) ? (
-            <Button
-              type="button"
-              variant={status?.status === "update_available" ? "primary" : "secondary"}
-              className="h-8 w-full whitespace-nowrap px-2.5 text-xs md:w-auto md:min-w-20"
-              disabled={preparing}
-              onClick={onPrepare}
-            >
-              {preparing ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" /> : <Download aria-hidden="true" className="size-3.5" />}
-              {preparing ? t("versionManagementInstallingAction") : actionLabel}
-            </Button>
-          ) : null}
-        </div>
+        {!preparing ? (
+          <div className="flex items-center justify-end gap-2">
+            {canInstall ? <RuntimeImageUninstall provider={provider} disabled={preparing} /> : null}
+            {canInstall && actionable ? (
+              <Button
+                type="button"
+                variant={status?.status === "update_available" ? "primary" : "secondary"}
+                className="h-8 w-full whitespace-nowrap px-2.5 text-xs md:w-auto md:min-w-20"
+                disabled={preparing}
+                onClick={onPrepare}
+              >
+                <Download aria-hidden="true" className="size-3.5" />
+                {actionLabel}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      {preparing && typeof displayStatus?.progress === "number" ? (
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={displayStatus.progress}>
-          <div className="h-full rounded-full bg-panel-green transition-[width] duration-200 motion-reduce:transition-none" style={{ width: `${Math.max(0, Math.min(100, displayStatus.progress))}%` }} />
-        </div>
-      ) : null}
       {error ? <p className="mt-3 text-xs text-red-300" role="alert">{error}</p> : null}
     </div>
   );

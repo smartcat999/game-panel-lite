@@ -198,3 +198,28 @@
   The latest-only flow also passed: provider-level uninstall has no version
   selector, and reinstall requests the recommended latest runtime version.
 - Not deployed or released. v0.2.19 remains a draft pending user validation.
+
+
+### 2026-10-27: Measured runtime installation progress (local implementation)
+
+- Replaced weighted overall installation percentages with explicit resolving,
+  downloading, extracting, saving and finalizing phases. Download and extraction
+  counters stay independent when late layers arrive or cached layers are reused.
+- Docker pull events do not establish a reliable fixed whole-image size. These
+  events now report measured bytes and sampled download speed without a guessed
+  percentage; supported fixed totals can drive a current-phase percentage.
+- Archive saving reports actual successful bytes written rather than jumping to
+  95%. Installation is ready only after the archive and marker are saved. Errors
+  retain the last measured phase; isolated layer completion cannot finalize a pull.
+- A shared compact progress component serves Game Library and Runtime Images.
+  Removed repeated preparing badges, disabled installing buttons and duplicate
+  single-provider descriptions. Stage, relevant counters and a thin progress bar
+  occupy one area; stale transfer speeds are hidden. Chinese/English supported.
+- Regression coverage includes replayed mixed pull events, late/cached layers,
+  measured speed, archive writes/cancellation, saving-phase success/failure and
+  omission of legacy guessed percentages. Full Go tests/vet, 126 frontend tests,
+  typecheck, application-source lint and production build passed. Follow-up Go
+  tests cover delaying finalization until the pull stream finishes.
+- Local Playwright API-fixture checks passed for all five phases, one status label,
+  no guessed percentage, desktop Runtime Images and Chinese/English 390px layouts.
+  No production image download, deployment or release was performed for this change.

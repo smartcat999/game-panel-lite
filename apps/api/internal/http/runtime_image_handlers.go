@@ -78,7 +78,7 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "another runtime image task is already running")
 		return
 	}
-	status := domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusPreparing, UpdatedAt: time.Now()}
+	status := domain.RuntimeImageStatus{Image: image, Status: runtime.ImageStatusPreparing, Phase: "resolving", UpdatedAt: time.Now()}
 	h.setRuntimeImageJob(status)
 	go h.prepareRuntimeImageAsync(ref)
 	writeJSON(w, http.StatusAccepted, status)
@@ -87,93 +87,49 @@ func (h *Handler) prepareRuntimeImage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) prepareRuntimeImageAsync(ref runtimeInstallRef) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	lastProgress := 0
-	status := domain.RuntimeImageStatus{Image: ref.Image, Progress: lastProgress, UpdatedAt: time.Now()}
-	if err := h.runtime.PrepareImageWithProgress(ctx, ref.Image, func(progress runtime.ImagePrepareProgress) {
-		nextProgress := runtimeInstallPullProgress(progress.Progress)
-		if nextProgress < lastProgress {
-			nextProgress = lastProgress
+	status := domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusPreparing, Phase: "resolving"}
+	report := func(p runtime.ImagePrepareProgress) {
+		status.Phase = p.Phase
+		if status.Phase == "" {
+			status.Phase = "resolving"
 		}
-		lastProgress = nextProgress
-		h.setRuntimeImageJob(domain.RuntimeImageStatus{
-			Image:     ref.Image,
-			Status:    runtime.ImageStatusPreparing,
-			Message:   progress.Message,
-			Progress:  nextProgress,
-			UpdatedAt: time.Now(),
-		})
-	}); err != nil {
+		status.Progress = 0
+		// A percentage belongs only to a stage with a measured fixed total.
+		if p.TotalBytes > 0 {
+			status.Progress = int(float64(p.CurrentBytes) / float64(p.TotalBytes) * 100)
+			status.Progress = max(0, min(100, status.Progress))
+		}
+		status.Message = p.Message
+		status.CurrentBytes, status.TotalBytes = p.CurrentBytes, p.TotalBytes
+		status.BytesPerSecond, status.CompletedLayers = p.BytesPerSecond, p.CompletedLayers
+		status.UpdatedAt = time.Now()
+		h.setRuntimeImageJob(status)
+	}
+	fail := func(err error) {
 		status.Status = runtime.ImageStatusFailed
 		status.Message = err.Error()
-		status.Progress = lastProgress
+		status.UpdatedAt = time.Now()
+		h.setRuntimeImageJob(status)
 		if h.logger != nil {
-			h.logger.Warn("runtime image prepare failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
-		}
-	} else {
-		saveProgress := lastProgress
-		if saveProgress < 95 {
-			saveProgress = 95
-		}
-		h.setRuntimeImageJob(domain.RuntimeImageStatus{
-			Image:     ref.Image,
-			Status:    runtime.ImageStatusPreparing,
-			Message:   "saving runtime image",
-			Progress:  saveProgress,
-			UpdatedAt: time.Now(),
-		})
-		if err := h.runtime.SaveImageArchive(ctx, ref.Image, h.runtimeInstallArchivePath(ref)); err != nil {
-			status.Status = runtime.ImageStatusFailed
-			status.Message = err.Error()
-			status.Progress = saveProgress
-			if h.logger != nil {
-				h.logger.Warn("runtime image archive save failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
-			}
-		} else if err := h.writeRuntimeInstallMarker(ref); err != nil {
-			status.Status = runtime.ImageStatusFailed
-			status.Message = err.Error()
-			status.Progress = saveProgress
-			if h.logger != nil {
-				h.logger.Warn("runtime install marker write failed", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version, "error", err)
-			}
-		} else {
-			h.cleanupOldRuntimeImages(ctx, ref)
-			status.Status = runtime.ImageStatusReady
-			status.Progress = 100
-			if h.logger != nil {
-				h.logger.Info("runtime image prepared", "image", ref.Image, "provider", ref.ProviderKey, "version", ref.Version)
-			}
+			h.logger.Warn("runtime image installation failed", "image", ref.Image, "phase", status.Phase, "error", err)
 		}
 	}
-	status.UpdatedAt = time.Now()
-	h.setRuntimeImageJob(status)
-}
-
-func clampRuntimeImageProgress(progress int) int {
-	if progress < 0 {
-		return 0
+	if err := h.runtime.PrepareImageWithProgress(ctx, ref.Image, report); err != nil {
+		fail(err)
+		return
 	}
-	if progress > 100 {
-		return 100
+	report(runtime.ImagePrepareProgress{Phase: "saving"})
+	if err := h.runtime.SaveImageArchiveWithProgress(ctx, ref.Image, h.runtimeInstallArchivePath(ref), report); err != nil {
+		fail(err)
+		return
 	}
-	return progress
-}
-
-func runtimeInstallPullProgress(progress int) int {
-	progress = clampRuntimeImageProgress(progress)
-	if progress == 0 {
-		return 0
+	report(runtime.ImagePrepareProgress{Phase: "finalizing"})
+	if err := h.writeRuntimeInstallMarker(ref); err != nil {
+		fail(err)
+		return
 	}
-	if progress >= 100 {
-		return 90
-	}
-	scaled := int(float64(progress) * 0.9)
-	if scaled <= 0 {
-		return 1
-	}
-	if scaled > 90 {
-		return 90
-	}
-	return scaled
+	h.cleanupOldRuntimeImages(ctx, ref)
+	h.setRuntimeImageJob(domain.RuntimeImageStatus{Image: ref.Image, Status: runtime.ImageStatusReady, Phase: "complete", Progress: 100, UpdatedAt: time.Now()})
 }
 
 func (h *Handler) runtimeInstallStatus(ctx context.Context, ref runtimeInstallRef) domain.RuntimeImageStatus {

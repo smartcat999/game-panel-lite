@@ -8,7 +8,7 @@ import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/page-header";
 import { getGameArt } from "@/lib/game-art";
 import { gameDescription, gameDisplayName } from "@/lib/game-display";
-import { useI18n, type MessageKey } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { listGames, prepareRuntimeImage } from "@/lib/api";
 import { providerDescription, providerDisplayName } from "@/lib/provider-display";
 import { formatRuntimeInstallError } from "@/lib/runtime-errors";
@@ -16,6 +16,7 @@ import { isRuntimeImagePreparing, isRuntimeImageReady, runtimeImageLabelKey, run
 import { cn } from "@/lib/utils";
 import type { GameCatalogEntry, ProviderCatalog, ProviderKey, RuntimeImageStatus } from "@/lib/types";
 import { usePermissions } from "@/lib/permissions";
+import { RuntimeInstallProgress } from "@/components/runtime-install-progress";
 import { RuntimeImageUninstall } from "@/components/runtime-image-uninstall";
 
 import { GameAssetsSubNav } from "@/components/sub-nav";
@@ -168,11 +169,9 @@ function ProviderRuntimeRow({
   const failed = status?.status === "failed";
   const updateAvailable = status?.status === "update_available";
   const displayStatus: RuntimeImageStatus | undefined = preparing
-    ? { image: status?.image ?? provider.key, message: status?.message, progress: status?.progress, status: "preparing", updatedAt: status?.updatedAt }
+    ? { ...status, image: status?.image ?? provider.key, status: "preparing" }
     : status;
-  const statusHint = preparing
-    ? t(runtimeInstallPhaseMessageKey(displayStatus))
-    : ready
+  const statusHint = ready
       ? t("gameLibraryReadyHint")
       : updateAvailable
         ? t("gameLibraryUpdateHint", {
@@ -180,6 +179,12 @@ function ProviderRuntimeRow({
           target: status?.targetVersion ?? provider.recommendedVersion ?? ""
         })
         : t("gameLibraryInstallHint");
+  if (preparing) return (
+    <div className="p-4">
+      {showProviderTitle ? <p className="mb-2 text-sm font-medium text-slate-100">{providerDisplayName(provider.key, provider.name, t)}</p> : null}
+      <RuntimeInstallProgress status={displayStatus} />
+    </div>
+  );
   return (
     <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 flex-1">
@@ -188,9 +193,8 @@ function ProviderRuntimeRow({
           <RuntimeStatusBadge status={displayStatus} />
           {provider.recommended && <span className="rounded bg-panel-green/15 px-2 py-0.5 text-xs text-panel-green">{t("recommended")}</span>}
         </div>
-        <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p>
+        {showProviderTitle ? <p className="mt-1 max-w-2xl text-sm text-slate-400">{providerDescription(provider.key, provider.description, t)}</p> : null}
         <p className="mt-2 text-xs text-slate-500">{statusHint}</p>
-        {preparing ? <RuntimeInstallProgress status={displayStatus} /> : null}
         {failed && status?.message ? <p className="mt-2 text-xs text-panel-gold">{formatRuntimeInstallError(status.message, t)}</p> : null}
         {failed && installError ? <p className="mt-1 text-xs text-panel-gold">{installError}</p> : null}
       </div>
@@ -212,40 +216,11 @@ function ProviderRuntimeRow({
             disabled={preparing || unsupported}
             onClick={() => onInstall(provider)}
           >
-            {preparing ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Download aria-hidden="true" className="size-4" />}
-            {preparing ? t("gameLibraryInstalling") : updateAvailable ? t("gameLibraryUpdate") : t("gameLibraryInstall")}
+            <Download aria-hidden="true" className="size-4" />
+            {updateAvailable ? t("gameLibraryUpdate") : t("gameLibraryInstall")}
           </Button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function RuntimeInstallProgress({ status }: { status?: RuntimeImageStatus }) {
-  const progress = Math.max(0, Math.min(100, status?.progress ?? 0));
-  const hasProgress = progress > 0;
-  return (
-    <div className="mt-3 flex w-full max-w-2xl items-center gap-3">
-      <div
-        aria-label="Runtime install progress"
-        aria-valuemax={100}
-        aria-valuemin={0}
-        aria-valuenow={hasProgress ? progress : undefined}
-        className="relative h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-800/80"
-        role="progressbar"
-      >
-        {hasProgress ? (
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-sky-300 transition-[width] duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        ) : (
-          <div className="runtime-install-indeterminate absolute inset-y-0 left-0 w-20 rounded-full bg-sky-300/90" />
-        )}
-      </div>
-      <span className="w-9 shrink-0 text-right font-mono text-[11px] tabular-nums text-sky-300">
-        {hasProgress ? `${progress}%` : "—"}
-      </span>
     </div>
   );
 }
@@ -272,15 +247,4 @@ function RuntimeStatusBadge({ status }: { status?: RuntimeImageStatus }) {
 
 function hasActiveGameLibraryTask(games?: GameCatalogEntry[]) {
   return Boolean(games?.some((game) => game.providers.some((provider) => provider.runtimeImage?.status === "preparing")));
-}
-
-function runtimeInstallPhaseMessageKey(status?: RuntimeImageStatus): MessageKey {
-  const message = status?.message?.toLowerCase() ?? "";
-  if (message.includes("saving")) {
-    return "gameLibraryInstallSaving";
-  }
-  if (status?.progress && status.progress > 0) {
-    return "gameLibraryInstallDownloading";
-  }
-  return "gameLibraryInstallStarting";
 }

@@ -248,26 +248,36 @@ func TestImagePullErrorExplainsMissingDSTRegistryImage(t *testing.T) {
 	}
 }
 
-func TestConsumeImagePullReportsProgress(t *testing.T) {
-	stream := strings.NewReader(`{"id":"layer-a","status":"Downloading","progressDetail":{"current":25,"total":100}}
-{"id":"layer-b","status":"Downloading","progressDetail":{"current":50,"total":100}}
-{"id":"layer-a","status":"Downloading","progressDetail":{"current":100,"total":100}}
+func TestConsumeImagePullReportsPhaseWithoutInventingOverallProgress(t *testing.T) {
+	stream := strings.NewReader(`{"id":"a","status":"Downloading","progressDetail":{"current":100,"total":100}}
+{"id":"a","status":"Download complete"}
+{"id":"a","status":"Extracting","progressDetail":{"current":5,"total":1000}}
+{"id":"b","status":"Downloading","progressDetail":{"current":50,"total":10000}}
+{"id":"a","status":"Pull complete"}
 `)
-	var progresses []int
-	if err := consumeImagePullWithProgress(stream, func(progress runtime.ImagePrepareProgress) {
-		progresses = append(progresses, progress.Progress)
-	}); err != nil {
-		t.Fatalf("expected successful pull stream, got %v", err)
+	var events []runtime.ImagePrepareProgress
+	if err := consumeImagePullWithProgress(stream, func(p runtime.ImagePrepareProgress) { events = append(events, p) }); err != nil {
+		t.Fatal(err)
 	}
-	if len(progresses) == 0 {
-		t.Fatal("expected progress callbacks")
-	}
-	for i := 1; i < len(progresses); i++ {
-		if progresses[i] < progresses[i-1] {
-			t.Fatalf("expected monotonic progress, got %v", progresses)
+	var download, extract bool
+	for i, p := range events {
+		if p.Phase == "finalizing" && i != len(events)-1 {
+			t.Fatal("individual layers must not finalize installation")
+		}
+		if p.Progress != 0 || p.TotalBytes != 0 {
+			t.Fatalf("stream lacks a reliable overall denominator: %+v", p)
+		}
+		if p.Phase == "downloading" && p.CurrentBytes == 150 {
+			download = true
+		}
+		if p.Phase == "extracting" {
+			extract = true
 		}
 	}
-	if progresses[len(progresses)-1] != 100 {
-		t.Fatalf("expected final progress to be 100, got %v", progresses)
+	if !download || !extract {
+		t.Fatalf("download bytes must survive extraction and late layers: %+v", events)
+	}
+	if events[len(events)-1].Phase != "finalizing" {
+		t.Fatal("pull EOF must not claim installation is complete")
 	}
 }
