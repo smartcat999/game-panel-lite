@@ -1,5 +1,14 @@
 # V1 Progress
 
+## 2026-10-27 — Seven Days image build separation
+
+- Split the game/dependency base Dockerfile from the lightweight runtime Dockerfile. Runtime builds consume a digest-pinned base and never invoke Steam or rebuild system dependencies, including with --no-cache.
+- Added explicit base/runtime build entry points, expected Steam Build ID verification, pinned-image migration, dual-registry publishing, optional regional Debian dependency sources and download inactivity limits. Migration reuses verified layers and removes startup helpers from the base filesystem instead of copying the full game tree again.
+- Built and pushed base build-25661908 and candidate runtime verify-base-split-20261027 to Docker Hub and Alibaba Cloud. Verified all base layers are reused and the runtime adds only 6,724 bytes; a wrong Build ID is rejected before export. The initial migration keeps the already tested game and dependency versions; a fresh download of Steam's latest public game was not performed.
+- Passed 14 build-entry tests, 17 runtime Python unit tests, six isolated Docker integration cases, no-cache push/load builds and native um773 startup/replacement tests. Both native boots loaded the test mod, saved world and logged into Steam; EOS credentials survived panel-style permission preparation and container replacement, and instance data stayed about 17 MiB.
+- Full Go tests/vet, frontend typecheck/build and application-source lint pass. Full frontend lint still fails on pre-existing untracked apps/web/scripts files; those files were preserved.
+- Production aliases and running containers were not updated in this phase. No GitHub Release was created or published; v0.2.19 remains a draft.
+
 ## 2026-10-27
 
 - Diagnosed repeated Seven Days exits after panel restarts: generic data permission preparation changed EOS credential files to 0666, causing DeviceId InvalidState / NoLoginTicket and clean exits that Docker restarted. Restoring only EOS permissions on production recovered world startup and Steam login without replacing credentials or saves.

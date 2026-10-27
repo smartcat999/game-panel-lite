@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+ARG SEVEN_DAYS_BASE_STAGE=assembled-base
+ARG STEAMCMD_IMAGE=steamcmd/steamcmd@sha256:aed94b9fa7322488a36f97d0842cd0df1d73d79d592ea0b6f39b3a8fba7076de
+FROM ${STEAMCMD_IMAGE} AS steamcmd
+FROM steamcmd AS steam-runtime
+RUN /usr/games/steamcmd +quit \
+    && test -f /root/.local/share/Steam/steamcmd/linux64/steamclient.so
+FROM steam-runtime AS game-files
+RUN --mount=type=cache,id=gamepanel-seven-days-steam-library,target=/var/cache/seven-days,sharing=locked \
+    echo "Installing public seven-days-to-die app 294420" \
+    && /usr/games/steamcmd -tcp +force_install_dir /var/cache/seven-days +login anonymous +app_update 294420 validate +quit \
+    && test -f /var/cache/seven-days/7DaysToDieServer.x86_64 \
+    && grep -Eq '"StateFlags"[[:space:]]+"4"' /var/cache/seven-days/steamapps/appmanifest_294420.acf \
+    && mkdir -p /opt/seven-days \
+    && cp -a /var/cache/seven-days/. /opt/seven-days/
+
+FROM debian:bookworm-slim AS runtime-base
+# Bootstrap TLS for HTTPS package mirrors before installing Debian certificates.
+COPY --from=steamcmd /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+ARG DEBIAN_MIRROR=http://deb.debian.org
+RUN sed -i "s|http://deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && dpkg --add-architecture i386 \
+    && apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update \
+    && apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ca-certificates lib32gcc-s1 libstdc++6 libstdc++6:i386 libcurl4 libglu1-mesa python3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data /home/steam/steamcmd /root/.steam/sdk64
+COPY --from=steamcmd /usr/games/steamcmd /usr/games/steamcmd
+COPY --from=steamcmd /usr/lib/games/steam/ /usr/lib/games/steam/
+COPY --from=steam-runtime /root/.local/share/Steam/steamcmd/ /root/.local/share/Steam/steamcmd/
+RUN printf '#!/bin/sh\nexec /usr/games/steamcmd "$@"\n' > /home/steam/steamcmd/steamcmd.sh \
+    && chmod +x /home/steam/steamcmd/steamcmd.sh \
+    && cp /root/.local/share/Steam/steamcmd/linux64/steamclient.so /root/.steam/sdk64/steamclient.so
+
+FROM runtime-base AS assembled-base
+COPY --from=game-files /opt/seven-days/ /opt/seven-days/
+
+# Migration reuses the verified game/dependency layers verbatim. Small historical
+# helper layers stay shared, but no helper remains in the base filesystem.
+# The build script overrides this empty context with a digest-pinned image.
+FROM scratch AS verified-runtime
+FROM verified-runtime AS imported-base
+RUN rm -f /usr/local/bin/gamepanel-seven-days \
+    && rm -rf /opt/gamepanel
+CMD ["/bin/sh"]
+
+FROM ${SEVEN_DAYS_BASE_STAGE}
+ARG SEVEN_DAYS_BUILD_ID
+RUN python3 - <<'VERIFY'
+import os
+import re
+from pathlib import Path
+root = Path("/opt/seven-days")
+manifest = (root / "steamapps/appmanifest_294420.acf").read_text()
+for key, value in [("appid", "294420"), ("StateFlags", "4"), ("buildid", os.environ["SEVEN_DAYS_BUILD_ID"])]:
+    if not value.isdigit() or not re.search(r'"' + key + r'"\s+"' + value + r'"', manifest):
+        raise SystemExit("Unexpected Steam " + key + "; refusing to publish this base image")
+for name in ["7DaysToDieServer.x86_64", "UnityPlayer.so", "serverconfig.xml"]:
+    if not (root / name).is_file():
+        raise SystemExit("Missing game file: " + name)
+VERIFY
+LABEL org.opencontainers.image.title="GamePanel Lite 7 Days to Die base" \
+      org.opencontainers.image.source="https://github.com/smartcat999/game-panel-lite" \
+      io.gamepanel.steam.appid="294420" \
+      io.gamepanel.steam.buildid="${SEVEN_DAYS_BUILD_ID}"

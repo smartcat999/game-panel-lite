@@ -63,15 +63,79 @@ only the game can validate its version-specific contents.
 The container receives SIGINT on stop so the dedicated server can save and exit.
 The first start, especially random world generation, can take several minutes.
 
-Build:
+Build and update policy:
+
+- `Dockerfile.base` produces `seven-days-to-die-base:build-<SteamBuildID>` with
+  operating-system dependencies, SteamCMD/SDK and `/opt/seven-days` programs.
+  It contains no GamePanel startup scripts. Refresh it for a tested game baseline,
+  security/dependency changes, or when new instances would immediately need an update.
+- `Dockerfile` produces the public `seven-days-to-die` runtime by adding only the
+  startup/configuration helpers to a digest-pinned base. Script fixes do not build
+  the installer, run SteamCMD or depend on a warm game-build cache. Even
+  `--no-cache` only rebuilds the small runtime layers.
+- Normal starts and restarts reuse the selected image/local programs. Game updates
+  are explicit panel operations, not automatic Steam downloads on every startup.
+  Those updates retain the writable-copy / 25 GiB disk requirements described above.
+- The game Build ID, runtime-script revision and panel version are independent.
+  Replacing a base image does not update existing per-instance local game copies.
+
+Daily runtime build (choose a candidate tag before promoting the production alias):
 
 ```sh
-scripts/build-game-images.sh seven-days-to-die --platform linux/amd64 --load
+scripts/build-game-images.sh seven-days-to-die --builder my-builder \
+  --version candidate-base-split --push \
+  --mirror-registry registry.cn-hangzhou.aliyuncs.com/gamepanel-lite
 ```
 
-The runtime tag identifies the tested image. Explicitly updated local programs
-and their Steam Build ID are managed separately. Rebuilding an image against Steam's public
-branch must be tested before publishing a new immutable tag.
+The base is pinned in the runtime Dockerfile's `SEVEN_DAYS_BASE_IMAGE` default.
+An explicit `--base-image repository@sha256:...` can select the same base from a
+regional registry. Mutable base tags are rejected by the build script. The
+normal runtime reference remains compatible with the provider catalog.
+
+Explicit base refresh from Steam:
+
+```sh
+scripts/build-game-images.sh seven-days-to-die-base --builder my-builder \
+  --base-build-id "$EXPECTED_BUILD_ID" --push \
+  --mirror-registry registry.cn-hangzhou.aliyuncs.com/gamepanel-lite
+```
+
+`EXPECTED_BUILD_ID` must be the public Steam build you intend to test. It is an
+assertion, not a selector for historical Steam builds: SteamCMD downloads the
+current public branch, and the build fails before publishing if the manifest
+AppID, install state or Build ID does not match. Review the base digest and test a
+runtime built on it before updating the pinned default. Tags describe the build;
+consumers use the immutable digest.
+
+For the initial split or migration of an already verified game build, reuse its
+files and bundled SDK through named image contexts:
+
+```sh
+scripts/build-game-images.sh seven-days-to-die-base --builder my-builder \
+  --base-build-id "$VERIFIED_BUILD_ID" \
+  --game-source-image "$VERIFIED_RUNTIME_DIGEST_REF" --push \
+  --mirror-registry registry.cn-hangzhou.aliyuncs.com/gamepanel-lite
+```
+
+The source must be pinned by digest. Migration inherits the verified game and dependency layers without copying the
+program tree into a new large layer, then removes the startup helpers from the
+base filesystem. Small historical helper layers remain shared in image history;
+the new runtime adds the current helpers separately. Existing game, SDK and OS
+versions are retained. Migration does not accept a dependency mirror override.
+
+Explicit Steam base builds install system packages independently. On regional
+build hosts, optionally add `--debian-mirror https://mirrors.aliyun.com`; the
+default remains Debian's CDN, and package downloads have bounded inactivity
+timeouts and retries. Both targets support `--load` for local
+validation; publish the base first to consume it by registry digest. Neither
+command creates a GitHub Release or changes production containers.
+
+Build-flow checks:
+
+```sh
+python3 scripts/test_build_seven_days_images.py
+bash -n scripts/build-game-images.sh scripts/build-seven-days-images.sh
+```
 
 Runtime checks:
 
@@ -83,6 +147,7 @@ GAMEPANEL_SHARED_RUNTIME_IMAGE=smartcat99999/seven-days-to-die:v3.3.0 \
 ```
 
 References:
+- [Docker named image contexts](https://docs.docker.com/reference/cli/docker/buildx/build/#build-context)
 - [Official A20.5 UserDataFolder and Mods announcement](https://store.steampowered.com/news/posts/?appids=251570&enddate=1659373443&feed=steam_community_announcements)
 - https://community.thefunpimps.com/threads/v3-0-dead-hot-summer-dev-diary.46879/page-52
 - https://developer.valvesoftware.com/wiki/7_Days_to_Die_Dedicated_Server
