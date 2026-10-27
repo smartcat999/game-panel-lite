@@ -43,6 +43,7 @@ func (p Provider) ImageFor(version string) string {
 }
 
 type Config struct {
+	advancedConfig
 	ServerName        string `json:"serverName"`
 	WorldName         string `json:"worldName"`
 	ServerPassword    string `json:"serverPassword"`
@@ -72,6 +73,9 @@ func parseConfig(payload map[string]any) (Config, error) {
 	config.ServerName = strings.TrimSpace(config.ServerName)
 	config.WorldName = strings.TrimSpace(config.WorldName)
 	config.SandboxCode = strings.TrimSpace(config.SandboxCode)
+	if config.Language != nil {
+		*config.Language = strings.TrimSpace(*config.Language)
+	}
 	return config, validateConfig(config)
 }
 func payload(config Config) map[string]any {
@@ -85,7 +89,11 @@ func (Provider) DefaultConfigPayload() map[string]any {
 	// Keep the legacy parse fallback for existing payloads without a seed.
 	// Generate defaults only for creation; normalization never changes an existing seed.
 	config.WorldGenSeed = rand.Text()[:16]
-	return payload(config)
+	out := payload(config)
+	for _, field := range advancedConfigSchema() {
+		out[field.Name] = field.Default
+	}
+	return out
 }
 func (Provider) NormalizeConfigPayload(input map[string]any) (map[string]any, error) {
 	config, err := parseConfig(input)
@@ -147,20 +155,21 @@ func validateConfig(config Config) error {
 	if len(config.SandboxCode) > 4096 || !sandboxPattern.MatchString(config.SandboxCode) {
 		return fmt.Errorf("sandbox code must contain 1-4096 uppercase letters; copy it from the game's Sandbox Options menu")
 	}
-	return nil
+	return validateAdvancedConfig(config.advancedConfig)
 }
 func (Provider) ConfigSummary(input map[string]any) (domain.ProviderConfigSummary, error) {
 	c, err := parseConfig(input)
 	return domain.ProviderConfigSummary{ServerName: c.ServerName, WorldName: c.WorldName, MaxPlayers: c.MaxPlayers, Port: c.Port, Password: c.ServerPassword}, err
 }
 
+type property struct {
+	Name  string `xml:"name,attr"`
+	Value string `xml:"value,attr"`
+}
+
 // Only properties supported by 3.x are emitted. Gameplay rules belong to
 // SandboxCode; obsolete individual XML properties are silently ignored by 3.x.
 func renderConfig(c Config) (string, error) {
-	type property struct {
-		Name  string `xml:"name,attr"`
-		Value string `xml:"value,attr"`
-	}
 	properties := []property{
 		{"ServerName", c.ServerName}, {"ServerPassword", c.ServerPassword}, {"ServerDescription", "Managed by GamePanel Lite"},
 		{"ServerPort", strconv.Itoa(c.Port)}, {"ServerMaxPlayerCount", strconv.Itoa(c.MaxPlayers)},
@@ -170,6 +179,7 @@ func renderConfig(c Config) (string, error) {
 		{"EACEnabled", strconv.FormatBool(c.EACEnabled)}, {"PlayerKillingMode", c.PlayerKillingMode}, {"SandboxCode", c.SandboxCode},
 		{"TelnetEnabled", "false"}, {"WebDashboardEnabled", "false"}, {"ServerAllowCrossplay", "false"},
 	}
+	properties = append(properties, advancedProperties(c.advancedConfig)...)
 	document := struct {
 		XMLName    xml.Name   `xml:"ServerSettings"`
 		Properties []property `xml:"property"`

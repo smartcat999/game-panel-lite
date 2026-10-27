@@ -306,3 +306,49 @@
   Full repository lint remains blocked by 155 existing errors in unrelated
   untracked `apps/web/scripts/` and `docs/wechat/` files, which were left intact.
   No actual game instances or third-party sandbox output were exercised.
+
+## 2026-10-27 — Seven Days region, language, performance and land claims
+
+- Re-extracted the v3.3.0 / Steam Build 25661908 serverconfig.xml from the cached
+  um773 image in a network-disabled read-only container. Its SHA-256 matches the
+  configuration audit. All 19 added XML properties/defaults exist in that file;
+  the selected original properties are checked into a regression fixture.
+- Added Region/Language, nine performance properties and eight land-claim
+  properties to schema, sparse typed payloads, validation and XML rendering.
+  Legacy omitted settings keep inheriting each instance's template until saved;
+  false, zero and fractional protection multipliers round-trip without omission.
+- The template defines ten regions, view distance 6–12, three decay modes and
+  zero-durability-multiplier immunity. Other numeric upper bounds are not presented
+  as official ranges. Non-negative inputs, positive claim size, finite multipliers,
+  32-bit integer safety and language text checks are panel validation rules.
+- Replaced nested settings navigation for Seven Days with one compact set of
+  categories: Server & world / Performance / Land claims. Hide inactive dynamic
+  mesh dependencies without clearing their values. Shared multiplier guidance is
+  displayed once; units are in field labels and group reset only affects that group.
+- This batch does not deploy, rebuild game images or publish v0.2.19. Source
+  existence/default parity and mocked API persistence do not establish actual
+  in-game performance or protection effects.
+- Validation: full Go tests/vet, 132 frontend tests, typecheck, application-source
+  lint and production build passed. Browser fixtures extracted the actual schema;
+  English/Chinese checks covered all ten region choices, independent listing
+  language, mesh dependencies/value retention, fractional/zero claim multipliers,
+  group-only resets, single shared guidance, and 390px overflow/control clipping.
+  Full repository lint still has the previously identified unrelated untracked
+  script issues; those files were not changed. No real game or production instance
+  was started, stopped or reconfigured for these checks.
+- Follow-up terminology check: read the same game's Localization.csv directly.
+  Land Claim is officially localized as 土地征用; Max Zombies/Animals as 丧尸上限/
+  动物上限; View Distance as 可视距离. The panel category is now 运行与性能 / 土地征用.
+  Durability guidance now correctly scopes immunity to non-allied player damage.
+  These copy-only changes passed provider tests, frontend typecheck and touched-file lint.
+
+- Corrected category terminology after checking the actual XUi_Menu/windows.xml:
+  native labels are Basic/基础, Advanced/高级 and Multiplayer/多人. Claim settings
+  and PlayerKillingMode are grouped under Multiplayer. Land Claim/土地征用 is a
+  localized gameplay term, not the original category title. Server-only extensions
+  remain in the panel's Advanced group without claiming native menu parity.
+
+- Pre-deployment correction: native XUi menu defines online/offline claim durability
+  as integer options (0/1/2/4/8/16/32/64/128/256). Replaced the unverified decimal UI
+  with those choices and integer validation; fractional input is rejected. Earlier
+  decimal round-trip tests only established panel serialization, not game support.

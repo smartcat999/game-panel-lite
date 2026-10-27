@@ -200,3 +200,73 @@ docker run --rm --pull never --network none --read-only \
 | `SandboxCode` | `AAAJABJACJADJARFBNC` | 可编辑 | P0 获取入口与版本提示 |
 
 补充：面板另行托管 `UserDataFolder=/data/userdata`，该项在官方模板中被注释。
+
+
+## 后续实现：地区、语言、性能与领地保护（2026-10-27）
+
+在补充参数前，重新从 um773 缓存的同一 v3.3.0 镜像读取了原始 XML，SHA-256 与本文基线一致。以下 19 项全部出现在游戏模板中；对应默认值已保存为测试夹具，并逐项与 schema 和渲染出的 XML 对照。
+
+| 游戏 XML 参数 | 模板默认 | 面板 JSON 字段 |
+| --- | --- | --- |
+| `Region` | `NorthAmericaEast` | `region` |
+| `Language` | `English` | `language` |
+| `MaxSpawnedZombies` | `64` | `maxSpawnedZombies` |
+| `MaxSpawnedAnimals` | `50` | `maxSpawnedAnimals` |
+| `ServerMaxAllowedViewDistance` | `12` | `serverMaxAllowedViewDistance` |
+| `ServerMaxWorldTransferSpeedKiBs` | `512` | `serverMaxWorldTransferSpeedKiBs` |
+| `MaxQueuedMeshLayers` | `1000` | `maxQueuedMeshLayers` |
+| `DynamicMeshEnabled` | `true` | `dynamicMeshEnabled` |
+| `DynamicMeshLandClaimOnly` | `true` | `dynamicMeshLandClaimOnly` |
+| `DynamicMeshLandClaimBuffer` | `3` | `dynamicMeshLandClaimBuffer` |
+| `DynamicMeshMaxItemCache` | `3` | `dynamicMeshMaxItemCache` |
+| `LandClaimCount` | `5` | `landClaimCount` |
+| `LandClaimSize` | `41` | `landClaimSize` |
+| `LandClaimDeadZone` | `30` | `landClaimDeadZone` |
+| `LandClaimExpiryTime` | `7` | `landClaimExpiryTime` |
+| `LandClaimDecayMode` | `0` | `landClaimDecayMode` |
+| `LandClaimOnlineDurabilityModifier` | `4` | `landClaimOnlineDurabilityModifier` |
+| `LandClaimOfflineDurabilityModifier` | `4` | `landClaimOfflineDurabilityModifier` |
+| `LandClaimOfflineDelay` | `0` | `landClaimOfflineDelay` |
+
+实现边界：
+
+- 官方模板明确提供 Region 的 10 个取值、视距 6–12、领地衰减模式 0/1/2，以及在线/离线保护倍率为 0 时不受伤害的语义。Language 是服务器列表检索信息，按模板提示填写英文语言名；它不是面板或客户端语言切换。
+- 未提供其他数量的所谓“官方最大值”，也未把 0 解释成无限或关闭。非负数量、正数领地尺寸、有限倍率、32 位整数安全边界，以及语言长度/控制字符检查属于面板输入校验，不宣称是游戏原始范围。
+- MaxSpawnedZombies 会按血月、沉睡僵尸等场景缩放，因此 UI 称为总量基数；地图传输参数只作用于首次地图下载，不是游戏实时网络带宽上限。
+- 新字段为可选托管配置。旧实例缺失它们时，规范化和运行配置不会凭空补入 XML 覆盖，原实例模板继续生效；新建默认配置提供经过核对的官方默认。用户打开并保存表单后，提交的字段按面板值托管。
+- 页面只保留一层分类；动态网格关闭隐藏依赖项，关闭领地限定时隐藏领地网格半径，已有数值不会丢弃。倍率 0 的共同说明仅显示一次。
+- 本次不改跨平台、管理端口、区块重置或自动备份行为，不修改生产，不正式发布 v0.2.19。真实游戏内效果仍需独立联机验证；参数存在性来自当前游戏模板，不能用 UI 测试替代游戏效果测试。
+
+
+### 游戏中文术语复核
+
+同日只读核对同一 v3.3.0 镜像的 `/opt/seven-days/Data/Config/Localization.csv`，比较 `english` 与 `schinese` 列：
+
+| 本地化 Key | English | 游戏简体中文 |
+| --- | --- | --- |
+| `landClaimTip_title` | Land Claim | 土地征用 |
+| `challengeCraftLandclaim` | Craft Land Claim Block | 制作土地征用块 |
+| `goMaxSpawnedZombies` | Max Zombies | 丧尸上限 |
+| `goMaxSpawnedAnimals` | Max Animals | 动物上限 |
+| `xuiOptionsVideoViewDistance` | View Distance | 可视距离 |
+| `xuiOptionsDynamicMesh` | Dynamic Mesh | 动态网格 |
+| `goLandClaimSize` | Claim Size | 所有权范围 |
+| `goLandClaimOnlineDurabilityModifier` | Claim Health Online | 在线所有权生命值 |
+
+“运行与性能”是面板分组，参考模板 Performance related，并涵盖地图传输设置；不宣称是游戏原生菜单名。“土地征用”沿用官方术语。部分官方直译生硬，面板按同一语义使用“保护范围”“在线/离线耐久倍率”“离线切换延迟”，不将这些可读性调整称为逐字官方译名。
+
+`goLandClaimSizeDesc`、`landClaimTip` 和 `challengeCraftLandclaimDesc` 明确说明耐久修正针对敌方/非盟友玩家的物块破坏，因此共同说明收窄为：耐久倍率针对非盟友玩家的破坏，0 免疫此类伤害。不能描述成抵挡所有来源的伤害。游戏本地化中也存在旧说明（例如某段仍写三个征用块，与当前 XML 默认五个不一致），因此数值默认仍以已核对的当前 XML 为准，不从旧文案推断。
+
+
+### 菜单分类纠正（同日继续复核）
+
+进一步检查游戏 `Data/Config/XUi_Menu/windows.xml`，第 553–568 行的 `xuiGameSettingsMultiplayer` 实际包含 PlayerKillingMode、领地尺寸/间距/期限/衰减/在线离线耐久/离线切换延迟等参数。对应 Localization.csv：`xuiGameSettingsBasic` = 基础，`xuiGameSettingsAdvanced` = 高级，`xuiGameSettingsMultiplayer` = 多人；另有 Server = 服务器、General = 普通。
+
+因此面板分类改用 **基础 / 高级 / 多人**，玩家伤害与领地规则放在“多人”。“土地征用”虽然是官方物品/提示术语，但不是原生设置菜单的分类名；此前以该词条为依据命名独立分类的说明应以本节纠正为准。服务器专有性能/传输参数归入面板的“高级”，不声称它们全都出现在游戏原生高级菜单中。
+
+同次还发现客户端菜单对保护倍率提供整数预设，而 XML 注释没有给出小数支持依据。此前小数测试仅验证面板保存和 XML 输出，不证明游戏接受小数；不能把这项面板能力描述为已确认的原生游戏能力。
+
+
+### 部署前倍率类型修正
+
+依据同一构建 XUi_Menu/windows.xml 的 LandClaimOnlineDurabilityModifier / LandClaimOfflineDurabilityModifier 定义（value_type=int，values=0,1,2,4,8,16,32,64,128,256），界面采用这些整数选项，后端拒绝小数。0 的显示为无限，伤害范围沿用上文针对非盟友玩家的说明。此前关于小数的测试记录仅是面板序列化验证，已不作为部署功能。
