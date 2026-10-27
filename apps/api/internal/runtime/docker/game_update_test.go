@@ -2,8 +2,10 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -251,5 +253,69 @@ func TestProgressPercentSupportsSteamFormats(t *testing.T) {
 		if got := progressPercent(test.line); got != test.want {
 			t.Fatalf("progressPercent(%q)=%d, want %d", test.line, got, test.want)
 		}
+	}
+}
+
+func TestCompleteGameUpdatePublishesOnlyVerifiedBuild(t *testing.T) {
+	for _, tc := range []struct {
+		name, installed, target string
+		wantError               bool
+	}{
+		{name: "validated", installed: "100", target: "100"},
+		{name: "newer installed", installed: "200", target: "100"},
+		{name: "stale install", installed: "100", target: "200", wantError: true},
+		{name: "missing manifest", target: "100", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			world := filepath.Join(root, "world.save")
+			if err := os.WriteFile(world, []byte("day 49"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(root, ".gamepanel-update-complete")
+			original := []byte(`{"appId":"294420","buildId":"90"}`)
+			if err := os.WriteFile(marker, original, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if tc.installed != "" {
+				if err := os.MkdirAll(filepath.Join(root, "steamapps"), 0755); err != nil {
+					t.Fatal(err)
+				}
+				content := `"AppState" { "buildid" "` + tc.installed + `" }`
+				if err := os.WriteFile(filepath.Join(root, "steamapps", "appmanifest_294420.acf"), []byte(content), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			output := `"branches" { "public" { "buildid" "` + tc.target + `" } }`
+			_, err := completeGameUpdate(root, runtime.GameUpdateRequest{AppID: "294420"}, output)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("unexpected update result: %v", err)
+			}
+			data, err := os.ReadFile(marker)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantError {
+				if string(data) != string(original) {
+					t.Fatal("failed update changed completion record")
+				}
+			} else {
+				var record map[string]string
+				if err := json.Unmarshal(data, &record); err != nil {
+					t.Fatal(err)
+				}
+				if record["appId"] != "294420" || record["buildId"] != tc.installed {
+					t.Fatalf("bad completion record: %s", data)
+				}
+			}
+			files, _ := filepath.Glob(filepath.Join(root, ".gamepanel-update-*.tmp"))
+			if len(files) != 0 {
+				t.Fatal("temporary update records remain")
+			}
+			data, _ = os.ReadFile(world)
+			if string(data) != "day 49" {
+				t.Fatal("saved world changed")
+			}
+		})
 	}
 }

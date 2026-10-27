@@ -868,6 +868,7 @@ export default function ServerDetailPage() {
           {!isViewer && providerCatalog?.gameVersion?.supported ? (
             <div className={activeTab === "version" ? "" : "hidden"}>
               <GameUpdateCard
+                providerKey={serverResource.providerKey}
                 playersOnline={playersOnline}
                 runtimeVersion={gameServerVersion(serverResource)}
                 serverId={serverResource.id}

@@ -3,6 +3,7 @@ package docker
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -140,6 +141,10 @@ func (a *Adapter) ApplyGameUpdate(ctx context.Context, request runtime.GameUpdat
 	if err != nil {
 		return runtime.GameUpdateResult{}, err
 	}
+	return completeGameUpdate(dataDir, request, output)
+}
+
+func completeGameUpdate(dataDir string, request runtime.GameUpdateRequest, output string) (runtime.GameUpdateResult, error) {
 	installed, err := readInstalledBuildID(dataDir, request.AppID)
 	if err != nil {
 		return runtime.GameUpdateResult{}, err
@@ -153,7 +158,35 @@ func (a *Adapter) ApplyGameUpdate(ctx context.Context, request runtime.GameUpdat
 	} else if err := validateInstalledBuild(installed, latest); err != nil {
 		return runtime.GameUpdateResult{}, err
 	}
+	if err := writeGameUpdateCompletion(dataDir, request.AppID, installed); err != nil {
+		return runtime.GameUpdateResult{}, fmt.Errorf("record successful game update: %w", err)
+	}
 	return runtime.GameUpdateResult{InstalledBuildID: installed, LatestBuildID: latest}, nil
+}
+
+// A runtime can distinguish a validated update from a partial installation.
+// This record is written only after Steam completed and build verification passed.
+func writeGameUpdateCompletion(dataDir, appID, buildID string) error {
+	data, err := json.Marshal(struct {
+		AppID   string `json:"appId"`
+		BuildID string `json:"buildId"`
+	}{appID, buildID})
+	if err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(dataDir, ".gamepanel-update-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err = file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), filepath.Join(dataDir, ".gamepanel-update-complete"))
 }
 
 func validateInstalledBuild(installed, target string) error {

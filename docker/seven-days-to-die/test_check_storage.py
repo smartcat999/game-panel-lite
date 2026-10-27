@@ -18,9 +18,9 @@ class StorageCheckTest(unittest.TestCase):
         (self.seed / "game.bin").write_bytes(b"game files")
         (self.data / "world.save").write_bytes(b"existing day 49")
 
-    def test_seed_needs_program_space_plus_reserve(self):
-        self.assertEqual(required_bytes(self.seed, self.data, 100), 110)
-        with patch("check_storage.os.statvfs", return_value=SimpleNamespace(f_bavail=109, f_frsize=1)):
+    def test_shared_programs_only_need_running_reserve(self):
+        self.assertEqual(required_bytes(self.seed, self.data, 100), 100)
+        with patch("check_storage.os.statvfs", return_value=SimpleNamespace(f_bavail=99, f_frsize=1)):
             with self.assertRaisesRegex(RuntimeError, "Insufficient disk space"):
                 check_storage(self.seed, self.data, 100)
         self.assertEqual((self.data / "world.save").read_bytes(), b"existing day 49")

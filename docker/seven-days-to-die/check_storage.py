@@ -1,4 +1,4 @@
-"""Check the mounted instance filesystem before seeding game files or starting."""
+"""Check operating space on the mounted instance filesystem before starting."""
 import os
 import sys
 from pathlib import Path
@@ -7,11 +7,9 @@ RESERVE_BYTES = 2 * 1024 ** 3
 
 
 def required_bytes(seed, data, reserve=RESERVE_BYTES):
-    installed = (data / ".gamepanel-installed").is_file()
-    prepared = (data / "7DaysToDieServer.x86_64").is_file() and (data / "steamapps/appmanifest_294420.acf").is_file()
-    if installed or prepared:
-        return reserve
-    return reserve + sum(p.stat().st_size for p in seed.rglob("*") if p.is_file())
+    # Image files are shared and never seeded into the instance on startup.
+    # Explicit Steam updates have their own 25 GiB preflight in the panel.
+    return reserve
 
 
 def check_storage(seed, data, reserve=RESERVE_BYTES):
