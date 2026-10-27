@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +23,10 @@ func (r *latestArchiveRuntime) ImageStatus(_ context.Context, image string) doma
 func (r *latestArchiveRuntime) LoadImageArchive(_ context.Context, path string) error {
 	r.loaded = path
 	return nil
+}
+
+func (r *latestArchiveRuntime) PrepareImage(context.Context, string) error {
+	return fmt.Errorf("unexpected registry pull")
 }
 
 func TestImageLoaderFindsLatestSharedRuntimeForExistingGameVersion(t *testing.T) {

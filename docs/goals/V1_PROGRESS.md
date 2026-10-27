@@ -223,3 +223,35 @@
 - Local Playwright API-fixture checks passed for all five phases, one status label,
   no guessed percentage, desktop Runtime Images and Chinese/English 390px layouts.
   No production image download, deployment or release was performed for this change.
+
+
+### 2026-10-27: Install Docker runtimes without mandatory offline archives (local implementation)
+
+- Normal installation now reuses or pulls a Docker image, verifies it exists, and
+  atomically writes a Docker-backed installation record. It never exports a tar
+  archive or waits for a duplicate copy. Only the active job's exact abandoned
+  `.tar.tmp` file is removed; existing offline archives and instance data remain.
+- Library availability requires both valid registration and an actual Docker
+  image. Missing or empty optional archives do not hide an installed image; an
+  archive alone does not claim the Docker image is installed.
+- Legacy offline archives remain usable for installation and startup recovery.
+  If no usable archive exists, registered images can be pulled again and verified.
+  Removed registrations do not auto-reinstall. Shared-image game versions can use
+  the latest matching registration. Old runtime caches remain until the replacement
+  image is available, preserving recovery options if registry access fails.
+- Disk-full errors map to one Chinese/English message without host paths. Game
+  Library and Runtime Images show a single error, without repeated install hints.
+- Added a seven-days-to-die entrypoint storage check on the mounted instance
+  filesystem. Initial preparation estimates program copy bytes plus 2 GiB reserve;
+  already prepared instances only require the operating reserve. It exits before
+  copying when space is insufficient and leaves existing files intact. This check
+  requires rebuilding the game runtime image; it is not active in existing images.
+- Validation: full Go tests/vet, 127 frontend tests, typecheck, application-source
+  lint, production build and four Python storage-check tests passed. API fixtures
+  verified one localized error on both library pages and ready-state actions without
+  an archive. An isolated real Docker test on um773 with 1 MiB tmpfs stopped before
+  any game-file copying; current seed estimated 19,848,638,198 bytes including reserve.
+- Scope: first installation/recovery phase plus startup space protection. Reusing
+  read-only game binaries, daemon-filesystem pull capacity estimation and a manual
+  offline-export UI remain separate follow-up work. No deployment or release was
+  performed, and v0.2.19 remains draft.

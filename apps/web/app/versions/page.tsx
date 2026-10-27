@@ -117,6 +117,7 @@ function ImageVersionRow({
   const displayStatus: RuntimeImageStatus | undefined = preparing
     ? { ...status, image: status?.image ?? provider.key, status: "preparing" }
     : status;
+  const errorText = error || (status?.status === "failed" && status.message ? formatRuntimeInstallError(status.message, t) : "");
   const actionable = !preparing && status?.status !== "ready" && status?.status !== "unsupported";
   const actionLabel = status?.status === "update_available"
     ? t("versionManagementUpdateAction")
@@ -157,7 +158,7 @@ function ImageVersionRow({
           </div>
         ) : null}
       </div>
-      {error ? <p className="mt-3 text-xs text-red-300" role="alert">{error}</p> : null}
+      {errorText ? <p className="mt-3 text-xs text-red-300" role="alert">{errorText}</p> : null}
     </div>
   );
 }

@@ -209,7 +209,7 @@ paths:
   /api/runtime/images/prepare:
     post:
       summary: Queue runtime image preparation
-      description: Pulls and archives the latest provider runtime image asynchronously. Historical image requests are rejected; game-file versions that share one image use one canonical latest installation. Unused historical installations are cleaned up after success; active dependencies are retained. Heavy runtime-image and game-update tasks are mutually exclusive.
+      description: Verifies an existing local image or pulls the latest provider runtime image asynchronously, then writes an installation record atomically. No offline archive is exported. Valid legacy offline archives can be reused for recovery; registered missing images are pulled when no usable archive exists. Historical image requests are rejected. Unused historical installations are cleaned up only after success; active dependencies are retained. Heavy runtime-image and game-update tasks are mutually exclusive.
       requestBody:
         required: true
         content:

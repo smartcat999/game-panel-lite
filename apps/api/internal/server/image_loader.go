@@ -17,6 +17,7 @@ import (
 type ImageRuntime interface {
 	ImageStatus(ctx context.Context, image string) domain.RuntimeImageStatus
 	LoadImageArchive(ctx context.Context, path string) error
+	PrepareImage(ctx context.Context, image string) error
 }
 
 type RuntimeImageLoader struct {
@@ -25,6 +26,7 @@ type RuntimeImageLoader struct {
 }
 
 type runtimeInstallMarker struct {
+	Storage     string             `json:"storage,omitempty"`
 	ProviderKey domain.ProviderKey `json:"providerKey"`
 	Version     string             `json:"version"`
 	Image       string             `json:"image"`
@@ -43,21 +45,35 @@ func (l *RuntimeImageLoader) EnsureImage(ctx context.Context, server domain.Game
 	if status := l.runtime.ImageStatus(ctx, image); status.Status == runtime.ImageStatusReady {
 		return nil
 	}
-	archivePath, err := l.runtimeInstallArchivePath(server.ProviderKey, server.Spec.Version, image)
-	if err != nil {
-		archivePath, err = l.runtimeInstallArchiveForImage(server.ProviderKey, image, err)
-		if err != nil {
-			return err
+	archivePath, archiveErr := l.runtimeInstallArchivePath(server.ProviderKey, server.Spec.Version, image)
+	if archiveErr != nil {
+		archivePath, archiveErr = l.runtimeInstallArchiveForImage(server.ProviderKey, image, archiveErr)
+	}
+	if archiveErr == nil {
+		archiveErr = l.runtime.LoadImageArchive(ctx, archivePath)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if l.runtime.ImageStatus(ctx, image).Status == runtime.ImageStatusReady {
+			return nil
 		}
 	}
-	if err := l.runtime.LoadImageArchive(ctx, archivePath); err != nil {
-		return fmt.Errorf("load server runtime image from local archive: %w", err)
+	if !l.runtimeImageRegistered(server.ProviderKey, server.Spec.Version, image) {
+		if archiveErr != nil {
+			return archiveErr
+		}
+		return fmt.Errorf("server runtime is not installed; install it from Game Library first")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Only registered installations may recover automatically. Explicit uninstall
+	// removes the registration, so a start cannot silently reinstall it.
+	if err := l.runtime.PrepareImage(ctx, image); err != nil {
+		return fmt.Errorf("recover server runtime image: %w", err)
 	}
 	if status := l.runtime.ImageStatus(ctx, image); status.Status != runtime.ImageStatusReady {
-		if status.Message != "" {
-			return fmt.Errorf("load server runtime image from local archive: %s", status.Message)
-		}
-		return fmt.Errorf("load server runtime image from local archive failed")
+		return fmt.Errorf("runtime image verification failed after recovery")
 	}
 	return nil
 }
@@ -89,51 +105,72 @@ func (l *RuntimeImageLoader) runtimeInstallArchiveForImage(providerKey domain.Pr
 	return "", originalErr
 }
 
-func (l *RuntimeImageLoader) runtimeInstallArchivePath(providerKey domain.ProviderKey, version string, image string) (string, error) {
+func (l *RuntimeImageLoader) readRuntimeInstallMarker(providerKey domain.ProviderKey, version, image string) (runtimeInstallMarker, error) {
 	path := filepath.Join(l.dataDir, "runtime-installs", safeRuntimeInstallPathPart(string(providerKey)), safeRuntimeInstallPathPart(version)+".json")
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("server runtime is not installed; install it from Game Library first")
+		return runtimeInstallMarker{}, fmt.Errorf("server runtime is not installed; install it from Game Library first")
 	}
 	if err != nil {
-		return "", err
+		return runtimeInstallMarker{}, err
 	}
 	var marker runtimeInstallMarker
-	if err := json.Unmarshal(data, &marker); err != nil {
+	if err = json.Unmarshal(data, &marker); err != nil {
+		return marker, err
+	}
+	if (marker.ProviderKey != "" && marker.ProviderKey != providerKey) || (marker.Version != "" && marker.Version != version) || (marker.Image != "" && marker.Image != image) {
+		return marker, fmt.Errorf("runtime install marker identity mismatch")
+	}
+	if marker.Storage != "" && marker.Storage != "docker" {
+		return marker, fmt.Errorf("runtime install marker storage is invalid")
+	}
+	expected := filepath.Join("runtime-images", safeRuntimeInstallPathPart(string(providerKey)), safeRuntimeInstallPathPart(version)+".tar")
+	if marker.ArchivePath != "" && filepath.Clean(marker.ArchivePath) != expected {
+		return marker, fmt.Errorf("runtime install marker archive path is invalid")
+	}
+	return marker, nil
+}
+
+func (l *RuntimeImageLoader) runtimeImageRegistered(providerKey domain.ProviderKey, version, image string) bool {
+	if m, err := l.readRuntimeInstallMarker(providerKey, version, image); err == nil && m.Image == image {
+		return true
+	}
+	entries, err := os.ReadDir(filepath.Join(l.dataDir, "runtime-installs", safeRuntimeInstallPathPart(string(providerKey))))
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		version := strings.TrimSuffix(entry.Name(), ".json")
+		if version != safeRuntimeInstallPathPart(version) {
+			continue
+		}
+		m, err := l.readRuntimeInstallMarker(providerKey, version, image)
+		if err == nil && m.Image == image {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *RuntimeImageLoader) runtimeInstallArchivePath(providerKey domain.ProviderKey, version string, image string) (string, error) {
+	if _, err := l.readRuntimeInstallMarker(providerKey, version, image); err != nil {
 		return "", err
 	}
-	if marker.ProviderKey != "" && marker.ProviderKey != providerKey {
-		return "", fmt.Errorf("runtime install marker provider mismatch")
-	}
-	if marker.Version != "" && marker.Version != version {
-		return "", fmt.Errorf("runtime install marker version mismatch")
-	}
-	if marker.Image != "" && marker.Image != image {
-		return "", fmt.Errorf("runtime install marker image mismatch")
-	}
-	archivePath := strings.TrimSpace(marker.ArchivePath)
-	if archivePath == "" {
-		archivePath = filepath.Join("runtime-images", safeRuntimeInstallPathPart(string(providerKey)), safeRuntimeInstallPathPart(version)+".tar")
-	}
-	clean := filepath.Clean(archivePath)
-	if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("runtime install marker archive path is invalid")
-	}
-	fullPath := filepath.Join(l.dataDir, clean)
-	stat, err := os.Stat(fullPath)
+	path := filepath.Join(l.dataDir, "runtime-images", safeRuntimeInstallPathPart(string(providerKey)), safeRuntimeInstallPathPart(version)+".tar")
+	stat, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("runtime image archive is missing")
 	}
 	if err != nil {
 		return "", err
 	}
-	if stat.IsDir() {
-		return "", fmt.Errorf("runtime image archive path is a directory")
-	}
-	if stat.Size() <= 0 {
+	if stat.IsDir() || stat.Size() <= 0 {
 		return "", fmt.Errorf("runtime image archive is empty")
 	}
-	return fullPath, nil
+	return path, nil
 }
 
 func safeRuntimeInstallPathPart(value string) string {
