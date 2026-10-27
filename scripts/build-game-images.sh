@@ -6,7 +6,7 @@ usage() {
 Build GamePanel Lite game runtime images.
 
 Usage:
-  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld|seven-days-to-die] [options]
+  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld|seven-days-to-die|seven-days-to-die-base] [options]
 
 Targets:
   all           Build vanilla Terraria and tModLoader images. Default.
@@ -14,7 +14,10 @@ Targets:
   tmodloader    Build only tModLoader images.
   dst           Build only Don't Starve Together images. linux/amd64 only.
   palworld      Build only the Palworld dedicated server image.
-  seven-days-to-die Build the vanilla 7 Days to Die image. linux/amd64 only.
+  seven-days-to-die Build only 7 Days runtime scripts on its pinned base.
+  seven-days-to-die-base Explicitly build 7 Days programs and dependencies.
+
+7 Days targets also accept the options in scripts/build-seven-days-images.sh --help.
 
 Options:
   --registry NAME       Image namespace. Default: smartcat99999
@@ -45,6 +48,12 @@ no_cache=""
 if [[ $# -gt 0 && "$1" != --* ]]; then
   target="$1"
   shift
+fi
+
+if [[ "$target" == "seven-days-to-die" || "$target" == "seven-days-to-die-base" ]]; then
+  seven_days_target="runtime"
+  if [[ "$target" == "seven-days-to-die-base" ]]; then seven_days_target="base"; fi
+  exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/build-seven-days-images.sh" "$seven_days_target" "$@"
 fi
 
 while [[ $# -gt 0 ]]; do
@@ -170,16 +179,6 @@ build_palworld() {
 }
 
 cd "$root_dir"
-
-if [[ "$target" == "seven-days-to-die" ]]; then
-  if [[ -n "$platform" && "$platform" != "linux/amd64" ]]; then
-    echo "7 Days to Die currently supports linux/amd64 only." >&2
-    exit 1
-  fi
-  if [[ -z "$platform" ]]; then buildx_args+=(--platform linux/amd64); fi
-  docker "${buildx_args[@]}" -f docker/seven-days-to-die/Dockerfile \
-    -t "${registry}/seven-days-to-die:v3.3.0" "${root_dir}"
-fi
 
 if [[ "$target" == "all" || "$target" == "vanilla" ]]; then
   build_vanilla "1.4.5.6" "1456"
