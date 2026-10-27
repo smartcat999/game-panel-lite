@@ -19,9 +19,11 @@ export function isSevenDaysFieldVisible(field: ProviderConfigField, payload: Pro
   return true;
 }
 
-export type SevenDaysConfigSection = "basic" | "performance" | "landClaims";
+export type SevenDaysConfigSection = "basic" | "server" | "performance" | "landClaims";
 
 export function sevenDaysConfigSection(field: ProviderConfigField): SevenDaysConfigSection {
+  if (["serverName", "serverPassword", "serverVisibility", "maxPlayers", "eacEnabled", "region", "language"].includes(field.name)) return "server";
+  if (field.group === "sevenDays.advanced") return "performance";
   if (field.group === "sevenDays.performance") return "performance";
   if (field.group === "sevenDays.landClaims" || field.name === "playerKillingMode") return "landClaims";
   return "basic";

@@ -1,0 +1,8609 @@
+{
+  "source": {
+    "steamBuild": "25661908",
+    "codeVersion": "A",
+    "assemblySha256": "e16ff9d539b8fbf64904c0bc090d502286a62464742a9396f0455936ad0beb87"
+  },
+  "categories": [
+    {
+      "key": "General",
+      "zh": "玩家",
+      "en": "Player"
+    },
+    {
+      "key": "Entities",
+      "zh": "实体",
+      "en": "Entities"
+    },
+    {
+      "key": "World",
+      "zh": "世界",
+      "en": "World"
+    },
+    {
+      "key": "Resources",
+      "zh": "资源",
+      "en": "Resources"
+    },
+    {
+      "key": "Crafting",
+      "zh": "制作",
+      "en": "Crafting"
+    },
+    {
+      "key": "Traders",
+      "zh": "商人",
+      "en": "Traders"
+    },
+    {
+      "key": "Tasks",
+      "zh": "任务",
+      "en": "Tasks"
+    },
+    {
+      "key": "Misc",
+      "zh": "其他",
+      "en": "Misc"
+    }
+  ],
+  "options": [
+    {
+      "id": 0,
+      "key": "RangedDamage",
+      "category": "General",
+      "label": {
+        "zh": "远程伤害",
+        "en": "Ranged Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "MeleeDamage",
+      "category": "General",
+      "label": {
+        "zh": "近战伤害",
+        "en": "Melee Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "BlockDamage",
+      "category": "General",
+      "label": {
+        "zh": "物块伤害",
+        "en": "Block Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "TerrainDamage",
+      "category": "General",
+      "label": {
+        "zh": "地形伤害",
+        "en": "Terrain Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "HeadshotMultiplier",
+      "category": "General",
+      "label": {
+        "zh": "爆头倍数",
+        "en": "Headshot Multiplier"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "key": "IncomingDamage",
+      "category": "General",
+      "label": {
+        "zh": "玩家所受伤害",
+        "en": "Player Damage In"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "WalkSpeed",
+      "category": "General",
+      "label": {
+        "zh": "行走速度",
+        "en": "Walk Speed"
+      },
+      "defaultIndex": 6,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.1,
+          "zh": "110%",
+          "en": "110%"
+        },
+        {
+          "value": 1.2,
+          "zh": "120%",
+          "en": "120%"
+        },
+        {
+          "value": 1.3,
+          "zh": "130%",
+          "en": "130%"
+        },
+        {
+          "value": 1.4,
+          "zh": "140%",
+          "en": "140%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "RunSpeed",
+      "category": "General",
+      "label": {
+        "zh": "奔跑速度",
+        "en": "Run Speed"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.1,
+          "zh": "110%",
+          "en": "110%"
+        },
+        {
+          "value": 1.2,
+          "zh": "120%",
+          "en": "120%"
+        },
+        {
+          "value": 1.3,
+          "zh": "130%",
+          "en": "130%"
+        },
+        {
+          "value": 1.4,
+          "zh": "140%",
+          "en": "140%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "CrouchSpeed",
+      "category": "General",
+      "label": {
+        "zh": "蹲伏速度",
+        "en": "Crouch Speed"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.1,
+          "zh": "110%",
+          "en": "110%"
+        },
+        {
+          "value": 1.2,
+          "zh": "120%",
+          "en": "120%"
+        },
+        {
+          "value": 1.3,
+          "zh": "130%",
+          "en": "130%"
+        },
+        {
+          "value": 1.4,
+          "zh": "140%",
+          "en": "140%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "key": "CrouchRunSpeed",
+      "category": "General",
+      "label": {
+        "zh": "蹲伏奔跑速度",
+        "en": "Crouch Run Speed"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.1,
+          "zh": "110%",
+          "en": "110%"
+        },
+        {
+          "value": 1.2,
+          "zh": "120%",
+          "en": "120%"
+        },
+        {
+          "value": 1.3,
+          "zh": "130%",
+          "en": "130%"
+        },
+        {
+          "value": 1.4,
+          "zh": "140%",
+          "en": "140%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "JumpStrength",
+      "category": "General",
+      "label": {
+        "zh": "跳跃力量",
+        "en": "Jump Strength"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "StaminaRegen",
+      "category": "General",
+      "label": {
+        "zh": "体力值回复",
+        "en": "Stamina Regen"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "StaminaUsage",
+      "category": "General",
+      "label": {
+        "zh": "体力值消耗",
+        "en": "Stamina Usage"
+      },
+      "defaultIndex": 4,
+      "dependency": {
+        "ids": [
+          10
+        ],
+        "value": 0.0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "key": "XPMultiplier",
+      "category": "General",
+      "label": {
+        "zh": "经验值倍数",
+        "en": "XP Multiplier"
+      },
+      "defaultIndex": 4,
+      "dependency": {
+        "ids": [
+          19
+        ],
+        "value": 0.0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "key": "ShowXP",
+      "category": "General",
+      "label": {
+        "zh": "显示经验值",
+        "en": "Show XP"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "所有",
+          "en": "All"
+        },
+        {
+          "value": 1,
+          "zh": "仅显示条",
+          "en": "Bar Only"
+        },
+        {
+          "value": 2,
+          "zh": "仅通知",
+          "en": "Notifications Only"
+        },
+        {
+          "value": 3,
+          "zh": "无",
+          "en": "None"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "PlayerLevelBonusApplied",
+      "category": "General",
+      "label": {
+        "zh": "等级属性加成",
+        "en": "Level Stat Bonus"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 116,
+      "key": "SkillGainRate",
+      "category": "General",
+      "label": {
+        "zh": "技能获得速率",
+        "en": "Skill Gain Rate"
+      },
+      "defaultIndex": 0,
+      "dependency": {
+        "ids": [
+          117
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        }
+      ]
+    },
+    {
+      "id": 117,
+      "key": "SkillPointsPerLevel",
+      "category": "General",
+      "label": {
+        "zh": "技能获得数量",
+        "en": "Skill Gain Amount"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "key": "NewbieCoat",
+      "category": "General",
+      "label": {
+        "zh": "新玩家增益",
+        "en": "New Player Buff"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "key": "DeathPenalty",
+      "category": "General",
+      "label": {
+        "zh": "死亡惩罚",
+        "en": "Death Penalty"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "仅经验值",
+          "en": "XP Only"
+        },
+        {
+          "value": 2,
+          "zh": "受伤",
+          "en": "Injured"
+        },
+        {
+          "value": 3,
+          "zh": "永久死亡",
+          "en": "Permanent Death"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "key": "LoseItemsOnDeathType",
+      "category": "General",
+      "label": {
+        "zh": "死亡时丢失",
+        "en": "Lose On Death"
+      },
+      "defaultIndex": 0,
+      "dependency": {
+        "ids": [
+          23
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "所有",
+          "en": "All"
+        },
+        {
+          "value": 2,
+          "zh": "仅工具带",
+          "en": "Toolbelt Only"
+        },
+        {
+          "value": 3,
+          "zh": "仅背包",
+          "en": "Backpack Only"
+        },
+        {
+          "value": 4,
+          "zh": "设备",
+          "en": "Equipment"
+        },
+        {
+          "value": 5,
+          "zh": "仅携带的",
+          "en": "Carried Only"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "key": "LoseItemsOnDeathCount",
+      "category": "General",
+      "label": {
+        "zh": "死亡丢失数量",
+        "en": "Death Loss Count"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 1,
+          "zh": "1-3",
+          "en": "1-3"
+        },
+        {
+          "value": 2,
+          "zh": "1-5",
+          "en": "1-5"
+        },
+        {
+          "value": 3,
+          "zh": "1-10",
+          "en": "1-10"
+        },
+        {
+          "value": 4,
+          "zh": "1-20",
+          "en": "1-20"
+        },
+        {
+          "value": 5,
+          "zh": "3-5",
+          "en": "3-5"
+        },
+        {
+          "value": 6,
+          "zh": "5-7",
+          "en": "5-7"
+        },
+        {
+          "value": 7,
+          "zh": "5-10",
+          "en": "5-10"
+        },
+        {
+          "value": 8,
+          "zh": "7-10",
+          "en": "7-10"
+        },
+        {
+          "value": 9,
+          "zh": "10-15",
+          "en": "10-15"
+        },
+        {
+          "value": 10,
+          "zh": "15-20",
+          "en": "15-20"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "key": "DegradeItemsOnDeath",
+      "category": "General",
+      "label": {
+        "zh": "死亡损耗",
+        "en": "Death Degradation"
+      },
+      "defaultIndex": 0,
+      "dependency": {
+        "ids": [
+          25
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "耐久度",
+          "en": "Durability"
+        },
+        {
+          "value": 2,
+          "zh": "最大耐久度",
+          "en": "Max Durability"
+        },
+        {
+          "value": 3,
+          "zh": "均可",
+          "en": "Both"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "key": "DegradeAmountOnDeath",
+      "category": "General",
+      "label": {
+        "zh": "死亡损耗量",
+        "en": "Death Degradation Amount"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.05,
+          "zh": "5%",
+          "en": "5%"
+        },
+        {
+          "value": 0.1,
+          "zh": "10%",
+          "en": "10%"
+        },
+        {
+          "value": 0.15,
+          "zh": "15%",
+          "en": "15%"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "key": "DropOnDeath",
+      "category": "General",
+      "label": {
+        "zh": "死亡丢失物品",
+        "en": "Drop On Death"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "所有",
+          "en": "All"
+        },
+        {
+          "value": 2,
+          "zh": "仅工具带",
+          "en": "Toolbelt Only"
+        },
+        {
+          "value": 3,
+          "zh": "仅背包",
+          "en": "Backpack Only"
+        },
+        {
+          "value": 4,
+          "zh": "设备",
+          "en": "Equipment"
+        },
+        {
+          "value": 5,
+          "zh": "仅携带的",
+          "en": "Carried Only"
+        },
+        {
+          "value": 6,
+          "zh": "删除所有",
+          "en": "Delete All"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "key": "DropOnQuit",
+      "category": "General",
+      "label": {
+        "zh": "退出丢失物品",
+        "en": "Drop On Quit"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "所有",
+          "en": "All"
+        },
+        {
+          "value": 2,
+          "zh": "仅工具带",
+          "en": "Toolbelt Only"
+        },
+        {
+          "value": 3,
+          "zh": "仅背包",
+          "en": "Backpack Only"
+        },
+        {
+          "value": 4,
+          "zh": "设备",
+          "en": "Equipment"
+        },
+        {
+          "value": 5,
+          "zh": "仅携带的",
+          "en": "Carried Only"
+        }
+      ]
+    },
+    {
+      "id": 161,
+      "key": "HungerMultiplier",
+      "category": "General",
+      "label": {
+        "zh": "饥饿度倍数",
+        "en": "Hunger Multiplier"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        }
+      ]
+    },
+    {
+      "id": 162,
+      "key": "ThirstMultiplier",
+      "category": "General",
+      "label": {
+        "zh": "口渴度倍数",
+        "en": "Thirst Multiplier"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        }
+      ]
+    },
+    {
+      "id": 160,
+      "key": "InfectionChance",
+      "category": "General",
+      "label": {
+        "zh": "感染几率",
+        "en": "Infection Chance"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "key": "InfectionRate",
+      "category": "General",
+      "label": {
+        "zh": "感染速率",
+        "en": "Infection Rate"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 163,
+      "key": "StackSizeMultiplier",
+      "category": "General",
+      "label": {
+        "zh": "堆叠上限倍率",
+        "en": "Stack Size Multiplier"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "key": "EncumbranceModifier",
+      "category": "General",
+      "label": {
+        "zh": "负重栏位",
+        "en": "Encumbrance Slots"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 10.0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 1.35,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 0.7,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 0.35,
+          "zh": "非常高",
+          "en": "Very High"
+        },
+        {
+          "value": 0.0,
+          "zh": "完整",
+          "en": "Full"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "JarRefund",
+      "category": "General",
+      "label": {
+        "zh": "罐子退款",
+        "en": "Jar Refund"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.05,
+          "zh": "5%",
+          "en": "5%"
+        },
+        {
+          "value": 0.1,
+          "zh": "10%",
+          "en": "10%"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.3,
+          "zh": "30%",
+          "en": "30%"
+        },
+        {
+          "value": 0.4,
+          "zh": "40%",
+          "en": "40%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "key": "EnemySpawnMode",
+      "category": "Entities",
+      "label": {
+        "zh": "敌人生成",
+        "en": "Enemy Spawning"
+      },
+      "defaultIndex": 1,
+      "dependency": {
+        "ids": [
+          43,
+          46,
+          44,
+          158,
+          156,
+          31,
+          42,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          41,
+          40,
+          47,
+          16
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "key": "MaxEnemyTier",
+      "category": "Entities",
+      "label": {
+        "zh": "最大敌人等级",
+        "en": "Max Enemy Tier"
+      },
+      "defaultIndex": 5,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "普通",
+          "en": "Normals"
+        },
+        {
+          "value": 1,
+          "zh": "强壮",
+          "en": "Strongs"
+        },
+        {
+          "value": 2,
+          "zh": "特殊",
+          "en": "Specials"
+        },
+        {
+          "value": 3,
+          "zh": "凶残",
+          "en": "Ferals"
+        },
+        {
+          "value": 4,
+          "zh": "辐射",
+          "en": "Radiated"
+        },
+        {
+          "value": 5,
+          "zh": "精英",
+          "en": "Elites"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "key": "BiomeDayEnemyDensity",
+      "category": "Entities",
+      "label": {
+        "zh": "白天敌人密度",
+        "en": "Day Enemy Density"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 2,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 3,
+          "zh": "中等",
+          "en": "Medium"
+        },
+        {
+          "value": 4,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 5,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "key": "BiomeDayZombieRespawn",
+      "category": "Entities",
+      "label": {
+        "zh": "白天敌人重新生成",
+        "en": "Day Enemy Respawn"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常慢",
+          "en": "Very Slow"
+        },
+        {
+          "value": 2,
+          "zh": "慢速",
+          "en": "Slow"
+        },
+        {
+          "value": 3,
+          "zh": "普通",
+          "en": "Normal"
+        },
+        {
+          "value": 4,
+          "zh": "快速",
+          "en": "Fast"
+        },
+        {
+          "value": 5,
+          "zh": "非常快",
+          "en": "Very Fast"
+        }
+      ]
+    },
+    {
+      "id": 155,
+      "key": "BiomeDayAnimalDensity",
+      "category": "Entities",
+      "label": {
+        "zh": "白天动物密度",
+        "en": "Day Animal Density"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 2,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 3,
+          "zh": "中等",
+          "en": "Medium"
+        },
+        {
+          "value": 4,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 5,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "key": "BiomeDayAnimalRespawn",
+      "category": "Entities",
+      "label": {
+        "zh": "白天动物重新生成",
+        "en": "Day Animal Respawn"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常慢",
+          "en": "Very Slow"
+        },
+        {
+          "value": 2,
+          "zh": "慢速",
+          "en": "Slow"
+        },
+        {
+          "value": 3,
+          "zh": "普通",
+          "en": "Normal"
+        },
+        {
+          "value": 4,
+          "zh": "快速",
+          "en": "Fast"
+        },
+        {
+          "value": 5,
+          "zh": "非常快",
+          "en": "Very Fast"
+        }
+      ]
+    },
+    {
+      "id": 158,
+      "key": "BiomeNightEnemyDensity",
+      "category": "Entities",
+      "label": {
+        "zh": "夜间敌人密度",
+        "en": "Night Enemy Density"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 2,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 3,
+          "zh": "中等",
+          "en": "Medium"
+        },
+        {
+          "value": 4,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 5,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 156,
+      "key": "BiomeNightZombieRespawn",
+      "category": "Entities",
+      "label": {
+        "zh": "夜间敌人重新生成",
+        "en": "Night Enemy Respawn"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常慢",
+          "en": "Very Slow"
+        },
+        {
+          "value": 2,
+          "zh": "慢速",
+          "en": "Slow"
+        },
+        {
+          "value": 3,
+          "zh": "普通",
+          "en": "Normal"
+        },
+        {
+          "value": 4,
+          "zh": "快速",
+          "en": "Fast"
+        },
+        {
+          "value": 5,
+          "zh": "非常快",
+          "en": "Very Fast"
+        }
+      ]
+    },
+    {
+      "id": 159,
+      "key": "BiomeNightAnimalDensity",
+      "category": "Entities",
+      "label": {
+        "zh": "夜间动物密度",
+        "en": "Night Animal Density"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 2,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 3,
+          "zh": "中等",
+          "en": "Medium"
+        },
+        {
+          "value": 4,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 5,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 157,
+      "key": "BiomeNightAnimalRespawn",
+      "category": "Entities",
+      "label": {
+        "zh": "夜间动物重新生成",
+        "en": "Night Animal Respawn"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "非常慢",
+          "en": "Very Slow"
+        },
+        {
+          "value": 2,
+          "zh": "慢速",
+          "en": "Slow"
+        },
+        {
+          "value": 3,
+          "zh": "普通",
+          "en": "Normal"
+        },
+        {
+          "value": 4,
+          "zh": "快速",
+          "en": "Fast"
+        },
+        {
+          "value": 5,
+          "zh": "非常快",
+          "en": "Very Fast"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "key": "EntityDamage",
+      "category": "Entities",
+      "label": {
+        "zh": "敌人造成的伤害",
+        "en": "Enemy Damage Dealt"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "key": "EntityIncomingDamage",
+      "category": "Entities",
+      "label": {
+        "zh": "实体所受伤害",
+        "en": "Entity Damage In"
+      },
+      "defaultIndex": 6,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "key": "BlockDamageAI",
+      "category": "Entities",
+      "label": {
+        "zh": "敌人物块伤害",
+        "en": "Enemy Block Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "key": "BlockDamageAIBM",
+      "category": "Entities",
+      "label": {
+        "zh": "血月物块伤害",
+        "en": "BM Block Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "key": "HeadshotMode",
+      "category": "Entities",
+      "label": {
+        "zh": "爆头模式",
+        "en": "Headshot Mode"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "仅限爆头",
+          "en": "Headshot Only"
+        },
+        {
+          "value": 2,
+          "zh": "爆头终结",
+          "en": "Headshot Finisher"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "key": "ShowHealthBars",
+      "category": "Entities",
+      "label": {
+        "zh": "实体生命值条",
+        "en": "Entity Health Bars"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "key": "ShowEnemyDamage",
+      "category": "Entities",
+      "label": {
+        "zh": "显示实体伤害",
+        "en": "Show Entity Damage"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "key": "ZombieMove",
+      "category": "Entities",
+      "label": {
+        "zh": "丧尸白天速度",
+        "en": "Zombie Day Speed"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "行走",
+          "en": "Walk"
+        },
+        {
+          "value": 1,
+          "zh": "慢跑",
+          "en": "Jog"
+        },
+        {
+          "value": 2,
+          "zh": "奔跑",
+          "en": "Run"
+        },
+        {
+          "value": 3,
+          "zh": "冲刺",
+          "en": "Sprint"
+        },
+        {
+          "value": 4,
+          "zh": "噩梦",
+          "en": "Nightmare"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "key": "ZombieMoveNight",
+      "category": "Entities",
+      "label": {
+        "zh": "丧尸夜间速度",
+        "en": "Zombie Night Speed"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "行走",
+          "en": "Walk"
+        },
+        {
+          "value": 1,
+          "zh": "慢跑",
+          "en": "Jog"
+        },
+        {
+          "value": 2,
+          "zh": "奔跑",
+          "en": "Run"
+        },
+        {
+          "value": 3,
+          "zh": "冲刺",
+          "en": "Sprint"
+        },
+        {
+          "value": 4,
+          "zh": "噩梦",
+          "en": "Nightmare"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "key": "ZombieFeralMove",
+      "category": "Entities",
+      "label": {
+        "zh": "凶残丧尸速度",
+        "en": "Zombie Feral Speed"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "行走",
+          "en": "Walk"
+        },
+        {
+          "value": 1,
+          "zh": "慢跑",
+          "en": "Jog"
+        },
+        {
+          "value": 2,
+          "zh": "奔跑",
+          "en": "Run"
+        },
+        {
+          "value": 3,
+          "zh": "冲刺",
+          "en": "Sprint"
+        },
+        {
+          "value": 4,
+          "zh": "噩梦",
+          "en": "Nightmare"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "key": "ZombieBMMove",
+      "category": "Entities",
+      "label": {
+        "zh": "丧尸血月速度",
+        "en": "Zombie BM Speed"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "行走",
+          "en": "Walk"
+        },
+        {
+          "value": 1,
+          "zh": "慢跑",
+          "en": "Jog"
+        },
+        {
+          "value": 2,
+          "zh": "奔跑",
+          "en": "Run"
+        },
+        {
+          "value": 3,
+          "zh": "冲刺",
+          "en": "Sprint"
+        },
+        {
+          "value": 4,
+          "zh": "噩梦",
+          "en": "Nightmare"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "key": "ZombieFeralSense",
+      "category": "Entities",
+      "label": {
+        "zh": "凶残丧尸感知",
+        "en": "Zombie Feral Sense"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 1,
+          "zh": "白天",
+          "en": "Day"
+        },
+        {
+          "value": 2,
+          "zh": "夜晚",
+          "en": "Night"
+        },
+        {
+          "value": 3,
+          "zh": "全部",
+          "en": "All"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "key": "AISmellMode",
+      "category": "Entities",
+      "label": {
+        "zh": "AI 嗅觉模式",
+        "en": "AI Smell Mode"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "行走",
+          "en": "Walk"
+        },
+        {
+          "value": 2,
+          "zh": "慢跑",
+          "en": "Jog"
+        },
+        {
+          "value": 3,
+          "zh": "奔跑",
+          "en": "Run"
+        },
+        {
+          "value": 4,
+          "zh": "冲刺",
+          "en": "Sprint"
+        },
+        {
+          "value": 5,
+          "zh": "噩梦",
+          "en": "Nightmare"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "key": "ZombieRageChance",
+      "category": "Entities",
+      "label": {
+        "zh": "丧尸狂暴",
+        "en": "Zombie Rage"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.15,
+          "zh": "15%",
+          "en": "15%"
+        },
+        {
+          "value": 0.3,
+          "zh": "30%",
+          "en": "30%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.4,
+          "zh": "40%",
+          "en": "40%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "key": "AllowZombieDigging",
+      "category": "Entities",
+      "label": {
+        "zh": "丧尸挖掘",
+        "en": "Zombie Digging"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "key": "ZombiesEatAnimals",
+      "category": "Entities",
+      "label": {
+        "zh": "丧尸吃动物",
+        "en": "Zombies Eat Animals"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "key": "GlobalGSModifier",
+      "category": "World",
+      "label": {
+        "zh": "全局游戏阶段",
+        "en": "Global Game Stage"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "key": "BiomeGSModifier",
+      "category": "World",
+      "label": {
+        "zh": "环境游戏阶段",
+        "en": "Biome Game Stage"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "key": "BiomeProgression",
+      "category": "World",
+      "label": {
+        "zh": "生态环境进度",
+        "en": "Biome Progression"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "key": "TemperatureSurvival",
+      "category": "World",
+      "label": {
+        "zh": "温度生存",
+        "en": "Temperature Survival"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "key": "MaxTechType",
+      "category": "World",
+      "label": {
+        "zh": "最大科技类型",
+        "en": "Max Tech Type"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "科技 0",
+          "en": "Tech 0"
+        },
+        {
+          "value": 2,
+          "zh": "科技 1",
+          "en": "Tech 1"
+        },
+        {
+          "value": 3,
+          "zh": "科技 2",
+          "en": "Tech 2"
+        },
+        {
+          "value": 4,
+          "zh": "科技 3",
+          "en": "Tech 3"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "key": "WorkstationsInTheWild",
+      "category": "World",
+      "label": {
+        "zh": "野外工作站",
+        "en": "Workstations In The Wild"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.05,
+          "zh": "5%",
+          "en": "5%"
+        },
+        {
+          "value": 0.1,
+          "zh": "10%",
+          "en": "10%"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.3,
+          "zh": "30%",
+          "en": "30%"
+        },
+        {
+          "value": 0.4,
+          "zh": "40%",
+          "en": "40%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "key": "BloodMoonFrequency",
+      "category": "World",
+      "label": {
+        "zh": "血月频率",
+        "en": "Blood Moon Frequency"
+      },
+      "defaultIndex": 7,
+      "dependency": {
+        "ids": [
+          49,
+          51,
+          50
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 1,
+          "zh": "1 日",
+          "en": "1 Day"
+        },
+        {
+          "value": 2,
+          "zh": "2 日",
+          "en": "2 Days"
+        },
+        {
+          "value": 3,
+          "zh": "3 日",
+          "en": "3 Days"
+        },
+        {
+          "value": 4,
+          "zh": "4 日",
+          "en": "4 Days"
+        },
+        {
+          "value": 5,
+          "zh": "5 日",
+          "en": "5 Days"
+        },
+        {
+          "value": 6,
+          "zh": "6 日",
+          "en": "6 Days"
+        },
+        {
+          "value": 7,
+          "zh": "7 日",
+          "en": "7 Days"
+        },
+        {
+          "value": 8,
+          "zh": "8 日",
+          "en": "8 Days"
+        },
+        {
+          "value": 9,
+          "zh": "9 日",
+          "en": "9 Days"
+        },
+        {
+          "value": 10,
+          "zh": "10 日",
+          "en": "10 Days"
+        },
+        {
+          "value": 14,
+          "zh": "14 日",
+          "en": "14 Days"
+        },
+        {
+          "value": 20,
+          "zh": "20 日",
+          "en": "20 Days"
+        },
+        {
+          "value": 30,
+          "zh": "30 日",
+          "en": "30 Days"
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "key": "BloodMoonRange",
+      "category": "World",
+      "label": {
+        "zh": "血月范围",
+        "en": "Blood Moon Range"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "0 日",
+          "en": "0 Days"
+        },
+        {
+          "value": 1,
+          "zh": "1 日",
+          "en": "1 Day"
+        },
+        {
+          "value": 2,
+          "zh": "2 日",
+          "en": "2 Days"
+        },
+        {
+          "value": 3,
+          "zh": "3 日",
+          "en": "3 Days"
+        },
+        {
+          "value": 4,
+          "zh": "4 日",
+          "en": "4 Days"
+        },
+        {
+          "value": 7,
+          "zh": "7 日",
+          "en": "7 Days"
+        },
+        {
+          "value": 10,
+          "zh": "10 日",
+          "en": "10 Days"
+        },
+        {
+          "value": 14,
+          "zh": "14 日",
+          "en": "14 Days"
+        },
+        {
+          "value": 20,
+          "zh": "20 日",
+          "en": "20 Days"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "key": "BloodMoonEnemyCount",
+      "category": "World",
+      "label": {
+        "zh": "血月计数",
+        "en": "Blood Moon Count"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 4,
+          "zh": "4 敌人",
+          "en": "4 Enemies"
+        },
+        {
+          "value": 6,
+          "zh": "6 敌人",
+          "en": "6 Enemies"
+        },
+        {
+          "value": 8,
+          "zh": "8 敌人",
+          "en": "8 Enemies"
+        },
+        {
+          "value": 10,
+          "zh": "10 敌人",
+          "en": "10 Enemies"
+        },
+        {
+          "value": 12,
+          "zh": "12 敌人",
+          "en": "12 Enemies"
+        },
+        {
+          "value": 16,
+          "zh": "16 敌人",
+          "en": "16 Enemies"
+        },
+        {
+          "value": 24,
+          "zh": "24 敌人",
+          "en": "24 Enemies"
+        },
+        {
+          "value": 32,
+          "zh": "32 敌人",
+          "en": "32 Enemies"
+        },
+        {
+          "value": 64,
+          "zh": "64 敌人",
+          "en": "64 Enemies"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "key": "BloodMoonWarning",
+      "category": "World",
+      "label": {
+        "zh": "血月警告",
+        "en": "Blood Moon Warning"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 1,
+          "zh": "早晨",
+          "en": "Morning"
+        },
+        {
+          "value": 2,
+          "zh": "晚上",
+          "en": "Evening"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "key": "AirDropFrequency",
+      "category": "World",
+      "label": {
+        "zh": "空投",
+        "en": "Air Drops"
+      },
+      "defaultIndex": 3,
+      "dependency": {
+        "ids": [
+          54,
+          53
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 1,
+          "zh": "每天",
+          "en": "Every Day"
+        },
+        {
+          "value": 2,
+          "zh": "1-3 日",
+          "en": "1-3 Days"
+        },
+        {
+          "value": 3,
+          "zh": "3 日",
+          "en": "3 Days"
+        },
+        {
+          "value": 4,
+          "zh": "3-7 日",
+          "en": "3-7 Days"
+        },
+        {
+          "value": 5,
+          "zh": "7 日",
+          "en": "7 Days"
+        },
+        {
+          "value": 6,
+          "zh": "1-7 日",
+          "en": "1-7 Days"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "key": "AirDropRandomTime",
+      "category": "World",
+      "label": {
+        "zh": "空投变化",
+        "en": "Air Drop Variance"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "早晨",
+          "en": "Morning"
+        },
+        {
+          "value": 2,
+          "zh": "日间",
+          "en": "Mid Day"
+        },
+        {
+          "value": 3,
+          "zh": "晚上",
+          "en": "Evening"
+        },
+        {
+          "value": 4,
+          "zh": "深夜",
+          "en": "Night"
+        },
+        {
+          "value": 5,
+          "zh": "全天",
+          "en": "All Day"
+        },
+        {
+          "value": 6,
+          "zh": "任何",
+          "en": "Any"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "key": "StormFreq",
+      "category": "World",
+      "label": {
+        "zh": "风暴频率",
+        "en": "Storm Frequency"
+      },
+      "defaultIndex": 2,
+      "dependency": {
+        "ids": [
+          58
+        ],
+        "value": 0.0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "key": "StormWarning",
+      "category": "World",
+      "label": {
+        "zh": "风暴警告",
+        "en": "Storm Warning"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "key": "HeatMapSensitivity",
+      "category": "World",
+      "label": {
+        "zh": "热力图敏感度",
+        "en": "Heat Map Sensitivity"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "key": "DayNightLength",
+      "category": "World",
+      "label": {
+        "zh": "24 小时周期",
+        "en": "24 Hour Cycle"
+      },
+      "defaultIndex": 5,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        },
+        {
+          "value": 20,
+          "zh": "20",
+          "en": "20"
+        },
+        {
+          "value": 30,
+          "zh": "30",
+          "en": "30"
+        },
+        {
+          "value": 40,
+          "zh": "40",
+          "en": "40"
+        },
+        {
+          "value": 50,
+          "zh": "50",
+          "en": "50"
+        },
+        {
+          "value": 60,
+          "zh": "60",
+          "en": "60"
+        },
+        {
+          "value": 90,
+          "zh": "90",
+          "en": "90"
+        },
+        {
+          "value": 120,
+          "zh": "120",
+          "en": "120"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "key": "DayLightLength",
+      "category": "World",
+      "label": {
+        "zh": "白昼时长",
+        "en": "Daylight Length"
+      },
+      "defaultIndex": 8,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "总是夜晚",
+          "en": "Always Night"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 8,
+          "zh": "8",
+          "en": "8"
+        },
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        },
+        {
+          "value": 12,
+          "zh": "12",
+          "en": "12"
+        },
+        {
+          "value": 14,
+          "zh": "14",
+          "en": "14"
+        },
+        {
+          "value": 16,
+          "zh": "16",
+          "en": "16"
+        },
+        {
+          "value": 18,
+          "zh": "18",
+          "en": "18"
+        },
+        {
+          "value": 20,
+          "zh": "20",
+          "en": "20"
+        },
+        {
+          "value": 24,
+          "zh": "总是白天",
+          "en": "Always Day"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "key": "AirDropMarker",
+      "category": "World",
+      "label": {
+        "zh": "标记空投",
+        "en": "Mark Air Drops"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "key": "AllowMap",
+      "category": "World",
+      "label": {
+        "zh": "允许地图",
+        "en": "Allow Map"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "key": "AllowCompass",
+      "category": "World",
+      "label": {
+        "zh": "允许指南针",
+        "en": "Allow Compass"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "key": "AllowScreenMarkers",
+      "category": "World",
+      "label": {
+        "zh": "允许屏幕标记",
+        "en": "Allow Screen Markers"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "key": "ShowLocationInfo",
+      "category": "World",
+      "label": {
+        "zh": "显示地点信息",
+        "en": "Show Location Info"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        },
+        {
+          "value": 2,
+          "zh": "仅名称",
+          "en": "Name Only"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "key": "ShowDayTime",
+      "category": "World",
+      "label": {
+        "zh": "显示天数/时间",
+        "en": "Show Day/Time"
+      },
+      "defaultIndex": 1,
+      "dependency": {
+        "ids": [
+          50
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "key": "LootMaxTier",
+      "category": "Resources",
+      "label": {
+        "zh": "最大战利品品质",
+        "en": "Max Loot Quality"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "key": "GlobalLSModifier",
+      "category": "Resources",
+      "label": {
+        "zh": "全局战利品等级",
+        "en": "Global Loot Stage"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "key": "BiomeLSModifier",
+      "category": "Resources",
+      "label": {
+        "zh": "环境战利品等级",
+        "en": "Biome Loot Stage"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "key": "POITierLSModifier",
+      "category": "Resources",
+      "label": {
+        "zh": "目标点战利品等级",
+        "en": "POI Loot Stage"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "key": "LootRespawnDays",
+      "category": "Resources",
+      "label": {
+        "zh": "战利品刷新天数",
+        "en": "Loot Respawn Days"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        },
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        },
+        {
+          "value": 15,
+          "zh": "15",
+          "en": "15"
+        },
+        {
+          "value": 20,
+          "zh": "20",
+          "en": "20"
+        },
+        {
+          "value": 30,
+          "zh": "30",
+          "en": "30"
+        },
+        {
+          "value": 40,
+          "zh": "40",
+          "en": "40"
+        },
+        {
+          "value": 50,
+          "zh": "50",
+          "en": "50"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "key": "LootTimer",
+      "category": "Resources",
+      "label": {
+        "zh": "开箱时间",
+        "en": "Loot Timer"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "key": "LootBagChance",
+      "category": "Resources",
+      "label": {
+        "zh": "战利品袋掉落",
+        "en": "Loot Bag Drop"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "key": "GlobalLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "掉落率",
+        "en": "Loot Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": {
+        "ids": [
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          111,
+          89
+        ],
+        "value": 0.0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "key": "FoodLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "食物丰富度",
+        "en": "Food Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "key": "DrinkLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "饮料丰富度",
+        "en": "Drink Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "key": "MedicalLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "药品丰富度",
+        "en": "Medical Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "key": "AmmoLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "弹药丰富度",
+        "en": "Ammo Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "key": "ResourceLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "资源丰富度",
+        "en": "Resource Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "key": "ArmorLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "护甲丰富度",
+        "en": "Armor Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "key": "MeleeLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "近战武器丰富度",
+        "en": "Melee Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "key": "RangedLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "远程武器丰富度",
+        "en": "Ranged Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "key": "DukesLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "货币丰富度",
+        "en": "Currency Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "key": "CraftingMagazinesLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "杂志丰富度",
+        "en": "Magazine Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "key": "BookLootCount",
+      "category": "Resources",
+      "label": {
+        "zh": "书籍丰富度",
+        "en": "Book Abundance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "key": "TreasureMapChance",
+      "category": "Resources",
+      "label": {
+        "zh": "藏宝图生成概率",
+        "en": "Treasure Map Chance"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.1,
+          "zh": "110%",
+          "en": "110%"
+        },
+        {
+          "value": 1.2,
+          "zh": "120%",
+          "en": "120%"
+        },
+        {
+          "value": 1.3,
+          "zh": "130%",
+          "en": "130%"
+        },
+        {
+          "value": 1.4,
+          "zh": "140%",
+          "en": "140%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "key": "MiningOutput",
+      "category": "Resources",
+      "label": {
+        "zh": "采矿产出",
+        "en": "Mining Yield"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "key": "CropOutput",
+      "category": "Resources",
+      "label": {
+        "zh": "农作物产出",
+        "en": "Crop Yield"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "key": "SeedDropOutput",
+      "category": "Resources",
+      "label": {
+        "zh": "种子掉落",
+        "en": "Seed Drop"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "key": "HarvestingOutput",
+      "category": "Resources",
+      "label": {
+        "zh": "资源产出",
+        "en": "Resource Yield"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "key": "CropGrowthSpeed",
+      "category": "Resources",
+      "label": {
+        "zh": "农作物生长",
+        "en": "Crop Growth"
+      },
+      "defaultIndex": 5,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 1000.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.0,
+          "zh": "立即",
+          "en": "Instant"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "key": "CraftingProgression",
+      "category": "Crafting",
+      "label": {
+        "zh": "制作进度",
+        "en": "Crafting Progression"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "key": "CraftingMaxTier",
+      "category": "Crafting",
+      "label": {
+        "zh": "制作最高品质",
+        "en": "Crafting Max Quality"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        }
+      ]
+    },
+    {
+      "id": 115,
+      "key": "PointsPerMagazine",
+      "category": "Crafting",
+      "label": {
+        "zh": "杂志进度",
+        "en": "Magazine Progress"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "key": "BackpackCrafting",
+      "category": "Crafting",
+      "label": {
+        "zh": "背包制作",
+        "en": "Backpack Crafting"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        },
+        {
+          "value": 2,
+          "zh": "有限",
+          "en": "Limited"
+        },
+        {
+          "value": 3,
+          "zh": "仅工作台",
+          "en": "Workbench Only"
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "key": "WorkstationCrafting",
+      "category": "Crafting",
+      "label": {
+        "zh": "工作台制作",
+        "en": "Workstation Crafting"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "key": "SmeltingType",
+      "category": "Crafting",
+      "label": {
+        "zh": "熔炉类型",
+        "en": "Smelter Type"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "熔炉",
+          "en": "Smelter"
+        },
+        {
+          "value": 1,
+          "zh": "配方",
+          "en": "Recipes"
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "key": "CraftingTime",
+      "category": "Crafting",
+      "label": {
+        "zh": "制作计时器",
+        "en": "Crafting Timer"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 98,
+      "key": "CraftingInput",
+      "category": "Crafting",
+      "label": {
+        "zh": "制作消耗",
+        "en": "Crafting Cost"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "key": "CraftingOutput",
+      "category": "Crafting",
+      "label": {
+        "zh": "制作产出",
+        "en": "Crafting Yield"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "key": "ScrappingOutput",
+      "category": "Crafting",
+      "label": {
+        "zh": "分解产出",
+        "en": "Scrapping Yield"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "key": "DewCollectorTime",
+      "category": "Crafting",
+      "label": {
+        "zh": "露水收集器时间",
+        "en": "Dew Collector Time"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "key": "DewCollectorOutput",
+      "category": "Crafting",
+      "label": {
+        "zh": "露水收集器产出",
+        "en": "Dew Collector Yield"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "key": "DewCollectorInput",
+      "category": "Crafting",
+      "label": {
+        "zh": "露水收集器原料",
+        "en": "Dew Collector Input"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "key": "ApiaryTime",
+      "category": "Crafting",
+      "label": {
+        "zh": "蜂箱时长",
+        "en": "Apiary Time"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 109,
+      "key": "ApiaryOutput",
+      "category": "Crafting",
+      "label": {
+        "zh": "蜂箱产出",
+        "en": "Apiary Yield"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "key": "ApiaryInput",
+      "category": "Crafting",
+      "label": {
+        "zh": "蜂箱原料",
+        "en": "Apiary Input"
+      },
+      "defaultIndex": 5,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.4,
+          "zh": "40%",
+          "en": "40%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 152,
+      "key": "ChickenCoopTime",
+      "category": "Crafting",
+      "label": {
+        "zh": "鸡舍生产时间",
+        "en": "Chicken Coop Time"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 153,
+      "key": "ChickenCoopOutput",
+      "category": "Crafting",
+      "label": {
+        "zh": "鸡舍产量",
+        "en": "Chicken Coop Yield"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        },
+        {
+          "value": 5.0,
+          "zh": "500%",
+          "en": "500%"
+        }
+      ]
+    },
+    {
+      "id": 154,
+      "key": "ChickenCoopInput",
+      "category": "Crafting",
+      "label": {
+        "zh": "鸡舍投入量",
+        "en": "Chicken Coop Input"
+      },
+      "defaultIndex": 5,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.4,
+          "zh": "40%",
+          "en": "40%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 164,
+      "key": "FullChickenStressEvent",
+      "category": "Crafting",
+      "label": {
+        "zh": "鸡只压力事件",
+        "en": "Chicken Stress Event"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "随机",
+          "en": "Random"
+        },
+        {
+          "value": 2,
+          "zh": "鸡脱手",
+          "en": "Chicken Drop"
+        },
+        {
+          "value": 3,
+          "zh": "愤怒的鸡",
+          "en": "Angry Chicken"
+        },
+        {
+          "value": 4,
+          "zh": "丧尸群",
+          "en": "Zombie Horde"
+        },
+        {
+          "value": 5,
+          "zh": "杀人鸡群",
+          "en": "Murder Chickens"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "key": "ItemDegradation",
+      "category": "Crafting",
+      "label": {
+        "zh": "物品损坏",
+        "en": "Item Degradation"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "关闭",
+          "en": "Disabled"
+        },
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "key": "RepairTypes",
+      "category": "Crafting",
+      "label": {
+        "zh": "修理方式",
+        "en": "Repair Method"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "仅修理",
+          "en": "Repair Only"
+        },
+        {
+          "value": 2,
+          "zh": "仅合并",
+          "en": "Combine Only"
+        },
+        {
+          "value": 3,
+          "zh": "均可",
+          "en": "Both"
+        }
+      ]
+    },
+    {
+      "id": 114,
+      "key": "MaxDegradationAmount",
+      "category": "Crafting",
+      "label": {
+        "zh": "修理损坏",
+        "en": "Repair Degradation"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.05,
+          "zh": "5%",
+          "en": "5%"
+        },
+        {
+          "value": 0.1,
+          "zh": "10%",
+          "en": "10%"
+        },
+        {
+          "value": 0.15,
+          "zh": "15%",
+          "en": "15%"
+        },
+        {
+          "value": 0.2,
+          "zh": "20%",
+          "en": "20%"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        }
+      ]
+    },
+    {
+      "id": 128,
+      "key": "TradersEnabled",
+      "category": "Traders",
+      "label": {
+        "zh": "交易开启",
+        "en": "Trading Enabled"
+      },
+      "defaultIndex": 1,
+      "dependency": {
+        "ids": [
+          136,
+          134,
+          133,
+          130,
+          131,
+          135,
+          65
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 129,
+      "key": "VendingEnabled",
+      "category": "Traders",
+      "label": {
+        "zh": "贩卖机开启",
+        "en": "Vending Enabled"
+      },
+      "defaultIndex": 1,
+      "dependency": {
+        "ids": [
+          138,
+          137
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 127,
+      "key": "TraderHours",
+      "category": "Traders",
+      "label": {
+        "zh": "商人营业时间",
+        "en": "Trader Hours"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "早晨",
+          "en": "Morning"
+        },
+        {
+          "value": 2,
+          "zh": "日间",
+          "en": "Mid Day"
+        },
+        {
+          "value": 3,
+          "zh": "晚上",
+          "en": "Evening"
+        },
+        {
+          "value": 4,
+          "zh": "深夜",
+          "en": "Night"
+        },
+        {
+          "value": 5,
+          "zh": "血月已关闭",
+          "en": "BM Closed"
+        },
+        {
+          "value": 6,
+          "zh": "总是开门",
+          "en": "Always Open"
+        }
+      ]
+    },
+    {
+      "id": 132,
+      "key": "TraderProtection",
+      "category": "Traders",
+      "label": {
+        "zh": "商人保护",
+        "en": "Trader Protection"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "是",
+          "en": "Yes"
+        },
+        {
+          "value": 1,
+          "zh": "可占领",
+          "en": "Claimable"
+        },
+        {
+          "value": 2,
+          "zh": "不可占领",
+          "en": "Not Claimable"
+        }
+      ]
+    },
+    {
+      "id": 126,
+      "key": "TraderDialog",
+      "category": "Traders",
+      "label": {
+        "zh": "交易对话",
+        "en": "Trading Dialog"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "key": "GlobalTSModifier",
+      "category": "Traders",
+      "label": {
+        "zh": "全局商人阶段",
+        "en": "Global Trader Stage"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 136,
+      "key": "TraderMaxTier",
+      "category": "Traders",
+      "label": {
+        "zh": "商人最高品质",
+        "en": "Trader Max Quality"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        }
+      ]
+    },
+    {
+      "id": 134,
+      "key": "TraderItemAbundance",
+      "category": "Traders",
+      "label": {
+        "zh": "商人物品数量",
+        "en": "Trader Item Count"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 138,
+      "key": "VendingItemAbundance",
+      "category": "Traders",
+      "label": {
+        "zh": "贩卖机物品数量",
+        "en": "Vending Item Count"
+      },
+      "defaultIndex": 2,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "非常低",
+          "en": "Very Low"
+        },
+        {
+          "value": 0.5,
+          "zh": "低",
+          "en": "Low"
+        },
+        {
+          "value": 1.0,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1.5,
+          "zh": "高",
+          "en": "High"
+        },
+        {
+          "value": 2.0,
+          "zh": "非常高",
+          "en": "Very High"
+        }
+      ]
+    },
+    {
+      "id": 133,
+      "key": "TraderResetInterval",
+      "category": "Traders",
+      "label": {
+        "zh": "商人重置",
+        "en": "Trader Reset"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "1 日",
+          "en": "1 Day"
+        },
+        {
+          "value": 2,
+          "zh": "2 日",
+          "en": "2 Days"
+        },
+        {
+          "value": 3,
+          "zh": "3 日",
+          "en": "3 Days"
+        },
+        {
+          "value": 4,
+          "zh": "4 日",
+          "en": "4 Days"
+        },
+        {
+          "value": 5,
+          "zh": "5 日",
+          "en": "5 Days"
+        },
+        {
+          "value": 6,
+          "zh": "6 日",
+          "en": "6 Days"
+        },
+        {
+          "value": 7,
+          "zh": "7 日",
+          "en": "7 Days"
+        },
+        {
+          "value": 14,
+          "zh": "14 日",
+          "en": "14 Days"
+        }
+      ]
+    },
+    {
+      "id": 137,
+      "key": "VendingResetInterval",
+      "category": "Traders",
+      "label": {
+        "zh": "贩卖机重置",
+        "en": "Vending Reset"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "默认",
+          "en": "Default"
+        },
+        {
+          "value": 1,
+          "zh": "1 日",
+          "en": "1 Day"
+        },
+        {
+          "value": 2,
+          "zh": "2 日",
+          "en": "2 Days"
+        },
+        {
+          "value": 3,
+          "zh": "3 日",
+          "en": "3 Days"
+        },
+        {
+          "value": 4,
+          "zh": "4 日",
+          "en": "4 Days"
+        },
+        {
+          "value": 5,
+          "zh": "5 日",
+          "en": "5 Days"
+        },
+        {
+          "value": 6,
+          "zh": "6 日",
+          "en": "6 Days"
+        },
+        {
+          "value": 7,
+          "zh": "7 日",
+          "en": "7 Days"
+        },
+        {
+          "value": 14,
+          "zh": "14 日",
+          "en": "14 Days"
+        }
+      ]
+    },
+    {
+      "id": 130,
+      "key": "TraderSellPrices",
+      "category": "Traders",
+      "label": {
+        "zh": "出售价格",
+        "en": "Sell Price"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        }
+      ]
+    },
+    {
+      "id": 131,
+      "key": "TraderBuyPrices",
+      "category": "Traders",
+      "label": {
+        "zh": "购买价格",
+        "en": "Buy Price"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 1.75,
+          "zh": "175%",
+          "en": "175%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        },
+        {
+          "value": 4.0,
+          "zh": "400%",
+          "en": "400%"
+        }
+      ]
+    },
+    {
+      "id": 135,
+      "key": "TraderBuyLimit",
+      "category": "Traders",
+      "label": {
+        "zh": "商人收购上限",
+        "en": "Trader Buy Limit"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        },
+        {
+          "value": 8,
+          "zh": "8",
+          "en": "8"
+        },
+        {
+          "value": 9,
+          "zh": "9",
+          "en": "9"
+        },
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        }
+      ]
+    },
+    {
+      "id": 139,
+      "key": "ChallengesEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "挑战",
+        "en": "Challenges"
+      },
+      "defaultIndex": 1,
+      "dependency": {
+        "ids": [
+          140
+        ],
+        "value": 0,
+        "inverted": false
+      },
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 118,
+      "key": "QuestsEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "任务",
+        "en": "Quests"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 140,
+      "key": "IntroChallengesEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "入门挑战",
+        "en": "Intro Challenges"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 119,
+      "key": "IntroQuestEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "入门任务",
+        "en": "Intro Quest"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 120,
+      "key": "TraderToTraderQuestsEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "商贸路线",
+        "en": "Trade Routes"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 124,
+      "key": "BuriedQuestsEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "埋藏任务",
+        "en": "Buried Quests"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 125,
+      "key": "POIQuestsEnabled",
+      "category": "Tasks",
+      "label": {
+        "zh": "目标点任务",
+        "en": "POI Quests"
+      },
+      "defaultIndex": 1,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 122,
+      "key": "QuestsPerTier",
+      "category": "Tasks",
+      "label": {
+        "zh": "每级任务",
+        "en": "Quests Per Tier"
+      },
+      "defaultIndex": 10,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        },
+        {
+          "value": 8,
+          "zh": "8",
+          "en": "8"
+        },
+        {
+          "value": 9,
+          "zh": "9",
+          "en": "9"
+        },
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        },
+        {
+          "value": 11,
+          "zh": "11",
+          "en": "11"
+        },
+        {
+          "value": 12,
+          "zh": "12",
+          "en": "12"
+        },
+        {
+          "value": 13,
+          "zh": "13",
+          "en": "13"
+        },
+        {
+          "value": 14,
+          "zh": "14",
+          "en": "14"
+        },
+        {
+          "value": 15,
+          "zh": "15",
+          "en": "15"
+        }
+      ]
+    },
+    {
+      "id": 123,
+      "key": "QuestProgressionDailyLimit",
+      "category": "Tasks",
+      "label": {
+        "zh": "每日任务数",
+        "en": "Quests Per Day"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": -1,
+          "zh": "无限制",
+          "en": "Unlimited"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        },
+        {
+          "value": 8,
+          "zh": "8",
+          "en": "8"
+        },
+        {
+          "value": 9,
+          "zh": "9",
+          "en": "9"
+        },
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        }
+      ]
+    },
+    {
+      "id": 121,
+      "key": "StarterSkillPoints",
+      "category": "Tasks",
+      "label": {
+        "zh": "基础技能点",
+        "en": "Base Skill Points"
+      },
+      "defaultIndex": 4,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 1,
+          "zh": "1",
+          "en": "1"
+        },
+        {
+          "value": 2,
+          "zh": "2",
+          "en": "2"
+        },
+        {
+          "value": 3,
+          "zh": "3",
+          "en": "3"
+        },
+        {
+          "value": 4,
+          "zh": "4",
+          "en": "4"
+        },
+        {
+          "value": 5,
+          "zh": "5",
+          "en": "5"
+        },
+        {
+          "value": 6,
+          "zh": "6",
+          "en": "6"
+        },
+        {
+          "value": 7,
+          "zh": "7",
+          "en": "7"
+        },
+        {
+          "value": 8,
+          "zh": "8",
+          "en": "8"
+        },
+        {
+          "value": 9,
+          "zh": "9",
+          "en": "9"
+        },
+        {
+          "value": 10,
+          "zh": "10",
+          "en": "10"
+        }
+      ]
+    },
+    {
+      "id": 141,
+      "key": "VehicleFuelUsage",
+      "category": "Misc",
+      "label": {
+        "zh": "载具燃料使用量",
+        "en": "Vehicle Fuel Usage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 142,
+      "key": "VehicleEntityDamage",
+      "category": "Misc",
+      "label": {
+        "zh": "载具实体伤害",
+        "en": "Vehicle Entity Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 143,
+      "key": "VehicleBlockDamage",
+      "category": "Misc",
+      "label": {
+        "zh": "载具物块伤害",
+        "en": "Vehicle Block Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 144,
+      "key": "VehicleSelfDamage",
+      "category": "Misc",
+      "label": {
+        "zh": "载具自身伤害",
+        "en": "Vehicle Self Damage"
+      },
+      "defaultIndex": 7,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.0,
+          "zh": "无",
+          "en": "None"
+        },
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.35,
+          "zh": "35%",
+          "en": "35%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.65,
+          "zh": "65%",
+          "en": "65%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 0.85,
+          "zh": "85%",
+          "en": "85%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 2.5,
+          "zh": "250%",
+          "en": "250%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 145,
+      "key": "ElectricalOutput",
+      "category": "Misc",
+      "label": {
+        "zh": "电力输出",
+        "en": "Electrical Output"
+      },
+      "defaultIndex": 3,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.25,
+          "zh": "25%",
+          "en": "25%"
+        },
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.75,
+          "zh": "75%",
+          "en": "75%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        },
+        {
+          "value": 1.25,
+          "zh": "125%",
+          "en": "125%"
+        },
+        {
+          "value": 1.5,
+          "zh": "150%",
+          "en": "150%"
+        },
+        {
+          "value": 2.0,
+          "zh": "200%",
+          "en": "200%"
+        },
+        {
+          "value": 3.0,
+          "zh": "300%",
+          "en": "300%"
+        }
+      ]
+    },
+    {
+      "id": 146,
+      "key": "SillyCelebrate",
+      "category": "Misc",
+      "label": {
+        "zh": "庆祝击杀",
+        "en": "Celebrate Kills"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        },
+        {
+          "value": 2,
+          "zh": "仅限爆头",
+          "en": "Headshot Only"
+        }
+      ]
+    },
+    {
+      "id": 147,
+      "key": "SillyBigHeads",
+      "category": "Misc",
+      "label": {
+        "zh": "大头",
+        "en": "Big Heads"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 148,
+      "key": "SillyTinyZombies",
+      "category": "Misc",
+      "label": {
+        "zh": "迷你丧尸",
+        "en": "Tiny Zombies"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 150,
+      "key": "SillyLowGravity",
+      "category": "Misc",
+      "label": {
+        "zh": "重力",
+        "en": "Gravity"
+      },
+      "defaultIndex": 5,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0.5,
+          "zh": "50%",
+          "en": "50%"
+        },
+        {
+          "value": 0.6,
+          "zh": "60%",
+          "en": "60%"
+        },
+        {
+          "value": 0.7,
+          "zh": "70%",
+          "en": "70%"
+        },
+        {
+          "value": 0.8,
+          "zh": "80%",
+          "en": "80%"
+        },
+        {
+          "value": 0.9,
+          "zh": "90%",
+          "en": "90%"
+        },
+        {
+          "value": 1.0,
+          "zh": "100%",
+          "en": "100%"
+        }
+      ]
+    },
+    {
+      "id": 149,
+      "key": "SillySounds",
+      "category": "Misc",
+      "label": {
+        "zh": "滑稽声音",
+        "en": "Silly Sounds"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    },
+    {
+      "id": 151,
+      "key": "SillyBlackandWhite",
+      "category": "Misc",
+      "label": {
+        "zh": "黑白",
+        "en": "Black and White"
+      },
+      "defaultIndex": 0,
+      "dependency": null,
+      "choices": [
+        {
+          "value": 0,
+          "zh": "否",
+          "en": "No"
+        },
+        {
+          "value": 1,
+          "zh": "是",
+          "en": "Yes"
+        }
+      ]
+    }
+  ]
+}
