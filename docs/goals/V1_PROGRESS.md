@@ -2,6 +2,9 @@
 
 ## 2026-10-27
 
+- Diagnosed repeated Seven Days exits after panel restarts: generic data permission preparation changed EOS credential files to 0666, causing DeviceId InvalidState / NoLoginTicket and clean exits that Docker restarted. Restoring only EOS permissions on production recovered world startup and Steam login without replacing credentials or saves.
+- Prepared a local game-runtime fix to restore private EOS cache permissions before startup, reject symlink traversal and use a private creation mask. All 17 Python unit tests and six isolated Docker integration tests pass; this follow-up image fix is not yet deployed.
+
 - Changed new Seven Days to Die instances to execute shared image programs without copying the full game into each data directory; saves, configuration, mods and small platform caches remain isolated per instance.
 - Preserved existing local installations and explicit Steam updates. New image-backed instances select an updated local copy only after build verification publishes an atomic completion record; incomplete legacy installs fail without replacing user data.
 - Added bilingual confirmation text explaining the writable program copy and 25 GiB reserve required by manual Steam updates. Normal startup checks a 2 GiB operating reserve, with world and mod growth additional.

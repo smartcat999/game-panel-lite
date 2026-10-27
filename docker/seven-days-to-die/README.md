@@ -11,6 +11,9 @@ Persistent layout:
 - `userdata/GeneratedWorlds`: randomly generated maps
 - `userdata/Mods`: instance mods; new instances also provide `Mods` as a compatibility symlink
 - `.runtime-home`: small Unity/EOS/Steam caches, isolated from the image
+  - Startup restores EOS cache directories to `0700` and credential files to `0600`
+    after the panel prepares writable data. Shared permissions make EOS reject
+    an existing device credential; permissions are repaired without resetting it.
 - `gamepanel-serverconfig.xml`: panel-managed properties
 - `gamepanel-active.xml`: managed properties merged into the installed game's defaults
 - `steamapps/appmanifest_294420.acf`: active Steam Build ID metadata, copied without program files
