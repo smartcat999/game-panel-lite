@@ -1,5 +1,14 @@
 # V1 Progress
 
+## 2026-10-27
+
+- Changed new Seven Days to Die instances to execute shared image programs without copying the full game into each data directory; saves, configuration, mods and small platform caches remain isolated per instance.
+- Preserved existing local installations and explicit Steam updates. New image-backed instances select an updated local copy only after build verification publishes an atomic completion record; incomplete legacy installs fail without replacing user data.
+- Added bilingual confirmation text explaining the writable program copy and 25 GiB reserve required by manual Steam updates. Normal startup checks a 2 GiB operating reserve, with world and mod growth additional.
+- Verified 15 Python unit tests and five isolated Docker integration cases, full Go tests/vet, 127 frontend tests, application-source lint, typecheck and production build. Full frontend lint remains blocked by pre-existing files in apps/web/scripts.
+- Tested real native startup on um773 with a read-only root filesystem: the test mod loaded, initial instance data was about 16 MiB, and replacing the container loaded the same saved world without copying game programs. Steam login timed out on the fixture network after world startup; public multiplayer connectivity was not verified.
+- Changes are local; no production deployment or formal v0.2.19 release performed in this phase.
+
 ## 2026-08-30
 
 - Centralized administrator, operator, and viewer permissions in one backend role matrix and returned effective capabilities with the authenticated account.

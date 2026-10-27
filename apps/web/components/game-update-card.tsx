@@ -43,12 +43,14 @@ function shouldResumeServer(status: ServerStatus) {
 
 export function GameUpdateCard({
   playersOnline,
+  providerKey,
   runtimeVersion,
   serverId,
   serverStatus,
   onActiveChange
 }: {
   playersOnline: number;
+  providerKey: string;
   runtimeVersion?: string;
   serverId: string;
   serverStatus: ServerStatus;
@@ -233,7 +235,7 @@ export function GameUpdateCard({
         open={confirmOpen}
         eyebrow={t("gameUpdateDialogEyebrow")}
         title={t("gameUpdateDialogTitle")}
-        description={t("gameUpdateDialogDescription")}
+        description={t(providerKey === "seven-days-to-die" ? "gameUpdateSevenDaysDialogDescription" : "gameUpdateDialogDescription")}
         detail={(
           <div className="space-y-3">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-md bg-slate-900/70 px-3 py-2.5">

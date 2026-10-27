@@ -32,6 +32,7 @@ COPY --from=installer /opt/seven-days/ /opt/seven-days/
 COPY --chmod=755 docker/seven-days-to-die/entrypoint.sh /usr/local/bin/gamepanel-seven-days
 COPY docker/seven-days-to-die/merge_config.py /opt/gamepanel/merge_config.py
 COPY docker/seven-days-to-die/check_storage.py /opt/gamepanel/check_storage.py
+COPY docker/seven-days-to-die/prepare_runtime.py /opt/gamepanel/prepare_runtime.py
 WORKDIR /data
 STOPSIGNAL SIGINT
 LABEL org.opencontainers.image.title="GamePanel Lite 7 Days to Die" \
