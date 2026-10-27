@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 runtime_dir="$(python3 /opt/gamepanel/prepare_runtime.py)"
 # Unity/EOS and Steam need small per-instance writable caches, not a program copy.
 export HOME=/data/.runtime-home

@@ -45,11 +45,29 @@ def select_runtime(seed, data):
     return data if local else seed
 
 
+def restore_private_eos_cache(data):
+    # The runtime adapter makes data writable on each manual start. EOS rejects
+    # device credentials with those shared permissions, so restore them in-game.
+    cache = data
+    for part in [".runtime-home", ".local", "share", ".eos_sdk"]:
+        cache = cache / part
+        if cache.is_symlink():
+            raise RuntimeError("EOS cache path contains a symlink; existing files were not changed.")
+        if not cache.exists():
+            return
+    paths = [cache, *cache.rglob("*")]
+    if any(path.is_symlink() for path in paths):
+        raise RuntimeError("EOS cache contains a symlink; existing files were not changed.")
+    for path in paths:
+        path.chmod(0o700 if path.is_dir() else 0o600)
+
+
 def prepare_runtime(seed, data):
     runtime = select_runtime(seed, data)
     if not program_ready(runtime):
         raise RuntimeError("Game runtime is incomplete; reinstall the runtime image. Saved data is retained.")
     check_storage(seed, data)
+    restore_private_eos_cache(data)
     (data / "userdata/Saves").mkdir(parents=True, exist_ok=True)
     if runtime == seed:
         mods = data / "userdata/Mods"

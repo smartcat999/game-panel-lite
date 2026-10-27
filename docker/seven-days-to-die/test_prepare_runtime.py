@@ -33,6 +33,33 @@ class PrepareRuntimeTest(unittest.TestCase):
         self.space.start()
         self.addCleanup(self.space.stop)
 
+    def test_restart_restores_private_eos_credentials_without_changing_contents(self):
+        cache = self.data / ".runtime-home/.local/share/.eos_sdk"
+        credential = cache / "keychain/product/device_id/credential"
+        credential.parent.mkdir(parents=True)
+        credential.write_bytes(b"existing device identity")
+        for path in [cache, *cache.rglob("*")]:
+            path.chmod(0o777 if path.is_dir() else 0o666)
+        prepare_runtime(self.seed, self.data)
+        for path in [cache, *cache.rglob("*")]:
+            self.assertEqual(path.stat().st_mode & 0o777, 0o700 if path.is_dir() else 0o600)
+        self.assertEqual(credential.read_bytes(), b"existing device identity")
+        self.assertEqual(self.world.read_bytes(), b"day 49")
+
+    def test_private_eos_cache_does_not_follow_symlinks(self):
+        home = self.data / ".runtime-home"
+        home.mkdir()
+        outside = self.root / "outside"
+        (outside / "share/.eos_sdk").mkdir(parents=True)
+        credential = outside / "share/.eos_sdk/credential"
+        credential.write_bytes(b"untouched")
+        credential.chmod(0o666)
+        (home / ".local").symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(RuntimeError, "symlink"):
+            prepare_runtime(self.seed, self.data)
+        self.assertEqual(credential.stat().st_mode & 0o777, 0o666)
+        self.assertEqual(credential.read_bytes(), b"untouched")
+
     def test_new_instance_reuses_image_and_only_copies_metadata(self):
         before = {p.relative_to(self.seed): p.read_bytes() for p in self.seed.rglob("*") if p.is_file()}
         self.assertEqual(prepare_runtime(self.seed, self.data), self.seed)

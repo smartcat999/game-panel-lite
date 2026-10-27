@@ -49,6 +49,22 @@ class RuntimeIntegrationTest(unittest.TestCase):
         self.assertEqual((self.data / "launched-from").read_text().strip(), "/opt/seven-days/7DaysToDieServer.x86_64")
         self.assertEqual(self.world.read_bytes(), b"existing day 49")
 
+    def test_manual_restart_repairs_eos_permissions_without_resetting_identity(self):
+        self.assertEqual(self.run_runtime().returncode, 0)
+        cache = self.data / ".runtime-home/.local/share/.eos_sdk"
+        credential = cache / "keychain/product/device_id/credential"
+        credential.parent.mkdir(parents=True)
+        credential.write_bytes(b"existing device identity")
+        # Reproduce the writable-tree preparation used by panel manual starts.
+        for path in [cache, *cache.rglob("*")]:
+            path.chmod(0o777 if path.is_dir() else 0o666)
+        result = self.run_runtime()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(credential.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(credential.parent.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(credential.read_bytes(), b"existing device identity")
+        self.assertEqual(self.world.read_bytes(), b"existing day 49")
+
     def install_local(self, build="100"):
         (self.data / "steamapps").mkdir(exist_ok=True)
         for name in ["7DaysToDieServer.x86_64", "UnityPlayer.so", "serverconfig.xml"]:
