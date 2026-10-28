@@ -57,7 +57,7 @@
 - **Project Zomboid 42.21**: Search native server and sandbox options, apply one of five verified official presets, and back up saves, configuration and account databases together. Applying a preset replaces sandbox settings while preserving server options. Existing native world identity survives configuration application and restarts. This first integration uses the vanilla map and eleven default spawn regions; Workshop/modded-server management is not included.
 - **Networking and storage**: Project Zomboid publishes two UDP ports (16261/16262 inside the container). Forward both corresponding host ports for public access; FRP and cloud-firewall setup are separate. Both new providers require a stopped server for consistent backups. Game programs stay in shared image layers, with per-instance saves kept separate.
 
-These integrations are available in `main` and candidate deployments. They do **not** announce a formal v0.2.19 release: the installer below continues to follow published release metadata. Match your Steam client to the supported server version and check free disk space before installing a large game runtime.
+These integrations are included in **v0.2.19**. The installer below follows published release metadata. Match your Steam client to the supported server version and check free disk space before installing a large game runtime.
 
 ---
 
