@@ -31,3 +31,17 @@ export function isWorldActiveOnServer(world: World, serverId?: string): boolean 
   if (!serverId) return Boolean(world.activeInstanceId);
   return world.activeInstanceId === serverId;
 }
+
+
+export function serverTopologyPorts(server: Pick<GameServerResource, "providerKey" | "spec">): { internal: string; external: string } {
+  const internalPort = server.spec.network?.port ?? 0;
+  const hostPort = server.spec.network?.hostPort ?? 0;
+  if (server.providerKey === "project-zomboid") {
+    const firstHostPort = hostPort || internalPort || 16261;
+    return { internal: "16261, 16262 / udp", external: `${firstHostPort}, ${firstHostPort + 1} / udp` };
+  }
+  return {
+    internal: `${internalPort || 7777} / ${server.spec.network?.protocol || "tcp"}`,
+    external: String(hostPort || internalPort || 7777)
+  };
+}

@@ -28,6 +28,11 @@ type ConfigSummaryProvider interface {
 	ConfigSummary(map[string]any) (domain.ProviderConfigSummary, error)
 }
 
+// ConfigPresetSanitizer removes provider-owned identities from reusable templates.
+type ConfigPresetSanitizer interface {
+	SanitizeConfigPreset(map[string]any) map[string]any
+}
+
 type ConfigUpdateValidator interface {
 	ValidateConfigUpdate(current, next map[string]any) error
 }
@@ -126,6 +131,13 @@ func (r *Registry) List() []GameProvider {
 
 func (r *Registry) Games() []domain.GameCatalogEntry {
 	games := map[domain.GameKey]domain.GameCatalogEntry{
+		domain.GameProjectZomboid: {
+			Key:         domain.GameProjectZomboid,
+			Name:        "Project Zomboid",
+			Description: "Vanilla 42.21 zombie survival server for friends.",
+			Status:      "planned",
+			CoverImage:  "project-zomboid",
+		},
 		domain.GameSevenDaysToDie: {
 			Key:         domain.GameSevenDaysToDie,
 			Name:        "7 Days to Die",

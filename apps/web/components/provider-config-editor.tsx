@@ -3,6 +3,7 @@
 import { ExternalLink, RotateCcw, Search, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { createSevenDaysWorldSeed, isSevenDaysFieldVisible, sevenDaysConfigSection, type SevenDaysConfigSection } from "@/lib/seven-days-config";
+import { ProjectZomboidConfigEditor } from "@/components/project-zomboid-config-editor";
 import { SevenDaysSandboxEditor } from "@/components/seven-days-sandbox-editor";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SecretInput } from "@/components/secret-input";
@@ -25,6 +26,7 @@ export function ProviderConfigEditor({
   fields,
   hasUnsavedWorldGenerationChanges = false,
   onChange,
+  onPayloadChange,
   onRegenerateWorld,
   onRestoreDefaults,
   payload,
@@ -38,6 +40,7 @@ export function ProviderConfigEditor({
   fields: ProviderConfigField[];
   hasUnsavedWorldGenerationChanges?: boolean;
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
+  onPayloadChange?: (payload: ProviderConfigPayload) => void;
   onRegenerateWorld?: () => void;
   onRestoreDefaults?: (fields: ProviderConfigField[]) => void;
   payload: ProviderConfigPayload;
@@ -103,6 +106,10 @@ export function ProviderConfigEditor({
     return `${fieldLabel(field)} ${field.help ?? ""}`.toLocaleLowerCase(locale === "zh" ? "zh-CN" : "en-US").includes(normalizedQuery);
   });
   const visibleGroups = normalizedQuery ? groups.filter((group) => matchedFields.some((field) => field.group === group)) : activeGroup ? [activeGroup] : [];
+
+  if (providerKey === "project-zomboid") {
+    return <ProjectZomboidConfigEditor disabled={disabled} errors={errors} fields={fields} payload={payload} onPayloadChange={onPayloadChange} surface={surface} />;
+  }
 
   if (fields.length === 0) return <p className="mt-4 text-sm text-slate-500">{t("none")}</p>;
 
@@ -367,7 +374,8 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
     { key: "performance", label: isZh ? "高级" : "Advanced" },
     { key: "landClaims", label: isZh ? "多人" : "Multiplayer" }
   ];
-  const sectionFields = fields.filter((field) => sevenDaysConfigSection(field) === section);
+  const sectionFields = fields.filter((field) => sevenDaysConfigSection(field) === section)
+    .sort((a, b) => Number(a.group === "sevenDays.performance") - Number(b.group === "sevenDays.performance"));
   const visibleFields = sectionFields.filter((field) => isSevenDaysFieldVisible(field, payload) || Boolean(errors[field.name]));
   const hasChanges = sectionFields.some((field) => isProviderFieldModified(payload, field));
   const changeField = (field: ProviderConfigField, value: ConfigValue) => {
@@ -385,6 +393,7 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
             const hasErrors = fields.some((field) => sevenDaysConfigSection(field) === key && Boolean(errors[field.name]));
             return <button key={key} type="button" aria-pressed={section === key} onClick={() => setSection(key)} className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-panel-green", section === key ? "bg-slate-800 text-slate-100" : "text-slate-400 hover:text-white")}>
               {label}
+              <span aria-hidden="true" className="text-[10px] tabular-nums text-slate-500">{fields.filter((field) => sevenDaysConfigSection(field) === key && (isSevenDaysFieldVisible(field, payload) || Boolean(errors[field.name]))).length}</span>
               {hasErrors ? <span className="size-1.5 rounded-full bg-red-400" aria-label={isZh ? "有待修正的参数" : "Contains invalid settings"} /> : null}
             </button>;
           })}
@@ -394,6 +403,9 @@ function SevenDaysConfigEditor({ disabled, errors, fields, onChange, onRestoreDe
       <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", section !== "basic" && "xl:grid-cols-3")}>
         {visibleFields.map((field) => <ConfigField key={field.name} disabled={disabled || (surface === "server" && ["worldName", "gameWorld", "worldGenSeed", "worldGenSize"].includes(field.name))} error={errors[field.name]} field={field} help={(isZh ? field.help : field.helpEn) ?? ""} label={(isZh ? field.label : field.labelEn) ?? field.label} onChange={changeField} payload={payload} slider={false} sevenDays />)}
       </div>
+      {section === "basic" && (surface === "server" || payload.gameWorld !== "RWG") ? <p className="text-xs text-slate-400">{isZh
+        ? `${surface === "server" ? "存档与地图标识只读，避免切换已有世界。" : ""}${payload.gameWorld !== "RWG" ? "随机种子和尺寸仅在随机生成地图时显示。" : ""}`
+        : `${surface === "server" ? "Save and world identity are read-only to preserve the existing world. " : ""}${payload.gameWorld !== "RWG" ? "Seed and size are shown only for random worlds." : ""}`}</p> : null}
       <ConfirmDialog eyebrow={isZh ? "世界数据" : "World data"} open={Boolean(resetChange)} title={isZh ? "启用区块重置？" : "Enable chunk reset?"} description={isZh ? "长时间未访问且未受保护的区块会重置，建造内容可能丢失。确认后仍需保存配置并重启服务器。" : "Unvisited, unprotected chunks will reset and builds may be lost. Save settings and restart to apply."} confirmLabel={isZh ? "确认设置" : "Confirm setting"} cancelLabel={isZh ? "取消" : "Cancel"} confirmVariant="danger" onCancel={() => setResetChange(null)} onConfirm={() => { if (resetChange) onChange(resetChange.field, resetChange.value); setResetChange(null); }} />
       {section === "landClaims" ? <p className="text-xs text-slate-400">{isZh ? "耐久倍率针对非盟友玩家的破坏；0 表示免疫此类伤害。" : "Durability multipliers protect against non-allied player damage; 0 prevents that damage."}</p> : null}
     </div>

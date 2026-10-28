@@ -12,6 +12,8 @@ output
 test-results
 tmp
 data
+!apps/api/internal/provider/projectzomboid/data/
+!apps/api/internal/provider/projectzomboid/data/options.json
 *.log
 .env
 .env.local

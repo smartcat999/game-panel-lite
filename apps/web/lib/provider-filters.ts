@@ -7,6 +7,7 @@ export type ProviderFilterOption = {
 };
 
 const fallbackProviderLabels: Record<string, string> = {
+  "project-zomboid": "Project Zomboid",
   "terraria-vanilla": "Terraria",
   "terraria-tmodloader": "tModLoader",
   palworld: "Palworld",

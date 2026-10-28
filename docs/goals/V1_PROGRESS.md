@@ -1,5 +1,16 @@
 # V1 Progress
 
+## 2026-10-28 — Project Zomboid 42.21 vanilla integration
+
+- Added the Project Zomboid provider, native server/sandbox configuration editor and local base/runtime image build workflow. Configuration metadata comes from official Steam app 380870 public Build 25485538: 144 server options, 269 sandbox options and five complete presets.
+- Preserved official option names, grouping, typed values and edit dependencies. Preset application replaces the sandbox in one operation, preserving server credentials and identity; vanilla map and eleven default spawn regions follow the native source.
+- Rendered actual Provider output for defaults and all five presets and read every sandbox field through the official Java loader: all six sets match all 269 typed values. Server files use uppercase VERSION=6 to prevent legacy migrations. INI values reject ASCII control characters and equals signs to prevent injection/truncation.
+- Native um773 runtime checks passed two boots, Steam initialization, UDP 16261/16262, clean quit on SIGTERM/console, saved world and account database persistence. Initial admin credentials are only supplied before database creation and are masked from launcher output.
+- Real panel stop/start exposed native world creation rewriting ResetID: replacing gamepanel.ini from the initial panel payload then changed that identity. The Provider now writes gamepanel.ini.pending; the runtime atomically applies desired options while retaining the existing native ResetID and ServerPlayerID. Missing or invalid existing identity fails without reseeding. The runtime has 21 regression tests and the build entry point has five tests.
+- Deployed API/Web and the local runtime only to um773. Created an isolated two-player, 3 GiB test server through the browser; native startup, clean stop (exit 0), full 46-file Zomboid backup, restore and subsequent native startup passed. Backup file hashes match the complete stopped subtree, including account database/configuration/saves and excluding game programs. ResetID, ServerPlayerID, world seed and admin password hash remain unchanged after the fixed lifecycle.
+- Full Go tests/vet, frontend tests (173), typecheck, application-source lint and production build pass. Full frontend lint still reports 140 pre-existing errors in untracked apps/web/scripts, which were preserved. Actual Steam client joining remains a user-assisted check; the test server is left running on LAN UDP 7783/7784.
+- No production deployment or formal v0.2.19 release in this phase.
+
 ## 2026-10-27 — Seven Days image build separation
 
 - Split the game/dependency base Dockerfile from the lightweight runtime Dockerfile. Runtime builds consume a digest-pinned base and never invoke Steam or rebuild system dependencies, including with --no-cache.
@@ -375,3 +386,41 @@
   hit an existing Docker-host timeout test; isolated and full reruns passed.
 - Local implementation only. No production server was changed, and v0.2.19
   remains unpublished. Client-side testing of every rule combination is pending.
+
+
+### Runtime installation during Steam version checks
+
+- Reproduced Seven Days image installation returning HTTP 409 while an unrelated
+  Palworld metadata check is active. Installation incorrectly used the broad
+  maintenance lock, including read-only checks.
+- Reuse the existing creation-maintenance predicate for image preparation:
+  version checks may run concurrently; actual file updates and world regeneration
+  continue to block installation. Uninstall locking remains unchanged.
+- Added HTTP regression coverage for current/legacy version checks and file
+  updates; the two read-only cases failed before the fix and pass afterwards.
+- Validation: related HTTP tests, full Go tests and go vet pass. No frontend change.
+
+
+### Seven Days disabled numeric values in creation
+
+- Reproduced the default creation wizard rejecting MaxChunkAge=-1 and
+  CameraRestrictionMode=0 as non-positive values. The API schema omitted their
+  minimum bounds, so the generic wizard fell back to a minimum of one.
+- Declared the existing backend bounds for chunk reset, camera restriction,
+  bedroll deadzone/duration and party kill sharing. Valid disabled values remain
+  available without enabling destructive chunk reset or changing game defaults.
+- Added a schema contract regression that failed before the fix; provider/HTTP
+  tests, full Go tests and go vet pass. No frontend code change is required.
+
+
+### Seven Days detail configuration visibility
+
+- Removed the unrelated curated Terraria rules block from Seven Days details;
+  unknown providers no longer fall back to Terraria controls.
+- Audited all 37 schema fields across Basic (5), Server (7), Advanced (13), and
+  Multiplayer (12), plus 165 sandbox options. Random seed/size remain conditional
+  on RWG, and inactive dynamic-mesh fields remain conditional on mesh settings.
+- Category controls now show visible field counts. Native advanced toggles precede
+  server performance fields. One concise hint explains fixed-map conditional
+  fields and existing-world identity protection without duplicating descriptions.
+- Frontend tests (137), typecheck, scoped lint and production build pass.

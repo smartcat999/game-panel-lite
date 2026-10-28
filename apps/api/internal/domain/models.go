@@ -132,6 +132,7 @@ const (
 	GameDST            GameKey = "dont-starve-together"
 	GameMinecraft      GameKey = "minecraft"
 	GameSevenDaysToDie GameKey = "seven-days-to-die"
+	GameProjectZomboid GameKey = "project-zomboid"
 
 	ProviderTerrariaVanilla    ProviderKey = "terraria-vanilla"
 	ProviderTerrariaTModLoader ProviderKey = "terraria-tmodloader"
@@ -139,6 +140,7 @@ const (
 	ProviderDST                ProviderKey = "dont-starve-together"
 	ProviderMinecraft          ProviderKey = "minecraft"
 	ProviderSevenDaysToDie     ProviderKey = "seven-days-to-die"
+	ProviderProjectZomboid     ProviderKey = "project-zomboid"
 
 	StatusCreating   ServerStatus = "creating"
 	StatusStarting   ServerStatus = "starting"

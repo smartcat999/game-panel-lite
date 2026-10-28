@@ -65,6 +65,26 @@ func TestAdvancedSettingsMatchVerifiedGameTemplate(t *testing.T) {
 	}
 }
 
+func TestDisabledMenuValuesDeclareTheirNumericBounds(t *testing.T) {
+	minimums := map[string]float64{
+		"maxChunkAge": -1, "cameraRestrictionMode": 0,
+		"bedrollDeadZoneSize": 0, "bedrollExpiryTime": 0, "partySharedKillRange": 0,
+	}
+	for _, field := range NewProvider().ConfigSchema() {
+		minimum, ok := minimums[field.Name]
+		if !ok {
+			continue
+		}
+		delete(minimums, field.Name)
+		if field.Min == nil || *field.Min != minimum {
+			t.Errorf("%s must declare minimum %v so valid disabled values pass creation validation", field.Name, minimum)
+		}
+	}
+	if len(minimums) != 0 {
+		t.Fatalf("missing fields: %v", minimums)
+	}
+}
+
 func TestAdvancedSettingsPersistZeroFalseAndIntegerMultipliers(t *testing.T) {
 	p := NewProvider()
 	input := p.DefaultConfigPayload()

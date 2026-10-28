@@ -531,6 +531,7 @@ function PresetEditDrawer({ context, pending, preset, t, onClose, onSave }: {
                 fieldLabel={(field) => field.label || formatKey(field.name)}
                 fields={provider.configSchema}
                 onChange={(field, value) => setConfig((current) => updateProviderConfigPayload(current, field, value))}
+                onPayloadChange={setConfig}
                 onRestoreDefaults={(fields) => setConfig((current) => restoreProviderConfigDefaults(current, fields))}
                 payload={config}
                 providerKey={provider.key}

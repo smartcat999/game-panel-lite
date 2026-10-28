@@ -73,6 +73,7 @@ import { localizeRelativeTime, useI18n, type MessageKey } from "@/lib/i18n";
 import { dstConfiguredWorkshopIds, dstModScope, isServerAssignableMod, mergeConfiguredWorkshopMods, modDisplayName, modRuntimeState, type ModRuntimeState } from "@/lib/mod-display";
 import { createDefaultProviderConfigPayload, isCuratedGameRuleField, isWorldGenerationProviderConfigField, providerConfigFieldChanged, restoreProviderConfigDefaults, updateDSTGameModePayload, updateProviderConfigPath, updateProviderConfigPayload, type ProviderConfigPayload } from "@/lib/provider-config";
 import { describeResourceAction, formatServerDetailError, isServerLifecyclePending, shouldRenderServerDetailTabs } from "@/lib/server-detail-actions";
+import { serverTopologyPorts } from "@/lib/server-detail-resources";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/lib/permissions";
 import type { Backup, DSTModConfiguration, GameServerResource, ModConfigFile, ModFile, ModPack, ProviderCapabilities, ProviderCatalog, ProviderConfigField, ResourceLimits, ServerStatus, World } from "@/lib/types";
@@ -1132,8 +1133,7 @@ function OverviewTab({
     ? `${nodeInfo.name}${nodeInfo.region ? ` (${nodeInfo.region})` : ""}`
     : (resource.nodeId || "主控本机 (Local Daemon)");
 
-  const hostPort = resource.spec.network?.hostPort ?? 0;
-  const internalPort = resource.spec.network?.port ?? 0;
+  const topologyPorts = serverTopologyPorts(resource);
   return (
     <div className="space-y-6">
       {/* Compute Node Topology Card */}
@@ -1185,14 +1185,14 @@ function OverviewTab({
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
             <span className="text-[11px] text-slate-500 block">容器内部端口</span>
             <span className="mt-1 text-sm font-mono font-semibold text-slate-200 block">
-              {internalPort || 7777} / {resource.spec.network?.protocol || "tcp"}
+              {topologyPorts.internal}
             </span>
           </div>
 
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
             <span className="text-[11px] text-slate-500 block">对外服务端口</span>
             <span className="mt-1 text-sm font-mono font-semibold text-panel-green block">
-              {hostPort || internalPort || 7777}
+              {topologyPorts.external}
             </span>
           </div>
         </div>
@@ -1822,6 +1822,7 @@ function ConfigTab({
               fieldLabel={(field) => providerFieldLabel(field, t)}
               fieldHelp={(field) => providerFieldHelp(field, t)}
               onChange={(field, value) => setProviderDraft((current) => updateProviderConfigPayload(current, field, value))}
+              onPayloadChange={setProviderDraft}
               onRegenerateWorld={onRegenerateWorld}
               onRestoreDefaults={(fields) => setProviderDraft((current) => restoreProviderConfigDefaults(current, fields))}
             />

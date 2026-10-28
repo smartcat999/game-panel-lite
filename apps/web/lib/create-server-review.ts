@@ -25,6 +25,8 @@ export function createReviewInvitePreview({
 
 function reviewGameName(gameKey?: GameKey) {
   switch (gameKey) {
+    case "project-zomboid":
+      return "Project Zomboid";
     case "seven-days-to-die":
       return "7 Days to Die";
     case "palworld":
@@ -43,6 +45,8 @@ function reviewGameName(gameKey?: GameKey) {
 
 export function reviewJoinInstructionKey(gameKey?: GameKey): MessageKey {
   switch (gameKey) {
+    case "project-zomboid":
+      return "reviewProjectZomboidJoinInstruction";
     case "seven-days-to-die":
       return "reviewSevenDaysJoinInstruction";
     case "palworld":
