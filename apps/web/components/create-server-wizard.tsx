@@ -1,5 +1,7 @@
 "use client";
 
+import { isPZFieldVisible, validatePZConfig } from "@/lib/project-zomboid-config";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -214,6 +216,7 @@ function createGameDefaultNames(gameName: string, locale: "zh" | "en") {
 }
 
 function createProviderDefaultOverrides(names: ReturnType<typeof createGameDefaultNames>, gameKey: string, locale: "zh" | "en") {
+  if (gameKey === "project-zomboid") return { server: { PublicName: names.serverName } };
   const overrides: ProviderConfigPayload = {
     clusterName: names.clusterName,
     saveName: names.saveName,
@@ -274,6 +277,7 @@ function validateCreateConfig({
   providerConfigPayload: ProviderConfigPayload;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
 }) {
+  if (provider?.key === "project-zomboid") return validatePZConfig(providerConfigPayload, provider.configSchema, locale);
   const errors: ConfigValidationErrors = {};
   if (gameKey === "terraria") {
     if (!String(config.serverName ?? "").trim()) errors.serverName = t("requiredFieldError", { field: t("serverName") });
@@ -365,18 +369,18 @@ function terrariaConfigFromPayload(payload: ProviderConfigPayload | undefined, f
 }
 
 function providerServerName(payload: ProviderConfigPayload, fallback: string) {
-  return stringPayloadValue(payload, "serverName") || stringPayloadValue(payload, "identity.serverName") || stringPayloadValue(payload, "clusterName") || stringPayloadValue(payload, "identity.clusterName") || fallback;
+  return stringPayloadValue(payload, "server.PublicName") || stringPayloadValue(payload, "serverName") || stringPayloadValue(payload, "identity.serverName") || stringPayloadValue(payload, "clusterName") || stringPayloadValue(payload, "identity.clusterName") || fallback;
 }
 
 function providerJoinPassword(payload: ProviderConfigPayload) {
-  return stringPayloadValue(payload, "password") || stringPayloadValue(payload, "identity.password") || stringPayloadValue(payload, "serverPassword");
+  return stringPayloadValue(payload, "server.Password") || stringPayloadValue(payload, "password") || stringPayloadValue(payload, "identity.password") || stringPayloadValue(payload, "serverPassword");
 }
 
 function providerReviewValue(field: ProviderConfigField, value: unknown, t: (key: MessageKey, values?: Record<string, string | number>) => string, locale?: string): string {
   if (field.type === "boolean") return value === true ? t("enabled") : t("disabled");
   if (field.type === "password") return String(value ?? "").trim() ? t("enabled") : t("none");
   if (field.type === "select") {
-    const option = field.options?.find((item) => item.value === value);
+    const option = field.options?.find((item) => String(item.value) === String(value));
     return option ? (locale === "en" && option.labelEn ? option.labelEn : providerOptionLabel(field, option.value, option.label, t)) : String(value ?? "");
   }
   return String(value ?? "");
@@ -446,7 +450,7 @@ function createReviewConfigModel({
   const providerFields = provider?.configSchema ?? [];
   const modifiedAdvancedCount = providerFields.filter((field) => isAdvancedProviderConfigField(provider?.key ?? "", field) && isProviderFieldModified(providerConfigPayload, field)).length;
   const fields = providerFields
-    .filter((field) => !isAdvancedProviderConfigField(provider?.key ?? "", field) && (provider?.key !== "seven-days-to-die" || isSevenDaysFieldVisible(field, providerConfigPayload)))
+    .filter((field) => (provider?.key !== "project-zomboid" || (isPZFieldVisible(field) && ["server.PublicName", "server.MaxPlayers", "server.Public", "server.Password", "server.DefaultPort", "server.UDPPort"].includes(field.name))) && !isAdvancedProviderConfigField(provider?.key ?? "", field) && (provider?.key !== "seven-days-to-die" || isSevenDaysFieldVisible(field, providerConfigPayload)))
     .map((field): ReviewConfigField | null => {
       const value = providerConfigValue(providerConfigPayload, field.name);
       const formatted = providerReviewValue(field, value, t, locale);
@@ -721,7 +725,7 @@ export function CreateServerWizard() {
   const applyQuickPlayTemplate = (templateId: string, targetGameKey?: string) => {
     const isZh = locale.startsWith("zh");
     const targetKey = targetGameKey || selectedGameKey;
-    if (targetKey === "seven-days-to-die") return;
+    if (["seven-days-to-die", "project-zomboid"].includes(targetKey)) return;
     const game = (targetGameKey ? games.find((g) => g.key === targetKey) : null) ?? games.find((g) => g.key === selectedGameKey) ?? games[0];
     if (!game) return;
 
@@ -1147,7 +1151,7 @@ export function CreateServerWizard() {
             {currentStepId === "setup" && (
               <div className="space-y-4">
                 {/* Only show presets for games with implemented templates. */}
-                {selectedGameKey !== "seven-days-to-die" && <div className="rounded-xl border border-panel-green/30 bg-slate-950/70 p-3.5 shadow-lg relative overflow-hidden">
+                {!["seven-days-to-die", "project-zomboid"].includes(selectedGameKey) && <div className="rounded-xl border border-panel-green/30 bg-slate-950/70 p-3.5 shadow-lg relative overflow-hidden">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Zap className="size-3.5 text-panel-gold animate-pulse shrink-0" />
@@ -1783,6 +1787,11 @@ function ConfigStep({
                 onCustomize();
                 onClearValidationError(field.name);
                 setProviderConfigPayload(updateProviderConfigPayload(providerConfigPayload, field, nextValue));
+              }}
+              onPayloadChange={(payload) => {
+                onCustomize();
+                for (const field of providerFields) onClearValidationError(field.name);
+                setProviderConfigPayload(payload);
               }}
               onRestoreDefaults={(fields) => {
                 onCustomize();

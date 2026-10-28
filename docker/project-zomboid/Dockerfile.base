@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.7
+# The named gamefiles context is an already downloaded, complete official install.
+FROM debian:bookworm-slim AS dependencies
+RUN apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update \
+    && apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends ca-certificates python3 libstdc++6 libgcc-s1 libgomp1 libgl1 libglu1-mesa libsdl2-2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+FROM dependencies
+COPY --from=gamefiles / /opt/project-zomboid/
+ARG PZ_BUILD_ID=25485538
+RUN python3 - <<'PY'
+import os, re, json
+from pathlib import Path
+root = Path('/opt/project-zomboid')
+manifest = (root / 'steamapps/appmanifest_380870.acf').read_text()
+if os.environ['PZ_BUILD_ID'] != '25485538':
+    raise SystemExit('This runtime supports audited Build 25485538 / Core 42.21 only')
+for key, value in [('appid', '380870'), ('StateFlags', '4'), ('buildid', os.environ['PZ_BUILD_ID'])]:
+    if not re.search(r'"' + key + r'"\s+"' + value + r'"', manifest):
+        raise SystemExit('Unexpected Steam ' + key)
+for name in ['ProjectZomboid64', 'ProjectZomboid64.json', 'start-server.sh', 'jre64/bin/java',
+             'java/projectzomboid.jar', 'linux64/libZNetJNI64.so', 'jre64/lib/libjsig.so',
+             *['media/lua/shared/Sandbox/' + p + '.lua' for p in
+               ['Apocalypse', 'Outbreak', 'Extinction', 'Rising', 'SixMonthsLater']]]:
+    if not (root / name).is_file():
+        raise SystemExit('Missing official file: ' + name)
+if '-Dzomboid.steam=1' not in json.loads((root / 'ProjectZomboid64.json').read_text())['vmArgs']:
+    raise SystemExit('Expected Steam-enabled official launcher')
+PY
+WORKDIR /opt/project-zomboid
+LABEL org.opencontainers.image.title="GamePanel Lite Project Zomboid base" \
+      org.opencontainers.image.source="https://github.com/smartcat999/game-panel-lite" \
+      io.gamepanel.steam.appid="380870" \
+      io.gamepanel.steam.buildid="${PZ_BUILD_ID}" \
+      io.gamepanel.game.version="42.21"
+CMD ["/bin/sh"]

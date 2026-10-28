@@ -15,6 +15,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
+COPY apps/api/internal/provider/projectzomboid/data/options.json ./apps/api/internal/provider/projectzomboid/data/options.json
 
 ARG NEXT_PUBLIC_API_BASE_URL=
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}

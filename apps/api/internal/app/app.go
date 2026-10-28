@@ -19,6 +19,7 @@ import (
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/dst"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/minecraft"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/palworld"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/projectzomboid"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/sevendaystodie"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/terraria"
@@ -58,6 +59,7 @@ func New(cfg config.Config, logger *slog.Logger) (*App, error) {
 		dst.NewProvider(providerCatalog),
 		minecraft.NewProvider(providerCatalog),
 		sevendaystodie.NewProvider(providerCatalog),
+		projectzomboid.NewProvider(providerCatalog),
 	)
 	adapter, err := dockerruntime.NewAdapter(cfg.DockerHost)
 	var runtimeAdapter runtime.Adapter = runtime.NewMockAdapter()

@@ -75,7 +75,12 @@ func (h *Handler) configSummaryForServer(server domain.GameServer) (domain.Provi
 func mergeConfigPayload(base map[string]any, overlay map[string]any) map[string]any {
 	out := cloneConfigPayload(base)
 	for key, value := range overlay {
-		out[key] = value
+		if child, ok := value.(map[string]any); ok {
+			previous, _ := out[key].(map[string]any)
+			out[key] = mergeConfigPayload(previous, child)
+		} else {
+			out[key] = value
+		}
 	}
 	return out
 }
@@ -86,7 +91,11 @@ func cloneConfigPayload(payload map[string]any) map[string]any {
 	}
 	out := make(map[string]any, len(payload))
 	for key, value := range payload {
-		out[key] = value
+		if child, ok := value.(map[string]any); ok {
+			out[key] = cloneConfigPayload(child)
+		} else {
+			out[key] = value
+		}
 	}
 	return out
 }
@@ -147,14 +156,29 @@ func sanitizePresetConfigPayload(gameProvider provider.GameProvider, configPaylo
 	}
 	for _, field := range gameProvider.ConfigSchema() {
 		if field.Type == "password" {
-			delete(payload, field.Name)
+			deleteConfigPayloadPath(payload, field.Name)
 		}
+	}
+	if sanitizer, ok := gameProvider.(provider.ConfigPresetSanitizer); ok {
+		payload = sanitizer.SanitizeConfigPreset(payload)
 	}
 	buf, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 	return string(buf), nil
+}
+
+func deleteConfigPayloadPath(payload map[string]any, path string) {
+	parts := strings.Split(path, ".")
+	for _, key := range parts[:len(parts)-1] {
+		next, ok := payload[key].(map[string]any)
+		if !ok {
+			return
+		}
+		payload = next
+	}
+	delete(payload, parts[len(parts)-1])
 }
 
 func isEmptyRawJSON(raw json.RawMessage) bool {

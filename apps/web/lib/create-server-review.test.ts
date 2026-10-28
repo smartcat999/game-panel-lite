@@ -46,3 +46,9 @@ describe("createReviewInvitePreview", () => {
     expect(reviewResourceSummaryKey("minecraft")).toBe("reviewMinecraftWorldPlayers");
   });
 });
+
+
+it("uses PZ joining guidance without Terraria fallback", () => {
+  expect(reviewJoinInstructionKey("project-zomboid")).toBe("reviewProjectZomboidJoinInstruction");
+  expect(createReviewInvitePreview({ gameKey: "project-zomboid", hostPortLabel: "16261", serverName: "PZ room" })).toBe("Join PZ room in Project Zomboid at 127.0.0.1:16261");
+});

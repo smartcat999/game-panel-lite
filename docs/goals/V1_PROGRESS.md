@@ -1,5 +1,16 @@
 # V1 Progress
 
+## 2026-10-28 — Project Zomboid 42.21 vanilla integration
+
+- Added the Project Zomboid provider, native server/sandbox configuration editor and local base/runtime image build workflow. Configuration metadata comes from official Steam app 380870 public Build 25485538: 144 server options, 269 sandbox options and five complete presets.
+- Preserved official option names, grouping, typed values and edit dependencies. Preset application replaces the sandbox in one operation, preserving server credentials and identity; vanilla map and eleven default spawn regions follow the native source.
+- Rendered actual Provider output for defaults and all five presets and read every sandbox field through the official Java loader: all six sets match all 269 typed values. Server files use uppercase VERSION=6 to prevent legacy migrations. INI values reject ASCII control characters and equals signs to prevent injection/truncation.
+- Native um773 runtime checks passed two boots, Steam initialization, UDP 16261/16262, clean quit on SIGTERM/console, saved world and account database persistence. Initial admin credentials are only supplied before database creation and are masked from launcher output.
+- Real panel stop/start exposed native world creation rewriting ResetID: replacing gamepanel.ini from the initial panel payload then changed that identity. The Provider now writes gamepanel.ini.pending; the runtime atomically applies desired options while retaining the existing native ResetID and ServerPlayerID. Missing or invalid existing identity fails without reseeding. The runtime has 21 regression tests and the build entry point has five tests.
+- Deployed API/Web and the local runtime only to um773. Created an isolated two-player, 3 GiB test server through the browser; native startup, clean stop (exit 0), full 46-file Zomboid backup, restore and subsequent native startup passed. Backup file hashes match the complete stopped subtree, including account database/configuration/saves and excluding game programs. ResetID, ServerPlayerID, world seed and admin password hash remain unchanged after the fixed lifecycle.
+- Full Go tests/vet, frontend tests (173), typecheck, application-source lint and production build pass. Full frontend lint still reports 140 pre-existing errors in untracked apps/web/scripts, which were preserved. Actual Steam client joining remains a user-assisted check; the test server is left running on LAN UDP 7783/7784.
+- No production deployment or formal v0.2.19 release in this phase.
+
 ## 2026-10-27 — Seven Days image build separation
 
 - Split the game/dependency base Dockerfile from the lightweight runtime Dockerfile. Runtime builds consume a digest-pinned base and never invoke Steam or rebuild system dependencies, including with --no-cache.

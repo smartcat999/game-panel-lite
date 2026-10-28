@@ -8,6 +8,7 @@ export type GameFilterOption = {
 };
 
 const providerGameMap: Record<string, GameKey> = {
+  "project-zomboid": "project-zomboid",
   "seven-days-to-die": "seven-days-to-die",
   "terraria-vanilla": "terraria",
   "terraria-tmodloader": "terraria",
@@ -17,6 +18,7 @@ const providerGameMap: Record<string, GameKey> = {
 };
 
 const fallbackGameLabels: Record<string, string> = {
+  "project-zomboid": "Project Zomboid",
   "seven-days-to-die": "7 Days to Die",
   terraria: "Terraria",
   palworld: "Palworld",

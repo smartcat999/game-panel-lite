@@ -2,6 +2,7 @@ import type { MessageKey } from "./i18n";
 import type { GameKey } from "./types";
 
 const gameNameKeys: Partial<Record<string, MessageKey>> = {
+  "project-zomboid": "gameNameProjectZomboid",
   "seven-days-to-die": "gameNameSevenDays",
   terraria: "gameNameTerraria",
   palworld: "gameNamePalworld",
@@ -10,6 +11,7 @@ const gameNameKeys: Partial<Record<string, MessageKey>> = {
 };
 
 const gameDescKeys: Partial<Record<string, MessageKey>> = {
+  "project-zomboid": "gameDescProjectZomboid",
   "seven-days-to-die": "gameDescSevenDays",
   terraria: "gameDescTerraria",
   palworld: "gameDescPalworld",

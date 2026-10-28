@@ -6,7 +6,7 @@ usage() {
 Build GamePanel Lite game runtime images.
 
 Usage:
-  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld|seven-days-to-die|seven-days-to-die-base] [options]
+  scripts/build-game-images.sh [all|vanilla|tmodloader|dst|palworld|seven-days-to-die|seven-days-to-die-base|project-zomboid|project-zomboid-base] [options]
 
 Targets:
   all           Build vanilla Terraria and tModLoader images. Default.
@@ -16,6 +16,8 @@ Targets:
   palworld      Build only the Palworld dedicated server image.
   seven-days-to-die Build only 7 Days runtime scripts on its pinned base.
   seven-days-to-die-base Explicitly build 7 Days programs and dependencies.
+  project-zomboid Build Project Zomboid 42.21 runtime locally.
+  project-zomboid-base Build from an explicitly verified official installation.
 
 7 Days targets also accept the options in scripts/build-seven-days-images.sh --help.
 
@@ -54,6 +56,12 @@ if [[ "$target" == "seven-days-to-die" || "$target" == "seven-days-to-die-base" 
   seven_days_target="runtime"
   if [[ "$target" == "seven-days-to-die-base" ]]; then seven_days_target="base"; fi
   exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/build-seven-days-images.sh" "$seven_days_target" "$@"
+fi
+
+if [[ "$target" == "project-zomboid" || "$target" == "project-zomboid-base" ]]; then
+  pz_target="runtime"
+  if [[ "$target" == "project-zomboid-base" ]]; then pz_target="base"; fi
+  exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/build-project-zomboid-images.sh" "$pz_target" "$@"
 fi
 
 while [[ $# -gt 0 ]]; do

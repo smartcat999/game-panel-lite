@@ -2,6 +2,7 @@ import type { MessageKey } from "./i18n";
 import type { ProviderKey } from "./types";
 
 const providerNameKeys: Partial<Record<string, MessageKey>> = {
+  "project-zomboid": "providerNameProjectZomboid",
   "seven-days-to-die": "gameNameSevenDays",
   "terraria-vanilla": "providerNameTerrariaVanilla",
   "terraria-tmodloader": "providerNameTerrariaTmodloader",
@@ -11,6 +12,7 @@ const providerNameKeys: Partial<Record<string, MessageKey>> = {
 };
 
 const providerDescriptionKeys: Partial<Record<string, MessageKey>> = {
+  "project-zomboid": "gameDescProjectZomboid",
   "seven-days-to-die": "gameDescSevenDays",
   "terraria-vanilla": "providerDescTerrariaVanilla",
   "terraria-tmodloader": "providerDescTerrariaTmodloader",

@@ -19,6 +19,7 @@ const terrariaArt: GameArtConfig = {
 };
 
 export const gameArtConfig: Record<string, GameArtConfig> = {
+  "project-zomboid": { gradient: "from-slate-900 to-slate-900", icon: Skull, alt: "Project Zomboid" },
   "seven-days-to-die": {
     imageSrc: "/images/seven-days-to-die-cover.jpg",
     gradient: "from-red-950/50 via-slate-950/20 to-slate-950/50",

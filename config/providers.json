@@ -5,6 +5,10 @@
     "cn": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite"
   },
   "providers": {
+	"project-zomboid": {
+	  "imageTemplate": "{registry}/project-zomboid:{version}",
+	  "versions": ["42.21"]
+	},
     "seven-days-to-die": {
       "imageTemplate": "{registry}/seven-days-to-die:{version}",
       "versions": ["v3.3.0"]

@@ -5,7 +5,8 @@ import {
   getWorldSourceServerId,
   isWorldCompatibleWithServer,
   isWorldActiveOnServer,
-  providerKeyForServer
+  providerKeyForServer,
+  serverTopologyPorts
 } from "./server-detail-resources";
 import type { GameServerResource, World } from "./types";
 
@@ -117,5 +118,23 @@ describe("server detail resource helpers", () => {
     expect(getWorldSourceServerId(world)).toBe("server-1");
     expect(isWorldActiveOnServer(world, "server-1")).toBe(false);
     expect(isWorldActiveOnServer({ ...world, activeInstanceId: "server-1" }, "server-1")).toBe(true);
+  });
+});
+
+
+describe("server topology port labels", () => {
+  it("shows both PZ UDP container ports and consecutive host mappings", () => {
+    const server = { ...baseServer, providerKey: "project-zomboid", spec: { ...baseServer.spec, network: { port: 16261, hostPort: 7783 } } };
+    expect(serverTopologyPorts(server)).toEqual({ internal: "16261, 16262 / udp", external: "7783, 7784 / udp" });
+    expect(serverTopologyPorts({ ...server, spec: { ...server.spec, network: { ...server.spec.network, protocol: "tcp" } } })).toEqual({ internal: "16261, 16262 / udp", external: "7783, 7784 / udp" });
+  });
+
+  it("uses PZ native UDP ports when no host mapping is provided", () => {
+    expect(serverTopologyPorts({ ...baseServer, providerKey: "project-zomboid", spec: { ...baseServer.spec, network: undefined } })).toEqual({ internal: "16261, 16262 / udp", external: "16261, 16262 / udp" });
+  });
+
+  it("preserves existing port labels for other providers", () => {
+    expect(serverTopologyPorts(baseServer)).toEqual({ internal: "7777 / tcp", external: "7777" });
+    expect(serverTopologyPorts({ ...baseServer, spec: { ...baseServer.spec, network: { port: 7777, hostPort: 30001, protocol: "udp" } } })).toEqual({ internal: "7777 / udp", external: "30001" });
   });
 });

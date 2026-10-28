@@ -34,6 +34,7 @@ export function gameServerWorldName(server: GameServerResource): string {
 export function gameServerPassword(server: GameServerResource): string {
   const config = (server.spec?.config ?? {}) as Record<string, unknown>;
   const identity = (config.identity ?? {}) as Record<string, unknown>;
+  if (server.providerKey === "project-zomboid") return String((config.server as Record<string, unknown> | undefined)?.Password ?? "");
   return (
     String(config.password ?? "") ||
     String(config.serverPassword ?? "") ||
@@ -46,6 +47,7 @@ export function gameServerPassword(server: GameServerResource): string {
 export function gameServerMaxPlayers(server: GameServerResource): number {
   const config = (server.spec?.config ?? {}) as Record<string, unknown>;
   const gameplay = (config.gameplay ?? {}) as Record<string, unknown>;
+  if (server.providerKey === "project-zomboid") return Number((config.server as Record<string, unknown> | undefined)?.MaxPlayers ?? 32);
   return (
     Number(config.maxPlayers ?? 0) ||
     Number(config["gameplay.maxPlayers"] ?? 0) ||

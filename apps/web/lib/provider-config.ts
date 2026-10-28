@@ -1,3 +1,4 @@
+import pzMetadata from "../../api/internal/provider/projectzomboid/data/options.json";
 import type { ProviderCatalog, ProviderConfigField } from "./types";
 
 export type ProviderConfigPayload = Record<string, unknown>;
@@ -7,8 +8,16 @@ export function createDefaultProviderConfigPayload(
   overrides: ProviderConfigPayload = {}
 ): ProviderConfigPayload {
   const payload: ProviderConfigPayload = {};
+  if (provider?.key === "project-zomboid") {
+    for (const option of pzMetadata.sandbox) setProviderConfigValue(payload, `sandbox.${option.name}`, option.defaultValue);
+  }
   for (const field of provider?.configSchema ?? []) {
     setProviderConfigValue(payload, field.name, defaultProviderFieldValue(field));
+  }
+  if (provider?.key === "project-zomboid") {
+    // Runtime policy differs from the official UPnP default. Preserve loaded overrides.
+    setProviderConfigValue(payload, "server.UPnP", false);
+    setProviderConfigValue(payload, "server.RCONPassword", "");
   }
   const merged = deepMergeProviderPayload(payload, overrides);
   for (const field of provider?.configSchema ?? []) {
@@ -82,6 +91,7 @@ export function providerConfigValue(payload: ProviderConfigPayload | undefined, 
 }
 
 export function isAdvancedProviderConfigField(providerKey: string, field: ProviderConfigField): boolean {
+  if (providerKey === "project-zomboid") return field.name.startsWith("sandbox.");
   if (providerKey === "dont-starve-together") return Boolean(field.group);
   if (providerKey === "seven-days-to-die") return Boolean(field.group) || field.name === "playerKillingMode";
   if (providerKey === "palworld") return Boolean(field.group && field.group !== "基础设置");

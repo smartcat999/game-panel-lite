@@ -3,6 +3,7 @@
 import { ExternalLink, RotateCcw, Search, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { createSevenDaysWorldSeed, isSevenDaysFieldVisible, sevenDaysConfigSection, type SevenDaysConfigSection } from "@/lib/seven-days-config";
+import { ProjectZomboidConfigEditor } from "@/components/project-zomboid-config-editor";
 import { SevenDaysSandboxEditor } from "@/components/seven-days-sandbox-editor";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SecretInput } from "@/components/secret-input";
@@ -25,6 +26,7 @@ export function ProviderConfigEditor({
   fields,
   hasUnsavedWorldGenerationChanges = false,
   onChange,
+  onPayloadChange,
   onRegenerateWorld,
   onRestoreDefaults,
   payload,
@@ -38,6 +40,7 @@ export function ProviderConfigEditor({
   fields: ProviderConfigField[];
   hasUnsavedWorldGenerationChanges?: boolean;
   onChange: (field: ProviderConfigField, value: ConfigValue) => void;
+  onPayloadChange?: (payload: ProviderConfigPayload) => void;
   onRegenerateWorld?: () => void;
   onRestoreDefaults?: (fields: ProviderConfigField[]) => void;
   payload: ProviderConfigPayload;
@@ -103,6 +106,10 @@ export function ProviderConfigEditor({
     return `${fieldLabel(field)} ${field.help ?? ""}`.toLocaleLowerCase(locale === "zh" ? "zh-CN" : "en-US").includes(normalizedQuery);
   });
   const visibleGroups = normalizedQuery ? groups.filter((group) => matchedFields.some((field) => field.group === group)) : activeGroup ? [activeGroup] : [];
+
+  if (providerKey === "project-zomboid") {
+    return <ProjectZomboidConfigEditor disabled={disabled} errors={errors} fields={fields} payload={payload} onPayloadChange={onPayloadChange} surface={surface} />;
+  }
 
   if (fields.length === 0) return <p className="mt-4 text-sm text-slate-500">{t("none")}</p>;
 
