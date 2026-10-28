@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Next-Generation, Lightweight Self-Hosted Game Server Management Platform.</strong><br>
-  Deploy and manage Terraria, Don't Starve Together, Palworld, and Minecraft servers across distributed nodes with zero hassle.
+  Deploy and manage Terraria, Don't Starve Together, Palworld, Minecraft, 7 Days to Die, and Project Zomboid servers across distributed nodes.
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 
 ## ✨ Key Features
 
-- **🎮 Native Multi-Game Engine**: Deep lifecycle and configuration management for **Terraria** (Vanilla/tModLoader), **Don't Starve Together** (multi-shard forest/caves), **Palworld**, and **Minecraft Java Edition**.
+- **🎮 Native Multi-Game Engine**: Lifecycle and configuration management for **Terraria** (Vanilla/tModLoader), **Don't Starve Together** (forest/caves), **Palworld**, **Minecraft Java Edition**, **7 Days to Die**, and **Project Zomboid** (vanilla 42.21).
 - **🌐 Distributed Multi-Node Fleet**: Seamlessly manage game servers across multiple physical machines or cloud instances from a single master dashboard with real-time network topology visualization.
 - **📦 Integrated Steam Workshop & Mod Hub**: Search, install, configure dependencies, and batch-toggle mods directly through a unified modern UI.
 - **⏱️ Time-Machine Snapshots & Rollback**: One-click world snapshots, backup downloads, and instant disaster recovery without touching the CLI.
@@ -48,6 +48,16 @@
 | **Don't Starve Together** | Multi-shard (Forest + Caves) | ✅ Workshop Mods & Setup | ✅ Full Cluster Backup | ✅ Shard Configs & Multipliers |
 | **Palworld** | Unreal Engine 5 Dedicated | ✅ Config & Savegame | ✅ World Snapshots | ✅ World Settings & Multipliers |
 | **Minecraft Java** | Paper / Fabric / Vanilla | ✅ Plugins & DataPacks | ✅ World Backup | ✅ server.properties Editor |
+| **7 Days to Die** | Vanilla dedicated server | Mod server management not included | Stop-required save backup | Native server groups and sandbox rules/code |
+| **Project Zomboid** | Vanilla 42.21 dedicated server | Vanilla only | Stop-required full Zomboid backup | Native server/sandbox groups and five official presets |
+
+### New survival-game integrations
+
+- **7 Days to Die**: Configure the world, random-map seed, server access, advanced settings and multiplayer rules. Edit sandbox options in game-style groups or use a Sandbox Code. Game-file updates are separate from runtime-image versions; check the actual server build when matching a client.
+- **Project Zomboid 42.21**: Search native server and sandbox options, apply one of five verified official presets, and back up saves, configuration and account databases together. Applying a preset replaces sandbox settings while preserving server options. Existing native world identity survives configuration application and restarts. This first integration uses the vanilla map and eleven default spawn regions; Workshop/modded-server management is not included.
+- **Networking and storage**: Project Zomboid publishes two UDP ports (16261/16262 inside the container). Forward both corresponding host ports for public access; FRP and cloud-firewall setup are separate. Both new providers require a stopped server for consistent backups. Game programs stay in shared image layers, with per-instance saves kept separate.
+
+These integrations are available in `main` and candidate deployments. They do **not** announce a formal v0.2.19 release: the installer below continues to follow published release metadata. Match your Steam client to the supported server version and check free disk space before installing a large game runtime.
 
 ---
 
