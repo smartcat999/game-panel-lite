@@ -404,18 +404,47 @@ func (h *Handler) deleteBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createInstanceBackupArchive(ctx context.Context, server domain.GameServer, dataDir string) (string, int64, error) {
-	svc := backupsvc.NewService(h.cfg.DataDir)
 	if h.provider != nil {
 		if gameProvider, ok := h.provider.Get(server.ProviderKey); ok {
 			if gameProvider.Capabilities().BackupRequiresStop && (isGameServerLockedForMutation(server) || server.Status.ActualState == domain.ActualRunning) {
 				return "", 0, fmt.Errorf("stop the server before creating a consistent save backup")
 			}
-			if subtreeProvider, ok := gameProvider.(provider.BackupSubtreeProvider); ok {
-				if subtree := subtreeProvider.BackupSubtree(server); strings.TrimSpace(subtree) != "" {
-					return svc.CreateSubtree(server.ID, dataDir, subtree)
+			if saver, ok := gameProvider.(provider.OnlineBackupProvider); ok {
+				if server.Status.Phase != domain.PhaseRunning && isGameServerLockedForMutation(server) {
+					return "", 0, fmt.Errorf("wait for the server to finish starting or stopping before backing up")
+				}
+				if server.Status.Phase == domain.PhaseRunning || server.Status.ActualState == domain.ActualRunning {
+					if err := h.confirmBackupSave(ctx, server, saver); err != nil {
+						return "", 0, err
+					}
+				} else if server.Status.Phase != domain.PhaseStopped && server.Status.ActualState != domain.ActualStopped {
+					return "", 0, fmt.Errorf("cannot back up while the game runtime state is unknown")
 				}
 			}
+			if subtreeProvider, ok := gameProvider.(provider.BackupSubtreeProvider); ok {
+				return h.createSavedBackupArchive(server, dataDir, subtreeProvider.BackupSubtree(server))
+			}
 		}
+	}
+	return h.createSavedBackupArchive(server, dataDir, "")
+}
+
+// Caller has either confirmed online saves or already stopped the workload.
+func (h *Handler) createSavedBackupArchive(server domain.GameServer, dataDir, subtree string) (string, int64, error) {
+	svc := backupsvc.NewService(h.cfg.DataDir)
+	if h.provider != nil {
+		if gameProvider, ok := h.provider.Get(server.ProviderKey); ok {
+			if native, ok := gameProvider.(provider.NativeBackupProvider); ok {
+				directory, err := native.BackupDirectory(server)
+				if err != nil {
+					return "", 0, err
+				}
+				return svc.CreateDirectory(server.ID, dataDir, directory)
+			}
+		}
+	}
+	if strings.TrimSpace(subtree) != "" {
+		return svc.CreateSubtree(server.ID, dataDir, subtree)
 	}
 	return svc.Create(server.ID, dataDir)
 }
@@ -423,6 +452,13 @@ func (h *Handler) createInstanceBackupArchive(ctx context.Context, server domain
 func (h *Handler) restoreInstanceBackupArchive(server domain.GameServer, item domain.Backup, dataDir string) error {
 	svc := backupsvc.NewService(h.cfg.DataDir)
 	if gameProvider, ok := h.provider.Get(server.ProviderKey); ok {
+		if native, ok := gameProvider.(provider.NativeBackupProvider); ok {
+			directory, err := native.BackupDirectory(server)
+			if err != nil {
+				return err
+			}
+			return svc.RestoreDirectory(item.InstanceID, item.FileName, dataDir, directory)
+		}
 		if restoreProvider, ok := gameProvider.(provider.ReplacementRestoreProvider); ok {
 			return svc.RestoreSubtree(item.InstanceID, item.FileName, dataDir, restoreProvider.RestoreSubtree(server))
 		}

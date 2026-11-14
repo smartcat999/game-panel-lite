@@ -424,3 +424,12 @@
   server performance fields. One concise hint explains fixed-map conditional
   fields and existing-world identity protection without duplicating descriptions.
 - Frontend tests (137), typecheck, scoped lint and production build pass.
+
+### 2026-11-14 — 饥荒保存确认与原生 ZIP 备份
+
+- 在线手动备份、存档快照和定时备份先等待各启用分片的原生保存完成回调；通过本次唯一标识接收确认，保存失败、超时或日志断开不生成 ZIP。已停服的实例不需要运行时连接。
+- 饥荒 ZIP 以原生集群名称为顶层目录，保留原生配置及 Master/Caves 存档，不新增私有清单或文件编码；不再携带外层 dst/ 或其他集群/缓存。游戏更新和世界重建前的保护备份沿用相同格式。
+- 原生 ZIP 可在 Lite 内回档并替换目标集群，避免遗留更新快照；旧版面板目录布局继续可恢复。恢复使用受限文件系统访问防止目录符号链接越界。
+- 在线保存确认不构成跨分片事务快照；严格一致的正式迁移仍应保存后停服导出。本轮只修改 Lite 源码，没有部署生产、启停游戏或修改 Cloud 代码。
+- Cloud 后续工作独立列于 docs/operations/cloud-dst-import-requirements.txt。
+- 验证：完整 Go 测试 31 个包通过，新增保存确认/ZIP/回档用例及相关 race 检查通过；go vet、前端 typecheck、pnpm build、diff-check 通过。原始 pnpm lint 被既有未跟踪的 apps/web/scripts 与 docs/wechat 脚本 155 项错误阻塞；排除这些原有未跟踪目录后的仓库 lint 通过，未改动这些脚本。尚未部署或对运行中的真实双世界执行新备份流程。

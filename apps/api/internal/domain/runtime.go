@@ -57,3 +57,10 @@ type WorkloadStatus struct {
 	State     ServerActualState `json:"state"`
 	Message   string            `json:"message,omitempty"`
 }
+
+type BackupSaveCommand struct {
+	Name         string
+	Command      string
+	Confirmation string
+	Failure      string
+}

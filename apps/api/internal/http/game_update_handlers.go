@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	backupsvc "github.com/smartcat999/game-panel-lite/apps/api/internal/backup"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider"
 	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
@@ -550,7 +549,7 @@ func (h *Handler) runGameUpdateApply(ctx context.Context, server domain.GameServ
 		h.failGameUpdateApply(ctx, server, &job, fmt.Errorf("prepare game save directory: %w", err))
 		return
 	}
-	path, size, err := backupsvc.NewService(h.cfg.DataDir).CreateSubtree(server.ID, dataDir, updateConfig.BackupSubtree)
+	path, size, err := h.createSavedBackupArchive(server, dataDir, updateConfig.BackupSubtree)
 	if err != nil {
 		h.failGameUpdateApply(ctx, server, &job, err)
 		return
