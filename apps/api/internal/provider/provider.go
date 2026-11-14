@@ -53,6 +53,18 @@ type BackupSubtreeProvider interface {
 	BackupSubtree(domain.GameServer) string
 }
 
+// NativeBackupProvider exports a game directory with its own name at the ZIP
+// root, without the panel's storage prefix. Paths are relative to instance data.
+type NativeBackupProvider interface {
+	BackupDirectory(domain.GameServer) (string, error)
+}
+
+// OnlineBackupProvider supplies save commands whose completion is acknowledged
+// by the game, not merely by the runtime accepting a console command.
+type OnlineBackupProvider interface {
+	BackupSaveCommands(domain.GameServer, string) ([]domain.BackupSaveCommand, error)
+}
+
 // ReplacementRestoreProvider requests an exact save-directory restore rather
 // than overlaying files, which would retain world regions created after backup.
 type ReplacementRestoreProvider interface {

@@ -28,37 +28,58 @@ func (s *Service) Create(instanceID string, sourceDir string) (string, int64, er
 // relative to rootDir. This keeps save-only backups small and still allows the
 // regular Restore method to put every file back in its original location.
 func (s *Service) CreateSubtree(instanceID string, rootDir string, relativeSubtree string) (string, int64, error) {
-	cleanRoot, err := filepath.Abs(rootDir)
+	cleanRoot, sourceDir, err := backupDirectory(rootDir, relativeSubtree)
 	if err != nil {
 		return "", 0, err
 	}
+	return s.create(instanceID, cleanRoot, sourceDir)
+}
+
+// CreateDirectory keeps the native directory name at the archive root.
+func (s *Service) CreateDirectory(instanceID, rootDir, directory string) (string, int64, error) {
+	_, sourceDir, err := backupDirectory(rootDir, directory)
+	if err != nil {
+		return "", 0, err
+	}
+	return s.create(instanceID, filepath.Dir(sourceDir), sourceDir)
+}
+
+func backupDirectory(rootDir, relativeSubtree string) (string, string, error) {
+	cleanRoot, err := filepath.Abs(rootDir)
+	if err != nil {
+		return "", "", err
+	}
 	if filepath.IsAbs(relativeSubtree) {
-		return "", 0, fmt.Errorf("backup subtree must be relative")
+		return "", "", fmt.Errorf("backup subtree must be relative")
 	}
 	cleanRelative := filepath.Clean(relativeSubtree)
 	if cleanRelative == "." || cleanRelative == ".." || strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
-		return "", 0, fmt.Errorf("invalid backup subtree")
+		return "", "", fmt.Errorf("invalid backup subtree")
 	}
 	sourceDir, err := filepath.Abs(filepath.Join(cleanRoot, cleanRelative))
 	if err != nil {
-		return "", 0, err
+		return "", "", err
 	}
 	if sourceDir != cleanRoot && !strings.HasPrefix(sourceDir, cleanRoot+string(filepath.Separator)) {
-		return "", 0, fmt.Errorf("backup subtree escapes data directory")
+		return "", "", fmt.Errorf("backup subtree escapes data directory")
 	}
 	realRoot, err := filepath.EvalSymlinks(cleanRoot)
 	if err != nil {
-		return "", 0, fmt.Errorf("resolve backup data directory: %w", err)
+		return "", "", fmt.Errorf("resolve backup data directory: %w", err)
 	}
 	realSource, err := filepath.EvalSymlinks(sourceDir)
 	if err != nil {
-		return "", 0, fmt.Errorf("resolve backup subtree: %w", err)
+		return "", "", fmt.Errorf("resolve backup subtree: %w", err)
 	}
 	realRelative, err := filepath.Rel(realRoot, realSource)
 	if err != nil || realRelative == ".." || filepath.IsAbs(realRelative) || strings.HasPrefix(realRelative, ".."+string(filepath.Separator)) {
-		return "", 0, fmt.Errorf("backup subtree resolves outside data directory")
+		return "", "", fmt.Errorf("backup subtree resolves outside data directory")
 	}
-	return s.create(instanceID, cleanRoot, sourceDir)
+	info, err := os.Stat(sourceDir)
+	if err != nil || !info.IsDir() {
+		return "", "", fmt.Errorf("backup source must be a directory")
+	}
+	return cleanRoot, sourceDir, nil
 }
 
 func (s *Service) create(instanceID string, archiveRoot string, sourceDir string) (string, int64, error) {
@@ -70,7 +91,7 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		return "", 0, err
 	}
 	target := filepath.Join(dir, "backup-"+time.Now().UTC().Format("20060102-150405.000000000")+".zip")
-	out, err := os.Create(target)
+	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", 0, err
 	}
@@ -92,7 +113,7 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		if err != nil {
 			return err
 		}
-		writer, err := zipper.Create(rel)
+		writer, err := zipper.Create(filepath.ToSlash(rel))
 		if err != nil {
 			return err
 		}
@@ -100,9 +121,12 @@ func (s *Service) create(instanceID string, archiveRoot string, sourceDir string
 		if err != nil {
 			return err
 		}
-		defer in.Close()
-		_, err = io.Copy(writer, in)
-		return err
+		_, copyErr := io.Copy(writer, in)
+		closeErr := in.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
 	})
 	closeErr := zipper.Close()
 	fileErr := out.Close()
@@ -148,6 +172,11 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 	if err := os.MkdirAll(cleanTarget, 0o755); err != nil {
 		return err
 	}
+	root, err := os.OpenRoot(cleanTarget)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	for _, file := range reader.File {
 		if file.FileInfo().IsDir() {
 			continue
@@ -162,14 +191,18 @@ func (s *Service) Restore(instanceID string, fileName string, targetDir string) 
 		if target != cleanTarget && !strings.HasPrefix(target, cleanTarget+string(filepath.Separator)) {
 			return fmt.Errorf("backup contains unsafe path")
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		rel, err := filepath.Rel(cleanTarget, target)
+		if err != nil {
+			return err
+		}
+		if err := root.MkdirAll(filepath.Dir(rel), 0o755); err != nil {
 			return err
 		}
 		in, err := file.Open()
 		if err != nil {
 			return err
 		}
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		out, err := root.OpenFile(rel, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 		if err != nil {
 			_ = in.Close()
 			return err
