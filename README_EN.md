@@ -18,8 +18,8 @@
 
 <p align="center">
   <a href="./web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the v2 product tour" width="900" /></a><br />
-  <a href="./web/public/landing/demo.mp4">Watch the v2 product tour (3:32)</a><br />
-  <sub>Mandarin narration and Chinese subtitles · Server creation, mods, backups, team access and platform administration</sub>
+  <a href="./web/public/landing/demo.mp4">Watch the v2 product tour (1:58)</a><br />
+  <sub>Silent tour with on-screen Chinese instructions · Server creation, mods, backups, team access and platform administration</sub>
 </p>
 
 > Looking for the legacy `v0.x` codebase? See the [v1-legacy](https://github.com/smartcat999/game-panel-lite/tree/v1-legacy) branch.
