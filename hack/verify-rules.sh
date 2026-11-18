@@ -46,7 +46,7 @@ if [[ -n "${for_update_hits}" ]]; then
 fi
 
 # 3. Canonical Constant Management (no raw string literals for Type/Status/Reason/Phase/Stage or inline label/annotation keys in pkg/, AGENTS.md Section 2 Rule 9)
-raw_const_hits=$(git grep -n -E '\b(Type|Status|Reason|Phase|Stage):\s*"[^"]+"' -- 'pkg/*.go' 'pkg/**/*.go' | grep -v '_test\.go:' | grep -v '//' || true)
+raw_const_hits=$(git grep -n -E '(^|[^[:alnum:]_])(Type|Status|Reason|Phase|Stage):[[:space:]]*"[^"]+"' -- 'pkg/*.go' 'pkg/**/*.go' | grep -v '_test\.go:' | grep -v '//' || true)
 if [[ -n "${raw_const_hits}" ]]; then
   echo "[verify-rules] Raw string literals for Type/Status/Reason/Phase/Stage are forbidden in pkg/ (AGENTS.md Section 2 Rule 9):" >&2
   printf '%s\n' "${raw_const_hits}" >&2

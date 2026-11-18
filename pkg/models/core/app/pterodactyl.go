@@ -163,7 +163,7 @@ func parsePterodactylVariable(name, desc, envKey, defVal, rules, fieldType strin
 	f := corev1.AppConfigField{
 		Name:    strings.ToLower(envKey),
 		Label:   name,
-		Type:    "text",
+		Type:    corev1.ConfigFieldTypeText,
 		Group:   "基础设置",
 		Default: defVal,
 		Help:    desc,

@@ -22,6 +22,8 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/repo/pgutil"
 )
 
+const redeemOrderReasonPrefix = "Redeem code "
+
 const redeemAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 // Service coordinates redeem codes, entitlement orders, and subscription convergence.
@@ -220,7 +222,7 @@ func candidateRedeemOrder(tenantUID string, code corev1.RedeemCode, plan *corev1
 	return corev1.QuotaOrder{
 		ID: "redeem:" + code.ID, TenantUID: tenantUID, OrderKind: code.OrderKind,
 		PlanName: code.PlanName, Source: corev1.QuotaOrderSourceRedeem, SourceRef: code.ID,
-		Reason: "Redeem code " + code.CodeHint, QuotaDelta: plan.Quota, DurationDays: code.DurationDays,
+		Reason: redeemOrderReasonPrefix + code.CodeHint, QuotaDelta: plan.Quota, DurationDays: code.DurationDays,
 		State: corev1.QuotaOrderStatePaid, PaidAt: &ts, ExpiresAt: &exp, CreatedBy: actor,
 	}
 }

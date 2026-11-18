@@ -46,7 +46,7 @@ func DefaultPortRange() PortRange {
 
 func (p PortRange) Validate() error {
 	if p.Min < 1 || p.Max > 65535 || p.Min > p.Max || p.MaxProbes < 1 || p.MaxProbes > MaxDynamicPortProbes {
-		return &corev1.ValidationError{Field: "portRange", Reason: "invalid bounded dynamic port range"}
+		return &corev1.ValidationError{Field: "portRange", Reason: corev1.ValidationReasonInvalidPortRange}
 	}
 	return nil
 }

@@ -103,6 +103,15 @@ func (e *Error) Is(target error) bool {
 
 func (e *Error) Unwrap() error { return e.Cause }
 
+const (
+	ValidationReasonInvalidPortRange    = "invalid bounded dynamic port range"
+	ValidationReasonPortOutOfRange      = "port outside valid range"
+	ValidationReasonPrimaryPoolRequired = "PRIMARY pool is required"
+	ValidationReasonMustBePositive      = "must be positive"
+	ValidationReasonInvalidPortOptions  = "invalid bounded dynamic port options"
+	ValidationReasonNodeBackupLimits    = "node backup limits must be finite zero"
+)
+
 // ValidationError rejects malformed resource/port input before a command is accepted.
 type ValidationError struct {
 	Field  string

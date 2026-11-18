@@ -23,5 +23,5 @@ func fileDeviceID(info os.FileInfo) (uint64, bool) {
 	if !ok || st == nil {
 		return 0, false
 	}
-	return uint64(st.Dev), true
+	return uint64(st.Dev), true //nolint:unconvert // Darwin uses int32 for Dev; Linux uses uint64.
 }

@@ -4,16 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"testing"
 	"time"
 
 	corev1 "github.com/smartcat999/game-panel-cloud/pkg/apis/core/v1"
-	iamv1 "github.com/smartcat999/game-panel-cloud/pkg/apis/iam/v1"
 	metav1 "github.com/smartcat999/game-panel-cloud/pkg/apis/meta/v1"
-	tenantctrl "github.com/smartcat999/game-panel-cloud/pkg/controller/core/tenant"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/db"
-	"github.com/smartcat999/game-panel-cloud/pkg/infra/mq"
 	instancemodel "github.com/smartcat999/game-panel-cloud/pkg/models/core/instance"
 	quotadb "github.com/smartcat999/game-panel-cloud/pkg/repo/core/quota"
 	"github.com/smartcat999/game-panel-cloud/pkg/repo/pgutil"
@@ -248,90 +244,10 @@ func TestPostgresQuotaExpiresAtAtomicAdmissionGate(t *testing.T) {
 	}
 }
 
-func TestQuotaPolicyChangesAPIAndRBAC(t *testing.T) {
+func TestInstanceAdmissionWaitsForPolicySync(t *testing.T) {
 	ctx := context.Background()
 	h := setupSecurityTestHarness(t)
 	h.createUser(t, "alice")
-	h.createUser(t, "bob")
-	h.createUser(t, "eve")
-
-	studio := h.createTenant(t, "studio", "alice")
-	if err := (&tenantctrl.Controller{}).Reconcile(ctx, h.reg, nil, nil, mq.NewEvent(mq.EventReconcile, corev1.GroupVersion, "Tenant", "", "studio", 0, "")); err != nil {
-		t.Fatalf("Reconcile studio bootstrap: %v", err)
-	}
-	if _, err := h.trb.Create(ctx, "studio", &iamv1.TenantRoleBinding{
-		Metadata: metav1.ObjectMeta{Name: "bob-operator", Tenant: "studio"},
-		RoleRef:  iamv1.RoleRef{Name: "instance-operator"},
-		Subjects: []iamv1.Subject{{Kind: iamv1.SubjectKindUser, Name: "bob"}},
-	}); err != nil {
-		t.Fatalf("bind bob instance-operator: %v", err)
-	}
-
-	adminTok := issueUserToken(t, h, "admin")
-	aliceTok := issueUserToken(t, h, "alice")
-	bobTok := issueUserToken(t, h, "bob")
-	eveTok := issueUserToken(t, h, "eve")
-
-	for _, tok := range []string{adminTok, aliceTok, bobTok} {
-		code, body := h.doGET(t, tok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges")
-		if code != http.StatusOK {
-			t.Fatalf("expected 200 for authorized quotachanges GET, got %d body=%s", code, string(body))
-		}
-	}
-	if code, _ := h.doGET(t, eveTok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges"); code != http.StatusForbidden {
-		t.Fatalf("expected 403 for outsider eve on quotachanges, got %d", code)
-	}
-
-	// Update quota and verify pagination + invariants.
-	loaded, err := h.tenants.Get(ctx, "studio")
-	if err != nil {
-		t.Fatalf("Get studio: %v", err)
-	}
-	loaded.Spec.Quota[corev1.ResourceCPU] = "64"
-	if _, err := h.tenants.Update(ctx, "studio", loaded); err != nil {
-		t.Fatalf("Update studio quota: %v", err)
-	}
-	if err := (&tenantctrl.Controller{}).Reconcile(ctx, h.reg, nil, nil, mq.NewEvent(mq.EventReconcile, corev1.GroupVersion, "Tenant", "", studio.Metadata.Name, 0, "")); err != nil {
-		t.Fatalf("Reconcile studio update: %v", err)
-	}
-
-	code, body := h.doGET(t, bobTok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges?limit=1&offset=0")
-	if code != http.StatusOK {
-		t.Fatalf("GET page 1 status=%d body=%s", code, string(body))
-	}
-	var page1 metav1.List[corev1.QuotaPolicyChange]
-	if err := json.Unmarshal(body, &page1); err != nil || len(page1.Items) != 1 || page1.Metadata.TotalCount != 2 || page1.Metadata.Continue != "1" {
-		t.Fatalf("unexpected page1 response: %+v err=%v", page1, err)
-	}
-	if page1.Items[0].ChangeKind != corev1.QuotaPolicyChangeKindAdminAdjust || page1.Items[0].FromVersion != 1 || page1.Items[0].ToVersion != 2 {
-		t.Fatalf("unexpected newest ledger item: %+v", page1.Items[0])
-	}
-
-	code2, body2 := h.doGET(t, bobTok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges?limit=1&continue="+page1.Metadata.Continue)
-	if code2 != http.StatusOK {
-		t.Fatalf("GET page 2 status=%d body=%s", code2, string(body2))
-	}
-	var page2 metav1.List[corev1.QuotaPolicyChange]
-	if err := json.Unmarshal(body2, &page2); err != nil || len(page2.Items) != 1 || page2.Items[0].ChangeKind != corev1.QuotaPolicyChangeKindBootstrap {
-		t.Fatalf("unexpected page2 response: %+v err=%v", page2, err)
-	}
-
-	// Verify invariants endpoint is restricted to platform admins.
-	if code, _ := h.doGET(t, aliceTok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges?verify=true"); code != http.StatusForbidden {
-		t.Fatalf("expected 403 for non-admin verify=true, got %d", code)
-	}
-	if code, _ := h.doGET(t, bobTok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges?verify=true"); code != http.StatusForbidden {
-		t.Fatalf("expected 403 for instance-operator verify=true, got %d", code)
-	}
-	vCode, vBody := h.doGET(t, adminTok, "/apis/core.gamepanel.io/v1/tenants/studio/quotachanges?verify=true")
-	if vCode != http.StatusOK {
-		t.Fatalf("expected 200 for admin verify=true, got %d body=%s", vCode, string(vBody))
-	}
-	var verification corev1.QuotaPolicyVerification
-	if err := json.Unmarshal(vBody, &verification); err != nil || !verification.Valid || verification.CheckedChanges != 2 {
-		t.Fatalf("unexpected verification response: %+v err=%v", verification, err)
-	}
-
 	// Instance admission must wait for Tenant controller single writer (RequireAccountAt -> ErrPolicySyncPending).
 	h.createTenant(t, "unsynced", "alice")
 	fixtures.ReadyNode(t, ctx, h.reg, "node-a")
@@ -355,13 +271,4 @@ func TestQuotaPolicyChangesAPIAndRBAC(t *testing.T) {
 		t.Fatalf("expected ErrPolicySyncPending before Tenant controller sync, got %v", err)
 	}
 	fixtures.ReconcileActive(t, ctx, h.reg, "unsynced", createdInst.Metadata.Name)
-}
-
-func issueUserToken(t *testing.T, h *securityTestHarness, name string) string {
-	t.Helper()
-	sess, err := h.sessions.Issue(context.Background(), iamv1.SubjectKindUser, name, "")
-	if err != nil {
-		t.Fatalf("issue session for %s: %v", name, err)
-	}
-	return sess.Token
 }

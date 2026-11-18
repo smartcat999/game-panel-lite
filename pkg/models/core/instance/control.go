@@ -525,7 +525,7 @@ func canonicalPorts(input []corev1.InstancePort) ([]corev1.InstancePort, error) 
 	requests := make([]corev1.PortRequest, len(input))
 	for n, p := range input {
 		if p.TargetPort < 1 || p.TargetPort > 65535 || p.PublishedPort < 0 || p.PublishedPort > 65535 {
-			return nil, &corev1.ValidationError{Field: "ports", Reason: "port outside valid range"}
+			return nil, &corev1.ValidationError{Field: "ports", Reason: corev1.ValidationReasonPortOutOfRange}
 		}
 		requests[n] = corev1.PortRequest{Name: p.Name, Protocol: p.Protocol, TargetPort: int32(p.TargetPort), PublishedPort: int32(p.PublishedPort)}
 	}

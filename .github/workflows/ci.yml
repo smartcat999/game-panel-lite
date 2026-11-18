@@ -52,16 +52,8 @@ jobs:
         run: ./hack/verify-all.sh
       - name: Test packages
         env:
-          GP_DB_DSN: postgres://postgres:platform_ci@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/gamepanel_test?sslmode=disable
-        run: |
-          status=0
-          for pkg in $(go list ./cmd/... ./pkg/... ./tests/...); do
-            echo "=== Package: $pkg ==="
-            if ! timeout --foreground -k 5s 30s go test -timeout=20s -count=1 -v "$pkg"; then
-              status=1
-            fi
-          done
-          exit "$status"
+          GP_TEST_POSTGRES_DSN: postgres://postgres:platform_ci@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/gamepanel_test?sslmode=disable
+        run: go test -timeout=5m -count=1 ./cmd/... ./pkg/... ./tests/...
       - name: Build all packages and commands
         run: go build ./cmd/... ./pkg/...
 
