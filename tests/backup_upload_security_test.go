@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -364,14 +365,11 @@ func setupDirectUploadRecoveryTest(t *testing.T, backupQuotaStorage string) *dir
 	if err := apiserver.Bootstrap(ctx, reg, "admin", "admin@example.com", "P@88w0rd"); err != nil {
 		t.Fatalf("Bootstrap: %v", err)
 	}
-	if _, err := tenantdb.NewDB(reg.Pool()).Create(ctx, &corev1.Tenant{
+	tenants := tenantdb.NewDB(reg.Pool())
+	if _, err := tenants.Create(ctx, &corev1.Tenant{
 		Metadata: metav1.ObjectMeta{Name: "default"},
 		Spec: corev1.TenantSpec{
 			DisplayName: "Default", Type: corev1.TenantTypeOrganization, Owner: "admin",
-			Quota: corev1.ResourceList{
-				corev1.ResourceCPU: "4000m", corev1.ResourceMemory: "8Gi", corev1.ResourceStorage: "50Gi",
-				corev1.ResourceInstances: "4", corev1.ResourceBackups: "4", corev1.ResourceBackupStorage: corev1.Quantity(backupQuotaStorage),
-			},
 		},
 	}); err != nil {
 		t.Fatalf("Create default tenant: %v", err)
@@ -385,6 +383,9 @@ func setupDirectUploadRecoveryTest(t *testing.T, backupQuotaStorage string) *dir
 			}},
 		},
 	})
+	// Activation reconciles the Lite workspace to unlimited. Install the finite
+	// backup-storage policy this reservation/abort test is intended to exercise.
+	setBackupStorageLimit(t, ctx, reg, inst.Metadata.Tenant, backupQuotaStorage)
 	s3Cfg := &config.S3Config{
 		Endpoint: memS3.srv.URL, Region: "us-east-1", Bucket: "backups",
 		AccessKey: "ak", SecretKey: "sk", UsePathStyle: true, PresignTTL: 10 * time.Minute,
@@ -399,6 +400,33 @@ func setupDirectUploadRecoveryTest(t *testing.T, backupQuotaStorage string) *dir
 		instancemodel.WithClock(nowFn),
 	)
 	return &directUploadRecoveryEnv{ctx: ctx, reg: reg, memS3: memS3, inst: inst, instOp: instOp, nowFn: nowFn, advanceClock: adv}
+}
+
+func setBackupStorageLimit(t *testing.T, ctx context.Context, reg *repo.Registry, name, limit string) {
+	t.Helper()
+	tenants := tenantdb.NewDB(reg.Pool())
+	tenant, err := tenants.Get(ctx, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenant.Spec.UnlimitedQuota = slices.DeleteFunc(tenant.Spec.UnlimitedQuota, func(dim corev1.ResourceName) bool { return dim == corev1.ResourceBackupStorage })
+	tenant.Spec.Quota = corev1.ResourceList{corev1.ResourceBackupStorage: corev1.Quantity(limit)}
+	tenant, err = tenants.Update(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rv, err := strconv.ParseInt(tenant.Metadata.ResourceVersion, 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits, err := corev1.NormalizeLimits(tenant.Spec.Quota, tenant.Spec.UnlimitedQuota)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = quotadb.NewDB(reg.Pool()).SyncPolicy(ctx, quotadb.PolicySync{TenantUID: tenant.Metadata.UID, UpstreamVersion: rv, Target: quotadb.QuotaPolicy{Limits: limits}, Kind: corev1.QuotaPolicyChangeKindAdminAdjust})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func deterministicUncompressibleBytes(n int) string {
