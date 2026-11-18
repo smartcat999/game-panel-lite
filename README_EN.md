@@ -17,8 +17,8 @@
 </p>
 
 <p align="center">
-  <a href="./web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the v2 product tour" width="900" /></a><br />
-  <a href="./web/public/landing/demo.mp4">Watch the v2 product tour (1:58)</a><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@273e8f8cd348e96c7addcf09492fef86cd5c29ea/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the v2 product tour" width="900" /></a><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@273e8f8cd348e96c7addcf09492fef86cd5c29ea/web/public/landing/demo.mp4">Watch the v2 product tour (1:58)</a><br />
   <sub>Silent tour with on-screen Chinese instructions · Server creation, mods, backups, team access and platform administration</sub>
 </p>
 
