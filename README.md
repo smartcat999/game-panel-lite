@@ -17,9 +17,9 @@
 </p>
 
 <p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@e52d7dd5b71429e7c8a9b1344deb1254ccf54843/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="播放 GamePanel Lite v2 产品导览" width="900" /></a><br />
-  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@e52d7dd5b71429e7c8a9b1344deb1254ccf54843/web/public/landing/demo.mp4">播放 GamePanel Lite v2 产品导览 (1:58)</a><br />
-  <sub>无旁白 · 中文操作字幕 · 从开服、装模组和备份，到邀请好友与平台运维</sub>
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@dcf4963537b5aaeace8e756a2b248a1f26748ffb/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="播放 GamePanel Lite v2 产品导览" width="900" /></a><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@dcf4963537b5aaeace8e756a2b248a1f26748ffb/web/public/landing/demo.mp4">播放 GamePanel Lite v2 产品导览 (2:56)</a><br />
+  <sub>无旁白 · 中文操作字幕 · 00:56 模组依赖、下载进度、版本与配置 · 02:19 镜像站与节点预热</sub>
 </p>
 
 > 💡 如需查看旧版 `v0.x` 源码与历史文档，请切换至 [v1-legacy](https://github.com/smartcat999/game-panel-lite/tree/v1-legacy) 分支。

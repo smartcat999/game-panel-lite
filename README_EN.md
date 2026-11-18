@@ -17,9 +17,9 @@
 </p>
 
 <p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@e52d7dd5b71429e7c8a9b1344deb1254ccf54843/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the v2 product tour" width="900" /></a><br />
-  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@e52d7dd5b71429e7c8a9b1344deb1254ccf54843/web/public/landing/demo.mp4">Watch the v2 product tour (1:58)</a><br />
-  <sub>Silent tour with on-screen Chinese instructions · Server creation, mods, backups, team access and platform administration</sub>
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@dcf4963537b5aaeace8e756a2b248a1f26748ffb/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the v2 product tour" width="900" /></a><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@dcf4963537b5aaeace8e756a2b248a1f26748ffb/web/public/landing/demo.mp4">Watch the v2 product tour (2:56)</a><br />
+  <sub>Silent tour with Chinese on-screen instructions · 00:56 Mod dependencies, download progress, versions and settings · 02:19 Registry and node prewarming</sub>
 </p>
 
 > Looking for the legacy `v0.x` codebase? See the [v1-legacy](https://github.com/smartcat999/game-panel-lite/tree/v1-legacy) branch.
