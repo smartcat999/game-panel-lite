@@ -17,7 +17,9 @@
 </p>
 
 <p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@main/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="播放 GamePanel Lite v2 产品导览" width="900" /></a>
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="播放从节点预热到好友进服的泰拉瑞亚开服实操" width="900" /></a><br />
+  <strong>泰拉瑞亚模组服实操 · 无旁白 · 2:52</strong><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4#t=36">0:36 查看预热任务</a> · <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4#t=89">1:29 安装模组</a> · <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4#t=135">2:15 备份存档</a> · <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@dcf4963537b5aaeace8e756a2b248a1f26748ffb/web/public/landing/demo.mp4">按功能浏览完整导览</a>
 </p>
 
 > 🌐 **在线体验 Demo**：[https://dev.gamepanel.site](https://dev.gamepanel.site)（只读体验账号：`viewer` / 密码：`viewer123456`）

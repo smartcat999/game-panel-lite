@@ -17,7 +17,9 @@
 </p>
 
 <p align="center">
-  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@main/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the v2 product tour" width="900" /></a>
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="Watch the Terraria server walkthrough" width="900" /></a><br />
+  <strong>Silent walkthrough with Chinese captions · 2:52</strong><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4#t=36">0:36 · Prewarm tasks</a> · <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4#t=89">1:29 · Install mods</a> · <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@7e3c4149f9bfbdae28b46104167644ca1a497d5b/web/public/landing/demo.mp4#t=135">2:15 · Back up the world</a> · <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@dcf4963537b5aaeace8e756a2b248a1f26748ffb/web/public/landing/demo.mp4">Browse the full feature tour</a>
 </p>
 
 > 🌐 **Live Demo**: [https://dev.gamepanel.site](https://dev.gamepanel.site) (Read-only demo account: `viewer` / password: `viewer123456`)
