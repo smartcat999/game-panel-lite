@@ -19,6 +19,8 @@ import (
 	userdb "github.com/smartcat999/game-panel-cloud/pkg/repo/iam/user"
 )
 
+const personalTrialOrderReason = "Personal workspace 7-day trial"
+
 // ReconcileSubscriptionPolicy converges Spec.Quota, quota_accounts, and quota_orders for a Subscription tenant.
 func ReconcileSubscriptionPolicy(ctx context.Context, reg *repo.Registry, tenantName string, now time.Time) (*corev1.Tenant, FoldResult, error) {
 	if reg == nil || reg.Pool() == nil {
@@ -125,7 +127,7 @@ func ensurePersonalTrialOrder(ctx context.Context, reg *repo.Registry, tenant *c
 		ID: "trial:" + userUID, TenantUID: tenant.Metadata.UID,
 		OrderKind: corev1.QuotaOrderKindBasePlan, PlanName: plan.Metadata.Name,
 		Source: corev1.QuotaOrderSourceTrial, SourceRef: userUID,
-		Reason: "Personal workspace 7-day trial", QuotaDelta: plan.Quota,
+		Reason: personalTrialOrderReason, QuotaDelta: plan.Quota,
 		DurationDays: corev1.DefaultSubscriptionTrialDays, State: corev1.QuotaOrderStatePaid,
 		PaidAt: &t0, ExpiresAt: &exp, CreatedBy: tenant.Spec.Owner,
 	})

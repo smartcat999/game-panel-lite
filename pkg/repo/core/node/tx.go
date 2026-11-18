@@ -72,7 +72,7 @@ func (o Options) portRange() network.PortRange {
 }
 func (o Options) validate() error {
 	if err := o.portRange().Validate(); err != nil {
-		return &corev1.ValidationError{Field: "options", Reason: "invalid bounded dynamic port options"}
+		return &corev1.ValidationError{Field: "options", Reason: corev1.ValidationReasonInvalidPortOptions}
 	}
 	return nil
 }
@@ -85,7 +85,7 @@ func validateLimits(l corev1.Limits) error {
 		return err
 	}
 	if l.Backups != (corev1.Limit{}) || l.BackupStorage != (corev1.Limit{}) {
-		return &corev1.ValidationError{Field: "limits", Reason: "node backup limits must be finite zero"}
+		return &corev1.ValidationError{Field: "limits", Reason: corev1.ValidationReasonNodeBackupLimits}
 	}
 	return nil
 }

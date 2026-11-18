@@ -36,7 +36,7 @@ func NewDB(pool *pgxpool.Pool) *DB {
 
 func NewDBWithOptions(pool *pgxpool.Pool, options Options) (*DB, error) {
 	if pool == nil {
-		return nil, &corev1.ValidationError{Field: "pool", Reason: "PRIMARY pool is required"}
+		return nil, &corev1.ValidationError{Field: "pool", Reason: corev1.ValidationReasonPrimaryPoolRequired}
 	}
 	if err := options.validate(); err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (s *DB) SyncAccount(ctx context.Context, id string, policyVersion int64, li
 		return Account{}, err
 	}
 	if policyVersion < 1 {
-		return Account{}, &corev1.ValidationError{Field: "policyVersion", Reason: "must be positive"}
+		return Account{}, &corev1.ValidationError{Field: "policyVersion", Reason: corev1.ValidationReasonMustBePositive}
 	}
 	if err := corev1.ValidateIdentifier("nodeUid", id); err != nil {
 		return Account{}, err
