@@ -1,0 +1,390 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: '0001-01-01T00:00:00Z'
+  generation: 0
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: sandbox
+  name: terraria-tmodloader
+  resourceVersion: ''
+  uid: ''
+builtIn: true
+serverBinding:
+  repository: terraria-tmodloader
+  package: terraria-tmodloader
+  targetPath: .
+addonBinding:
+  repository: tmodloader-workshop
+  installMode: tmod_latest
+  targetDir: Mods
+capabilities:
+- console
+- mods
+- versions
+- files
+- backups
+category: sandbox
+configPresets:
+- description: 大型专家世界，推荐在模组页安装灾厄本体与灾厄音乐包，适合 2–8 人深度开荒
+  id: calamity-expert
+  name: 灾厄模组开荒（大型专家世界）
+  values:
+    autoEnableMods: 'true'
+    difficulty: '1'
+    maxPlayers: '8'
+    motd: 欢迎来到泰拉瑞亚灾厄模组开荒服！
+    worldName: CalamityWorld
+    worldSize: '3'
+- description: 大型大师世界，推荐在模组页安装法狗突变与魂石 DLC（Fargo's Mutant & Souls）
+  id: fargo-master
+  name: 法狗魂石挑战（大型大师世界）
+  values:
+    autoEnableMods: 'true'
+    difficulty: '2'
+    maxPlayers: '8'
+    motd: 泰拉瑞亚法狗魂石挑战服
+    worldName: FargoWorld
+    worldSize: '3'
+- description: 纯净官方 tModLoader 模组框架，可在模组页自由安装创意工坊模组或在文件管理上传 .tmod
+  id: clean-modded
+  name: 纯净模组框架（自由组合与手动上传）
+  values:
+    autoEnableMods: 'true'
+    difficulty: '1'
+    maxPlayers: '8'
+    motd: 欢迎来到泰拉瑞亚 tModLoader 模组联机服！
+    worldName: ModdedWorld
+    worldSize: '2'
+configSchema:
+- default: ModdedWorld
+  envKey: WORLD_NAME
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 世界名称与存档文件名
+  label: 世界存档名称
+  name: worldName
+  required: true
+  type: text
+- default: tModLoader Friends Server
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 面板与配置注释标识的服务器名称
+  label: 服务器列表名称
+  name: serverName
+  required: true
+  type: text
+- default: '8'
+  envKey: MAXPLAYERS
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 同时在线玩家上限 (1–64)
+  label: 最大玩家人数
+  max: 64
+  min: 1
+  name: maxPlayers
+  step: 1
+  type: number
+- envKey: PASSWORD
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 留空则无需密码即可加入
+  label: 进服密码
+  name: password
+  type: password
+- default: 欢迎来到泰拉瑞亚 tModLoader 模组联机服！
+  envKey: MOTD
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 玩家进服时聊天栏展示的欢迎语
+  label: 每日欢迎消息
+  name: motd
+  type: text
+- default: '7777'
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 容器内 tModLoader 服务监听端口（默认 7777）
+  label: 游戏监听端口
+  max: 65535
+  min: 1024
+  name: port
+  required: true
+  step: 1
+  type: number
+- default: 'true'
+  envKey: AUTO_ENABLE_MODS
+  fileTarget: Mods/enabled.json
+  group: 模组工坊
+  help: 开启后启动时自动扫描 /data/Mods 下所有已下载或上传的 .tmod 文件并写入 enabled.json
+  label: 自动启用全部已安装模组
+  name: autoEnableMods
+  type: boolean
+- default: ''
+  envKey: ENABLED_MODS
+  fileTarget: Mods/enabled.json
+  group: 模组工坊
+  help: 可选；需要精确指定启用顺序或子集时填入模组内部英文名（逗号分隔，如 CalamityMod,CalamityModMusic）
+  label: 指定启用模组内部名（可选）
+  name: enabledMods
+  type: text
+- default: ''
+  envKey: MODPACK
+  fileTarget: serverconfig.txt
+  group: 模组工坊
+  help: 可选；指定加载已保存的 tModLoader 整合包名称（留空则按 Mods/enabled.json 加载）
+  label: 整合包名称
+  name: modPack
+  type: text
+- default: '2'
+  envKey: AUTOCREATE
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 首次创建世界时的地图尺寸
+  label: 世界地图大小
+  name: worldSize
+  options:
+  - label: 小型世界（4200×1200）
+    value: '1'
+  - label: 中型世界（6400×1800）
+    value: '2'
+  - label: 大型世界（8400×2400）
+    value: '3'
+  type: select
+- default: '1'
+  envKey: DIFFICULTY
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 决定世界机制与 Boss 掉落（灾厄等大型模组推荐专家或大师）
+  label: 世界难度模式
+  name: difficulty
+  options:
+  - label: 经典模式
+    value: '0'
+  - label: 专家模式
+    value: '1'
+  - label: 大师模式
+    value: '2'
+  - label: 旅途模式
+    value: '3'
+  type: select
+- default: random
+  envKey: WORLD_EVIL
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 仅在新建世界时生效，决定腐化或猩红地形
+  label: 世界邪恶地形群系
+  name: worldEvil
+  options:
+  - label: 随机
+    value: random
+  - label: 腐化之地
+    value: corruption
+  - label: 猩红之地
+    value: crimson
+  required: true
+  type: select
+- envKey: SEED
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 支持填入彩蛋种子，留空则随机生成
+  label: 世界种子
+  name: seed
+  type: text
+- default: 'true'
+  envKey: AUTO_CREATE_WORLD
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 找不到指定世界文件时自动按所选尺寸创建新世界
+  label: 缺失存档时自动创建新世界
+  name: autoCreateWorld
+  type: boolean
+- default: 'true'
+  envKey: SECURE
+  fileTarget: serverconfig.txt
+  group: 联机安全
+  help: 启用官方服务端防作弊保护
+  label: 开启反作弊校验
+  name: secure
+  type: boolean
+- default: en-US
+  fileTarget: serverconfig.txt
+  group: 联机安全
+  help: 仅控制后台控制台日志语言（不影响玩家客户端界面中文显示）；推荐保持 English 以兼容英文标准控制指令
+  label: 服务端控制台与系统语言
+  name: language
+  options:
+  - label: 英文（推荐）
+    value: en-US
+  - label: 简体中文
+    value: zh-Hans
+  - label: 德文
+    value: de-DE
+  - label: 法文
+    value: fr-FR
+  - label: 西班牙文
+    value: es-ES
+  - label: 俄文
+    value: ru-RU
+  type: select
+- default: '60'
+  fileTarget: serverconfig.txt
+  group: 联机安全
+  help: 调低可减少高延迟玩家的怪物瞬移，设为 0 关闭优化
+  label: 生物网络同步降频阈值
+  max: 120
+  min: 0
+  name: npcStream
+  step: 15
+  type: number
+coverImage: /landing/games/terraria-tmodloader.jpg
+displayName: 泰拉瑞亚 tModLoader
+env:
+  AUTOCREATE: '2'
+  AUTO_ENABLE_MODS: 'true'
+  DIFFICULTY: '1'
+fileTemplates:
+- content: |
+    # Managed by GamePanel Lite ({{serverName}} | evil={{worldEvil}} | auto={{autoCreateWorld}} | secure={{secure}} | modpack={{modPack}})
+    world=/data/Worlds/{{worldName}}.wld
+    worldpath=/data/Worlds
+    worldname={{worldName}}
+    modpath=/data/Mods
+    autocreate={{worldSize}}
+    difficulty={{difficulty}}
+    maxplayers={{maxPlayers}}
+    port={{port}}
+    password={{password}}
+    motd={{motd}}
+    seed={{seed}}
+    upnp=0
+    language={{language}}
+    npcstream={{npcStream}}
+  path: serverconfig.txt
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+preStartCommand: |
+  mkdir -p /data/Worlds /data/Mods /data/SaveData /data/steamapps/workshop
+  [ -f /data/Mods/enabled.json ] || echo '[]' > /data/Mods/enabled.json
+  if [ -d /data/Libraries/Newtonsoft.Json ]; then
+    rm -rf /data/Libraries/newtonsoft.json
+    mv /data/Libraries/Newtonsoft.Json /data/Libraries/newtonsoft.json
+  fi
+  if [ -L /data/Libraries/Native/Linux/libSDL2.so ]; then
+    rm -f /data/Libraries/Native/Linux/libSDL2.so
+  fi
+  if [ -f /data/Libraries/Native/Linux/libSDL2-2.0.so.0 ] && [ ! -f /data/Libraries/Native/Linux/libSDL2.so ]; then
+    cp -f /data/Libraries/Native/Linux/libSDL2-2.0.so.0 /data/Libraries/Native/Linux/libSDL2.so
+  fi
+  if [ -f /data/serverconfig.txt ]; then
+    [ "${AUTO_CREATE_WORLD:-true}" = "false" ] && sed -i '/^autocreate=/d' /data/serverconfig.txt
+    if [ "${WORLD_EVIL:-random}" = "corruption" ]; then
+      sed -i "s|^seed=.*|seed=${AUTOCREATE:-2}.$(( ${DIFFICULTY:-1} + 1 )).1.${SEED:-}|" /data/serverconfig.txt
+    elif [ "${WORLD_EVIL:-random}" = "crimson" ]; then
+      sed -i "s|^seed=.*|seed=${AUTOCREATE:-2}.$(( ${DIFFICULTY:-1} + 1 )).2.${SEED:-}|" /data/serverconfig.txt
+    fi
+    [ -n "${MODPACK:-}" ] && ! grep -q '^modpack=' /data/serverconfig.txt && echo "modpack=${MODPACK}" >> /data/serverconfig.txt
+    [ "${SECURE:-true}" != "false" ] && ! grep -q '^secure=' /data/serverconfig.txt && echo 'secure=1' >> /data/serverconfig.txt
+    true
+  fi
+  if [ -n "${ENABLED_MODS:-}" ]; then
+    printf '%s' "${ENABLED_MODS}" | tr ',;\n' '\n\n\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/\.tmod$//' | awk 'NF' | jq -R . | jq -s . > /data/Mods/enabled.json
+  elif [ "${AUTO_ENABLE_MODS:-true}" != "false" ]; then
+    find /data/Mods -maxdepth 1 -type f -name '*.tmod' -exec basename {} .tmod \; | sort -u | jq -R . | jq -s . > /data/Mods/enabled.json
+  fi
+startupCommand: LD_LIBRARY_PATH="/data/Libraries/Native/Linux:${LD_LIBRARY_PATH:-}" DOTNET_ROLL_FORWARD=Disable exec /opt/dotnet/dotnet /data/tModLoader.dll -server -nosteam -tmlsavedirectory /data/SaveData -steamworkshopfolder /data/steamapps/workshop -config /data/serverconfig.txt
+preStopCommand: |
+  tml-send-to-console exit || true
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[t]ModLoader' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+ports:
+- name: game
+  protocol: TCP
+  targetPort: 7777
+published: true
+recommendedPlan: standard
+recommendedVersion: v2026.09.3.1
+resources:
+  cpu: '2'
+  memory: 4Gi
+  storage: 20Gi
+summary: 官方 .NET 8 模组联机服务端，支持填入 Steam 创意工坊模组 ID 自动下载启用（灾厄 Calamity、法狗魂石 Fargo 等）或直接上传 .tmod 模组文件。
+tagline: 像素沙盒模组服 · 灾厄 / 法狗 / 创意工坊
+versions:
+- v2026.09.3.1
+- v2026.08.3.0
+consoleDelivery: tml-send-to-console
+consoleActions:
+- id: tml-save
+  title: 立即保存地图
+  group: 模组世界
+  command: save
+  starred: true
+- id: tml-time
+  title: 切换世界时间
+  group: 模组世界
+  command: '{{time}}'
+  starred: true
+  params:
+  - name: time
+    label: 时间段
+    type: select
+    defaultValue: noon
+    options:
+    - value: dawn
+      label: 黎明
+    - value: noon
+      label: 正午
+    - value: dusk
+      label: 黄昏
+    - value: midnight
+      label: 午夜
+- id: tml-settle
+  title: 立即平衡液体流动
+  group: 模组世界
+  command: settle
+  starred: false
+- id: tml-say
+  title: 全服公告广播
+  group: 玩家广播
+  command: say {{msg}}
+  starred: true
+  params:
+  - name: msg
+    label: 广播内容
+    type: text
+    defaultValue: 模组服务器即将执行自动存档
+- id: tml-kick
+  title: 踢出玩家
+  group: 玩家广播
+  command: kick {{player}}
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名称
+    type: text
+storagePolicy:
+  backupSubtree: Worlds,Mods,SaveData
+  anchorFiles:
+  - Worlds
+  replaceOnRestore: true
+  backupRequiresStop: false
+  preBackupCommand: save
+  regeneratePaths:
+  - Worlds
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  mode: regex_value
+  probeCommand: playing
+  pattern: '(No|\d+)(?:\s+players?\s+connected|\s*个玩家已连接)'
+  resetPattern: 'No players connected|无玩家连接'
+  incPattern: '([^\r\n:]+?)(?:\s+has joined\.|已加入[。\.])'
+  decPattern: '([^\r\n:]+?)(?:\s+has left\.|已离开[。\.])'
+  maxConfigKey: maxPlayers
+  bindParam: player
+  quickActionIds:
+  - tml-kick

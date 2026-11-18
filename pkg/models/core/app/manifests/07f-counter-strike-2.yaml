@@ -1,0 +1,448 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  name: counter-strike-2
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: fps
+displayName: 反恐精英 2 Counter-Strike 2
+tagline: 团队竞技射击对战 · 满十内战与跑图练习专用服
+summary: 支持竞技/搭档/休闲/死斗模式、回合数与初始资金调节、电脑机器人配置、跑图练习开关及远程控制台赛事指令。
+category: fps
+coverImage: /landing/games/counter-strike-2.jpg
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+versions:
+- latest
+recommendedVersion: latest
+recommendedPlan: pro
+resources:
+  cpu: '4'
+  memory: 8Gi
+  storage: 45Gi
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 27015
+- name: rcon
+  protocol: TCP
+  targetPort: 27015
+- name: tv
+  protocol: UDP
+  targetPort: 27020
+serverBinding:
+  repository: cs2-server
+  package: cs2
+  targetPath: .
+env:
+  HOSTNAME: GamePanel 竞技训练服
+  SV_PASSWORD: ''
+  RCON_PASSWORD: cs2admin123
+  GSLT_TOKEN: ''
+  GAME_MODE_PRESET: competitive
+  START_MAP: de_mirage
+  MAX_PLAYERS: '12'
+  MP_MAXROUNDS: '24'
+  MP_STARTMONEY: '800'
+  MP_FREEZETIME: '15'
+  MP_FRIENDLYFIRE: '1'
+  MP_OVERTIME_ENABLE: '1'
+  SV_ALLTALK: '0'
+  BOT_QUOTA: '0'
+  BOT_DIFFICULTY: '2'
+  SV_CHEATS: '0'
+  TV_ENABLE: '0'
+configSchema:
+- name: hostname
+  label: 服务器名称
+  type: text
+  required: true
+  default: GamePanel 竞技训练服
+  envKey: HOSTNAME
+  group: 基础设置
+  help: 显示在游戏社区服务器列表中的房间名称
+  fileTarget: game/csgo/cfg/server.cfg
+- name: svPassword
+  label: 进服密码
+  type: password
+  default: ''
+  envKey: SV_PASSWORD
+  group: 基础设置
+  help: 留空则无需密码即可通过地址直连进入
+  fileTarget: game/csgo/cfg/server.cfg
+- name: rconPassword
+  label: 远程控制密码
+  type: password
+  required: true
+  default: cs2admin123
+  envKey: RCON_PASSWORD
+  group: 基础设置
+  help: 用于控制台远程执行比赛重置、换图等管理员指令
+  fileTarget: game/csgo/cfg/server.cfg
+- name: gsltToken
+  label: 社区服登录令牌
+  type: password
+  default: ''
+  envKey: GSLT_TOKEN
+  group: 基础设置
+  help: 如需公网大厅可见，请前往官方账号页面申请专用服务器登录令牌并填入此处
+  fileTarget: game/csgo/cfg/server.cfg
+- name: gameModePreset
+  label: 比赛玩法模式
+  type: select
+  default: competitive
+  envKey: GAME_MODE_PRESET
+  group: 基础设置
+  help: 控制房间基础玩法与胜利判定规则
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: competitive
+    label: 竞技模式（五对五）
+  - value: wingman
+    label: 搭档模式（二对二）
+  - value: casual
+    label: 休闲模式（十对十）
+  - value: deathmatch
+    label: 死斗模式
+- name: startMap
+  label: 初始启动地图
+  type: select
+  default: de_mirage
+  envKey: START_MAP
+  group: 基础设置
+  help: 服务器启动后默认加载的竞技图池地图
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: de_mirage
+    label: 荒漠迷城
+  - value: de_dust2
+    label: 炙热沙城
+  - value: de_inferno
+    label: 炼狱小镇
+  - value: de_nuke
+    label: 核子危机
+  - value: de_ancient
+    label: 远古遗迹
+  - value: de_anubis
+    label: 阿努比斯
+  - value: de_vertigo
+    label: 殒命大厦
+- name: maxPlayers
+  label: 最大玩家槽位数
+  type: number
+  default: '12'
+  min: 2
+  max: 64
+  step: 1
+  envKey: MAX_PLAYERS
+  group: 基础设置
+  help: 包含观战与裁判槽位在内的最大连接数（五对五推荐 12）
+  fileTarget: game/csgo/cfg/server.cfg
+- name: mpMaxrounds
+  label: 整场最大回合数
+  type: number
+  default: '24'
+  min: 6
+  max: 60
+  step: 2
+  envKey: MP_MAXROUNDS
+  group: 比赛规则
+  help: 半场换边后先赢过半回合即获胜（标准十二回合制为 24）
+  fileTarget: game/csgo/cfg/server.cfg
+- name: mpStartmoney
+  label: 初始回合资金
+  type: number
+  default: '800'
+  min: 800
+  max: 16000
+  step: 100
+  envKey: MP_STARTMONEY
+  group: 比赛规则
+  help: 比赛手枪局开局时的初始金钱
+  fileTarget: game/csgo/cfg/server.cfg
+- name: mpFreezetime
+  label: 回合冻结准备时长（秒）
+  type: number
+  default: '15'
+  min: 0
+  max: 60
+  step: 1
+  envKey: MP_FREEZETIME
+  group: 比赛规则
+  help: 每回合开始前的购买装备与战术讨论倒计时
+  fileTarget: game/csgo/cfg/server.cfg
+- name: mpFriendlyfire
+  label: 开启队友伤害
+  type: select
+  default: '1'
+  envKey: MP_FRIENDLYFIRE
+  group: 比赛规则
+  help: 竞技满十内战推荐开启队友伤害与碰撞体积
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: '1'
+    label: 开启
+  - value: '0'
+    label: 关闭
+- name: mpOvertimeEnable
+  label: 开启平局加时赛
+  type: select
+  default: '1'
+  envKey: MP_OVERTIME_ENABLE
+  group: 比赛规则
+  help: 十二比十二平局后自动进入三回合加时决胜
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: '1'
+    label: 开启
+  - value: '0'
+    label: 关闭
+- name: svAlltalk
+  label: 开启全服自由语音
+  type: select
+  default: '0'
+  envKey: SV_ALLTALK
+  group: 比赛规则
+  help: 开启后双方阵营与观战席可以彼此互通语音
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: '0'
+    label: 仅限队友语音
+  - value: '1'
+    label: 全服互通
+- name: botQuota
+  label: 电脑机器人数量
+  type: number
+  default: '0'
+  min: 0
+  max: 20
+  step: 1
+  envKey: BOT_QUOTA
+  group: 电脑观战
+  help: 设为 0 表示禁止电脑机器人加入，保持纯粹玩家对战
+  fileTarget: game/csgo/cfg/server.cfg
+- name: botDifficulty
+  label: 电脑机器人难度
+  type: select
+  default: '2'
+  envKey: BOT_DIFFICULTY
+  group: 电脑观战
+  help: 控制补位电脑机器人的反应速度与瞄准精度
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: '0'
+    label: 简单
+  - value: '1'
+    label: 普通
+  - value: '2'
+    label: 困难
+  - value: '3'
+    label: 专家
+- name: svCheats
+  label: 开启跑图道具练习指令
+  type: select
+  default: '0'
+  envKey: SV_CHEATS
+  group: 电脑观战
+  help: 正式比赛请关闭；开启后允许飞行、无限手雷与弹道轨迹指令
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: '0'
+    label: 关闭
+  - value: '1'
+    label: 开启
+- name: tvEnable
+  label: 开启赛事观战转播
+  type: select
+  default: '0'
+  envKey: TV_ENABLE
+  group: 电脑观战
+  help: 启用 27020 端口赛事延迟转播与自动录像录制功能
+  fileTarget: game/csgo/cfg/server.cfg
+  options:
+  - value: '0'
+    label: 关闭
+  - value: '1'
+    label: 开启
+configPresets:
+- id: match-5v5
+  name: 标准十人满十内战（二十四回合竞技·开启加时）
+  description: 还原官方十二胜制竞技内战规则，开启友伤、加时赛并禁用机器人
+  values:
+    gameModePreset: competitive
+    maxPlayers: '12'
+    mpMaxrounds: '24'
+    mpStartmoney: '800'
+    mpFreezetime: '15'
+    mpFriendlyfire: '1'
+    mpOvertimeEnable: '1'
+    svAlltalk: '0'
+    botQuota: '0'
+    svCheats: '0'
+- id: casual-warmup
+  name: 休闲娱乐混战（满额初始资金·关闭友伤·全服语音）
+  description: 开局满额资金自由购枪练习，关闭队友误伤且全场自由开麦交流
+  values:
+    gameModePreset: casual
+    maxPlayers: '20'
+    mpMaxrounds: '16'
+    mpStartmoney: '16000'
+    mpFreezetime: '5'
+    mpFriendlyfire: '0'
+    mpOvertimeEnable: '0'
+    svAlltalk: '1'
+    svCheats: '0'
+- id: nade-practice
+  name: 跑图道具练习服（开启练习指令·零冻结准备）
+  description: 专为战队研究烟雾弹与闪光弹点位打造，无限时间且关闭电脑补位
+  values:
+    gameModePreset: competitive
+    maxPlayers: '10'
+    mpStartmoney: '16000'
+    mpFreezetime: '0'
+    mpFriendlyfire: '0'
+    svAlltalk: '1'
+    botQuota: '0'
+    svCheats: '1'
+fileTemplates:
+- path: game/csgo/cfg/server.cfg
+  content: |
+    // Managed by GamePanel Lite (preset={{gameModePreset}} | startMap={{startMap}} | maxPlayers={{maxPlayers}} | gslt={{gsltToken}})
+    hostname "{{hostname}}"
+    sv_password "{{svPassword}}"
+    rcon_password "{{rconPassword}}"
+    mp_maxrounds {{mpMaxrounds}}
+    mp_startmoney {{mpStartmoney}}
+    mp_freezetime {{mpFreezetime}}
+    mp_friendlyfire {{mpFriendlyfire}}
+    mp_overtime_enable {{mpOvertimeEnable}}
+    sv_alltalk {{svAlltalk}}
+    bot_quota {{botQuota}}
+    bot_difficulty {{botDifficulty}}
+    sv_cheats {{svCheats}}
+    tv_enable {{tvEnable}}
+- path: rcon.yaml
+  content: |
+    default:
+      address: "127.0.0.1:27015"
+      password: "{{rconPassword}}"
+      type: "rcon"
+preStartCommand: |
+  chmod +x /data/game/cs2.sh /data/game/bin/linuxsteamrt64/cs2 2>/dev/null || true
+  mkdir -p /data/game/csgo/cfg /data/.steam/sdk64 /home/steam/.steam/sdk64
+  if [ -L /data/game/bin/linuxsteamrt64/steamclient.so ]; then
+    rm -f /data/game/bin/linuxsteamrt64/steamclient.so
+  fi
+  if [ -f /opt/steamcmd/linux64/steamclient.so ]; then
+    ln -sf /opt/steamcmd/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
+    ln -sf /opt/steamcmd/linux64/steamclient.so /home/steam/.steam/sdk64/steamclient.so
+    if [ ! -f /data/game/bin/linuxsteamrt64/steamclient.so ]; then
+      cp -f /opt/steamcmd/linux64/steamclient.so /data/game/bin/linuxsteamrt64/steamclient.so 2>/dev/null || true
+    fi
+  fi
+  chown -R 1000:1000 /data/game/csgo/cfg /data/.steam
+startupCommand: |
+  cfg_val() {
+    [ -f /data/game/csgo/cfg/server.cfg ] && sed -n "s|.*$1=\([^| )]*\).*|\1|p" /data/game/csgo/cfg/server.cfg | head -n1 || true
+  }
+  PRESET="$(cfg_val preset)"; [ -n "$PRESET" ] || PRESET="${GAME_MODE_PRESET:-competitive}"
+  MAP="$(cfg_val startMap)"; [ -n "$MAP" ] || MAP="${START_MAP:-de_mirage}"
+  MAXP="$(cfg_val maxPlayers)"; [ -n "$MAXP" ] || MAXP="${MAX_PLAYERS:-12}"
+  GSLT="$(cfg_val gslt)"; [ -n "$GSLT" ] || GSLT="${GSLT_TOKEN:-}"
+  case "$PRESET" in
+    wingman) GT=0; GM=2 ;;
+    casual) GT=0; GM=0 ;;
+    deathmatch) GT=1; GM=2 ;;
+    *) GT=0; GM=1 ;;
+  esac
+  export LD_LIBRARY_PATH="/data/game/bin/linuxsteamrt64:${LD_LIBRARY_PATH:-}"
+  set -- /data/game/bin/linuxsteamrt64/cs2 -dedicated -usercon -ip 0.0.0.0 -port 27015 -maxplayers "$MAXP" +game_type "$GT" +game_mode "$GM" +map "$MAP" +exec server.cfg
+  [ -n "$GSLT" ] && set -- "$@" +sv_setsteamaccount "$GSLT"
+  exec runuser -u steam -- env HOME=/data LD_LIBRARY_PATH="$LD_LIBRARY_PATH" "$@"
+preStopCommand: |
+  rcon-cli quit >/dev/null 2>&1 || pkill -INT -f '[b]in/linuxsteamrt64/cs2' 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && pgrep -f '[b]in/linuxsteamrt64/cs2' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+published: false
+consoleDelivery: rcon-cli
+consoleActions:
+- id: cs2-restart
+  title: 重新开始对局
+  group: 赛事控制
+  command: mp_restartgame 1
+  starred: true
+- id: cs2-warmup-end
+  title: 结束热身立即开赛
+  group: 赛事控制
+  command: mp_warmup_end
+  starred: true
+- id: cs2-map
+  title: 切换竞技地图
+  group: 赛事控制
+  command: changelevel {{map}}
+  starred: true
+  params:
+  - name: map
+    label: 目标地图
+    type: select
+    defaultValue: de_mirage
+    options:
+    - value: de_mirage
+      label: 荒漠迷城
+    - value: de_dust2
+      label: 炙热沙城
+    - value: de_inferno
+      label: 炼狱小镇
+    - value: de_nuke
+      label: 核子危机
+    - value: de_ancient
+      label: 远古遗迹
+    - value: de_anubis
+      label: 阿努比斯
+- id: cs2-say
+  title: 全服公告广播
+  group: 玩家广播
+  command: say "{{msg}}"
+  starred: true
+  params:
+  - name: msg
+    label: 公告内容
+    type: text
+    defaultValue: 比赛即将开始，请双方队员就位
+- id: cs2-kick
+  title: 踢出玩家
+  group: 玩家广播
+  command: kick "{{player}}"
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家昵称
+    type: text
+storagePolicy:
+  backupSubtree: game/csgo/cfg
+  replaceOnRestore: true
+  backupRequiresStop: true
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_value
+  maxConfigKey: maxPlayers
+  probeCommand: |-
+    python3 -c 'import socket
+    q=b"\xff\xff\xff\xffTSource Engine Query\x00"
+    for h in (socket.gethostbyname(socket.gethostname()),"127.0.0.1"):
+      try:
+        s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(0.6); s.sendto(q,(h,27015)); d,_=s.recvfrom(4096)
+        if len(d)>=9 and d[4]==65: s.sendto(q+d[5:9],(h,27015)); d,_=s.recvfrom(4096)
+        pos=6
+        for _ in range(4): pos=d.find(0,pos)+1
+        print("GP_ONLINE="+str(d[pos+2])); raise SystemExit
+      except SystemExit: raise
+      except Exception: pass
+    print("GP_ONLINE=0")' 2>/dev/null || echo 'GP_ONLINE=0'
+  pattern: 'GP_ONLINE=(\d+)'

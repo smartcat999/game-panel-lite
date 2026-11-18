@@ -1,0 +1,22 @@
+apiVersion: core.gamepanel.io/v1
+kind: ResourcePlan
+metadata:
+  name: standard
+  labels:
+    gamepanel.io/builtin: "true"
+displayName: 标准版 Standard
+description: 适合多人模组服或并行托管 2~3 个游戏实例。
+planKind: Base
+sortOrder: 20
+published: true
+quota:
+  cpu: "4"
+  memory: "8Gi"
+  storage: "50Gi"
+  instances: "3"
+  backups: "5"
+  backupStorage: "15Gi"
+prices:
+  - currency: CNY
+    amountCents: 4900
+    durationDays: 30

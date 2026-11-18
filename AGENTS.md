@@ -1,145 +1,102 @@
-# GamePanel Lite Agent Instructions
+# GamePanel Cloud — V1 Declarative Architecture Instructions
 
-You are the lead full-stack engineer, product engineer, UI engineer, and test owner for GamePanel Lite.
+## 1. Core Architecture & API Groups
 
-## Project
+GamePanel Cloud is built from the ground up as a minimal, extensible Kubernetes-style declarative platform:
 
-- Repo: smartcat999/game-panel-lite
-- Local path: /Users/pengwu/Desktop/Projects/go-project/game-panel-lite
-- Brand: GamePanel Lite
-- Repo name: game-panel-lite
+- **`pkg/config` Unified Configuration Object**: `pkg/config` defines and manages the single unified `Config` struct (`Log`, `Server`, `Auth`, `Database`, `Cache`, `MQ`, `Controller`, `Agent`, `Registry`, `Bootstrap`, `Client`, `Network`, `S3`, `Observability`), parsing CLI flags (`spf13/cobra` + `spf13/pflag`), YAML configuration (`spf13/viper`), and `GP_*` environment variable overrides (`caarlos0/env/v11`) in one place via `config.NewCommand`, `config.LoadFile`, and `config.Get()`.
+- **Module-Internal Self-Registration**:
+  - **API Resource Handlers (`pkg/kapis`)**: `pkg/kapis/iam/v1/{session,user,globalrole,globalrolebinding,tenantrole,tenantrolebinding}`, `pkg/kapis/core/v1/{tenant,resourceplan,redeemcode,runtimeclass,app,node,prewarmjob,instance,metering,event,alert,log}`, and `pkg/kapis/registry/v1/{upstream,repository,pkg,artifact,blob,blobupload,policy}` each have their own subdirectory with `register.go` (declarative `WebService` method+path+OpenAPI schema registration) and `handler.go` (method-specific HTTP handler methods).
+  - **Cache Drivers**: `pkg/infra/cache/redis.go` self-registers via `cache.Register(driver, factory)` (using `github.com/redis/go-redis/v9`).
+  - **Message Queue Drivers**: `pkg/infra/mq/{redis,nats}.go` self-register via `mq.Register(driver, factory)` (using `github.com/redis/go-redis/v9` Redis Streams and `github.com/nats-io/nats.go` NATS QueueSubscribe).
+  - **Object Storage Client (`pkg/infra/s3`)**: Middleware-level S3/MinIO client (`s3.Interface`: `PresignGet`, `PresignPut`, `PresignHead`, `PresignDelete`, `Stat`, `Get`, `Put`, `Delete`, `Ping`) backed by `pkg/infra/s3/s3.go`, decoupled from business models.
+  - **Compute Runtime Drivers (`pkg/infra/runtime`)**: `pkg/infra/runtime/docker.go` self-registers via `runtime.Register(handler, factory)` (CRI-style container lifecycle `Validate`, `Reconcile`, `Destroy`, `Logs`, `Exec`).
+  - **Volume & Quota Drivers (`pkg/infra/volume`)**: `pkg/infra/volume/hostpath.go` self-registers via `volume.Register("hostpath", ...)` (`os.Root`-isolated workspace CRUD & `tar.gz` streaming), `pkg/infra/volume/xfs.go` self-registers via `volume.RegisterQuotaProvider("xfs-project-quota", ...)`, and `pkg/infra/volume/ticket.go` manages HMAC-SHA256 transfer tickets.
+  - **Network & Port-Pool Drivers (`pkg/infra/network`)**: `pkg/infra/network/hostport.go` self-registers via `network.Register("hostport", ...)` (configurable dynamic port-pool range `PortRangeMin..PortRangeMax`, deterministic hash probing, and execution port verification).
+  - **Upstream Mirror & Artifact Sync Drivers (`pkg/infra/addonmirror`, `pkg/registryworker`)**: `pkg/infra/addonmirror/providers/{http,modrinth,papermc,purpur,steam,terraria,tmodloader,vanilla}` self-register upstream catalog/version resolvers against `addonmirror/driver`, and `pkg/registryworker/providers/{http,steam,steamcmd,dst,l4d2,tmod,zomboid}` self-register artifact syncers, executors, and archive inspectors against `registryworker/driver` via `<module>/register.go`.
+  - **Addon Materialization, App Config Extractors, Alert Channel & Metering Export Drivers (`pkg/agent`, `pkg/models/core/app`, `pkg/models/core/alert`, `pkg/models/core/metering`)**: `pkg/agent/providers/{flatdir,tmod,dst,workshoptree}` self-register addon lifecycle injectors (`Inject`, `Finalize`, `Cleanup`), `pkg/models/core/app/providers/{dst,flatdir,tmod,workshoptree}` self-register game config & addon extractors against `app/driver`, `pkg/models/core/alert/providers/{feishu,dingtalk,wecom,slack,webhook,shoutrrr}` self-register notification channel senders, and `pkg/models/core/metering/providers/{json,cloudevents,lago}` self-register billing exporters via `<module>/driver` + `<module>/register.go`.
+  - **Controllers (`pkg/controller`)**: `pkg/controller/iam/user`, `pkg/controller/core/{tenant,node,prewarmjob,instance,metering,event,notification}`, and `pkg/controller/registry/{repository,artifact,policy}` each have their own subdirectory with `controller.go` self-registering via `ctrlruntime.Register(reconciler)`, binding to dedicated MQ topics (`iam.v1.users`, `core.v1.tenants`, `core.v1.nodes`, `core.v1.prewarmjobs`, `core.v1.instances`, `billing.v1.metering`, `audit.v1.events`, `core.v1.notifications`, `registry.v1.repositories`, `registry.v1.artifacts`, `registry.v1.replicationpolicies`) and sharing a single idempotent `Reconcile` + `Resync` implementation.
+- **KubeSphere-Style `pkg/kapis` + `pkg/models` Per-Resource Layering & MQ-Driven Async Reconciliation**:
+  - `pkg/kapis/{iam,core,registry}/v1/<resource>/{register.go,handler.go}`: Pure HTTP transport handlers split by HTTP method (`List*`, `Create*`, `Get*`, `Update*`, `Update*Status`, `Delete*`) and registered via `runtime.WebService` (backed by `github.com/emicklei/go-restful/v3`) which automatically generates the OpenAPI 3.0.3 specification at `GET /openapi/v3`. All `List*` routes support universal query parameters (`?labelSelector=`, `?fieldSelector=`, `?limit=`, `?offset=`, `?continue=`) via `apiruntime.ParseListOptions(r)`. `instances/log` and `instances/exec` support both HTTP and interactive WebSocket streaming via `github.com/gorilla/websocket`, with transparent remote proxying from `apiserver` to the target `node-agent` HTTP/WS server (`pkg/agent/server.go`). `instances/files` issues HMAC-SHA256 signed tickets (`pkg/infra/volume/ticket.go`) with direct `node-agent` URLs (`directURL`) for zero-control-plane-bandwidth file streaming and middleware S3 (`pkg/infra/s3`) Pre-signed URL `tar.gz` backup/restore with multi-layer quotas (`backups`, `backupStorage`, `MaxBytes`) and token-bucket IO rate limiting (`RateLimitBytesPerSec`).
+  - `pkg/models/{iam,core,registry}/<resource>/operator.go`: Fast, concise, re-entrant CRUD operators persist declarative state and publish best-effort typed `mq.Event` wakeups (`Created`, `Updated`, `Deleted`, `StateChanged`, `Reconcile`). Instance Create/Update/State/Delete and backup/restore/delete_backup accept desired intent only: no infrastructure execution, external S3/agent backup transfer, automatic compensation or quota refunds in the API path. Heavy admission/provisioning/backup/restore/cleanup/release runs in reconciliation; durable observations feed CNCF CloudEvents 1.0 usage metering (`billing.v1.metering`), never desired Start/Stop edits.
+  - `pkg/models/iam/session/operator.go`: Standalone `session.Operator` backed by `pkg/infra/cache` (`redis`) and `github.com/golang-jwt/jwt/v5` that encapsulates credential authentication (`Create`), per-node session token issuance (`subjectKind: "Node"` with `system:nodes` group membership), JWT token signing & cache persistence (`Issue`), stateful token signature + cache validity verification (`Verify`), session inspection (`Get`), and session revocation (`Delete`).
+- **Observability & Structured Logging (`pkg/infra/log`, `pkg/infra/metrics`, `pkg/infra/prometheus`)**:
+  - `pkg/infra/log`: Unified structured logger backed by `go.uber.org/zap` (`log.Init`, `log.S()`, `log.L()`). Zero `log/slog` usage across the codebase.
+  - `pkg/infra/metrics`: Prometheus metrics registry (`github.com/prometheus/client_golang`) exposing `GET /metrics` (`HTTPRequestsTotal`, `HTTPRequestDuration`, `MQEventsPublishedTotal`, `ControllerReconcileTotal`, `ControllerReconcileDuration`, `NodeCPUPercent`, `NodeMemoryBytes`, `NodeDiskBytes`, `NodeNetworkRxBytesPerSec`, `NodeNetworkTxBytesPerSec`, plus per-instance `InstanceCPUPercent`, `InstanceMemoryBytes`, `InstanceDiskBytes`, `InstanceNetworkRxBytesPerSec`, and `InstanceNetworkTxBytesPerSec` on `node-agent`).
+  - `pkg/infra/prometheus`: Prometheus TSDB HTTP `/api/v1/query_range` client and read-through latest-sample cache.
+  - `GET /livez` & deep `GET /readyz` (`db.Ping`, `cache.Ping`, `mq.Ping`), end-to-end `X-Request-ID` tracing, and structured `audit.event` logging across state-mutating API requests.
+- **Host Resource Collection, Stateless Registry Worker & Typed SDK (`pkg/agent`, `pkg/registryworker`, `pkg/client`)**:
+  - `pkg/agent/{collector.go,ip.go,server.go,files.go,blob_cache.go,materializer.go,register.go,prewarm.go,driver,providers/*}`: Live host telemetry via `github.com/shirou/gopsutil/v4` (CPU cores, physical RAM, workDir disk capacity/free space, host & container network throughput `NetworkRxBytesPerSec`/`NetworkTxBytesPerSec`), separated `InternalIP` (tiered physical NIC auto-detection) and `ExternalIP` (public/NAT game endpoint reporting), execution of admitted dynamic `HostPort` assignments (`publishedPort: 0` is allocated only by the node Store), content-addressed `<WorkDir>/.blob-cache` CoW/isolated-copy materialization (`flat_dir`, `tmod_latest`, `dst_local_mods`, `workshop_tree`) with strict `Fail-Closed` startup gating, `PrewarmJob` execution, token-authenticated `/log`, `/exec`, `/metrics`, and signed-ticket `/files` (list/read/write/mkdir/rm/upload/download/S3 backup & restore) endpoints.
+  - `pkg/registryworker` (`cmd/registry-worker`): Stateless, zero-host Harbor-style artifact synchronizer (`system:registry-worker`) pulling game server binaries, Modrinth addons, and Steam/SteamCMD Workshop packages into content-addressed S3 `Blob` storage exclusively via `client.RegistryV1()`.
+  - `pkg/client`: Typed REST + WebSocket SDK (`CoreV1()`, `IAMV1()`, `RegistryV1()`, `Logs()`, `Exec()`) used by `node-agent`, `registry-worker`, and external integrations.
+- **K8s / KubeSphere-Style HTTP Filter Chain & Authn/Authz**:
+  - `pkg/apiserver/request`: `RequestInfo` & `RequestInfoResolver` (`NewRequestInfo`), `UserInfo` (`system:anonymous`, `system:authenticated`, `system:nodes`).
+  - `pkg/apiserver/authentication`: `UnionAuthenticator` (`BearerTokenAuthenticator` backed by `session.Operator.Verify` -> `AnonymousAuthenticator`).
+  - `pkg/apiserver/authorization`: `UnionAuthorizer` (`PathAuthorizer` for non-resource/public paths -> `RBACAuthorizer` for resource/subresource PolicyRules with in-memory RBAC snapshot cache and Kubernetes-style `NodeRestriction` isolation for `system:nodes`).
+  - `pkg/apiserver/filters`: `DefaultBuildHandlerChain` (`WithPanicRecovery` -> `WithRequestInfo` -> `WithAuthentication` -> `WithAuditLog` -> `WithRequestLog` -> `WithAuthorization` -> `mux`).
+- **`iam.gamepanel.io/v1`** (`pkg/apis/iam/v1`):
+  - `User`
+  - `GlobalRole` & `GlobalRoleBinding` (platform-wide scope)
+  - `TenantRole` & `TenantRoleBinding` (tenant scope)
+  - `Session` (cache-backed authentication session & per-node token lifecycle)
+  - Pure additive K8s RBAC rules (`apiGroups`, `resources`, `verbs`, `resourceNames`, `selector`) with full `*` wildcard matching (`*`, `instances/*`, `*/status`, `prod-*`). No redundant `effect` field or separate `Policy` resource.
+- **`core.gamepanel.io/v1`** (`pkg/apis/core/v1`):
+  - `Tenant`: Unified multi-tenant boundary supporting both individual users (`type: Personal`) and teams (`type: Organization`), with `spec.billingMode` (`Manual | Subscription`), `spec.quota` (`cpu`, `memory`, `storage`, `instances`, `backups`, `backupStorage`), declarative alerting configuration (`spec.alertRules`, `spec.alertChannels`, `spec.platformAlertChannels`), `status.subscription`, and `status.usage`.
+  - `ResourcePlan`: Cluster-scoped quota tier / add-on pack definition (`planKind`, `quota`, `prices`, `published` at top level).
+  - `RedeemCode` & `QuotaOrder`: Hash-stored single-use activation codes (`redeemcodes`) and auditable tenant entitlement ledger (`tenants/orders`, `QuotaPolicyChange`).
+  - `RuntimeClass`: Cluster-scoped runtime class modeled after Kubernetes `RuntimeClass` / `StorageClass` / `IngressClass` (`handler`, `parameters`, `scheduling`, `isDefault` at top level).
+  - `App`: Cluster-scoped game application marketplace definition (`displayName`, `category`, `versions`, `serverBinding`, `addonBinding`, `configSchema`, `configPresets`, `fileTemplates`, `published` at top level) with built-in YAML manifests (`pkg/models/core/app/manifests`) and configuration file rendering engine (`pkg/models/core/app/engine.go`).
+  - `Node`: Compute host reporting `status.capacity`, `status.allocatable`, `status.addresses` (`InternalIP`, `ExternalIP`, `Hostname`), supported runtime handlers (`status.runtimes`), and verified `.blob-cache` / image inventory (`status.cachedArtifacts`, `status.cachedBlobs`, `status.warmImages`).
+  - `PrewarmJob`: Cluster-scoped declarative node prewarming workload (`spec.nodeSelector`, `spec.images`, `spec.artifacts` + `status.nodes`) enforcing `NodeRestriction` per-node status reporting.
+  - `Instance`: Unified workload resource referencing `spec.runtimeClassName` with `spec.state` (`Running | Stopped`), `spec.nodeSelector`, `spec.image`, `spec.command`, `spec.args`, `spec.workingDir`, `spec.serverArtifact`, `spec.addons` (pinned version coordinates), `spec.resources`, `spec.ports` (supporting dynamic `publishedPort: 0` allocation), `spec.env`, `spec.files`.
+  - `TenantMetering`: Workspace-scoped and cluster-wide resource usage metering (`cpuCoreHours`, `memoryGiBHours`, `storageGiBHours`, `instances` at top level) with CNCF CloudEvents 1.0 (`?format=cloudevents|openmeter`) and Lago (`?format=lago`) billing export.
+  - Subresources: `tenants/status`, `tenants/quota`, `tenants/quotachanges`, `tenants/orders`, `tenants/redeem`, `tenants/reclaim`, `nodes/status`, `nodes/metrics`, `nodes/exec`, `prewarmjobs/status`, `instances/state`, `instances/status`, `instances/log`, `instances/exec`, `instances/files`, `instances/metrics`.
+- **`registry.gamepanel.io/v1`** (`pkg/apis/registry/v1`):
+  - Harbor-style cluster-scoped Artifact Registry completely decoupled from `core.gamepanel.io/v1` (enforced by `hack/verify-imports.sh`): `Upstream`, `Repository` (`Hosted | Proxy`, `.spec` + `.status`), `Package` (+ `packages/icon`), `Artifact` (`.spec` + `.status`, supporting Harbor pull-through on `Proxy` repositories), content-addressed S3 `Blob`, `BlobUpload`, and `ReplicationPolicy`.
+  - **API Struct Flattening Rule**: Only asynchronous state-machine resources (`User`, `Tenant`, `Node`, `PrewarmJob`, `Instance`, `Repository`, `Artifact`) retain `.Spec` + `.Status`. All non-reconciled resources, DTOs, and subresources (`GlobalRole`, `GlobalRoleBinding`, `TenantRole`, `TenantRoleBinding`, `Session`, `ResourcePlan`, `QuotaPolicyChange`, `QuotaOrder`, `RedeemCode`, `RuntimeClass`, `App`, `Upstream`, `Package`, `Blob`, `BlobUpload`, `ReplicationPolicy`, `Event`, `Alert`, `LogEntry`, `InstanceMetrics`, `NodeMetrics`, `TenantMetering`, `InstanceState`, `InstanceExec`, `InstanceFiles`) promote their fields directly to the top level alongside `TypeMeta` and `ObjectMeta`.
+- **`pkg/infra/runtime`**: Pluggable `runtime.Driver` interface (`Handler`, `Version`, `Validate`, `Reconcile`, `Destroy`, `Logs`, `Exec`).
 
-## Product Goal
+## 2. Package Layering & State-Machine Concurrency Rules
 
-GamePanel Lite is a modern lightweight self-hosted game server management panel.
+1. **Layer 1 (`pkg/config`, `pkg/apis/{meta/v1,iam/v1,core/v1,registry/v1}`)**: Pure configuration, declarative API types, and strongly-typed GORM database table models (`pkg/apis/{iam,core,registry}/v1/records.go`) with zero database or runtime dependencies.
+2. **Layer 2 (`pkg/infra/{db,cache,mq,s3,addonmirror,volume,network,runtime,log,metrics,prometheus}`)**: Low-level PostgreSQL connection pool & schema migrations (`pkg/infra/db/{db,pool,filter}.go`), pluggable `cache.Interface`, pluggable `mq.Interface`, middleware object storage `s3.Interface`, upstream metadata resolver `pkg/infra/addonmirror`, pluggable `volume.Driver` & `volume.QuotaProvider`, pluggable `network.Driver` (port-pool allocator), `runtime.Driver` implementations, structured logging, and Prometheus metric descriptors. `pkg/infra` must not contain business-domain SQL or business resource logic.
+3. **Layer 3 (`pkg/repo/{iam,core,registry}/<module>`)**: Modular single-domain PostgreSQL data access repositories (`db.go`, `state.go`, `status.go`, `tx.go`, `change.go`, `validate.go`) with dedicated child status tables (`user_states`, `tenant_states`, `node_heartbeats`, `prewarm_job_states`, `instance_observations`, `registry_repository_states`, `registry_artifact_states`) decoupling `resourceVersion` from `statusVersion`, shared PostgreSQL helpers (`pkg/repo/pgutil`), and `pkg/repo/registry.go`. Each domain repository operates only on its own tables with zero cross-module imports, preventing Go package import cycles when upper layers compose multiple repositories.
+4. **Layer 4 (`pkg/models/{iam,core,registry}/<resource>`)**: Business orchestration layer (`operator.go`, `reconcile.go`) composing one or more `pkg/repo` domain repositories within its own API group vertical slice (`core` and `registry` never cross-import), publishing `mq.Event` messages, and advancing stage-based lifecycles (`PendingQuota -> Scheduling -> Active -> Deleting -> ReleasingQuota`).
+5. **Layer 5 (`pkg/kapis/{iam,core,registry}/v1/<resource>`, `pkg/apiserver`)**: Per-resource HTTP handlers (`pkg/kapis`) and generic K8s/KubeSphere HTTP filter chain (`pkg/apiserver/{request,authentication,authorization,filters,runtime}`).
+6. **Layer 6 (`pkg/controller`, `pkg/agent`, `pkg/registryworker`, `pkg/client`)**: Asynchronous MQ topic-consuming & idempotent reconciliation loops (`User`, `Tenant`, `Node`, `PrewarmJob`, `Instance`, `Event`, `Repository`, `Artifact`, `ReplicationPolicy`), host `node-agent`, stateless `registry-worker`, and the typed API client (`pkg/client`).
+7. **Entrypoints (`cmd/{apiserver,controller-manager,node-agent,registry-worker}`)**: Thin `main.go` composition roots. No `internal` packages are used anywhere in the repository.
+8. **Strict Function Length Limit (`<= 60` Lines)**: Every Go function across `cmd/` and `pkg/` MUST NOT exceed **60 lines** (measured from `func ... {` to its closing `}`). Decompose complex flows into cohesive, well-named helper functions rather than writing monolithic functions.
+9. **Canonical Constant Management (Zero Hardcoded State Literals)**: Lifecycle stages (`InstanceStage*`), phases (`InstancePhase*`, `BackupPhase*`, `AttemptPhase*`, `ResourceChangePhase*`), conditions (`ConditionType*`, `ConditionTrue/False/Unknown`), actions (`FileAction*`, `ScheduleAction*`), identities (`SubjectKind*`, `Verb*`), protocols (`ProtocolTCP`, `ProtocolUDP`), and driver names (`DefaultDockerDriverName`, `DefaultHostPathDriverName`, `DefaultHostPortDriverName`) MUST be defined as typed/exported constants in their canonical API or domain package (`pkg/apis/*`, `pkg/infra/*`, `pkg/controller/runtime`) and never hardcoded as raw string literals across business or transport logic.
+10. **Extension-Point Modularization vs. Inline Branching Boundary**:
+    - **Modularize (`<module>/driver/` + `<module>/providers/<name>/` + `<module>/register.go`)** when at least two of the following hold: (a) open-ended external vendor, protocol, game, notification channel, or billing export ecosystem where new implementations are added over time (`pkg/infra/addonmirror`, `pkg/registryworker`, `pkg/agent` addon modes, `pkg/models/core/alert` channels, `pkg/models/core/metering` exporters); (b) per-branch independent lifecycle hooks (e.g., `Inject -> Finalize -> Cleanup`), third-party auth/signing, rate-limiting, or dedicated helper functions (`> 25` lines); (c) repeated `switch` dispatch for the same discriminator across multiple functions. Lightweight 1–2 file low-level infrastructure drivers (`pkg/infra/{cache,mq,runtime,volume,network}`) may keep single-package `Register(name, factory)`, whereas multi-provider subsystems MUST split into `driver/` (pure interface contract, shared DTOs, thread-safe registry — zero imports of parent or `providers/*`), `providers/<name>/` (one subpackage per implementation self-registering in `init()` — zero imports of parent or sibling `providers/*`), and `register.go` (blank-importing all providers and exposing facade helpers; never place flat `driver_*.go` / `provider_*.go` files in the parent root).
+    - **Keep Direct `switch` / `if-else` (Do Not Over-Abstract)** whenever ANY of the following holds: (a) closed domain state machines and internal control flow (`InstanceStage*` / `ArtifactPhase*` reconciliation stages, RBAC verb/scope checks, `errors.Is` to HTTP status mapping) where co-locating branches preserves invariant readability; (b) small, closed, stdlib-only format or protocol helpers at a single callsite (`<= 20` lines, e.g., `tar.gz` vs `zip` extraction in `pkg/agent/blob_cache.go`, TCP/UDP normalization, query selector parsing); (c) a single standard wire protocol already isolated behind a mockable interface (`pkg/infra/s3.Interface`, where AWS S3, MinIO, OSS, and R2 share S3 SigV4 without needing a `Register` factory).
 
-V1 focuses only on Terraria:
-- Vanilla Terraria server
-- tModLoader Terraria server
-- Multiple server instances
-- Custom server configuration
-- Quick presets
-- Start / stop / restart
-- Logs and console
-- World import / backup / restore / migration
-- Easy join info: IP, port, password
-- Modern gamer-friendly UI
+### Resource-Control Atomicity & Interruption Recovery (`pkg/repo`)
 
-## Mandatory Tech Stack
+The resource model has one canonical implementation, with no old-ledger adapters, versioned inventory packages, dual writers or data backfill. Applications receive one `*repo.Registry`; generic `pkg/infra/db` owns declarative objects only.
 
-Frontend:
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-- lucide-react
-- TanStack Query
-- Framer Motion only for subtle transitions
+1. **Atomicity within one domain**: quota and node use private short PostgreSQL transactions to commit immutable operation state, current allocation, additive/subtractive account counters and, for node, all ports together. No public WithTx callback, cross-domain transaction, external RPC in a transaction, explicit FOR UPDATE or account Get+resourceVersion inventory writeback.
+2. **Frozen identities**: operation IDs, initial allocation intent, placement attempt payload and complete resource-change plans are immutable. A mismatch conflicts. A plan captures its own allocation SourceVersion. PolicyVersion only orders upstream account configuration; it never replaces inventory arithmetic.
+3. **Current holdings and history are separate**: Pending/Closed holdings are zero. RequestClose closes admission while retaining actual resources/ports. FinalizeClose refunds the persisted current holding after verified cleanup. Denial is retryable, not a durable financial Rejected state. Never clamp an underflow or repair inventory with SUM.
+4. **Persist intent before effects**: Instance UID/allocation references are saved before quota admission. A candidate attempt is saved before node admission. Binding is a UID/RV object CAS against that exact attempt; close the object's binding gate before abandoning a candidate. Unknown outcomes recover the original IDs; they do not create replacements or trigger blind refunds.
+5. **Execution and observation**: agent/runtime consume only the approved resource/port snapshot, fenced by instance UID, node UID, attempt, epoch and resource revision. Both domain growth budgets precede approval; matching execution observation precedes shrink settlement. NotReady or an absent node is not evidence of cleanup.
+6. **Object CAS and deletion**: generic UpdateObject is a single-object UID/RV CAS, not an inventory transaction. UpdateStatus preserves every existing metadata field. Physical Instance deletion requires current UID/RV and zero finalizers in the atomic DELETE; status writes cannot remove cleanup protection.
+7. **Ports**: node Store is the only allocator. Ownership is attemptID; uniqueness is nodeUID/protocol/publishedPort. Dynamic results are persisted, canonical and bounded to 32 requests with at most 256 non-repeating probes per request. Runtime must not allocate fallback ports.
+8. **Validation and tests**: zero is finite; unlimited is explicit. Use exact checked integer accounting. Memory and PostgreSQL share behavior contracts; verify actual transaction interruption, lost acknowledgements and concurrent processes in disposable databases, never by truncating a shared database.
 
-Backend:
-- Golang
-- chi router
-- SQLite
-- GORM or sqlc
-- Docker SDK for Go
-- slog logger
-- Server-Sent Events for logs/status
-- OpenAPI contract
+## 3. Frontend Console UI/UX Restraint Guidelines (`web/app/console`)
 
-Runtime:
-- Docker
-- One game server instance maps to one container
-- Each server instance has isolated data directory
+All console pages MUST strictly reuse the native primitives in `web/app/components/console/ui.tsx` (`PageHeader`, `Card`, `Badge`, `Segmented`, `Input`, `Select`, `Modal`, `EmptyState`, `Button`) and follow the `impeccable` (`Operate` mode) + `design-taste-frontend` (`VISUAL_DENSITY: 3`) anti-crowding rules:
 
-Testing:
-- Go unit tests
-- frontend lint/typecheck/build
-- Playwright for major UI flows when available
+1. **One Primary Surface per Viewport**: Every operational page consists of `PageHeader` -> 1 single-row filter bar (`Segmented` + `Input`/`Select`) -> 1 primary `<Card>` container. Never stack hero KPI stat cards, sparklines, histograms, split sidebars, and bottom cards onto the same screen.
+2. **Mutually Exclusive Sub-Views via `<Segmented>`**: When a feature has multiple perspectives (e.g., `告警事件` / `监控规则` / `通知渠道`), switch the single `<Card>` view using `<Segmented>` rather than stacking multiple tables vertically. Never append counts or dynamic numbers to `<Segmented>` / tab labels (e.g., `预热任务 (8)` or `全部 · 12`), as changing widths cause layout jitter; place counts in `PageHeader.description` or `CardHeader.description` instead.
+3. **Progressive Disclosure & Zero Nested Cards**: Keep table/list rows spacious (`px-6 py-4` / `py-5`), limited to at most 5 columns and **at most 1 status `<Badge>` per row**. Reveal deep technical payloads (`Request ID`, `User-Agent`, `Spec Diff`, structured log fields) on demand via `<Modal>` or a borderless `#F7F8FC` `<dl>` row expansion — never nest bordered cards inside cards.
 
-## Hard Rules
+## 4. Local Pre-PR Verification (Remote CI Is Manual-Only)
 
-1. Backend must be Golang.
-2. Do not use Node.js / Fastify / NestJS as backend.
-3. Do not use Dockerode.
-4. Do not add auth, billing, cloud provider provisioning, SaaS multi-tenancy, OAuth, or RBAC in V1.
-5. Do not hardcode future games into runtime logic.
-6. Keep provider architecture extensible.
-7. Keep Docker logic inside RuntimeAdapter.
-8. Keep Terraria logic inside Terraria providers.
-9. Do not store secrets, tokens, passwords, or machine-specific absolute paths in committed config.
-10. Do not expose arbitrary host paths.
-11. Validate uploaded files.
-12. Prevent path traversal.
-13. Confirm destructive actions in UI.
-14. UI must follow docs/ui-reference/gamepanel-lite-v1-ui-reference.png.
-15. V1 must feel modern, dark, lightweight, gamer-friendly, and polished.
+Remote CI (`.github/workflows/ci.yml`) runs only via `workflow_dispatch` to save runner resources. Every PR MUST therefore pass `make pre-pr` (`hack/pre-pr.sh`) locally before `gh pr create`:
 
-## UI Direction
-
-Use:
-- Modern dark gaming dashboard
-- Steam Deck / Discord / Linear inspired
-- Deep charcoal background
-- Lightweight cards
-- Green as primary accent
-- Purple only for tModLoader / Modded
-- Gold for backup / warnings
-- Subtle Terraria-inspired pixel accents only
-
-Avoid:
-- glassmorphism
-- heavy neon
-- cyberpunk
-- AI-style gradient background
-- childish pixel art
-- enterprise admin template feel
-- thick shadows
-- overdecorated background
-
-## Required Checks
-
-After each major phase, run what exists:
-
-Backend:
-- gofmt
-- go test ./...
-- go vet ./...
-
-Frontend:
-- pnpm lint
-- pnpm typecheck
-- pnpm build
-
-If a command is not available yet, document why and continue.
-
-## Git Rules
-
-Work on branch:
-- feat/v1-full-run
-
-Commit after each phase:
-- feat: initialize go backend monorepo foundation
-- feat: build v1 mock ui
-- feat: add terraria config renderer
-- feat: add go docker runtime server management
-- feat: add go world and backup management
-- feat: complete go terraria v1
-- docs: polish v1 documentation
-
-Never commit broken code if the failing checks are fixable.
-If a check fails due to missing external dependency, document it clearly.
-
-## Execution Style
-
-Do not stop after one phase.
-Do not ask for confirmation between phases.
-Proceed through the full V1 execution plan.
-Update docs/goals/V1_PROGRESS.md after each phase.
-At the end, provide:
-- summary
-- commits created
-- tests run
-- known limitations
-- how to run locally
-- next recommended work
+1. **Backend changes** (`cmd/`, `pkg/`, `tests/`, `hack/`, `go.mod`): `hack/verify-all.sh` with `golangci-lint` (gofmt, go vet, `verify-imports.sh` layering & `driver/providers` isolation, `<= 60`-line rule, modular layout, no `FOR UPDATE`) plus `go test ./cmd/... ./pkg/... ./tests/...`.
+2. **Web changes** (`web/`): `eslint --max-warnings=0` and `tsc --noEmit`.
+3. **Mini Program changes** (`miniprogram/`): `pnpm --dir miniprogram check` (`eslint --max-warnings=0`, `tsc --noEmit`, unit tests, and WXML/WXSS compilation).
+4. Suites are selected from the diff against `origin/main`; use `PRE_PR_ALL=1 make pre-pr` to force everything. `make install-hooks` optionally runs the gate on `git push`.

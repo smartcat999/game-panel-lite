@@ -1,0 +1,605 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: '0001-01-01T00:00:00Z'
+  generation: 0
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: sandbox
+  name: minecraft-paper
+  resourceVersion: ''
+  uid: ''
+builtIn: true
+serverBinding:
+  repository: mc-paper
+  package: paper
+  targetPath: paper-{{Version}}.jar
+addonBinding:
+  repository: mc-paper-plugins
+  installMode: flat_dir
+  targetDir: plugins
+capabilities:
+- console
+- mods
+- whitelist
+- versions
+- files
+- backups
+category: sandbox
+configPresets:
+- description: 关闭正版验证方便好友直连，普通难度，建议 4–10 人联机
+  id: casual-survival
+  name: 好友休闲生存（离线可进·保留背包）
+  values:
+    allowFlight: 'true'
+    difficulty: normal
+    enableCommandBlock: 'true'
+    gamemode: survival
+    maxPlayers: '20'
+    motd: 欢迎来到我们的 Minecraft 生存服
+    onlineMode: 'false'
+    pvp: 'true'
+    simulationDistance: '8'
+    spawnProtection: '0'
+    viewDistance: '10'
+    whiteList: 'false'
+- description: 开启正版验证与白名单，提高模拟距离与视距，适合生电长期服
+  id: redstone-tech
+  name: 红石生电开荒（高视距·正版白名单）
+  values:
+    allowFlight: 'true'
+    difficulty: hard
+    enableCommandBlock: 'true'
+    gamemode: survival
+    maxPlayers: '16'
+    motd: Minecraft 红石生电技术服
+    onlineMode: 'true'
+    pvp: 'false'
+    simulationDistance: '12'
+    spawnProtection: '0'
+    viewDistance: '14'
+    whiteList: 'true'
+- description: 默认创造模式、和平难度，适合多人协同建筑
+  id: creative-build
+  name: 创造建筑工坊（创造模式·关闭怪物）
+  values:
+    allowFlight: 'true'
+    difficulty: peaceful
+    enableCommandBlock: 'true'
+    gamemode: creative
+    maxPlayers: '20'
+    motd: Minecraft 创造建筑工坊
+    onlineMode: 'false'
+    pvp: 'false'
+    simulationDistance: '8'
+    spawnProtection: '0'
+    viewDistance: '12'
+    whiteList: 'false'
+configSchema:
+- default: 欢迎来到我们的 Minecraft 服务器
+  envKey: MOTD
+  fileTarget: server.properties
+  group: 基础设置
+  help: 显示在多人游戏列表中的描述文字
+  label: 服务器欢迎语
+  name: motd
+  required: true
+  type: text
+- default: '20'
+  envKey: MAX_PLAYERS
+  fileTarget: server.properties
+  group: 基础设置
+  help: 同时在线玩家上限 (1–100)
+  label: 最大同时在线人数
+  max: 100
+  min: 1
+  name: maxPlayers
+  step: 1
+  type: number
+- default: normal
+  envKey: DIFFICULTY
+  fileTarget: server.properties
+  group: 基础设置
+  help: 影响怪物生成与饥饿机制
+  label: 游戏难度
+  name: difficulty
+  options:
+  - label: 和平
+    value: peaceful
+  - label: 简单
+    value: easy
+  - label: 普通
+    value: normal
+  - label: 困难
+    value: hard
+  type: select
+- default: survival
+  envKey: MODE
+  fileTarget: server.properties
+  group: 基础设置
+  help: 新玩家首次进入时的默认模式
+  label: 默认游戏模式
+  name: gamemode
+  options:
+  - label: 生存模式
+    value: survival
+  - label: 创造模式
+    value: creative
+  - label: 冒险模式
+    value: adventure
+  - label: 旁观模式
+    value: spectator
+  type: select
+- default: 'false'
+  envKey: ONLINE_MODE
+  fileTarget: server.properties
+  group: 基础设置
+  help: 关闭后允许第三方启动器与离线账号直接进入
+  label: 开启 Mojang 正版验证
+  name: onlineMode
+  type: boolean
+- default: 'false'
+  envKey: ENABLE_WHITELIST
+  fileTarget: server.properties
+  group: 基础设置
+  help: 开启后仅白名单内玩家可进服
+  label: 启用白名单准入控制
+  name: whiteList
+  type: boolean
+- default: world
+  envKey: LEVEL
+  fileTarget: server.properties
+  group: 世界生成
+  help: 存档文件夹名称，修改会生成新世界
+  label: 世界存档名称
+  name: levelName
+  type: text
+- envKey: SEED
+  fileTarget: server.properties
+  group: 世界生成
+  help: 留空则随机生成地图种子
+  label: 世界生成种子
+  name: levelSeed
+  type: text
+- default: minecraft:normal
+  envKey: LEVEL_TYPE
+  fileTarget: server.properties
+  group: 世界生成
+  help: 仅在首次生成世界时生效
+  label: 世界地图类型
+  name: levelType
+  options:
+  - label: 标准群系
+    value: minecraft:normal
+  - label: 超平坦
+    value: minecraft:flat
+  - label: 巨型生物群系
+    value: minecraft:large_biomes
+  - label: 放大化地形
+    value: minecraft:amplified
+  type: select
+- default: 'true'
+  envKey: PVP
+  fileTarget: server.properties
+  group: 生存战斗
+  help: 关闭后玩家之间无法互相攻击
+  label: 允许玩家间伤害
+  name: pvp
+  type: boolean
+- default: 'false'
+  envKey: HARDCORE
+  fileTarget: server.properties
+  group: 生存战斗
+  help: 开启后玩家死亡无法复活
+  label: 极限模式（死亡即旁观）
+  name: hardcore
+  type: boolean
+- default: 'true'
+  envKey: ALLOW_FLIGHT
+  fileTarget: server.properties
+  group: 生存战斗
+  help: 建议开启，避免玩家因骑乘或卡顿被误踢
+  label: 允许飞行模组/鞘翅滞空
+  name: allowFlight
+  type: boolean
+- default: 'true'
+  envKey: ENABLE_COMMAND_BLOCK
+  fileTarget: server.properties
+  group: 生存战斗
+  help: 允许在游戏内运行命令方块逻辑
+  label: 启用命令方块
+  name: enableCommandBlock
+  type: boolean
+- default: '10'
+  envKey: VIEW_DISTANCE
+  fileTarget: server.properties
+  group: 性能视距
+  help: 服务端向客户端发送的视野半径区块数 (默认 10)
+  label: 视野区块距离
+  max: 32
+  min: 4
+  name: viewDistance
+  step: 1
+  type: number
+- default: '8'
+  envKey: SIMULATION_DISTANCE
+  fileTarget: server.properties
+  group: 性能视距
+  help: 红石与怪物活跃加载区块半径 (默认 8)
+  label: 实体模拟距离
+  max: 32
+  min: 4
+  name: simulationDistance
+  step: 1
+  type: number
+- default: '0'
+  envKey: SPAWN_PROTECTION
+  fileTarget: server.properties
+  group: 性能视距
+  help: 设为 0 允许所有玩家在出生点建造
+  label: 出生点保护半径
+  max: 64
+  min: 0
+  name: spawnProtection
+  step: 1
+  type: number
+- name: serverName
+  label: 服务器名称标识
+  type: text
+  required: true
+  default: Minecraft Paper Server
+  group: 基础设置
+  help: 面板与监控展示的服务器名称
+  fileTarget: server.properties
+- name: allowNether
+  label: 开启下界维度
+  type: boolean
+  default: 'true'
+  group: 世界生成
+  help: 关闭后下界传送门将无法激活
+  fileTarget: server.properties
+- name: generateStructures
+  label: 生成自然建筑结构
+  type: boolean
+  default: 'true'
+  group: 世界生成
+  help: 控制村庄、林地府邸、要塞与远古城市是否生成
+  fileTarget: server.properties
+- name: maxWorldSize
+  label: 世界边界最大半径（方块）
+  type: number
+  default: '29999984'
+  min: 1000
+  max: 29999984
+  step: 1000
+  group: 世界生成
+  help: 限制探索边界以控制磁盘存档体积
+  fileTarget: server.properties
+- name: spawnMonsters
+  label: 自然生成敌对怪物
+  type: boolean
+  default: 'true'
+  group: 生存战斗
+  help: 关闭后夜晚与洞穴不再刷新僵尸、骷髅等敌对生物
+  fileTarget: server.properties
+- name: spawnAnimals
+  label: 自然生成被动动物
+  type: boolean
+  default: 'true'
+  group: 生存战斗
+  help: 控制牛、羊、猪、鸡等被动生物生成
+  fileTarget: server.properties
+- name: spawnNpcs
+  label: 自然生成村民
+  type: boolean
+  default: 'true'
+  group: 生存战斗
+  help: 控制村庄中村民的生成与繁殖
+  fileTarget: server.properties
+- name: forceGamemode
+  label: 进服强制重置默认模式
+  type: boolean
+  default: 'false'
+  group: 生存战斗
+  help: 玩家每次加入时强制切换为服务器默认游戏模式
+  fileTarget: server.properties
+- name: entityBroadcastRangePercentage
+  label: 实体渲染广播距离（%）
+  type: number
+  default: '100'
+  min: 10
+  max: 500
+  step: 10
+  group: 性能视距
+  help: 控制客户端可见实体距离百分比 (10–500%)
+  fileTarget: server.properties
+- name: maxTickTime
+  label: 看门狗超时阈值（毫秒）
+  type: number
+  default: '60000'
+  min: -1
+  max: 600000
+  step: 5000
+  group: 性能视距
+  help: 设为 -1 可禁用 Watchdog 假死自动停服
+  fileTarget: server.properties
+- name: playerIdleTimeout
+  label: 挂机自动踢出时长（分钟）
+  type: number
+  default: '0'
+  min: 0
+  max: 1440
+  step: 5
+  group: 性能视距
+  help: 设为 0 表示允许无限时长挂机 (AFK)
+  fileTarget: server.properties
+- name: networkCompressionThreshold
+  label: 网络数据包压缩阈值（字节）
+  type: number
+  default: '256'
+  min: -1
+  max: 1500
+  step: 64
+  group: 性能视距
+  help: 默认 256 字节；设为 -1 关闭网络包压缩
+  fileTarget: server.properties
+coverImage: /landing/games/minecraft-paper.jpg
+displayName: Minecraft
+env:
+  EULA: 'TRUE'
+  MEMORY: 3G
+  ONLINE_MODE: 'FALSE'
+  TYPE: PAPER
+  VERSION: '26.3'
+fileTemplates:
+- content: |
+    eula=true
+  path: eula.txt
+- content: |
+    # Managed by GamePanel Lite ({{serverName}})
+    motd={{motd}}
+    server-name={{serverName}}
+    max-players={{maxPlayers}}
+    difficulty={{difficulty}}
+    gamemode={{gamemode}}
+    force-gamemode={{forceGamemode}}
+    online-mode={{onlineMode}}
+    white-list={{whiteList}}
+    level-name={{levelName}}
+    level-seed={{levelSeed}}
+    level-type={{levelType}}
+    allow-nether={{allowNether}}
+    generate-structures={{generateStructures}}
+    max-world-size={{maxWorldSize}}
+    pvp={{pvp}}
+    hardcore={{hardcore}}
+    allow-flight={{allowFlight}}
+    enable-command-block={{enableCommandBlock}}
+    spawn-monsters={{spawnMonsters}}
+    spawn-animals={{spawnAnimals}}
+    spawn-npcs={{spawnNpcs}}
+    view-distance={{viewDistance}}
+    simulation-distance={{simulationDistance}}
+    spawn-protection={{spawnProtection}}
+    entity-broadcast-range-percentage={{entityBroadcastRangePercentage}}
+    max-tick-time={{maxTickTime}}
+    player-idle-timeout={{playerIdleTimeout}}
+    network-compression-threshold={{networkCompressionThreshold}}
+  path: server.properties
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+preStartCommand: |
+  mkdir -p /data/plugins
+  rm -f /data/*/session.lock 2>/dev/null || true
+startupCommand: exec java -XX:+UseContainerSupport -XX:InitialRAMPercentage=50.0 -XX:MaxRAMPercentage=70.0 -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -Dterminal.jline=false -Dterminal.ansi=true -jar paper-{{Version}}.jar --nogui
+preStopCommand: |
+  mc-send-to-console "save-all" || true
+  mc-send-to-console "stop" || true
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[p]aper-.*\.jar' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+ports:
+- name: game
+  protocol: TCP
+  targetPort: 25565
+published: true
+recommendedPlan: standard
+recommendedVersion: '26.3'
+resources:
+  cpu: '2'
+  memory: 4Gi
+  storage: 20Gi
+summary: 沙盒建造与生存联机服务器，支持多版本切换、正版/离线验证、视距调优与 server.properties 自动生成。
+tagline: Java 版 · Paper / Vanilla 多版本联机服
+versions:
+- '26.3'
+- 1.21.11
+- 1.21.4
+consoleDelivery: mc-send-to-console
+consoleActions:
+- id: mc-time-set
+  title: 设置时间段
+  group: 时间天气
+  command: time set {{time}}
+  starred: true
+  params:
+  - name: time
+    label: 时间段
+    type: select
+    defaultValue: day
+    options:
+    - value: sunrise
+      label: 日出
+    - value: day
+      label: 白天
+    - value: noon
+      label: 正午
+    - value: night
+      label: 夜晚
+- id: mc-weather
+  title: 切换天气
+  group: 时间天气
+  command: weather {{weather}}
+  starred: true
+  params:
+  - name: weather
+    label: 天气
+    type: select
+    defaultValue: clear
+    options:
+    - value: clear
+      label: 晴天
+    - value: rain
+      label: 降雨
+    - value: thunder
+      label: 雷暴
+- id: mc-save-all
+  title: 立即保存世界
+  group: 存档规则
+  command: save-all
+  starred: true
+- id: mc-keep-inventory
+  title: 死亡不掉落
+  group: 存档规则
+  command: gamerule keepInventory {{enabled}}
+  starred: true
+  params:
+  - name: enabled
+    label: 状态
+    type: select
+    defaultValue: 'true'
+    options:
+    - value: 'true'
+      label: 开启
+    - value: 'false'
+      label: 关闭
+- id: mc-mob-griefing
+  title: 生物破坏地形
+  group: 存档规则
+  command: gamerule mobGriefing {{enabled}}
+  starred: false
+  params:
+  - name: enabled
+    label: 状态
+    type: select
+    defaultValue: 'false'
+    options:
+    - value: 'true'
+      label: 允许
+    - value: 'false'
+      label: 禁止
+- id: mc-say
+  title: 全服公告广播
+  group: 存档规则
+  command: say {{msg}}
+  starred: true
+  params:
+  - name: msg
+    label: 公告内容
+    type: text
+    defaultValue: 服务器将在 5 分钟后进行例行维护
+- id: mc-op
+  title: 授予管理员
+  group: 玩家权限
+  command: op {{player}}
+  starred: false
+  params:
+  - name: player
+    label: 玩家名称
+    type: text
+- id: mc-kick
+  title: 踢出玩家
+  group: 玩家权限
+  command: kick {{player}}
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名称
+    type: text
+- id: mc-whitelist-add
+  title: 添加白名单玩家
+  group: 玩家权限
+  command: whitelist add {{player}}
+  starred: false
+  params:
+  - name: player
+    label: 玩家名称
+    type: text
+- id: mc-gamemode
+  title: 修改玩家游戏模式
+  group: 玩家权限
+  command: gamemode {{mode}} {{player}}
+  starred: true
+  params:
+  - name: mode
+    label: 游戏模式
+    type: select
+    defaultValue: creative
+    options:
+    - value: survival
+      label: 生存
+    - value: creative
+      label: 创造
+    - value: adventure
+      label: 冒险
+    - value: spectator
+      label: 旁观
+  - name: player
+    label: 目标玩家
+    type: text
+    defaultValue: '@a'
+- id: mc-give
+  title: 给予玩家物品
+  group: 玩家权限
+  command: give {{player}} {{item}} {{count}}
+  starred: true
+  params:
+  - name: player
+    label: 目标玩家
+    type: text
+    defaultValue: '@p'
+  - name: item
+    label: 物品 ID
+    type: text
+    defaultValue: minecraft:diamond
+  - name: count
+    label: 数量
+    type: number
+    defaultValue: '64'
+storagePolicy:
+  backupSubtree: world,world_nether,world_the_end,data/world,data/world_nether,data/world_the_end
+  anchorFiles:
+  - world/level.dat
+  replaceOnRestore: true
+  backupRequiresStop: false
+  preBackupCommand: save-all flush
+  regeneratePaths:
+  - world
+  - world_nether
+  - world_the_end
+  - data/world
+  - data/world_nether
+  - data/world_the_end
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  mode: regex_value
+  probeCommand: list
+  pattern: 'There are (\d+) of a max of \d+ players online'
+  itemPattern: 'There are \d+ of a max of \d+ players online:\s*(.+)'
+  incPattern: '([A-Za-z0-9_]{2,16}) joined the game'
+  decPattern: '([A-Za-z0-9_]{2,16}) left the game'
+  maxConfigKey: maxPlayers
+  bindParam: player
+  quickActionIds:
+  - mc-op
+  - mc-kick
+- id: server_tps
+  label: 服务端 TPS
+  unit: TPS
+  mode: regex_value
+  probeCommand: tps
+  pattern: 'TPS from last 1m, 5m, 15m:\s*\*?([0-9.]+)'

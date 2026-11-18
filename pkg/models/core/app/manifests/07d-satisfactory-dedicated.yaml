@@ -1,0 +1,274 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  name: satisfactory-dedicated
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: sandbox
+displayName: 幸福工厂 Satisfactory
+tagline: 第一人称自动化工厂建设 · 多人协同流水线联机服
+summary: 支持服务器名称与存档会话配置、无人在线自动暂停、自动存盘间隔与保留份数、网络同步带宽与服务端帧率调优。
+category: sandbox
+coverImage: /landing/games/satisfactory-dedicated.jpg
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+versions:
+- latest
+recommendedVersion: latest
+recommendedPlan: pro
+resources:
+  cpu: '4'
+  memory: 8Gi
+  storage: 30Gi
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 7777
+- name: game-tcp
+  protocol: TCP
+  targetPort: 7777
+serverBinding:
+  repository: satisfactory-server
+  package: satisfactory
+  targetPath: .
+env:
+  SERVER_NAME: GamePanel 幸福工厂服
+  SESSION_NAME: SatisfactoryFactory
+  MAX_PLAYERS: '4'
+  AUTO_PAUSE: 'true'
+  AUTOSAVE_INTERVAL: '300'
+  AUTOSAVE_NUM: '5'
+  SAVE_ON_DISCONNECT: 'true'
+  SEASONAL_EVENTS: 'true'
+  NETWORK_QUALITY: '3'
+  TICK_RATE: '30'
+configSchema:
+- name: serverName
+  label: 服务器名称
+  type: text
+  required: true
+  default: GamePanel 幸福工厂服
+  envKey: SERVER_NAME
+  group: 基础设置
+  help: 显示在游戏服务器管理列表中的名称
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: sessionName
+  label: 世界存档会话名
+  type: text
+  required: true
+  default: SatisfactoryFactory
+  envKey: SESSION_NAME
+  group: 基础设置
+  help: 世界存档的会话标识名称，用于区分不同工厂存档
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: maxPlayers
+  label: 最大同时在线人数
+  type: number
+  default: '4'
+  min: 1
+  max: 16
+  step: 1
+  envKey: MAX_PLAYERS
+  group: 基础设置
+  help: 同时在线开拓者上限（1–16）
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: autoPause
+  label: 无人在线时自动暂停
+  type: boolean
+  default: 'true'
+  envKey: AUTO_PAUSE
+  group: 基础设置
+  help: 所有玩家退出后自动暂停模拟以降低闲置资源占用
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: autosaveInterval
+  label: 自动存盘间隔（秒）
+  type: number
+  default: '300'
+  min: 60
+  max: 3600
+  step: 60
+  envKey: AUTOSAVE_INTERVAL
+  group: 存档网络
+  help: 工厂运行期间定期自动保存世界数据的间隔时间（默认 300 秒）
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: autosaveNum
+  label: 自动存档保留份数
+  type: number
+  default: '5'
+  min: 1
+  max: 20
+  step: 1
+  envKey: AUTOSAVE_NUM
+  group: 存档网络
+  help: 自动滚动保留的历史存档数量上限
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: saveOnDisconnect
+  label: 最后玩家离开时自动存盘
+  type: boolean
+  default: 'true'
+  envKey: SAVE_ON_DISCONNECT
+  group: 存档网络
+  help: 确保全部玩家退出后立即触发一次完整存档保存
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: seasonalEvents
+  label: 开启节日活动
+  type: boolean
+  default: 'true'
+  envKey: SEASONAL_EVENTS
+  group: 存档网络
+  help: 允许在对应现实节日触发 FICSIT 季节特别活动
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+- name: networkQuality
+  label: 网络同步带宽档位
+  type: select
+  default: '3'
+  envKey: NETWORK_QUALITY
+  group: 性能调优
+  help: 大型复杂产线推荐保持超高带宽以减少传送带同步卡顿
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+  options:
+  - value: '0'
+    label: 低带宽
+  - value: '1'
+    label: 中等带宽
+  - value: '2'
+    label: 高带宽
+  - value: '3'
+    label: 超高带宽（推荐）
+- name: tickRate
+  label: 服务端最大帧率上限
+  type: number
+  default: '30'
+  min: 15
+  max: 120
+  step: 5
+  envKey: TICK_RATE
+  group: 性能调优
+  help: 服务端模拟更新频率上限（默认 30，后期大型工厂可调高至 60）
+  fileTarget: FactoryGame/Saved/Config/LinuxServer/Engine.ini
+configPresets:
+- id: standard-factory
+  name: 标准四人产线（无人自动暂停·五分钟存盘）
+  description: 适合 2–4 人常规联机开荒，无人时自动暂停节省算力
+  values:
+    maxPlayers: '4'
+    autoPause: 'true'
+    autosaveInterval: '300'
+    networkQuality: '3'
+    tickRate: '30'
+- id: mega-factory
+  name: 大型多人超级工厂（八人联机·高帧率带宽）
+  description: 开放八人同时建造并提升服务端模拟帧率上限，适合中后期大规模基地
+  values:
+    maxPlayers: '8'
+    autoPause: 'true'
+    autosaveInterval: '600'
+    networkQuality: '3'
+    tickRate: '60'
+- id: always-on
+  name: 全天候挂机产线（无人在线持续生产）
+  description: 关闭自动暂停，玩家下线后矿机与自动化产线继续运转积攒物资
+  values:
+    maxPlayers: '6'
+    autoPause: 'false'
+    autosaveInterval: '300'
+    networkQuality: '3'
+    tickRate: '30'
+fileTemplates:
+- path: FactoryGame/Saved/Config/LinuxServer/GameUserSettings.ini
+  content: |
+    [/Script/Engine.GameSession]
+    MaxPlayers={{maxPlayers}}
+
+    [/Script/FactoryGame.FGGameUserSettings]
+    mNetworkQuality={{networkQuality}}
+
+    [ServerSettings]
+    ServerName={{serverName}}
+    SessionName={{sessionName}}
+    AutoPause={{autoPause}}
+    AutoSaveInterval={{autosaveInterval}}
+    AutoSaveCount={{autosaveNum}}
+    SaveOnDisconnect={{saveOnDisconnect}}
+    FG.DisableSeasonalEvents={{ if eq (index .Values "seasonalEvents") "false" }}1{{ else }}0{{ end }}
+- path: FactoryGame/Saved/Config/LinuxServer/Engine.ini
+  content: |
+    [/Script/OnlineSubsystemUtils.IpNetDriver]
+    MaxClientRate=1000000
+    MaxInternetClientRate=1000000
+    NetServerMaxTickRate={{tickRate}}
+preStartCommand: |
+  chmod +x /data/FactoryServer.sh /data/Engine/Binaries/Linux/FactoryServer-Linux-Shipping 2>/dev/null || true
+  mkdir -p /data/FactoryGame/Saved/SaveGames/server /data/FactoryGame/Saved/Config/LinuxServer /data/.steam/sdk64 /home/steam/.steam/sdk64
+  if [ -f /opt/steamcmd/linux64/steamclient.so ]; then
+    ln -sf /opt/steamcmd/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
+    ln -sf /opt/steamcmd/linux64/steamclient.so /home/steam/.steam/sdk64/steamclient.so
+  fi
+  chown -R 1000:1000 /data/FactoryGame /data/.steam
+startupCommand: exec runuser -u steam -- env HOME=/data /data/FactoryServer.sh -log -unattended -Port=7777
+preStopCommand: |
+  pkill -INT -f '[F]actoryServer-Linux-Shipping' 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && pgrep -f '[F]actoryServer-Linux-Shipping' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+published: true
+consoleDelivery: |-
+  python3 -c '
+  import glob,json,os,ssl,sys,urllib.request
+  op=sys.argv[1].strip()
+  out=""
+  if op=="health":
+    req=urllib.request.Request("https://127.0.0.1:7777/api/v1",data=json.dumps({"function":"HealthCheck","data":{"clientCustomData":""}}).encode(),headers={"Content-Type":"application/json"},method="POST")
+    out=urllib.request.urlopen(req,context=ssl._create_unverified_context(),timeout=2).read().decode()
+  elif op=="saves":
+    paths=sorted(glob.glob("/data/FactoryGame/Saved/SaveGames/**/*.sav",recursive=True)+glob.glob("/data/.config/Epic/FactoryGame/Saved/SaveGames/**/*.sav",recursive=True))
+    out="\n".join(f"{os.path.basename(x)} ({os.path.getsize(x)} bytes)" for x in paths) if paths else "暂无工厂存档"
+  else:
+    sys.exit(1)
+  try:
+    open("/proc/1/fd/1","a",encoding="utf-8").write(f"[Console] > {op}\n{out}\n")
+  except Exception:
+    pass
+  print(out)
+  ' {{cmd}}
+consoleActions:
+- id: sf-health
+  title: 检查服务健康状态
+  group: 状态存档
+  command: health
+  starred: true
+- id: sf-saves
+  title: 查看工厂存档列表
+  group: 状态存档
+  command: saves
+  starred: true
+storagePolicy:
+  backupSubtree: FactoryGame/Saved
+  anchorFiles:
+  - SaveGames
+  replaceOnRestore: true
+  backupRequiresStop: true
+  regeneratePaths:
+  - FactoryGame/Saved/SaveGames
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_value
+  maxConfigKey: maxPlayers
+  probeCommand: |-
+    python3 -c 'import socket
+    q=b"\xff\xff\xff\xffTSource Engine Query\x00"
+    for h in (socket.gethostbyname(socket.gethostname()),"127.0.0.1"):
+      try:
+        s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(0.6); s.sendto(q,(h,7777)); d,_=s.recvfrom(4096)
+        if len(d)>=9 and d[4]==65: s.sendto(q+d[5:9],(h,7777)); d,_=s.recvfrom(4096)
+        pos=6
+        for _ in range(4): pos=d.find(0,pos)+1
+        print("GP_ONLINE="+str(d[pos+2])); raise SystemExit
+      except SystemExit: raise
+      except Exception: pass
+    print("GP_ONLINE=0")' 2>/dev/null || echo 'GP_ONLINE=0'
+  pattern: 'GP_ONLINE=(\d+)'

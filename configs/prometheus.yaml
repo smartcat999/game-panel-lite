@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: "gamepanel-apiserver"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["apiserver:8080"]
+        labels:
+          component: "apiserver"
+
+  - job_name: "gamepanel-controller-manager"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["controller-manager:8083"]
+        labels:
+          component: "controller-manager"
+
+  - job_name: "gamepanel-node-agent"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["node-agent:8082"]
+        labels:
+          component: "node-agent"

@@ -1,0 +1,64 @@
+log:
+  level: info
+  format: console
+
+server:
+  addr: "0.0.0.0:8080"
+  readTimeout: 15s
+  writeTimeout: 30s
+  shutdownTimeout: 15s
+
+database:
+  dsn: "postgres://postgres:${POSTGRES_PASSWORD:-postgres}@127.0.0.1:5432/gamepanel?sslmode=disable"
+  maxOpenConns: 25
+  maxIdleConns: 5
+  connMaxLifetime: 30m
+
+cache:
+  driver: "${GP_CACHE_DRIVER:-redis}"
+  addr: "${GP_CACHE_ADDR:-127.0.0.1:6379}"
+  password: "${GP_CACHE_PASSWORD:-}"
+  db: 0
+
+mq:
+  driver: "${GP_MQ_DRIVER:-redis}"
+  addr: "${GP_MQ_ADDR:-127.0.0.1:6379}"
+  password: "${GP_MQ_PASSWORD:-}"
+  db: 0
+  group: "gamepanel-controllers"
+
+auth:
+  jwtSecret: "${GP_AUTH_JWT_SECRET:-dev-secret-change-me}"
+  tokenTTL: 24h
+
+network:
+  driver: "hostport"
+  portRangeMin: 20000
+  portRangeMax: 29999
+  maxPortProbes: 256
+
+s3:
+  endpoint: "${GP_S3_ENDPOINT:-http://127.0.0.1:9000}"
+  publicEndpoint: "${GP_S3_PUBLIC_ENDPOINT:-}"
+  region: "${GP_S3_REGION:-us-east-1}"
+  bucket: "${GP_S3_BUCKET:-gamepanel-backups}"
+  accessKey: "${GP_S3_ACCESS_KEY:-gamepanel}"
+  secretKey: "${GP_S3_SECRET_KEY:-gamepanel123}"
+  usePathStyle: true
+  presignTTL: 15m
+
+observability:
+  prometheusURL: "${GP_PROMETHEUS_URL:-}"
+  alertmanagerURL: "${GP_ALERTMANAGER_URL:-}"
+  victoriaLogsURL: "${GP_VICTORIALOGS_URL:-}"
+  # Audit capture level: Metadata | Request | RequestResponse
+  auditLevel: "${GP_AUDIT_LEVEL:-RequestResponse}"
+
+addonMirror:
+  steamWebAPIKey: "${GP_ADDON_MIRROR_STEAM_WEB_API_KEY:-}"
+  upstreamProxyURL: "${GP_ADDON_MIRROR_UPSTREAM_PROXY_URL:-}"
+  externalEndpoint: "${GP_ADDON_MIRROR_EXTERNAL_ENDPOINT:-}"
+  imageHostMirrors: "${GP_ADDON_MIRROR_IMAGE_HOST_MIRRORS:-}"
+  allowedImageHosts: "${GP_ADDON_MIRROR_ALLOWED_IMAGE_HOSTS:-}"
+  cacheTTL: 15m
+  timeout: 15s

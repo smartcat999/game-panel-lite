@@ -1,0 +1,15 @@
+apiVersion: core.gamepanel.io/v1
+kind: RuntimeClass
+metadata:
+  name: docker
+  labels:
+    runtime.gamepanel.io/type: container
+spec:
+  handler: docker
+  isDefault: true
+  parameters:
+    networkMode: bridge
+    restartPolicy: unless-stopped
+  scheduling:
+    nodeSelector:
+      topology.gamepanel.io/region: ap-east-1

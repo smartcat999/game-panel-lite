@@ -1,0 +1,654 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: '0001-01-01T00:00:00Z'
+  generation: 0
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: survival
+  name: palworld-dedicated
+  resourceVersion: ''
+  uid: ''
+builtIn: true
+serverBinding:
+  repository: palworld-server
+  package: palworld
+  targetPath: .
+capabilities:
+- console
+- players
+- versions
+- files
+- backups
+category: survival
+configPresets:
+- description: 保持官方 1.0x 倍率与标准孵化时长
+  id: official-standard
+  name: 官方标准难度（原汁原味）
+  values:
+    bActiveUNKO: 'true'
+    bEnableInvaderEnemy: 'true'
+    bIsPvP: 'false'
+    baseCampMaxNumInGuild: '4'
+    baseCampWorkerMaxNum: '15'
+    collectionDropRate: '1.0'
+    deathPenalty: All
+    difficulty: None
+    eggHatchingTime: '72'
+    expRate: '1.0'
+    guildPlayerMaxNum: '20'
+    palCaptureRate: '1.0'
+    palSpawnNumRate: '1.0'
+    workSpeedRate: '1.0'
+- description: 3 倍经验、2 倍捕获率与采集产出、巨大蛋 0 小时秒孵、死亡不掉落
+  id: casual-boost
+  name: 轻松休闲（3倍经验·秒孵蛋·死不掉落）
+  values:
+    bActiveUNKO: 'true'
+    bEnableInvaderEnemy: 'true'
+    bIsPvP: 'false'
+    baseCampMaxNumInGuild: '6'
+    baseCampWorkerMaxNum: '20'
+    collectionDropRate: '2.0'
+    deathPenalty: None
+    difficulty: None
+    eggHatchingTime: '0'
+    expRate: '3.0'
+    guildPlayerMaxNum: '32'
+    palCaptureRate: '2.0'
+    palSpawnNumRate: '1.0'
+    workSpeedRate: '2.0'
+- description: 0.8 倍经验、高怪物伤害、死亡掉落全部物品与帕鲁
+  id: hardcore-survival
+  name: 硬核开荒（高伤高掉落惩罚）
+  values:
+    bActiveUNKO: 'false'
+    bEnableInvaderEnemy: 'true'
+    bIsPvP: 'true'
+    baseCampMaxNumInGuild: '3'
+    baseCampWorkerMaxNum: '15'
+    collectionDropRate: '1.0'
+    deathPenalty: All
+    difficulty: Hard
+    eggHatchingTime: '72'
+    expRate: '0.8'
+    guildPlayerMaxNum: '10'
+    palCaptureRate: '0.8'
+    palSpawnNumRate: '1.5'
+    workSpeedRate: '1.0'
+configSchema:
+- default: GamePanel Palworld Server
+  envKey: SERVER_NAME
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 基础设置
+  help: 显示在游戏社区列表中的名称
+  label: 服务器名称
+  name: serverName
+  required: true
+  type: text
+- default: 由 GamePanel Lite 驱动的幻兽帕鲁联机服
+  envKey: SERVER_DESCRIPTION
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 基础设置
+  help: 服务器公告与说明信息
+  label: 服务器简介
+  name: serverDescription
+  type: text
+- default: '16'
+  envKey: PLAYERS
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 基础设置
+  help: 同时在线人数上限 (1–32)
+  label: 最大玩家人数
+  max: 32
+  min: 1
+  name: maxPlayers
+  step: 1
+  type: number
+- envKey: SERVER_PASSWORD
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 基础设置
+  help: 留空表示公开免密进入
+  label: 进服密码
+  name: serverPassword
+  type: password
+- default: paladmin123
+  envKey: ADMIN_PASSWORD
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 基础设置
+  help: 游戏内输入 /AdminPassword 获取管理员权限，同时用于 RCON 控制台鉴权
+  label: 管理员 GM 密码
+  name: adminPassword
+  required: true
+  type: password
+- default: None
+  envKey: DIFFICULTY
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 基础设置
+  help: 基础难度模板
+  label: 预设难度档位
+  name: difficulty
+  options:
+  - label: 自定义 / 标准
+    value: None
+  - label: 休闲
+    value: Casual
+  - label: 困难
+    value: Hard
+  type: select
+- default: '1.0'
+  envKey: EXP_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 影响打怪、捕获与制作获得的经验值 (0.1–20)
+  label: 角色与帕鲁经验倍率
+  max: 20
+  min: 0.1
+  name: expRate
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: PAL_CAPTURE_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 调高可显著降低后期神兽捕获难度 (0.5–5)
+  label: 帕鲁捕获概率倍率
+  max: 5
+  min: 0.5
+  name: palCaptureRate
+  step: 0.1
+  type: number
+- default: '72'
+  envKey: PAL_EGG_DEFAULT_HATCHING_TIME
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 设为 0 表示放入孵化器后立即秒孵 (0–240)
+  label: 巨大蛋孵化所需时间（小时）
+  max: 240
+  min: 0
+  name: eggHatchingTime
+  step: 1
+  type: number
+- default: '1.0'
+  envKey: WORK_SPEED_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 影响建造、采矿、伐木与制作速度 (0.1–10)
+  label: 据点帕鲁工作速度倍率
+  max: 10
+  min: 0.1
+  name: workSpeedRate
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: PAL_SPAWN_NUM_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 调至 2.0 以上会使野生头目成倍出现 (0.5–3)
+  label: 野生帕鲁刷新密度倍率
+  max: 3
+  min: 0.5
+  name: palSpawnNumRate
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: COLLECTION_DROP_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 矿石、树木、石块的采集产出倍率 (0.5–10)
+  label: 资源采集掉落倍率
+  max: 10
+  min: 0.5
+  name: collectionDropRate
+  step: 0.5
+  type: number
+- default: '1.0'
+  envKey: ENEMY_DROP_ITEM_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 帕鲁油、帕鲁体液等战利品掉落倍率
+  label: 野生帕鲁击败掉落倍率
+  max: 10
+  min: 0.5
+  name: enemyDropItemRate
+  step: 0.5
+  type: number
+- default: '1.0'
+  envKey: DAY_TIME_SPEED_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 数值越小白天越漫长 (0.1–5)
+  label: 白天流逝速度倍率
+  max: 5
+  min: 0.1
+  name: dayTimeSpeedRate
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: NIGHT_TIME_SPEED_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 世界倍率
+  help: 调大可快速跳过夜晚 (0.1–5)
+  label: 夜晚流逝速度倍率
+  max: 5
+  min: 0.1
+  name: nightTimeSpeedRate
+  step: 0.1
+  type: number
+- default: '15'
+  envKey: BASE_CAMP_WORKER_MAX_NUM
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 据点公会
+  help: 每个终端据点可同时放出的工作帕鲁上限 (1–50)
+  label: 单据点最大工作帕鲁数
+  max: 50
+  min: 1
+  name: baseCampWorkerMaxNum
+  step: 1
+  type: number
+- default: '4'
+  envKey: BASE_CAMP_MAX_NUM_IN_GUILD
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 据点公会
+  help: 每个公会可建造的终端据点上限 (1–10)
+  label: 单公会最大据点数量
+  max: 10
+  min: 1
+  name: baseCampMaxNumInGuild
+  step: 1
+  type: number
+- default: '20'
+  envKey: GUILD_PLAYER_MAX_NUM
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 据点公会
+  help: 每个公会可容纳的玩家上限
+  label: 单公会最大成员人数
+  max: 100
+  min: 1
+  name: guildPlayerMaxNum
+  step: 1
+  type: number
+- default: '1.0'
+  envKey: BUILD_OBJECT_DETERIORATION_DAMAGE_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 据点公会
+  help: 设为 0 时据点范围外的建筑永不自动损坏
+  label: 圈外建筑腐朽倍率
+  max: 10
+  min: 0
+  name: buildObjectDeteriorationDamageRate
+  step: 0.5
+  type: number
+- default: All
+  envKey: DEATH_PENALTY
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 生存战斗
+  help: 控制角色死亡后需要跑尸捡回的范围
+  label: 玩家死亡掉落惩罚
+  name: deathPenalty
+  options:
+  - label: 不掉落任何物品
+    value: None
+  - label: 仅掉落背包道具
+    value: Item
+  - label: 掉落道具与身上装备
+    value: ItemAndEquipment
+  - label: 掉落全部物品与随身帕鲁
+    value: All
+  type: select
+- default: '1.0'
+  envKey: PLAYER_DAMAGE_RATE_ATTACK
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 生存战斗
+  help: 玩家武器攻击力倍率 (0.1–5)
+  label: 玩家造成伤害倍率
+  max: 5
+  min: 0.1
+  name: playerDamageRateAttack
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: PLAYER_DAMAGE_RATE_DEFENSE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 生存战斗
+  help: 调低可提升角色生存能力 (0.1–5)
+  label: 玩家承受伤害倍率
+  max: 5
+  min: 0.1
+  name: playerDamageRateDefense
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: PLAYER_STOMACH_DECREASE_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 生存战斗
+  help: 调低可减少进食频率 (0.1–5)
+  label: 玩家饱食度消耗倍率
+  max: 5
+  min: 0.1
+  name: playerStomachDecreaceRate
+  step: 0.1
+  type: number
+- default: '1.0'
+  envKey: PLAYER_STAMINA_DECREASE_RATE
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 生存战斗
+  help: 影响攀爬、滑翔与奔跑耐力消耗 (0.1–5)
+  label: 玩家耐力消耗倍率
+  max: 5
+  min: 0.1
+  name: playerStaminaDecreaceRate
+  step: 0.1
+  type: number
+- default: 'true'
+  envKey: ENABLE_INVADER_ENEMY
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 功能开关
+  help: 关闭后不会有野生帕鲁或盗猎集团袭击基地
+  label: 开启据点袭击事件
+  name: bEnableInvaderEnemy
+  type: boolean
+- default: 'false'
+  envKey: IS_PVP
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 功能开关
+  help: 允许非同公会玩家互相伤害
+  label: 开启玩家间 PVP 对战
+  name: bIsPvP
+  type: boolean
+- default: 'true'
+  envKey: ACTIVE_UNKO
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 功能开关
+  help: 允许牧场与伙伴帕鲁周期性生成副产物
+  label: 开启帕鲁掉落物生成事件
+  name: bActiveUNKO
+  type: boolean
+- default: 'true'
+  envKey: ENABLE_FAST_TRAVEL
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+  group: 功能开关
+  help: 关闭后只能徒步或骑乘移动
+  label: 允许巨鹫之像快速传送
+  name: bEnableFastTravel
+  type: boolean
+- name: saveName
+  label: 存档目录名称
+  type: text
+  required: true
+  default: PalworldSave
+  group: 基础设置
+  help: 专属世界存档标识名称
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: collectionRespawnRate
+  label: 采集物刷新间隔倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 世界倍率
+  help: 数值越小，树木与矿脉刷新越快 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: supplyDropSpan
+  label: 陨石与补给空投间隔（分钟）
+  type: number
+  default: '180'
+  min: 1
+  max: 1440
+  step: 10
+  group: 世界倍率
+  help: 天降陨石与空投补给箱的时间间隔 (1–1440 分钟)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: baseCampMaxNum
+  label: 全服据点总数上限
+  type: number
+  default: '128'
+  min: 1
+  max: 256
+  step: 1
+  group: 据点公会
+  help: 整个世界允许存在的最大据点总数 (1–256)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: palDamageRateAttack
+  label: 帕鲁造成伤害倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 生存战斗
+  help: 所有帕鲁攻击力倍率 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: palDamageRateDefense
+  label: 帕鲁承受伤害倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 生存战斗
+  help: 所有帕鲁受到伤害倍率 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: palStaminaDecreaceRate
+  label: 帕鲁体力消耗倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 生存战斗
+  help: 坐骑与战斗帕鲁耐力消耗速度 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: palStomachDecreaceRate
+  label: 帕鲁饥饿消耗倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 生存战斗
+  help: 据点与队伍帕鲁饱食度下降速度 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: itemCorruptionRate
+  label: 食物腐败速度倍率
+  type: number
+  default: '1.0'
+  min: 0.0
+  max: 10.0
+  step: 0.1
+  group: 生存战斗
+  help: 设为 0 表示食材永不腐烂变质 (0–10)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: equipmentDurabilityDamageRate
+  label: 装备耐久损耗倍率
+  type: number
+  default: '1.0'
+  min: 0.0
+  max: 10.0
+  step: 0.1
+  group: 生存战斗
+  help: 设为 0 表示武器与防具永不磨损 (0–10)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: playerAutoHPRegeneRate
+  label: 玩家生命自然恢复倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 生存战斗
+  help: 角色脱战后自动回血速度倍率 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: palAutoHPRegeneRate
+  label: 帕鲁生命自然恢复倍率
+  type: number
+  default: '1.0'
+  min: 0.1
+  max: 5.0
+  step: 0.1
+  group: 生存战斗
+  help: 帕鲁在终端或背包中回血速度倍率 (0.1–5)
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: bCanPickupOtherGuildDeathPenaltyDrop
+  label: 允许拾取其他公会死亡掉落
+  type: boolean
+  default: 'false'
+  group: 功能开关
+  help: 开启后非本公会成员也可捡走死亡掉落包
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- name: bEnableNonLoginPenalty
+  label: 开启长期未登录超时惩罚
+  type: boolean
+  default: 'true'
+  group: 功能开关
+  help: 关闭后长期不上线不会触发公会据点自动回收
+  fileTarget: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+coverImage: /landing/games/palworld-dedicated.jpg
+displayName: 幻兽帕鲁 Palworld
+env:
+  COMMUNITY: 'false'
+  MULTITHREADING: 'true'
+  PLAYERS: '16'
+  RCON_ENABLED: 'true'
+  SERVER_NAME: GamePanel Palworld Server
+fileTemplates:
+- content: |
+    [/Script/Pal.PalGameWorldSettings]
+    OptionSettings=(Difficulty={{difficulty}},DayTimeSpeedRate={{dayTimeSpeedRate}},NightTimeSpeedRate={{nightTimeSpeedRate}},ExpRate={{expRate}},PalCaptureRate={{palCaptureRate}},PalSpawnNumRate={{palSpawnNumRate}},PalDamageRateAttack={{palDamageRateAttack}},PalDamageRateDefense={{palDamageRateDefense}},PlayerDamageRateAttack={{playerDamageRateAttack}},PlayerDamageRateDefense={{playerDamageRateDefense}},PlayerStomachDecreaceRate={{playerStomachDecreaceRate}},PlayerStaminaDecreaceRate={{playerStaminaDecreaceRate}},PlayerAutoHPRegeneRate={{playerAutoHPRegeneRate}},PalStomachDecreaceRate={{palStomachDecreaceRate}},PalStaminaDecreaceRate={{palStaminaDecreaceRate}},PalAutoHPRegeneRate={{palAutoHPRegeneRate}},CollectionDropRate={{collectionDropRate}},CollectionObjectRespawnSpeedRate={{collectionRespawnRate}},EnemyDropItemRate={{enemyDropItemRate}},DeathPenalty={{deathPenalty}},bEnableInvaderEnemy={{bEnableInvaderEnemy}},bActiveUNKO={{bActiveUNKO}},bEnableFastTravel={{bEnableFastTravel}},bIsPvP={{bIsPvP}},bCanPickupOtherGuildDeathPenaltyDrop={{bCanPickupOtherGuildDeathPenaltyDrop}},bEnableNonLoginPenalty={{bEnableNonLoginPenalty}},bIsShowJoinLeftMessage=True,GuildPlayerMaxNum={{guildPlayerMaxNum}},PalEggDefaultHatchingTime={{eggHatchingTime}},WorkSpeedRate={{workSpeedRate}},BaseCampMaxNum={{baseCampMaxNum}},BaseCampMaxNumInGuild={{baseCampMaxNumInGuild}},BaseCampWorkerMaxNum={{baseCampWorkerMaxNum}},BuildObjectDeteriorationDamageRate={{buildObjectDeteriorationDamageRate}},ItemCorruptionMultiplier={{itemCorruptionRate}},EquipmentDurabilityDamageRate={{equipmentDurabilityDamageRate}},SupplyDropSpan={{supplyDropSpan}},CoopPlayerMaxNum=4,ServerPlayerMaxNum={{maxPlayers}},ServerName="{{serverName}}",ServerDescription="{{serverDescription}}",AdminPassword="{{ default "paladmin123" .Values.adminPassword }}",ServerPassword="{{serverPassword}}",PublicPort=8211,RCONEnabled=True,RCONPort=25575,RESTAPIEnabled=True,RESTAPIPort=8212,DedicatedServerName="{{saveName}}")
+  path: Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+- content: |
+    default:
+      address: "127.0.0.1:25575"
+      password: "{{ default "paladmin123" .Values.adminPassword }}"
+      type: "rcon"
+  path: rcon.yaml
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+preStartCommand: |
+  mkdir -p /data/Pal/Binaries/Linux /data/Pal/Saved/Config/LinuxServer /data/Pal/Saved/SaveGames /data/.steam/sdk64 /home/steam/.steam/sdk64
+  if [ -L /data/Pal/Binaries/Linux/steamclient.so ]; then
+    rm -f /data/Pal/Binaries/Linux/steamclient.so
+  fi
+  if [ -f /data/linux64/steamclient.so ] && [ ! -f /data/Pal/Binaries/Linux/steamclient.so ]; then
+    cp -f /data/linux64/steamclient.so /data/Pal/Binaries/Linux/steamclient.so
+  fi
+  ln -sf /opt/steamcmd/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
+  ln -sf /opt/steamcmd/linux64/steamclient.so /home/steam/.steam/sdk64/steamclient.so
+  [ -x /data/Pal/Binaries/Linux/PalServer-Linux-Shipping ] || chmod +x /data/Pal/Binaries/Linux/PalServer-Linux-Shipping
+  [ ! -f /data/rcon.yaml ] || chmod 0644 /data/rcon.yaml
+  if [ -f /data/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini ]; then
+    if grep -q 'RESTAPIEnabled=False' /data/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini; then
+      sed -i 's/RESTAPIEnabled=False/RESTAPIEnabled=True/g' /data/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    elif ! grep -q 'RESTAPIEnabled=' /data/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini; then
+      sed -i 's/RCONPort=25575/RCONPort=25575,RESTAPIEnabled=True,RESTAPIPort=8212/g' /data/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+  fi
+  chown 1000:1000 /data /data/Pal /data/Pal/Binaries /data/Pal/Binaries/Linux
+  chown -R 1000:1000 /data/Pal/Saved /data/.steam
+startupCommand: exec runuser -u steam -- env HOME=/data /data/Pal/Binaries/Linux/PalServer-Linux-Shipping Pal -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS
+preStopCommand: |
+  palworld-send-to-console Save >/dev/null 2>&1 || rcon-cli Save >/dev/null 2>&1 || true
+  palworld-send-to-console DoExit >/dev/null 2>&1 || rcon-cli DoExit >/dev/null 2>&1 || true
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[P]alServer-Linux-Shipping' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 8211
+published: true
+recommendedPlan: pro
+recommendedVersion: latest
+resources:
+  cpu: '4'
+  memory: 8Gi
+  storage: 40Gi
+summary: 支持经验倍率、捕获率、巨大蛋孵化时间、据点上限、死亡惩罚等全量 PalWorldSettings.ini 可视化调节。
+tagline: 开放世界生存制作 · 32 人专用联机服
+versions:
+- latest
+consoleDelivery: palworld-send-to-console
+consoleActions:
+- id: pal-save
+  title: 立即保存世界存档
+  group: 存档广播
+  command: Save
+  starred: true
+- id: pal-broadcast
+  title: 全服广播公告
+  group: 存档广播
+  command: Broadcast {{msg}}
+  starred: true
+  params:
+  - name: msg
+    label: 广播内容
+    type: text
+    defaultValue: 服务器即将进行例行维护，请提前下线保存
+- id: pal-kick
+  title: 踢出玩家
+  group: 玩家管理
+  command: KickPlayer {{steamid}}
+  starred: false
+  danger: true
+  params:
+  - name: steamid
+    label: 玩家 UID / SteamID
+    type: text
+- id: pal-ban
+  title: 封禁玩家
+  group: 玩家管理
+  command: BanPlayer {{steamid}}
+  starred: false
+  danger: true
+  params:
+  - name: steamid
+    label: 玩家 UID / SteamID
+    type: text
+- id: pal-unban
+  title: 解除封禁
+  group: 玩家管理
+  command: UnbanPlayer {{steamid}}
+  starred: false
+  params:
+  - name: steamid
+    label: 玩家 UID / SteamID
+    type: text
+- id: pal-shutdown
+  title: 倒计时优雅停服
+  group: 存档广播
+  command: Shutdown {{seconds}} {{msg}}
+  starred: true
+  params:
+  - name: seconds
+    label: 倒计时(秒)
+    type: number
+    defaultValue: '60'
+  - name: msg
+    label: 停服提示
+    type: text
+    defaultValue: ServerRestarting
+storagePolicy:
+  backupSubtree: Pal/Saved
+  anchorFiles:
+  - SaveGames
+  replaceOnRestore: true
+  backupRequiresStop: false
+  preBackupCommand: Save
+  regeneratePaths:
+  - Pal/Saved/SaveGames
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_count
+  probeCommand: >-
+    python3 -c 'import base64,json,os,re,subprocess,urllib.request;pw="paladmin123";f="/data/rcon.yaml";m=re.search(r"password:\s*\"?([^\"\r\n]+)\"?",open(f).read()) if os.path.exists(f) else None;pw=m.group(1) if m else pw;req=urllib.request.Request("http://127.0.0.1:8212/v1/api/players",headers={"Authorization":"Basic "+base64.b64encode(("admin:"+pw).encode()).decode()});print("name,playeruid,steamid");exec("try:\n d=json.loads(urllib.request.urlopen(req,timeout=1.5).read().decode(\"utf-8\",\"replace\"))\n for p in d.get(\"players\",[]):\n  n=str(p.get(\"name\") or p.get(\"accountName\") or \"\").strip()\n  u=str(p.get(\"userId\") or p.get(\"playerId\") or \"\").strip()\n  if u.startswith(\"steam_\"): u=u[6:]\n  if n and u: print(f\"{n} ({u})\")\nexcept Exception:\n out=subprocess.run([\"rcon-cli\",\"ShowPlayers\"],capture_output=True,text=True,timeout=1.5).stdout\n for ln in out.splitlines()[1:]:\n  c=[x.strip() for x in ln.replace(\"\\r\",\"\").split(\",\")]\n  if len(c)>=3 and c[0] and c[2]: print(f\"{c[0]} ({c[2]})\")")' 2>/dev/null
+  pattern: '^(.+\s+\([0-9A-Za-z_:-]+\))$'
+  itemPattern: '^(.+\s+\([0-9A-Za-z_:-]+\))$'
+  maxConfigKey: maxPlayers
+  bindParam: steamid
+  quickActionIds:
+  - pal-kick

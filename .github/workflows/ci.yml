@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v2, lite]
+  pull_request:
+    branches: [main, v2, lite]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Go Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: platform_ci
+          POSTGRES_DB: gamepanel_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gamepanel_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read Go release line from module
+        id: go-version
+        run: |
+          version=$(awk '$1 == "go" { split($2, parts, "."); print parts[1] "." parts[2] ".x"; exit }' go.mod)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.go-version.outputs.version }}
+          check-latest: true
+          cache-dependency-path: go.sum
+      - name: Run backend verification and architecture guards
+        env:
+          VERIFY_GOLANGCI_LINT: '1'
+        run: ./hack/verify-all.sh
+      - name: Test packages
+        env:
+          GP_DB_DSN: postgres://postgres:platform_ci@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/gamepanel_test?sslmode=disable
+        run: |
+          status=0
+          for pkg in $(go list ./cmd/... ./pkg/... ./tests/...); do
+            echo "=== Package: $pkg ==="
+            if ! timeout --foreground -k 5s 30s go test -timeout=20s -count=1 -v "$pkg"; then
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: Build all packages and commands
+        run: go build ./cmd/... ./pkg/...
+
+  web:
+    name: Web Console
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: package.json
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm --ignore-workspace install --frozen-lockfile
+      - name: Lint frontend
+        run: pnpm lint
+      - name: Typecheck frontend
+        run: pnpm typecheck
+      - name: Build frontend
+        run: pnpm build

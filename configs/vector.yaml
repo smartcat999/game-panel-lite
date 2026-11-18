@@ -1,0 +1,138 @@
+# Vector configuration for streaming GamePanel Docker container stdout/stderr logs
+# directly to VictoriaLogs with disk-persisted checkpoints.
+data_dir: /var/lib/vector
+
+proxy:
+  enabled: false
+
+sources:
+  docker_containers:
+    type: docker_logs
+    docker_host: unix:///var/run/docker.sock
+    exclude_containers:
+      - gamepanel-victorialogs
+      - gamepanel-vector
+
+transforms:
+  filter_gamepanel:
+    type: filter
+    inputs:
+      - docker_containers
+    condition: |
+      cname = replace(string(.container_name) ?? "", r'^/', "")
+      raw_msg = strip_ansi_escape_codes(string(.message) ?? "")
+      (starts_with(cname, "gamepanel-") || starts_with(cname, "gp-")) && strip_whitespace(raw_msg) != ""
+
+  enrich_gamepanel_logs:
+    type: remap
+    inputs:
+      - filter_gamepanel
+    source: |
+      cname = replace(string!(.container_name), r'^/', "")
+      cid_raw = replace(string(.container_id) ?? "", r'^sha256:', "")
+      cid = truncate(cid_raw, limit: 12, suffix: "")
+
+      raw_msg = strip_whitespace(strip_ansi_escape_codes(string!(.message)))
+      msg = raw_msg
+      lvl = ""
+
+      parsed, json_err = parse_json(raw_msg)
+      if json_err == null && is_object(parsed) {
+        parsed_msg = strip_whitespace(string(parsed.msg) ?? "")
+        if parsed_msg != "" {
+          msg = parsed_msg
+        }
+        lvl = upcase(strip_whitespace(string(parsed.level) ?? ""))
+        del(parsed.ts)
+        del(parsed.level)
+        del(parsed.msg)
+        del(parsed.caller)
+        del(parsed.service)
+        merged, merge_err = merge(., parsed)
+        if merge_err == null {
+          . = merged
+        }
+      } else {
+        parts = split(raw_msg, "\t", limit: 4)
+        if length(parts) >= 3 && match(string!(parts[1]), r'^(?i)(debug|info|warn|warning|error|fatal|panic)$') {
+          tab_msg = strip_whitespace(string!(parts[2]))
+          if tab_msg != "" {
+            msg = tab_msg
+            lvl = upcase(strip_whitespace(string!(parts[1])))
+          }
+          if length(parts) == 4 {
+            tab_fields, tab_err = parse_json(string!(parts[3]))
+            if tab_err == null && is_object(tab_fields) {
+              merged_tab, merge_tab_err = merge(., tab_fields)
+              if merge_tab_err == null {
+                . = merged_tab
+              }
+            }
+          }
+        }
+      }
+
+      if lvl == "WARNING" {
+        lvl = "WARN"
+      } else if lvl == "FATAL" || lvl == "PANIC" {
+        lvl = "ERROR"
+      } else if lvl != "DEBUG" && lvl != "INFO" && lvl != "WARN" && lvl != "ERROR" {
+        if match(msg, r'(?i)\b(error|fatal|panic|exception|traceback|failed)\b|\[(?:error|fatal)\]|严重|异常|失败') {
+          lvl = "ERROR"
+        } else if match(msg, r'(?i)\b(warn|warning)\b|\[warn\]|警告') {
+          lvl = "WARN"
+        } else {
+          lvl = "INFO"
+        }
+      }
+
+      if starts_with(cname, "gp-") {
+        uid = replace(cname, r'^gp-', "")
+        svc = "instance"
+        label_tenant = strip_whitespace(string(get(.label, ["gamepanel.io/tenant"]) ?? "") ?? "")
+        label_inst = strip_whitespace(string(get(.label, ["gamepanel.io/instance-name"]) ?? "") ?? "")
+        label_uid = strip_whitespace(string(get(.label, ["gamepanel.io/instance-uid"]) ?? "") ?? "")
+        .service = svc
+        .instance = if label_inst != "" { label_inst } else { cname }
+        .instanceUID = if label_uid != "" { label_uid } else { uid }
+        if label_tenant != "" {
+          .tenant = label_tenant
+        } else {
+          del(.tenant)
+        }
+      } else {
+        .service = replace(cname, r'^gamepanel-', "")
+        .instance = cname
+        del(.tenant)
+        del(.instanceUID)
+      }
+
+      .ts = .timestamp
+      .level = lvl
+      .msg = msg
+      .container = cname
+      .containerId = cid
+      .node = "${GP_NODE_NAME:-node-local-01}"
+
+      del(.message)
+      del(.timestamp)
+      del(.container_name)
+      del(.container_id)
+      del(.container_created_at)
+      del(.host)
+      del(.image)
+      del(.label)
+      del(.source_type)
+
+sinks:
+  victorialogs:
+    type: http
+    inputs:
+      - enrich_gamepanel_logs
+    uri: "${GP_VICTORIALOGS_URL:-http://victorialogs:9428}/insert/jsonline?_stream_fields=service,level,tenant,instance,container&_msg_field=msg&_time_field=ts"
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    healthcheck:
+      enabled: false
