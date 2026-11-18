@@ -1,0 +1,37 @@
+{
+  "activeRegistry": "global",
+  "registries": {
+    "global": "smartcat99999",
+    "cn": "registry.cn-hangzhou.aliyuncs.com/gamepanel-lite"
+  },
+  "providers": {
+	"project-zomboid": {
+	  "imageTemplate": "{registry}/project-zomboid:{version}",
+	  "versions": ["42.21"]
+	},
+    "seven-days-to-die": {
+      "imageTemplate": "{registry}/seven-days-to-die:{version}",
+      "versions": ["v3.3.0"]
+    },
+    "terraria-vanilla": {
+      "imageTemplate": "{registry}/terraria-vanilla:{version}",
+      "versions": ["1.4.5.8", "1.4.5.7", "1.4.5.6"]
+    },
+    "terraria-tmodloader": {
+      "imageTemplate": "{registry}/tmodloader:{version}",
+      "versions": ["v2026.04.3.0", "v2026.02.3.1"]
+    },
+    "dont-starve-together": {
+      "imageTemplate": "{registry}/dst-server:{version}",
+      "versions": ["v2026.10.19", "v2026.08.14", "v2026.07.17", "v2026.06.21"]
+    },
+    "palworld": {
+      "imageTemplate": "{registry}/palworld-server:{version}",
+      "versions": ["v2.7.1", "v2.5.0", "v2.4.2", "v2.4.1"]
+    },
+    "minecraft": {
+      "image": "{registry}/minecraft-server:2026.6.0-java21",
+      "versions": ["1.21.4", "1.21", "1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.19.2"]
+    }
+  }
+}

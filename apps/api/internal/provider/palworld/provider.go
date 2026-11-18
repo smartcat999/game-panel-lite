@@ -1,0 +1,486 @@
+package palworld
+
+import (
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/domain"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/provider/runtimecatalog"
+	"github.com/smartcat999/game-panel-lite/apps/api/internal/runtime"
+)
+
+const DefaultInternalPort = 8211
+
+var versions = []string{"v2.7.1", "v2.5.0", "v2.4.2", "v2.4.1"}
+
+var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+
+type Provider struct {
+	runtime runtimecatalog.RuntimeConfig
+}
+
+type Config struct {
+	ServerName                                                                                 string
+	SaveName                                                                                   string
+	MaxPlayers                                                                                 int
+	Port                                                                                       int
+	ServerPassword                                                                             string
+	AdminPassword                                                                              string
+	EggHatchingTime, ExpRate, CaptureRate, PalSpawnRate                                        float64
+	EnemyDropRate, CollectionDropRate, DayTimeSpeedRate, NightTimeSpeedRate                    float64
+	BuildingDeteriorationRate                                                                  float64
+	PlayerDamageAttackRate, PlayerDamageDefenseRate, PalDamageAttackRate, PalDamageDefenseRate float64
+	PlayerStaminaRate, PlayerHungerRate, PalStaminaRate, PalHungerRate                         float64
+	CollectionRespawnRate, ItemCorruptionRate, EquipmentDurabilityRate                         float64
+	SupplyDropSpan                                                                             int
+	BaseCampMaxNum, BaseCampMaxNumInGuild, BaseCampWorkerMaxNum, GuildPlayerMaxNum             int
+	DeathPenalty                                                                               string
+	EnableInvaderEnemy, EnableFastTravel, PVP                                                  bool
+}
+
+func NewProvider(catalog ...runtimecatalog.Catalog) Provider {
+	return Provider{
+		runtime: runtimecatalog.FromCatalog(catalog, domain.ProviderPalworld, runtimeConfig()),
+	}
+}
+
+func runtimeConfig() runtimecatalog.RuntimeConfig {
+	return runtimecatalog.RuntimeConfig{ImageTemplate: "smartcat99999/palworld-server:{version}", Versions: versions}
+}
+
+func (Provider) GameKey() domain.GameKey { return domain.GamePalworld }
+func (Provider) Key() domain.ProviderKey { return domain.ProviderPalworld }
+func (Provider) Name() string            { return "Palworld" }
+func (Provider) Description() string {
+	return "Palworld dedicated server for private friend groups."
+}
+func (Provider) Capabilities() domain.ProviderCapabilities {
+	return domain.ProviderCapabilities{
+		ConsoleCommands: false,
+		PlayerList:      false,
+		KickPlayer:      false,
+		BanPlayer:       false,
+		SaveSnapshots:   true,
+		Backups:         true,
+		Mods:            true,
+		Versions:        true,
+	}
+}
+func (Provider) SaveDisplayName() string { return "save" }
+func (Provider) SteamUpdateConfig() domain.SteamUpdateConfig {
+	return domain.SteamUpdateConfig{AppID: "2394010", InstallDir: "/palworld", Executable: "PalServer.sh", BackupSubtree: "Pal/Saved"}
+}
+func (Provider) ConfigSchema() []domain.ProviderConfigField {
+	return configSchema()
+}
+func (p Provider) Image() string      { return p.ImageFor(p.Versions()[0]) }
+func (p Provider) Versions() []string { return p.runtime.WithFallback(runtimeConfig()).VersionList() }
+func (p Provider) ImageFor(version string) string {
+	return p.runtime.WithFallback(runtimeConfig()).ImageFor(version)
+}
+func defaultConfig() Config {
+	return normalizeConfig(Config{EggHatchingTime: 72, ExpRate: 1, CaptureRate: 1, PalSpawnRate: 1, EnemyDropRate: 1, CollectionDropRate: 1, DayTimeSpeedRate: 1, NightTimeSpeedRate: 1, BuildingDeteriorationRate: 1, PlayerDamageAttackRate: 1, PlayerDamageDefenseRate: 1, PalDamageAttackRate: 1, PalDamageDefenseRate: 1, PlayerStaminaRate: 1, PlayerHungerRate: 1, PalStaminaRate: 1, PalHungerRate: 1, CollectionRespawnRate: 1, ItemCorruptionRate: 1, EquipmentDurabilityRate: 1, SupplyDropSpan: 180, BaseCampMaxNum: 128, BaseCampMaxNumInGuild: 4, BaseCampWorkerMaxNum: 15, GuildPlayerMaxNum: 20, DeathPenalty: "None", EnableInvaderEnemy: true, EnableFastTravel: true})
+}
+func (p Provider) DefaultConfigPayload() map[string]any {
+	return payloadFromConfig(defaultConfig())
+}
+func (p Provider) NormalizeConfigPayload(payload map[string]any) (map[string]any, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return payloadFromConfig(config), nil
+}
+func (p Provider) ValidateConfigPayload(payload map[string]any) error {
+	config := configFromPayload(payload, defaultConfig())
+	return validateConfig(config)
+}
+func (p Provider) ConfigSummary(payload map[string]any) (domain.ProviderConfigSummary, error) {
+	config := configFromPayload(payload, defaultConfig())
+	return domain.ProviderConfigSummary{
+		ServerName: config.ServerName,
+		WorldName:  config.SaveName,
+		MaxPlayers: config.MaxPlayers,
+		Port:       config.Port,
+		Password:   config.ServerPassword,
+		MOTD:       config.AdminPassword,
+	}, nil
+}
+func validateConfig(config Config) error {
+	config = normalizeConfig(config)
+	if strings.TrimSpace(config.ServerName) == "" {
+		return fmt.Errorf("server name is required")
+	}
+	if strings.Contains(config.ServerName, "/") || strings.Contains(config.ServerName, "\\") {
+		return fmt.Errorf("server name contains unsupported path characters")
+	}
+	if strings.TrimSpace(config.SaveName) == "" {
+		return fmt.Errorf("save name is required")
+	}
+	if strings.Contains(config.SaveName, "/") || strings.Contains(config.SaveName, "\\") || strings.Contains(config.SaveName, "..") {
+		return fmt.Errorf("save name contains unsupported path characters")
+	}
+	if config.MaxPlayers < 1 || config.MaxPlayers > 32 {
+		return fmt.Errorf("max players must be between 1 and 32")
+	}
+	ranges := map[string][3]float64{"egg hatching time": {config.EggHatchingTime, 0, 240}, "experience rate": {config.ExpRate, .1, 20}, "capture rate": {config.CaptureRate, .1, 5}, "pal spawn rate": {config.PalSpawnRate, .1, 3}, "enemy drop rate": {config.EnemyDropRate, .1, 5}, "collection drop rate": {config.CollectionDropRate, .1, 5}, "day speed": {config.DayTimeSpeedRate, .1, 5}, "night speed": {config.NightTimeSpeedRate, .1, 5}, "building deterioration rate": {config.BuildingDeteriorationRate, 0, 10}}
+	for name, value := range map[string]float64{"player attack": config.PlayerDamageAttackRate, "player defense": config.PlayerDamageDefenseRate, "pal attack": config.PalDamageAttackRate, "pal defense": config.PalDamageDefenseRate, "player stamina": config.PlayerStaminaRate, "player hunger": config.PlayerHungerRate, "pal stamina": config.PalStaminaRate, "pal hunger": config.PalHungerRate, "collection respawn": config.CollectionRespawnRate} {
+		ranges[name] = [3]float64{value, .1, 5}
+	}
+	for name, value := range map[string]float64{"item corruption": config.ItemCorruptionRate, "equipment durability": config.EquipmentDurabilityRate} {
+		ranges[name] = [3]float64{value, 0, 10}
+	}
+	for name, bounds := range ranges {
+		if bounds[0] < bounds[1] || bounds[0] > bounds[2] {
+			return fmt.Errorf("%s must be between %g and %g", name, bounds[1], bounds[2])
+		}
+	}
+	if config.BaseCampMaxNum < 1 || config.BaseCampMaxNum > 256 || config.BaseCampMaxNumInGuild < 1 || config.BaseCampMaxNumInGuild > 10 || config.BaseCampWorkerMaxNum < 1 || config.BaseCampWorkerMaxNum > 50 || config.GuildPlayerMaxNum < 1 || config.GuildPlayerMaxNum > 100 {
+		return fmt.Errorf("invalid Palworld base or guild limit")
+	}
+	if config.SupplyDropSpan < 1 || config.SupplyDropSpan > 1440 {
+		return fmt.Errorf("supply drop span must be between 1 and 1440")
+	}
+	if !map[string]bool{"None": true, "Item": true, "ItemAndEquipment": true, "All": true}[config.DeathPenalty] {
+		return fmt.Errorf("invalid death penalty")
+	}
+	if strings.TrimSpace(config.AdminPassword) == "" {
+		return fmt.Errorf("admin password is required")
+	}
+	return nil
+}
+func renderConfig(config Config) (string, error) {
+	config = normalizeConfig(config)
+	if err := validateConfig(config); err != nil {
+		return "", err
+	}
+	lines := []string{
+		"game=palworld",
+		"serverName=" + config.ServerName,
+		"saveName=" + config.SaveName,
+		fmt.Sprintf("maxPlayers=%d", config.MaxPlayers),
+		fmt.Sprintf("port=%d", config.Port),
+	}
+	if config.ServerPassword != "" {
+		lines = append(lines, "serverPassword="+config.ServerPassword)
+	}
+	if config.AdminPassword != "" {
+		lines = append(lines, "adminPassword="+config.AdminPassword)
+	}
+	return strings.Join(lines, "\n") + "\n", nil
+}
+func runtimeOptions(config Config) runtime.ContainerOptions {
+	config = normalizeConfig(config)
+	return runtime.ContainerOptions{
+		Env: []string{
+			"PUID=1000",
+			"PGID=1000",
+			"PORT=" + fmt.Sprintf("%d", config.Port),
+			"PLAYERS=" + fmt.Sprintf("%d", config.MaxPlayers),
+			"SERVER_NAME=" + config.ServerName,
+			"SERVER_PASSWORD=" + config.ServerPassword,
+			"ADMIN_PASSWORD=" + config.AdminPassword,
+			"MULTITHREADING=true",
+			"COMMUNITY=false",
+			// GamePanel manages runtime image upgrades explicitly. Re-running
+			// SteamCMD on every container restart needlessly verifies ~5 GB and
+			// can replace PalServer.sh while the instance is recovering.
+			"UPDATE_ON_BOOT=false",
+			fmt.Sprintf("PAL_EGG_DEFAULT_HATCHING_TIME=%g", config.EggHatchingTime),
+			fmt.Sprintf("EXP_RATE=%g", config.ExpRate), fmt.Sprintf("PAL_CAPTURE_RATE=%g", config.CaptureRate),
+			fmt.Sprintf("PAL_SPAWN_NUM_RATE=%g", config.PalSpawnRate), fmt.Sprintf("ENEMY_DROP_ITEM_RATE=%g", config.EnemyDropRate),
+			fmt.Sprintf("COLLECTION_DROP_RATE=%g", config.CollectionDropRate), fmt.Sprintf("DAY_TIME_SPEED_RATE=%g", config.DayTimeSpeedRate),
+			fmt.Sprintf("NIGHT_TIME_SPEED_RATE=%g", config.NightTimeSpeedRate), fmt.Sprintf("BASE_CAMP_MAX_NUM=%d", config.BaseCampMaxNum),
+			fmt.Sprintf("BASE_CAMP_MAX_NUM_IN_GUILD=%d", config.BaseCampMaxNumInGuild), fmt.Sprintf("BASE_CAMP_WORKER_MAX_NUM=%d", config.BaseCampWorkerMaxNum),
+			fmt.Sprintf("GUILD_PLAYER_MAX_NUM=%d", config.GuildPlayerMaxNum), fmt.Sprintf("BUILD_OBJECT_DETERIORATION_DAMAGE_RATE=%g", config.BuildingDeteriorationRate),
+			"DEATH_PENALTY=" + config.DeathPenalty, fmt.Sprintf("ENABLE_INVADER_ENEMY=%t", config.EnableInvaderEnemy),
+			fmt.Sprintf("ENABLE_FAST_TRAVEL=%t", config.EnableFastTravel), fmt.Sprintf("IS_PVP=%t", config.PVP),
+			fmt.Sprintf("PLAYER_DAMAGE_RATE_ATTACK=%g", config.PlayerDamageAttackRate), fmt.Sprintf("PLAYER_DAMAGE_RATE_DEFENSE=%g", config.PlayerDamageDefenseRate), fmt.Sprintf("PAL_DAMAGE_RATE_ATTACK=%g", config.PalDamageAttackRate), fmt.Sprintf("PAL_DAMAGE_RATE_DEFENSE=%g", config.PalDamageDefenseRate),
+			fmt.Sprintf("PLAYER_STAMINA_DECREACE_RATE=%g", config.PlayerStaminaRate), fmt.Sprintf("PLAYER_STOMACH_DECREACE_RATE=%g", config.PlayerHungerRate), fmt.Sprintf("PAL_STAMINA_DECREACE_RATE=%g", config.PalStaminaRate), fmt.Sprintf("PAL_STOMACH_DECREACE_RATE=%g", config.PalHungerRate),
+			fmt.Sprintf("COLLECTION_OBJECT_RESPAWN_SPEED_RATE=%g", config.CollectionRespawnRate), fmt.Sprintf("ITEM_CORRUPTION_MULTIPLIER=%g", config.ItemCorruptionRate), fmt.Sprintf("EQUIPMENT_DURABILITY_DAMAGE_RATE=%g", config.EquipmentDurabilityRate), fmt.Sprintf("SUPPLY_DROP_SPAN=%d", config.SupplyDropSpan),
+		},
+		DataMounts:   []string{"/palworld"},
+		PortProtocol: "udp",
+	}
+}
+
+func (p Provider) RuntimeConfigForResource(server domain.GameServer) (domain.ProviderRuntimeConfig, error) {
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	if server.Spec.Network.Port != 0 {
+		config.Port = server.Spec.Network.Port
+	}
+	if err := validateConfig(config); err != nil {
+		return domain.ProviderRuntimeConfig{}, err
+	}
+	options := runtimeOptions(config)
+	return domain.ProviderRuntimeConfig{
+		Port:     config.Port,
+		Protocol: options.PortProtocol,
+		Options:  workloadOptions(options),
+	}, nil
+}
+
+func (p Provider) JoinInfo(server domain.GameServer) domain.ServerJoinInfo {
+	address := "127.0.0.1"
+	port := server.Spec.Network.HostPort
+	if port == 0 {
+		port = server.Spec.Network.Port
+	}
+	config := configFromPayload(server.Spec.Config, defaultConfig())
+	password := config.ServerPassword
+	invite := fmt.Sprintf("Join %s in Palworld at %s:%d", server.Name, address, port)
+	if password != "" {
+		invite += " password: " + password
+	}
+	return domain.ServerJoinInfo{
+		Address:    address,
+		Port:       port,
+		Password:   password,
+		InviteText: invite,
+		Instructions: []string{
+			"Open Palworld multiplayer.",
+			"Join by address using the host and port shown here.",
+		},
+	}
+}
+
+// ParsePlayerCount replays the image's REST-backed player logging from the
+// most recent server start. Only the helper's "has joined/left" messages are
+// consumed because Palworld also logs native events for the same player.
+func (Provider) ParsePlayerCount(lines []string) *int {
+	start := -1
+	for index, raw := range lines {
+		line := ansiEscapePattern.ReplaceAllString(raw, "")
+		if strings.Contains(line, "Running Palworld dedicated server") {
+			start = index
+		}
+	}
+	if start < 0 {
+		return nil
+	}
+	count := 0
+	for _, raw := range lines[start+1:] {
+		line := strings.TrimSpace(ansiEscapePattern.ReplaceAllString(raw, ""))
+		switch {
+		case strings.HasSuffix(line, " has joined"):
+			count++
+		case strings.HasSuffix(line, " has left"):
+			if count > 0 {
+				count--
+			}
+		}
+	}
+	return &count
+}
+
+func normalizeConfig(config Config) Config {
+	if strings.TrimSpace(config.ServerName) == "" {
+		config.ServerName = "Palworld Server"
+	}
+	if strings.TrimSpace(config.SaveName) == "" {
+		config.SaveName = "Palworld Save"
+	}
+	if config.MaxPlayers == 0 {
+		config.MaxPlayers = 8
+	}
+	if config.ExpRate == 0 {
+		config.ExpRate = 1
+	}
+	if config.CaptureRate == 0 {
+		config.CaptureRate = 1
+	}
+	if config.PalSpawnRate == 0 {
+		config.PalSpawnRate = 1
+	}
+	if config.EnemyDropRate == 0 {
+		config.EnemyDropRate = 1
+	}
+	if config.CollectionDropRate == 0 {
+		config.CollectionDropRate = 1
+	}
+	if config.DayTimeSpeedRate == 0 {
+		config.DayTimeSpeedRate = 1
+	}
+	if config.NightTimeSpeedRate == 0 {
+		config.NightTimeSpeedRate = 1
+	}
+	for _, target := range []*float64{&config.PlayerDamageAttackRate, &config.PlayerDamageDefenseRate, &config.PalDamageAttackRate, &config.PalDamageDefenseRate, &config.PlayerStaminaRate, &config.PlayerHungerRate, &config.PalStaminaRate, &config.PalHungerRate, &config.CollectionRespawnRate} {
+		if *target == 0 {
+			*target = 1
+		}
+	}
+	if config.SupplyDropSpan == 0 {
+		config.SupplyDropSpan = 180
+	}
+	if config.BaseCampMaxNum == 0 {
+		config.BaseCampMaxNum = 128
+	}
+	if config.BaseCampMaxNumInGuild == 0 {
+		config.BaseCampMaxNumInGuild = 4
+	}
+	if config.BaseCampWorkerMaxNum == 0 {
+		config.BaseCampWorkerMaxNum = 15
+	}
+	if config.GuildPlayerMaxNum == 0 {
+		config.GuildPlayerMaxNum = 20
+	}
+	if config.DeathPenalty == "" {
+		config.DeathPenalty = "None"
+	}
+	config.Port = DefaultInternalPort
+	return config
+}
+
+func configFromPayload(payload map[string]any, fallback Config) Config {
+	config := normalizeConfig(fallback)
+	if len(payload) == 0 {
+		return config
+	}
+	if value := stringPayload(payload, "serverName"); value != "" {
+		config.ServerName = value
+	}
+	if value := stringPayload(payload, "saveName"); value != "" {
+		config.SaveName = value
+	} else if value := stringPayload(payload, "worldName"); value != "" {
+		config.SaveName = value
+	}
+	if value, ok := intPayload(payload, "maxPlayers"); ok {
+		config.MaxPlayers = value
+	}
+	if value := stringPayload(payload, "serverPassword"); value != "" {
+		config.ServerPassword = value
+	} else if value := stringPayload(payload, "password"); value != "" {
+		config.ServerPassword = value
+	}
+	if value := stringPayload(payload, "adminPassword"); value != "" {
+		config.AdminPassword = value
+	} else if value := stringPayload(payload, "motd"); value != "" {
+		config.AdminPassword = value
+	}
+	for key, target := range map[string]*float64{"eggHatchingTime": &config.EggHatchingTime, "expRate": &config.ExpRate, "captureRate": &config.CaptureRate, "palSpawnRate": &config.PalSpawnRate, "enemyDropRate": &config.EnemyDropRate, "collectionDropRate": &config.CollectionDropRate, "dayTimeSpeedRate": &config.DayTimeSpeedRate, "nightTimeSpeedRate": &config.NightTimeSpeedRate, "buildingDeteriorationRate": &config.BuildingDeteriorationRate, "playerDamageAttackRate": &config.PlayerDamageAttackRate, "playerDamageDefenseRate": &config.PlayerDamageDefenseRate, "palDamageAttackRate": &config.PalDamageAttackRate, "palDamageDefenseRate": &config.PalDamageDefenseRate, "playerStaminaRate": &config.PlayerStaminaRate, "playerHungerRate": &config.PlayerHungerRate, "palStaminaRate": &config.PalStaminaRate, "palHungerRate": &config.PalHungerRate, "collectionRespawnRate": &config.CollectionRespawnRate, "itemCorruptionRate": &config.ItemCorruptionRate, "equipmentDurabilityRate": &config.EquipmentDurabilityRate} {
+		if value, ok := floatPayload(payload, key); ok {
+			*target = value
+		}
+	}
+	for key, target := range map[string]*int{"baseCampMaxNum": &config.BaseCampMaxNum, "baseCampMaxNumInGuild": &config.BaseCampMaxNumInGuild, "baseCampWorkerMaxNum": &config.BaseCampWorkerMaxNum, "guildPlayerMaxNum": &config.GuildPlayerMaxNum, "supplyDropSpan": &config.SupplyDropSpan} {
+		if value, ok := intPayload(payload, key); ok {
+			*target = value
+		}
+	}
+	if value := stringPayload(payload, "deathPenalty"); value != "" {
+		config.DeathPenalty = value
+	}
+	if value, ok := boolPayload(payload, "enableInvaderEnemy"); ok {
+		config.EnableInvaderEnemy = value
+	}
+	if value, ok := boolPayload(payload, "enableFastTravel"); ok {
+		config.EnableFastTravel = value
+	}
+	if value, ok := boolPayload(payload, "pvp"); ok {
+		config.PVP = value
+	}
+	return normalizeConfig(config)
+}
+
+func payloadFromConfig(config Config) map[string]any {
+	config = normalizeConfig(config)
+	payload := map[string]any{
+		"serverName":      config.ServerName,
+		"saveName":        config.SaveName,
+		"maxPlayers":      config.MaxPlayers,
+		"adminPassword":   config.AdminPassword,
+		"eggHatchingTime": config.EggHatchingTime, "expRate": config.ExpRate, "captureRate": config.CaptureRate, "palSpawnRate": config.PalSpawnRate, "enemyDropRate": config.EnemyDropRate, "collectionDropRate": config.CollectionDropRate, "dayTimeSpeedRate": config.DayTimeSpeedRate, "nightTimeSpeedRate": config.NightTimeSpeedRate, "buildingDeteriorationRate": config.BuildingDeteriorationRate,
+		"baseCampMaxNum": config.BaseCampMaxNum, "baseCampMaxNumInGuild": config.BaseCampMaxNumInGuild, "baseCampWorkerMaxNum": config.BaseCampWorkerMaxNum, "guildPlayerMaxNum": config.GuildPlayerMaxNum, "deathPenalty": config.DeathPenalty, "enableInvaderEnemy": config.EnableInvaderEnemy, "enableFastTravel": config.EnableFastTravel, "pvp": config.PVP,
+		"playerDamageAttackRate": config.PlayerDamageAttackRate, "playerDamageDefenseRate": config.PlayerDamageDefenseRate, "palDamageAttackRate": config.PalDamageAttackRate, "palDamageDefenseRate": config.PalDamageDefenseRate, "playerStaminaRate": config.PlayerStaminaRate, "playerHungerRate": config.PlayerHungerRate, "palStaminaRate": config.PalStaminaRate, "palHungerRate": config.PalHungerRate, "collectionRespawnRate": config.CollectionRespawnRate, "itemCorruptionRate": config.ItemCorruptionRate, "equipmentDurabilityRate": config.EquipmentDurabilityRate, "supplyDropSpan": config.SupplyDropSpan,
+	}
+	if config.ServerPassword != "" {
+		payload["serverPassword"] = config.ServerPassword
+	}
+	return payload
+}
+
+func floatPayload(payload map[string]any, key string) (float64, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case int:
+		return float64(typed), true
+	case json.Number:
+		got, err := typed.Float64()
+		return got, err == nil
+	}
+	return 0, false
+}
+func boolPayload(payload map[string]any, key string) (bool, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return false, false
+	}
+	got, ok := value.(bool)
+	return got, ok
+}
+
+func workloadOptions(options runtime.ContainerOptions) domain.WorkloadOptions {
+	return domain.WorkloadOptions{
+		Env:        append([]string{}, options.Env...),
+		Cmd:        append([]string{}, options.Cmd...),
+		Files:      cloneFiles(options.Files),
+		DataMounts: append([]string{}, options.DataMounts...),
+	}
+}
+
+func cloneFiles(files map[string]string) map[string]string {
+	if files == nil {
+		return nil
+	}
+	clone := make(map[string]string, len(files))
+	for key, value := range files {
+		clone[key] = value
+	}
+	return clone
+}
+
+func stringPayload(payload map[string]any, key string) string {
+	value, ok := payload[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+func intPayload(payload map[string]any, key string) (int, bool) {
+	value, ok := payload[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case json.Number:
+		got, err := typed.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(got), true
+	default:
+		return 0, false
+	}
+}
+
+func ImageForVersion(version string) string {
+	if strings.TrimSpace(version) == "" {
+		version = versions[0]
+	}
+	return "thijsvanloef/palworld-server-docker:" + version
+}

@@ -1,0 +1,105 @@
+{
+  "BP_PalGameSetting_C": {
+    "MaxUseablePoint_SumStatusPointAndExStatusPoint_PerParameter": 100,
+    "StatusPointPerLevel": 3,
+    "technologyPointPerLevel": 10,
+    "LongPressInterval_GetHatchedPal": 0.1,
+    "LongPressInterval_EnemyCampCage": 0.1,
+    "LongPressInterval_StartRaidBoss": 0.1,
+    "LongPressInterval_TreasureMapPoint": 0.1,
+    "BlockRespawnTime": 1,
+    "DeadBodyDestroySecond": 10,
+    "worldmapUIMaskClearSize": 2000,
+    "MergeDropItemRange": 5250,
+    "BaseCampAreaRange": 5250,
+    "SprintSP": 0,
+    "JumpSP": 0,
+    "GliderSP": 0,
+    "Swimming_SP_Idle": 0,
+    "Swimming_SP_Swim": 0,
+    "Swimming_SP_DashSwim": 0,
+    "ClimbingStamina_Move": 0,
+    "ClimbingStamina_Jump": 0,
+    "RideWazaStaminaRate": 0,
+    "FlyHover_SP": 0,
+    "FlyHorizon_SP": 0,
+    "FlyHorizon_Dash_SP": 0,
+    "FlyVertical_SP": 0,
+    "PalBoxPageNum": 50,
+    "MeleeAttackSP": 0
+  },
+  "BP_Player_Female_C": {
+    "CharacterMovement": {
+      "SprintMaxSpeed": 1100,
+      "SprintMaxAcceleration": 2200,
+      "SprintYawRate": 1,
+      "SlidingStartSpeed": 750,
+      "SlidingMaxSpeed": 2250,
+      "GravityScale": 2,
+      "MaxStepHeight": 60,
+      "JumpZVelocity": 1000,
+      "MaxWalkSpeed": 700,
+      "MaxWalkSpeedCrouched": 550,
+      "MaxSwimSpeed": 1100,
+      "ClimbMaxSpeed": 800,
+      "PlayerLight": {
+        "SourceRadius": 500,
+        "SoftSourceRadius": 750,
+        "AttenuationRadius": 2000,
+        "Intensity": 50
+      }
+    },
+    "BP_BuildObject_PalBoxV2_C": {
+      "AreaRange1": {
+        "RelativeScale3D": {
+          "X": 105,
+          "Y": 105,
+          "Z": 150
+        }
+      },
+      "AreaRange": {
+        "RelativeScale3D": {
+          "X": 105,
+          "Y": 105,
+          "Z": 150
+        }
+      }
+    },
+    "BP_PalBaseCampManager_C": {
+      "BaseCampSignificanceInfoList": [
+        {
+          "DistanceInRangeFromPlayer": -1,
+          "TickInterval": 0.1,
+          "bMergeDropItems": true,
+          "bUpdateSimple": false
+        },
+        {
+          "DistanceInRangeFromPlayer": 400,
+          "TickInterval": 0.4,
+          "bMergeDropItems": true,
+          "bUpdateSimple": false
+        },
+        {
+          "DistanceInRangeFromPlayer": 2000,
+          "TickInterval": 2,
+          "bMergeDropItems": true,
+          "bUpdateSimple": false
+        },
+        {
+          "DistanceInRangeFromPlayer": 4000,
+          "TickInterval": 4,
+          "bMergeDropItems": true,
+          "bUpdateSimple": false
+        },
+        {
+          "DistanceInRangeFromPlayer": 8000,
+          "TickInterval": 8,
+          "bMergeDropItems": true,
+          "bUpdateSimple": true
+        }
+      ]
+    }
+  }
+}
+	
+

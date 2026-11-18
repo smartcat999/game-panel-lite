@@ -1,0 +1,25 @@
+node_modules
+.pnpm-store
+.idea
+.next
+dist
+coverage
+test-results
+.cache
+.gocache
+*.tsbuildinfo
+.env
+.env.local
+data
+!apps/api/internal/provider/projectzomboid/data/
+!apps/api/internal/provider/projectzomboid/data/options.json
+*.db
+*.db-journal
+generated
+tmp
+output
+.playwright-cli
+
+# Local editorial drafts (not part of product releases)
+docs/wechat/GamePanel-Lite-开源游戏服务器面板.md
+artifacts/

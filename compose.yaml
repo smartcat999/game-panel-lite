@@ -1,0 +1,134 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+      network: host
+      args:
+        GAMEPANEL_VERSION: ${GAMEPANEL_IMAGE_TAG:-v0.2.19}
+        GAMEPANEL_COMMIT: ${GAMEPANEL_COMMIT:-local}
+        GAMEPANEL_BUILD_TIME: ${GAMEPANEL_BUILD_TIME:-local}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-api:${GAMEPANEL_IMAGE_TAG:-v0.2.19}
+    environment:
+      GAMEPANEL_HOST: 0.0.0.0
+      GAMEPANEL_PORT: 4000
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
+      GAMEPANEL_DOCKER_HOST: unix:///var/run/docker.sock
+      GAMEPANEL_PROVIDER_CATALOG_PATH: ${GAMEPANEL_PROVIDER_CATALOG_PATH:-/etc/gamepanel/providers.json}
+      GAMEPANEL_IMAGE_REGION: ${GAMEPANEL_IMAGE_REGION:-global}
+      GAMEPANEL_IMAGE_REGISTRY: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}
+      GAMEPANEL_IMAGE_TAG: ${GAMEPANEL_IMAGE_TAG:-v0.2.19}
+      GAMEPANEL_PROMETHEUS_URL: http://prometheus:9090
+      GAMEPANEL_PROMETHEUS_QUERY_TIMEOUT: 2s
+      GAMEPANEL_RELEASE_MANIFEST_URL: ${GAMEPANEL_RELEASE_MANIFEST_URL:-https://github.com/smartcat999/game-panel-lite/releases/latest/download/manifest.json}
+      GAMEPANEL_SYSTEM_UPDATE_INTERVAL: ${GAMEPANEL_SYSTEM_UPDATE_INTERVAL:-24h}
+      GAMEPANEL_UPDATER_URL: http://updater:4020
+      GAMEPANEL_UPDATER_TOKEN: ${GAMEPANEL_UPDATER_TOKEN:-local-development-token}
+    ports:
+      - "${GAMEPANEL_API_PORT:-4000}:4000"
+    stop_grace_period: 20s
+    volumes:
+      - ./config/providers.json:/etc/gamepanel/providers.json:ro
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+
+  updater:
+    build:
+      context: .
+      dockerfile: docker/updater/Dockerfile
+      network: host
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-updater:${GAMEPANEL_IMAGE_TAG:-v0.2.19}
+    environment:
+      GAMEPANEL_UPDATER_HOST: 0.0.0.0
+      GAMEPANEL_UPDATER_PORT: 4020
+      GAMEPANEL_UPDATER_WORKSPACE: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+      GAMEPANEL_UPDATER_TOKEN: ${GAMEPANEL_UPDATER_TOKEN:-local-development-token}
+    ports:
+      - "4020:4020"
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+
+  gamepanel-exporter:
+    build:
+      context: .
+      dockerfile: docker/exporter/Dockerfile
+      network: host
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-exporter:${GAMEPANEL_IMAGE_TAG:-v0.2.19}
+    environment:
+      GAMEPANEL_HOST: 0.0.0.0
+      GAMEPANEL_PORT: 4010
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_DB_PATH: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data/gamepanel.db
+    depends_on:
+      - api
+    ports:
+      - "4010:4010"
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+
+  palworld-mod-pack:
+    profiles:
+      - jobs
+    build:
+      context: .
+      dockerfile: docker/palworld-mod-pack/Dockerfile
+      network: host
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-palworld-mod-pack:${GAMEPANEL_PALWORLD_MOD_PACK_TAG:-v0.1.0}
+    environment:
+      GAMEPANEL_DATA_DIR: ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}/data
+      GAMEPANEL_PALWORLD_MOD_SOURCE_DIR: /palworld-mod-pack
+    volumes:
+      - ${GAMEPANEL_WORKSPACE_PATH:-${PWD}}:${GAMEPANEL_WORKSPACE_PATH:-${PWD}}
+
+  prometheus:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/prometheus:${GAMEPANEL_PROMETHEUS_TAG:-v2.55.1}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ${GAMEPANEL_PROMETHEUS_DATA_DIR:-./data/prometheus}:/prometheus
+    depends_on:
+      - api
+      - gamepanel-exporter
+      - cadvisor
+      - node-exporter
+
+  cadvisor:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/cadvisor:${GAMEPANEL_CADVISOR_TAG:-v0.52.1}
+    privileged: true
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - ${GAMEPANEL_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+
+  node-exporter:
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/node-exporter:${GAMEPANEL_NODE_EXPORTER_TAG:-v1.10.2}
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+      network: host
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
+    image: ${GAMEPANEL_IMAGE_REGISTRY:-smartcat99999}/game-panel-lite-web:${GAMEPANEL_IMAGE_TAG:-v0.2.19}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
+    depends_on:
+      - api
+    ports:
+      - "${GAMEPANEL_WEB_PORT:-3001}:3000"

@@ -1,0 +1,1783 @@
+import type { TerrariaConfig } from "@gamepanel-lite/shared";
+import { getApiBaseUrl } from "./api-base";
+import type { Locale } from "./i18n";
+import type { ActivityEvent, AuthBootstrap, Backup, BackupPolicy, ComputeNode, ConfigPreset, DSTModConfiguration, GameCatalogEntry, GameServerResource, GameUpdateJob, GameUpdateState, ModConfigFile, ModFile, ModPack, NodeJoinCommand, ProviderKey, PublicServerShare, RecommendedMod, ResourceLimits, RuntimeImageStatus, SaveSnapshotListResponse, ServerJoinInfo, ServerPlayerListResponse, ServerShare, ServerWhitelistResponse, UserAccount, UserRole, WorkshopPreview, World, WorldRegenerationJob, WorldRegenerationState } from "./types";
+
+const API_BASE = getApiBaseUrl();
+const DOCKER_CHECK_TIMEOUT_MS = 5000;
+const CREATE_SERVER_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = DOCKER_CHECK_TIMEOUT_MS,
+  timeoutMessage = "Request timed out"
+) {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([apiFetch(input, { ...init, signal: controller.signal }), timeoutPromise]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  return fetch(input, { ...init, credentials: "include" });
+}
+
+async function readPayload<T>(response: Response, fallback: string): Promise<T> {
+  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? fallback);
+  }
+  return payload;
+}
+
+export type AuthAccount = UserAccount;
+
+export async function getApiHealth(): Promise<{ status: string }> {
+  const response = await fetchWithTimeout(`${API_BASE}/healthz`, { cache: "no-store" }, 3000, "API health check timed out");
+  if (!response.ok) {
+    throw new Error("Unable to load API health");
+  }
+  return (await response.json()) as { status: string };
+}
+
+export async function getSystemVersion(): Promise<{ version: string; commit?: string; buildDate?: string }> {
+  const response = await apiFetch(`${API_BASE}/api/version`, { cache: "no-store" });
+  return readPayload<{ version: string; commit?: string; buildDate?: string }>(response, "Unable to load system version");
+}
+
+export async function getAuthBootstrap(): Promise<AuthBootstrap> {
+  const response = await apiFetch(`${API_BASE}/api/auth/bootstrap`, { cache: "no-store" });
+  return readPayload<AuthBootstrap>(response, "Unable to load auth state");
+}
+
+export async function setupAdmin(username: string, password: string): Promise<AuthAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  return readPayload<AuthAccount>(response, "Unable to create admin account");
+}
+
+export async function loginAdmin(username: string, password: string): Promise<AuthAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  return readPayload<AuthAccount>(response, "Unable to sign in");
+}
+
+export async function logoutAdmin(): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/auth/logout`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to sign out");
+}
+
+export async function changeAdminPassword(currentPassword: string, newPassword: string): Promise<AuthAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+  return readPayload<UserAccount>(response, "Unable to change password");
+}
+
+export async function registerUser(username: string, password: string): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+  return readPayload<UserAccount>(response, "Unable to register account");
+}
+
+export async function listUsers(): Promise<UserAccount[]> {
+  const response = await apiFetch(`${API_BASE}/api/users`, { cache: "no-store" });
+  return readPayload<UserAccount[]>(response, "Unable to load users");
+}
+
+export async function createUser(username: string, password: string, role: UserRole = "member"): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password, role })
+  });
+  return readPayload<UserAccount>(response, "Unable to create user");
+}
+
+export async function updateUserRole(userId: string, role: UserRole): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/users/${userId}/role`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role })
+  });
+  return readPayload<UserAccount>(response, "Unable to update role");
+}
+
+export async function resetUserPassword(userId: string, newPassword: string): Promise<UserAccount> {
+  const response = await apiFetch(`${API_BASE}/api/users/${userId}/password`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ newPassword })
+  });
+  return readPayload<UserAccount>(response, "Unable to reset password");
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/users/${userId}`, { method: "DELETE" });
+  await readPayload<{ status: string }>(response, "Unable to delete user");
+}
+
+export async function updateRegistrationSetting(allowRegistration: boolean): Promise<{ allowRegistration: boolean }> {
+  const response = await apiFetch(`${API_BASE}/api/settings/registration`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ allowRegistration })
+  });
+  return readPayload<{ allowRegistration: boolean }>(response, "Unable to update registration setting");
+}
+
+export async function listGames(): Promise<GameCatalogEntry[]> {
+  const response = await apiFetch(`${API_BASE}/api/games`, { cache: "no-store" });
+  return readPayload<GameCatalogEntry[]>(response, "Unable to load game catalog");
+}
+
+export async function getGame(gameKey: string): Promise<GameCatalogEntry> {
+  const response = await apiFetch(`${API_BASE}/api/games/${gameKey}`, { cache: "no-store" });
+  return readPayload<GameCatalogEntry>(response, "Unable to load game");
+}
+
+export async function getGameVersions(gameKey: string): Promise<Record<ProviderKey, string[]>> {
+  const response = await apiFetch(`${API_BASE}/api/games/${gameKey}/versions`, { cache: "no-store" });
+  return readPayload<Record<ProviderKey, string[]>>(response, "Unable to load game versions");
+}
+
+export async function prepareRuntimeImage(providerKey: ProviderKey, version?: string): Promise<RuntimeImageStatus> {
+  const response = await apiFetch(`${API_BASE}/api/runtime/images/prepare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ providerKey, version })
+  });
+  return readPayload<RuntimeImageStatus>(response, "Unable to install server runtime");
+}
+
+export async function uninstallRuntimeImage(providerKey: ProviderKey): Promise<RuntimeImageStatus> {
+  const response = await apiFetch(`${API_BASE}/api/runtime/images`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ providerKey })
+  });
+  return readPayload<RuntimeImageStatus>(response, "Unable to uninstall server runtime");
+}
+
+export async function checkProviderGameUpdate(providerKey: ProviderKey): Promise<GameUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/providers/${providerKey}/game-update/check`, { method: "POST" });
+  return readPayload<GameUpdateJob>(response, "Unable to check the provider game version");
+}
+
+export async function updateProviderGameUpdateAutoCheck(providerKey: ProviderKey, enabled: boolean): Promise<{ enabled: boolean; intervalHours: number }> {
+  const response = await apiFetch(`${API_BASE}/api/providers/${providerKey}/game-update/auto-check`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  return readPayload<{ enabled: boolean; intervalHours: number }>(response, "Unable to update automatic provider version checks");
+}
+
+export async function previewTerrariaConfig(config: TerrariaConfig): Promise<string> {
+  const response = await apiFetch(`${API_BASE}/api/terraria/config/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config })
+  });
+  const payload = (await response.json()) as { serverconfig?: string; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to render Terraria config");
+  }
+  return payload.serverconfig ?? "";
+}
+
+type ApiServer = GameServerResource;
+
+type ApiWorld = {
+  id: string;
+  instanceId: string;
+  gameKey?: string;
+  providerKey?: ProviderKey;
+  name: string;
+  fileName: string;
+  sizeBytes: number;
+  source?: string;
+  config?: Record<string, unknown>;
+  activeInstanceId?: string;
+  updatedAt?: string;
+  createdAt: string;
+};
+
+type ApiBackup = {
+  id: string;
+  instanceId: string;
+  gameKey?: string;
+  providerKey?: ProviderKey;
+  fileName: string;
+  worldName: string;
+  sizeBytes: number;
+  type: "Auto" | "Manual" | "Pre-update";
+  createdAt: string;
+};
+
+function toBackup(backup: ApiBackup): Backup {
+  return {
+    id: backup.id,
+    instanceId: backup.instanceId,
+    gameKey: backup.gameKey,
+    providerKey: backup.providerKey,
+    name: backup.fileName,
+    server: backup.instanceId,
+    world: backup.worldName,
+    type: backup.type,
+    size: formatBytes(backup.sizeBytes),
+    sizeBytes: backup.sizeBytes,
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
+  };
+}
+
+type ApiModFile = {
+  id: string;
+  instanceId: string;
+  gameKey?: string;
+  providerKey?: string;
+  fileName: string;
+  source?: string;
+  workshopId?: string;
+  modName?: string;
+  title?: string;
+  modVersion?: string;
+  tmodVersion?: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  description?: string;
+  tags?: string[];
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  updatedAtSteam?: number;
+  sizeBytes: number;
+  enabled: boolean;
+  runtimeEnabled?: boolean;
+  runtimePresent?: boolean;
+  dependencies?: string[];
+  createdAt: string;
+};
+
+type ApiRecommendedMod = {
+  rank: number;
+  source?: string;
+  externalId?: string;
+  workshopId?: string;
+  fileName?: string;
+  sourceUrl?: string;
+  gameKey?: string;
+  providerKey?: string;
+  modName?: string;
+  title: string;
+  creatorSteamId?: string;
+  previewUrl?: string;
+  description?: string;
+  fileSize: number;
+  subscriptions?: number;
+  favorited?: number;
+  views?: number;
+  timeCreated?: number;
+  timeUpdated?: number;
+  tags?: string[];
+  dependencies?: string[];
+  inLibrary: boolean;
+  modId?: string;
+};
+
+type ApiModPack = {
+  id: string;
+  name: string;
+  description: string;
+  gameKey?: string;
+  providerKey?: string;
+  modIds: string[];
+  mods: ApiModFile[];
+  createdAt: string;
+};
+
+type ApiActivityEvent = {
+  id: string;
+  instanceId?: string;
+  type: string;
+  message: string;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatRelative(value?: string) {
+  if (!value) {
+    return "Unknown";
+  }
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return "Unknown";
+  }
+  const diff = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
+
+function gameServerResourceFromApi(server: ApiServer): GameServerResource {
+  return {
+    id: server.id,
+    name: server.name,
+    nodeId: server.nodeId || (server as unknown as { node_id?: string }).node_id || undefined,
+    gameKey: server.gameKey,
+    providerKey: server.providerKey,
+    spec: server.spec,
+    status: server.status,
+    createdAt: "createdAt" in server && typeof server.createdAt === "string" ? server.createdAt : "",
+    updatedAt: "updatedAt" in server && typeof server.updatedAt === "string" ? server.updatedAt : ""
+  };
+}
+
+function toWorld(world: ApiWorld): World {
+  return {
+    id: world.id,
+    instanceId: world.instanceId,
+    activeInstanceId: world.activeInstanceId,
+    gameKey: world.gameKey,
+    providerKey: world.providerKey,
+    name: world.name,
+    size: world.fileName,
+    difficulty: "Imported",
+    server: world.activeInstanceId || (world.instanceId !== "unassigned" ? world.instanceId : undefined),
+    modified: formatRelative(world.updatedAt ?? world.createdAt),
+    bytes: formatBytes(world.sizeBytes),
+    source: world.source,
+    config: world.config
+  };
+}
+
+export async function listGameServers(): Promise<GameServerResource[]> {
+  const response = await apiFetch(`${API_BASE}/api/servers`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load servers");
+  }
+  const payload = (await response.json()) as ApiServer[];
+  return payload.map(gameServerResourceFromApi);
+}
+
+export type GameServerListParams = {
+  page?: number;
+  pageSize?: 20 | 50 | 100;
+  search?: string;
+  game?: string;
+  provider?: string;
+  status?: string;
+  sort?: "name" | "status" | "createdAt" | "updatedAt";
+  direction?: "asc" | "desc";
+};
+
+export type GameServerPage = {
+  items: GameServerResource[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listGameServersPage(params: GameServerListParams = {}): Promise<GameServerPage> {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 1),
+    pageSize: String(params.pageSize ?? 20),
+    sort: params.sort ?? "updatedAt",
+    direction: params.direction ?? "desc"
+  });
+  if (params.search?.trim()) query.set("search", params.search.trim());
+  if (params.game && params.game !== "all") query.set("game", params.game);
+  if (params.provider && params.provider !== "all") query.set("provider", params.provider);
+  if (params.status && params.status !== "all") query.set("status", params.status);
+  const response = await apiFetch(`${API_BASE}/api/servers?${query.toString()}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Unable to load servers");
+  const payload = (await response.json()) as Omit<GameServerPage, "items"> & { items: ApiServer[] };
+  return { ...payload, items: payload.items.map(gameServerResourceFromApi) };
+}
+
+export async function getGameServer(id: string): Promise<GameServerResource> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load server");
+  }
+  const server = (await response.json()) as ApiServer;
+  return gameServerResourceFromApi(server);
+}
+
+export type ServerConfigUpdatePayload = TerrariaConfig | Record<string, unknown>;
+
+export async function updateGameServerConfig(id: string, config: ServerConfigUpdatePayload, hostPort?: number, resources?: ResourceLimits): Promise<GameServerResource> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config, hostPort, resources })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to update server config");
+  }
+  const server = (await response.json()) as ApiServer;
+  return gameServerResourceFromApi(server);
+}
+
+export async function getDockerStatus(): Promise<DockerStatus> {
+  const response = await fetchWithTimeout(`${API_BASE}/api/runtime/docker`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load Docker status");
+  }
+  return (await response.json()) as DockerStatus;
+}
+
+export type DockerStatus = {
+  available: boolean;
+  message: string;
+  host: string;
+  architecture?: string;
+  lastCheckedAt?: string;
+};
+
+export type AppSettings = {
+  host: string;
+  port: string;
+  dataDir: string;
+  dbPath: string;
+  dockerHost: string;
+  publicHost: string;
+  locale: Locale;
+  imageRegion: string;
+  gameImageRegistry: string;
+  imageRegistry: string;
+  imageTag: string;
+  providerCatalogPath: string;
+};
+
+export type PanelBuildInfo = {
+  name: string;
+  version: string;
+  commit: string;
+  buildTime: string;
+  goVersion: string;
+};
+
+export type SystemUpdateManifest = {
+  schemaVersion: number;
+  channel: string;
+  version: string;
+  publishedAt?: string;
+  releaseNotesUrl?: string;
+};
+
+export type SystemUpdateJob = {
+  id?: string;
+  kind?: string;
+  version?: string;
+  status?: "running" | "completed" | "failed" | string;
+  stage?: string;
+  message?: string;
+  startedAt?: string;
+  updatedAt?: string;
+};
+
+export type DeploymentService = {
+  name: string;
+  state: string;
+  health?: string;
+  image?: string;
+};
+
+export type DeploymentStatus = {
+  mode: "http" | "https" | string;
+  manager: "docker-compose" | "standalone" | string;
+  checkedAt: string;
+  capabilities: {
+    reconcile: boolean;
+    restart: boolean;
+    httpsSetup: boolean;
+    httpsRenew: boolean;
+  };
+  healthy: boolean;
+  services: DeploymentService[];
+  https: {
+    configured: boolean;
+    domain?: string;
+    certificate: "valid" | "expired" | "missing" | string;
+    expiresAt?: string;
+    daysRemaining?: number;
+    autoRenewal: {
+      enabled: boolean;
+      method?: string;
+      installedAt?: string;
+      lastCheckedAt?: string;
+      lastStatus?: "pending" | "running" | "success" | "failed" | "unknown" | string;
+    };
+  };
+  job?: SystemUpdateJob;
+};
+
+export type SystemUpdateStatus = {
+  current: PanelBuildInfo;
+  latest?: SystemUpdateManifest;
+  updateAvailable: boolean;
+  checkedAt?: string;
+  checkError?: string;
+  autoCheckEnabled: boolean;
+  intervalHours: number;
+  updaterAvailable: boolean;
+  job?: SystemUpdateJob;
+};
+
+export type ServerStats = {
+  cpuPercent: number;
+  memoryMb: number;
+  memoryLimitMb: number;
+};
+
+export type ServerWatchEvent = {
+  id: string;
+  severity: "success" | "warning" | "error" | "info" | string;
+  type: string;
+  title: string;
+  message: string;
+  serverId?: string;
+  serverName?: string;
+  operator: string;
+  timestamp: string;
+  metadata?: Record<string, string>;
+};
+
+export type ServerWatchSnapshot = {
+  server: GameServerResource;
+  stats: ServerStats;
+  events: ServerWatchEvent[];
+  collectedAt: string;
+};
+
+export async function getServerStats(id: string): Promise<ServerStats> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/stats`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load server stats");
+  }
+  return (await response.json()) as ServerStats;
+}
+
+export function serverLogsUrl(id: string) {
+  return `${API_BASE}/api/servers/${id}/logs`;
+}
+
+export function serverWatchUrl(id: string) {
+  return `${API_BASE}/api/servers/${id}/watch`;
+}
+
+export async function getGameUpdate(id: string): Promise<GameUpdateState> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update`, { cache: "no-store" });
+  return readPayload<GameUpdateState>(response, "Unable to load game update status");
+}
+
+export async function checkGameUpdate(id: string): Promise<GameUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/check`, { method: "POST" });
+  return readPayload<GameUpdateJob>(response, "Unable to check for game updates");
+}
+
+export async function updateGameUpdateAutoCheck(id: string, enabled: boolean): Promise<{ enabled: boolean; intervalHours: number }> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/auto-check`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  return readPayload<{ enabled: boolean; intervalHours: number }>(response, "Unable to update automatic game update checks");
+}
+
+export async function applyGameUpdate(id: string, startAfterUpdate: boolean): Promise<GameUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/game-update/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startAfterUpdate })
+  });
+  return readPayload<GameUpdateJob>(response, "Unable to update game server");
+}
+
+export async function getWorldRegeneration(id: string): Promise<WorldRegenerationState> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/world-regeneration`, { cache: "no-store" });
+  return readPayload<WorldRegenerationState>(response, "Unable to load world regeneration status");
+}
+
+export async function regenerateWorld(id: string, startAfter: boolean): Promise<WorldRegenerationJob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/world-regeneration`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ startAfter })
+  });
+  return readPayload<WorldRegenerationJob>(response, "Unable to regenerate world");
+}
+
+export type HostStats = {
+  runningWorkloads: number;
+  cpuCores: number;
+  totalCpuPercent: number;
+  totalMemoryMb: number;
+  memoryLimitMb: number;
+  storageUsedBytes: number;
+};
+
+export type ObservabilityServerMetric = {
+  id: string;
+  name: string;
+  gameKey: string;
+  providerKey: ProviderKey;
+  status: string;
+  playersOnline: number;
+  maxPlayers: number;
+  hostPort?: number;
+  version?: string;
+  cpuPercent: number;
+  memoryMb: number;
+  memoryLimitMb: number;
+  statsAvailable: boolean;
+};
+
+export type ObservabilityActivityTypeCount = {
+  type: string;
+  count: number;
+};
+
+export type ObservabilityActivitySummary = {
+  windowHours: number;
+  total: number;
+  lifecycle: number;
+  backups: number;
+  players: number;
+  failures: number;
+  byType: ObservabilityActivityTypeCount[];
+};
+
+export type ObservabilityMetrics = {
+  collectedAt: string;
+  host: HostStats;
+  servers: ObservabilityServerMetric[];
+  activity: ObservabilityActivitySummary;
+};
+
+export async function getRuntimeStats(): Promise<HostStats> {
+  const response = await apiFetch(`${API_BASE}/api/runtime/stats`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load runtime stats");
+  }
+  return (await response.json()) as HostStats;
+}
+
+export async function getObservabilityMetrics(): Promise<ObservabilityMetrics> {
+  const response = await apiFetch(`${API_BASE}/api/observability/metrics`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load observability metrics");
+  }
+  return (await response.json()) as ObservabilityMetrics;
+}
+
+export function prometheusMetricsUrl() {
+  return `${API_BASE}/metrics`;
+}
+
+export async function getServerLogSnapshot(id: string): Promise<string[]> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/logs/snapshot`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as { lines?: string[]; error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to load server logs");
+  }
+  return payload.lines ?? [];
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const response = await apiFetch(`${API_BASE}/api/settings`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load settings");
+  }
+  return (await response.json()) as AppSettings;
+}
+
+export async function getSystemUpdateStatus(): Promise<SystemUpdateStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/update`, { cache: "no-store" });
+  return readPayload<SystemUpdateStatus>(response, "Unable to load panel update status");
+}
+
+export async function checkSystemUpdate(): Promise<SystemUpdateStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/update/check`, { method: "POST" });
+  const payload = (await response.json().catch(() => ({}))) as SystemUpdateStatus;
+  if (!response.ok) throw new Error(payload.checkError || "Unable to check for panel updates");
+  return payload;
+}
+
+export async function updateSystemAutoCheck(enabled: boolean): Promise<SystemUpdateStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/update/auto-check`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  return readPayload<SystemUpdateStatus>(response, "Unable to save automatic update checks");
+}
+
+export async function applySystemUpdate(version: string): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/update/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version })
+  });
+  return readPayload<SystemUpdateJob>(response, "Unable to start panel update");
+}
+
+export async function getDeploymentStatus(): Promise<DeploymentStatus> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment`, { cache: "no-store" });
+  return readPayload<DeploymentStatus>(response, "Unable to load deployment status");
+}
+
+export async function reconcileDeployment(): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/reconcile`, { method: "POST" });
+  return readPayload<SystemUpdateJob>(response, "Unable to restore control-plane services");
+}
+
+export async function restartDeployment(): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/restart`, { method: "POST" });
+  return readPayload<SystemUpdateJob>(response, "Unable to restart control-plane services");
+}
+
+export async function setupDeploymentHTTPS(domain: string, email: string): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/https/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain, email })
+  });
+  return readPayload<SystemUpdateJob>(response, "Unable to configure HTTPS");
+}
+
+export async function renewDeploymentHTTPS(): Promise<SystemUpdateJob> {
+  const response = await apiFetch(`${API_BASE}/api/system/deployment/https/renew`, { method: "POST" });
+  return readPayload<SystemUpdateJob>(response, "Unable to check certificate renewal");
+}
+
+export async function getTerrariaVersions(): Promise<Record<string, string[]>> {
+  const response = await apiFetch(`${API_BASE}/api/terraria/versions`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load versions");
+  }
+  return (await response.json()) as Record<string, string[]>;
+}
+
+export async function createGameServer(input: {
+  name: string;
+  providerKey: ProviderKey;
+  config: TerrariaConfig | Record<string, unknown>;
+  hostPort?: number;
+  modIds?: string[];
+  version?: string;
+  resources?: ResourceLimits;
+  nodeId?: string;
+}): Promise<GameServerResource> {
+  const response = await fetchWithTimeout(`${API_BASE}/api/servers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }, CREATE_SERVER_TIMEOUT_MS, "Create server request timed out");
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create server");
+  }
+  const server = (await response.json()) as ApiServer;
+  return gameServerResourceFromApi(server);
+}
+
+export async function listConfigPresets(): Promise<ConfigPreset[]> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load configuration presets");
+  }
+  return (await response.json()) as ConfigPreset[];
+}
+
+export type ConfigPresetInput = {
+  name: string;
+  providerKey: ProviderKey;
+  config: TerrariaConfig | Record<string, unknown>;
+  version?: string;
+  resources?: ResourceLimits;
+  modPackId?: string;
+  modIds: string[];
+};
+
+export async function createConfigPreset(input: ConfigPresetInput): Promise<ConfigPreset> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  const payload = (await response.json().catch(() => ({}))) as ConfigPreset & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to save configuration preset");
+  }
+  return payload;
+}
+
+export async function updateConfigPreset(id: string, input: ConfigPresetInput): Promise<ConfigPreset> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  const payload = (await response.json().catch(() => ({}))) as ConfigPreset & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to update configuration preset");
+  }
+  return payload;
+}
+
+export async function deleteConfigPreset(id: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete configuration preset");
+  }
+}
+
+export async function deleteConfigPresets(ids: string[]): Promise<BatchDeleteResult> {
+  const response = await apiFetch(`${API_BASE}/api/config-presets/batch-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  const payload = (await response.json().catch(() => ({}))) as BatchDeleteResult & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Unable to delete configuration presets");
+  }
+  return payload;
+}
+
+export async function gameServerAction(id: string, action: "start" | "stop" | "restart" | "delete"): Promise<GameServerResource | null> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}${action === "delete" ? "" : `/${action}`}`, {
+    method: action === "delete" ? "DELETE" : "POST"
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? `Unable to ${action} server`);
+  }
+  if (action === "delete") {
+    return null;
+  }
+  const server = (await response.json()) as ApiServer;
+  return gameServerResourceFromApi(server);
+}
+
+export async function sendServerCommand(id: string, command: string, target?: "master" | "caves") {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command, target })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to send command");
+  }
+  return (await response.json()) as { id: string; status: "queued" };
+}
+
+export async function listWorlds(): Promise<World[]> {
+  const response = await apiFetch(`${API_BASE}/api/worlds`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load worlds");
+  }
+  const payload = (await response.json()) as ApiWorld[];
+  return payload.map(toWorld);
+}
+
+export async function importWorld(file: File, instanceId = "unassigned"): Promise<World> {
+  const body = new FormData();
+  body.set("file", file);
+  body.set("instanceId", instanceId);
+  const response = await apiFetch(`${API_BASE}/api/worlds/import`, { method: "POST", body });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import world");
+  }
+  const world = (await response.json()) as ApiWorld;
+  return toWorld(world);
+}
+
+export async function createWorldSnapshot(serverId: string, name?: string): Promise<World> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/world-snapshots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to save world snapshot");
+  }
+  const world = (await response.json()) as ApiWorld;
+  return toWorld(world);
+}
+
+export async function assignWorld(id: string, instanceId: string): Promise<World> {
+  const response = await apiFetch(`${API_BASE}/api/worlds/${id}/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to assign world");
+  }
+  const world = (await response.json()) as ApiWorld;
+  return toWorld(world);
+}
+
+export async function deleteWorld(id: string) {
+  const response = await apiFetch(`${API_BASE}/api/worlds/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete world");
+  }
+}
+
+export function worldDownloadUrl(id: string) {
+  return `${API_BASE}/api/worlds/${id}/download`;
+}
+
+async function downloadBlob(url: string, fallbackMessage: string): Promise<Blob> {
+  const response = await apiFetch(url);
+  if (!response.ok) {
+    const payload = (await response.clone().json().catch(() => ({}))) as { error?: string };
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    const text = await response.text().catch(() => "");
+    throw new Error(text.trim() || fallbackMessage);
+  }
+  return response.blob();
+}
+
+export async function downloadWorldFile(id: string): Promise<Blob> {
+  return downloadBlob(worldDownloadUrl(id), "Unable to download world");
+}
+
+export async function listBackups(): Promise<Backup[]> {
+  const response = await apiFetch(`${API_BASE}/api/backups`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load backups");
+  }
+  const payload = (await response.json()) as ApiBackup[];
+  return payload.map((backup) => ({
+    id: backup.id,
+    instanceId: backup.instanceId,
+    name: backup.fileName,
+    server: backup.instanceId,
+    world: backup.worldName,
+    type: backup.type,
+    size: formatBytes(backup.sizeBytes),
+    sizeBytes: backup.sizeBytes,
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
+  }));
+}
+
+export async function createBackup(serverId: string): Promise<Backup> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/backups`, { method: "POST" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create backup");
+  }
+  const backup = (await response.json()) as ApiBackup;
+  return {
+    id: backup.id,
+    instanceId: backup.instanceId,
+    name: backup.fileName,
+    server: backup.instanceId,
+    world: backup.worldName,
+    type: backup.type,
+    size: formatBytes(backup.sizeBytes),
+    sizeBytes: backup.sizeBytes,
+    created: formatRelative(backup.createdAt),
+    createdAt: backup.createdAt
+  };
+}
+
+export async function restoreBackup(id: string) {
+  const response = await apiFetch(`${API_BASE}/api/backups/${id}/restore`, { method: "POST" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to restore backup");
+  }
+}
+
+export async function deleteBackup(id: string) {
+  const response = await apiFetch(`${API_BASE}/api/backups/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete backup");
+  }
+}
+
+export async function getServerBackupPolicy(serverId: string): Promise<BackupPolicy> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/backup-policy`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to fetch backup policy");
+  }
+  return (await response.json()) as BackupPolicy;
+}
+
+export async function updateServerBackupPolicy(
+  serverId: string,
+  payload: { enabled: boolean; intervalHours: number; retentionCount: number }
+): Promise<BackupPolicy> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/backup-policy`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(errorData.error ?? "Unable to update backup policy");
+  }
+  return (await response.json()) as BackupPolicy;
+}
+
+export function backupDownloadUrl(id: string) {
+  return `${API_BASE}/api/backups/${id}/download`;
+}
+
+export async function downloadBackupFile(id: string): Promise<Blob> {
+  return downloadBlob(backupDownloadUrl(id), "Unable to download backup");
+}
+
+export async function listMods(serverId: string): Promise<ModFile[]> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to load mods");
+  }
+  const payload = (await response.json()) as ApiModFile[];
+  return payload.map(toModFile);
+}
+
+export async function getDSTModConfiguration(serverId: string, modId: string, locale: string): Promise<DSTModConfiguration> {
+  const query = new URLSearchParams({ locale });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}/configuration?${query}`, { cache: "no-store" });
+  return readPayload<DSTModConfiguration>(response, "Unable to load mod configuration");
+}
+
+export async function saveDSTModConfiguration(serverId: string, modId: string, locale: string, values: DSTModConfiguration["values"]): Promise<DSTModConfiguration> {
+  const query = new URLSearchParams({ locale });
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}/configuration?${query}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ values })
+  });
+  return readPayload<DSTModConfiguration>(response, "Unable to save mod configuration");
+}
+
+export async function listModConfigs(serverId: string): Promise<ModConfigFile[]> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs`, { cache: "no-store" });
+  return readPayload<ModConfigFile[]>(response, "Unable to load mod configs");
+}
+
+export async function getModConfig(serverId: string, name: string): Promise<ModConfigFile> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/${encodeURIComponent(name)}`, { cache: "no-store" });
+  return readPayload<ModConfigFile>(response, "Unable to load mod config");
+}
+
+export async function saveModConfig(serverId: string, name: string, content: string): Promise<ModConfigFile> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content })
+  });
+  return readPayload<ModConfigFile>(response, "Unable to save mod config");
+}
+
+export async function uploadModConfig(serverId: string, file: File): Promise<ModConfigFile> {
+  const body = new FormData();
+  body.set("file", file);
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/upload`, { method: "POST", body });
+  return readPayload<ModConfigFile>(response, "Unable to upload mod config");
+}
+
+export async function deleteModConfig(serverId: string, name: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mod-configs/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod config");
+  }
+}
+
+function toModFile(file: ApiModFile): ModFile {
+  return {
+    id: file.id,
+    instanceId: file.instanceId,
+    gameKey: file.gameKey,
+    providerKey: file.providerKey,
+    fileName: file.fileName,
+    source: file.source,
+    workshopId: file.workshopId,
+    modName: file.modName,
+    title: file.title,
+    modVersion: file.modVersion,
+    tmodVersion: file.tmodVersion,
+    creatorSteamId: file.creatorSteamId,
+    previewUrl: file.previewUrl,
+    description: file.description,
+    tags: file.tags,
+    subscriptions: file.subscriptions,
+    favorited: file.favorited,
+    views: file.views,
+    updatedAtSteam: file.updatedAtSteam,
+    size: formatBytes(file.sizeBytes),
+    sizeBytes: file.sizeBytes,
+    enabled: file.enabled,
+    runtimeEnabled: file.runtimeEnabled,
+    runtimePresent: file.runtimePresent,
+    dependencies: file.dependencies,
+    created: formatRelative(file.createdAt)
+  };
+}
+
+function toRecommendedMod(mod: ApiRecommendedMod): RecommendedMod {
+  return {
+    rank: mod.rank,
+    source: mod.source,
+    externalId: mod.externalId,
+    workshopId: mod.workshopId,
+    fileName: mod.fileName,
+    sourceUrl: mod.sourceUrl,
+    gameKey: mod.gameKey,
+    providerKey: mod.providerKey,
+    modName: mod.modName,
+    title: mod.title,
+    creatorSteamId: mod.creatorSteamId,
+    previewUrl: mod.previewUrl,
+    description: mod.description,
+    fileSize: mod.fileSize,
+    size: formatBytes(mod.fileSize),
+    subscriptions: mod.subscriptions,
+    favorited: mod.favorited,
+    views: mod.views,
+    timeCreated: mod.timeCreated,
+    timeUpdated: mod.timeUpdated,
+    tags: mod.tags,
+    dependencies: mod.dependencies,
+    inLibrary: mod.inLibrary,
+    modId: mod.modId
+  };
+}
+
+function toModPack(pack: ApiModPack): ModPack {
+  return {
+    id: pack.id,
+    name: pack.name,
+    description: pack.description,
+    gameKey: pack.gameKey,
+    providerKey: pack.providerKey,
+    modIds: pack.modIds,
+    mods: pack.mods.map(toModFile),
+    created: formatRelative(pack.createdAt)
+  };
+}
+
+export async function uploadMod(serverId: string, file: File): Promise<ModFile> {
+  const body = new FormData();
+  body.set("file", file);
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/upload`, { method: "POST", body });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to upload mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function importWorkshopMods(serverId: string, workshopIds: string[]): Promise<ModFile[]> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/workshop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workshopIds })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import workshop mods");
+  }
+  const payload = (await response.json()) as ApiModFile[];
+  return payload.map(toModFile);
+}
+
+export async function setModEnabled(serverId: string, modId: string, enabled: boolean): Promise<ModFile> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to update mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function deleteMod(serverId: string, modId: string) {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/mods/${modId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod");
+  }
+}
+
+export async function listGlobalMods(): Promise<ModFile[]> {
+  const response = await apiFetch(`${API_BASE}/api/mods`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load mod library");
+  }
+  const payload = (await response.json()) as ApiModFile[];
+  return payload.map(toModFile);
+}
+
+export async function uploadGlobalMod(file: File): Promise<ModFile> {
+  const body = new FormData();
+  body.set("file", file);
+  const response = await apiFetch(`${API_BASE}/api/mods/upload`, { method: "POST", body });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to upload mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function listRecommendedMods(): Promise<RecommendedMod[]> {
+  const response = await apiFetch(`${API_BASE}/api/mods/recommended`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to load recommended mods");
+  }
+  const payload = (await response.json()) as ApiRecommendedMod[];
+  return payload.map(toRecommendedMod);
+}
+
+export async function previewWorkshopCollection(input: { value: string; providerKey?: ProviderKey; instanceId?: string }): Promise<WorkshopPreview> {
+  const response = await apiFetch(`${API_BASE}/api/mods/workshop/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      value: input.value,
+      providerKey: input.providerKey ?? "terraria-tmodloader",
+      instanceId: input.instanceId
+    })
+  });
+  const payload = await readPayload<Omit<WorkshopPreview, "items"> & { items: Array<Omit<WorkshopPreview["items"][number], "size">> }>(
+    response,
+    "Unable to preview Workshop collection"
+  );
+  return {
+    ...payload,
+    items: payload.items.map((item) => ({ ...item, size: formatBytes(item.fileSize) }))
+  };
+}
+
+export async function previewWorkshopItems(input: { workshopIds: string[]; providerKey?: ProviderKey }): Promise<WorkshopPreview> {
+  const response = await apiFetch(`${API_BASE}/api/mods/workshop/items/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workshopIds: input.workshopIds,
+      providerKey: input.providerKey ?? "terraria-tmodloader"
+    })
+  });
+  const payload = await readPayload<Omit<WorkshopPreview, "items"> & { items: Array<Omit<WorkshopPreview["items"][number], "size">> }>(
+    response,
+    "Unable to preview Workshop items"
+  );
+  return {
+    ...payload,
+    items: payload.items.map((item) => ({ ...item, size: formatBytes(item.fileSize) }))
+  };
+}
+
+export async function importGlobalWorkshopMods(workshopIds: string[], providerKey = "terraria-tmodloader", previewId?: string): Promise<ModFile[]> {
+  const response = await apiFetch(`${API_BASE}/api/mods/workshop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ providerKey, workshopIds, previewId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import workshop mods");
+  }
+  const payload = (await response.json()) as ApiModFile[];
+  return payload.map(toModFile);
+}
+
+export async function importRecommendedMod(input: { providerKey?: string; externalId?: string; workshopId?: string }): Promise<ModFile> {
+  const response = await apiFetch(`${API_BASE}/api/mods/recommended/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to import recommended mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function assignMod(modId: string, instanceId: string): Promise<ModFile> {
+  const response = await apiFetch(`${API_BASE}/api/mods/${modId}/assign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ instanceId })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to assign mod");
+  }
+  const item = (await response.json()) as ApiModFile;
+  return toModFile(item);
+}
+
+export async function deleteGlobalMod(modId: string) {
+  const response = await apiFetch(`${API_BASE}/api/mods/${modId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod");
+  }
+}
+
+export type BatchDeleteResult = {
+  succeeded: Array<{ id: string }>;
+  failed: Array<{ id: string; error: string }>;
+};
+
+export async function deleteGlobalMods(ids: string[]): Promise<BatchDeleteResult> {
+  const response = await apiFetch(`${API_BASE}/api/mods/batch-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mods");
+  }
+  return response.json() as Promise<BatchDeleteResult>;
+}
+
+export async function listModPacks(): Promise<ModPack[]> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to load mod packs");
+  }
+  const payload = (await response.json()) as ApiModPack[];
+  return payload.map(toModPack);
+}
+
+export async function createModPack(input: { name: string; description?: string; modIds: string[] }): Promise<ModPack> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create mod pack");
+  }
+  const pack = (await response.json()) as ApiModPack;
+  return toModPack(pack);
+}
+
+export async function createModPackFromWorkshopCollection(input: {
+  name: string;
+  description?: string;
+  providerKey: ProviderKey;
+  previewId: string;
+  workshopIds: string[];
+}): Promise<ModPack> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/workshop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to create mod pack from Steam collection");
+  }
+  const pack = (await response.json()) as ApiModPack;
+  return toModPack(pack);
+}
+
+export async function updateModPack(id: string, input: { name: string; description?: string; modIds: string[] }): Promise<ModPack> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to update mod pack");
+  }
+  const pack = (await response.json()) as ApiModPack;
+  return toModPack(pack);
+}
+
+export async function deleteModPack(id: string) {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod pack");
+  }
+}
+
+export async function deleteModPacks(ids: string[]): Promise<BatchDeleteResult> {
+  const response = await apiFetch(`${API_BASE}/api/mod-packs/batch-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids })
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Unable to delete mod packs");
+  }
+  return response.json() as Promise<BatchDeleteResult>;
+}
+
+export async function listActivity(): Promise<ActivityEvent[]> {
+  const response = await apiFetch(`${API_BASE}/api/activity`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load activity");
+  }
+  const payload = (await response.json()) as ApiActivityEvent[];
+  return payload.map((event) => ({
+    id: event.id,
+    instanceId: event.instanceId,
+    type: event.type,
+    message: event.message,
+    payload: event.payload,
+    created: formatRelative(event.createdAt)
+  }));
+}
+
+export async function updatePublicHost(publicHost: string): Promise<{ publicHost: string }> {
+  const response = await apiFetch(`${API_BASE}/api/settings/public-host`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicHost })
+  });
+  return readPayload<{ publicHost: string }>(response, "Unable to update public host");
+}
+
+export async function updateImageRegion(imageRegion: "global" | "cn"): Promise<{
+  imageRegion: string;
+  gameImageRegistry: string;
+  restartRequired: boolean;
+}> {
+  const response = await apiFetch(`${API_BASE}/api/settings/image-region`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageRegion })
+  });
+  return readPayload(response, "Unable to update image region");
+}
+
+export async function updateLocale(locale: Locale): Promise<{ locale: Locale }> {
+  const response = await apiFetch(`${API_BASE}/api/settings/locale`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale })
+  });
+  return readPayload<{ locale: Locale }>(response, "Unable to update language");
+}
+
+export async function getServerJoinInfo(id: string): Promise<ServerJoinInfo> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/join-info`, { cache: "no-store" });
+  return readPayload<ServerJoinInfo>(response, "Unable to load join info");
+}
+
+export async function getServerShare(id: string): Promise<ServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/share`, { cache: "no-store" });
+  return readPayload<ServerShare>(response, "Unable to load share settings");
+}
+
+export async function enableServerShare(id: string, includePassword: boolean): Promise<ServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/share`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ includePassword })
+  });
+  return readPayload<ServerShare>(response, "Unable to enable share page");
+}
+
+export async function disableServerShare(id: string): Promise<ServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/share`, { method: "DELETE" });
+  return readPayload<ServerShare>(response, "Unable to disable share page");
+}
+
+export async function getPublicServerShare(token: string): Promise<PublicServerShare> {
+  const response = await apiFetch(`${API_BASE}/api/public/servers/${token}`, { cache: "no-store" });
+  return readPayload<PublicServerShare>(response, "Unable to load shared server");
+}
+
+export async function listServerSaves(id: string): Promise<SaveSnapshotListResponse> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/saves`, { cache: "no-store" });
+  const payload = await readPayload<{ saveDisplayName: string; saves: ApiBackup[] }>(response, "Unable to load saves");
+  return {
+    saveDisplayName: payload.saveDisplayName,
+    saves: payload.saves.map((backup) => toBackup(backup))
+  };
+}
+
+export async function createServerSaveSnapshot(id: string): Promise<Backup> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/saves/snapshot`, { method: "POST" });
+  const payload = await readPayload<{ save: ApiBackup }>(response, "Unable to create save snapshot");
+  return toBackup(payload.save);
+}
+
+export async function downloadServerSave(serverId: string, saveId: string): Promise<Blob> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/saves/${saveId}/download`);
+  if (!response.ok) {
+    throw new Error("Unable to download save snapshot");
+  }
+  return response.blob();
+}
+
+export async function restoreServerSave(serverId: string, saveId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${serverId}/saves/${saveId}/restore`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to restore save snapshot");
+}
+
+export async function listServerPlayers(id: string, force?: boolean): Promise<ServerPlayerListResponse> {
+  const url = force ? `${API_BASE}/api/servers/${id}/players?force=true` : `${API_BASE}/api/servers/${id}/players`;
+  const response = await apiFetch(url, { cache: "no-store" });
+  return readPayload<ServerPlayerListResponse>(response, "Unable to load players");
+}
+
+export async function kickServerPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/players/${encodeURIComponent(player)}/kick`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to kick player");
+}
+
+export async function banServerPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/players/${encodeURIComponent(player)}/ban`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to ban player");
+}
+
+export async function getServerWhitelist(id: string): Promise<ServerWhitelistResponse> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist`, { cache: "no-store" });
+  return readPayload<ServerWhitelistResponse>(response, "Unable to load whitelist status");
+}
+
+export async function addServerWhitelistPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist/${encodeURIComponent(player)}`, { method: "POST" });
+  await readPayload<{ status: string }>(response, "Unable to add player to whitelist");
+}
+
+export async function removeServerWhitelistPlayer(id: string, player: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/whitelist/${encodeURIComponent(player)}`, { method: "DELETE" });
+  await readPayload<{ status: string }>(response, "Unable to remove player from whitelist");
+}
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationMember = {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  createdAt: string;
+};
+
+export type TenantQuota = {
+  organizationId: string;
+  maxServers: number;
+  maxCpuCores: number;
+  maxMemoryMb: number;
+  maxStorageGb: number;
+};
+
+export type TenantUsage = {
+  totalServers: number;
+  runningServers: number;
+  usedCpuCores: number;
+  usedMemoryMb: number;
+  quota: TenantQuota;
+};
+
+export async function listOrganizations(): Promise<Organization[]> {
+  const response = await apiFetch(`${API_BASE}/api/organizations`, { cache: "no-store" });
+  return readPayload<Organization[]>(response, "Unable to load organizations");
+}
+
+export async function getOrganizationUsage(id: string): Promise<TenantUsage> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${id}/usage`, { cache: "no-store" });
+  return readPayload<TenantUsage>(response, "Unable to load tenant usage");
+}
+
+export async function updateOrganizationQuota(
+  id: string,
+  payload: { maxServers: number; maxCpuCores: number; maxMemoryMb: number; maxStorageGb?: number }
+): Promise<TenantQuota> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${id}/quota`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<TenantQuota>(response, "Unable to update organization quota");
+}
+
+export async function createOrganization(payload: { name: string; slug?: string; plan?: string }): Promise<Organization> {
+  const response = await apiFetch(`${API_BASE}/api/organizations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<Organization>(response, "Unable to create organization");
+}
+
+export async function listComputeNodes(): Promise<ComputeNode[]> {
+  const response = await apiFetch(`${API_BASE}/api/nodes`, { cache: "no-store" });
+  return readPayload<ComputeNode[]>(response, "Unable to load compute nodes");
+}
+
+export async function listNodeServers(id: string): Promise<GameServerResource[]> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/servers`, { cache: "no-store" });
+  return readPayload<GameServerResource[]>(response, "Unable to load node servers");
+}
+
+export async function pingComputeNode(id: string): Promise<{ nodeId: string; status: string; latencyMs: number }> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/ping`, { method: "POST" });
+  return readPayload<{ nodeId: string; status: string; latencyMs: number }>(response, "Unable to ping node");
+}
+
+export async function getNodeJoinCommand(id: string): Promise<NodeJoinCommand> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}/join-command`, { cache: "no-store" });
+  return readPayload<NodeJoinCommand>(response, "Unable to get node join command");
+}
+
+export async function listOrganizationMembers(orgId: string): Promise<OrganizationMember[]> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${orgId}/members`, { cache: "no-store" });
+  return readPayload<OrganizationMember[]>(response, "Unable to load organization members");
+}
+
+export async function addOrganizationMember(orgId: string, payload: { userId: string; role: string }): Promise<OrganizationMember> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${orgId}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<OrganizationMember>(response, "Unable to add member");
+}
+
+export async function removeOrganizationMember(orgId: string, userId: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/organizations/${orgId}/members/${userId}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error("Unable to remove member");
+  }
+}
+
+export async function createComputeNode(payload: {
+  name: string;
+  host: string;
+  port?: number;
+  token?: string;
+  publicIp?: string;
+  region?: string;
+  cpuCores?: number;
+  memoryTotalMb?: number;
+}): Promise<ComputeNode> {
+  const response = await apiFetch(`${API_BASE}/api/nodes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<ComputeNode>(response, "Unable to create compute node");
+}
+
+export async function updateComputeNode(id: string, payload: {
+  name?: string;
+  region?: string;
+  publicIp?: string;
+  host?: string;
+  port?: number;
+}): Promise<ComputeNode> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return readPayload<ComputeNode>(response, "Unable to update compute node");
+}
+
+export async function deleteComputeNode(id: string): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/nodes/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error("Unable to delete compute node");
+  }
+}
+
+export type ServerGatewayDiagnostic = {
+  isRemote: boolean;
+  nodeId: string;
+  nodeName: string;
+  region?: string;
+  nodeOnline: boolean;
+  latencyMs: number;
+  listenPort: number;
+  gatewayListening: boolean;
+  cachedLogLines: number;
+};
+
+export async function getServerGatewayStatus(id: string): Promise<ServerGatewayDiagnostic> {
+  const response = await apiFetch(`${API_BASE}/api/servers/${id}/gateway-status`, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Unable to load gateway status");
+  }
+  return (await response.json()) as ServerGatewayDiagnostic;
+}

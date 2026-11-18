@@ -1,0 +1,88 @@
+{
+  "runtime": {
+    "palworld": "Steam dedicated/runtime layout",
+    "ue4ss": {
+      "name": "UE4SS Palworld",
+      "source": "https://github.com/Okaetsu/RE-UE4SS/releases/tag/experimental-palworld",
+      "asset": "UE4SS-Palworld.zip",
+      "sha256": "5af83c9e8278d9881e223034574a7b9afabeca36939c22308c863e7fd4cbfa98",
+      "installPath": "Pal/Binaries/Win64"
+    }
+  },
+  "mods": [
+    {
+      "id": "pal-schema",
+      "title": "PalSchema (Okaetsu)",
+      "type": "ue4ss",
+      "installPath": "Pal/Binaries/Win64/ue4ss/Mods/PalSchema",
+      "dependencies": ["ue4ss"]
+    },
+    {
+      "id": "mod-config-menu",
+      "title": "Mod Config Menu (UI)",
+      "type": "logicmod+ue4ss",
+      "installPaths": [
+        "Pal/Content/Paks/LogicMods/DekModConfigMenu_P.pak",
+        "Pal/Binaries/Win64/ue4ss/Mods/DekModConfigMenu"
+      ],
+      "dependencies": ["ue4ss"]
+    },
+    {
+      "id": "pal-analyzer",
+      "title": "Pal Analyzer",
+      "type": "logicmod",
+      "installPaths": [
+        "Pal/Content/Paks/LogicMods/PalAnalyzer.pak",
+        "Pal/Content/Paks/LogicMods/PalAnalyzerConfig.json"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "pal-analyzer-cn",
+      "title": "Pal Analyzer CNS XD",
+      "type": "ue4ss-translation",
+      "installPath": "Pal/Binaries/Win64/ue4ss/Mods/PalAnalyzerCN",
+      "dependencies": ["ue4ss", "pal-analyzer"]
+    },
+    {
+      "id": "basic-minimap",
+      "title": "Basic MiniMap",
+      "type": "logicmod",
+      "installPaths": [
+        "Pal/Content/Paks/LogicMods/DekBasicMinimap_P.pak",
+        "Pal/Content/Paks/LogicMods/DekBasicMinimap_P.ucas",
+        "Pal/Content/Paks/LogicMods/DekBasicMinimap_P.utoc",
+        "Pal/Content/Paks/LogicMods/DekBasicMinimap_P.modconfig.json"
+      ],
+      "dependencies": ["mod-config-menu"]
+    },
+    {
+      "id": "map-unlocker-plus",
+      "title": "Map Unlocker Plus",
+      "type": "palschema-blueprint",
+      "installPath": "Pal/Binaries/Win64/ue4ss/Mods/PalSchema/mods/Map_Unlocker",
+      "dependencies": ["ue4ss", "pal-schema"]
+    },
+    {
+      "id": "game-tweaks",
+      "title": "GameTweaks - Palshema Mod",
+      "type": "palschema-blueprint",
+      "installPath": "Pal/Binaries/Win64/ue4ss/Mods/PalSchema/mods/GameTweaks",
+      "dependencies": ["ue4ss", "pal-schema"]
+    },
+    {
+      "id": "faster-breeding",
+      "title": "Faster Breeding - PalSchema",
+      "type": "palschema-blueprint",
+      "installPath": "Pal/Binaries/Win64/ue4ss/Mods/PalSchema/mods/Dek/blueprints/DekFasterBreeding.json",
+      "dependencies": ["ue4ss", "pal-schema"]
+    },
+    {
+      "id": "less-restrictive-building",
+      "title": "Less Restrictive Building",
+      "type": "ue4ss-lua",
+      "installPath": "Pal/Binaries/Win64/ue4ss/Mods/LessRestrictiveBuilding",
+      "dependencies": ["ue4ss"]
+    }
+  ]
+}

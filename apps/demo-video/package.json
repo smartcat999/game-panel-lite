@@ -1,0 +1,39 @@
+{
+  "name": "demo-video",
+  "version": "1.0.0",
+  "description": "GamePanel Lite product demo rendered with Remotion",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/cli": "4.0.518",
+    "@remotion/transitions": "4.0.518",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.518",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.518",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "render:zh": "remotion render GamePanelDemo-ZH ../../apps/web/public/official/gamepanel-demo-zh-CN.mp4 --muted",
+    "render:en": "remotion render GamePanelDemo-EN ../../apps/web/public/official/gamepanel-demo-en.mp4 --muted",
+    "poster:zh": "remotion still GamePanelDemo-ZH ../../apps/web/public/official/gamepanel-demo-zh-CN-poster.png --frame=72",
+    "poster:en": "remotion still GamePanelDemo-EN ../../apps/web/public/official/gamepanel-demo-en-poster.png --frame=72",
+    "gif:zh": "ffmpeg -y -i ../../apps/web/public/official/gamepanel-demo-zh-CN.mp4 -filter_complex '[0:v]fps=8,scale=800:-2:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle' -loop 0 ../../apps/web/public/official/gamepanel-demo-zh-CN.gif",
+    "gif:en": "ffmpeg -y -i ../../apps/web/public/official/gamepanel-demo-en.mp4 -filter_complex '[0:v]fps=8,scale=800:-2:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle' -loop 0 ../../apps/web/public/official/gamepanel-demo-en.gif",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

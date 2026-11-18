@@ -1,0 +1,276 @@
+{
+    "note": "THIS JSON FILE WAS CREATED USING THE `DekModConfigMenu` MOD FOR PALWORLD! DO NOT MANUALLY EDIT THIS FILE UNLESS YOU KNOW WHAT YOU'RE DOING -- USE THE `DekModConfigMenu` MOD INSTEAD <3",
+    "meta": {
+        "game": true,
+        "vers": "3.6",
+        "auth": "DekitaRPG",
+        "desc": "Adds a basic minimap to the game ui.",
+        "link": {
+            "nexus-mod-id": "146",
+            "curse-slug": "blueprint-code-mods/basic-minimap",
+            "donate": "https://www.patreon.com/DekitaRPG"
+        }
+    },
+    "General": {
+        "type": "object",
+        "desc": "General settings for the overlay.",
+        "data": {
+            "Mod Logic Enabled": {
+                "type": "boolean",
+                "desc": "Whether the minimap mod is enabled or not.",
+                "init": true,
+                "live": true
+            },
+            "Minimap Size": {
+                "type": "integer",
+                "desc": "The size of the minimap in pixels.",
+                "opts": {
+                    "min": 1,
+                    "max": 512
+                },
+                "init": 192,
+                "live": 192
+            },
+            "Minimap Visibility": {
+                "type": "integer",
+                "desc": "The opacity of the minimap.",
+                "opts": {
+                    "min": 0,
+                    "max": 100
+                },
+                "init": 69,
+                "live": 69
+            },
+            "Rotate Minimap": {
+                "type": "boolean",
+                "desc": "Whether the minimap should rotate with the direction the player is facing.",
+                "init": true,
+                "live": true
+            },
+            "Rotate With Camera": {
+                "type": "boolean",
+                "desc": "Whether the minimap should follow the players camera (requires rotate minimap to also be enabled).",
+                "init": true,
+                "live": true
+            },
+            "Allow Angle Shift": {
+                "type": "boolean",
+                "desc": "Should the minimap allow angle shift? (requires rotate minimap to also be enabled).",
+                "init": true,
+                "live": true
+            },
+            "Auto Zoom Enabled": {
+                "type": "boolean",
+                "desc": "Whether the minimap camera should auto zoom when the player is indoors.",
+                "init": true,
+                "live": true
+            },
+            "Disable Banner": {
+                "type": "boolean",
+                "desc": "Whether the developer support banner should be hidden.",
+                "init": false,
+                "live": false
+            }
+        }
+    },
+    "Position": {
+        "type": "object",
+        "desc": "Position settings for the overlay.",
+        "data": {
+            "Vertical Pull": {
+                "type": "option",
+                "desc": "The vertical alignment of the minimap.",
+                "opts": [
+                    "top",
+                    "center",
+                    "bottom"
+                ],
+                "init": "top",
+                "live": "top"
+            },
+            "Horizontal Pull": {
+                "type": "option",
+                "desc": "The horizontal alignment of the minimap.",
+                "opts": [
+                    "left",
+                    "center",
+                    "right"
+                ],
+                "init": "center",
+                "live": "center"
+            },
+            "Horizontal Padding": {
+                "type": "integer",
+                "desc": "The padding at the left and right of the minimap in pixels.",
+                "opts": {
+                    "min": 0,
+                    "max": 256,
+                    "step": 1
+                },
+                "init": 64,
+                "live": 64
+            },
+            "Vertical Padding": {
+                "type": "integer",
+                "desc": "The padding at the top and bottom of the minimap in pixels.",
+                "opts": {
+                    "min": 0,
+                    "max": 256,
+                    "step": 1
+                },
+                "init": 64,
+                "live": 64
+            }
+        }
+    },
+    "Auto Fade": {
+        "type": "object",
+        "desc": "Auto fade settings for the overlay.",
+        "data": {
+            "When In Battle": {
+                "type": "boolean",
+                "desc": "Should the minimap be allowed to auto fade in battle?",
+                "init": true,
+                "live": true
+            },
+            "When Targeting Enemy": {
+                "type": "boolean",
+                "desc": "Should the minimap be allowed to auto fade when targetting an enemy?",
+                "init": true,
+                "live": true
+            }
+        }
+    },
+    "Directional Markers": {
+        "type": "object",
+        "desc": "Cardinal marker settings for the overlay.",
+        "data": {
+            "Show Cardinal Dirs": {
+                "type": "boolean",
+                "desc": "Whether the minimap should show cardinal directions (north south east west).",
+                "init": true,
+                "live": false
+            },
+            "Cardinal Dir Size": {
+                "type": "integer",
+                "desc": "The size of the cardinal direction markers.",
+                "opts": {
+                    "min": 12,
+                    "max": 32
+                },
+                "init": 12,
+                "live": 12
+            },
+            "Cardinal Color [R]": {
+                "type": "float",
+                "desc": "The amount of red color in the cardinal direction markers.",
+                "init": 1,
+                "live": 1
+            },
+            "Cardinal Color [G]": {
+                "type": "float",
+                "desc": "The amount of green color in the cardinal direction markers.",
+                "init": 1,
+                "live": 1
+            },
+            "Cardinal Color [B]": {
+                "type": "float",
+                "desc": "The amount of blue color in the cardinal direction markers.",
+                "init": 1,
+                "live": 1
+            },
+            "Cardinal Color [A]": {
+                "type": "float",
+                "desc": "The alpha value for the cardinal direction markers.",
+                "opts": {
+                    "step": 0.1
+                },
+                "init": 1,
+                "live": 1
+            }
+        }
+    },
+    "Player Pin": {
+        "type": "object",
+        "desc": "Player pin settings for the overlay.",
+        "data": {
+            "Show Player Pin": {
+                "type": "boolean",
+                "desc": "Whether the minimap should show the players position pin.",
+                "init": true,
+                "live": true
+            },
+            "Player Pin Size": {
+                "type": "integer",
+                "desc": "The size of the players position pin.",
+                "opts": {
+                    "min": 12,
+                    "max": 64
+                },
+                "init": 24,
+                "live": 24
+            },
+            "Pin Color [R]": {
+                "type": "float",
+                "desc": "The red color value for the player position pin.",
+                "init": 1,
+                "live": 1
+            },
+            "Pin Color [G]": {
+                "type": "float",
+                "desc": "The green color value for the player position pin.",
+                "init": 1,
+                "live": 1
+            },
+            "Pin Color [B]": {
+                "type": "float",
+                "desc": "The blue color value for the player position pin.",
+                "init": 1,
+                "live": 1
+            },
+            "Pin Color [A]": {
+                "type": "float",
+                "desc": "The alpha value for the player position pin.",
+                "opts": {
+                    "step": 0.1
+                },
+                "init": 1,
+                "live": 1
+            }
+        }
+    },
+    "Performance": {
+        "type": "object",
+        "desc": "Performance settings for the overlay.",
+        "data": {
+            "Camera Distance": {
+                "type": "integer",
+                "desc": "The distance of the minimap camera to the player.",
+                "opts": {
+                    "min": 22222,
+                    "max": 42069,
+                    "step": 1
+                },
+                "init": 32000,
+                "live": 32000
+            },
+            "Frames Per Second": {
+                "type": "integer",
+                "desc": "The number of frames per second the overlay will run at.",
+                "opts": {
+                    "min": 5,
+                    "max": 120,
+                    "step": 5
+                },
+                "init": 15,
+                "live": 15
+            },
+            "Capture Every Frame": {
+                "type": "boolean",
+                "desc": "Whether the minimap camera should render all input frames (if false it will only render frames when the camera position is moved).",
+                "init": false,
+                "live": false
+            }
+        }
+    }
+}
