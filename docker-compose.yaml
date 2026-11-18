@@ -1,0 +1,343 @@
+x-no-proxy-env: &no-proxy-env
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  http_proxy: ""
+  https_proxy: ""
+
+services:
+  postgres:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/postgres:16-alpine
+    container_name: gamepanel-lite-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gamepanel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gamepanel}
+      POSTGRES_DB: ${POSTGRES_DB:-gamepanel}
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-gamepanel} -d $${POSTGRES_DB:-gamepanel}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/redis:7-alpine
+    container_name: gamepanel-lite-redis
+    restart: unless-stopped
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/nats:2.10-alpine
+    container_name: gamepanel-lite-nats
+    restart: unless-stopped
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_NATS_PORT:-4222}:4222"
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_NATS_MONITOR_PORT:-8222}:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  apiserver:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/gamepanel-lite-apiserver:${GP_IMAGE_TAG:-v2.0.0}
+    container_name: gamepanel-lite-apiserver
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/apiserver"]
+    environment:
+      <<: *no-proxy-env
+      GP_LOG_LEVEL: info
+      GP_LOG_FORMAT: console
+      GP_SERVICE_NAME: apiserver
+      GP_SERVER_ADDR: 0.0.0.0:8080
+      GP_AUTH_JWT_SECRET: ${GP_AUTH_JWT_SECRET:-dev-secret-change-me}
+      GP_AUTH_TOKEN_TTL: 24h
+      GP_DB_DSN: postgres://${POSTGRES_USER:-gamepanel}:${POSTGRES_PASSWORD:-gamepanel}@postgres:5432/${POSTGRES_DB:-gamepanel}?sslmode=disable
+      GP_CACHE_DRIVER: redis
+      GP_CACHE_ADDR: redis:6379
+      GP_MQ_DRIVER: nats
+      GP_MQ_ADDR: nats://nats:4222
+      GP_MQ_GROUP: gamepanel-controllers
+      GP_BOOTSTRAP_ADMIN: ${GP_BOOTSTRAP_ADMIN:-admin}
+      GP_BOOTSTRAP_EMAIL: ${GP_BOOTSTRAP_EMAIL:-admin@example.com}
+      GP_BOOTSTRAP_PASSWORD: "${GP_BOOTSTRAP_PASSWORD:-P@88w0rd}"
+      GP_AGENT_ADDR: 0.0.0.0:8082
+      GP_AGENT_TOKEN: ${GP_AGENT_TOKEN:-dev-agent-token}
+      GP_AGENT_PER_INSTANCE_PROMETHEUS_METRICS: ${GP_AGENT_PER_INSTANCE_PROMETHEUS_METRICS:-true}
+      GP_NETWORK_PORT_RANGE_MIN: ${GP_NETWORK_PORT_RANGE_MIN:-20000}
+      GP_NETWORK_PORT_RANGE_MAX: ${GP_NETWORK_PORT_RANGE_MAX:-29999}
+      GP_REGISTRY_WORKER_TOKEN: ${GP_REGISTRY_WORKER_TOKEN:-dev-registry-worker-token}
+      GP_REGISTRY_STEAM_WEB_API_KEY: ${GP_REGISTRY_STEAM_WEB_API_KEY:-${STEAM_WEB_API_KEY:-}}
+      GP_REGISTRY_UPSTREAM_PROXY_URL: ${GP_REGISTRY_UPSTREAM_PROXY_URL:-${GP_AGENT_UPSTREAM_PROXY:-}}
+      GP_S3_ENDPOINT: ${GP_S3_ENDPOINT:-http://seaweedfs:8333}
+      GP_S3_PUBLIC_ENDPOINT: ${GP_S3_PUBLIC_ENDPOINT:-}
+      GP_S3_REGION: ${GP_S3_REGION:-us-east-1}
+      GP_S3_BUCKET: ${GP_S3_BUCKET:-gamepanel-backups}
+      GP_S3_ACCESS_KEY: ${GP_S3_ACCESS_KEY:-gamepanel}
+      GP_S3_SECRET_KEY: ${GP_S3_SECRET_KEY:-gamepanel123}
+      GP_S3_USE_PATH_STYLE: "true"
+      GP_S3_PRESIGN_TTL: 15m
+      GP_PROMETHEUS_URL: ${GP_PROMETHEUS_URL:-http://prometheus:9090}
+      GP_ADDON_MIRROR_STEAM_WEB_API_KEY: ${GP_ADDON_MIRROR_STEAM_WEB_API_KEY:-${STEAM_WEB_API_KEY:-}}
+      GP_ADDON_MIRROR_UPSTREAM_PROXY_URL: ${GP_ADDON_MIRROR_UPSTREAM_PROXY_URL:-${GP_AGENT_UPSTREAM_PROXY:-}}
+      GP_ADDON_MIRROR_EXTERNAL_ENDPOINT: ${GP_ADDON_MIRROR_EXTERNAL_ENDPOINT:-}
+      GP_ADDON_MIRROR_IMAGE_HOST_MIRRORS: ${GP_ADDON_MIRROR_IMAGE_HOST_MIRRORS:-}
+      GP_ADDON_MIRROR_ALLOWED_IMAGE_HOSTS: ${GP_ADDON_MIRROR_ALLOWED_IMAGE_HOSTS:-}
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_APISERVER_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/readyz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  controller-manager:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/gamepanel-lite-controller-manager:${GP_IMAGE_TAG:-v2.0.0}
+    container_name: gamepanel-lite-controller-manager
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      apiserver:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/controller-manager"]
+    environment:
+      <<: *no-proxy-env
+      GP_LOG_LEVEL: info
+      GP_LOG_FORMAT: console
+      GP_SERVICE_NAME: controller-manager
+      GP_AUTH_JWT_SECRET: ${GP_AUTH_JWT_SECRET:-dev-secret-change-me}
+      GP_DB_DSN: postgres://${POSTGRES_USER:-gamepanel}:${POSTGRES_PASSWORD:-gamepanel}@postgres:5432/${POSTGRES_DB:-gamepanel}?sslmode=disable
+      GP_CACHE_DRIVER: redis
+      GP_CACHE_ADDR: redis:6379
+      GP_MQ_DRIVER: nats
+      GP_MQ_ADDR: nats://nats:4222
+      GP_MQ_GROUP: gamepanel-controllers
+      GP_CONTROLLER_WORKERS: "4"
+      GP_CONTROLLER_RESYNC_PERIOD: 5m
+      GP_CONTROLLER_NODE_GRACE_DURATION: 40s
+      GP_CONTROLLER_ADDR: 0.0.0.0:8083
+      GP_AGENT_TOKEN: ${GP_AGENT_TOKEN:-dev-agent-token}
+      GP_NETWORK_PORT_RANGE_MIN: ${GP_NETWORK_PORT_RANGE_MIN:-20000}
+      GP_NETWORK_PORT_RANGE_MAX: ${GP_NETWORK_PORT_RANGE_MAX:-29999}
+      GP_REGISTRY_WORKER_TOKEN: ${GP_REGISTRY_WORKER_TOKEN:-dev-registry-worker-token}
+      GP_REGISTRY_STEAM_WEB_API_KEY: ${GP_REGISTRY_STEAM_WEB_API_KEY:-${STEAM_WEB_API_KEY:-}}
+      GP_REGISTRY_UPSTREAM_PROXY_URL: ${GP_REGISTRY_UPSTREAM_PROXY_URL:-${GP_AGENT_UPSTREAM_PROXY:-}}
+      GP_S3_ENDPOINT: ${GP_S3_ENDPOINT:-http://seaweedfs:8333}
+      GP_S3_PUBLIC_ENDPOINT: ${GP_S3_PUBLIC_ENDPOINT:-}
+      GP_S3_REGION: ${GP_S3_REGION:-us-east-1}
+      GP_S3_BUCKET: ${GP_S3_BUCKET:-gamepanel-backups}
+      GP_S3_ACCESS_KEY: ${GP_S3_ACCESS_KEY:-gamepanel}
+      GP_S3_SECRET_KEY: ${GP_S3_SECRET_KEY:-gamepanel123}
+      GP_S3_USE_PATH_STYLE: "true"
+      GP_S3_PRESIGN_TTL: 15m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8083/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  registry-worker:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/gamepanel-lite-registry-worker:${GP_IMAGE_TAG:-v2.0.0}
+    container_name: gamepanel-lite-registry-worker
+    restart: unless-stopped
+    depends_on:
+      apiserver:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/registry-worker"]
+    environment:
+      <<: *no-proxy-env
+      GP_LOG_LEVEL: info
+      GP_LOG_FORMAT: console
+      GP_SERVICE_NAME: registry-worker
+      GP_CLIENT_SERVER_URL: ${GP_REGISTRY_ENDPOINT:-http://apiserver:8080}
+      GP_REGISTRY_ENDPOINT: ${GP_REGISTRY_ENDPOINT:-http://apiserver:8080}
+      GP_REGISTRY_WORKER_TOKEN: ${GP_REGISTRY_WORKER_TOKEN:-dev-registry-worker-token}
+      GP_REGISTRY_WORKER_ADDR: 0.0.0.0:8084
+      GP_REGISTRY_WORKER_WORK_DIR: /var/lib/gamepanel/registry-worker
+      GP_REGISTRY_WORKER_CONCURRENCY: "4"
+      GP_REGISTRY_STEAM_WEB_API_KEY: ${GP_REGISTRY_STEAM_WEB_API_KEY:-${STEAM_WEB_API_KEY:-}}
+      GP_REGISTRY_UPSTREAM_PROXY_URL: ${GP_REGISTRY_UPSTREAM_PROXY_URL:-${GP_AGENT_UPSTREAM_PROXY:-}}
+    volumes:
+      - registry_worker_data:/var/lib/gamepanel/registry-worker
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8084/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  node-agent:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/gamepanel-lite-node-agent:${GP_IMAGE_TAG:-v2.0.0}
+    container_name: gamepanel-lite-node-agent
+    pid: host
+    restart: unless-stopped
+    depends_on:
+      apiserver:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/node-agent"]
+    environment:
+      <<: *no-proxy-env
+      GP_LOG_LEVEL: info
+      GP_LOG_FORMAT: console
+      GP_SERVICE_NAME: node-agent
+      GP_AGENT_NODE_NAME: ${GP_NODE_NAME:-node-local-01}
+      GP_AGENT_REGION: ${GP_AGENT_REGION:-ap-east-1}
+      GP_AGENT_ADDR: 0.0.0.0:8082
+      GP_AGENT_INTERNAL_IP: ${GP_AGENT_INTERNAL_IP:-}
+      GP_AGENT_EXTERNAL_IP: ${GP_AGENT_EXTERNAL_IP:-}
+      GP_AGENT_APISERVER_URL: http://apiserver:8080
+      GP_AGENT_TOKEN: ${GP_AGENT_TOKEN:-dev-agent-token}
+      GP_AGENT_PER_INSTANCE_PROMETHEUS_METRICS: ${GP_AGENT_PER_INSTANCE_PROMETHEUS_METRICS:-true}
+      GP_AGENT_HEARTBEAT_INTERVAL: 10s
+      GP_AGENT_WORK_DIR: ${GP_AGENT_WORK_DIR:-/var/lib/gamepanel/instances}
+      GP_AGENT_SHUTDOWN_TIMEOUT: 5s
+      GP_AGENT_RESERVED_CPU: ${GP_AGENT_RESERVED_CPU:-}
+      GP_AGENT_RESERVED_MEMORY: ${GP_AGENT_RESERVED_MEMORY:-}
+      GP_NETWORK_PORT_RANGE_MIN: ${GP_NETWORK_PORT_RANGE_MIN:-20000}
+      GP_NETWORK_PORT_RANGE_MAX: ${GP_NETWORK_PORT_RANGE_MAX:-29999}
+      # Optional Dragonfly dfdaemon proxy for P2P package distribution, e.g. http://127.0.0.1:65001
+      GP_AGENT_DOWNLOAD_PROXY: ${GP_AGENT_DOWNLOAD_PROXY:-}
+      # Builder-node egress proxy for upstream sources (GitHub / PaperMC / Steam) only
+      GP_AGENT_UPSTREAM_PROXY: ${GP_AGENT_UPSTREAM_PROXY:-}
+      GP_AGENT_CACHE_MAX_BYTES: ${GP_AGENT_CACHE_MAX_BYTES:-0}
+      GP_AGENT_CACHE_MIN_FREE_PERCENT: ${GP_AGENT_CACHE_MIN_FREE_PERCENT:-5}
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_AGENT_PORT:-8082}:8082"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${GP_AGENT_WORK_DIR:-/var/lib/gamepanel/instances}:${GP_AGENT_WORK_DIR:-/var/lib/gamepanel/instances}
+
+  web:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/gamepanel-lite-web:${GP_IMAGE_TAG:-v2.0.0}
+    container_name: gamepanel-lite-web
+    restart: unless-stopped
+    depends_on:
+      apiserver:
+        condition: service_healthy
+    environment:
+      <<: *no-proxy-env
+      NODE_ENV: production
+      GAMEPANEL_APISERVER_URL: http://apiserver:8080
+      GAMEPANEL_NODE_AGENT_URL: http://node-agent:8082
+      GAMEPANEL_S3_URL: http://seaweedfs:8333
+      GP_S3_BUCKET: ${GP_S3_BUCKET:-gamepanel-backups}
+    ports:
+      - "${GP_WEB_BIND_IP:-0.0.0.0}:${GP_WEB_PORT:-3000}:3000"
+
+  # Legacy object storage (opt-in via --profile legacy-minio); default stack uses seaweedfs.
+  minio:
+    profiles: ["legacy-minio"]
+    image: minio/minio:latest
+    container_name: gamepanel-lite-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-gamepanel}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-gamepanel123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Default object storage: SeaweedFS (Apache-2.0) single-node dev stack.
+  # Production: deploy a dedicated 3-node cluster, see deploy/seaweedfs/README.md.
+  seaweedfs:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/seaweedfs:${SEAWEEDFS_VERSION:-4.53}
+    container_name: gamepanel-lite-seaweedfs
+    restart: unless-stopped
+    command:
+      - "server"
+      - "-dir=/data"
+      - "-ip=seaweedfs"
+      - "-ip.bind=0.0.0.0"
+      - "-master.volumeSizeLimitMB=1024"
+      - "-volume.max=0"
+      - "-s3"
+      - "-s3.port=8333"
+      - "-s3.config=/etc/seaweedfs/s3.json"
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_SEAWEEDFS_S3_PORT:-8333}:8333"
+      - "127.0.0.1:${GP_SEAWEEDFS_MASTER_PORT:-9333}:9333"
+    volumes:
+      - seaweedfs_data:/data
+      - ./deploy/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9333/cluster/status >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # SeaweedFS built-in admin console (bucket / volume / cluster management).
+  seaweedfs-admin:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/seaweedfs:${SEAWEEDFS_VERSION:-4.53}
+    container_name: gamepanel-lite-seaweedfs-admin
+    restart: unless-stopped
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    command:
+      - "admin"
+      - "-master=seaweedfs:9333"
+      - "-port=23646"
+      - "-ip=0.0.0.0"
+      - "-dataDir=/data"
+      - "-adminUser=${SEAWEEDFS_ADMIN_USER:-admin}"
+      - "-adminPassword=${SEAWEEDFS_ADMIN_PASSWORD:-gamepanel123}"
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_SEAWEEDFS_ADMIN_PORT:-23646}:23646"
+    volumes:
+      - seaweedfs_admin_data:/data
+
+  prometheus:
+    image: ${GP_IMAGE_REGISTRY:-registry.cn-hangzhou.aliyuncs.com/gamepanel-lite}/prometheus:v3.13.3
+    container_name: gamepanel-lite-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    ports:
+      - "${GP_BIND_IP:-127.0.0.1}:${GP_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus_data:/prometheus
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  seaweedfs_data:
+  seaweedfs_admin_data:
+  prometheus_data:
+  registry_worker_data:

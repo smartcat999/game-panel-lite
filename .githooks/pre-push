@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Opt-in local gate (install with `make install-hooks`). Runs hack/pre-pr.sh before pushing
+# feature branches. Skip in an emergency with `git push --no-verify`.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "${branch}" == "main" ]]; then
+  exit 0
+fi
+
+exec bash "$(git rev-parse --show-toplevel)/hack/pre-pr.sh"

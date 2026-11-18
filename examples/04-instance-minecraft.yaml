@@ -1,0 +1,53 @@
+apiVersion: core.gamepanel.io/v1
+kind: Instance
+metadata:
+  name: mc-survival-01
+  tenant: studio-alpha
+  labels:
+    game: minecraft
+    mode: survival
+    env: production
+spec:
+  runtimeClassName: docker
+  state: Running
+  nodeSelector:
+    topology.gamepanel.io/region: ap-east-1
+  image: itzg/minecraft-server:java21
+  workingDir: /data
+  resources:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+      storage: 20Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+      storage: 20Gi
+  ports:
+    - name: game
+      protocol: TCP
+      targetPort: 25565
+      publishedPort: 0
+    - name: rcon
+      protocol: TCP
+      targetPort: 25575
+      publishedPort: 0
+  env:
+    EULA: "TRUE"
+    TYPE: PAPER
+    VERSION: "1.21.1"
+    MEMORY: 4G
+  files:
+    - path: eula.txt
+      content: |
+        eula=true
+    - path: server.properties
+      content: |
+        motd=Studio Alpha Survival Server
+        gamemode=survival
+        difficulty=normal
+        max-players=50
+        online-mode=true
+        server-port=25565
+        enable-rcon=true
+        rcon.port=25575

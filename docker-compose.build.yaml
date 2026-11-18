@@ -1,0 +1,25 @@
+services:
+  apiserver:
+    build:
+      context: .
+      dockerfile: build/apiserver/Dockerfile
+
+  controller-manager:
+    build:
+      context: .
+      dockerfile: build/controller-manager/Dockerfile
+
+  registry-worker:
+    build:
+      context: .
+      dockerfile: build/registry-worker/Dockerfile
+
+  node-agent:
+    build:
+      context: .
+      dockerfile: build/node-agent/Dockerfile
+
+  web:
+    build:
+      context: ./web
+      dockerfile: ../build/web/Dockerfile

@@ -1,0 +1,18 @@
+apiVersion: core.gamepanel.io/v1
+kind: Tenant
+metadata:
+  name: studio-alpha
+  labels:
+    env: production
+    tier: studio
+spec:
+  displayName: Studio Alpha Gaming
+  type: Organization
+  owner: admin
+  quota:
+    cpu: "16"
+    memory: 32Gi
+    storage: 200Gi
+    instances: "20"
+    backups: "10"
+    backupStorage: 100Gi

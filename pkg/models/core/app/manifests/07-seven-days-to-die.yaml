@@ -1,0 +1,761 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: '0001-01-01T00:00:00Z'
+  generation: 0
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: survival
+  name: seven-days-to-die
+  resourceVersion: ''
+  uid: ''
+builtIn: true
+serverBinding:
+  repository: seven-days-server
+  package: seven-days-server
+  targetPath: .
+capabilities:
+- console
+- versions
+- files
+- backups
+category: survival
+configPresets:
+- id: rwg-standard
+  name: 随机地图冒险者血月（大型地图 · 官方标准）
+  description: 8K 随机生成世界，官方推荐冒险者沙盒预设，适合 4–8 人联机开荒
+  values:
+    serverName: 7 Days to Die 血月生存服
+    gameWorld: RWG
+    worldGenSeed: GamePanel7DTD
+    worldGenSize: '8192'
+    sandboxPreset: AAAJABJARFBNC
+- id: navezgane-coop
+  name: 纳维戈恩轻松开荒（拾荒者难度 · 强化领地防护）
+  description: 经典官方手工大地图，拾荒者友好伤害倍率与高额领地石耐久保护，适合好友小队探索
+  values:
+    serverName: 7 Days to Die 合作养老服
+    gameWorld: Navezgane
+    sandboxPreset: AAAKABKARDBNB
+    landClaimOnlineDurabilityModifier: '16'
+    landClaimOfflineDurabilityModifier: '32'
+- id: hardcore-horde
+  name: 疯狂尸潮挑战（疯狂难度 · 96只同屏上限）
+  description: V 3.4 疯狂挑战沙盒预设 + 高密度全图丧尸上限，考验钢铁防线与陷阱塔防
+  values:
+    serverName: 7 Days to Die 极限尸潮服
+    gameWorld: RWG
+    worldGenSeed: HordeFortress
+    worldGenSize: '8192'
+    maxSpawnedZombies: '96'
+    sandboxPreset: AAADABDARLBNF
+- id: legacy-survival
+  name: 经典生存规则（怀旧预设 · 中型预生成地图）
+  description: 启用官方 Legacy Survival 沙盒代码与预生成 6K 地图，秒开服免等待生成地形
+  values:
+    serverName: 7 Days to Die 经典生存服
+    gameWorld: Pregen06k01
+    sandboxPreset: AAHIAJDBACAPAAUAAMLBREBUEBSCGCEGACBNCBPABOABVACDACVGCGACBACXBDDGDJIDNJDOJDSAELAEABEBGCNDFEDFIDFAFEOAFKAEPAEQA
+configSchema:
+- name: serverName
+  label: 服务器名称
+  type: text
+  required: true
+  default: 7 Days to Die 血月生存服
+  group: 基础设置
+  help: 大厅列表显示的名称
+  fileTarget: serverconfig.xml
+- name: serverDescription
+  label: 服务器描述
+  type: text
+  default: Powered by GamePanel Lite
+  group: 基础设置
+  help: 在游戏服务器浏览器详情面板显示的简介
+  fileTarget: serverconfig.xml
+- name: worldName
+  label: 存档名称
+  type: text
+  required: true
+  default: Friends
+  group: 基础设置
+  help: 世界存档目录名称（仅限英文字母、数字、下划线或连字符）
+  fileTarget: serverconfig.xml
+- name: serverPassword
+  label: 服务器密码
+  type: password
+  default: ''
+  group: 基础设置
+  help: 留空则公开免密进入
+  fileTarget: serverconfig.xml
+- name: maxPlayers
+  label: 最大玩家数
+  type: number
+  required: true
+  default: '8'
+  min: 1
+  max: 64
+  step: 1
+  group: 基础设置
+  help: 同时在线人数上限 (1–64)
+  fileTarget: serverconfig.xml
+- name: gameWorld
+  label: 地图模式
+  type: select
+  default: Navezgane
+  group: 基础设置
+  help: 首次开服推荐 Navezgane 或 Pregen 预生成地图秒启动；选择 RWG 首次启动需数分钟生成地形
+  fileTarget: serverconfig.xml
+  options:
+  - value: Navezgane
+    label: 纳维戈恩
+  - value: Pregen06k01
+    label: 预生成 6K · 01
+  - value: Pregen06k02
+    label: 预生成 6K · 02
+  - value: Pregen08k01
+    label: 预生成 8K · 01
+  - value: Pregen08k02
+    label: 预生成 8K · 02
+  - value: RWG
+    label: 随机生成世界
+- name: worldGenSeed
+  label: 随机地图种子
+  type: text
+  default: GamePanel7DTD
+  group: 基础设置
+  help: 决定随机地图地形布局（RWG 模式下生效）
+  fileTarget: serverconfig.xml
+- name: worldGenSize
+  label: 随机地图大小
+  type: select
+  default: '6144'
+  group: 基础设置
+  help: 8K 及以上建议使用 8GB+ 内存
+  fileTarget: serverconfig.xml
+  options:
+  - value: '6144'
+    label: 中型地图（6144）
+  - value: '8192'
+    label: 大型地图（8192）
+  - value: '10240'
+    label: 巨型地图（10240）
+- name: sandboxPreset
+  label: 难度与沙盒预设
+  type: select
+  default: AAAJABJARFBNC
+  group: 基础设置
+  help: 内置七日杀 V 3.4 官方沙盒预设代码；如需精细自定义血月/倍率，请选择「自定义沙盒代码」并在下方粘贴客户端复制的代码
+  fileTarget: serverconfig.xml
+  options:
+  - value: AAAKABKARDBNB
+    label: 拾荒者（轻松休闲）
+  - value: AAAJABJARFBNC
+    label: 冒险者（官方默认）
+  - value: NOMAD
+    label: 游牧民（原版标准基准）
+  - value: AAAGABGARJ
+    label: 战士（进阶挑战）
+  - value: AAAEABEARKBNE
+    label: 求生专家（高压生存）
+  - value: AAADABDARLBNF
+    label: 疯狂挑战（极限尸潮）
+  - value: ABEABTBGBBBWADFN
+    label: 准创造模式（自由建造）
+  - value: AAHIAJDBACAPAAUAAMLBREBUEBSCGCEGACBNCBPABOABVACDACVGCGACBACXBDDGDJIDNJDOJDSAELAEABEBGCNDFEDFIDFAFEOAFKAEPAEQA
+    label: 经典生存（怀旧规则）
+  - value: CUSTOM
+    label: 自定义沙盒代码（使用下方自定义代码）
+- name: sandboxCode
+  label: 自定义沙盒代码
+  type: text
+  default: AAAJABJARFBNC
+  group: 基础设置
+  help: 当上方选择「自定义沙盒代码」时生效；可在七日杀 V 3.4 客户端「新游戏 -> 沙盒选项 -> 复制代码」生成后粘贴至此
+  fileTarget: serverconfig.xml
+- name: serverVisibility
+  label: 可见性
+  type: select
+  default: '2'
+  group: 基础设置
+  help: 好友可见需要一名玩家先通过 IP 加入；不列出仍可通过地址连接
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 不列出
+  - value: '1'
+    label: 仅好友可见
+  - value: '2'
+    label: 公开可见
+- name: playerKillingMode
+  label: 玩家伤害模式
+  type: select
+  default: '0'
+  group: 基础设置
+  help: 控制玩家之间的友伤与 PVP 规则
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 关闭玩家伤害
+  - value: '1'
+    label: 仅伤害盟友
+  - value: '2'
+    label: 仅伤害非盟友
+  - value: '3'
+    label: 伤害所有玩家
+- name: region
+  label: 服务器地区
+  type: select
+  default: Asia
+  group: 基础设置
+  help: 社区大厅检索区域
+  fileTarget: serverconfig.xml
+  options:
+  - value: Asia
+    label: 亚洲
+  - value: NorthAmericaEast
+    label: 北美东部
+  - value: NorthAmericaWest
+    label: 北美西部
+  - value: Europe
+    label: 欧洲
+  - value: Oceania
+    label: 大洋洲
+- name: language
+  label: 服务器语言
+  type: text
+  default: Chinese
+  group: 基础设置
+  help: 列表检索用英文语言名，如 Chinese / English
+  fileTarget: serverconfig.xml
+- name: eacEnabled
+  label: 启用 EAC 反作弊
+  type: boolean
+  default: 'true'
+  group: 基础设置
+  help: 开启 Easy Anti-Cheat 保护（使用无签名的服务端 Mod 时建议关闭）
+  fileTarget: serverconfig.xml
+- name: serverAllowCrossplay
+  label: 允许跨平台联机
+  type: boolean
+  default: 'false'
+  group: 基础设置
+  help: 开启后允许主机与 PC 跨平台检索加入（需保持最大人数不超过 8 人且开启 EAC）
+  fileTarget: serverconfig.xml
+- name: maxSpawnedZombies
+  label: 全图丧尸生成上限
+  type: number
+  default: '64'
+  min: 0
+  max: 256
+  step: 1
+  group: 性能网格
+  help: 血月、沉睡僵尸等场景会应用额外系数
+  fileTarget: serverconfig.xml
+- name: maxSpawnedAnimals
+  label: 全图动物生成上限
+  type: number
+  default: '50'
+  min: 0
+  max: 200
+  step: 1
+  group: 性能网格
+  help: 控制野生动物最大同屏刷新数
+  fileTarget: serverconfig.xml
+- name: serverMaxAllowedViewDistance
+  label: 最大可视距离
+  type: number
+  default: '12'
+  min: 6
+  max: 12
+  step: 1
+  group: 性能网格
+  help: 允许客户端设置的最大区块视距 (6–12)
+  fileTarget: serverconfig.xml
+- name: serverMaxWorldTransferSpeedKiBs
+  label: 地图传输速率上限
+  type: number
+  default: '512'
+  min: 128
+  max: 1300
+  step: 64
+  group: 性能网格
+  help: 仅首次加入下载地图时生效，实际最高约 1300 KiB/s
+  fileTarget: serverconfig.xml
+- name: maxQueuedMeshLayers
+  label: 网格排队层数
+  type: number
+  default: '1000'
+  min: 100
+  max: 5000
+  step: 100
+  group: 性能网格
+  help: 降低可节省内存，但可能延长区块生成
+  fileTarget: serverconfig.xml
+- name: dynamicMeshEnabled
+  label: 启用动态网格
+  type: boolean
+  default: 'true'
+  group: 性能网格
+  help: 开启远景建筑动态网格渲染
+  fileTarget: serverconfig.xml
+- name: dynamicMeshLandClaimOnly
+  label: 动态网格仅限领地石区域
+  type: boolean
+  default: 'true'
+  group: 性能网格
+  help: 仅在玩家领地范围内生成动态网格以节省内存
+  fileTarget: serverconfig.xml
+- name: dynamicMeshLandClaimBuffer
+  label: 领地动态网格缓冲半径（区块）
+  type: number
+  default: '3'
+  min: 0
+  max: 10
+  step: 1
+  group: 性能网格
+  fileTarget: serverconfig.xml
+- name: dynamicMeshMaxItemCache
+  label: 同时处理动态网格数
+  type: number
+  default: '3'
+  min: 1
+  max: 16
+  step: 1
+  group: 性能网格
+  help: 提高会增加内存占用
+  fileTarget: serverconfig.xml
+- name: landClaimCount
+  label: 每人领地石上限
+  type: number
+  default: '5'
+  min: 0
+  max: 20
+  step: 1
+  group: 领地联机
+  fileTarget: serverconfig.xml
+- name: landClaimSize
+  label: 领地所有权范围（物块）
+  type: number
+  default: '41'
+  min: 1
+  max: 101
+  step: 2
+  group: 领地联机
+  fileTarget: serverconfig.xml
+- name: landClaimDeadZone
+  label: 领地死区最小间距（物块）
+  type: number
+  default: '30'
+  min: 0
+  max: 100
+  step: 5
+  group: 领地联机
+  help: 好友之间不受此间距限制
+  fileTarget: serverconfig.xml
+- name: landClaimExpiryTime
+  label: 领地所有权离线期限（天）
+  type: number
+  default: '7'
+  min: 0
+  max: 90
+  step: 1
+  group: 领地联机
+  fileTarget: serverconfig.xml
+- name: landClaimDecayMode
+  label: 领地所有权衰减模式
+  type: select
+  default: '0'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 缓慢衰减（线性）
+  - value: '1'
+    label: 快速衰减（指数）
+  - value: '2'
+    label: 到期前完全保护不衰减
+- name: landClaimOnlineDurabilityModifier
+  label: 在线领地建筑耐久倍率
+  type: select
+  default: '4'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 无限（免疫破坏）
+  - value: '1'
+    label: 1 倍
+  - value: '2'
+    label: 2 倍
+  - value: '4'
+    label: 4 倍
+  - value: '8'
+    label: 8 倍
+  - value: '16'
+    label: 16 倍
+  - value: '32'
+    label: 32 倍
+  - value: '64'
+    label: 64 倍
+  - value: '128'
+    label: 128 倍
+  - value: '256'
+    label: 256 倍
+- name: landClaimOfflineDurabilityModifier
+  label: 离线领地建筑耐久倍率
+  type: select
+  default: '4'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 无限（免疫破坏）
+  - value: '1'
+    label: 1 倍
+  - value: '2'
+    label: 2 倍
+  - value: '4'
+    label: 4 倍
+  - value: '8'
+    label: 8 倍
+  - value: '16'
+    label: 16 倍
+  - value: '32'
+    label: 32 倍
+  - value: '64'
+    label: 64 倍
+  - value: '128'
+    label: 128 倍
+  - value: '256'
+    label: 256 倍
+- name: landClaimOfflineDelay
+  label: 领地离线保护延迟（分钟）
+  type: number
+  default: '0'
+  min: 0
+  max: 120
+  step: 5
+  group: 领地联机
+  fileTarget: serverconfig.xml
+- name: bedrollDeadZoneSize
+  label: 睡袋死区范围
+  type: select
+  default: '15'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 关闭
+  - value: '5'
+    label: 5 物块
+  - value: '15'
+    label: 15 物块
+  - value: '30'
+    label: 30 物块
+- name: bedrollExpiryTime
+  label: 睡袋保留期限
+  type: select
+  default: '45'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '3'
+    label: 3 天
+  - value: '7'
+    label: 7 天
+  - value: '15'
+    label: 15 天
+  - value: '30'
+    label: 30 天
+  - value: '45'
+    label: 45 天
+  - value: '60'
+    label: 60 天
+- name: allowSpawnNearFriend
+  label: 允许新手出生在好友附近
+  type: select
+  default: '2'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 禁用
+  - value: '1'
+    label: 始终允许
+  - value: '2'
+    label: 仅限森林生态群落内好友
+- name: partySharedKillRange
+  label: 队伍共享击杀经验范围
+  type: select
+  default: '100'
+  group: 领地联机
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 关闭
+  - value: '100'
+    label: 100 米
+  - value: '500'
+    label: 500 米
+  - value: '1000'
+    label: 1000 米
+  - value: '5000'
+    label: 5000 米
+  - value: '10000'
+    label: 10000 米
+- name: playerSafeZoneLevel
+  label: 新手安全区保护等级上限
+  type: number
+  default: '5'
+  min: 0
+  max: 60
+  step: 1
+  group: 世界规则
+  help: 低于或等于该等级的新玩家出生点周围不刷丧尸
+  fileTarget: serverconfig.xml
+- name: playerSafeZoneHours
+  label: 新手安全区持续时间（游戏小时）
+  type: number
+  default: '5'
+  min: 0
+  max: 72
+  step: 1
+  group: 世界规则
+  fileTarget: serverconfig.xml
+- name: maxChunkAge
+  label: 未保护区块重置计时器
+  type: select
+  default: '-1'
+  group: 世界规则
+  help: 按游戏内天数重置未访问且未受保护的区块
+  fileTarget: serverconfig.xml
+  options:
+  - value: '-1'
+    label: 关闭重置
+  - value: '10'
+    label: 10 天
+  - value: '20'
+    label: 20 天
+  - value: '30'
+    label: 30 天
+  - value: '50'
+    label: 50 天
+  - value: '75'
+    label: 75 天
+  - value: '100'
+    label: 100 天
+- name: saveDataLimit
+  label: 单存档空间上限
+  type: number
+  default: '-1'
+  min: -1
+  max: 102400
+  step: 512
+  group: 世界规则
+  help: 设为 -1 表示不限制；达到上限时会自动重置最久未访问区块释放空间
+  fileTarget: serverconfig.xml
+- name: cameraRestrictionMode
+  label: 限制视角镜头模式
+  type: select
+  default: '0'
+  group: 世界规则
+  fileTarget: serverconfig.xml
+  options:
+  - value: '0'
+    label: 自由切换
+  - value: '1'
+    label: 锁定第一人称
+  - value: '2'
+    label: 锁定第三人称
+- name: buildCreate
+  label: 开启创造作弊模式
+  type: boolean
+  default: 'false'
+  group: 世界规则
+  fileTarget: serverconfig.xml
+- name: persistentPlayerProfiles
+  label: 强制固定玩家档案外观
+  type: boolean
+  default: 'false'
+  group: 世界规则
+  fileTarget: serverconfig.xml
+coverImage: /landing/games/seven-days-to-die.jpg
+displayName: 七日杀 7 Days to Die
+env:
+  START_MODE: '1'
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+preStartCommand: |
+  chmod +x ./7DaysToDieServer.x86_64 ./startserver.sh 2>/dev/null || true
+  mkdir -p /data/userdata/Saves
+startupCommand: export LD_LIBRARY_PATH=.; exec ./7DaysToDieServer.x86_64 -logfile /dev/stdout -quit -batchmode -nographics -dedicated -configfile=serverconfig.xml
+preStopCommand: |
+  7dtd-send-to-console saveworld >/dev/null 2>&1 || true
+  7dtd-send-to-console shutdown >/dev/null 2>&1 || true
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[7]DaysToDieServer' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+ports:
+- name: game-tcp
+  protocol: TCP
+  targetPort: 26900
+- name: game-udp
+  protocol: UDP
+  targetPort: 26900
+published: true
+recommendedPlan: pro
+recommendedVersion: latest
+resources:
+  cpu: '4'
+  memory: 8Gi
+  storage: 40Gi
+summary: 支持 Navezgane / 预生成 / RWG 随机地图、V 3.4 官方沙盒预设与自定义 SandboxCode、领地石保护及本地控制台管理。
+tagline: 末日塔防建造 · 血月尸潮与 RWG 随机地图
+versions:
+- latest
+consoleDelivery: 7dtd-send-to-console
+consoleActions:
+- id: 7d-save
+  title: 立即保存世界
+  group: 世界时间
+  command: saveworld
+  starred: true
+- id: 7d-settime
+  title: 修改世界天数与时间
+  group: 世界时间
+  command: settime {{day}} {{hour}} 0
+  starred: true
+  params:
+  - name: day
+    label: 第几天
+    type: number
+    defaultValue: '7'
+  - name: hour
+    label: 小时(0-23)
+    type: number
+    defaultValue: '8'
+- id: 7d-say
+  title: 全服公告广播
+  group: 玩家广播
+  command: say "{{msg}}"
+  starred: true
+  params:
+  - name: msg
+    label: 广播内容
+    type: text
+    defaultValue: 血月即将降临，请返回防御据点
+- id: 7d-kick
+  title: 踢出玩家
+  group: 玩家广播
+  command: kick "{{player}}"
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名或实体 ID
+    type: text
+storagePolicy:
+  backupSubtree: userdata
+  anchorFiles:
+  - Saves
+  replaceOnRestore: true
+  backupRequiresStop: true
+  preBackupCommand: saveworld
+  regeneratePaths:
+  - userdata/Saves
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_count
+  probeCommand: 7dtd-send-to-console listplayers
+  pattern: '^\d+\.\s*id=(\d+),\s*([^,]+)'
+  itemPattern: '^\d+\.\s*id=(\d+),\s*([^,]+)'
+  maxConfigKey: maxPlayers
+  bindParam: player
+  quickActionIds:
+  - 7d-kick
+- id: world_day
+  label: 生存天数
+  unit: 天
+  source: exec
+  mode: regex_value
+  probeCommand: 7dtd-send-to-console gettime
+  pattern: 'Day\s+(\d+),'
+fileTemplates:
+- path: serverconfig.xml
+  content: |
+    <?xml version="1.0"?>
+    <ServerSettings>
+      <property name="ServerName" value="{{serverName}}"/>
+      <property name="ServerDescription" value="{{serverDescription}}"/>
+      <property name="ServerWebsiteURL" value=""/>
+      <property name="ServerPassword" value="{{serverPassword}}"/>
+      <property name="ServerLoginConfirmationText" value=""/>
+      <property name="Region" value="{{region}}"/>
+      <property name="Language" value="{{language}}"/>
+      <property name="ServerPort" value="26900"/>
+      <property name="ServerVisibility" value="{{serverVisibility}}"/>
+      <property name="ServerDisabledNetworkProtocols" value="SteamNetworking"/>
+      <property name="ServerMaxWorldTransferSpeedKiBs" value="{{serverMaxWorldTransferSpeedKiBs}}"/>
+      <property name="ServerMaxPlayerCount" value="{{maxPlayers}}"/>
+      <property name="ServerReservedSlots" value="0"/>
+      <property name="ServerReservedSlotsPermission" value="100"/>
+      <property name="ServerAdminSlots" value="0"/>
+      <property name="ServerAdminSlotsPermission" value="0"/>
+      <property name="WebDashboardEnabled" value="false"/>
+      <property name="WebDashboardPort" value="8080"/>
+      <property name="WebDashboardUrl" value=""/>
+      <property name="EnableMapRendering" value="false"/>
+      <property name="TelnetEnabled" value="true"/>
+      <property name="TelnetPort" value="8081"/>
+      <property name="TelnetPassword" value=""/>
+      <property name="TelnetFailedLoginLimit" value="10"/>
+      <property name="TelnetFailedLoginsBlocktime" value="10"/>
+      <property name="TerminalWindowEnabled" value="false"/>
+      <property name="AdminFileName" value="serveradmin.xml"/>
+      <property name="UserDataFolder" value="/data/userdata"/>
+      <property name="ServerAllowCrossplay" value="{{serverAllowCrossplay}}"/>
+      <property name="EACEnabled" value="{{eacEnabled}}"/>
+      <property name="IgnoreEOSSanctions" value="false"/>
+      <property name="HideCommandExecutionLog" value="0"/>
+      <property name="MaxUncoveredMapChunksPerPlayer" value="131072"/>
+      <property name="PersistentPlayerProfiles" value="{{persistentPlayerProfiles}}"/>
+      <property name="MaxChunkAge" value="{{maxChunkAge}}"/>
+      <property name="SaveDataLimit" value="{{saveDataLimit}}"/>
+      <property name="GameWorld" value="{{gameWorld}}"/>
+      <property name="WorldGenSeed" value="{{worldGenSeed}}"/>
+      <property name="WorldGenSize" value="{{worldGenSize}}"/>
+      <property name="GameName" value="{{worldName}}"/>
+      <property name="GameMode" value="GameModeSurvival"/>
+      <property name="PlayerSafeZoneLevel" value="{{playerSafeZoneLevel}}"/>
+      <property name="PlayerSafeZoneHours" value="{{playerSafeZoneHours}}"/>
+      <property name="BuildCreate" value="{{buildCreate}}"/>
+      <property name="BedrollDeadZoneSize" value="{{bedrollDeadZoneSize}}"/>
+      <property name="BedrollExpiryTime" value="{{bedrollExpiryTime}}"/>
+      <property name="AllowSpawnNearFriend" value="{{allowSpawnNearFriend}}"/>
+      <property name="CameraRestrictionMode" value="{{cameraRestrictionMode}}"/>
+      <property name="MaxSpawnedZombies" value="{{maxSpawnedZombies}}"/>
+      <property name="MaxSpawnedAnimals" value="{{maxSpawnedAnimals}}"/>
+      <property name="ServerMaxAllowedViewDistance" value="{{serverMaxAllowedViewDistance}}"/>
+      <property name="MaxQueuedMeshLayers" value="{{maxQueuedMeshLayers}}"/>
+      <property name="PartySharedKillRange" value="{{partySharedKillRange}}"/>
+      <property name="PlayerKillingMode" value="{{playerKillingMode}}"/>
+      <property name="LandClaimCount" value="{{landClaimCount}}"/>
+      <property name="LandClaimSize" value="{{landClaimSize}}"/>
+      <property name="LandClaimDeadZone" value="{{landClaimDeadZone}}"/>
+      <property name="LandClaimExpiryTime" value="{{landClaimExpiryTime}}"/>
+      <property name="LandClaimDecayMode" value="{{landClaimDecayMode}}"/>
+      <property name="LandClaimOnlineDurabilityModifier" value="{{landClaimOnlineDurabilityModifier}}"/>
+      <property name="LandClaimOfflineDurabilityModifier" value="{{landClaimOfflineDurabilityModifier}}"/>
+      <property name="LandClaimOfflineDelay" value="{{landClaimOfflineDelay}}"/>
+      <property name="DynamicMeshEnabled" value="{{dynamicMeshEnabled}}"/>
+      <property name="DynamicMeshLandClaimOnly" value="{{dynamicMeshLandClaimOnly}}"/>
+      <property name="DynamicMeshLandClaimBuffer" value="{{dynamicMeshLandClaimBuffer}}"/>
+      <property name="DynamicMeshMaxItemCache" value="{{dynamicMeshMaxItemCache}}"/>
+      <property name="TwitchServerPermission" value="90"/>
+      <property name="TwitchBloodMoonAllowed" value="false"/>
+      <property name="SandboxCode" value="{{ if eq (index .Values "sandboxPreset") "CUSTOM" }}{{sandboxCode}}{{ else if eq (index .Values "sandboxPreset") "NOMAD" }}{{ else }}{{sandboxPreset}}{{ end }}"/>
+    </ServerSettings>

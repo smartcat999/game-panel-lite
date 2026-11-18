@@ -1,0 +1,37 @@
+apiVersion: iam.gamepanel.io/v1
+kind: TenantRole
+metadata:
+  name: game-operator
+  tenant: studio-alpha
+  labels:
+    role: operator
+spec:
+  description: Grants full operational access to game instances, logs, and exec within the tenant
+  rules:
+    - apiGroups:
+        - core.gamepanel.io
+      resources:
+        - instances
+        - instances/state
+        - instances/log
+        - instances/exec
+      verbs:
+        - get
+        - list
+        - watch
+        - create
+        - update
+        - patch
+        - delete
+---
+apiVersion: iam.gamepanel.io/v1
+kind: TenantRoleBinding
+metadata:
+  name: studio-alpha-operators
+  tenant: studio-alpha
+spec:
+  roleRef:
+    name: game-operator
+  subjects:
+    - kind: User
+      name: admin
