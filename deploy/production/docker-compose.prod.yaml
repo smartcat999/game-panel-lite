@@ -1,0 +1,96 @@
+# Production overlay for docker-compose.yaml.
+# Validate resolved config before rollout:
+#   docker compose -f docker-compose.yaml -f deploy/production/docker-compose.prod.yaml config >/dev/null
+# Usage:
+#   docker compose -f docker-compose.yaml -f deploy/production/docker-compose.prod.yaml up -d --no-build
+
+x-prod-common-env: &prod-common-env
+  GP_LOG_FORMAT: json
+  GP_LOG_LEVEL: ${GP_LOG_LEVEL:-info}
+
+x-prod-s3-env: &prod-s3-env
+  GP_S3_ENDPOINT: ${GP_S3_ENDPOINT:?GP_S3_ENDPOINT must point to the production S3/SeaweedFS TLS or private endpoint}
+  GP_S3_PUBLIC_ENDPOINT: ${GP_S3_PUBLIC_ENDPOINT:?GP_S3_PUBLIC_ENDPOINT must point to the client-reachable S3 endpoint}
+  GP_S3_REGION: ${GP_S3_REGION:-us-east-1}
+  GP_S3_BUCKET: ${GP_S3_BUCKET:-gamepanel-backups}
+  GP_S3_ACCESS_KEY: ${GP_S3_ACCESS_KEY:?GP_S3_ACCESS_KEY is required}
+  GP_S3_SECRET_KEY: ${GP_S3_SECRET_KEY:?GP_S3_SECRET_KEY is required}
+
+services:
+  postgres:
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-gamepanel}
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  nats:
+    ports: !reset []
+
+  seaweedfs:
+    profiles: ["dev-only"]
+    ports: !reset []
+
+  seaweedfs-admin:
+    profiles: ["dev-only"]
+    ports: !reset []
+
+  minio:
+    profiles: !override ["dev-only"]
+    ports: !reset []
+
+  prometheus:
+    ports: !reset []
+
+  apiserver:
+    build: !reset null
+    image: ${GP_IMAGE_REGISTRY:-ghcr.io/smartcat999}/gamepanel-apiserver:${GP_IMAGE_TAG:?GP_IMAGE_TAG must be pinned to an immutable release tag or digest}
+    environment:
+      <<: [*prod-common-env, *prod-s3-env]
+      GP_AUTH_JWT_SECRET: ${GP_AUTH_JWT_SECRET:?GP_AUTH_JWT_SECRET is required}
+      GP_DB_DSN: postgres://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${GP_DB_HOST:-postgres}:${GP_DB_PORT:-5432}/${POSTGRES_DB:-gamepanel}?sslmode=${GP_DB_SSLMODE:-require}
+      GP_BOOTSTRAP_ADMIN: ${GP_BOOTSTRAP_ADMIN:-admin}
+      GP_BOOTSTRAP_EMAIL: ${GP_BOOTSTRAP_EMAIL:?GP_BOOTSTRAP_EMAIL is required}
+      GP_BOOTSTRAP_PASSWORD: ${GP_BOOTSTRAP_PASSWORD:?GP_BOOTSTRAP_PASSWORD is required}
+      GP_AGENT_TOKEN: ${GP_AGENT_TOKEN:?GP_AGENT_TOKEN is required}
+      GP_REGISTRY_WORKER_TOKEN: ${GP_REGISTRY_WORKER_TOKEN:?GP_REGISTRY_WORKER_TOKEN is required}
+    ports: !reset
+      - "127.0.0.1:${GP_APISERVER_PORT:-8080}:8080"
+
+  controller-manager:
+    build: !reset null
+    image: ${GP_IMAGE_REGISTRY:-ghcr.io/smartcat999}/gamepanel-controller-manager:${GP_IMAGE_TAG:?GP_IMAGE_TAG must be pinned to an immutable release tag or digest}
+    environment:
+      <<: [*prod-common-env, *prod-s3-env]
+      GP_AUTH_JWT_SECRET: ${GP_AUTH_JWT_SECRET:?GP_AUTH_JWT_SECRET is required}
+      GP_DB_DSN: postgres://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${GP_DB_HOST:-postgres}:${GP_DB_PORT:-5432}/${POSTGRES_DB:-gamepanel}?sslmode=${GP_DB_SSLMODE:-require}
+      GP_AGENT_TOKEN: ${GP_AGENT_TOKEN:?GP_AGENT_TOKEN is required}
+      GP_REGISTRY_WORKER_TOKEN: ${GP_REGISTRY_WORKER_TOKEN:?GP_REGISTRY_WORKER_TOKEN is required}
+
+  registry-worker:
+    build: !reset null
+    image: ${GP_IMAGE_REGISTRY:-ghcr.io/smartcat999}/gamepanel-registry-worker:${GP_IMAGE_TAG:?GP_IMAGE_TAG must be pinned to an immutable release tag or digest}
+    depends_on: !reset
+      apiserver:
+        condition: service_healthy
+    environment:
+      <<: *prod-common-env
+      GP_REGISTRY_WORKER_TOKEN: ${GP_REGISTRY_WORKER_TOKEN:?GP_REGISTRY_WORKER_TOKEN is required}
+
+  node-agent:
+    build: !reset null
+    image: ${GP_IMAGE_REGISTRY:-ghcr.io/smartcat999}/gamepanel-node-agent:${GP_IMAGE_TAG:?GP_IMAGE_TAG must be pinned to an immutable release tag or digest}
+    environment:
+      <<: *prod-common-env
+      GP_AGENT_TOKEN: ${GP_AGENT_TOKEN:?GP_AGENT_TOKEN is required}
+    ports: !reset
+      - "${GP_AGENT_BIND_IP:-127.0.0.1}:8082:8082"
+
+  web:
+    build: !reset null
+    image: ${GP_IMAGE_REGISTRY:-ghcr.io/smartcat999}/gamepanel-web:${GP_IMAGE_TAG:?GP_IMAGE_TAG must be pinned to an immutable release tag or digest}
+    ports: !reset
+      - "127.0.0.1:${GP_WEB_PORT:-3000}:3000"

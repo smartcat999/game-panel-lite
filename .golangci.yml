@@ -1,0 +1,70 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - errcheck
+    - errorlint
+    - funlen
+    - govet
+    - ineffassign
+    - intrange
+    - misspell
+    - nosprintfhostport
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    errorlint:
+      errorf-multi: false
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - (net/http.ResponseWriter).Write
+        - (*os.File).Close
+        - (io.Closer).Close
+    funlen:
+      lines: 60
+      statements: -1
+      ignore-comments: false
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000"
+        - "-ST1003"
+    depguard:
+      rules:
+        no-slog:
+          files:
+            - "$all"
+          deny:
+            - pkg: "log/slog"
+              desc: "use github.com/smartcat999/game-panel-cloud/pkg/infra/log instead of log/slog"
+  exclusions:
+    generated: lax
+    rules:
+      - path: 'tests/'
+        linters:
+          - errcheck
+          - funlen
+          - intrange
+      - path: '_test\.go'
+        linters:
+          - errcheck
+          - intrange
+      - path: 'pkg/infra/volume/xfs_mount\.go'
+        linters:
+          - unused
+
+formatters:
+  enable:
+    - gofmt

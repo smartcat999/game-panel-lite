@@ -1,0 +1,360 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  name: left-4-dead-2
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: survival
+displayName: 求生之路 2 Left 4 Dead 2
+tagline: 经典四人合作僵尸逃生 · 战役与八人对抗专用服
+summary: 支持合作战役/写实/对抗/清道夫模式、默认地图与难度切换、RCON 远程控制台指令及优雅停服。
+category: survival
+coverImage: /landing/games/left-4-dead-2.jpg
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+versions:
+- latest
+recommendedVersion: latest
+recommendedPlan: lite
+resources:
+  cpu: '2'
+  memory: 2Gi
+  storage: 15Gi
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 27015
+- name: rcon
+  protocol: TCP
+  targetPort: 27015
+serverBinding:
+  repository: l4d2-server
+  package: l4d2
+  targetPath: .
+addonBinding:
+  repository: l4d2-workshop
+  installMode: flat_dir
+  targetDir: left4dead2/addons
+env:
+  HOSTNAME: GamePanel L4D2 Server
+  SV_PASSWORD: ''
+  RCON_PASSWORD: l4d2admin123
+  GAMEMODE: coop
+  DIFFICULTY: Normal
+  START_MAP: c1m1_hotel
+  ALL_BOT_GAME: '1'
+  SV_REGION: '4'
+  SV_CONSISTENCY: '0'
+  SV_ALLOW_WAIT: '1'
+configSchema:
+- name: hostname
+  label: 服务器名称
+  type: text
+  required: true
+  default: GamePanel L4D2 Server
+  envKey: HOSTNAME
+  group: 基础设置
+  help: 显示在社区服务器大厅中的名称
+  fileTarget: left4dead2/cfg/server.cfg
+- name: svPassword
+  label: 进服密码
+  type: password
+  default: ''
+  envKey: SV_PASSWORD
+  group: 基础设置
+  help: 留空则允许公开免密加入
+  fileTarget: left4dead2/cfg/server.cfg
+- name: rconPassword
+  label: 远程控制密码
+  type: password
+  required: true
+  default: l4d2admin123
+  envKey: RCON_PASSWORD
+  group: 基础设置
+  help: 用于控制台远程指令鉴权与游戏内管理员控制
+  fileTarget: left4dead2/cfg/server.cfg
+- name: gamemode
+  label: 默认游戏模式
+  type: select
+  default: coop
+  envKey: GAMEMODE
+  group: 基础设置
+  help: 决定服务器启动后加载的玩法模式
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: coop
+    label: 合作战役
+  - value: realism
+    label: 写实战役
+  - value: versus
+    label: 感染对抗
+  - value: survival
+    label: 生还者挑战
+  - value: scavenge
+    label: 清道夫模式
+- name: difficulty
+  label: 战役游戏难度
+  type: select
+  default: Normal
+  envKey: DIFFICULTY
+  group: 基础设置
+  help: 控制丧尸伤害、队友误伤倍率与补给品数量
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: Easy
+    label: 简单
+  - value: Normal
+    label: 普通
+  - value: Hard
+    label: 高级
+  - value: Impossible
+    label: 专家
+- name: startMap
+  label: 初始启动战役地图
+  type: select
+  optionsSource: addon_maps
+  default: c1m1_hotel
+  envKey: START_MAP
+  group: 模式地图
+  help: 服务器启动时默认加载的官方或工坊战役起始关卡
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: c1m1_hotel
+    label: 死亡中心
+  - value: c2m1_highway
+    label: 黑色狂欢节
+  - value: c3m1_plankcountry
+    label: 沼泽激战
+  - value: c4m1_milltown_a
+    label: 暴风骤雨
+  - value: c5m1_waterfront
+    label: 教区
+  - value: c6m1_riverbank
+    label: 短暂时刻
+  - value: c7m1_docks
+    label: 牺牲
+  - value: c8m1_apartment
+    label: 毫不留情
+  - value: c10m1_caves
+    label: 死亡丧钟
+  - value: c11m1_greenhouse
+    label: 静寂时分
+  - value: c12m1_hilltop
+    label: 血腥收获
+- name: allBotGame
+  label: 允许单人带电脑开局
+  type: select
+  default: '1'
+  envKey: ALL_BOT_GAME
+  group: 模式地图
+  help: 开启后即使人类玩家不足四人也可直接开始战役与对抗
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: '1'
+    label: 开启
+  - value: '0'
+    label: 关闭
+- name: svRegion
+  label: 大厅列表检索区域
+  type: select
+  default: '4'
+  envKey: SV_REGION
+  group: 联机安全
+  help: 社区服务器浏览器的地理归属区域
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: '4'
+    label: 亚洲
+  - value: '0'
+    label: 北美东部
+  - value: '1'
+    label: 北美西部
+  - value: '3'
+    label: 欧洲
+  - value: '5'
+    label: 大洋洲
+  - value: '255'
+    label: 全球
+- name: svConsistency
+  label: 客户端模型一致性校验
+  type: select
+  default: '0'
+  envKey: SV_CONSISTENCY
+  group: 联机安全
+  help: 建议关闭以允许好友自由使用创意工坊人物与武器皮肤模组
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: '0'
+    label: 关闭（兼容外观模组）
+  - value: '1'
+    label: 开启严格校验
+- name: svAllowWaitCommand
+  label: 允许客户端等待指令
+  type: select
+  default: '1'
+  envKey: SV_ALLOW_WAIT
+  group: 联机安全
+  help: 控制是否允许客户端脚本使用延迟命令
+  fileTarget: left4dead2/cfg/server.cfg
+  options:
+  - value: '1'
+    label: 允许
+  - value: '0'
+    label: 禁止
+configPresets:
+- id: coop-campaign
+  name: 经典四人合作战役（普通难度·兼容外观模组）
+  description: 默认开启死亡中心普通难度，关闭模型强制校验以方便好友携带皮肤模组
+  values:
+    gamemode: coop
+    difficulty: Normal
+    startMap: c1m1_hotel
+    svConsistency: '0'
+- id: expert-realism
+  name: 专家写实硬核挑战（专家难度·写实模式）
+  description: 关闭轮廓高亮与大幅提升特感伤害，适合老玩家开黑挑战通关成就
+  values:
+    gamemode: realism
+    difficulty: Impossible
+    startMap: c8m1_apartment
+    svConsistency: '0'
+- id: versus-pvp
+  name: 八人感染对抗（对抗模式·死亡中心开局）
+  description: 幸存者与特殊感染者轮流攻防积分对抗，默认从死亡中心开启
+  values:
+    gamemode: versus
+    difficulty: Normal
+    startMap: c1m1_hotel
+    allBotGame: '1'
+fileTemplates:
+- path: left4dead2/cfg/server.cfg
+  content: |
+    // Managed by GamePanel Lite (startMap={{startMap}} | gamemode={{gamemode}})
+    hostname "{{hostname}}"
+    sv_password "{{svPassword}}"
+    rcon_password "{{rconPassword}}"
+    sv_gametypes "{{gamemode}}"
+    z_difficulty "{{difficulty}}"
+    sb_all_bot_game {{allBotGame}}
+    sv_region {{svRegion}}
+    sv_consistency {{svConsistency}}
+    sv_allow_wait_command {{svAllowWaitCommand}}
+    sv_lan 0
+    sv_cheats 0
+    sv_allow_lobby_connect_only 0
+    hostport 27015
+- path: rcon.yaml
+  content: |
+    default:
+      address: "127.0.0.1:27015"
+      password: "{{rconPassword}}"
+      type: "rcon"
+preStartCommand: |
+  chmod +x /data/srcds_run /data/srcds_linux 2>/dev/null || true
+  mkdir -p /data/left4dead2/cfg /data/left4dead2/addons
+  if [ -f /opt/steamcmd/linux32/steamclient.so ]; then
+    mkdir -p /data/.steam/sdk32
+    ln -sf /opt/steamcmd/linux32/steamclient.so /data/.steam/sdk32/steamclient.so
+  fi
+startupCommand: |
+  cfg_val() {
+    [ -f /data/left4dead2/cfg/server.cfg ] && sed -n "s|.*$1=\([^| )]*\).*|\1|p" /data/left4dead2/cfg/server.cfg | head -n1 || true
+  }
+  cfg_map="$(cfg_val startMap)"; [ -n "$cfg_map" ] || cfg_map="${START_MAP:-c1m1_hotel}"
+  cfg_mode="$(cfg_val gamemode)"; [ -n "$cfg_mode" ] || cfg_mode="${GAMEMODE:-coop}"
+  exec /data/srcds_run -game left4dead2 -console -usercon -ip 0.0.0.0 -port 27015 +sv_gametypes "$cfg_mode" +map "$cfg_map" "$cfg_mode" +exec server.cfg -norestart
+preStopCommand: |
+  rcon-cli quit >/dev/null 2>&1 || pkill -INT -f '[s]rcds_linux' 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[s]rcds_linux' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+published: true
+consoleDelivery: rcon-cli
+consoleActions:
+- id: l4d2-changelevel
+  title: 切换战役地图
+  group: 地图难度
+  command: changelevel {{map}}
+  starred: true
+  params:
+  - name: map
+    label: 起始地图
+    type: select
+    optionsSource: addon_maps
+    defaultValue: c1m1_hotel
+    options:
+    - value: c1m1_hotel
+      label: 死亡中心
+    - value: c2m1_highway
+      label: 黑色狂欢节
+    - value: c3m1_plankcountry
+      label: 沼泽激战
+    - value: c5m1_waterfront
+      label: 教区
+    - value: c8m1_apartment
+      label: 毫不留情
+- id: l4d2-difficulty
+  title: 调整战役难度
+  group: 地图难度
+  command: z_difficulty {{difficulty}}
+  starred: true
+  params:
+  - name: difficulty
+    label: 难度等级
+    type: select
+    defaultValue: Normal
+    options:
+    - value: Easy
+      label: 简单
+    - value: Normal
+      label: 普通
+    - value: Hard
+      label: 高级
+    - value: Impossible
+      label: 专家
+- id: l4d2-say
+  title: 全服公告广播
+  group: 玩家广播
+  command: say "{{msg}}"
+  starred: true
+  params:
+  - name: msg
+    label: 公告内容
+    type: text
+    defaultValue: 服务器即将切换地图，请做好准备
+- id: l4d2-kick
+  title: 踢出玩家
+  group: 玩家广播
+  command: kick "{{player}}"
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家昵称
+    type: text
+storagePolicy:
+  backupSubtree: left4dead2/cfg,left4dead2/addons
+  replaceOnRestore: true
+  backupRequiresStop: true
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_value
+  maxValue: '8'
+  probeCommand: |-
+    python3 -c 'import socket
+    q=b"\xff\xff\xff\xffTSource Engine Query\x00"
+    for h in (socket.gethostbyname(socket.gethostname()),"127.0.0.1"):
+      try:
+        s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(0.6); s.sendto(q,(h,27015)); d,_=s.recvfrom(4096)
+        if len(d)>=9 and d[4]==65: s.sendto(q+d[5:9],(h,27015)); d,_=s.recvfrom(4096)
+        pos=6
+        for _ in range(4): pos=d.find(0,pos)+1
+        print("GP_ONLINE="+str(d[pos+2])); raise SystemExit
+      except SystemExit: raise
+      except Exception: pass
+    print("GP_ONLINE=0")' 2>/dev/null || echo 'GP_ONLINE=0'
+  pattern: 'GP_ONLINE=(\d+)'

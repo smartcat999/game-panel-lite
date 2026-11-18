@@ -1,0 +1,391 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  name: valheim-dedicated
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: survival
+displayName: 英灵神殿 Valheim
+tagline: 北欧神话维京生存 · 多人合作探索与建造
+summary: 支持世界难度预设、资源采集倍率、传送门矿石规则、怪物袭击频率调节及管理员/白名单管理。
+category: survival
+coverImage: /landing/games/valheim-dedicated.jpg
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+versions:
+- latest
+recommendedVersion: latest
+recommendedPlan: standard
+resources:
+  cpu: '2'
+  memory: 4Gi
+  storage: 20Gi
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 2456
+- name: query
+  protocol: UDP
+  targetPort: 2457
+serverBinding:
+  repository: valheim-server
+  package: valheim
+  targetPath: .
+env:
+  SERVER_NAME: GamePanel Valheim
+  WORLD_NAME: Dedicated
+  SERVER_PASSWORD: valheim123
+  PUBLIC_SERVER: 'false'
+  CROSSPLAY: 'false'
+  WORLD_PRESET: normal
+  MOD_COMBAT: normal
+  MOD_DEATH_PENALTY: normal
+  MOD_RESOURCES: normal
+  MOD_RAIDS: normal
+  MOD_PORTALS: normal
+  SAVE_INTERVAL: '1800'
+  BACKUP_COUNT: '4'
+configSchema:
+- name: serverName
+  label: 房间显示名称
+  type: text
+  required: true
+  default: GamePanel Valheim
+  envKey: SERVER_NAME
+  group: 基础设置
+  help: 显示在游戏内服务器列表中的房间名称（不少于 3 个字符）
+  fileTarget: saves/valheim-server.conf
+- name: worldName
+  label: 世界存档名称
+  type: text
+  required: true
+  default: Dedicated
+  envKey: WORLD_NAME
+  group: 基础设置
+  help: 世界存档文件名称，用于区分不同世界存档
+  fileTarget: saves/valheim-server.conf
+- name: serverPassword
+  label: 进服密码
+  type: password
+  required: true
+  default: valheim123
+  envKey: SERVER_PASSWORD
+  group: 基础设置
+  help: 服务端要求密码至少 5 个字符，且不能与房间名称或世界名称相同
+  fileTarget: saves/valheim-server.conf
+- name: preset
+  label: 世界难度预设
+  type: select
+  default: normal
+  envKey: WORLD_PRESET
+  group: 世界倍率
+  help: 官方整体世界规则预设；保持「标准模式」时可单独调节下方各项规则
+  fileTarget: saves/valheim-server.conf
+  options:
+  - value: normal
+    label: 标准模式
+  - value: casual
+    label: 休闲探索（柔和战斗·低惩罚）
+  - value: easy
+    label: 简单模式
+  - value: hard
+    label: 困难模式
+  - value: hardcore
+    label: 硬核模式（高伤害·无地图·禁传送门）
+  - value: immersive
+    label: 沉浸模式（无地图·禁传送门）
+  - value: hammer
+    label: 自由建造（免材料消耗·被动怪物）
+- name: resources
+  label: 资源采集倍率
+  type: select
+  default: normal
+  envKey: MOD_RESOURCES
+  group: 世界倍率
+  help: 调节砍树、挖矿与掉落物数量倍率
+  fileTarget: saves/valheim-server.conf
+  options:
+  - value: muchless
+    label: 极少（0.5倍）
+  - value: less
+    label: 较少（0.75倍）
+  - value: normal
+    label: 标准（1.0倍）
+  - value: more
+    label: 丰饶（1.5倍）
+  - value: muchmore
+    label: 充沛（2.0倍）
+  - value: most
+    label: 极限（3.0倍）
+- name: portals
+  label: 传送门规则
+  type: select
+  default: normal
+  envKey: MOD_PORTALS
+  group: 世界倍率
+  help: 控制金属矿石等物资是否允许通过传送门携带
+  fileTarget: saves/valheim-server.conf
+  options:
+  - value: casual
+    label: 允许携带矿石与全部物品
+  - value: normal
+    label: 标准（禁止携带矿石）
+  - value: hard
+    label: 首领战期间禁用传送门
+  - value: veryhard
+    label: 完全禁用传送门
+- name: combat
+  label: 敌人战斗难度
+  type: select
+  default: normal
+  envKey: MOD_COMBAT
+  group: 生存战斗
+  help: 调整敌人血量、攻击力与移动速度
+  fileTarget: saves/valheim-server.conf
+  options:
+  - value: veryeasy
+    label: 极简
+  - value: easy
+    label: 简单
+  - value: normal
+    label: 标准
+  - value: hard
+    label: 困难
+  - value: veryhard
+    label: 极难
+- name: deathPenalty
+  label: 死亡掉落惩罚
+  type: select
+  default: normal
+  envKey: MOD_DEATH_PENALTY
+  group: 生存战斗
+  help: 控制玩家阵亡后物品掉落与技能经验损失程度
+  fileTarget: saves/valheim-server.conf
+  options:
+  - value: casual
+    label: 休闲（保留穿戴装备·极低技能损失）
+  - value: veryeasy
+    label: 极轻（掉落背包·少量技能损失）
+  - value: easy
+    label: 较轻（掉落背包·较低技能损失）
+  - value: normal
+    label: 标准（掉落全部物品·标准技能损失）
+  - value: hard
+    label: 严苛（掉落全部物品·大幅技能损失）
+  - value: hardcore
+    label: 硬核（清空随身物品与全部技能）
+- name: raids
+  label: 怪物袭击频率
+  type: select
+  default: normal
+  envKey: MOD_RAIDS
+  group: 生存战斗
+  help: 控制怪物军团袭扰领地事件的触发频率
+  fileTarget: saves/valheim-server.conf
+  options:
+  - value: none
+    label: 关闭袭击
+  - value: muchless
+    label: 极低
+  - value: less
+    label: 较低
+  - value: normal
+    label: 标准
+  - value: more
+    label: 频繁
+  - value: muchmore
+    label: 极高
+- name: public
+  label: 在社区服务器列表公开显示
+  type: boolean
+  default: 'false'
+  envKey: PUBLIC_SERVER
+  group: 联机存档
+  help: 关闭时仅支持通过 IP 端口直连或好友邀请加入
+  fileTarget: saves/valheim-server.conf
+- name: crossplay
+  label: 开启跨平台联机
+  type: boolean
+  default: 'false'
+  envKey: CROSSPLAY
+  group: 联机存档
+  help: 开启后允许主机与多平台玩家加入；关闭时使用原生直连，延迟更低且支持实时在线人数统计
+  fileTarget: saves/valheim-server.conf
+- name: saveInterval
+  label: 自动存盘间隔（秒）
+  type: number
+  default: '1800'
+  min: 300
+  max: 7200
+  step: 300
+  envKey: SAVE_INTERVAL
+  group: 联机存档
+  help: 服务端定期自动保存世界数据的间隔时间（默认 1800 秒）
+  fileTarget: saves/valheim-server.conf
+- name: backupCount
+  label: 自动备份保留份数
+  type: number
+  default: '4'
+  min: 1
+  max: 20
+  step: 1
+  envKey: BACKUP_COUNT
+  group: 联机存档
+  help: 服务端在存档目录内自动滚动保留的历史世界备份份数
+  fileTarget: saves/valheim-server.conf
+configPresets:
+- id: normal
+  name: 官方标准难度（原汁原味）
+  description: 官方默认平衡难度，保留原汁原味战斗与航海体验
+  values:
+    preset: normal
+    combat: normal
+    deathPenalty: normal
+    resources: normal
+    raids: normal
+    portals: normal
+- id: casual
+  name: 轻松休闲建造（1.5倍资源·可传矿石·保留装备）
+  description: 资源更充沛、支持传送门携带矿石且阵亡保留穿戴装备
+  values:
+    preset: normal
+    combat: easy
+    deathPenalty: casual
+    resources: more
+    raids: less
+    portals: casual
+- id: hardcore
+  name: 硬核开荒挑战（高伤强袭·严苛死亡惩罚）
+  description: 强敌突袭、严苛死亡惩罚与高频率怪物袭击
+  values:
+    preset: normal
+    combat: hard
+    deathPenalty: hard
+    resources: more
+    raids: more
+    portals: hard
+fileTemplates:
+- path: saves/valheim-server.conf
+  content: |
+    serverName={{serverName}}
+    worldName={{worldName}}
+    serverPassword={{serverPassword}}
+    public={{public}}
+    crossplay={{crossplay}}
+    preset={{preset}}
+    combat={{combat}}
+    deathPenalty={{deathPenalty}}
+    resources={{resources}}
+    raids={{raids}}
+    portals={{portals}}
+    saveInterval={{saveInterval}}
+    backupCount={{backupCount}}
+preStartCommand: |
+  chmod +x /data/valheim_server.x86_64 2>/dev/null || true
+  mkdir -p /data/saves /data/saves/worlds_local
+  touch /data/saves/adminlist.txt /data/saves/bannedlist.txt /data/saves/permittedlist.txt
+  if [ -f /data/linux64/steamclient.so ]; then
+    mkdir -p /data/.steam/sdk64
+    ln -sf /data/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
+  fi
+startupCommand: |
+  get_cfg() { [ -f /data/saves/valheim-server.conf ] && sed -n "s/^$1=//p" /data/saves/valheim-server.conf | head -n1 || true; }
+  VALHEIM_NAME="$(get_cfg serverName)"; [ -n "$VALHEIM_NAME" ] || VALHEIM_NAME="${SERVER_NAME:-GamePanel Valheim}"
+  VALHEIM_WORLD="$(get_cfg worldName)"; [ -n "$VALHEIM_WORLD" ] || VALHEIM_WORLD="${WORLD_NAME:-Dedicated}"
+  VALHEIM_PW="$(get_cfg serverPassword)"; [ -n "$VALHEIM_PW" ] || VALHEIM_PW="${SERVER_PASSWORD:-valheim123}"
+  VALHEIM_PUB="$(get_cfg public)"; [ -n "$VALHEIM_PUB" ] || VALHEIM_PUB="${PUBLIC_SERVER:-false}"
+  [ "$VALHEIM_PUB" = "false" ] || [ "$VALHEIM_PUB" = "0" ] && PUB_FLAG=0 || PUB_FLAG=1
+  VALHEIM_CROSS="$(get_cfg crossplay)"; [ -n "$VALHEIM_CROSS" ] || VALHEIM_CROSS="${CROSSPLAY:-false}"
+  VALHEIM_PRESET="$(get_cfg preset)"; [ -n "$VALHEIM_PRESET" ] || VALHEIM_PRESET="${WORLD_PRESET:-normal}"
+  VALHEIM_COMBAT="$(get_cfg combat)"; [ -n "$VALHEIM_COMBAT" ] || VALHEIM_COMBAT="${MOD_COMBAT:-normal}"
+  VALHEIM_DEATH="$(get_cfg deathPenalty)"; [ -n "$VALHEIM_DEATH" ] || VALHEIM_DEATH="${MOD_DEATH_PENALTY:-normal}"
+  VALHEIM_RES="$(get_cfg resources)"; [ -n "$VALHEIM_RES" ] || VALHEIM_RES="${MOD_RESOURCES:-normal}"
+  VALHEIM_RAIDS="$(get_cfg raids)"; [ -n "$VALHEIM_RAIDS" ] || VALHEIM_RAIDS="${MOD_RAIDS:-normal}"
+  VALHEIM_PORTALS="$(get_cfg portals)"; [ -n "$VALHEIM_PORTALS" ] || VALHEIM_PORTALS="${MOD_PORTALS:-normal}"
+  VALHEIM_SAVEINT="$(get_cfg saveInterval)"; [ -n "$VALHEIM_SAVEINT" ] || VALHEIM_SAVEINT="${SAVE_INTERVAL:-1800}"
+  VALHEIM_BACKUPS="$(get_cfg backupCount)"; [ -n "$VALHEIM_BACKUPS" ] || VALHEIM_BACKUPS="${BACKUP_COUNT:-4}"
+  set -- /data/valheim_server.x86_64 -nographics -batchmode -name "$VALHEIM_NAME" -port 2456 -world "$VALHEIM_WORLD" -password "$VALHEIM_PW" -savedir /data/saves -public "$PUB_FLAG" -saveinterval "$VALHEIM_SAVEINT" -backups "$VALHEIM_BACKUPS"
+  [ "$VALHEIM_CROSS" = "true" ] && set -- "$@" -crossplay
+  [ -n "$VALHEIM_PRESET" ] && [ "$VALHEIM_PRESET" != "normal" ] && set -- "$@" -preset "$VALHEIM_PRESET"
+  [ -n "$VALHEIM_COMBAT" ] && [ "$VALHEIM_COMBAT" != "normal" ] && set -- "$@" -modifier combat "$VALHEIM_COMBAT"
+  [ -n "$VALHEIM_DEATH" ] && [ "$VALHEIM_DEATH" != "normal" ] && set -- "$@" -modifier deathpenalty "$VALHEIM_DEATH"
+  [ -n "$VALHEIM_RES" ] && [ "$VALHEIM_RES" != "normal" ] && set -- "$@" -modifier resources "$VALHEIM_RES"
+  [ -n "$VALHEIM_RAIDS" ] && [ "$VALHEIM_RAIDS" != "normal" ] && set -- "$@" -modifier raids "$VALHEIM_RAIDS"
+  [ -n "$VALHEIM_PORTALS" ] && [ "$VALHEIM_PORTALS" != "normal" ] && set -- "$@" -modifier portals "$VALHEIM_PORTALS"
+  export LD_LIBRARY_PATH="/data/linux64:${LD_LIBRARY_PATH:-}"
+  export SteamAppId=892970
+  exec "$@"
+preStopCommand: |
+  pkill -INT -f '[v]alheim_server.x86_64' 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && pgrep -f '[v]alheim_server.x86_64' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+published: true
+consoleDelivery: >-
+  python3 -c 'import os,sys; p=sys.argv[1].split(); op=p[0] if p else ""; arg=p[1] if len(p)>1 else ""; f={"admin":"/data/saves/adminlist.txt","ban":"/data/saves/bannedlist.txt","unban":"/data/saves/bannedlist.txt","permit":"/data/saves/permittedlist.txt","unpermit":"/data/saves/permittedlist.txt"}.get(op); os.makedirs("/data/saves",exist_ok=True); lines=[x.strip() for x in open(f).read().splitlines() if x.strip()] if f and os.path.exists(f) else []; open(f,"w").write("\n".join(([x for x in lines if x!=arg]+([arg] if op in ("admin","ban","permit") else [])))+"\n") if f and arg else sys.exit(1); print("OK:",op,arg)' {{cmd}}
+consoleActions:
+- id: vh-admin-add
+  title: 添加服务器管理员
+  group: 玩家权限名单
+  command: admin {{steamid}}
+  starred: true
+  params:
+  - name: steamid
+    label: SteamID 64
+    type: text
+- id: vh-ban
+  title: 封禁玩家
+  group: 玩家权限名单
+  command: ban {{steamid}}
+  starred: true
+  danger: true
+  params:
+  - name: steamid
+    label: SteamID 64
+    type: text
+- id: vh-unban
+  title: 解除玩家封禁
+  group: 玩家权限名单
+  command: unban {{steamid}}
+  starred: false
+  params:
+  - name: steamid
+    label: SteamID 64
+    type: text
+- id: vh-permit-add
+  title: 添加白名单玩家
+  group: 玩家权限名单
+  command: permit {{steamid}}
+  starred: false
+  params:
+  - name: steamid
+    label: SteamID 64
+    type: text
+- id: vh-permit-del
+  title: 移除白名单玩家
+  group: 玩家权限名单
+  command: unpermit {{steamid}}
+  starred: false
+  params:
+  - name: steamid
+    label: SteamID 64
+    type: text
+storagePolicy:
+  backupSubtree: saves
+  anchorFiles:
+  - worlds_local
+  replaceOnRestore: true
+  backupRequiresStop: true
+  regeneratePaths:
+  - saves/worlds_local
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_value
+  maxValue: '10'
+  probeCommand: >-
+    python3 -c 'import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(1.2); q=b"\xff\xff\xff\xffTSource Engine Query\x00"; s.sendto(q,("127.0.0.1",2457)); d,_=s.recvfrom(4096); d=((s.sendto(q+d[5:9],("127.0.0.1",2457)), s.recvfrom(4096)[0])[1]) if len(d)>=9 and d[4]==65 else d; pos=6; exec("for _ in range(4): pos=d.find(0,pos)+1\npos+=2\nprint(\"GP_ONLINE=\"+str(d[pos]))")' 2>/dev/null || echo 'GP_ONLINE=0'
+  pattern: 'GP_ONLINE=(\d+)'

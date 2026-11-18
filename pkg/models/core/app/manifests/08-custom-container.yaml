@@ -1,0 +1,39 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: "0001-01-01T00:00:00Z"
+  generation: 0
+  labels:
+    gamepanel.io/builtin: "true"
+    gamepanel.io/category: custom
+  name: custom-container
+  resourceVersion: ""
+  uid: ""
+builtIn: true
+capabilities:
+  - console
+  - files
+  - backups
+category: custom
+command:
+  - sh
+  - -c
+  - while true; do sleep 3600; done
+coverImage: /landing/games/default-cover.jpg
+displayName: 自定义容器镜像
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/alpine:3.20
+ports:
+  - name: game
+    protocol: TCP
+    targetPort: 8080
+published: true
+recommendedPlan: lite
+recommendedVersion: latest
+resources:
+  cpu: "1"
+  memory: 2Gi
+  storage: 10Gi
+summary: 自己填写容器镜像、启动命令、多端口映射和环境变量，支持任意自定义游戏服。
+tagline: 任意 Docker Hub / GHCR 游戏或工具镜像
+versions:
+  - latest

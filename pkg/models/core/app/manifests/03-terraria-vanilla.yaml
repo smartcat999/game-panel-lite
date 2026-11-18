@@ -1,0 +1,381 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: '0001-01-01T00:00:00Z'
+  generation: 0
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: sandbox
+  name: terraria-vanilla
+  resourceVersion: ''
+  uid: ''
+builtIn: true
+serverBinding:
+  repository: terraria-vanilla
+  package: terraria-vanilla
+  targetPath: .
+capabilities:
+- console
+- versions
+- files
+- backups
+category: sandbox
+configPresets:
+- description: 适合 2–8 位好友周末轻松开荒
+  id: friends-casual
+  name: 休闲联机（中型世界·经典难度）
+  values:
+    difficulty: '0'
+    maxPlayers: '8'
+    motd: 欢迎来到泰拉瑞亚好友休闲服！
+    worldName: TerrariaWorld
+    worldSize: '2'
+- description: 解锁专家专属宝藏袋与 Boss 新机制
+  id: expert-adventure
+  name: 专家开荒（大型世界·专家难度）
+  values:
+    difficulty: '1'
+    maxPlayers: '12'
+    motd: 泰拉瑞亚专家开荒服 · 宝藏袋全开
+    worldName: ExpertWorld
+    worldSize: '3'
+- description: 最高数值挑战，掉落大师圣物与专属宠物
+  id: master-challenge
+  name: 大师挑战（大型世界·大师难度）
+  values:
+    difficulty: '2'
+    maxPlayers: '16'
+    motd: 泰拉瑞亚大师挑战服
+    worldName: MasterWorld
+    worldSize: '3'
+configSchema:
+- default: TerrariaWorld
+  envKey: WORLD_NAME
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 世界名称与存档文件名
+  label: 世界存档名称
+  name: worldName
+  required: true
+  type: text
+- default: '8'
+  envKey: MAXPLAYERS
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 同时在线玩家上限 (1–64)
+  label: 最大玩家人数
+  max: 64
+  min: 1
+  name: maxPlayers
+  step: 1
+  type: number
+- envKey: PASSWORD
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 留空则无需密码即可加入
+  label: 进服密码
+  name: password
+  type: password
+- default: 欢迎来到泰拉瑞亚联机服！
+  envKey: MOTD
+  fileTarget: serverconfig.txt
+  group: 基础设置
+  help: 玩家进服时聊天栏展示的欢迎语
+  label: 每日欢迎消息
+  name: motd
+  type: text
+- default: '2'
+  envKey: AUTOCREATE
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 首次创建世界时的地图尺寸
+  label: 世界地图大小
+  name: worldSize
+  options:
+  - label: 小型世界（4200×1200）
+    value: '1'
+  - label: 中型世界（6400×1800）
+    value: '2'
+  - label: 大型世界（8400×2400）
+    value: '3'
+  type: select
+- default: '0'
+  envKey: DIFFICULTY
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 决定世界机制与 Boss 掉落
+  label: 世界难度模式
+  name: difficulty
+  options:
+  - label: 经典模式
+    value: '0'
+  - label: 专家模式
+    value: '1'
+  - label: 大师模式
+    value: '2'
+  - label: 旅途模式
+    value: '3'
+  type: select
+- envKey: SEED
+  fileTarget: serverconfig.txt
+  group: 世界生成
+  help: 支持填入彩蛋种子，留空则随机生成
+  label: 世界生成种子
+  name: seed
+  type: text
+- default: 'true'
+  envKey: SECURE
+  fileTarget: serverconfig.txt
+  group: 联机安全
+  help: 启用官方服务端防作弊保护
+  label: 开启反作弊校验
+  name: secure
+  type: boolean
+- name: serverName
+  label: 服务器列表名称
+  type: text
+  required: true
+  default: Terraria Friends Server
+  group: 基础设置
+  help: 显示在多人游戏列表中的服务器名称
+  fileTarget: serverconfig.txt
+- name: port
+  label: 游戏监听端口
+  type: number
+  required: true
+  default: '7777'
+  min: 1024
+  max: 65535
+  step: 1
+  group: 基础设置
+  help: 容器内 Terraria 服务监听端口（默认 7777）
+  fileTarget: serverconfig.txt
+- name: worldEvil
+  envKey: WORLD_EVIL
+  label: 世界邪恶地形群系
+  type: select
+  required: true
+  default: random
+  group: 世界生成
+  help: 仅在新建世界时生效，决定腐化或猩红地形
+  fileTarget: serverconfig.txt
+  options:
+  - value: random
+    label: 随机
+  - value: corruption
+    label: 腐化之地
+  - value: crimson
+    label: 猩红之地
+- name: specialSeeds
+  envKey: SPECIAL_SEEDS
+  label: 官方秘密彩蛋种子模式
+  type: select
+  default: ''
+  group: 世界生成
+  help: 一键选择泰拉瑞亚官方彩蛋世界种子（仅新建世界生效）
+  fileTarget: serverconfig.txt
+  options:
+  - value: ''
+    label: 标准世界（不使用彩蛋种子）
+  - value: '05162020'
+    label: 醉酒世界（双邪恶共存）
+  - value: not the bees
+    label: 蜜蜂世界（全图蜂巢丛林）
+  - value: for the worthy
+    label: 勇者挑战（传奇高难）
+  - value: celebrationmk10
+    label: 十周年庆典（派对公主开局）
+  - value: the constant
+    label: 永恒领域（饥荒联动饥饿暗影）
+  - value: dont dig up
+    label: 不要往上挖（地狱颠倒开局）
+  - value: no traps
+    label: 没有陷阱（遍地致命机关）
+  - value: get fixed boi
+    label: 天顶世界（终极缝合全彩蛋）
+- name: autoCreateWorld
+  envKey: AUTO_CREATE_WORLD
+  label: 缺失存档时自动创建新世界
+  type: boolean
+  default: 'true'
+  group: 世界生成
+  help: 找不到指定世界文件时自动按所选尺寸创建新世界
+  fileTarget: serverconfig.txt
+- name: language
+  label: 服务端控制台与系统语言
+  type: select
+  default: zh-Hans
+  group: 联机安全
+  help: 服务器控制台与系统广播消息使用的语言
+  fileTarget: serverconfig.txt
+  options:
+  - value: zh-Hans
+    label: 简体中文
+  - value: en-US
+    label: 英文
+  - value: de-DE
+    label: 德文
+  - value: fr-FR
+    label: 法文
+  - value: es-ES
+    label: 西班牙文
+  - value: ru-RU
+    label: 俄文
+- name: npcStream
+  label: 生物网络同步降频阈值
+  type: number
+  default: '60'
+  min: 0
+  max: 120
+  step: 15
+  group: 联机安全
+  help: 调低可减少高延迟玩家的怪物瞬移，设为 0 关闭优化
+  fileTarget: serverconfig.txt
+- name: slowLiquids
+  envKey: SLOW_LIQUIDS
+  label: 减缓液体流动计算峰值
+  type: boolean
+  default: 'true'
+  group: 联机安全
+  help: 防止排干海洋或大量岩浆流动导致服务端卡顿
+  fileTarget: serverconfig.txt
+coverImage: /landing/games/terraria-vanilla.jpg
+displayName: 泰拉瑞亚 Terraria
+env:
+  AUTOCREATE: '2'
+  DIFFICULTY: '0'
+  WORLD_FILENAME: world.wld
+fileTemplates:
+- content: |
+    # Managed by GamePanel Lite ({{serverName}} | evil={{worldEvil}} | special={{specialSeeds}} | auto={{autoCreateWorld}} | secure={{secure}} | slow={{slowLiquids}})
+    world=/data/Worlds/{{worldName}}.wld
+    worldpath=/data/Worlds
+    worldname={{worldName}}
+    autocreate={{worldSize}}
+    difficulty={{difficulty}}
+    maxplayers={{maxPlayers}}
+    port={{port}}
+    password={{password}}
+    motd={{motd}}
+    seed={{seed}}
+    worldrollbackstokeep=2
+    upnp=0
+    language={{language}}
+    npcstream={{npcStream}}
+  path: serverconfig.txt
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+preStartCommand: |
+  for d in /data/*/Linux; do
+    [ -f "$d/TerrariaServer.bin.x86_64" ] && cp -rf "$d"/* /data/ && break
+  done
+  chmod +x /data/TerrariaServer.bin.x86_64
+  mkdir -p /data/Worlds
+  if [ -f /data/serverconfig.txt ]; then
+    [ "${AUTO_CREATE_WORLD:-true}" = "false" ] && sed -i '/^autocreate=/d' /data/serverconfig.txt
+    if [ -n "${SPECIAL_SEEDS:-}" ]; then
+      sed -i "s|^seed=.*|seed=${SPECIAL_SEEDS}|" /data/serverconfig.txt
+    elif [ "${WORLD_EVIL:-random}" = "corruption" ]; then
+      sed -i "s|^seed=.*|seed=${AUTOCREATE:-2}.$(( ${DIFFICULTY:-0} + 1 )).1.${SEED:-}|" /data/serverconfig.txt
+    elif [ "${WORLD_EVIL:-random}" = "crimson" ]; then
+      sed -i "s|^seed=.*|seed=${AUTOCREATE:-2}.$(( ${DIFFICULTY:-0} + 1 )).2.${SEED:-}|" /data/serverconfig.txt
+    fi
+    [ "${SECURE:-true}" != "false" ] && ! grep -q '^secure=' /data/serverconfig.txt && echo 'secure=1' >> /data/serverconfig.txt
+    [ "${SLOW_LIQUIDS:-true}" != "false" ] && ! grep -q '^slowliquids=' /data/serverconfig.txt && echo 'slowliquids=1' >> /data/serverconfig.txt
+    true
+  fi
+startupCommand: exec /data/TerrariaServer.bin.x86_64 -config /data/serverconfig.txt -noupnp
+preStopCommand: |
+  tml-send-to-console exit || true
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[T]errariaServer' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+ports:
+- name: game
+  protocol: TCP
+  targetPort: 7777
+published: true
+recommendedPlan: lite
+recommendedVersion: 1.4.5.8
+resources:
+  cpu: '1'
+  memory: 2Gi
+  storage: 10Gi
+summary: Re-Logic 官方原版联机服务端，支持一键切换经典/专家/大师/旅途难度、小/中/大世界尺寸、腐化/猩红群系与官方彩蛋种子。
+tagline: 像素沙盒冒险 · Re-Logic 官方原版服
+versions:
+- 1.4.5.8
+- 1.4.4.9
+consoleDelivery: tml-send-to-console
+consoleActions:
+- id: tr-time
+  title: 切换世界时间
+  group: 时间世界
+  command: '{{time}}'
+  starred: true
+  params:
+  - name: time
+    label: 时间段
+    type: select
+    defaultValue: noon
+    options:
+    - value: dawn
+      label: 黎明
+    - value: noon
+      label: 正午
+    - value: dusk
+      label: 黄昏
+    - value: midnight
+      label: 午夜
+- id: tr-save
+  title: 立即保存地图
+  group: 时间世界
+  command: save
+  starred: true
+- id: tr-settle
+  title: 立即平衡液体流动
+  group: 时间世界
+  command: settle
+  starred: false
+- id: tr-say
+  title: 全服公告广播
+  group: 玩家广播
+  command: say {{msg}}
+  starred: true
+  params:
+  - name: msg
+    label: 广播内容
+    type: text
+    defaultValue: 服务器即将保存地图
+- id: tr-kick
+  title: 踢出玩家
+  group: 玩家广播
+  command: kick {{player}}
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名称
+    type: text
+storagePolicy:
+  backupSubtree: Worlds
+  replaceOnRestore: true
+  backupRequiresStop: false
+  preBackupCommand: save
+  regeneratePaths:
+  - Worlds
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  mode: regex_value
+  probeCommand: playing
+  pattern: '(No|\d+)(?:\s+players?\s+connected|\s*个玩家已连接)'
+  resetPattern: 'No players connected|无玩家连接'
+  incPattern: '([^\r\n:]+?)(?:\s+has joined\.|已加入[。\.])'
+  decPattern: '([^\r\n:]+?)(?:\s+has left\.|已离开[。\.])'
+  maxConfigKey: maxPlayers
+  bindParam: player
+  quickActionIds:
+  - tr-kick

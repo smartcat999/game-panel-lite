@@ -1,0 +1,469 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  name: rust-dedicated
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: survival
+displayName: 腐蚀 Rust
+tagline: 硬核多人沙盒生存对抗 · 程序地图与领地攻防服
+summary: 支持地图尺寸与种子生成、对抗/合作规则切换、领地建筑腐朽与维护消耗调节、自动存盘及优雅停服保存。
+category: survival
+coverImage: /landing/games/rust-dedicated.jpg
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+versions:
+- latest
+recommendedVersion: latest
+recommendedPlan: pro
+resources:
+  cpu: '4'
+  memory: 12Gi
+  storage: 40Gi
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 28015
+- name: query
+  protocol: UDP
+  targetPort: 28016
+- name: rcon
+  protocol: TCP
+  targetPort: 28016
+- name: app
+  protocol: TCP
+  targetPort: 28082
+serverBinding:
+  repository: rust-server
+  package: rust
+  targetPath: .
+env:
+  HOSTNAME: GamePanel 腐蚀生存服
+  DESCRIPTION: 由 GamePanel Lite 驱动的多人腐蚀专用服务器
+  MAX_PLAYERS: '50'
+  RCON_PASSWORD: rustadmin123
+  LEVEL: Procedural Map
+  WORLD_SIZE: '3500'
+  WORLD_SEED: '1337'
+  SAVE_INTERVAL: '600'
+  PVE: 'false'
+  DECAY_SCALE: '1.0'
+  DECAY_UPKEEP: 'true'
+  STABILITY: 'true'
+  RADIATION: 'true'
+  EAC_SECURE: 'true'
+  FPS_LIMIT: '60'
+configSchema:
+- name: hostname
+  label: 服务器名称
+  type: text
+  required: true
+  default: GamePanel 腐蚀生存服
+  envKey: HOSTNAME
+  group: 基础设置
+  help: 显示在游戏服务器浏览器大厅中的名称
+  fileTarget: server/rust/cfg/server.cfg
+- name: description
+  label: 服务器简介
+  type: text
+  default: 由 GamePanel Lite 驱动的多人腐蚀专用服务器
+  envKey: DESCRIPTION
+  group: 基础设置
+  help: 服务器详情页面展示的公告与介绍文字
+  fileTarget: server/rust/cfg/server.cfg
+- name: maxPlayers
+  label: 最大同时在线人数
+  type: number
+  default: '50'
+  min: 2
+  max: 500
+  step: 1
+  envKey: MAX_PLAYERS
+  group: 基础设置
+  help: 允许同时在线游玩的幸存者人数上限（建议根据内存合理设置）
+  fileTarget: server/rust/cfg/server.cfg
+- name: fpsLimit
+  label: 服务端帧率上限
+  type: number
+  default: '60'
+  min: 15
+  max: 256
+  step: 5
+  envKey: FPS_LIMIT
+  group: 基础设置
+  help: 限制服务端主循环最高帧率（推荐 30~60 降低空载 CPU 占用，256 为引擎默认上限）
+  fileTarget: server/rust/cfg/server.cfg
+- name: rconPassword
+  label: 远程管理密码
+  type: password
+  required: true
+  default: rustadmin123
+  envKey: RCON_PASSWORD
+  group: 基础设置
+  help: 用于远程管理工具连接控制腐蚀服务端
+  fileTarget: server/rust/cfg/server.cfg
+- name: level
+  label: 地图类型
+  type: select
+  default: Procedural Map
+  envKey: LEVEL
+  group: 世界生成
+  help: 选择程序随机生成海岛地形或官方预设岛屿地图
+  fileTarget: server/rust/cfg/server.cfg
+  options:
+  - value: Procedural Map
+    label: 程序随机生成地图
+  - value: Barren
+    label: 荒芜高帧率地图
+  - value: CraggyIsland
+    label: 崎岖岛屿
+  - value: HapisIsland
+    label: 哈皮斯岛
+- name: worldSize
+  label: 世界地图尺寸
+  type: number
+  default: '3500'
+  min: 1000
+  max: 6000
+  step: 250
+  envKey: WORLD_SIZE
+  group: 世界生成
+  help: 地图边长（米），较大尺寸会显著增加内存占用（3500 推荐 12GB 内存）
+  fileTarget: server/rust/cfg/server.cfg
+- name: worldSeed
+  label: 世界地图种子
+  type: number
+  default: '1337'
+  min: 1
+  max: 2147483647
+  step: 1
+  envKey: WORLD_SEED
+  group: 世界生成
+  help: 相同地图尺寸下对应固定不变的海岛与公路布局
+  fileTarget: server/rust/cfg/server.cfg
+- name: saveInterval
+  label: 自动存盘间隔（秒）
+  type: number
+  default: '600'
+  min: 120
+  max: 3600
+  step: 60
+  envKey: SAVE_INTERVAL
+  group: 世界生成
+  help: 定期保存地图建筑与玩家背包数据的时间间隔（默认 600 秒）
+  fileTarget: server/rust/cfg/server.cfg
+- name: pve
+  label: 游戏对抗模式
+  type: select
+  default: 'false'
+  envKey: PVE
+  group: 生存规则
+  help: 合作模式下玩家之间无法互相攻击或直接摧毁他人建筑
+  fileTarget: server/rust/cfg/server.cfg
+  options:
+  - value: 'false'
+    label: 对抗生存模式
+  - value: 'true'
+    label: 合作生存模式（关闭玩家伤害）
+- name: decayScale
+  label: 领地建筑腐朽速率倍率
+  type: number
+  default: '1.0'
+  min: 0
+  max: 5
+  step: 0.1
+  envKey: DECAY_SCALE
+  group: 生存规则
+  help: 设为 0 可关闭领地柜材料不足时的建筑自动腐朽坍塌
+  fileTarget: server/rust/cfg/server.cfg
+- name: decayUpkeep
+  label: 领地柜维护材料消耗
+  type: select
+  default: 'true'
+  envKey: DECAY_UPKEEP
+  group: 生存规则
+  help: 关闭后建造基地无需持续向领地柜填充木石与金属维护材料
+  fileTarget: server/rust/cfg/server.cfg
+  options:
+  - value: 'true'
+    label: 启用标准维护消耗
+  - value: 'false'
+    label: 关闭维护消耗（建筑免腐朽）
+- name: stability
+  label: 建筑结构承重坍塌
+  type: select
+  default: 'true'
+  envKey: STABILITY
+  group: 生存规则
+  help: 关闭后可无视承重上限自由建造超大跨度高塔基地
+  fileTarget: server/rust/cfg/server.cfg
+  options:
+  - value: 'true'
+    label: 启用真实承重
+  - value: 'false'
+    label: 关闭承重限制
+- name: radiation
+  label: 辐射区域伤害
+  type: select
+  default: 'true'
+  envKey: RADIATION
+  group: 生存规则
+  help: 控制各大废墟遗迹是否保留高辐射防护需求
+  fileTarget: server/rust/cfg/server.cfg
+  options:
+  - value: 'true'
+    label: 启用辐射
+  - value: 'false'
+    label: 关闭辐射
+- name: eacSecure
+  label: 开启反作弊安全保护
+  type: select
+  default: 'true'
+  envKey: EAC_SECURE
+  group: 生存规则
+  help: 启用官方反作弊防护校验，私人测试局可临时关闭
+  fileTarget: server/rust/cfg/server.cfg
+  options:
+  - value: 'true'
+    label: 开启
+  - value: 'false'
+    label: 关闭
+configPresets:
+- id: vanilla-pvp
+  name: 官方标准对抗（中型随机地图·标准建筑腐朽）
+  description: 3500 米标准随机海岛、真实承重与标准维护腐朽规则，原汁原味多人对抗体验
+  values:
+    worldSize: '3500'
+    pve: 'false'
+    decayScale: '1.0'
+    decayUpkeep: 'true'
+    stability: 'true'
+    radiation: 'true'
+- id: casual-pve
+  name: 养老合作建造（关闭玩家伤害·免建筑维护腐朽）
+  description: 适合好友协作探索遗迹与大型建筑设计，免除偷家顾虑与维护负担
+  values:
+    worldSize: '3000'
+    pve: 'true'
+    decayScale: '0'
+    decayUpkeep: 'false'
+    stability: 'true'
+    radiation: 'true'
+- id: small-island
+  name: 小岛高频遭遇战（紧凑小地图·快速资源争夺）
+  description: 2000 米紧凑海岛缩小玩家分布半径并提高对抗节奏，降低内存占用
+  values:
+    worldSize: '2000'
+    pve: 'false'
+    decayScale: '1.0'
+    decayUpkeep: 'true'
+    stability: 'true'
+    radiation: 'true'
+fileTemplates:
+- path: server/rust/cfg/server.cfg
+  content: |
+    server.hostname "{{hostname}}"
+    server.description "{{description}}"
+    server.maxplayers {{maxPlayers}}
+    server.level "{{level}}"
+    server.worldsize {{worldSize}}
+    server.seed {{worldSeed}}
+    server.saveinterval {{saveInterval}}
+    server.pve {{pve}}
+    decay.scale {{decayScale}}
+    decay.upkeep {{decayUpkeep}}
+    server.stability {{stability}}
+    server.radiation {{radiation}}
+    server.secure {{eacSecure}}
+    fps.limit {{fpsLimit}}
+    rcon.password "{{rconPassword}}"
+preStartCommand: |
+  chmod +x /data/RustDedicated 2>/dev/null || true
+  mkdir -p /data/server/rust/cfg /data/.steam/sdk64
+  if [ -L /data/RustDedicated_Data/Plugins/x86_64/steamclient.so ]; then
+    rm -f /data/RustDedicated_Data/Plugins/x86_64/steamclient.so
+  fi
+  if [ -f /opt/steamcmd/linux64/steamclient.so ]; then
+    ln -sf /opt/steamcmd/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
+    if [ ! -f /data/RustDedicated_Data/Plugins/x86_64/steamclient.so ]; then
+      cp -f /opt/steamcmd/linux64/steamclient.so /data/RustDedicated_Data/Plugins/x86_64/steamclient.so 2>/dev/null || true
+    fi
+  fi
+startupCommand: |
+  cfg_val() {
+    [ -f /data/server/rust/cfg/server.cfg ] && sed -n "s|^$1 ||p" /data/server/rust/cfg/server.cfg | head -n1 | sed 's/^"//;s/"$//' || true
+  }
+  HNAME="$(cfg_val server.hostname)"; [ -n "$HNAME" ] || HNAME="${HOSTNAME:-GamePanel 腐蚀生存服}"
+  HDESC="$(cfg_val server.description)"; [ -n "$HDESC" ] || HDESC="${DESCRIPTION:-GamePanel Lite Rust}"
+  MAXP="$(cfg_val server.maxplayers)"; [ -n "$MAXP" ] || MAXP="${MAX_PLAYERS:-50}"
+  LVL="$(cfg_val server.level)"; [ -n "$LVL" ] || LVL="${LEVEL:-Procedural Map}"
+  WSIZE="$(cfg_val server.worldsize)"; [ -n "$WSIZE" ] || WSIZE="${WORLD_SIZE:-3500}"
+  WSEED="$(cfg_val server.seed)"; [ -n "$WSEED" ] || WSEED="${WORLD_SEED:-1337}"
+  SINT="$(cfg_val server.saveinterval)"; [ -n "$SINT" ] || SINT="${SAVE_INTERVAL:-600}"
+  PVE="$(cfg_val server.pve)"; [ -n "$PVE" ] || PVE="${PVE:-false}"
+  DECAY="$(cfg_val decay.scale)"; [ -n "$DECAY" ] || DECAY="${DECAY_SCALE:-1.0}"
+  UPKEEP="$(cfg_val decay.upkeep)"; [ -n "$UPKEEP" ] || UPKEEP="${DECAY_UPKEEP:-true}"
+  STAB="$(cfg_val server.stability)"; [ -n "$STAB" ] || STAB="${STABILITY:-true}"
+  RAD="$(cfg_val server.radiation)"; [ -n "$RAD" ] || RAD="${RADIATION:-true}"
+  SEC="$(cfg_val server.secure)"; [ -n "$SEC" ] || SEC="${EAC_SECURE:-true}"
+  FPS="$(cfg_val fps.limit)"; [ -n "$FPS" ] || FPS="${FPS_LIMIT:-60}"
+  RPW="$(cfg_val rcon.password)"; [ -n "$RPW" ] || RPW="${RCON_PASSWORD:-rustadmin123}"
+  export LD_LIBRARY_PATH="/data:/data/RustDedicated_Data/Plugins/x86_64:${LD_LIBRARY_PATH:-}"
+  set -- /data/RustDedicated -batchmode -nographics -logfile - +fps.limit "$FPS" +server.ip 0.0.0.0 +server.port 28015 +server.queryport 28016 +app.port 28082 +rcon.ip 0.0.0.0 +rcon.port 28016 +rcon.web 1 +server.identity "rust" +server.level "$LVL" +server.worldsize "$WSIZE" +server.seed "$WSEED" +server.maxplayers "$MAXP" +server.hostname "$HNAME" +server.description "$HDESC" +server.saveinterval "$SINT" +server.pve "$PVE" +decay.scale "$DECAY" +decay.upkeep "$UPKEEP" +server.stability "$STAB" +server.radiation "$RAD" +rcon.password "$RPW"
+  [ "$SEC" = "false" ] && set -- "$@" -insecure
+  exec "$@"
+preStopCommand: |
+  pkill -INT -f '[R]ustDedicated' 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && pgrep -f '[R]ustDedicated' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+published: true
+consoleDelivery: |-
+  python3 -c '
+  import base64,json,os,socket,struct,sys
+  cmd=sys.argv[1].strip()
+  def log_stdout(msg):
+    try:
+      open("/proc/1/fd/1","a",encoding="utf-8").write(msg+"\n")
+    except Exception:
+      pass
+  cfg="/data/server/rust/cfg/server.cfg"
+  raw=open(cfg).read() if os.path.exists(cfg) else ""
+  pws=[ln.split("rcon.password",1)[1].strip().strip("\"") for ln in raw.splitlines() if ln.strip().startswith("rcon.password")]
+  pw=pws[0] if pws and pws[0] else os.environ.get("RCON_PASSWORD","rustadmin123")
+  out_msg=""
+  try:
+    s=socket.create_connection(("127.0.0.1",28016),1.5)
+    k=base64.b64encode(os.urandom(16)).decode()
+    s.sendall(f"GET /{pw} HTTP/1.1\r\nHost: 127.0.0.1:28016\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {k}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode())
+    buf=b""
+    while b"\r\n\r\n" not in buf:
+      c=s.recv(4096)
+      if not c: break
+      buf+=c
+    if b"101" not in buf.split(b"\r\n",1)[0]: sys.exit(1)
+    pay=json.dumps({"Identifier":1,"Message":cmd,"Name":"GamePanel"}).encode()
+    hdr=bytes([0x81,0x80|(len(pay) if len(pay)<126 else 126)])+(b"" if len(pay)<126 else struct.pack("!H",len(pay)))
+    mask=os.urandom(4)
+    s.sendall(hdr+mask+bytes(b^mask[i&3] for i,b in enumerate(pay)))
+    s.settimeout(0.6)
+    for _ in range(8):
+      b=s.recv(2)
+      if len(b)<2: break
+      l=b[1]&0x7f
+      if l==126: l=struct.unpack("!H",s.recv(2))[0]
+      elif l==127: l=struct.unpack("!Q",s.recv(8))[0]
+      data=b""
+      while len(data)<l: data+=s.recv(l-len(data))
+      try:
+        resp=json.loads(data.decode("utf-8","replace"))
+      except Exception:
+        continue
+      if resp.get("Identifier")==1:
+        out_msg=(resp.get("Message") or "").strip()
+        break
+  except SystemExit:
+    raise
+  except Exception:
+    pass
+  log_stdout(f"[RCON] > {cmd}" + (f"\n{out_msg}" if out_msg else ""))
+  print(out_msg or "OK")
+  ' {{cmd}}
+consoleActions:
+- id: rust-save
+  title: 立即保存世界
+  group: 服务器维护
+  command: server.save
+  starred: true
+- id: rust-status
+  title: 查看在线玩家状态
+  group: 服务器维护
+  command: status
+  starred: true
+- id: rust-fps
+  title: 调整服务端帧率上限
+  group: 服务器维护
+  command: fps.limit {{fps}}
+  starred: true
+  params:
+  - name: fps
+    label: 帧率上限
+    type: select
+    defaultValue: '60'
+    options:
+    - value: '30'
+      label: 30 FPS
+    - value: '60'
+      label: 60 FPS
+    - value: '120'
+      label: 120 FPS
+    - value: '256'
+      label: 256 FPS
+- id: rust-say
+  title: 全服公告广播
+  group: 玩家广播
+  command: say "{{msg}}"
+  starred: true
+  params:
+  - name: msg
+    label: 公告内容
+    type: text
+    defaultValue: 服务器即将维护，请提前前往安全屋
+- id: rust-kick
+  title: 踢出玩家
+  group: 玩家权限
+  command: kick "{{player}}"
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名称
+    type: text
+- id: rust-ban
+  title: 封禁玩家
+  group: 玩家权限
+  command: ban "{{player}}"
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名称或 SteamID
+    type: text
+- id: rust-unban
+  title: 解除玩家封禁
+  group: 玩家权限
+  command: unban "{{player}}"
+  starred: false
+  params:
+  - name: player
+    label: SteamID 64
+    type: text
+storagePolicy:
+  backupSubtree: server/rust
+  replaceOnRestore: true
+  backupRequiresStop: true
+  preBackupCommand: server.save
+  regeneratePaths:
+  - server/rust
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_value
+  maxConfigKey: maxPlayers
+  probeCommand: |-
+    python3 -c 'import socket
+    q=b"\xff\xff\xff\xffTSource Engine Query\x00"
+    for h in (socket.gethostbyname(socket.gethostname()),"127.0.0.1"):
+      try:
+        s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(0.6); s.sendto(q,(h,28016)); d,_=s.recvfrom(4096)
+        if len(d)>=9 and d[4]==65: s.sendto(q+d[5:9],(h,28016)); d,_=s.recvfrom(4096)
+        pos=6
+        for _ in range(4): pos=d.find(0,pos)+1
+        print("GP_ONLINE="+str(d[pos+2])); raise SystemExit
+      except SystemExit: raise
+      except Exception: pass
+    print("GP_ONLINE=0")' 2>/dev/null || echo 'GP_ONLINE=0'
+  pattern: 'GP_ONLINE=(\d+)'

@@ -1,0 +1,5674 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  creationTimestamp: '0001-01-01T00:00:00Z'
+  generation: 0
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: survival
+  name: dont-starve-together
+  resourceVersion: ''
+  uid: ''
+builtIn: true
+serverBinding:
+  repository: dst-server
+  package: dst-server
+  targetPath: .
+addonBinding:
+  repository: dst-workshop
+  installMode: dst_local_mods
+  targetDir: mods
+capabilities:
+- console
+- mods
+- files
+- backups
+category: survival
+configPresets:
+- id: endless-coop
+  name: 无尽合作模式（绚丽之门无限复活）
+  description: 死亡后可在出生点绚丽之门直接复活，全灭不重置世界，开启地下洞穴
+  values:
+    identity.serverName: 饥荒无尽联机服
+    gameplay.gameMode: endless
+    gameplay.maxPlayers: '8'
+    gameplay.pvp: 'false'
+    gameplay.pauseWhenEmpty: 'true'
+    caves.enabled: 'true'
+    world.overrides.portalresurection: always
+    world.overrides.resettime: none
+- id: survival-classic
+  name: 经典生存模式（全员阵亡世界重置）
+  description: 官方原版合作生存体验，固定出生门，全员变鬼魂后倒计时重置世界
+  values:
+    identity.serverName: 饥荒经典生存服
+    gameplay.gameMode: survival
+    gameplay.maxPlayers: '6'
+    gameplay.pvp: 'false'
+    gameplay.pauseWhenEmpty: 'true'
+    caves.enabled: 'true'
+    world.overrides.portalresurection: none
+    world.overrides.resettime: default
+- id: rich-resources
+  name: 丰饶养老开荒（多资源·长秋季·少袭击）
+  description: 调高树枝、草、浆果与矿石密度，延长开局秋季，降低猎犬袭击频率
+  values:
+    identity.serverName: 饥荒丰饶养老服
+    gameplay.gameMode: endless
+    gameplay.maxPlayers: '10'
+    caves.enabled: 'true'
+    world.overrides.flint: often
+    world.overrides.grass: often
+    world.overrides.sapling: often
+    world.overrides.berrybush: often
+    world.overrides.rock: often
+    world.overrides.autumn: longseason
+    world.overrides.hounds: rare
+configSchema:
+- name: identity.serverName
+  label: 服务器名称
+  type: text
+  required: true
+  default: DST Friends
+  group: 基础设置
+  help: 显示在饥荒大厅列表中的房间名称
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: identity.clusterName
+  label: 集群存档名称
+  type: text
+  required: true
+  default: GamePanelCluster
+  group: 基础设置
+  help: 集群存档目录标识
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: identity.description
+  label: 服务器描述
+  type: text
+  default: 由 GamePanel Lite 驱动的饥荒联机服
+  group: 基础设置
+  help: 大厅房间详情页显示的欢迎说明
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: identity.password
+  label: 服务器密码
+  type: password
+  default: ''
+  group: 基础设置
+  help: 留空表示公开免密进入
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: identity.clusterToken
+  label: Klei 服务器令牌
+  type: password
+  required: false
+  default: ''
+  group: 基础设置
+  help: 在 Klei 账号页面创建专用服务器令牌 (pds-g^...) 后填入；留空时自动降级为局域网离线模式启动
+  envKey: DST_CLUSTER_TOKEN
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster_token.txt
+- name: identity.visibility
+  label: 可见性
+  type: select
+  required: true
+  default: public
+  group: 基础设置
+  help: 控制服务器在公共大厅中的展示方式
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+  options:
+  - value: public
+    label: 公开
+  - value: lan
+    label: 局域网
+  - value: offline
+    label: 离线
+  envKey: CLUSTER_VISIBILITY
+- name: gameplay.gameMode
+  label: 游戏模式
+  type: select
+  required: true
+  default: endless
+  group: 基础设置
+  help: 生存 / 无尽（绚丽之门复活） / 荒野（随机出生）
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+  options:
+  - value: survival
+    label: 生存
+  - value: endless
+    label: 无尽
+  - value: wilderness
+    label: 荒野
+- name: gameplay.maxPlayers
+  label: 最大玩家数
+  type: number
+  required: true
+  default: '6'
+  min: 1
+  max: 64
+  step: 1
+  group: 基础设置
+  help: 允许同时在线的冒险家人数上限 (1–64)
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: world.preset
+  label: 世界预设
+  type: select
+  required: true
+  default: forest_default
+  group: 基础设置
+  help: 地上森林世界的基础生成模板
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: forest_default
+    label: 默认森林
+  - value: forest_classic
+    label: 经典森林
+  - value: forest_survival
+    label: 生存森林
+- name: gameplay.pvp
+  label: 开启 PVP
+  type: boolean
+  default: 'false'
+  group: 基础设置
+  help: 允许玩家之间互相造成伤害
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: gameplay.pauseWhenEmpty
+  label: 无人时暂停
+  type: boolean
+  default: 'true'
+  group: 基础设置
+  help: 服务器无玩家在线时自动冻结世界时间
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: gameplay.consoleEnabled
+  label: 启用控制台
+  type: boolean
+  default: 'true'
+  group: 基础设置
+  help: 允许管理员执行远程 Lua 控制台指令
+  fileTarget: DoNotStarveTogether/Cluster_1/cluster.ini
+- name: caves.enabled
+  label: 启用洞穴世界
+  type: boolean
+  default: 'true'
+  group: 基础设置
+  help: 同时开启地下洞穴世界进程与专属世界参数
+  envKey: ENABLE_CAVES
+- name: world.overrides.spiders
+  label: 蜘蛛巢
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Spider Dens · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.houndmound
+  label: 猎犬丘
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Hound Mounds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.merm
+  label: 漏雨的小屋
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Leaky Shack · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.tentacles
+  label: 触手
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Tentacles · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.chess
+  label: 发条装置
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Clockworks · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.walrus
+  label: 海象营地
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: MacTusk Camps · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_spiders
+  label: 破碎蜘蛛洞
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Shattered Spider Holes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ocean_waterplant
+  label: 海草
+  type: select
+  default: ocean_default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Sea Weeds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: ocean_never
+    label: 从不
+  - value: ocean_rare
+    label: 稀少
+  - value: ocean_uncommon
+    label: 较少
+  - value: ocean_default
+    label: 默认
+  - value: ocean_often
+    label: 较多
+  - value: ocean_mostly
+    label: 很多
+  - value: ocean_always
+    label: 总是
+  - value: ocean_insane
+    label: 疯狂
+- name: world.overrides.angrybees
+  label: 杀人蜂蜂窝
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Killer Bee Hives · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.tallbirds
+  label: 高脚鸟
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 敌对生物
+  help: Tallbirds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.rabbits
+  label: 兔洞
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Rabbit Holes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moles
+  label: 鼹鼠丘
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Mole Burrows · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.buzzard
+  label: 秃鹫
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Buzzards · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.catcoon
+  label: 空心树桩
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Hollow Stump · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.pigs
+  label: 猪屋
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Pig Houses · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.lightninggoat
+  label: 伏特羊
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Volt Goats · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.beefalo
+  label: 皮弗娄牛
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Beefalos · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.bees
+  label: 蜜蜂蜂窝
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Bee Hives · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_carrot
+  label: 胡萝卜鼠
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Carrats · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_fruitdragon
+  label: 沙拉蝾螈
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Saladmander · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ocean_shoal
+  label: 鱼群
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Shoals · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ocean_wobsterden
+  label: 龙虾窝
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Wobster Mounds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ocean_otterdens
+  label: 水獭掠夺者窝点
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 生态动物
+  help: Marotter Dens · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.flowers
+  label: 花，邪恶花
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Flowers, Evil Flowers · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.grass
+  label: 草
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Grass · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.sapling
+  label: 树苗
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Saplings · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.marshbush
+  label: 尖刺灌木
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Spiky Bushes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.tumbleweed
+  label: 风滚草
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Tumbleweeds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.reeds
+  label: 芦苇
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Reeds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.trees
+  label: 树（所有）
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Trees (All) · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.flint
+  label: 燧石
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Flint · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.rock
+  label: 巨石
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Boulders · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.rock_ice
+  label: 迷你冰川
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Mini Glaciers · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.meteorspawner
+  label: 流星区域
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Meteor Fields · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.berrybush
+  label: 浆果丛
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Berry Bushes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.carrot
+  label: 胡萝卜
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Carrots · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.mushroom
+  label: 蘑菇
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Mushrooms · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.cactus
+  label: 仙人掌
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Cacti · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_tree
+  label: 月树
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Lune Trees · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_sapling
+  label: 月亮树苗
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Lunar Saplings · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_berrybush
+  label: 石果灌木丛
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Stone Fruit Bushes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_rock
+  label: 月亮石
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Lunar Rocks · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_hotspring
+  label: 温泉
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Hot Springs · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_starfish
+  label: 海星
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Anenemies · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.moon_bullkelp
+  label: 海岸公牛海带
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Beached Bull Kelp · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ponds
+  label: 池塘
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Ponds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ocean_bullkelp
+  label: 公牛海带
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 自然资源
+  help: Bull Kelp · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.ocean_seastack
+  label: 海蚀柱
+  type: select
+  default: ocean_default
+  group: 地上世界 / 生成 · 自然资源
+  help: Sea Stacks · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: ocean_never
+    label: 从不
+  - value: ocean_rare
+    label: 稀少
+  - value: ocean_uncommon
+    label: 较少
+  - value: ocean_default
+    label: 默认
+  - value: ocean_often
+    label: 较多
+  - value: ocean_mostly
+    label: 很多
+  - value: ocean_always
+    label: 总是
+  - value: ocean_insane
+    label: 疯狂
+- name: world.overrides.task_set
+  label: 生物群落
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Biomes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: classic
+    label: 经典
+- name: world.overrides.start_location
+  label: 出生点
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Spawn Area · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: plus
+    label: 额外资源
+  - value: darkness
+    label: 黑暗
+- name: world.overrides.world_size
+  label: 世界大小
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: World Size · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: small
+    label: 小
+  - value: medium
+    label: 中等
+  - value: default
+    label: 默认
+  - value: huge
+    label: 巨大
+- name: world.overrides.branching
+  label: 分支
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Branches · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: least
+    label: 最少
+  - value: default
+    label: 默认
+  - value: most
+    label: 最多
+  - value: random
+    label: 随机
+- name: world.overrides.loop
+  label: 环形
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Loops · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+  - value: always
+    label: 总是
+- name: world.overrides.roads
+  label: 道路
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Roads · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.touchstone
+  label: 试金石
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Touch Stones · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.boons
+  label: 失败的冒险家
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Failed Survivors · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.prefabswaps_start
+  label: 开始资源多样化
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Starting Resource Variety · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: classic
+    label: 经典
+  - value: default
+    label: 默认
+  - value: highly random
+    label: 高度随机
+- name: world.overrides.moon_fissure
+  label: 天体裂缝
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Celestial Fissures · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: world.overrides.terrariumchest
+  label: 盒中泰拉
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Terrarium · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.stageplays
+  label: 舞台剧
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Stage Plays · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.junkyard
+  label: 垃圾场
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: Junk Yard · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.balatro
+  label: 小丑
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 特殊地形
+  help: JIMBO · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.season_start
+  label: 起始季节
+  type: select
+  default: default
+  group: 地上世界 / 生成 · 起始规则
+  help: Starting Season · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: winter
+    label: 冬季
+  - value: spring
+    label: 春季
+  - value: summer
+    label: 夏季
+  - value: autumn|spring
+    label: 秋季或春季
+  - value: winter|summer
+    label: 冬季或夏季
+  - value: autumn|winter|spring|summer
+    label: 随机季节
+- name: world.overrides.mutated_hounds
+  label: 恐怖猎犬
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Horror Hounds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.penguins_moon
+  label: 永冻企鸥
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Permafrost Pengulls · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.moon_spider
+  label: 破碎蜘蛛
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Shattered Spiders · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.mutated_birds
+  label: 变异的鸟
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Mutated Birds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_merm
+  label: 变异鱼人
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Mutated Merms · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_spiderqueen
+  label: 破碎蜘蛛洞
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Shattered Spider Holes · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_bird_gestalt
+  label: 亮喙鸟
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Bright-Beaked Birds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_buzzard_gestalt
+  label: 水晶冠秃鹫
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Crystal-Crested Buzzards · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_deerclops
+  label: 晶体独眼巨鹿
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Crystal Deerclops · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_bearger
+  label: 装甲熊獾
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Armored Bearger · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.mutated_warg
+  label: 附身座狼
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 月亮变异
+  help: Possessed Vargs · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.liefs
+  label: 树精守卫
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Treeguards · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.deciduousmonster
+  label: 毒桦栗树
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Poison Birchnut Trees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.bearger
+  label: 熊獾
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Bearger · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.deerclops
+  label: 独眼巨鹿
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Deerclops · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.goosemoose
+  label: 麋鹿鹅
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Meese/Geese · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.dragonfly
+  label: 龙蝇
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Dragonfly · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.antliontribute
+  label: 蚁狮贡品
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Antlion Tribute · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.crabking
+  label: 帝王蟹
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Crabking · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.beequeen
+  label: 蜂王
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Bee Queen · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.malbatross
+  label: 邪天翁
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Malbatross · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.fruitfly
+  label: 果蝇王
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Lord of the Fruit Flies · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.klaus
+  label: 克劳斯
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Klaus · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.spiderqueen
+  label: 蜘蛛女王
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Spider Queen · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.eyeofterror
+  label: 恐怖之眼
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Eye of Terror · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.daywalker2
+  label: 拾荒疯猪
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Scrappy Werepig · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.sharkboi
+  label: 大霜鲨
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 巨兽首领
+  help: Frostjaw · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.lureplants
+  label: 食人花
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Lureplants · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.hound_mounds
+  label: 猎犬
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Hounds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.mosquitos
+  label: 蚊子
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Mosquitos · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.sharks
+  label: 鲨鱼
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Sharks · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.squid
+  label: 鱿鱼
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Skittersquids · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.wasps
+  label: 杀人蜂
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Killer Bees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.frogs
+  label: 青蛙
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Frogs · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.walrus_setting
+  label: 海象
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: MacTusk · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.cookiecutters
+  label: 饼干切割机
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Cookie Cutters · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.merms
+  label: 鱼人
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Merms · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.spiders_setting
+  label: 蜘蛛
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Spiders · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.spider_warriors
+  label: 蜘蛛战士
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Spider Warriors · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.bats_setting
+  label: 蝙蝠
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 敌对生物
+  help: Bats · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.butterfly
+  label: 蝴蝶
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Butterflies · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.birds
+  label: 鸟
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Birds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.perd
+  label: 火鸡
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Gobblers · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.penguins
+  label: 企鸥
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Pengulls · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.bees_setting
+  label: 蜜蜂
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Bees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.catcoons
+  label: 浣猫
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Catcoons · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.rabbits_setting
+  label: 兔子
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Rabbits · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.wobsters
+  label: 龙虾
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Wobsters · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.gnarwail
+  label: 一角鲸
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Gnarwails · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.fishschools
+  label: 鱼群
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Schools of Fish · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.otters_setting
+  label: 水獭掠夺者
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Marotters · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.pigs_setting
+  label: 猪
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Pigs · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.bunnymen_setting
+  label: 兔人
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Bunnymen · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.moles_setting
+  label: 鼹鼠
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Moles · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.grassgekkos
+  label: 草壁虎转化
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 生态动物
+  help: Grass Gekko Morphing · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.regrowth
+  label: 再生速度
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Regrowth Multiplier · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.evergreen_regrowth
+  label: 常青树
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Evergreens · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.deciduoustree_regrowth
+  label: 桦栗树
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Birchnut Trees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.twiggytrees_regrowth
+  label: 多枝树
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Twiggy Trees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.moon_tree_regrowth
+  label: 月树
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Lune Trees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.flowers_regrowth
+  label: 花
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Flowers · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.carrots_regrowth
+  label: 胡萝卜
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Carrots · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.reeds_regrowth
+  label: 芦苇
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Reeds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.cactus_regrowth
+  label: 仙人掌
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Cacti · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.saltstack_regrowth
+  label: 盐堆
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 资源再生
+  help: Salt Formations · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: world.overrides.basicresource_regrowth
+  label: 基础资源
+  type: select
+  default: none
+  group: 地上世界 / 规则 · 资源再生
+  help: Basic Resources · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+- name: world.overrides.lightning
+  label: 闪电
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Lightning · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.frograin
+  label: 青蛙雨
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Frog Rain · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.wildfires
+  label: 野火
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Wildfires · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.petrification
+  label: 森林石化
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Forest Petrification · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: few
+    label: 少
+  - value: default
+    label: 默认
+  - value: many
+    label: 多
+  - value: max
+    label: 最大
+- name: world.overrides.meteorshowers
+  label: 流星频率
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Meteor Frequency · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.hunt
+  label: 狩猎
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Hunts · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.alternatehunt
+  label: 狩猎惊喜
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Hunt Surprises · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.hounds
+  label: 猎犬袭击
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Hound Attacks · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.winterhounds
+  label: 寒冰猎犬群
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Ice Hound Waves · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.summerhounds
+  label: 火焰猎犬群
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Fire Hound Waves · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.wanderingtrader_enabled
+  label: 流浪商人
+  type: select
+  default: always
+  group: 地上世界 / 规则 · 环境袭击
+  help: Wandering Trader · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+- name: world.overrides.weather
+  label: 雨
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 环境袭击
+  help: Rain · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.extrastartingitems
+  label: 额外起始资源
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Extra Starting Resources · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: '0'
+    label: 立即
+  - value: '5'
+    label: 5 天
+  - value: default
+    label: 默认
+  - value: '15'
+    label: 15 天
+  - value: '20'
+    label: 20 天
+  - value: none
+    label: 无
+- name: world.overrides.seasonalstartingitems
+  label: 季节起始物品
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Seasonal Starting Items · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: world.overrides.spawnprotection
+  label: 防骚扰出生保护
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Griefer Spawn Protection · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+  - value: always
+    label: 总是
+- name: world.overrides.dropeverythingondespawn
+  label: 离开游戏后物品掉落
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Drop Items on Disconnect · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: always
+    label: 总是
+- name: world.overrides.healthpenalty
+  label: 生命值上限惩罚
+  type: select
+  default: always
+  group: 地上世界 / 规则 · 玩家
+  help: Max Health Penalty · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+- name: world.overrides.lessdamagetaken
+  label: 受到的伤害
+  type: select
+  default: none
+  group: 地上世界 / 规则 · 玩家
+  help: Damage Taken · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: always
+    label: 总是
+  - value: none
+    label: 无
+  - value: more
+    label: 更多伤害
+- name: world.overrides.temperaturedamage
+  label: 温度伤害
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Temperature Damage · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: nonlethal
+    label: 非致命
+  - value: default
+    label: 默认
+- name: world.overrides.hunger
+  label: 饥饿伤害
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Hunger Damage · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: nonlethal
+    label: 非致命
+  - value: default
+    label: 默认
+- name: world.overrides.darkness
+  label: 黑暗伤害
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Darkness Damage · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: nonlethal
+    label: 非致命
+  - value: default
+    label: 默认
+- name: world.overrides.shadowcreatures
+  label: 理智怪兽
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Sanity Monsters · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.brightmarecreatures
+  label: 启蒙怪兽
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 玩家
+  help: Enlightenment Monsters · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.crow_carnival
+  label: 盛夏鸦年华
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Midsummer Cawnival · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.hallowed_nights
+  label: 万圣夜
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Hallowed Nights · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.winters_feast
+  label: 冬季盛宴
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Winter's Feast · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_gobbler
+  label: 火鸡之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Gobbler · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_varg
+  label: 座狼之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Varg · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_pig
+  label: 猪王之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Pig King · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_carrat
+  label: 胡萝卜鼠之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Carrat · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_beefalo
+  label: 皮弗娄牛之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Beefalo · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_catcoon
+  label: 浣猫之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Catcoon · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_bunnyman
+  label: 兔人之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Bunnyman · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_dragonfly
+  label: 龙蝇之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Dragonfly · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_snake
+  label: 洞穴蠕虫之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Depths Worm · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.year_of_the_knight
+  label: 发条骑士之年
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 季节活动
+  help: Year of the Clockwork Knight · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: enabled
+    label: 启用
+- name: world.overrides.specialevent
+  label: 活动
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Events · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: default
+    label: 默认
+- name: world.overrides.autumn
+  label: 秋
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Autumn · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: noseason
+    label: 无
+  - value: veryshortseason
+    label: 非常短
+  - value: shortseason
+    label: 短
+  - value: default
+    label: 默认
+  - value: longseason
+    label: 长
+  - value: verylongseason
+    label: 非常长
+  - value: random
+    label: 随机
+- name: world.overrides.winter
+  label: 冬
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Winter · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: noseason
+    label: 无
+  - value: veryshortseason
+    label: 非常短
+  - value: shortseason
+    label: 短
+  - value: default
+    label: 默认
+  - value: longseason
+    label: 长
+  - value: verylongseason
+    label: 非常长
+  - value: random
+    label: 随机
+- name: world.overrides.spring
+  label: 春
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Spring · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: noseason
+    label: 无
+  - value: veryshortseason
+    label: 非常短
+  - value: shortseason
+    label: 短
+  - value: default
+    label: 默认
+  - value: longseason
+    label: 长
+  - value: verylongseason
+    label: 非常长
+  - value: random
+    label: 随机
+- name: world.overrides.summer
+  label: 夏
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Summer · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: noseason
+    label: 无
+  - value: veryshortseason
+    label: 非常短
+  - value: shortseason
+    label: 短
+  - value: default
+    label: 默认
+  - value: longseason
+    label: 长
+  - value: verylongseason
+    label: 非常长
+  - value: random
+    label: 随机
+- name: world.overrides.day
+  label: 昼夜选项
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Day Type · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: default
+    label: 默认
+  - value: longday
+    label: 长白天
+  - value: longdusk
+    label: 长黄昏
+  - value: longnight
+    label: 长夜晚
+  - value: noday
+    label: 无白天
+  - value: nodusk
+    label: 无黄昏
+  - value: nonight
+    label: 无夜晚
+  - value: onlyday
+    label: 仅白天
+  - value: onlydusk
+    label: 仅黄昏
+  - value: onlynight
+    label: 仅夜晚
+- name: world.overrides.spawnmode
+  label: 出生模式
+  type: select
+  default: fixed
+  group: 地上世界 / 规则 · 全局
+  help: Spawn Mode · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: fixed
+    label: 固定出生门
+  - value: scatter
+    label: 随机出生
+- name: world.overrides.ghostenabled
+  label: 冒险家死亡
+  type: select
+  default: always
+  group: 地上世界 / 规则 · 全局
+  help: Survivor Death · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+- name: world.overrides.portalresurection
+  label: 在绚丽之门复活
+  type: select
+  default: none
+  group: 地上世界 / 规则 · 全局
+  help: Revive At Florid Postern · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+- name: world.overrides.ghostsanitydrain
+  label: 鬼魂理智值惩罚
+  type: select
+  default: always
+  group: 地上世界 / 规则 · 全局
+  help: Ghost Sanity Drain · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+- name: world.overrides.resettime
+  label: 死亡重置倒计时
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Death Reset Timer · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: always
+    label: 总是
+- name: world.overrides.beefaloheat
+  label: 皮弗娄牛交配频率
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Beefalo Mating Frequency · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: world.overrides.krampus
+  label: 坎普斯
+  type: select
+  default: default
+  group: 地上世界 / 规则 · 全局
+  help: Krampii · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spiders
+  label: 蜘蛛巢
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Spider Dens · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.cave_spiders
+  label: 蛛网岩
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Spilagmites · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.tentacles
+  label: 触手
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Tentacles · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.chess
+  label: 发条装置
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Clockworks · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.bats
+  label: 蝙蝠
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Bats · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.fissure
+  label: 梦魇裂缝
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Nightmare Fissures · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.worms
+  label: 洞穴蠕虫
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 敌对生物
+  help: Cave Worms · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.slurper
+  label: 啜食者
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 生态动物
+  help: Slurpers · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.bunnymen
+  label: 兔屋
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 生态动物
+  help: Rabbit Hutches · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.slurtles
+  label: 蛞蝓龟窝
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 生态动物
+  help: Slurtle Mounds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.rocky
+  label: 石虾
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 生态动物
+  help: Rock Lobsters · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.monkey
+  label: 穴居猴桶
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 生态动物
+  help: Splumonkey Pods · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.grass
+  label: 草
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Grass · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.sapling
+  label: 树苗
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Saplings · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.marshbush
+  label: 尖刺灌木
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Spiky Bushes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.reeds
+  label: 芦苇
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Reeds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.trees
+  label: 树（所有）
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Trees (All) · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.flint
+  label: 燧石
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Flint · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.rock
+  label: 巨石
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Boulders · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.mushtree
+  label: 蘑菇树
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Mushroom Trees · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.fern
+  label: 洞穴蕨类
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Cave Ferns · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.flower_cave
+  label: 荧光花
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Light Flowers · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.wormlights
+  label: 发光浆果
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Glow Berries · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.tree_rock
+  label: 巨石枝
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Boulderboughs · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.berrybush
+  label: 浆果丛
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Berry Bushes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.mushroom
+  label: 蘑菇
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Mushrooms · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.banana
+  label: 香蕉
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Bananas · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.lichen
+  label: 苔藓
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Lichen · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.cave_ponds
+  label: 池塘
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 自然资源
+  help: Ponds · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.task_set
+  label: 生物群落
+  type: select
+  default: cave_default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Biomes · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: cave_default
+    label: 默认洞穴
+- name: caves.overrides.start_location
+  label: 出生点
+  type: select
+  default: caves
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Spawn Area · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: caves
+    label: 洞穴入口
+- name: caves.overrides.world_size
+  label: 世界大小
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: World Size · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: small
+    label: 小
+  - value: medium
+    label: 中等
+  - value: default
+    label: 默认
+  - value: huge
+    label: 巨大
+- name: caves.overrides.branching
+  label: 分支
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Branches · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: least
+    label: 最少
+  - value: default
+    label: 默认
+  - value: most
+    label: 最多
+  - value: random
+    label: 随机
+- name: caves.overrides.loop
+  label: 环形
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Loops · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+  - value: always
+    label: 总是
+- name: caves.overrides.touchstone
+  label: 试金石
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Touch Stones · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.boons
+  label: 失败的冒险家
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Failed Survivors · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: uncommon
+    label: 较少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: mostly
+    label: 很多
+  - value: always
+    label: 总是
+  - value: insane
+    label: 疯狂
+- name: caves.overrides.cavelight
+  label: 洞穴光照
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Sinkhole Lights · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.prefabswaps_start
+  label: 开始资源多样化
+  type: select
+  default: default
+  group: 洞穴世界 / 生成 · 特殊地形
+  help: Starting Resource Variety · 仅在创建或重新生成世界时生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: classic
+    label: 经典
+  - value: default
+    label: 默认
+  - value: highly random
+    label: 高度随机
+- name: caves.overrides.moon_spider
+  label: 破碎蜘蛛
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 月亮变异
+  help: Shattered Spiders · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.mutated_birds
+  label: 变异的鸟
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 月亮变异
+  help: Mutated Birds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: caves.overrides.mutated_merm
+  label: 变异鱼人
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 月亮变异
+  help: Mutated Merms · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: caves.overrides.mutated_spiderqueen
+  label: 破碎蜘蛛洞
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 月亮变异
+  help: Shattered Spider Holes · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: caves.overrides.liefs
+  label: 树精守卫
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 巨兽首领
+  help: Treeguards · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.toadstool
+  label: 毒菌蟾蜍
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 巨兽首领
+  help: Toadstool · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.fruitfly
+  label: 果蝇王
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 巨兽首领
+  help: Lord of the Fruit Flies · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spiderqueen
+  label: 蜘蛛女王
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 巨兽首领
+  help: Spider Queen · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.daywalker
+  label: 梦魇疯猪
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 巨兽首领
+  help: Nightmare Werepig · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.merms
+  label: 鱼人
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Merms · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spiders_setting
+  label: 蜘蛛
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Spiders · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spider_warriors
+  label: 蜘蛛战士
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Spider Warriors · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: default
+    label: 默认
+- name: caves.overrides.bats_setting
+  label: 蝙蝠
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Bats · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.nightmarecreatures
+  label: 遗迹梦魇
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Ruins Nightmares · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spider_hider
+  label: 洞穴蜘蛛
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Cave Spiders · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spider_spitter
+  label: 喷射蜘蛛
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Spitter Spiders · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.spider_dropper
+  label: 穴居悬蛛
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Dangling Depth Dwellers · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.molebats
+  label: 裸鼹蝠
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Naked Mole Bats · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.itemmimics
+  label: 拟态蠕虫
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Mimicreeps · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.chest_mimics
+  label: 暴躁箱子
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 敌对生物
+  help: Ornery Chests · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.pigs_setting
+  label: 猪
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Pigs · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.bunnymen_setting
+  label: 兔人
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Bunnymen · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.moles_setting
+  label: 鼹鼠
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Moles · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.grassgekkos
+  label: 草壁虎转化
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Grass Gekko Morphing · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.slurtles_setting
+  label: 蛞蝓龟
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Slurtles · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.snurtles
+  label: 蜗牛龟
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Snurtles · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.rocky_setting
+  label: 石虾
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Rock Lobsters · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.monkey_setting
+  label: 穴居猴
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Splumonkeys · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.dustmoths
+  label: 尘蛾
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Dust Moths · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.lightfliers
+  label: 球状光虫
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Bulbous Lightbugs · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.mushgnome
+  label: 蘑菇地精
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 生态动物
+  help: Mush Gnomes · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.regrowth
+  label: 再生速度
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Regrowth Multiplier · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.evergreen_regrowth
+  label: 常青树
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Evergreens · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.twiggytrees_regrowth
+  label: 多枝树
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Twiggy Trees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.reeds_regrowth
+  label: 芦苇
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Reeds · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.flower_cave_regrowth
+  label: 荧光花
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Light Flower · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.lightflier_flower_regrowth
+  label: 光虫花
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Lightbug Flower · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.mushtree_regrowth
+  label: 蘑菇树
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Mushroom Trees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.mushtree_moon_regrowth
+  label: 月亮蘑菇树
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Lunar Mushtrees · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.tree_rock_regrowth
+  label: 巨石枝
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 资源再生
+  help: Boulderboughs · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.weather
+  label: 雨
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 环境袭击
+  help: Rain · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.earthquakes
+  label: 地震
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 环境袭击
+  help: Earthquakes · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.wormattacks
+  label: 洞穴蠕虫袭击
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 环境袭击
+  help: Cave Worm Attacks · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.wormattacks_boss
+  label: 大蠕虫
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 环境袭击
+  help: Great Worm · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: never
+    label: 从不
+  - value: rare
+    label: 稀少
+  - value: default
+    label: 默认
+  - value: often
+    label: 较多
+  - value: always
+    label: 总是
+- name: caves.overrides.atriumgate
+  label: 远古大门
+  type: select
+  default: default
+  group: 洞穴世界 / 规则 · 环境袭击
+  help: Ancient Gateway · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: veryslow
+    label: 非常慢
+  - value: slow
+    label: 慢
+  - value: default
+    label: 默认
+  - value: fast
+    label: 快
+  - value: veryfast
+    label: 非常快
+- name: caves.overrides.acidrain_enabled
+  label: 酸雨
+  type: select
+  default: always
+  group: 洞穴世界 / 规则 · 环境袭击
+  help: Acid Rain · 修改并重启服务器后生效
+  fileTarget: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  options:
+  - value: none
+    label: 无
+  - value: always
+    label: 总是
+coverImage: /landing/games/dont-starve-together.jpg
+displayName: 饥荒联机版 Don't Starve Together
+env:
+  DST_CLUSTER_NAME: GamePanelDST
+fileTemplates:
+- path: DoNotStarveTogether/Cluster_1/cluster.ini
+  content: |
+    # Cluster: {{identity.clusterName}} | Visibility: {{identity.visibility}}
+    [GAMEPLAY]
+    game_mode = {{gameplay.gameMode}}
+    max_players = {{gameplay.maxPlayers}}
+    pvp = {{gameplay.pvp}}
+    pause_when_empty = {{gameplay.pauseWhenEmpty}}
+
+    [NETWORK]
+    cluster_name = {{identity.serverName}}
+    cluster_description = {{identity.description}}
+    cluster_password = {{identity.password}}
+    cluster_intention = cooperative
+    lan_only_cluster = {{ if eq (index .Values "identity.visibility") "lan" }}true{{ else }}false{{ end }}
+    offline_cluster = {{ if eq (index .Values "identity.visibility") "offline" }}true{{ else }}false{{ end }}
+
+    [MISC]
+    console_enabled = {{gameplay.consoleEnabled}}
+
+    [SHARD]
+    shard_enabled = true
+    bind_ip = 127.0.0.1
+    master_ip = 127.0.0.1
+    master_port = 10888
+    cluster_key = defaultPass
+- path: DoNotStarveTogether/Cluster_1/cluster_token.txt
+  content: |
+    {{identity.clusterToken}}
+- path: DoNotStarveTogether/Cluster_1/Master/server.ini
+  content: |
+    [NETWORK]
+    server_port = 10999
+
+    [SHARD]
+    is_master = true
+
+    [STEAM]
+    master_server_port = 27018
+    authentication_port = 8768
+- path: DoNotStarveTogether/Cluster_1/Caves/server.ini
+  content: |
+    [NETWORK]
+    server_port = 11000
+
+    [SHARD]
+    is_master = false
+    name = Caves
+    id = 2
+
+    [STEAM]
+    master_server_port = 27019
+    authentication_port = 8769
+- path: DoNotStarveTogether/Cluster_1/Master/worldgenoverride.lua
+  content: |
+    KLEI     1
+    return {
+      override_enabled = true,
+      preset = "{{ if eq (index .Values "world.preset") "forest_classic" }}SURVIVAL_TOGETHER_CLASSIC{{ else }}SURVIVAL_TOGETHER{{ end }}",
+      overrides = {
+        spiders = "{{world.overrides.spiders}}",
+        houndmound = "{{world.overrides.houndmound}}",
+        merm = "{{world.overrides.merm}}",
+        tentacles = "{{world.overrides.tentacles}}",
+        chess = "{{world.overrides.chess}}",
+        walrus = "{{world.overrides.walrus}}",
+        moon_spiders = "{{world.overrides.moon_spiders}}",
+        ocean_waterplant = "{{world.overrides.ocean_waterplant}}",
+        angrybees = "{{world.overrides.angrybees}}",
+        tallbirds = "{{world.overrides.tallbirds}}",
+        rabbits = "{{world.overrides.rabbits}}",
+        moles = "{{world.overrides.moles}}",
+        buzzard = "{{world.overrides.buzzard}}",
+        catcoon = "{{world.overrides.catcoon}}",
+        pigs = "{{world.overrides.pigs}}",
+        lightninggoat = "{{world.overrides.lightninggoat}}",
+        beefalo = "{{world.overrides.beefalo}}",
+        bees = "{{world.overrides.bees}}",
+        moon_carrot = "{{world.overrides.moon_carrot}}",
+        moon_fruitdragon = "{{world.overrides.moon_fruitdragon}}",
+        ocean_shoal = "{{world.overrides.ocean_shoal}}",
+        ocean_wobsterden = "{{world.overrides.ocean_wobsterden}}",
+        ocean_otterdens = "{{world.overrides.ocean_otterdens}}",
+        flowers = "{{world.overrides.flowers}}",
+        grass = "{{world.overrides.grass}}",
+        sapling = "{{world.overrides.sapling}}",
+        marshbush = "{{world.overrides.marshbush}}",
+        tumbleweed = "{{world.overrides.tumbleweed}}",
+        reeds = "{{world.overrides.reeds}}",
+        trees = "{{world.overrides.trees}}",
+        flint = "{{world.overrides.flint}}",
+        rock = "{{world.overrides.rock}}",
+        rock_ice = "{{world.overrides.rock_ice}}",
+        meteorspawner = "{{world.overrides.meteorspawner}}",
+        berrybush = "{{world.overrides.berrybush}}",
+        carrot = "{{world.overrides.carrot}}",
+        mushroom = "{{world.overrides.mushroom}}",
+        cactus = "{{world.overrides.cactus}}",
+        moon_tree = "{{world.overrides.moon_tree}}",
+        moon_sapling = "{{world.overrides.moon_sapling}}",
+        moon_berrybush = "{{world.overrides.moon_berrybush}}",
+        moon_rock = "{{world.overrides.moon_rock}}",
+        moon_hotspring = "{{world.overrides.moon_hotspring}}",
+        moon_starfish = "{{world.overrides.moon_starfish}}",
+        moon_bullkelp = "{{world.overrides.moon_bullkelp}}",
+        ponds = "{{world.overrides.ponds}}",
+        ocean_bullkelp = "{{world.overrides.ocean_bullkelp}}",
+        ocean_seastack = "{{world.overrides.ocean_seastack}}",
+        task_set = "{{world.overrides.task_set}}",
+        start_location = "{{world.overrides.start_location}}",
+        world_size = "{{world.overrides.world_size}}",
+        branching = "{{world.overrides.branching}}",
+        loop = "{{world.overrides.loop}}",
+        roads = "{{world.overrides.roads}}",
+        touchstone = "{{world.overrides.touchstone}}",
+        boons = "{{world.overrides.boons}}",
+        prefabswaps_start = "{{world.overrides.prefabswaps_start}}",
+        moon_fissure = "{{world.overrides.moon_fissure}}",
+        terrariumchest = "{{world.overrides.terrariumchest}}",
+        stageplays = "{{world.overrides.stageplays}}",
+        junkyard = "{{world.overrides.junkyard}}",
+        balatro = "{{world.overrides.balatro}}",
+        season_start = "{{world.overrides.season_start}}",
+        mutated_hounds = "{{world.overrides.mutated_hounds}}",
+        penguins_moon = "{{world.overrides.penguins_moon}}",
+        moon_spider = "{{world.overrides.moon_spider}}",
+        mutated_birds = "{{world.overrides.mutated_birds}}",
+        mutated_merm = "{{world.overrides.mutated_merm}}",
+        mutated_spiderqueen = "{{world.overrides.mutated_spiderqueen}}",
+        mutated_bird_gestalt = "{{world.overrides.mutated_bird_gestalt}}",
+        mutated_buzzard_gestalt = "{{world.overrides.mutated_buzzard_gestalt}}",
+        mutated_deerclops = "{{world.overrides.mutated_deerclops}}",
+        mutated_bearger = "{{world.overrides.mutated_bearger}}",
+        mutated_warg = "{{world.overrides.mutated_warg}}",
+        liefs = "{{world.overrides.liefs}}",
+        deciduousmonster = "{{world.overrides.deciduousmonster}}",
+        bearger = "{{world.overrides.bearger}}",
+        deerclops = "{{world.overrides.deerclops}}",
+        goosemoose = "{{world.overrides.goosemoose}}",
+        dragonfly = "{{world.overrides.dragonfly}}",
+        antliontribute = "{{world.overrides.antliontribute}}",
+        crabking = "{{world.overrides.crabking}}",
+        beequeen = "{{world.overrides.beequeen}}",
+        malbatross = "{{world.overrides.malbatross}}",
+        fruitfly = "{{world.overrides.fruitfly}}",
+        klaus = "{{world.overrides.klaus}}",
+        spiderqueen = "{{world.overrides.spiderqueen}}",
+        eyeofterror = "{{world.overrides.eyeofterror}}",
+        daywalker2 = "{{world.overrides.daywalker2}}",
+        sharkboi = "{{world.overrides.sharkboi}}",
+        lureplants = "{{world.overrides.lureplants}}",
+        hound_mounds = "{{world.overrides.hound_mounds}}",
+        mosquitos = "{{world.overrides.mosquitos}}",
+        sharks = "{{world.overrides.sharks}}",
+        squid = "{{world.overrides.squid}}",
+        wasps = "{{world.overrides.wasps}}",
+        frogs = "{{world.overrides.frogs}}",
+        walrus_setting = "{{world.overrides.walrus_setting}}",
+        cookiecutters = "{{world.overrides.cookiecutters}}",
+        merms = "{{world.overrides.merms}}",
+        spiders_setting = "{{world.overrides.spiders_setting}}",
+        spider_warriors = "{{world.overrides.spider_warriors}}",
+        bats_setting = "{{world.overrides.bats_setting}}",
+        butterfly = "{{world.overrides.butterfly}}",
+        birds = "{{world.overrides.birds}}",
+        perd = "{{world.overrides.perd}}",
+        penguins = "{{world.overrides.penguins}}",
+        bees_setting = "{{world.overrides.bees_setting}}",
+        catcoons = "{{world.overrides.catcoons}}",
+        rabbits_setting = "{{world.overrides.rabbits_setting}}",
+        wobsters = "{{world.overrides.wobsters}}",
+        gnarwail = "{{world.overrides.gnarwail}}",
+        fishschools = "{{world.overrides.fishschools}}",
+        otters_setting = "{{world.overrides.otters_setting}}",
+        pigs_setting = "{{world.overrides.pigs_setting}}",
+        bunnymen_setting = "{{world.overrides.bunnymen_setting}}",
+        moles_setting = "{{world.overrides.moles_setting}}",
+        grassgekkos = "{{world.overrides.grassgekkos}}",
+        regrowth = "{{world.overrides.regrowth}}",
+        evergreen_regrowth = "{{world.overrides.evergreen_regrowth}}",
+        deciduoustree_regrowth = "{{world.overrides.deciduoustree_regrowth}}",
+        twiggytrees_regrowth = "{{world.overrides.twiggytrees_regrowth}}",
+        moon_tree_regrowth = "{{world.overrides.moon_tree_regrowth}}",
+        flowers_regrowth = "{{world.overrides.flowers_regrowth}}",
+        carrots_regrowth = "{{world.overrides.carrots_regrowth}}",
+        reeds_regrowth = "{{world.overrides.reeds_regrowth}}",
+        cactus_regrowth = "{{world.overrides.cactus_regrowth}}",
+        saltstack_regrowth = "{{world.overrides.saltstack_regrowth}}",
+        basicresource_regrowth = "{{world.overrides.basicresource_regrowth}}",
+        lightning = "{{world.overrides.lightning}}",
+        frograin = "{{world.overrides.frograin}}",
+        wildfires = "{{world.overrides.wildfires}}",
+        petrification = "{{world.overrides.petrification}}",
+        meteorshowers = "{{world.overrides.meteorshowers}}",
+        hunt = "{{world.overrides.hunt}}",
+        alternatehunt = "{{world.overrides.alternatehunt}}",
+        hounds = "{{world.overrides.hounds}}",
+        winterhounds = "{{world.overrides.winterhounds}}",
+        summerhounds = "{{world.overrides.summerhounds}}",
+        wanderingtrader_enabled = "{{world.overrides.wanderingtrader_enabled}}",
+        weather = "{{world.overrides.weather}}",
+        extrastartingitems = "{{world.overrides.extrastartingitems}}",
+        seasonalstartingitems = "{{world.overrides.seasonalstartingitems}}",
+        spawnprotection = "{{world.overrides.spawnprotection}}",
+        dropeverythingondespawn = "{{world.overrides.dropeverythingondespawn}}",
+        healthpenalty = "{{world.overrides.healthpenalty}}",
+        lessdamagetaken = "{{world.overrides.lessdamagetaken}}",
+        temperaturedamage = "{{world.overrides.temperaturedamage}}",
+        hunger = "{{world.overrides.hunger}}",
+        darkness = "{{world.overrides.darkness}}",
+        shadowcreatures = "{{world.overrides.shadowcreatures}}",
+        brightmarecreatures = "{{world.overrides.brightmarecreatures}}",
+        crow_carnival = "{{world.overrides.crow_carnival}}",
+        hallowed_nights = "{{world.overrides.hallowed_nights}}",
+        winters_feast = "{{world.overrides.winters_feast}}",
+        year_of_the_gobbler = "{{world.overrides.year_of_the_gobbler}}",
+        year_of_the_varg = "{{world.overrides.year_of_the_varg}}",
+        year_of_the_pig = "{{world.overrides.year_of_the_pig}}",
+        year_of_the_carrat = "{{world.overrides.year_of_the_carrat}}",
+        year_of_the_beefalo = "{{world.overrides.year_of_the_beefalo}}",
+        year_of_the_catcoon = "{{world.overrides.year_of_the_catcoon}}",
+        year_of_the_bunnyman = "{{world.overrides.year_of_the_bunnyman}}",
+        year_of_the_dragonfly = "{{world.overrides.year_of_the_dragonfly}}",
+        year_of_the_snake = "{{world.overrides.year_of_the_snake}}",
+        year_of_the_knight = "{{world.overrides.year_of_the_knight}}",
+        specialevent = "{{world.overrides.specialevent}}",
+        autumn = "{{world.overrides.autumn}}",
+        winter = "{{world.overrides.winter}}",
+        spring = "{{world.overrides.spring}}",
+        summer = "{{world.overrides.summer}}",
+        day = "{{world.overrides.day}}",
+        spawnmode = "{{world.overrides.spawnmode}}",
+        ghostenabled = "{{world.overrides.ghostenabled}}",
+        portalresurection = "{{world.overrides.portalresurection}}",
+        ghostsanitydrain = "{{world.overrides.ghostsanitydrain}}",
+        resettime = "{{world.overrides.resettime}}",
+        beefaloheat = "{{world.overrides.beefaloheat}}",
+        krampus = "{{world.overrides.krampus}}",
+      },
+    }
+- path: DoNotStarveTogether/Cluster_1/Caves/worldgenoverride.lua
+  content: |
+    KLEI     1
+    return {
+      override_enabled = true,
+      preset = "DST_CAVE",
+      overrides = {
+        spiders = "{{caves.overrides.spiders}}",
+        cave_spiders = "{{caves.overrides.cave_spiders}}",
+        tentacles = "{{caves.overrides.tentacles}}",
+        chess = "{{caves.overrides.chess}}",
+        bats = "{{caves.overrides.bats}}",
+        fissure = "{{caves.overrides.fissure}}",
+        worms = "{{caves.overrides.worms}}",
+        slurper = "{{caves.overrides.slurper}}",
+        bunnymen = "{{caves.overrides.bunnymen}}",
+        slurtles = "{{caves.overrides.slurtles}}",
+        rocky = "{{caves.overrides.rocky}}",
+        monkey = "{{caves.overrides.monkey}}",
+        grass = "{{caves.overrides.grass}}",
+        sapling = "{{caves.overrides.sapling}}",
+        marshbush = "{{caves.overrides.marshbush}}",
+        reeds = "{{caves.overrides.reeds}}",
+        trees = "{{caves.overrides.trees}}",
+        flint = "{{caves.overrides.flint}}",
+        rock = "{{caves.overrides.rock}}",
+        mushtree = "{{caves.overrides.mushtree}}",
+        fern = "{{caves.overrides.fern}}",
+        flower_cave = "{{caves.overrides.flower_cave}}",
+        wormlights = "{{caves.overrides.wormlights}}",
+        tree_rock = "{{caves.overrides.tree_rock}}",
+        berrybush = "{{caves.overrides.berrybush}}",
+        mushroom = "{{caves.overrides.mushroom}}",
+        banana = "{{caves.overrides.banana}}",
+        lichen = "{{caves.overrides.lichen}}",
+        cave_ponds = "{{caves.overrides.cave_ponds}}",
+        task_set = "{{caves.overrides.task_set}}",
+        start_location = "{{caves.overrides.start_location}}",
+        world_size = "{{caves.overrides.world_size}}",
+        branching = "{{caves.overrides.branching}}",
+        loop = "{{caves.overrides.loop}}",
+        touchstone = "{{caves.overrides.touchstone}}",
+        boons = "{{caves.overrides.boons}}",
+        cavelight = "{{caves.overrides.cavelight}}",
+        prefabswaps_start = "{{caves.overrides.prefabswaps_start}}",
+        moon_spider = "{{caves.overrides.moon_spider}}",
+        mutated_birds = "{{caves.overrides.mutated_birds}}",
+        mutated_merm = "{{caves.overrides.mutated_merm}}",
+        mutated_spiderqueen = "{{caves.overrides.mutated_spiderqueen}}",
+        liefs = "{{caves.overrides.liefs}}",
+        toadstool = "{{caves.overrides.toadstool}}",
+        fruitfly = "{{caves.overrides.fruitfly}}",
+        spiderqueen = "{{caves.overrides.spiderqueen}}",
+        daywalker = "{{caves.overrides.daywalker}}",
+        merms = "{{caves.overrides.merms}}",
+        spiders_setting = "{{caves.overrides.spiders_setting}}",
+        spider_warriors = "{{caves.overrides.spider_warriors}}",
+        bats_setting = "{{caves.overrides.bats_setting}}",
+        nightmarecreatures = "{{caves.overrides.nightmarecreatures}}",
+        spider_hider = "{{caves.overrides.spider_hider}}",
+        spider_spitter = "{{caves.overrides.spider_spitter}}",
+        spider_dropper = "{{caves.overrides.spider_dropper}}",
+        molebats = "{{caves.overrides.molebats}}",
+        itemmimics = "{{caves.overrides.itemmimics}}",
+        chest_mimics = "{{caves.overrides.chest_mimics}}",
+        pigs_setting = "{{caves.overrides.pigs_setting}}",
+        bunnymen_setting = "{{caves.overrides.bunnymen_setting}}",
+        moles_setting = "{{caves.overrides.moles_setting}}",
+        grassgekkos = "{{caves.overrides.grassgekkos}}",
+        slurtles_setting = "{{caves.overrides.slurtles_setting}}",
+        snurtles = "{{caves.overrides.snurtles}}",
+        rocky_setting = "{{caves.overrides.rocky_setting}}",
+        monkey_setting = "{{caves.overrides.monkey_setting}}",
+        dustmoths = "{{caves.overrides.dustmoths}}",
+        lightfliers = "{{caves.overrides.lightfliers}}",
+        mushgnome = "{{caves.overrides.mushgnome}}",
+        regrowth = "{{caves.overrides.regrowth}}",
+        evergreen_regrowth = "{{caves.overrides.evergreen_regrowth}}",
+        twiggytrees_regrowth = "{{caves.overrides.twiggytrees_regrowth}}",
+        reeds_regrowth = "{{caves.overrides.reeds_regrowth}}",
+        flower_cave_regrowth = "{{caves.overrides.flower_cave_regrowth}}",
+        lightflier_flower_regrowth = "{{caves.overrides.lightflier_flower_regrowth}}",
+        mushtree_regrowth = "{{caves.overrides.mushtree_regrowth}}",
+        mushtree_moon_regrowth = "{{caves.overrides.mushtree_moon_regrowth}}",
+        tree_rock_regrowth = "{{caves.overrides.tree_rock_regrowth}}",
+        weather = "{{caves.overrides.weather}}",
+        earthquakes = "{{caves.overrides.earthquakes}}",
+        wormattacks = "{{caves.overrides.wormattacks}}",
+        wormattacks_boss = "{{caves.overrides.wormattacks_boss}}",
+        atriumgate = "{{caves.overrides.atriumgate}}",
+        acidrain_enabled = "{{caves.overrides.acidrain_enabled}}",
+      },
+    }
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+preStartCommand: |
+  chmod +x /data/bin64/dontstarve_dedicated_server_nullrenderer_x64 2>/dev/null || true
+  mkdir -p /data/DoNotStarveTogether/Cluster_1/Master /data/DoNotStarveTogether/Cluster_1/Caves
+  for f in /data/DoNotStarveTogether/Cluster_1/Master/leveldataoverride.lua /data/DoNotStarveTogether/Cluster_1/Caves/leveldataoverride.lua; do
+    if [ -f "$f" ] && ! grep -q 'desc' "$f"; then
+      rm -f "$f"
+    fi
+  done
+  if [ -n "${DST_CLUSTER_TOKEN:-}" ]; then
+    printf '%s\n' "${DST_CLUSTER_TOKEN}" > /data/DoNotStarveTogether/Cluster_1/cluster_token.txt
+  fi
+  if [ ! -f /data/DoNotStarveTogether/Cluster_1/cluster_token.txt ] || ! grep -q '[^[:space:]]' /data/DoNotStarveTogether/Cluster_1/cluster_token.txt; then
+    echo "[GamePanel] Klei cluster_token.txt is empty — automatically enabling LAN offline cluster mode."
+    if [ -f /data/DoNotStarveTogether/Cluster_1/cluster.ini ]; then
+      sed -i 's/^lan_only_cluster = .*/lan_only_cluster = true/' /data/DoNotStarveTogether/Cluster_1/cluster.ini
+      sed -i 's/^offline_cluster = .*/offline_cluster = true/' /data/DoNotStarveTogether/Cluster_1/cluster.ini
+    fi
+  fi
+  mkdir -p /data/mods
+  [ -f /data/mods/dedicated_server_mods_setup.lua ] || : > /data/mods/dedicated_server_mods_setup.lua
+  if [ "${ENABLE_CAVES:-true}" = "true" ]; then
+    rm -f /tmp/dst-caves.in
+    mkfifo /tmp/dst-caves.in
+    (tail -n +1 -f /tmp/dst-caves.in | { cd /data/bin64 && exec ./dontstarve_dedicated_server_nullrenderer_x64 -console -persistent_storage_root /data -conf_dir DoNotStarveTogether -cluster Cluster_1 -shard Caves; } 2>&1 | sed -u 's/^/[Caves] /' &)
+  fi
+startupCommand: cd /data/bin64 && exec ./dontstarve_dedicated_server_nullrenderer_x64 -console -persistent_storage_root /data
+  -conf_dir DoNotStarveTogether -cluster Cluster_1 -shard Master
+preStopCommand: |
+  dst-send-to-console "c_save()" >/dev/null 2>&1 || true
+  sleep 1
+  dst-send-to-console "c_shutdown(true)" >/dev/null 2>&1 || true
+  if [ -p /tmp/dst-caves.in ]; then timeout 1 sh -c 'printf "c_shutdown(true)\n" > /tmp/dst-caves.in' 2>/dev/null || true; fi
+  i=0
+  while [ "$i" -lt 15 ] && pgrep -f '[d]ontstarve_dedicated_server_nullrenderer' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+ports:
+- name: master
+  protocol: UDP
+  targetPort: 10999
+- name: caves
+  protocol: UDP
+  targetPort: 11000
+published: true
+recommendedPlan: standard
+recommendedVersion: latest
+resources:
+  cpu: '2'
+  memory: 4Gi
+  storage: 20Gi
+summary: 支持 Klei 令牌配置（免令牌自动降级局域网离线）、无尽/生存/荒野模式切换、双 Shard（地面+洞穴）联动、Steam 创意工坊模组及四季资源生成规则。
+tagline: 哥特风荒野生存 · 地面森林 + 洞穴双世界
+versions:
+- latest
+consoleDelivery: dst-send-to-console
+consoleActions:
+- id: dst-skip-day
+  title: 跳过 1 天
+  group: 时间季节
+  command: c_skip(1)
+  starred: true
+- id: dst-season
+  title: 切换季节
+  group: 时间季节
+  command: TheWorld:PushEvent("ms_setseason", "{{season}}")
+  starred: true
+  params:
+  - name: season
+    label: 季节
+    type: select
+    defaultValue: autumn
+    options:
+    - value: spring
+      label: 春
+    - value: summer
+      label: 夏
+    - value: autumn
+      label: 秋
+    - value: winter
+      label: 冬
+- id: dst-rain
+  title: 降水控制
+  group: 时间季节
+  command: TheWorld:PushEvent("ms_forceprecipitation", {{rain}})
+  starred: false
+  params:
+  - name: rain
+    label: 状态
+    type: select
+    defaultValue: 'true'
+    options:
+    - value: 'true'
+      label: 开始下雨
+    - value: 'false'
+      label: 停止下雨
+- id: dst-save
+  title: 立即保存存档
+  group: 存档回档
+  command: c_save()
+  starred: true
+- id: dst-rollback
+  title: 世界回档
+  group: 存档回档
+  command: c_rollback({{days}})
+  starred: true
+  params:
+  - name: days
+    label: 回档天数
+    type: select
+    defaultValue: '1'
+    options:
+    - value: '1'
+      label: 1天
+    - value: '2'
+      label: 2天
+    - value: '3'
+      label: 3天
+    - value: '5'
+      label: 5天
+- id: dst-regenerate
+  title: 重新生成世界
+  group: 存档回档
+  command: c_regenerateworld()
+  starred: false
+- id: dst-announce
+  title: 全服公告广播
+  group: 玩家管理
+  command: c_announce("{{msg}}")
+  starred: true
+  params:
+  - name: msg
+    label: 公告内容
+    type: text
+    defaultValue: 服务器将在 5 分钟后重启维护
+- id: dst-give
+  title: 给指定玩家刷物品
+  group: 玩家管理
+  command: c_give("{{item}}", {{count}})
+  starred: true
+  params:
+  - name: item
+    label: 物品代码
+    type: text
+    defaultValue: cutgrass
+  - name: count
+    label: 数量
+    type: number
+    defaultValue: '10'
+- id: dst-kick
+  title: 踢出玩家
+  group: 玩家管理
+  command: TheNet:Kick("{{player}}")
+  starred: false
+  danger: true
+  params:
+  - name: player
+    label: 玩家名或 KU_ID
+    type: text
+- id: dst-spawn
+  title: 生成指定生物或 Boss
+  group: 世界事件
+  command: c_spawn("{{prefab}}", {{count}})
+  starred: false
+  params:
+  - name: prefab
+    label: 生物代码
+    type: text
+    defaultValue: deerclops
+  - name: count
+    label: 数量
+    type: number
+    defaultValue: '1'
+consoleTargets:
+- id: master
+  label: 地上世界
+  format: '{{command}}'
+- id: caves
+  label: 洞穴世界
+  format: __GAMEPANEL_DST_CONSOLE__:caves:{{command_base64}}
+  enabledField: caves.enabled
+storagePolicy:
+  backupSubtree: DoNotStarveTogether/Cluster_1
+  anchorFiles:
+  - cluster.ini
+  - Master/server.ini
+  replaceOnRestore: true
+  backupRequiresStop: false
+  preBackupCommand: c_save()
+  regeneratePaths:
+  - DoNotStarveTogether/Cluster_1/Master/save
+  - DoNotStarveTogether/Cluster_1/Caves/save
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  mode: regex_value
+  probeCommand: local n=0; local out={}; for _,v in ipairs(TheNet:GetClientTable() or {}) do if v.performance==nil then n=n+1; table.insert(out, string.format("GP_PLAYER=%s (%s)", v.name or "Player", v.userid or "")) end end; print("GP_ONLINE=" .. tostring(n)); for _,s in ipairs(out) do print(s) end
+  pattern: GP_ONLINE=(\d+)
+  incPattern: \[Join Announcement\]\s*([^\r\n]+)
+  decPattern: \[Leave Announcement\]\s*([^\r\n]+)
+  maxConfigKey: gameplay.maxPlayers
+  itemPattern: GP_PLAYER=([^\r\n]+)
+  bindParam: player
+  quickActionIds:
+  - dst-kick
+- id: world_cycles
+  label: 世界天数
+  unit: 天
+  mode: regex_value
+  probeCommand: print("GP_CYCLE=" .. tostring((TheWorld and TheWorld.state and TheWorld.state.cycles or 0) + 1))
+  pattern: GP_CYCLE=(\d+)

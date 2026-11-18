@@ -11,15 +11,17 @@ test-results
 .env
 .env.local
 data
-!apps/api/internal/provider/projectzomboid/data/
-!apps/api/internal/provider/projectzomboid/data/options.json
 *.db
 *.db-journal
 generated
 tmp
 output
 .playwright-cli
-
-# Local editorial drafts (not part of product releases)
-docs/wechat/GamePanel-Lite-开源游戏服务器面板.md
-artifacts/
+.worktrees/
+/apiserver
+/controller-manager
+/node-agent
+/registry-worker
+/bin/
+.DS_Store
+miniprogram/

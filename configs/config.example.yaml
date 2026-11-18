@@ -1,0 +1,180 @@
+# ==============================================================================
+# GamePanel Lite — Unified Platform Configuration Example
+# ==============================================================================
+# This file documents every section of pkg/config.Config.
+# All fields support ${ENV_VAR:-default} placeholder expansion and direct
+# GP_* environment variable overrides.
+
+# 1. Structured Logging (pkg/infra/log)
+log:
+  # Log verbosity level: debug | info | warn | error (env: GP_LOG_LEVEL)
+  level: info
+  # Output encoding format: console | json (env: GP_LOG_FORMAT)
+  format: console
+  # Component service name reported in structured log streams (env: GP_SERVICE_NAME)
+  serviceName: apiserver
+
+# 2. HTTP API Server (cmd/apiserver)
+server:
+  # Listen address for the declarative API server (env: GP_SERVER_ADDR)
+  addr: 0.0.0.0:8080
+  # Maximum duration for reading the entire HTTP request (env: GP_SERVER_READ_TIMEOUT)
+  readTimeout: 15s
+  # Maximum duration before timing out writes of the response (env: GP_SERVER_WRITE_TIMEOUT)
+  writeTimeout: 30s
+  # Graceful HTTP server shutdown timeout (env: GP_SERVER_SHUTDOWN_TIMEOUT)
+  shutdownTimeout: 15s
+
+# 3. Authentication & JWT Session Lifecycle (pkg/models/iam/session)
+auth:
+  # HMAC secret key (minimum 8 chars) used to sign Session JWTs (env: GP_AUTH_JWT_SECRET)
+  jwtSecret: ${GP_AUTH_JWT_SECRET:-dev-secret-change-me}
+  # Validity period for issued Session tokens (env: GP_AUTH_TOKEN_TTL)
+  tokenTTL: 24h
+
+# 4. Declarative Storage Backend (pkg/infra/db)
+database:
+  # PostgreSQL connection string (env: GP_DB_DSN)
+  dsn: ${GP_DB_DSN:-postgres://gamepanel:gamepanel@127.0.0.1:5432/gamepanel?sslmode=disable}
+  # Maximum number of open database connections (env: GP_DB_MAX_OPEN_CONNS)
+  maxOpenConns: 25
+  # Maximum number of idle connections in the pool (env: GP_DB_MAX_IDLE_CONNS)
+  maxIdleConns: 5
+  # Maximum amount of time a connection may be reused (env: GP_DB_CONN_MAX_LIFETIME)
+  connMaxLifetime: 30m
+
+# 5. Key-Value Session Cache Backend (pkg/infra/cache)
+cache:
+  # Cache driver: redis (env: GP_CACHE_DRIVER)
+  driver: redis
+  # Redis server address when driver=redis (env: GP_CACHE_ADDR)
+  addr: 127.0.0.1:6379
+  # Optional Redis password (env: GP_CACHE_PASSWORD)
+  password: ""
+  # Redis database index (env: GP_CACHE_DB)
+  db: 0
+
+# 6. Asynchronous Message Queue Backend (pkg/infra/mq)
+mq:
+  # Message queue driver: redis | nats (env: GP_MQ_DRIVER)
+  driver: nats
+  # Broker address for redis (host:port) or nats (nats://host:port) (env: GP_MQ_ADDR)
+  addr: nats://127.0.0.1:4222
+  # Optional Redis password when driver=redis (env: GP_MQ_PASSWORD)
+  password: ""
+  # Redis database index when driver=redis (env: GP_MQ_DB)
+  db: 0
+  # Consumer group / queue group shared by controller workers (env: GP_MQ_GROUP)
+  group: gamepanel-controllers
+
+# 7. Asynchronous Controller Manager (cmd/controller-manager)
+controller:
+  # Number of concurrent reconciliation workers per controller (env: GP_CONTROLLER_WORKERS)
+  workers: 4
+  # Periodic full-state resync interval (env: GP_CONTROLLER_RESYNC_PERIOD)
+  resyncPeriod: 5m
+  # Heartbeat grace duration before marking a Node as NotReady (env: GP_CONTROLLER_NODE_GRACE_DURATION)
+  nodeGraceDuration: 40s
+
+# 8. Compute Host Node Agent (cmd/node-agent)
+agent:
+  # Unique Node resource name registered in the cluster (env: GP_AGENT_NODE_NAME)
+  nodeName: node-local-01
+  # Topology region label reported on the Node (env: GP_AGENT_REGION)
+  region: ap-east-1
+  # Listen address for node-agent log/exec/files/metrics server (env: GP_AGENT_ADDR)
+  addr: 0.0.0.0:8082
+  # Optional explicit internal IP reported for control-plane/intranet communication (env: GP_AGENT_INTERNAL_IP)
+  internalIP: ${GP_AGENT_INTERNAL_IP:-}
+  # Optional explicit public/NAT external IP reported for player direct connection and signed file URLs (env: GP_AGENT_EXTERNAL_IP)
+  externalIP: ${GP_AGENT_EXTERNAL_IP:-}
+  # Upstream apiserver base URL (env: GP_AGENT_APISERVER_URL)
+  apiserverURL: http://127.0.0.1:8080
+  # Bearer token used by node-agent to authenticate with apiserver and validate proxy requests (env: GP_AGENT_TOKEN)
+  token: ${GP_AGENT_TOKEN:-dev-agent-token}
+  # Interval between Node status heartbeats and instance reconciliation cycles (env: GP_AGENT_HEARTBEAT_INTERVAL)
+  heartbeatInterval: 10s
+  # Host directory for storing per-instance working directories and config files (env: GP_AGENT_WORK_DIR)
+  workDir: /tmp/gamepanel/instances
+  # Graceful HTTP server shutdown timeout (env: GP_AGENT_SHUTDOWN_TIMEOUT)
+  shutdownTimeout: 5s
+  # Optional host CPU quantity excluded from node allocatable (e.g. "2", "500m", "0") (env: GP_AGENT_RESERVED_CPU)
+  reservedCPU: ${GP_AGENT_RESERVED_CPU:-}
+  # Optional host memory quantity excluded from node allocatable (e.g. "8Gi", "512Mi", "0") (env: GP_AGENT_RESERVED_MEMORY)
+  reservedMemory: ${GP_AGENT_RESERVED_MEMORY:-}
+  # Optional host storage quantity excluded from node allocatable (e.g. "5Gi", "0") (env: GP_AGENT_RESERVED_STORAGE)
+  reservedStorage: ${GP_AGENT_RESERVED_STORAGE:-}
+  # Export per-instance Prometheus TSDB series for CPU, memory, disk, and custom game metrics (env: GP_AGENT_PER_INSTANCE_PROMETHEUS_METRICS)
+  perInstancePrometheusMetrics: true
+
+# 9. Platform Bootstrap Settings (cmd/apiserver)
+bootstrap:
+  # Initial platform administrator username (env: GP_BOOTSTRAP_ADMIN)
+  adminUser: admin
+  # Initial platform administrator email address (env: GP_BOOTSTRAP_EMAIL)
+  adminEmail: admin@example.com
+  # Initial platform administrator password (env: GP_BOOTSTRAP_PASSWORD)
+  adminPassword: "${GP_BOOTSTRAP_PASSWORD:-P@88w0rd}"
+
+# 10. Declarative API Client Settings (pkg/client)
+client:
+  # Target apiserver URL (env: GP_CLIENT_SERVER_URL or GP_SERVER_URL)
+  serverURL: http://127.0.0.1:8080
+  # Bearer Session token for authenticating API requests (env: GP_CLIENT_TOKEN or GP_TOKEN)
+  token: ${GP_CLIENT_TOKEN:-}
+  # Default tenant scope when tenant is not specified (env: GP_TENANT)
+  tenant: default
+  # Per-request HTTP timeout for non-streaming API calls (env: GP_CLIENT_TIMEOUT)
+  timeout: 30s
+
+# 11. Network & Dynamic Host-Port Pool (pkg/infra/network)
+network:
+  # Network driver: hostport (env: GP_NETWORK_DRIVER)
+  driver: hostport
+  # Minimum host port in the dynamic allocation pool (env: GP_NETWORK_PORT_RANGE_MIN)
+  portRangeMin: 20000
+  # Maximum host port in the dynamic allocation pool (env: GP_NETWORK_PORT_RANGE_MAX)
+  portRangeMax: 29999
+  # Maximum non-repeating hash probes per dynamic port request (env: GP_NETWORK_MAX_PORT_PROBES)
+  maxPortProbes: 256
+
+# 12. S3 / MinIO Object Storage Middleware (pkg/infra/s3)
+s3:
+  # S3-compatible internal/API endpoint URL (env: GP_S3_ENDPOINT)
+  endpoint: ${GP_S3_ENDPOINT:-http://127.0.0.1:9000}
+  # Optional public S3 endpoint URL used when signing URLs for external nodes (env: GP_S3_PUBLIC_ENDPOINT)
+  publicEndpoint: ${GP_S3_PUBLIC_ENDPOINT:-}
+  # S3 signing region (env: GP_S3_REGION)
+  region: us-east-1
+  # Bucket name for instance tar.gz backups (env: GP_S3_BUCKET)
+  bucket: gamepanel-backups
+  # S3 Access Key ID (env: GP_S3_ACCESS_KEY)
+  accessKey: ${GP_S3_ACCESS_KEY:-gamepanel}
+  # S3 Secret Access Key (env: GP_S3_SECRET_KEY)
+  secretKey: ${GP_S3_SECRET_KEY:-gamepanel123}
+  # Force path-style addressing (<endpoint>/<bucket>/<key>) for MinIO/local S3 (env: GP_S3_USE_PATH_STYLE)
+  usePathStyle: true
+  # Validity duration for generated S3 V4 presigned PUT/GET URLs (env: GP_S3_PRESIGN_TTL)
+  presignTTL: 15m
+
+# 13. External Prometheus Metrics Integration (pkg/infra/prometheus)
+observability:
+  # Optional Prometheus base URL for TSDB metrics queries (env: GP_PROMETHEUS_URL)
+  prometheusURL: ${GP_PROMETHEUS_URL:-}
+
+# 14. Pull-Through Game Addon & Workshop Mirror (pkg/infra/addonmirror)
+addonMirror:
+  # Official Steam Web API Key from https://steamcommunity.com/dev/apikey (env: GP_ADDON_MIRROR_STEAM_WEB_API_KEY or STEAM_WEB_API_KEY)
+  steamWebAPIKey: ${GP_ADDON_MIRROR_STEAM_WEB_API_KEY:-}
+  # Optional HTTP/HTTPS/SOCKS5 egress proxy for Steam & Modrinth APIs and image CDN (env: GP_ADDON_MIRROR_UPSTREAM_PROXY_URL)
+  upstreamProxyURL: ${GP_ADDON_MIRROR_UPSTREAM_PROXY_URL:-}
+  # Optional standalone mirror service endpoint when deployed separately (env: GP_ADDON_MIRROR_EXTERNAL_ENDPOINT)
+  externalEndpoint: ${GP_ADDON_MIRROR_EXTERNAL_ENDPOINT:-}
+  # Optional comma-separated image host mirror rules tried before upstream URL: sourceHostOrSuffix=mirrorHostOrBaseURL (env: GP_ADDON_MIRROR_IMAGE_HOST_MIRRORS)
+  imageHostMirrors: []
+  # Optional extra hostnames or .domain suffixes allowlisted for signed image proxy URLs (env: GP_ADDON_MIRROR_ALLOWED_IMAGE_HOSTS)
+  allowedImageHosts: []
+  # Read-through Redis cache TTL for catalog search/detail responses (env: GP_ADDON_MIRROR_CACHE_TTL)
+  cacheTTL: 15m
+  # Per-request upstream HTTP timeout (env: GP_ADDON_MIRROR_TIMEOUT)
+  timeout: 15s

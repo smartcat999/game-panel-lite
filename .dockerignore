@@ -7,13 +7,11 @@
 .pnpm-store
 node_modules
 **/node_modules
-apps/web/.next
+web/.next
 output
 test-results
 tmp
 data
-!apps/api/internal/provider/projectzomboid/data/
-!apps/api/internal/provider/projectzomboid/data/options.json
 *.log
 .env
 .env.local

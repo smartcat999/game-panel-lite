@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "gamepanel",
+      "credentials": [
+        {
+          "accessKey": "gamepanel",
+          "secretKey": "gamepanel123"
+        }
+      ],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    }
+  ]
+}

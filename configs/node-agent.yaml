@@ -1,0 +1,18 @@
+log:
+  level: info
+  format: console
+
+agent:
+  nodeName: "node-local-01"
+  region: "ap-east-1"
+  addr: "0.0.0.0:8082"
+  internalIP: "${GP_AGENT_INTERNAL_IP:-}"
+  externalIP: "${GP_AGENT_EXTERNAL_IP:-}"
+  apiserverURL: "http://127.0.0.1:8080"
+  token: "${GP_AGENT_TOKEN:-dev-agent-token}"
+  heartbeatInterval: 10s
+  workDir: "/tmp/gamepanel/instances"
+  shutdownTimeout: 5s
+  reservedCPU: "${GP_AGENT_RESERVED_CPU:-}"
+  reservedMemory: "${GP_AGENT_RESERVED_MEMORY:-}"
+  reservedStorage: "${GP_AGENT_RESERVED_STORAGE:-}"

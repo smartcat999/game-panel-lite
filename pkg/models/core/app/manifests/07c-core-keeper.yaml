@@ -1,0 +1,279 @@
+apiVersion: core.gamepanel.io/v1
+kind: App
+metadata:
+  name: core-keeper
+  labels:
+    gamepanel.io/builtin: 'true'
+    gamepanel.io/category: sandbox
+displayName: 护核纪元 Core Keeper
+tagline: 地下像素沙盒探险 · 多人合作挖掘与基地建造
+summary: 支持世界难度模式、随机种子、存档槽位与季节节日主题切换，内置 Xvfb 无头图形环境与优雅停服存盘。
+category: sandbox
+coverImage: /landing/games/core-keeper.jpg
+image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
+versions:
+- latest
+recommendedVersion: latest
+recommendedPlan: standard
+resources:
+  cpu: '2'
+  memory: 4Gi
+  storage: 15Gi
+ports:
+- name: game
+  protocol: UDP
+  targetPort: 27015
+serverBinding:
+  repository: core-keeper-server
+  package: core-keeper
+  targetPath: .
+env:
+  WORLD_NAME: CoreKeeperWorld
+  MAX_PLAYERS: '8'
+  WORLD_MODE: '0'
+  WORLD_SEED: '0'
+  WORLD_INDEX: '0'
+  SEASON_OVERRIDE: '-1'
+configSchema:
+- name: worldName
+  label: 世界存档名称
+  type: text
+  required: true
+  default: CoreKeeperWorld
+  envKey: WORLD_NAME
+  group: 基础设置
+  help: 地下世界的显示名称与存档标识
+  fileTarget: saves/ServerConfig.json
+- name: maxPlayers
+  label: 最大同时在线人数
+  type: number
+  default: '8'
+  min: 1
+  max: 8
+  step: 1
+  envKey: MAX_PLAYERS
+  group: 基础设置
+  help: 同时在线探索玩家上限（最多 8 人）
+  fileTarget: saves/ServerConfig.json
+- name: worldMode
+  label: 世界难度模式
+  type: select
+  default: '0'
+  envKey: WORLD_MODE
+  group: 基础设置
+  help: 决定地下世界的战斗强度、死亡惩罚与建造消耗
+  fileTarget: saves/ServerConfig.json
+  options:
+  - value: '0'
+    label: 标准模式
+  - value: '1'
+    label: 硬核模式
+  - value: '2'
+    label: 创造模式
+  - value: '3'
+    label: 休闲模式
+- name: worldSeed
+  label: 世界生成种子
+  type: text
+  default: '0'
+  envKey: WORLD_SEED
+  group: 世界生成
+  help: 设为 0 表示随机生成地下世界种子
+  fileTarget: saves/ServerConfig.json
+- name: worldIndex
+  label: 存档槽位编号
+  type: number
+  default: '0'
+  min: 0
+  max: 29
+  step: 1
+  envKey: WORLD_INDEX
+  group: 世界生成
+  help: 用于在同一存档目录内切换多个独立世界槽位（0–29）
+  fileTarget: saves/ServerConfig.json
+- name: seasonOverride
+  label: 季节主题模式
+  type: select
+  default: '-1'
+  envKey: SEASON_OVERRIDE
+  group: 季节玩法
+  help: 控制游戏内限定的节日主题与特殊掉落事件
+  fileTarget: saves/ServerConfig.json
+  options:
+  - value: '-1'
+    label: 跟随现实季节
+  - value: '0'
+    label: 关闭节日主题
+  - value: '1'
+    label: 复活节庆典
+  - value: '2'
+    label: 万圣节惊魂
+  - value: '3'
+    label: 冬季冰雪节
+  - value: '4'
+    label: 情人节庆典
+  - value: '5'
+    label: 周年庆典
+  - value: '6'
+    label: 樱花祭
+  - value: '7'
+    label: 春节庆典
+configPresets:
+- id: standard-coop
+  name: 标准地下探险（八人联机·标准难度）
+  description: 官方平衡难度与八人满员联机设置，适合好友合作挖掘与挑战首领
+  values:
+    worldMode: '0'
+    maxPlayers: '8'
+    seasonOverride: '-1'
+- id: casual-mining
+  name: 轻松休闲挖矿（休闲难度·春季樱花）
+  description: 开启休闲难度减缓怪物压迫并锁定樱花祭主题，适合轻松种田建造
+  values:
+    worldMode: '3'
+    maxPlayers: '8'
+    seasonOverride: '6'
+- id: hardcore-boss
+  name: 硬核首领挑战（硬核难度·高压生存）
+  description: 敌人伤害大幅提升且死亡惩罚更严格，考验小队配合与走位
+  values:
+    worldMode: '1'
+    maxPlayers: '8'
+    seasonOverride: '-1'
+fileTemplates:
+- path: saves/ServerConfig.json
+  content: |
+    {
+      "gameId": "",
+      "worldName": "{{worldName}}",
+      "worldMode": {{worldMode}},
+      "maxNumberPlayers": {{maxPlayers}},
+      "worldSeed": "{{worldSeed}}",
+      "worldIndex": {{worldIndex}},
+      "seasonOverride": {{seasonOverride}}
+    }
+preStartCommand: |
+  chmod +x /data/CoreKeeperServer /data/_launch.sh 2>/dev/null || true
+  mkdir -p /data/saves /data/saves/worlds
+  if [ -f /data/linux64/steamclient.so ]; then
+    mkdir -p /data/.steam/sdk64
+    ln -sf /data/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
+  fi
+startupCommand: |
+  cfg_val() {
+    python3 -c 'import json,sys; d=json.load(open("/data/saves/ServerConfig.json")) if __import__("os").path.exists("/data/saves/ServerConfig.json") else {}; v=d.get(sys.argv[1],""); print("" if v is None else v)' "$1" 2>/dev/null || true
+  }
+  CK_NAME="$(cfg_val worldName)"; [ -n "$CK_NAME" ] || CK_NAME="${WORLD_NAME:-CoreKeeperWorld}"
+  CK_MAXP="$(cfg_val maxNumberPlayers)"; [ -n "$CK_MAXP" ] || CK_MAXP="${MAX_PLAYERS:-8}"
+  CK_MODE="$(cfg_val worldMode)"; [ -n "$CK_MODE" ] || CK_MODE="${WORLD_MODE:-0}"
+  CK_SEED="$(cfg_val worldSeed)"; [ -n "$CK_SEED" ] || CK_SEED="${WORLD_SEED:-0}"
+  CK_INDEX="$(cfg_val worldIndex)"; [ -n "$CK_INDEX" ] || CK_INDEX="${WORLD_INDEX:-0}"
+  CK_SEASON="$(cfg_val seasonOverride)"; [ -n "$CK_SEASON" ] || CK_SEASON="${SEASON_OVERRIDE:--1}"
+  if command -v Xvfb >/dev/null 2>&1; then
+    rm -f /tmp/.X99-lock
+    Xvfb :99 -screen 0 640x480x24 -nolisten tcp >/dev/null 2>&1 &
+    export DISPLAY=:99
+    sleep 1
+  fi
+  export LD_LIBRARY_PATH="/data:/data/linux64:/data/CoreKeeperServer_Data/Plugins/x86_64:${LD_LIBRARY_PATH:-}"
+  set -- /data/CoreKeeperServer -batchmode -logfile /dev/stdout -datapath /data/saves -ip 0.0.0.0 -port 27015 -world "$CK_INDEX" -worldname "$CK_NAME" -maxplayers "$CK_MAXP" -worldmode "$CK_MODE" -season "$CK_SEASON"
+  [ -n "$CK_SEED" ] && [ "$CK_SEED" != "0" ] && set -- "$@" -worldseed "$CK_SEED"
+  exec "$@"
+preStopCommand: |
+  pkill -TERM -f '[C]oreKeeperServer' 2>/dev/null || true
+  i=0
+  while [ "$i" -lt 20 ] && pgrep -f '[C]oreKeeperServer' >/dev/null 2>&1; do
+    i=$((i+1))
+    sleep 0.5
+  done
+published: true
+consoleDelivery: |-
+  python3 -c '
+  import glob,json,os,sys
+  raw_cmd=sys.argv[1].strip()
+  p=raw_cmd.split()
+  op=p[0] if p else ""
+  arg=p[1] if len(p)>1 else ""
+  f="/data/saves/Admins.json"
+  out=""
+  if op=="gameinfo":
+    out=open("/data/GameInfo.txt").read().strip() if os.path.exists("/data/GameInfo.txt") else "GameInfo.txt 尚未生成"
+  elif op=="saves":
+    items=[f"{os.path.basename(x)} ({os.path.getsize(x)} bytes)" for x in sorted(glob.glob("/data/saves/worlds/*"))]
+    out="\n".join(items) if items else "暂无世界存档"
+  elif op in ("admin","unadmin") and arg:
+    d=json.load(open(f)) if os.path.exists(f) else {"admins":[]}
+    admins=[x for x in d.get("admins",[]) if isinstance(x,dict) and x.get("userId")!=arg]
+    if op=="admin": admins.append({"userId":arg})
+    d["admins"]=admins
+    os.makedirs("/data/saves",exist_ok=True)
+    json.dump(d,open(f,"w"),indent=2)
+    out=f"OK: {op} {arg}"
+  else:
+    sys.exit(1)
+  try:
+    open("/proc/1/fd/1","a",encoding="utf-8").write(f"[Console] > {raw_cmd}\n{out}\n")
+  except Exception:
+    pass
+  print(out)
+  ' {{cmd}}
+consoleActions:
+- id: ck-gameinfo
+  title: 查看联机房间码
+  group: 联机存档
+  command: gameinfo
+  starred: true
+- id: ck-saves
+  title: 查看世界存档状态
+  group: 联机存档
+  command: saves
+  starred: true
+- id: ck-admin-add
+  title: 添加管理员
+  group: 玩家权限
+  command: admin {{id}}
+  starred: false
+  params:
+  - name: id
+    label: 玩家 SteamID
+    type: text
+- id: ck-admin-del
+  title: 移除管理员
+  group: 玩家权限
+  command: unadmin {{id}}
+  starred: false
+  danger: true
+  params:
+  - name: id
+    label: 玩家 SteamID
+    type: text
+storagePolicy:
+  backupSubtree: saves
+  anchorFiles:
+  - worlds
+  replaceOnRestore: true
+  backupRequiresStop: true
+  regeneratePaths:
+  - saves/worlds
+metrics:
+- id: online_players
+  label: 在线玩家
+  unit: 人
+  source: exec
+  mode: regex_value
+  maxConfigKey: maxPlayers
+  probeCommand: |-
+    python3 -c 'import socket
+    q=b"\xff\xff\xff\xffTSource Engine Query\x00"
+    for h in ("127.0.0.1",socket.gethostbyname(socket.gethostname())):
+      for p in (27016,27015):
+        try:
+          s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(0.4); s.sendto(q,(h,p)); d,_=s.recvfrom(4096)
+          if len(d)>=9 and d[4]==65: s.sendto(q+d[5:9],(h,p)); d,_=s.recvfrom(4096)
+          pos=6
+          for _ in range(4): pos=d.find(0,pos)+1
+          print("GP_ONLINE="+str(d[pos+2])); raise SystemExit
+        except SystemExit: raise
+        except Exception: pass
+    print("GP_ONLINE=0")' 2>/dev/null || echo 'GP_ONLINE=0'
+  pattern: 'GP_ONLINE=(\d+)'
