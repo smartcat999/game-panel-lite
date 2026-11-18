@@ -17,7 +17,9 @@
 </p>
 
 <p align="center">
-  <a href="./web/public/landing/demo.mp4"><img src="./web/public/landing/demo.gif" alt="GamePanel Lite v2 Preview" width="900" /></a>
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@273e8f8cd348e96c7addcf09492fef86cd5c29ea/web/public/landing/demo.mp4"><img src="./web/public/landing/demo-cover.jpg" alt="播放 GamePanel Lite v2 产品导览" width="900" /></a><br />
+  <a href="https://cdn.jsdelivr.net/gh/smartcat999/game-panel-lite@273e8f8cd348e96c7addcf09492fef86cd5c29ea/web/public/landing/demo.mp4">播放 GamePanel Lite v2 产品导览 (1:58)</a><br />
+  <sub>无旁白 · 中文操作字幕 · 从开服、装模组和备份，到邀请好友与平台运维</sub>
 </p>
 
 > 💡 如需查看旧版 `v0.x` 源码与历史文档，请切换至 [v1-legacy](https://github.com/smartcat999/game-panel-lite/tree/v1-legacy) 分支。
