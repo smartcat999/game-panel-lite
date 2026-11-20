@@ -38,6 +38,9 @@ func (r *execSteamRunner) Run(ctx context.Context, installDir string, args []str
 		r.mu.Lock()
 	}
 	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if hooks.OnAcquired != nil {
 		hooks.OnAcquired()
 	}
@@ -51,6 +54,7 @@ func (r *execSteamRunner) Run(ctx context.Context, installDir string, args []str
 	fullArgs := append([]string{"+force_install_dir", installDir, "+login", "anonymous"}, args...)
 	fullArgs = append(fullArgs, "+quit")
 	cmd := exec.CommandContext(ctx, r.bin, fullArgs...)
+	configureProcessGroup(cmd)
 	cmd.Env = r.buildCmdEnv(homeDir, runtimeDir)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

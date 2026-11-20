@@ -62,15 +62,7 @@ func (w *Worker) processClaimedArtifact(ctx context.Context, rep *syncReporter, 
 }
 
 func cleanupPayloadStagingDir(stagingDir string) {
-	dir := strings.TrimSpace(stagingDir)
-	if dir == "" {
-		return
-	}
-	_ = os.RemoveAll(dir)
-	parent := filepath.Dir(dir)
-	if parent != "" && parent != "." && parent != string(filepath.Separator) {
-		_ = os.Remove(parent)
-	}
+	driver.CleanupStagingDir(stagingDir)
 }
 
 func (w *Worker) mirrorForArtifact(repoObj *registryv1.Repository, up *registryv1.Upstream) (*addonmirror.Service, addonmirror.Source) {

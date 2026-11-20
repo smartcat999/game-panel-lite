@@ -286,3 +286,16 @@ func MergeDeps(a []addonmirror.Dependency, fallback []registryv1.PackageDependen
 	}
 	return out
 }
+
+// CleanupStagingDir removes a temporary staging directory and prunes its parent directory if empty.
+func CleanupStagingDir(stagingDir string) {
+	dir := strings.TrimSpace(stagingDir)
+	if dir == "" {
+		return
+	}
+	_ = os.RemoveAll(dir)
+	parent := filepath.Dir(dir)
+	if parent != "" && parent != "." && parent != string(filepath.Separator) {
+		_ = os.Remove(parent)
+	}
+}

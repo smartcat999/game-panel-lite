@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -529,4 +530,118 @@ func TestCleanupPayloadStagingDir(t *testing.T) {
 	if _, err := os.Stat(branchB); err != nil {
 		t.Fatalf("expected sibling branch %q preserved, got err=%v", branchB, err)
 	}
+}
+
+type abortingSteamExec struct {
+	onStart func(stagingDir string)
+	cause   error
+}
+
+func (a *abortingSteamExec) Run(ctx context.Context, installDir string, _ []string, _ SteamHooks) error {
+	if a.onStart != nil {
+		a.onStart(installDir)
+	}
+	select {
+	case <-ctx.Done():
+		a.cause = context.Cause(ctx)
+		return ctx.Err()
+	case <-time.After(3 * time.Second):
+		return errors.New("timed out waiting for artifact abort")
+	}
+}
+
+func TestWorkerAbortsAndCleansStagingWhenArtifactDeletedMidSync(t *testing.T) {
+	workDir := t.TempDir()
+	var deleted, sawFailed atomic.Bool
+	srv := newAbortMidSyncTestServer(t, &deleted, &sawFailed)
+	defer srv.Close()
+
+	cli, err := client.New(&config.ClientConfig{ServerURL: srv.URL, Token: "t", Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := &abortingSteamExec{onStart: func(stagingDir string) {
+		writeTestTreeFile(t, stagingDir, "game/cs2.bin", "partial-730")
+		deleted.Store(true)
+	}}
+	cfg := &config.Config{Registry: config.RegistryConfig{WorkerWorkDir: workDir, WorkerLeaseTTL: 60 * time.Millisecond, WorkerConcurrency: 1}}
+	w := New(cfg, cli, WithWorkerID("w-abort"), WithSteamExecutor(exec))
+	if processed, syncErr := w.SyncOnce(context.Background()); syncErr != nil || processed != 0 {
+		t.Fatalf("expected SyncOnce aborted cleanly (processed=0, err=nil), got processed=%d err=%v", processed, syncErr)
+	}
+	if !errors.Is(exec.cause, driver.ErrArtifactAborted) {
+		t.Fatalf("expected ErrArtifactAborted context cause, got %v", exec.cause)
+	}
+	if _, statErr := os.Stat(filepath.Join(workDir, "steam-servers", "730")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected staging dir removed on abort, stat err=%v", statErr)
+	}
+	if sawFailed.Load() {
+		t.Fatal("expected deleted artifact not to receive Failed status update")
+	}
+}
+
+func newAbortMidSyncTestServer(t *testing.T, deleted, sawFailed *atomic.Bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		if handleAbortTestArtifactRoutes(rw, req, deleted, sawFailed) {
+			return
+		}
+		switch req.URL.Path {
+		case "/apis/registry.gamepanel.io/v1/repositories/cs2-server":
+			_ = json.NewEncoder(rw).Encode(registryv1.Repository{
+				Metadata: metav1.ObjectMeta{Name: "cs2-server"},
+				Spec:     registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatServerPackage, UpstreamName: "steam-cs2-server"},
+			})
+		case "/apis/registry.gamepanel.io/v1/upstreams/steam-cs2-server":
+			_ = json.NewEncoder(rw).Encode(registryv1.Upstream{Metadata: metav1.ObjectMeta{Name: "steam-cs2-server"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 730})
+		default:
+			rw.WriteHeader(http.StatusOK)
+		}
+	}))
+}
+
+func handleAbortTestArtifactRoutes(rw http.ResponseWriter, req *http.Request, deleted, sawFailed *atomic.Bool) bool {
+	const artPath = "/apis/registry.gamepanel.io/v1/artifacts/cs2-server.cs2.latest"
+	art := registryv1.Artifact{
+		Metadata: metav1.ObjectMeta{Name: "cs2-server.cs2.latest"},
+		Spec:     registryv1.ArtifactSpec{Repository: "cs2-server", Package: "cs2", Version: "latest"},
+		Status:   registryv1.ArtifactStatus{Phase: registryv1.ArtifactPhasePending},
+	}
+	switch {
+	case req.Method == http.MethodGet && req.URL.Path == "/apis/registry.gamepanel.io/v1/artifacts":
+		var items []registryv1.Artifact
+		if strings.Contains(req.URL.Query().Get("fieldSelector"), string(registryv1.ArtifactPhasePending)) && !deleted.Load() {
+			items = []registryv1.Artifact{art}
+		}
+		_ = json.NewEncoder(rw).Encode(metav1.List[registryv1.Artifact]{Items: items})
+		return true
+	case strings.HasPrefix(req.URL.Path, artPath):
+		return serveAbortTestSingleArtifact(rw, req, artPath, art, deleted, sawFailed)
+	default:
+		return false
+	}
+}
+
+func serveAbortTestSingleArtifact(rw http.ResponseWriter, req *http.Request, artPath string, art registryv1.Artifact, deleted, sawFailed *atomic.Bool) bool {
+	var body registryv1.Artifact
+	isStatusPut := req.Method == http.MethodPut && req.URL.Path == artPath+"/status"
+	if req.Method == http.MethodPut && (req.URL.Path == artPath || isStatusPut) {
+		_ = json.NewDecoder(req.Body).Decode(&body)
+		if isStatusPut && body.Status.Phase == registryv1.ArtifactPhaseFailed {
+			sawFailed.Store(true)
+		}
+	}
+	if deleted.Load() {
+		rw.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(rw).Encode(map[string]any{"code": http.StatusNotFound, "message": "not found"})
+		return true
+	}
+	if req.Method == http.MethodPut && (req.URL.Path == artPath || isStatusPut) {
+		_ = json.NewEncoder(rw).Encode(body)
+		return true
+	}
+	art.Metadata.Annotations = map[string]string{registryv1.AnnotationSyncClaimedBy: "w-abort"}
+	_ = json.NewEncoder(rw).Encode(art)
+	return true
 }

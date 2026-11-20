@@ -3,6 +3,7 @@ package registryworker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -223,10 +224,10 @@ func (w *Worker) claimAndSync(ctx context.Context, candidate *registryv1.Artifac
 	if !ok {
 		return false
 	}
-	syncCtx, stopRenew := w.startLeaseRenewal(ctx, claimed.Metadata.Name)
-	defer stopRenew()
+	syncCtx, abortSync := w.startLeaseRenewal(ctx, claimed.Metadata.Name)
+	defer abortSync(nil)
 
-	rep := newSyncReporter(syncCtx, w.cli, claimed)
+	rep := newSyncReporter(syncCtx, w.cli, claimed, abortSync)
 	rep.ResetLogs()
 	rep.Logf("开始同步资源 %s (Worker: %s)", claimed.Metadata.Name, w.workerID)
 	rep.Stage(registryv1.ArtifactStageResolving, 2, "正在准备上游同步")
@@ -238,10 +239,14 @@ func (w *Worker) claimAndSync(ctx context.Context, candidate *registryv1.Artifac
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	err = w.processClaimedArtifact(syncCtx, rep, claimed, tmpDir)
-	stopRenew()
+	abortSync(nil)
 	if err != nil {
 		if ctx.Err() != nil {
 			w.releaseClaimOnShutdown(ctx, rep, claimed)
+			return false
+		}
+		if errors.Is(context.Cause(syncCtx), driver.ErrArtifactAborted) {
+			log.Info("artifact sync aborted", "artifact", claimed.Metadata.Name)
 			return false
 		}
 		w.markFailed(ctx, rep, claimed, err)
@@ -280,9 +285,9 @@ func (w *Worker) tryClaim(ctx context.Context, art *registryv1.Artifact) (*regis
 	return withStatus, true
 }
 
-func (w *Worker) startLeaseRenewal(parent context.Context, artName string) (context.Context, context.CancelFunc) {
+func (w *Worker) startLeaseRenewal(parent context.Context, artName string) (context.Context, context.CancelCauseFunc) {
 	leaseTTL := w.leaseTTL()
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancelCause(parent)
 	go func() {
 		ticker := time.NewTicker(leaseTTL / 3)
 		defer ticker.Stop()
@@ -291,21 +296,44 @@ func (w *Worker) startLeaseRenewal(parent context.Context, artName string) (cont
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				cur, err := w.cli.RegistryV1().Artifacts().Get(ctx, artName)
-				if err == nil && cur.Metadata.Annotations[registryv1.AnnotationSyncClaimedBy] != w.workerID {
-					cancel()
+				if !w.renewLeaseOnce(ctx, artName, leaseTTL, cancel) {
 					return
 				}
-				if err != nil {
-					continue
-				}
-				cur.Metadata.Annotations = maps.Clone(cur.Metadata.Annotations)
-				cur.Metadata.Annotations[registryv1.AnnotationSyncLeaseUntil] = time.Now().UTC().Add(leaseTTL).Format(time.RFC3339)
-				_, _ = w.cli.RegistryV1().Artifacts().Update(ctx, cur)
 			}
 		}
 	}()
 	return ctx, cancel
+}
+
+func (w *Worker) renewLeaseOnce(ctx context.Context, artName string, leaseTTL time.Duration, cancel context.CancelCauseFunc) bool {
+	cur, err := w.cli.RegistryV1().Artifacts().Get(ctx, artName)
+	if shouldAbortSyncLease(cur, err, w.workerID) {
+		cancel(driver.ErrArtifactAborted)
+		return false
+	}
+	if err != nil {
+		return true
+	}
+	cur.Metadata.Annotations = maps.Clone(cur.Metadata.Annotations)
+	if cur.Metadata.Annotations == nil {
+		cur.Metadata.Annotations = make(map[string]string, 1)
+	}
+	cur.Metadata.Annotations[registryv1.AnnotationSyncLeaseUntil] = time.Now().UTC().Add(leaseTTL).Format(time.RFC3339)
+	if _, err := w.cli.RegistryV1().Artifacts().Update(ctx, cur); client.IsNotFound(err) {
+		cancel(driver.ErrArtifactAborted)
+		return false
+	}
+	return true
+}
+
+func shouldAbortSyncLease(cur *registryv1.Artifact, err error, workerID string) bool {
+	if client.IsNotFound(err) {
+		return true
+	}
+	if err != nil || cur == nil {
+		return false
+	}
+	return cur.Metadata.DeletionTimestamp != nil || cur.Metadata.Annotations[registryv1.AnnotationSyncClaimedBy] != workerID
 }
 
 func (w *Worker) releaseClaimOnShutdown(ctx context.Context, rep *syncReporter, art *registryv1.Artifact) {
@@ -343,7 +371,7 @@ func (w *Worker) markFailed(ctx context.Context, rep *syncReporter, art *registr
 	statusCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
 	cur, err := w.cli.RegistryV1().Artifacts().Get(statusCtx, art.Metadata.Name)
-	if err == nil && cur.Metadata.Annotations[registryv1.AnnotationSyncClaimedBy] != w.workerID {
+	if shouldAbortSyncLease(cur, err, w.workerID) {
 		return
 	}
 	if err != nil {

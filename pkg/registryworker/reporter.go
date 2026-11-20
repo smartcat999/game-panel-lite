@@ -27,6 +27,7 @@ type syncReporter struct {
 	cli       client.Interface
 	art       *registryv1.Artifact
 	startedAt time.Time
+	abort     context.CancelCauseFunc
 
 	mu             sync.Mutex
 	buf            []string
@@ -35,16 +36,21 @@ type syncReporter struct {
 	lastStage      registryv1.ArtifactSyncStage
 }
 
-func newSyncReporter(ctx context.Context, cli client.Interface, art *registryv1.Artifact) *syncReporter {
+func newSyncReporter(ctx context.Context, cli client.Interface, art *registryv1.Artifact, abort ...context.CancelCauseFunc) *syncReporter {
 	now := time.Now().UTC()
 	if art.Status.StartedAt == nil {
 		art.Status.StartedAt = &now
+	}
+	var abortFn context.CancelCauseFunc
+	if len(abort) > 0 {
+		abortFn = abort[0]
 	}
 	return &syncReporter{
 		ctx:       ctx,
 		cli:       cli,
 		art:       art,
 		startedAt: *art.Status.StartedAt,
+		abort:     abortFn,
 	}
 }
 
@@ -54,7 +60,9 @@ func (r *syncReporter) ResetLogs() {
 	}
 	chunk := &registryv1.ArtifactLogChunk{Action: registryv1.ArtifactLogActionReset}
 	chunk.DefaultMeta()
-	_ = r.cli.RegistryV1().Artifacts().PushLogs(r.ctx, r.art.Metadata.Name, chunk)
+	if err := r.cli.RegistryV1().Artifacts().PushLogs(r.ctx, r.art.Metadata.Name, chunk); err != nil {
+		r.checkAbortError(err)
+	}
 }
 
 func (r *syncReporter) Logf(format string, args ...any) {
@@ -138,7 +146,9 @@ func (r *syncReporter) takeBatchLocked() []string {
 func (r *syncReporter) sendChunk(action registryv1.ArtifactLogAction, lines []string) {
 	chunk := &registryv1.ArtifactLogChunk{Action: action, Lines: lines}
 	chunk.DefaultMeta()
-	_ = r.cli.RegistryV1().Artifacts().PushLogs(r.ctx, r.art.Metadata.Name, chunk)
+	if err := r.cli.RegistryV1().Artifacts().PushLogs(r.ctx, r.art.Metadata.Name, chunk); err != nil {
+		r.checkAbortError(err)
+	}
 }
 
 func (r *syncReporter) Stage(stage registryv1.ArtifactSyncStage, pct int32, msg string) {
@@ -176,10 +186,31 @@ func (r *syncReporter) pushStatus(stage registryv1.ArtifactSyncStage, pct int32,
 	snap := *r.art
 	r.mu.Unlock()
 
-	if updated, err := r.cli.RegistryV1().Artifacts().UpdateStatus(r.ctx, &snap); err == nil && updated != nil {
+	updated, err := r.cli.RegistryV1().Artifacts().UpdateStatus(r.ctx, &snap)
+	if err != nil {
+		r.checkAbortError(err)
+		return
+	}
+	if updated != nil {
+		if updated.Metadata.DeletionTimestamp != nil {
+			r.triggerAbort()
+			return
+		}
 		r.mu.Lock()
 		r.art.Metadata.StatusVersion = updated.Metadata.StatusVersion
 		r.mu.Unlock()
+	}
+}
+
+func (r *syncReporter) checkAbortError(err error) {
+	if client.IsNotFound(err) {
+		r.triggerAbort()
+	}
+}
+
+func (r *syncReporter) triggerAbort() {
+	if r.abort != nil {
+		r.abort(driver.ErrArtifactAborted)
 	}
 }
 

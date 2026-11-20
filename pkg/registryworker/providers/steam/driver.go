@@ -2,6 +2,7 @@ package steam
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -157,6 +158,9 @@ func syncServer(ctx context.Context, rt driver.Runtime, rep driver.Reporter, art
 	}
 	args := buildServerUpdateArgs(appID, branch, platforms)
 	if err := runWithRetry(ctx, rt, rep, 5, "下载游戏包 "+appID, staging, args); err != nil {
+		if errors.Is(context.Cause(ctx), driver.ErrArtifactAborted) {
+			driver.CleanupStagingDir(staging)
+		}
 		return nil, fmt.Errorf("steamcmd app_update %s: %w", appID, err)
 	}
 	buildID := readManifestBuildID(staging, appID)
@@ -173,6 +177,9 @@ func syncServer(ctx context.Context, rt driver.Runtime, rep driver.Reporter, art
 	dst := filepath.Join(tmpDir, "package.tar.gz")
 	size, shaHex, err := driver.ArchiveTreeTarGzWithProgress(ctx, staging, dst, rep)
 	if err != nil {
+		if errors.Is(context.Cause(ctx), driver.ErrArtifactAborted) {
+			driver.CleanupStagingDir(staging)
+		}
 		return nil, fmt.Errorf("archive steam game %s: %w", appID, err)
 	}
 	if rep != nil {

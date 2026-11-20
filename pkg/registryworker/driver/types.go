@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	registryv1 "github.com/smartcat999/game-panel-cloud/pkg/apis/registry/v1"
@@ -11,6 +12,9 @@ import (
 
 // DefaultSteamExecutorDriver is the built-in OS subprocess SteamCMD runner driver name.
 const DefaultSteamExecutorDriver = "steamcmd"
+
+// ErrArtifactAborted signals that an active sync was cancelled because the Artifact was deleted or reassigned.
+var ErrArtifactAborted = errors.New("artifact sync aborted")
 
 // BuiltPayload describes the materialized local artifact ready for S3 blob upload and Artifact status commit.
 type BuiltPayload struct {
