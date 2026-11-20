@@ -2385,9 +2385,14 @@ export default function AdminNodesPage() {
                       <CardHeader
                         title="预热资源"
                         description={[
+                          nodePrewarmEntries.length > 0
+                            ? `预热任务 ${nodePrewarmEntries.length} 项`
+                            : "",
                           cachedCount > 0
                             ? `游戏与模组 ${cachedList.length} 项 · 运行环境 ${warmImages.length} 项`
-                            : "尚未预热游戏或运行环境",
+                            : nodePrewarmEntries.length === 0
+                              ? "尚未预热游戏或运行环境"
+                              : "",
                           freeDiskBytes > 0
                             ? `节点可用磁盘 ${formatBytesCompact(freeDiskBytes)}`
                             : "",
@@ -2432,9 +2437,9 @@ export default function AdminNodesPage() {
                             setCacheSubTab(t);
                           }}
                           items={[
-                            { value: "jobs", label: `预热任务 (${nodePrewarmEntries.length})` },
-                            { value: "artifacts", label: `游戏与模组 (${cachedList.length})` },
-                            { value: "images", label: `运行环境 (${warmImages.length})` },
+                            { value: "jobs", label: "预热任务" },
+                            { value: "artifacts", label: "游戏与模组" },
+                            { value: "images", label: "运行环境" },
                           ]}
                         />
 
