@@ -71,21 +71,29 @@ export function advancedFromPreset(preset: GamePreset): AdvancedSettings {
   };
 }
 
+/** Effective storage quantity for a plan, floored by the game preset's minimum storage requirement. */
+export function effectivePlanStorage(plan: ResourcePlan, preset?: GamePreset): string {
+  if (!preset?.storage) return plan.storage;
+  return parseNumericQuantity(preset.storage) > parseNumericQuantity(plan.storage)
+    ? preset.storage
+    : plan.storage;
+}
+
 /** Returns a reason string when the plan does not fit into the remaining quota. */
-export function planQuotaIssue(plan: ResourcePlan, quota: QuotaSummary): string | null {
+export function planQuotaIssue(plan: ResourcePlan, quota: QuotaSummary, preset?: GamePreset): string | null {
   const cpuLeft = quota.cpu.max - Math.max(quota.cpu.used, quota.cpu.reserved ?? 0);
   const memLeft = quota.memory.max - Math.max(quota.memory.used, quota.memory.reserved ?? 0);
   const diskLeft = quota.storage.max - Math.max(quota.storage.used, quota.storage.reserved ?? 0);
   const eps = 1e-6;
   if (parseNumericQuantity(plan.cpu) > cpuLeft + eps) return "CPU";
   if (parseNumericQuantity(plan.memory) > memLeft + eps) return "内存";
-  if (parseNumericQuantity(plan.storage) > diskLeft + eps) return "存储";
+  if (parseNumericQuantity(effectivePlanStorage(plan, preset)) > diskLeft + eps) return "存储";
   return null;
 }
 
 /** Plan matching the preset's own sizing, else recommended, else the first plan that fits. */
 export function defaultPlanId(preset: GamePreset | undefined, quota: QuotaSummary): string | null {
-  const fitting = RESOURCE_PLANS.filter((p) => !planQuotaIssue(p, quota));
+  const fitting = RESOURCE_PLANS.filter((p) => !planQuotaIssue(p, quota, preset));
   if (fitting.length === 0) return null;
   const recId = recommendedPlanId(preset);
   const recIdx = RESOURCE_PLANS.findIndex((p) => p.id === recId);

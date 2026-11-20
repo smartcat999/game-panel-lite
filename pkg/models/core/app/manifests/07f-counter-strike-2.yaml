@@ -18,7 +18,7 @@ recommendedPlan: pro
 resources:
   cpu: '4'
   memory: 8Gi
-  storage: 45Gi
+  storage: 80Gi
 ports:
 - name: game
   protocol: UDP
@@ -365,7 +365,7 @@ preStopCommand: |
     i=$((i+1))
     sleep 0.5
   done
-published: false
+published: true
 consoleDelivery: rcon-cli
 consoleActions:
 - id: cs2-restart

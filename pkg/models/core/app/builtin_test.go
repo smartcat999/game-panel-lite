@@ -36,6 +36,12 @@ func TestBuiltInAppsRenderAllTemplatesCleanly(t *testing.T) {
 		if apps[i].Metadata.Name != want {
 			t.Fatalf("built-in app[%d] = %q, want %q", i, apps[i].Metadata.Name, want)
 		}
+		if !apps[i].Published {
+			t.Fatalf("built-in app %s should be published by default", want)
+		}
+		if want == "counter-strike-2" && apps[i].Resources[corev1.ResourceStorage] != "80Gi" {
+			t.Fatalf("counter-strike-2 storage = %q, want 80Gi", apps[i].Resources[corev1.ResourceStorage])
+		}
 		verifySingleBuiltInAppRender(t, apps[i])
 		verifyAppPresetsTargetsAndMetrics(t, apps[i])
 		verifyAppNamingConventions(t, apps[i])

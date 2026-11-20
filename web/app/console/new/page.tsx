@@ -39,6 +39,7 @@ import { Stepper } from "../../components/console/wizard/Stepper";
 import {
   advancedFromPreset,
   belowRecommended,
+  effectivePlanStorage,
   findPlan,
   nextEnvId,
   recommendedPlanId,
@@ -271,6 +272,7 @@ function NewServerWizard() {
       const primaryProtocol = isCustomContainer ? adv.protocol : preset.protocol;
       const primaryTargetPort = isCustomContainer ? Number(adv.targetPort) : preset.targetPort;
       const publishedPort = adv.publishedPortMode === "fixed" ? Number(adv.publishedPort) : 0;
+      const effectiveStorage = effectivePlanStorage(plan, preset);
       const finalEnv = compiled ? compiled.env : baseEnv;
       const finalFiles = compiled && compiled.files.length > 0 ? compiled.files : undefined;
       const serverArtifact = selectedApp ? resolveServerArtifact(selectedApp, appVersion) : undefined;
@@ -324,8 +326,8 @@ function NewServerWizard() {
               ...extraPorts,
             ],
             resources: {
-              requests: { cpu: plan.cpu, memory: plan.memory, storage: plan.storage },
-              limits: { cpu: plan.cpu, memory: plan.memory, storage: plan.storage },
+              requests: { cpu: plan.cpu, memory: plan.memory, storage: effectiveStorage },
+              limits: { cpu: plan.cpu, memory: plan.memory, storage: effectiveStorage },
             },
             ...(selectedApp?.storagePolicy
               ? {
@@ -528,7 +530,7 @@ function NewServerWizard() {
                       {formatCpu(p.cpu)} {formatGB(p.memory)}
                     </div>
                     <div className="mt-1 text-[13px] text-[#5B6075]">
-                      {formatGB(p.storage)} 存储
+                      {formatGB(effectivePlanStorage(p, preset))} 存储
                     </div>
                     <div className="mt-3 flex h-6 items-center gap-2">
                       {selected && (
@@ -750,7 +752,7 @@ function NewServerWizard() {
                 <SummaryRow label="配置">
                   <span className="font-medium text-[#14161F]">{plan.label}</span>
                   <span className="ml-2 text-[#5B6075]">
-                    {formatCpu(plan.cpu)} {formatGB(plan.memory)}，{formatGB(plan.storage)} 存储
+                    {formatCpu(plan.cpu)} {formatGB(plan.memory)}，{formatGB(effectivePlanStorage(plan, preset))} 存储
                   </span>
                 </SummaryRow>
                 <SummaryRow label="名称">
