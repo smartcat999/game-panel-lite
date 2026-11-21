@@ -100,7 +100,7 @@ func Reconcile(ctx context.Context, reg *repo.Registry, bus mq.Interface, name s
 		repoToApp = BuildRepoToAppMap(appsList.Items)
 	}
 	nextStatus := buildDesiredJobStatus(cur, nodesList.Items, repoToApp)
-	if reflect.DeepEqual(cur.Status, nextStatus) {
+	if prewarmJobStatusEqual(cur.Status, nextStatus) {
 		return nil
 	}
 	cur.Status = nextStatus
@@ -134,23 +134,60 @@ func buildDesiredJobStatus(cur *corev1.PrewarmJob, allNodes []*corev1.Node, repo
 		}
 	}
 	slices.Sort(targetNames)
-	nodes := make([]corev1.PrewarmNodeStatus, 0, len(targetNames))
-	for _, name := range targetNames {
-		if prev, ok := prevByNode[name]; ok {
-			nodes = append(nodes, prev)
-		} else {
-			nodes = append(nodes, corev1.PrewarmNodeStatus{
-				NodeName: name,
-				Phase:    corev1.PrewarmJobPhasePending,
-			})
+	var nodes []corev1.PrewarmNodeStatus
+	if len(targetNames) > 0 {
+		nodes = make([]corev1.PrewarmNodeStatus, 0, len(targetNames))
+		for _, name := range targetNames {
+			if prev, ok := prevByNode[name]; ok {
+				nodes = append(nodes, prev)
+			} else {
+				nodes = append(nodes, corev1.PrewarmNodeStatus{
+					NodeName: name,
+					Phase:    corev1.PrewarmJobPhasePending,
+				})
+			}
 		}
 	}
 	next := cur.Status
+	next.Conditions = append([]metav1.Condition(nil), cur.Status.Conditions...)
 	next.ObservedGeneration = cur.Metadata.Generation
 	next.Nodes = nodes
 	prewarmjobdb.RecomputeSummary(&next)
 	setJobReconciledCondition(&next, cur.Metadata.Generation)
 	return next
+}
+
+func prewarmJobStatusEqual(a, b corev1.PrewarmJobStatus) bool {
+	if a.ObservedGeneration != b.ObservedGeneration ||
+		a.Phase != b.Phase ||
+		a.TargetNodes != b.TargetNodes ||
+		a.ReadyNodes != b.ReadyNodes ||
+		a.FailedNodes != b.FailedNodes {
+		return false
+	}
+	if len(a.Nodes) > 0 || len(b.Nodes) > 0 {
+		if !reflect.DeepEqual(a.Nodes, b.Nodes) {
+			return false
+		}
+	}
+	return conditionsEqual(a.Conditions, b.Conditions)
+}
+
+func conditionsEqual(a, b []metav1.Condition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Type != b[i].Type ||
+			a[i].Status != b[i].Status ||
+			a[i].ObservedGeneration != b[i].ObservedGeneration ||
+			a[i].Reason != b[i].Reason ||
+			a[i].Message != b[i].Message ||
+			!a[i].LastTransitionTime.Equal(b[i].LastTransitionTime) {
+			return false
+		}
+	}
+	return true
 }
 
 func setJobReconciledCondition(st *corev1.PrewarmJobStatus, gen int64) {
