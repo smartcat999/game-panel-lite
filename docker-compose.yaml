@@ -169,7 +169,6 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
-    entrypoint: ["/usr/local/bin/registry-worker"]
     environment:
       <<: *no-proxy-env
       GP_LOG_LEVEL: info
