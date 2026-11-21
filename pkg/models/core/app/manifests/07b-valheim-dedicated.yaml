@@ -7,7 +7,7 @@ metadata:
     gamepanel.io/category: survival
 displayName: 英灵神殿 Valheim
 tagline: 北欧神话维京生存 · 多人合作探索与建造
-summary: 支持世界难度预设、资源采集倍率、传送门矿石规则、怪物袭击频率调节及管理员/白名单管理。
+summary: 支持世界难度预设、资源采集倍率、传送门矿石规则、怪物袭击频率调节、Thunderstore/BepInEx 模组扩展及管理员/白名单管理。
 category: survival
 coverImage: /landing/games/valheim-dedicated.jpg
 image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
@@ -30,6 +30,10 @@ serverBinding:
   repository: valheim-server
   package: valheim
   targetPath: .
+addonBinding:
+  repository: valheim-thunderstore
+  installMode: bepinex
+  targetDir: BepInEx
 env:
   SERVER_NAME: GamePanel Valheim
   WORLD_NAME: Dedicated
@@ -281,7 +285,7 @@ fileTemplates:
     backupCount={{backupCount}}
 preStartCommand: |
   chmod +x /data/valheim_server.x86_64 2>/dev/null || true
-  mkdir -p /data/saves /data/saves/worlds_local
+  mkdir -p /data/saves /data/saves/worlds_local /data/BepInEx/plugins /data/BepInEx/config
   touch /data/saves/adminlist.txt /data/saves/bannedlist.txt /data/saves/permittedlist.txt
   if [ -f /data/linux64/steamclient.so ]; then
     mkdir -p /data/.steam/sdk64
@@ -313,6 +317,19 @@ startupCommand: |
   [ -n "$VALHEIM_PORTALS" ] && [ "$VALHEIM_PORTALS" != "normal" ] && set -- "$@" -modifier portals "$VALHEIM_PORTALS"
   export LD_LIBRARY_PATH="/data/linux64:${LD_LIBRARY_PATH:-}"
   export SteamAppId=892970
+  if [ -f /data/BepInEx/core/BepInEx.Preloader.dll ]; then
+    export DOORSTOP_ENABLED=1
+    export DOORSTOP_ENABLE=TRUE
+    export DOORSTOP_TARGET_ASSEMBLY="/data/BepInEx/core/BepInEx.Preloader.dll"
+    export DOORSTOP_INVOKE_DLL_PATH="/data/BepInEx/core/BepInEx.Preloader.dll"
+    if [ -f /data/doorstop_libs/libdoorstop_x64.so ]; then
+      export LD_LIBRARY_PATH="/data/doorstop_libs:${LD_LIBRARY_PATH}"
+      export LD_PRELOAD="libdoorstop_x64.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    elif [ -f /data/libdoorstop.so ]; then
+      export LD_LIBRARY_PATH="/data:${LD_LIBRARY_PATH}"
+      export LD_PRELOAD="libdoorstop.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    fi
+  fi
   exec "$@"
 preStopCommand: |
   pkill -INT -f '[v]alheim_server.x86_64' 2>/dev/null || true

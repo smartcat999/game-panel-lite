@@ -148,8 +148,9 @@ export function AddonConfigModal({
   const displayTitle = pkgMeta?.title || addon?.title || addon?.package || `${noun}配置`;
   const installMode = addon?.installMode || "";
   const isTMod = installMode === "tmod_latest";
+  const isBepInEx = installMode === "bepinex";
   const isFlatDir = installMode === "flat_dir" || installMode === "";
-  const isFileMode = schema.length === 0 && (isTMod || isFlatDir);
+  const isFileMode = schema.length === 0 && (isTMod || isBepInEx || isFlatDir);
 
   // ----------------------------- Schema Form State -----------------------------
   const [schemaDraft, setSchemaDraft] = useState<Record<string, string>>({});
@@ -296,6 +297,32 @@ export function AddonConfigModal({
         const paths = hits.map((name) => `SaveData/ModConfigs/${name}`);
         setMatchedFiles(paths);
         setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
+      } else if (isBepInEx) {
+        const baseDir = (addon.targetDir || "BepInEx").replace(/^\/+|\/+$/g, "") || "BepInEx";
+        const configDir = `${baseDir}/config`;
+        const res = await listDirIfPresent(listFiles, configDir);
+        const allCfgs = res.entries
+          .filter((e) => !e.isDir && isEditablePluginConfig(e.name))
+          .map((e) => e.name)
+          .sort((a, b) => a.localeCompare(b));
+        const pkgTok = normalizeToken(addon.package);
+        const shortPkg = addon.package.includes("-") ? addon.package.split("-").slice(1).join("-") : addon.package;
+        const shortTok = normalizeToken(shortPkg);
+        const titleTok = normalizeToken(displayTitle);
+        let hits = allCfgs.filter((name) => {
+          const tok = normalizeToken(name);
+          if (!tok) return false;
+          if (pkgTok.length >= 3 && tok.includes(pkgTok)) return true;
+          if (shortTok.length >= 3 && tok.includes(shortTok)) return true;
+          return titleTok.length >= 3 && tok.includes(titleTok);
+        });
+        if (hits.length === 0 && allCfgs.length > 0) {
+          hits = allCfgs;
+          setFuzzyNotice(`未精确匹配到单一配置文件，已列出 ${configDir} 目录中的全部配置文件。`);
+        }
+        const paths = hits.map((name) => `${configDir}/${name}`);
+        setMatchedFiles(paths);
+        setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
       } else {
         const baseDir = (addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins";
         const res = await listDirIfPresent(listFiles, baseDir);
@@ -332,7 +359,7 @@ export function AddonConfigModal({
     } finally {
       setFilesLoading(false);
     }
-  }, [open, addon, isFileMode, isTMod, listFiles, modIds, displayTitle]);
+  }, [open, addon, isFileMode, isTMod, isBepInEx, listFiles, modIds, displayTitle]);
 
   useEffect(() => {
     void scanWorkspaceConfigs();

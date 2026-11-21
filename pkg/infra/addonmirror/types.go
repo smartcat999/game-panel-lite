@@ -13,15 +13,17 @@ const (
 	ProviderVanilla       = driver.ProviderVanilla
 	ProviderFabricMC      = driver.ProviderFabricMC
 	ProviderNeoForge      = driver.ProviderNeoForge
+	ProviderThunderstore  = driver.ProviderThunderstore
 	ProviderSteam         = driver.ProviderSteam
 	ProviderHTTP          = driver.ProviderHTTP
 	ProviderTerraria      = driver.ProviderTerraria
 	ProviderTModLoader    = driver.ProviderTModLoader
 
-	FormatServerPackage = driver.FormatServerPackage
-	FormatWorkshopMod   = driver.FormatWorkshopMod
-	FormatModrinthAddon = driver.FormatModrinthAddon
-	FormatGeneric       = driver.FormatGeneric
+	FormatServerPackage   = driver.FormatServerPackage
+	FormatWorkshopMod     = driver.FormatWorkshopMod
+	FormatModrinthAddon   = driver.FormatModrinthAddon
+	FormatThunderstoreMod = driver.FormatThunderstoreMod
+	FormatGeneric         = driver.FormatGeneric
 
 	ArchiveFormatRaw   = driver.ArchiveFormatRaw
 	ArchiveFormatTarGz = driver.ArchiveFormatTarGz
@@ -62,6 +64,7 @@ const (
 	DefaultMinecraftLibrariesBaseURL   = driver.DefaultMinecraftLibrariesBaseURL
 	DefaultMinecraftLibrariesMirrorURL = driver.DefaultMinecraftLibrariesMirrorURL
 	DefaultFabricServerMainClass       = driver.DefaultFabricServerMainClass
+	DefaultThunderstoreBaseURL         = driver.DefaultThunderstoreBaseURL
 	maxProxiedImageBytes               = 8 << 20 // 8 MiB
 	maxCachedThumbnailBytes            = 256 << 10
 )

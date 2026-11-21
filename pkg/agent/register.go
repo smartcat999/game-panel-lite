@@ -4,6 +4,7 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/agent/driver"
 
 	// Self-register built-in addon injectors for each corev1.AddonInstallMode.
+	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/bepinex"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/dst"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/flatdir"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/agent/providers/tmod"

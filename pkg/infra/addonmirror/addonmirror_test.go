@@ -342,7 +342,7 @@ func TestRegisteredDriversAndCapabilities(t *testing.T) {
 	registered := Drivers()
 	for _, want := range []string{
 		ProviderPaperMC, ProviderPurpur, ProviderVanilla, ProviderFabricMC, ProviderNeoForge, ProviderHTTP,
-		ProviderModrinth, ProviderSteam, ProviderSteamWorkshop,
+		ProviderModrinth, ProviderThunderstore, ProviderSteam, ProviderSteamWorkshop,
 		ProviderTerraria, ProviderTModLoader,
 	} {
 		if !slices.Contains(registered, want) {
@@ -352,6 +352,10 @@ func TestRegisteredDriversAndCapabilities(t *testing.T) {
 	svc, modSrc := NewForRegistry(nil, config.RegistryConfig{}, RegistryParams{Provider: ProviderModrinth, Format: "mod"})
 	if !svc.SupportsCatalog(modSrc) {
 		t.Fatalf("expected Modrinth catalog support")
+	}
+	_, tsSrc := NewForRegistry(nil, config.RegistryConfig{}, RegistryParams{Provider: ProviderThunderstore, Format: FormatThunderstoreMod})
+	if !svc.SupportsCatalog(tsSrc) {
+		t.Fatalf("expected Thunderstore catalog support")
 	}
 	_, wsSrc := NewForRegistry(nil, config.RegistryConfig{}, RegistryParams{Provider: ProviderSteam, Format: FormatWorkshopMod})
 	if !svc.SupportsCatalog(wsSrc) {
@@ -767,5 +771,65 @@ func TestNeoForgeCatalogRetainsOlderMCVersionsBeyond300Builds(t *testing.T) {
 	rel, err := svc.ResolveNeoForge(ctx, srv.URL, "1.21.4")
 	if err != nil || rel.Version != "1.21.4" || rel.Build != "1.21.4+21.4.161" {
 		t.Fatalf("expected 1.21.4+21.4.161 from cached catalog, got %#v err=%v", rel, err)
+	}
+}
+
+func newMockThunderstoreServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/cyberstorm/listing/valheim/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("ordering") != "most-downloaded" {
+			t.Fatalf("expected ordering=most-downloaded, got %q", r.URL.Query().Get("ordering"))
+		}
+		_, _ = w.Write([]byte(`{"count":1,"results":[{"namespace":"ValheimModding","name":"Jotunn","description":"Valheim Library","icon_url":"https://ccdn.thunderstore.io/live/repository/icons/ValheimModding-Jotunn-2.30.2.png","download_count":4979287,"size":835193,"last_updated":"2026-09-21T17:19:02Z","categories":[{"name":"Libraries"}]}]}`))
+	})
+	mux.HandleFunc("/api/experimental/package/ValheimModding/Jotunn/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"namespace":"ValheimModding","name":"Jotunn","full_name":"ValheimModding-Jotunn","owner":"ValheimModding","package_url":"https://thunderstore.io/package/ValheimModding/Jotunn/","date_updated":"2026-09-21T17:19:02Z","community_listings":[{"community":"valheim","categories":["Libraries"]}],"latest":{"namespace":"ValheimModding","name":"Jotunn","version_number":"2.30.2","full_name":"ValheimModding-Jotunn-2.30.2","description":"Valheim Library","icon":"https://ccdn.thunderstore.io/live/repository/icons/ValheimModding-Jotunn-2.30.2.png","dependencies":["denikson-BepInExPack_Valheim-5.4.2333"],"download_url":"https://thunderstore.io/package/download/ValheimModding/Jotunn/2.30.2/","downloads":123456,"date_created":"2026-09-21T17:19:02Z"}}`))
+	})
+	mux.HandleFunc("/api/experimental/package/ValheimModding/Jotunn/2.29.0/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"namespace":"ValheimModding","name":"Jotunn","version_number":"2.29.0","full_name":"ValheimModding-Jotunn-2.29.0","dependencies":["denikson-BepInExPack_Valheim-5.4.2332"],"download_url":"https://thunderstore.io/package/download/ValheimModding/Jotunn/2.29.0/","date_created":"2026-08-01T00:00:00Z"}`))
+	})
+	mux.HandleFunc("/api/cyberstorm/package/ValheimModding/Jotunn/versions/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"version_number":"2.1.0"},{"version_number":"2.29.0"},{"version_number":"2.30.2"}]`))
+	})
+	mux.HandleFunc("/api/experimental/package/ValheimModding/Jotunn/2.30.2/readme/", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"markdown":"# Jotunn README"}`))
+	})
+	return httptest.NewServer(mux)
+}
+
+func TestThunderstoreCatalogDetailResolveAndImageProxy(t *testing.T) {
+	toks := ParseInputTokens(ProviderThunderstore, "https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/, Advize-PlantEverything-1.19.1, denikson/BepInExPack_Valheim")
+	if !slices.Equal(toks, []string{"ValheimModding-Jotunn", "Advize-PlantEverything", "denikson-BepInExPack_Valheim"}) {
+		t.Fatalf("unexpected Thunderstore tokens: %#v", toks)
+	}
+	srv := newMockThunderstoreServer(t)
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{SigningSecret: "sec"})
+	src := Source{Provider: ProviderThunderstore, Endpoint: srv.URL + "/c/valheim", Format: FormatThunderstoreMod, ImageProxyPrefix: "/proxy"}
+	res, err := svc.Search(context.Background(), src, SearchParams{Query: "Jotunn", Page: 1, Limit: 10})
+	if err != nil || len(res.Items) != 1 || res.Items[0].ID != "ValheimModding-Jotunn" || res.Items[0].IconURL == "" {
+		t.Fatalf("unexpected Thunderstore search: %#v err=%v", res, err)
+	}
+	det, err := svc.Detail(context.Background(), src, "ValheimModding-Jotunn", "")
+	if err != nil || det.LatestVersion != "2.30.2" || !slices.Equal(det.AvailableVersions, []string{"2.30.2", "2.29.0", "2.1.0"}) ||
+		det.Description != "# Jotunn README" || len(det.Dependencies) != 1 || det.Dependencies[0].ID != "denikson-BepInExPack_Valheim" {
+		t.Fatalf("unexpected Thunderstore detail: %#v err=%v", det, err)
+	}
+	resolved, err := svc.Resolve(context.Background(), src, "https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/", "")
+	if err != nil || len(resolved.Items) != 1 || resolved.Items[0].LatestVersion != "2.30.2" {
+		t.Fatalf("unexpected Thunderstore batch resolve: %#v err=%v", resolved, err)
+	}
+	relLatest, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "ValheimModding-Jotunn"})
+	if err != nil || relLatest.ArchiveFormat != ArchiveFormatZip || relLatest.Version != "2.30.2" {
+		t.Fatalf("unexpected latest Thunderstore release: %#v err=%v", relLatest, err)
+	}
+	relPin, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "ValheimModding-Jotunn", Version: "2.29.0"})
+	if err != nil || relPin.Version != "2.29.0" || !strings.HasSuffix(relPin.DownloadURL, "/2.29.0/") {
+		t.Fatalf("unexpected pinned Thunderstore release: %#v err=%v", relPin, err)
+	}
+	if signed := svc.SignImageProxyURL("/proxy", "https://ccdn.thunderstore.io/live/repository/icons/Jotunn.png"); signed == "" {
+		t.Fatal("expected ccdn.thunderstore.io to be allowlisted for image proxy")
 	}
 }

@@ -339,6 +339,31 @@ func TestBuiltInMinecraftFabricBindingRender(t *testing.T) {
 		t.Fatalf("unexpected Fabric normalized Addons: %+v", fabInst.Spec.Addons)
 	}
 	assertBuiltInMinecraftNeoForgeBindingRender(t, byName["minecraft-neoforge"])
+	assertBuiltInValheimBepInExBindingRender(t, byName["valheim-dedicated"])
+}
+
+func assertBuiltInValheimBepInExBindingRender(t *testing.T, valheim *corev1.App) {
+	t.Helper()
+	if valheim == nil || valheim.AddonBinding == nil || valheim.AddonBinding.Repository != "valheim-thunderstore" ||
+		valheim.AddonBinding.InstallMode != corev1.AddonInstallModeBepInEx || valheim.AddonBinding.TargetDir != "BepInEx" {
+		t.Fatalf("unexpected valheim-dedicated AddonBinding: %+v", valheim)
+	}
+	if !strings.Contains(valheim.StartupCommand, "DOORSTOP_ENABLED=1") || !strings.Contains(valheim.StartupCommand, "BepInEx.Preloader.dll") {
+		t.Fatalf("expected valheim-dedicated StartupCommand to enable Doorstop when BepInEx is installed")
+	}
+	inst := &corev1.Instance{
+		Metadata: metav1.ObjectMeta{Name: "valheim-binding-test", Annotations: map[string]string{AnnotationAppConfig: `{}`}},
+		Spec: corev1.InstanceSpec{
+			Addons: []corev1.InstanceAddon{{Package: "ValheimModding-Jotunn", Version: "2.30.2"}},
+		},
+	}
+	if err := RenderInstanceSpec(valheim, inst); err != nil {
+		t.Fatalf("RenderInstanceSpec(valheim-dedicated): %v", err)
+	}
+	if len(inst.Spec.Addons) != 1 || inst.Spec.Addons[0].Coordinate() != "valheim-thunderstore.ValheimModding-Jotunn.2.30.2" ||
+		inst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeBepInEx || inst.Spec.Addons[0].TargetDir != "BepInEx" {
+		t.Fatalf("unexpected Valheim normalized Addons: %+v", inst.Spec.Addons)
+	}
 }
 
 func assertBuiltInMinecraftNeoForgeBindingRender(t *testing.T, neo *corev1.App) {

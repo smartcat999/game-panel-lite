@@ -324,6 +324,14 @@ func TestExtractArchiveAddonsGenericModes(t *testing.T) {
 		t.Fatalf("unexpected NeoForge extracted mods: %+v", neoAddons)
 	}
 
+	vhApp := findBuiltInApp(t, "valheim-dedicated")
+	vhAddons := ExtractArchiveAddons(vhApp, []string{"BepInEx/plugins/ValheimModding-Jotunn/Jotunn.dll"}, nil)
+	if len(vhAddons) != 1 || vhAddons[0].Package != "ValheimModding-Jotunn" ||
+		vhAddons[0].Repository != "valheim-thunderstore" || vhAddons[0].InstallMode != corev1.AddonInstallModeBepInEx ||
+		vhAddons[0].TargetDir != "BepInEx" {
+		t.Fatalf("unexpected Valheim BepInEx extracted mods: %+v", vhAddons)
+	}
+
 	l4d2App := findBuiltInApp(t, "left-4-dead-2")
 	l4d2Addons := ExtractArchiveAddons(l4d2App, []string{"left4dead2/addons/121339498-1358581160.vpk"}, nil)
 	if len(l4d2Addons) != 1 || l4d2Addons[0].Package != "121339498" || l4d2Addons[0].Version != "1358581160" ||
@@ -362,6 +370,10 @@ func TestExtractArchiveAddonsFallbackAndNonDSTMerge(t *testing.T) {
 	})
 	if len(pz) != 1 || pz[0].InstallMode != corev1.AddonInstallModeWorkshopTree || pz[0].Package != "2169435993" {
 		t.Fatalf("unexpected fallback workshop extraction: %+v", pz)
+	}
+	bep := ExtractArchiveAddons(nilApp, []string{"BepInEx/core/BepInEx.Preloader.dll", "BepInEx/plugins/Advize-PlantEverything/Advize_PlantEverything.dll"}, nil)
+	if len(bep) != 1 || bep[0].InstallMode != corev1.AddonInstallModeBepInEx || bep[0].Package != "Advize-PlantEverything" {
+		t.Fatalf("unexpected fallback bepinex extraction: %+v", bep)
 	}
 
 	mcApp := findBuiltInApp(t, "minecraft-paper")

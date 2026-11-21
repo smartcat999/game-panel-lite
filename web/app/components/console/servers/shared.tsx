@@ -30,8 +30,12 @@ export function addonBindingMeta(binding?: AppAddonBinding): AddonBindingMeta {
   const mode = (binding?.installMode || "").trim().toLowerCase();
   const targetParts = (binding?.targetDir || "").trim().toLowerCase().split("/").filter(Boolean);
   const targetLeaf = targetParts[targetParts.length - 1] || "";
-  const isSteam = repo.includes("workshop") || (mode !== "" && mode !== "flat_dir");
-  const isPlugin = !isSteam && targetLeaf !== "mods";
+  const isSteam =
+    repo.includes("workshop") ||
+    mode === "tmod_latest" ||
+    mode === "dst_local_mods" ||
+    mode === "workshop_tree";
+  const isPlugin = !isSteam && (mode === "" || mode === "flat_dir") && targetLeaf !== "mods";
   const noun = isPlugin ? "插件" : "模组";
   const marketLabel = isSteam ? "创意工坊" : isPlugin ? "插件市场" : "模组市场";
   return {

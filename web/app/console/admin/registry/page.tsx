@@ -72,6 +72,8 @@ function parseAddonInput(raw: string): string {
   if (idMatch) return idMatch[1];
   const modrinthMatch = trimmed.match(/modrinth\.com\/(?:mod|plugin|datapack)\/([^/?#]+)/i);
   if (modrinthMatch) return modrinthMatch[1];
+  const tsMatch = trimmed.match(/thunderstore\.io\/(?:c\/[^/]+\/p|package)\/([^/?#]+)\/([^/?#]+)/i);
+  if (tsMatch) return `${tsMatch[1]}-${tsMatch[2]}`;
   return trimmed;
 }
 

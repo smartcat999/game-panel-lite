@@ -66,7 +66,7 @@ func (u *Upstream) Validate() error {
 	}
 	switch u.Provider {
 	case UpstreamProviderPaperMC, UpstreamProviderPurpur, UpstreamProviderVanilla,
-		UpstreamProviderFabricMC, UpstreamProviderNeoForge, UpstreamProviderModrinth, UpstreamProviderSteam, UpstreamProviderHTTP:
+		UpstreamProviderFabricMC, UpstreamProviderNeoForge, UpstreamProviderModrinth, UpstreamProviderThunderstore, UpstreamProviderSteam, UpstreamProviderHTTP:
 	default:
 		return fmt.Errorf("unsupported upstream provider %q", u.Provider)
 	}
@@ -108,7 +108,7 @@ func (r *Repository) Validate() error {
 		return fmt.Errorf("unsupported repository spec.mode %q", r.Spec.Mode)
 	}
 	switch r.Spec.Format {
-	case FormatServerPackage, FormatWorkshopMod, FormatModrinthAddon, FormatGeneric:
+	case FormatServerPackage, FormatWorkshopMod, FormatModrinthAddon, FormatThunderstoreMod, FormatGeneric:
 		return nil
 	default:
 		return fmt.Errorf("unsupported repository spec.format %q", r.Spec.Format)

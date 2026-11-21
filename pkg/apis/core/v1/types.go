@@ -499,6 +499,7 @@ const (
 	AddonInstallModeTModLatest   = "tmod_latest"
 	AddonInstallModeDSTLocalMods = "dst_local_mods"
 	AddonInstallModeWorkshopTree = "workshop_tree"
+	AddonInstallModeBepInEx      = "bepinex"
 
 	// Instance → App identity (used by instance rendering and cache-affinity scheduling).
 	LabelInstanceApp             = "gamepanel.io/app"
@@ -745,7 +746,7 @@ func validateAddonConfig(prefix string, cfg map[string]string) error {
 
 func validAddonInstallMode(mode string) bool {
 	switch mode {
-	case AddonInstallModeFlatDir, AddonInstallModeTModLatest, AddonInstallModeDSTLocalMods, AddonInstallModeWorkshopTree:
+	case AddonInstallModeFlatDir, AddonInstallModeTModLatest, AddonInstallModeDSTLocalMods, AddonInstallModeWorkshopTree, AddonInstallModeBepInEx:
 		return true
 	default:
 		return false
@@ -1242,7 +1243,7 @@ func (b *AppServerBinding) Validate() error {
 // AppAddonBinding binds an App's mod/plugin ecosystem to a Repository in registry.gamepanel.io/v1.
 type AppAddonBinding struct {
 	Repository  string `json:"repository"`
-	InstallMode string `json:"installMode"` // flat_dir | tmod_latest | dst_local_mods | workshop_tree
+	InstallMode string `json:"installMode"` // flat_dir | tmod_latest | dst_local_mods | workshop_tree | bepinex
 	TargetDir   string `json:"targetDir"`   // e.g. "plugins", "Mods", "mods", "steamapps/workshop/content/108600"
 }
 

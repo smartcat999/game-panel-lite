@@ -150,7 +150,7 @@ export interface InstanceAddon {
   package: string;
   version: string;
   title?: string;
-  installMode?: "flat_dir" | "tmod_latest" | "dst_local_mods" | "workshop_tree" | string;
+  installMode?: "flat_dir" | "tmod_latest" | "dst_local_mods" | "workshop_tree" | "bepinex" | string;
   targetDir?: string;
   disabled?: boolean;
   config?: Record<string, string>;
@@ -453,7 +453,7 @@ export interface AppServerBinding {
 
 export interface AppAddonBinding {
   repository: string;
-  installMode: "flat_dir" | "tmod_latest" | "dst_local_mods" | "workshop_tree" | string;
+  installMode: "flat_dir" | "tmod_latest" | "dst_local_mods" | "workshop_tree" | "bepinex" | string;
   targetDir: string;
 }
 
@@ -531,7 +531,7 @@ export interface PrewarmJobItem {
 
 export interface RegistryUpstream {
   metadata: ObjectMeta;
-  provider: "papermc" | "purpur" | "vanilla" | "fabricmc" | "neoforge" | "modrinth" | "steam" | "http" | string;
+  provider: "papermc" | "purpur" | "vanilla" | "fabricmc" | "neoforge" | "modrinth" | "thunderstore" | "steam" | "http" | string;
   endpoint?: string;
   proxyURL?: string;
   steamAppId?: number;
@@ -552,7 +552,7 @@ export interface RegistryRepository {
     displayName?: string;
     description?: string;
     mode: "Hosted" | "Proxy" | "Virtual" | string;
-    format: "server_package" | "workshop_mod" | "modrinth_addon" | "generic" | string;
+    format: "server_package" | "workshop_mod" | "modrinth_addon" | "thunderstore_mod" | "generic" | string;
     upstreamName?: string;
     memberRepos?: string[];
     publicRead?: boolean;

@@ -20,6 +20,7 @@ var defaultAllowedImageHostSuffixes = []string{
 	".steamstatic.com",
 	".akamaihd.net",
 	"cdn.modrinth.com",
+	".thunderstore.io",
 	"raw.githubusercontent.com",
 	"media.forgecdn.net",
 }
