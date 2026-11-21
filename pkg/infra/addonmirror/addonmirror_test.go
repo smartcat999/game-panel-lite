@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -736,5 +737,35 @@ func TestVanillaResolveServerMappings(t *testing.T) {
 	}
 	if _, err := svc.ResolveVanillaMappings(context.Background(), srv.URL+"/manifest.json", "26.3"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("expected ErrNotFound for unobfuscated 26.3 mappings, got %v", err)
+	}
+}
+
+func TestNeoForgeCatalogRetainsOlderMCVersionsBeyond300Builds(t *testing.T) {
+	versions := []string{"21.1.219", "21.4.161"}
+	for i := 1; i <= 360; i++ {
+		versions = append(versions, "26.3.0."+strconv.Itoa(i))
+	}
+	payload := `{"versions":["` + strings.Join(versions, `","`) + `"]}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/maven/versions/releases/net/neoforged/neoforge" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(payload))
+	}))
+	defer srv.Close()
+
+	memCache := &unitTestCache{data: make(map[string]string)}
+	svc := New(memCache)
+	ctx := context.Background()
+
+	mcVers, err := svc.ListServerVersions(ctx, ProviderNeoForge, srv.URL, "neoforge")
+	if err != nil || !slices.Equal(mcVers, []string{"26.3", "1.21.4", "1.21.1"}) {
+		t.Fatalf("expected [26.3 1.21.4 1.21.1] retained beyond 360 builds, got %#v err=%v", mcVers, err)
+	}
+	rel, err := svc.ResolveNeoForge(ctx, srv.URL, "1.21.4")
+	if err != nil || rel.Version != "1.21.4" || rel.Build != "1.21.4+21.4.161" {
+		t.Fatalf("expected 1.21.4+21.4.161 from cached catalog, got %#v err=%v", rel, err)
 	}
 }

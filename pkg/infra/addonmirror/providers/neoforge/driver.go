@@ -14,10 +14,12 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
 )
 
-const (
-	officialMavenTimeout = 6 * time.Second
-	maxRawCacheVersions  = 300
-)
+const officialMavenTimeout = 6 * time.Second
+
+type neoForgeCatalog struct {
+	MCVersions []string          `json:"mcVersions"`
+	LatestByMC map[string]string `json:"latestByMC"`
+}
 
 func init() {
 	driver.Register(driver.ProviderNeoForge, func() driver.Driver { return &neoforgeDriver{} })
@@ -93,18 +95,18 @@ func normalizeBase(endpoint string) (string, bool) {
 }
 
 func listVersionsWithMirror(ctx context.Context, rt driver.Runtime, endpoint, mirrorBase string) ([]string, bool, error) {
-	base, isDefault := normalizeBase(endpoint)
-	rawVers, usedMirror, err := fetchAllNeoForgeVersions(ctx, rt, base, isDefault, mirrorBase)
+	cat, usedMirror, err := fetchCatalogWithMirror(ctx, rt, endpoint, mirrorBase)
 	if err != nil {
 		return nil, false, err
 	}
-	return mapStableMCVersions(rawVers), usedMirror, nil
+	return cat.MCVersions, usedMirror, nil
 }
 
-func fetchAllNeoForgeVersions(ctx context.Context, rt driver.Runtime, base string, isDefault bool, mirrorBase string) ([]string, bool, error) {
-	vers, err := fetchOfficialMavenVersions(ctx, rt, base, isDefault)
-	if err == nil && len(vers) > 0 {
-		return vers, false, nil
+func fetchCatalogWithMirror(ctx context.Context, rt driver.Runtime, endpoint, mirrorBase string) (*neoForgeCatalog, bool, error) {
+	base, isDefault := normalizeBase(endpoint)
+	cat, err := fetchOfficialCatalog(ctx, rt, base, isDefault)
+	if err == nil && len(cat.LatestByMC) > 0 {
+		return cat, false, nil
 	}
 	if !isDefault || strings.TrimSpace(mirrorBase) == "" || ctx.Err() != nil {
 		if err != nil {
@@ -112,9 +114,9 @@ func fetchAllNeoForgeVersions(ctx context.Context, rt driver.Runtime, base strin
 		}
 		return nil, false, driver.ErrNotFound
 	}
-	mVers, mErr := fetchMirrorMavenXML(ctx, rt, mirrorBase)
-	if mErr == nil && len(mVers) > 0 {
-		return mVers, true, nil
+	mCat, mErr := fetchMirrorCatalogXML(ctx, rt, mirrorBase)
+	if mErr == nil && len(mCat.LatestByMC) > 0 {
+		return mCat, true, nil
 	}
 	if err != nil {
 		return nil, false, err
@@ -122,11 +124,11 @@ func fetchAllNeoForgeVersions(ctx context.Context, rt driver.Runtime, base strin
 	return nil, false, mErr
 }
 
-func fetchOfficialMavenVersions(ctx context.Context, rt driver.Runtime, base string, capTimeout bool) ([]string, error) {
-	ck := driver.CacheHashKey("neoforge:maven_versions", base)
-	var cached []string
-	if rt.GetCachedJSON(ctx, ck, &cached) && len(cached) > 0 {
-		return cached, nil
+func fetchOfficialCatalog(ctx context.Context, rt driver.Runtime, base string, capTimeout bool) (*neoForgeCatalog, error) {
+	ck := driver.CacheHashKey("neoforge:catalog_v2", base)
+	var cached neoForgeCatalog
+	if rt.GetCachedJSON(ctx, ck, &cached) && len(cached.LatestByMC) > 0 {
+		return &cached, nil
 	}
 	reqCtx := ctx
 	var cancel context.CancelFunc
@@ -141,18 +143,18 @@ func fetchOfficialMavenVersions(ctx context.Context, rt driver.Runtime, base str
 	if err := rt.DoGetJSON(reqCtx, u, &payload); err != nil {
 		return nil, fmt.Errorf("query NeoForge releases: %w", err)
 	}
-	vers := trimRecentVersions(payload.Versions)
-	if len(vers) > 0 {
-		rt.SetCachedJSON(ctx, ck, vers)
+	cat := buildNeoForgeCatalog(payload.Versions)
+	if len(cat.LatestByMC) > 0 {
+		rt.SetCachedJSON(ctx, ck, cat)
 	}
-	return vers, nil
+	return cat, nil
 }
 
-func fetchMirrorMavenXML(ctx context.Context, rt driver.Runtime, mirrorBase string) ([]string, error) {
-	ck := driver.CacheHashKey("neoforge:bmcl_xml", mirrorBase)
-	var cached []string
-	if rt.GetCachedJSON(ctx, ck, &cached) && len(cached) > 0 {
-		return cached, nil
+func fetchMirrorCatalogXML(ctx context.Context, rt driver.Runtime, mirrorBase string) (*neoForgeCatalog, error) {
+	ck := driver.CacheHashKey("neoforge:bmcl_catalog_v2", mirrorBase)
+	var cached neoForgeCatalog
+	if rt.GetCachedJSON(ctx, ck, &cached) && len(cached.LatestByMC) > 0 {
+		return &cached, nil
 	}
 	u := strings.TrimRight(strings.TrimSpace(mirrorBase), "/") + "/maven/net/neoforged/neoforge/maven-metadata.xml"
 	raw, err := rt.DoGetBytes(ctx, u)
@@ -167,23 +169,17 @@ func fetchMirrorMavenXML(ctx context.Context, rt driver.Runtime, mirrorBase stri
 	if err := xml.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse NeoForge mirror metadata XML: %w", err)
 	}
-	vers := trimRecentVersions(doc.Versioning.Versions)
-	if len(vers) > 0 {
-		rt.SetCachedJSON(ctx, ck, vers)
+	cat := buildNeoForgeCatalog(doc.Versioning.Versions)
+	if len(cat.LatestByMC) > 0 {
+		rt.SetCachedJSON(ctx, ck, cat)
 	}
-	return vers, nil
-}
-
-func trimRecentVersions(vers []string) []string {
-	if len(vers) <= maxRawCacheVersions {
-		return vers
-	}
-	return vers[len(vers)-maxRawCacheVersions:]
+	return cat, nil
 }
 
 func fetchLatestNeoForgeForMC(ctx context.Context, rt driver.Runtime, base, mcVer string, isDefault bool, mirrorBase string) (string, bool, error) {
-	if vers, err := fetchOfficialMavenVersions(ctx, rt, base, isDefault); err == nil && len(vers) > 0 {
-		if chosen, ok := pickLatestNeoForgeForMC(vers, mcVer); ok {
+	want := strings.TrimSpace(mcVer)
+	if cat, err := fetchOfficialCatalog(ctx, rt, base, isDefault); err == nil && len(cat.LatestByMC) > 0 {
+		if chosen := cat.LatestByMC[want]; chosen != "" {
 			return chosen, false, nil
 		}
 		if !isDefault {
@@ -193,24 +189,24 @@ func fetchLatestNeoForgeForMC(ctx context.Context, rt driver.Runtime, base, mcVe
 	if !isDefault || strings.TrimSpace(mirrorBase) == "" {
 		return "", false, driver.ErrNotFound
 	}
-	vers, err := fetchBMCLNeoForgeList(ctx, rt, mirrorBase, mcVer)
+	vers, err := fetchBMCLNeoForgeList(ctx, rt, mirrorBase, want)
 	if err == nil {
-		if chosen, ok := pickLatestNeoForgeForMC(vers, mcVer); ok {
+		if chosen, ok := pickLatestNeoForgeForMC(vers, want); ok {
 			return chosen, true, nil
 		}
 		if len(vers) == 0 {
 			return "", true, driver.ErrNotFound
 		}
 	}
-	if xmlVers, xErr := fetchMirrorMavenXML(ctx, rt, mirrorBase); xErr == nil {
-		if chosen, ok := pickLatestNeoForgeForMC(xmlVers, mcVer); ok {
+	if xmlCat, xErr := fetchMirrorCatalogXML(ctx, rt, mirrorBase); xErr == nil {
+		if chosen := xmlCat.LatestByMC[want]; chosen != "" {
 			return chosen, true, nil
 		}
 	}
 	if errors.Is(err, driver.ErrNotFound) {
 		return "", true, driver.ErrNotFound
 	}
-	return "", true, fmt.Errorf("resolve NeoForge for Minecraft %s: %w", mcVer, err)
+	return "", true, fmt.Errorf("resolve NeoForge for Minecraft %s: %w", want, err)
 }
 
 func fetchBMCLNeoForgeList(ctx context.Context, rt driver.Runtime, mirrorBase, mcVer string) ([]string, error) {
@@ -252,29 +248,47 @@ func buildInstallerURLs(base, nfVer string, isDefault, usedMirror bool, mirrorBa
 	return official, []string{mirror}
 }
 
-func mapStableMCVersions(rawVers []string) []string {
-	stableMC := make(map[string]struct{})
-	allMC := make(map[string]struct{})
+func buildNeoForgeCatalog(rawVers []string) *neoForgeCatalog {
+	bestStable := make(map[string]string)
+	bestBeta := make(map[string]string)
 	for _, raw := range rawVers {
-		mc, isBeta, ok := neoForgeToMCVersion(raw)
+		trimmed := strings.TrimSpace(raw)
+		mc, isBeta, ok := neoForgeToMCVersion(trimmed)
 		if !ok {
 			continue
 		}
-		allMC[mc] = struct{}{}
-		if !isBeta {
-			stableMC[mc] = struct{}{}
+		if isBeta {
+			bestBeta[mc] = pickNewerSemVer(bestBeta[mc], trimmed)
+			continue
+		}
+		bestStable[mc] = pickNewerSemVer(bestStable[mc], trimmed)
+	}
+	latestByMC := make(map[string]string, len(bestBeta)+len(bestStable))
+	for mc, v := range bestBeta {
+		latestByMC[mc] = v
+	}
+	for mc, v := range bestStable {
+		latestByMC[mc] = v
+	}
+	mcVers := make([]string, 0, len(bestStable))
+	if len(bestStable) > 0 {
+		for mc := range bestStable {
+			mcVers = append(mcVers, mc)
+		}
+	} else {
+		for mc := range latestByMC {
+			mcVers = append(mcVers, mc)
 		}
 	}
-	source := stableMC
-	if len(source) == 0 {
-		source = allMC
+	slices.SortFunc(mcVers, driver.CompareSemanticDesc)
+	return &neoForgeCatalog{MCVersions: mcVers, LatestByMC: latestByMC}
+}
+
+func pickNewerSemVer(cur, candidate string) string {
+	if cur == "" || driver.CompareSemanticDesc(candidate, cur) < 0 {
+		return candidate
 	}
-	out := make([]string, 0, len(source))
-	for mc := range source {
-		out = append(out, mc)
-	}
-	slices.SortFunc(out, driver.CompareSemanticDesc)
-	return out
+	return cur
 }
 
 func pickLatestNeoForgeForMC(versions []string, targetMC string) (string, bool) {
