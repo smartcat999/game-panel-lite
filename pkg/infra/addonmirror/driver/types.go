@@ -114,27 +114,28 @@ type Dependency struct {
 
 // Item is a provider-agnostic mod or plugin metadata record.
 type Item struct {
-	ID            string       `json:"id"`
-	Title         string       `json:"title"`
-	Summary       string       `json:"summary,omitempty"`
-	Description   string       `json:"description,omitempty"`
-	Changelog     string       `json:"changelog,omitempty"`
-	Author        string       `json:"author,omitempty"`
-	IconURL       string       `json:"iconUrl,omitempty"`
-	GalleryURLs   []string     `json:"galleryUrls,omitempty"`
-	SourceURL     string       `json:"sourceUrl,omitempty"`
-	UpstreamURL   string       `json:"upstreamUrl,omitempty"`
-	FileURL       string       `json:"fileUrl,omitempty"`
-	FileName      string       `json:"fileName,omitempty"`
-	LatestVersion string       `json:"latestVersion,omitempty"`
-	Revision      int64        `json:"revision,omitempty"`
-	Downloads     int64        `json:"downloads,omitempty"`
-	SizeBytes     int64        `json:"sizeBytes,omitempty"`
-	UpdatedAt     string       `json:"updatedAt,omitempty"`
-	Tags          []string     `json:"tags,omitempty"`
-	ModIDs        []string     `json:"modIds,omitempty"`
-	MapFolders    []string     `json:"mapFolders,omitempty"`
-	Dependencies  []Dependency `json:"dependencies,omitempty"`
+	ID                string       `json:"id"`
+	Title             string       `json:"title"`
+	Summary           string       `json:"summary,omitempty"`
+	Description       string       `json:"description,omitempty"`
+	Changelog         string       `json:"changelog,omitempty"`
+	Author            string       `json:"author,omitempty"`
+	IconURL           string       `json:"iconUrl,omitempty"`
+	GalleryURLs       []string     `json:"galleryUrls,omitempty"`
+	SourceURL         string       `json:"sourceUrl,omitempty"`
+	UpstreamURL       string       `json:"upstreamUrl,omitempty"`
+	FileURL           string       `json:"fileUrl,omitempty"`
+	FileName          string       `json:"fileName,omitempty"`
+	LatestVersion     string       `json:"latestVersion,omitempty"`
+	AvailableVersions []string     `json:"availableVersions,omitempty"`
+	Revision          int64        `json:"revision,omitempty"`
+	Downloads         int64        `json:"downloads,omitempty"`
+	SizeBytes         int64        `json:"sizeBytes,omitempty"`
+	UpdatedAt         string       `json:"updatedAt,omitempty"`
+	Tags              []string     `json:"tags,omitempty"`
+	ModIDs            []string     `json:"modIds,omitempty"`
+	MapFolders        []string     `json:"mapFolders,omitempty"`
+	Dependencies      []Dependency `json:"dependencies,omitempty"`
 }
 
 // ResolvedRelease describes a concrete upstream artifact version and its download payload metadata.

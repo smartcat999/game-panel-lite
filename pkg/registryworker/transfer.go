@@ -57,7 +57,11 @@ func (w *Worker) processClaimedArtifact(ctx context.Context, rep *syncReporter, 
 		return err
 	}
 	cleanupPayloadStagingDir(payload.StagingDir)
-	w.queueMissingDependencies(ctx, repoObj, up, svc, src, payload.Dependencies)
+	var depGameVer string
+	if gvs := driver.FirstSlice(payload.GameVersions, art.Spec.GameVersions); len(gvs) > 0 {
+		depGameVer = gvs[0]
+	}
+	w.queueMissingDependencies(ctx, repoObj, up, svc, src, payload.Dependencies, depGameVer)
 	return w.markReady(ctx, rep, art, digest, payload)
 }
 
@@ -288,7 +292,7 @@ func (w *Worker) markReady(ctx context.Context, rep *syncReporter, art *registry
 	return err
 }
 
-func (w *Worker) queueMissingDependencies(ctx context.Context, repoObj *registryv1.Repository, up *registryv1.Upstream, svc *addonmirror.Service, src addonmirror.Source, deps []registryv1.PackageDependency) {
+func (w *Worker) queueMissingDependencies(ctx context.Context, repoObj *registryv1.Repository, up *registryv1.Upstream, svc *addonmirror.Service, src addonmirror.Source, deps []registryv1.PackageDependency, gameVersion string) {
 	if up == nil || len(deps) == 0 || !svc.SupportsCatalog(src) {
 		return
 	}
@@ -297,7 +301,7 @@ func (w *Worker) queueMissingDependencies(ctx context.Context, repoObj *registry
 		if pkgName == "" {
 			continue
 		}
-		rel, err := svc.ResolveRelease(ctx, src, addonmirror.ResolveReleaseRequest{Package: pkgName})
+		rel, err := svc.ResolveRelease(ctx, src, addonmirror.ResolveReleaseRequest{Package: pkgName, GameVersion: gameVersion})
 		if err != nil || rel == nil || rel.Version == "" {
 			continue
 		}

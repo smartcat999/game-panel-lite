@@ -54,7 +54,8 @@ func (h *handler) CreatePackage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) GetPackage(w http.ResponseWriter, r *http.Request) {
-	obj, err := h.op.Get(r.Context(), r.PathValue("name"))
+	gameVer := strings.TrimSpace(r.URL.Query().Get("gameVersion"))
+	obj, err := h.op.GetForGameVersion(r.Context(), r.PathValue("name"), gameVer)
 	if err != nil {
 		apiruntime.WriteModelError(w, err)
 		return

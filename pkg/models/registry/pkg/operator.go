@@ -21,6 +21,7 @@ import (
 type Operator interface {
 	List(ctx context.Context, opts db.ListOptions) (*metav1.List[*registryv1.Package], error)
 	Get(ctx context.Context, name string) (*registryv1.Package, error)
+	GetForGameVersion(ctx context.Context, name, gameVersion string) (*registryv1.Package, error)
 	Create(ctx context.Context, in *registryv1.Package) (*registryv1.Package, error)
 	Update(ctx context.Context, name string, in *registryv1.Package) (*registryv1.Package, error)
 	Delete(ctx context.Context, name string) error
@@ -93,18 +94,14 @@ func stripCatalogSelectors(opts db.ListOptions) db.ListOptions {
 }
 
 func (o *operator) Get(ctx context.Context, name string) (*registryv1.Package, error) {
+	return o.GetForGameVersion(ctx, name, "")
+}
+
+func (o *operator) GetForGameVersion(ctx context.Context, name, gameVersion string) (*registryv1.Package, error) {
+	gv := strings.TrimSpace(gameVersion)
 	persisted, err := o.db.Get(ctx, name)
 	if err == nil {
-		if repoObj, rErr := o.repoDB.Get(ctx, persisted.Repository); rErr == nil && repoObj.Spec.Mode == registryv1.RepositoryModeProxy {
-			if repoObj.Spec.Format == registryv1.FormatServerPackage {
-				return o.enrichServerProxyPackage(ctx, repoObj, persisted), nil
-			}
-			if isStubPackage(persisted) {
-				persisted = o.enrichPersistedStub(ctx, repoObj, persisted)
-			}
-			return o.signPackageIcon(ctx, repoObj, persisted), nil
-		}
-		return persisted, nil
+		return o.enrichPersistedPackage(ctx, persisted, gv), nil
 	}
 	if !errors.Is(err, db.ErrNotFound) {
 		return nil, err
@@ -120,7 +117,53 @@ func (o *operator) Get(ctx context.Context, name string) (*registryv1.Package, e
 	if repoObj.Spec.Format == registryv1.FormatServerPackage {
 		return o.detailServerProxyPackage(ctx, repoObj, pkgID)
 	}
-	return o.detailProxyPackage(ctx, repoObj, pkgID)
+	return o.detailProxyPackage(ctx, repoObj, pkgID, gv)
+}
+
+func (o *operator) enrichPersistedPackage(ctx context.Context, persisted *registryv1.Package, gameVersion string) *registryv1.Package {
+	if persisted == nil || o.repoDB == nil {
+		return persisted
+	}
+	repoObj, rErr := o.repoDB.Get(ctx, persisted.Repository)
+	if rErr != nil || repoObj.Spec.Mode != registryv1.RepositoryModeProxy {
+		return persisted
+	}
+	if repoObj.Spec.Format == registryv1.FormatServerPackage {
+		return o.enrichServerProxyPackage(ctx, repoObj, persisted)
+	}
+	if gameVersion != "" {
+		if live := o.overlayGameVersionProxyPackage(ctx, repoObj, persisted, gameVersion); live != nil {
+			return live
+		}
+	}
+	if isStubPackage(persisted) {
+		persisted = o.enrichPersistedStub(ctx, repoObj, persisted)
+	}
+	return o.signPackageIcon(ctx, repoObj, persisted)
+}
+
+func (o *operator) overlayGameVersionProxyPackage(ctx context.Context, repoObj *registryv1.Repository, persisted *registryv1.Package, gameVersion string) *registryv1.Package {
+	detailed, err := o.detailProxyPackage(ctx, repoObj, persisted.Package, gameVersion)
+	if err != nil || detailed == nil {
+		return nil
+	}
+	return mergePersistedPackageForDetail(persisted, detailed)
+}
+
+func mergePersistedPackageForDetail(persisted, detailed *registryv1.Package) *registryv1.Package {
+	if detailed == nil {
+		return persisted
+	}
+	if persisted == nil {
+		return detailed
+	}
+	merged := *detailed
+	merged.Metadata = persisted.Metadata
+	merged.Repository = persisted.Repository
+	merged.Package = persisted.Package
+	// Preserve live gameVersion-scoped LatestVersion, AvailableVersions, and Dependencies instead of persisted global fields.
+	mergePackageLocalMeta(&merged, persisted)
+	return &merged
 }
 
 func isStubPackage(p *registryv1.Package) bool {
@@ -132,19 +175,15 @@ func isStubPackage(p *registryv1.Package) bool {
 }
 
 func (o *operator) enrichPersistedStub(ctx context.Context, repoObj *registryv1.Repository, persisted *registryv1.Package) *registryv1.Package {
-	detailed, err := o.detailProxyPackage(ctx, repoObj, persisted.Package)
+	detailed, err := o.detailProxyPackage(ctx, repoObj, persisted.Package, "")
 	if err != nil || detailed == nil {
 		return persisted
 	}
-	merged := *detailed
-	merged.Metadata = persisted.Metadata
-	merged.Repository = persisted.Repository
-	merged.Package = persisted.Package
+	merged := mergePersistedPackageForDetail(persisted, detailed)
 	if merged.LatestVersion == "" {
 		merged.LatestVersion = persisted.LatestVersion
 	}
-	mergePackageLocalMeta(&merged, persisted)
-	return &merged
+	return merged
 }
 
 func (o *operator) Create(ctx context.Context, in *registryv1.Package) (*registryv1.Package, error) {

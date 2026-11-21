@@ -8,12 +8,14 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/smartcat999/game-panel-cloud/pkg/config"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/steam"
+	"github.com/smartcat999/game-panel-cloud/pkg/infra/cache"
 )
 
 func TestExtractProjectZomboidMetaAndBBCode(t *testing.T) {
@@ -525,5 +527,155 @@ func TestModrinthModSearchIncludesServerSideFacetAndPluginExcludesIt(t *testing.
 	}
 	if strings.Contains(seenFacets[1], "server_side") {
 		t.Fatalf("did not expect server_side facet on plugin search, got %q", seenFacets[1])
+	}
+}
+
+type unitTestCache struct {
+	mu   sync.RWMutex
+	data map[string]string
+}
+
+func (c *unitTestCache) Get(_ context.Context, k string) (string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.data[k]
+	if !ok {
+		return "", cache.ErrNotFound
+	}
+	return v, nil
+}
+func (c *unitTestCache) Set(_ context.Context, k, v string, _ time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[k] = v
+	return nil
+}
+func (c *unitTestCache) Delete(_ context.Context, k string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.data, k)
+	return nil
+}
+func (c *unitTestCache) Exists(_ context.Context, k string) (bool, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.data[k]
+	return ok, nil
+}
+func (c *unitTestCache) Ping(context.Context) error { return nil }
+func (c *unitTestCache) Close() error               { return nil }
+
+func newVersionedModrinthServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/project/ferrite-core", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"uXX01","slug":"ferrite-core","title":"FerriteCore"}`))
+	})
+	mux.HandleFunc("/project/ferrite-core/version", handleFerriteVersions)
+	mux.HandleFunc("/project/fabric-api", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"P7dR8mSH","slug":"fabric-api","title":"Fabric API"}`))
+	})
+	mux.HandleFunc("/project/fabric-api/version", handleFabricAPIVersions)
+	mux.HandleFunc("/project/my-mod", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"m1","slug":"my-mod","title":"My Mod"}`))
+	})
+	mux.HandleFunc("/project/my-mod/dependencies", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"projects":[{"id":"P7dR8mSH","slug":"fabric-api","title":"Fabric API"},{"id":"cloth","slug":"cloth-config","title":"Cloth Config"}]}`))
+	})
+	mux.HandleFunc("/project/my-mod/version", handleMyModVersions)
+	mux.HandleFunc("/project/essentialsx", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"hXiIvTyT","slug":"essentialsx","title":"EssentialsX"}`))
+	})
+	mux.HandleFunc("/project/essentialsx/version", handlePaperPluginVersions)
+	return httptest.NewServer(mux)
+}
+
+func handleFerriteVersions(w http.ResponseWriter, r *http.Request) {
+	gv := r.URL.Query().Get("game_versions")
+	switch {
+	case strings.Contains(gv, `"26.3"`):
+		_, _ = w.Write([]byte(`[{"id":"v90","version_number":"9.0.0-fabric","game_versions":["26.3"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fc-9.0.0.jar","filename":"ferritecore-9.0.0.jar","primary":true,"size":2048}]},{"id":"v80","version_number":"8.0.0-fabric","game_versions":["26.3"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fc-8.0.0.jar","filename":"ferritecore-8.0.0.jar","primary":true,"size":1900}]}]`))
+	case strings.Contains(gv, `"1.21.4"`):
+		_, _ = w.Write([]byte(`[{"id":"v713","version_number":"7.1.3-fabric","game_versions":["1.21.4"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fc-7.1.3.jar","filename":"ferritecore-7.1.3.jar","primary":true,"size":1024}]},{"id":"v711","version_number":"7.1.1-fabric","game_versions":["1.21.4"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fc-7.1.1.jar","filename":"ferritecore-7.1.1.jar","primary":true,"size":1000}]}]`))
+	default:
+		_, _ = w.Write([]byte(`[]`))
+	}
+}
+
+func handleFabricAPIVersions(w http.ResponseWriter, r *http.Request) {
+	gv := r.URL.Query().Get("game_versions")
+	if strings.Contains(gv, `"1.21.4"`) {
+		_, _ = w.Write([]byte(`[{"id":"fa1214","version_number":"0.119.4+1.21.4","game_versions":["1.21.4"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fa-1214.jar","filename":"fabric-api-0.119.4+1.21.4.jar","primary":true,"size":4096}]}]`))
+		return
+	}
+	_, _ = w.Write([]byte(`[]`))
+}
+
+func handleMyModVersions(w http.ResponseWriter, r *http.Request) {
+	gv := r.URL.Query().Get("game_versions")
+	if strings.Contains(gv, `"1.21.4"`) {
+		_, _ = w.Write([]byte(`[{"id":"mm1","version_number":"[1.21.4] 1.0.0","game_versions":["1.21.4"],"loaders":["fabric"],"dependencies":[{"project_id":"P7dR8mSH","dependency_type":"required"}],"files":[{"url":"https://cdn.example/mm-1.0.0.jar","filename":"mymod-1.0.0.jar","primary":true,"size":512}]}]`))
+		return
+	}
+	_, _ = w.Write([]byte(`[]`))
+}
+
+func handlePaperPluginVersions(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("game_versions") != "" {
+		_, _ = w.Write([]byte(`[]`))
+		return
+	}
+	_, _ = w.Write([]byte(`[{"id":"ess21","version_number":"2.21.0","game_versions":["1.21.4"],"loaders":["paper"],"files":[{"url":"https://cdn.example/ess.jar","filename":"EssentialsX-2.21.0.jar","primary":true,"size":8192}]}]`))
+}
+
+func TestModrinthCrossVersionDetailResolveAndCacheIsolation(t *testing.T) {
+	srv := newVersionedModrinthServer(t)
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{ModrinthBaseURL: srv.URL})
+	src := Source{Provider: ProviderModrinth, ModrinthLoader: "fabric", ModrinthProjectType: ProjectTypeMod}
+	ctx := context.Background()
+
+	d263, err := svc.Detail(ctx, src, "ferrite-core", "26.3")
+	if err != nil || d263.LatestVersion != "9.0.0-fabric" || len(d263.AvailableVersions) != 2 {
+		t.Fatalf("unexpected 26.3 detail: %#v err=%v", d263, err)
+	}
+	d1214, err := svc.Detail(ctx, src, "ferrite-core", "1.21.4")
+	if err != nil || d1214.LatestVersion != "7.1.3-fabric" || d1214.SizeBytes != 1024 ||
+		!slices.Equal(d1214.AvailableVersions, []string{"7.1.3-fabric", "7.1.1-fabric"}) {
+		t.Fatalf("unexpected 1.21.4 detail (cache collision?): %#v err=%v", d1214, err)
+	}
+	d1122, err := svc.Detail(ctx, src, "ferrite-core", "1.12.2")
+	if err != nil || d1122.LatestVersion != "" || len(d1122.AvailableVersions) != 0 {
+		t.Fatalf("expected empty versions on incompatible 1.12.2 mod, got %#v err=%v", d1122, err)
+	}
+	batch, err := svc.Resolve(ctx, src, "ferrite-core", "1.21.4")
+	if err != nil || len(batch.Items) != 1 || batch.Items[0].LatestVersion != "7.1.3-fabric" {
+		t.Fatalf("unexpected batch resolve for 1.21.4: %#v err=%v", batch, err)
+	}
+}
+
+func TestModrinthStrictModFallbackPlusAndSanitizedCoords(t *testing.T) {
+	srv := newVersionedModrinthServer(t)
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{ModrinthBaseURL: srv.URL})
+	modSrc := Source{Provider: ProviderModrinth, ModrinthLoader: "fabric", ModrinthProjectType: ProjectTypeMod}
+	ctx := context.Background()
+
+	if _, err := svc.ResolveRelease(ctx, modSrc, ResolveReleaseRequest{Package: "ferrite-core", GameVersion: "1.12.2"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for strict mod version mismatch, got %v", err)
+	}
+	fapi, err := svc.ResolveRelease(ctx, modSrc, ResolveReleaseRequest{Package: "fabric-api", Version: "0.119.4+1.21.4", GameVersion: "1.21.4"})
+	if err != nil || fapi.Version != "0.119.4+1.21.4" {
+		t.Fatalf("expected '+' version resolution, got %#v err=%v", fapi, err)
+	}
+	mm, err := svc.ResolveRelease(ctx, modSrc, ResolveReleaseRequest{Package: "my-mod", Version: "1.21.4-1.0.0", GameVersion: "1.21.4"})
+	if err != nil || mm.Version != "1.21.4-1.0.0" || len(mm.Dependencies) != 1 || mm.Dependencies[0].ID != "fabric-api" {
+		t.Fatalf("expected sanitized coord and version-scoped dep, got %#v err=%v", mm, err)
+	}
+	pluginSrc := Source{Provider: ProviderModrinth, ModrinthLoader: "paper", ModrinthProjectType: ProjectTypePlugin}
+	if ess, err := svc.ResolveRelease(ctx, pluginSrc, ResolveReleaseRequest{Package: "essentialsx", GameVersion: "1.21.11"}); err != nil || ess.Version != "2.21.0" {
+		t.Fatalf("expected graceful fallback for untagged plugin release, got %#v err=%v", ess, err)
 	}
 }

@@ -88,7 +88,7 @@ func (o *operator) listProxyCatalog(ctx context.Context, repoObj *registryv1.Rep
 	}, true, nil
 }
 
-func (o *operator) detailProxyPackage(ctx context.Context, repoObj *registryv1.Repository, pkgID string) (*registryv1.Package, error) {
+func (o *operator) detailProxyPackage(ctx context.Context, repoObj *registryv1.Repository, pkgID, gameVersion string) (*registryv1.Package, error) {
 	up, err := o.upstreamDB.Get(ctx, repoObj.Spec.UpstreamName)
 	if err != nil {
 		return nil, db.ErrNotFound
@@ -97,7 +97,7 @@ func (o *operator) detailProxyPackage(ctx context.Context, repoObj *registryv1.R
 	if !ok {
 		return nil, db.ErrNotFound
 	}
-	it, err := svc.Detail(ctx, src, pkgID, "")
+	it, err := svc.Detail(ctx, src, pkgID, gameVersion)
 	if err != nil {
 		if errors.Is(err, addonmirror.ErrNotFound) {
 			return nil, db.ErrNotFound
@@ -199,23 +199,24 @@ func convertMirrorItem(repoName string, it addonmirror.Item) *registryv1.Package
 		deps = append(deps, registryv1.PackageDependency{Package: d.ID, Title: d.Title})
 	}
 	p := &registryv1.Package{
-		Repository:    repoName,
-		Package:       it.ID,
-		Title:         it.Title,
-		Summary:       it.Summary,
-		Description:   it.Description,
-		Author:        it.Author,
-		IconURL:       it.IconURL,
-		GalleryURLs:   it.GalleryURLs,
-		SourceURL:     it.SourceURL,
-		Downloads:     it.Downloads,
-		SizeBytes:     it.SizeBytes,
-		LatestVersion: it.LatestVersion,
-		UpdatedAt:     it.UpdatedAt,
-		Tags:          it.Tags,
-		ModIDs:        it.ModIDs,
-		MapFolders:    it.MapFolders,
-		Dependencies:  deps,
+		Repository:        repoName,
+		Package:           it.ID,
+		Title:             it.Title,
+		Summary:           it.Summary,
+		Description:       it.Description,
+		Author:            it.Author,
+		IconURL:           it.IconURL,
+		GalleryURLs:       it.GalleryURLs,
+		SourceURL:         it.SourceURL,
+		Downloads:         it.Downloads,
+		SizeBytes:         it.SizeBytes,
+		LatestVersion:     it.LatestVersion,
+		AvailableVersions: it.AvailableVersions,
+		UpdatedAt:         it.UpdatedAt,
+		Tags:              it.Tags,
+		ModIDs:            it.ModIDs,
+		MapFolders:        it.MapFolders,
+		Dependencies:      deps,
 	}
 	p.DefaultMeta()
 	return p
@@ -348,7 +349,7 @@ func (o *operator) healMissingCachedPackage(
 	if repoObj.Spec.Format == registryv1.FormatServerPackage {
 		detailed, err = o.detailServerProxyPackage(ctx, repoObj, art.Spec.Package)
 	} else {
-		detailed, err = o.detailProxyPackage(ctx, repoObj, art.Spec.Package)
+		detailed, err = o.detailProxyPackage(ctx, repoObj, art.Spec.Package, "")
 	}
 	if err != nil || detailed == nil {
 		log.S().Warnw("failed to backfill missing cached package metadata", "package", coord, "error", err)

@@ -15,7 +15,15 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
 )
 
-var modrinthURLSlugRe = regexp.MustCompile(`(?i)modrinth\.com/(?:plugin|mod|datapack)/([a-zA-Z0-9_-]+)`)
+const (
+	maxAvailableVersions       = 25
+	modrinthResolveConcurrency = 4
+)
+
+var (
+	modrinthURLSlugRe     = regexp.MustCompile(`(?i)modrinth\.com/(?:plugin|mod|datapack)/([a-zA-Z0-9_-]+)`)
+	modrinthCoordUnsafeRe = regexp.MustCompile(`[^A-Za-z0-9._+-]+`)
+)
 
 func init() {
 	driver.Register(driver.ProviderModrinth, func() driver.Driver { return &modrinthDriver{} })
@@ -132,34 +140,35 @@ type modrinthGallery struct {
 	URL string `json:"url"`
 }
 
+type modrinthVersionFile struct {
+	URL      string `json:"url"`
+	Filename string `json:"filename"`
+	Primary  bool   `json:"primary"`
+	Size     int64  `json:"size"`
+}
+
+type modrinthVersionDep struct {
+	ProjectID      string `json:"project_id"`
+	DependencyType string `json:"dependency_type"`
+}
+
 type modrinthDepsResponse struct {
 	Projects []modrinthProject `json:"projects"`
 	Versions []struct {
-		Dependencies []struct {
-			ProjectID      string `json:"project_id"`
-			DependencyType string `json:"dependency_type"`
-		} `json:"dependencies"`
+		Dependencies []modrinthVersionDep `json:"dependencies"`
 	} `json:"versions"`
 }
 
 type modrinthVersionEntry struct {
-	ID            string   `json:"id"`
-	VersionNumber string   `json:"version_number"`
-	VersionType   string   `json:"version_type"`
-	Changelog     string   `json:"changelog"`
-	DatePublished string   `json:"date_published"`
-	GameVersions  []string `json:"game_versions"`
-	Loaders       []string `json:"loaders"`
-	Files         []struct {
-		URL      string `json:"url"`
-		Filename string `json:"filename"`
-		Primary  bool   `json:"primary"`
-		Size     int64  `json:"size"`
-	} `json:"files"`
-	Dependencies []struct {
-		ProjectID      string `json:"project_id"`
-		DependencyType string `json:"dependency_type"`
-	} `json:"dependencies"`
+	ID            string                `json:"id"`
+	VersionNumber string                `json:"version_number"`
+	VersionType   string                `json:"version_type"`
+	Changelog     string                `json:"changelog"`
+	DatePublished string                `json:"date_published"`
+	GameVersions  []string              `json:"game_versions"`
+	Loaders       []string              `json:"loaders"`
+	Files         []modrinthVersionFile `json:"files"`
+	Dependencies  []modrinthVersionDep  `json:"dependencies"`
 }
 
 func search(ctx context.Context, rt driver.Runtime, src driver.Source, params driver.SearchParams) (*driver.Result, error) {
@@ -248,8 +257,75 @@ func buildFacets(src driver.Source, gameVersion string) string {
 	return string(raw)
 }
 
-func detail(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID, _ string) (*driver.Item, error) {
-	ck := driver.CacheHashKey("modrinth:detail", slugOrID)
+func normalizeGameVersion(raw string) string {
+	gv := strings.TrimSpace(raw)
+	if gv == "" || driver.IsLatestAlias(gv) {
+		return ""
+	}
+	return gv
+}
+
+func isStrictModSource(src driver.Source) bool {
+	return strings.EqualFold(strings.TrimSpace(src.ModrinthProjectType), driver.ProjectTypeMod)
+}
+
+func sanitizeVersionCoord(raw string) string {
+	val := strings.TrimSpace(raw)
+	val = modrinthCoordUnsafeRe.ReplaceAllString(val, "-")
+	return strings.Trim(val, "-")
+}
+
+func normalizeVersionCoord(entry modrinthVersionEntry) string {
+	if v := sanitizeVersionCoord(entry.VersionNumber); v != "" {
+		return v
+	}
+	return strings.TrimSpace(entry.ID)
+}
+
+func extractAvailableVersions(entries []modrinthVersionEntry, limit int) []string {
+	if len(entries) == 0 || limit <= 0 {
+		return nil
+	}
+	out := make([]string, 0, min(len(entries), limit))
+	seen := make(map[string]bool, limit)
+	for _, e := range entries {
+		ver := normalizeVersionCoord(e)
+		if ver == "" || seen[ver] {
+			continue
+		}
+		seen[ver] = true
+		out = append(out, ver)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func primaryFile(entry modrinthVersionEntry) (modrinthVersionFile, bool) {
+	if len(entry.Files) == 0 {
+		return modrinthVersionFile{}, false
+	}
+	for _, f := range entry.Files {
+		if f.Primary {
+			return f, true
+		}
+	}
+	return entry.Files[0], true
+}
+
+func detailCacheKey(src driver.Source, slugOrID, gameVersion string) string {
+	raw := fmt.Sprintf("%s|%s|%s|%s",
+		strings.ToLower(strings.TrimSpace(src.ModrinthLoader)),
+		strings.ToLower(strings.TrimSpace(src.ModrinthProjectType)),
+		normalizeGameVersion(gameVersion),
+		strings.TrimSpace(slugOrID),
+	)
+	return driver.CacheHashKey("modrinth:detail", raw)
+}
+
+func detail(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID, gameVersion string) (*driver.Item, error) {
+	ck := detailCacheKey(src, slugOrID, gameVersion)
 	var cached driver.Item
 	if rt.GetCachedJSON(ctx, ck, &cached) && cached.ID != "" {
 		return &cached, nil
@@ -259,26 +335,47 @@ func detail(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID,
 		return nil, err
 	}
 	item := mapProjectToItem(proj, src.ModrinthProjectType)
-	var deps modrinthDepsResponse
-	if err := rt.DoGetJSON(ctx, rt.ModrinthEndpoint(src)+"/project/"+url.PathEscape(slugOrID)+"/dependencies", &deps); err == nil {
-		item.Dependencies = extractRequiredDeps(deps, item.ID)
+	entries, vErr := fetchCompatibleVersions(ctx, rt, src, slugOrID, gameVersion)
+	applyVersionMetaToItem(ctx, rt, src, slugOrID, &item, entries)
+	if vErr == nil {
+		rt.SetCachedJSON(ctx, ck, item)
 	}
-	rt.SetCachedJSON(ctx, ck, item)
 	return &item, nil
 }
 
-func extractRequiredDeps(deps modrinthDepsResponse, selfID string) []driver.Dependency {
+func applyVersionMetaToItem(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID string, item *driver.Item, entries []modrinthVersionEntry) {
+	if item == nil || len(entries) == 0 {
+		return
+	}
+	vers := extractAvailableVersions(entries, maxAvailableVersions)
+	if len(vers) > 0 {
+		item.AvailableVersions = vers
+		item.LatestVersion = vers[0]
+	}
+	if file, ok := primaryFile(entries[0]); ok && file.Size > 0 {
+		item.SizeBytes = file.Size
+	}
+	item.Dependencies = resolveVersionRequiredDeps(ctx, rt, src, slugOrID, item.ID, entries[0])
+}
+
+func resolveVersionRequiredDeps(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID, selfID string, entry modrinthVersionEntry) []driver.Dependency {
 	reqIDs := make(map[string]bool)
-	for _, v := range deps.Versions {
-		for _, d := range v.Dependencies {
-			if d.DependencyType == "required" && d.ProjectID != "" {
-				reqIDs[d.ProjectID] = true
-			}
+	for _, d := range entry.Dependencies {
+		if d.DependencyType == "required" && strings.TrimSpace(d.ProjectID) != "" {
+			reqIDs[d.ProjectID] = true
 		}
+	}
+	if len(reqIDs) == 0 {
+		return nil
+	}
+	var deps modrinthDepsResponse
+	endpoint := rt.ModrinthEndpoint(src) + "/project/" + url.PathEscape(slugOrID) + "/dependencies"
+	if err := rt.DoGetJSON(ctx, endpoint, &deps); err != nil {
+		return nil
 	}
 	var out []driver.Dependency
 	for _, dp := range deps.Projects {
-		if len(reqIDs) > 0 && !reqIDs[dp.ID] {
+		if !reqIDs[dp.ID] {
 			continue
 		}
 		id := driver.FirstNonEmpty(dp.Slug, dp.ID)
@@ -289,28 +386,61 @@ func extractRequiredDeps(deps modrinthDepsResponse, selfID string) []driver.Depe
 	return out
 }
 
+func resolveBatchCacheKey(src driver.Source, slugs []string, gameVersion string) string {
+	raw := fmt.Sprintf("%s|%s|%s|%s",
+		strings.ToLower(strings.TrimSpace(src.ModrinthLoader)),
+		strings.ToLower(strings.TrimSpace(src.ModrinthProjectType)),
+		normalizeGameVersion(gameVersion),
+		strings.Join(slugs, ","),
+	)
+	return driver.CacheHashKey("modrinth:resolve", raw)
+}
+
 func resolveBatch(ctx context.Context, rt driver.Runtime, src driver.Source, slugs []string, gameVersion string) ([]driver.Item, error) {
 	if len(slugs) > 40 {
 		slugs = slugs[:40]
 	}
-	ck := driver.CacheHashKey("modrinth:resolve", strings.Join(slugs, ","))
+	ck := resolveBatchCacheKey(src, slugs, gameVersion)
 	var cached []driver.Item
 	if rt.GetCachedJSON(ctx, ck, &cached) && len(cached) > 0 {
 		return cached, nil
 	}
+	out, err := resolveSlugsConcurrent(ctx, rt, src, slugs, gameVersion)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) > 0 {
+		rt.SetCachedJSON(ctx, ck, out)
+	}
+	return out, nil
+}
+
+func resolveSlugsConcurrent(ctx context.Context, rt driver.Runtime, src driver.Source, slugs []string, gameVersion string) ([]driver.Item, error) {
+	items := make([]*driver.Item, len(slugs))
+	errs := make([]error, len(slugs))
+	sem := make(chan struct{}, modrinthResolveConcurrency)
+	var wg sync.WaitGroup
+	for i, tok := range slugs {
+		wg.Add(1)
+		go func(idx int, token string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			items[idx], errs[idx] = detail(ctx, rt, src, token, gameVersion)
+		}(i, tok)
+	}
+	wg.Wait()
 	out := make([]driver.Item, 0, len(slugs))
-	for _, token := range slugs {
-		item, err := detail(ctx, rt, src, token, gameVersion)
+	for i, err := range errs {
 		if err != nil {
 			if errors.Is(err, driver.ErrNotFound) {
 				continue
 			}
 			return nil, err
 		}
-		out = append(out, *item)
-	}
-	if len(out) > 0 {
-		rt.SetCachedJSON(ctx, ck, out)
+		if items[i] != nil {
+			out = append(out, *items[i])
+		}
 	}
 	return out, nil
 }
@@ -356,45 +486,52 @@ func mapProjectToItem(p modrinthProject, fallbackType string) driver.Item {
 	}
 }
 
+func fetchCompatibleVersions(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID, gameVersion string) ([]modrinthVersionEntry, error) {
+	gv := normalizeGameVersion(gameVersion)
+	entries, err := queryVersions(ctx, rt, src, slugOrID, gv)
+	if err != nil {
+		return nil, err
+	}
+	// Preserve fallback on untagged patch releases for server plugins, never for mods whose loader/API breaks across versions.
+	if len(entries) == 0 && gv != "" && !isStrictModSource(src) {
+		return queryVersions(ctx, rt, src, slugOrID, "")
+	}
+	return entries, nil
+}
+
 // Resolve resolves a specific or latest Modrinth project version and its primary .jar download.
 func Resolve(ctx context.Context, rt driver.Runtime, src driver.Source, slugOrID, requestedVersion, gameVersion string) (*driver.ResolvedRelease, error) {
 	item, err := detail(ctx, rt, src, slugOrID, gameVersion)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := queryVersions(ctx, rt, src, slugOrID, gameVersion)
+	entries, err := fetchCompatibleVersions(ctx, rt, src, slugOrID, gameVersion)
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) == 0 && strings.TrimSpace(gameVersion) != "" {
-		entries, err = queryVersions(ctx, rt, src, slugOrID, "")
-		if err != nil {
-			return nil, err
-		}
-	}
 	chosen, ok := pickVersion(entries, requestedVersion)
-	if !ok || len(chosen.Files) == 0 {
+	if !ok {
 		return nil, driver.ErrNotFound
 	}
-	file := chosen.Files[0]
-	for _, f := range chosen.Files {
-		if f.Primary {
-			file = f
-			break
-		}
+	file, ok := primaryFile(chosen)
+	if !ok {
+		return nil, driver.ErrNotFound
 	}
-	ver := driver.FirstNonEmpty(chosen.VersionNumber, chosen.ID)
-	item.LatestVersion = ver
-	verURL := strings.TrimRight(item.SourceURL, "/")
+	ver := normalizeVersionCoord(chosen)
+	deps := resolveVersionRequiredDeps(ctx, rt, src, slugOrID, item.ID, chosen)
+	itemCopy := *item
+	itemCopy.LatestVersion = ver
+	itemCopy.Dependencies = deps
+	verURL := strings.TrimRight(itemCopy.SourceURL, "/")
 	if verURL != "" && chosen.ID != "" {
 		verURL = verURL + "/version/" + url.PathEscape(chosen.ID)
 	}
 	return &driver.ResolvedRelease{
-		Package: item.ID, Version: ver, Build: chosen.ID,
+		Package: itemCopy.ID, Version: ver, Build: chosen.ID,
 		DownloadURL: file.URL, FileName: file.Filename, ArchiveFormat: driver.ArchiveFormatJar,
 		TargetPath: file.Filename, SizeBytes: file.Size, GameVersions: chosen.GameVersions,
-		Loaders: chosen.Loaders, Dependencies: item.Dependencies, PublishedAt: driver.ParseRFC3339Ptr(chosen.DatePublished),
-		Changelog: strings.TrimSpace(chosen.Changelog), UpstreamURL: verURL, Item: item,
+		Loaders: chosen.Loaders, Dependencies: deps, PublishedAt: driver.ParseRFC3339Ptr(chosen.DatePublished),
+		Changelog: strings.TrimSpace(chosen.Changelog), UpstreamURL: verURL, Item: &itemCopy,
 	}, nil
 }
 
@@ -447,6 +584,12 @@ func pickVersion(entries []modrinthVersionEntry, requested string) (modrinthVers
 	}
 	for _, e := range entries {
 		if strings.EqualFold(e.VersionNumber, req) || e.ID == req {
+			return e, true
+		}
+	}
+	sanitizedReq := sanitizeVersionCoord(req)
+	for _, e := range entries {
+		if sanitizedReq != "" && strings.EqualFold(sanitizeVersionCoord(e.VersionNumber), sanitizedReq) {
 			return e, true
 		}
 	}

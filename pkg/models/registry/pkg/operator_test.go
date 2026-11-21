@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +13,10 @@ import (
 	registryv1 "github.com/smartcat999/game-panel-cloud/pkg/apis/registry/v1"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/db"
+	pkgdb "github.com/smartcat999/game-panel-cloud/pkg/repo/registry/pkg"
+	repositorydb "github.com/smartcat999/game-panel-cloud/pkg/repo/registry/repository"
+	upstreamdb "github.com/smartcat999/game-panel-cloud/pkg/repo/registry/upstream"
+	"github.com/smartcat999/game-panel-cloud/tests/testpg"
 )
 
 func TestIsStubPackage(t *testing.T) {
@@ -135,4 +141,115 @@ func TestNormalizeRepoPackageListCachedSkipsUpstreamHTTP(t *testing.T) {
 	if clean.FieldSelector["cached"] != "" || clean.FieldSelector["refresh"] != "" || clean.FieldSelector["repository"] != "paper" {
 		t.Fatalf("unexpected cleaned selectors: %#v", clean.FieldSelector)
 	}
+}
+
+func TestConvertMirrorItemPreservesAvailableVersions(t *testing.T) {
+	item := addonmirror.Item{
+		ID:                "ferrite-core",
+		Title:             "FerriteCore",
+		LatestVersion:     "7.1.3-fabric",
+		AvailableVersions: []string{"7.1.3-fabric", "7.1.1-fabric"},
+		SizeBytes:         1024,
+	}
+	pkg := convertMirrorItem("mc-fabric-mods", item)
+	if pkg.LatestVersion != "7.1.3-fabric" || !slices.Equal(pkg.AvailableVersions, []string{"7.1.3-fabric", "7.1.1-fabric"}) {
+		t.Fatalf("unexpected converted package versions: %#v", pkg)
+	}
+}
+
+func TestMergePersistedPackageForDetailPreservesVersionedFields(t *testing.T) {
+	persisted := &registryv1.Package{
+		Metadata:          metav1.ObjectMeta{Name: "mc-fabric-mods.ferrite-core", ResourceVersion: "9"},
+		Repository:        "mc-fabric-mods",
+		Package:           "ferrite-core",
+		Title:             "FerriteCore",
+		LatestVersion:     "9.0.0-fabric",
+		AvailableVersions: []string{"9.0.0-fabric"},
+		ModIDs:            []string{"ferritecore"},
+	}
+	detailed := &registryv1.Package{
+		Repository:        "mc-fabric-mods",
+		Package:           "ferrite-core",
+		Title:             "FerriteCore",
+		LatestVersion:     "7.1.3-fabric",
+		AvailableVersions: []string{"7.1.3-fabric", "7.1.1-fabric"},
+		Dependencies:      []registryv1.PackageDependency{{Package: "fabric-api", Title: "Fabric API"}},
+	}
+	merged := mergePersistedPackageForDetail(persisted, detailed)
+	if merged.LatestVersion != "7.1.3-fabric" || !slices.Equal(merged.AvailableVersions, []string{"7.1.3-fabric", "7.1.1-fabric"}) {
+		t.Fatalf("expected live versioned fields, got %#v", merged)
+	}
+	if merged.Metadata.ResourceVersion != "9" || !slices.Equal(merged.ModIDs, []string{"ferritecore"}) || len(merged.Dependencies) != 1 {
+		t.Fatalf("expected persisted metadata & local modIDs plus live deps, got %#v", merged)
+	}
+	if persisted.LatestVersion != "9.0.0-fabric" {
+		t.Fatal("expected persisted package not to be mutated")
+	}
+}
+
+func TestGetForGameVersionBypassesPersistedLatestVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/project/ferrite-core":
+			_, _ = w.Write([]byte(`{"id":"uXX01","slug":"ferrite-core","title":"FerriteCore"}`))
+		case "/v2/project/ferrite-core/version":
+			if strings.Contains(r.URL.Query().Get("game_versions"), `"1.21.4"`) {
+				_, _ = w.Write([]byte(`[{"id":"v713","version_number":"7.1.3-fabric","game_versions":["1.21.4"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fc.jar","filename":"fc.jar","primary":true,"size":1024}]},{"id":"v711","version_number":"7.1.1-fabric","game_versions":["1.21.4"],"loaders":["fabric"],"files":[{"url":"https://cdn.example/fc2.jar","filename":"fc2.jar","primary":true,"size":1000}]}]`))
+				return
+			}
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	seedVersionedProxyPackage(t, ctx, fix, srv.URL+"/v2")
+	op := NewOperator(fix.Registry, nil)
+
+	globalPkg, err := op.Get(ctx, "mc-fabric-mods.ferrite-core")
+	if err != nil || globalPkg.LatestVersion != "9.0.0-fabric" {
+		t.Fatalf("expected unscoped Get to return persisted 9.0.0-fabric, got %#v err=%v", globalPkg, err)
+	}
+	v1214Pkg, err := op.GetForGameVersion(ctx, "mc-fabric-mods.ferrite-core", "1.21.4")
+	if err != nil || v1214Pkg.LatestVersion != "7.1.3-fabric" || !slices.Equal(v1214Pkg.AvailableVersions, []string{"7.1.3-fabric", "7.1.1-fabric"}) {
+		t.Fatalf("expected 1.21.4 GetForGameVersion to bypass persisted 26.3 latestVersion, got %#v err=%v", v1214Pkg, err)
+	}
+}
+
+func seedVersionedProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fixture, modrinthEndpoint string) {
+	t.Helper()
+	if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, &registryv1.Upstream{
+		Metadata:            metav1.ObjectMeta{Name: "up-fabric"},
+		Provider:            registryv1.UpstreamProviderModrinth,
+		Endpoint:            modrinthEndpoint,
+		ModrinthLoader:      "fabric",
+		ModrinthProjectType: "mod",
+	}); err != nil {
+		t.Fatalf("Create upstream: %v", err)
+	}
+	if _, err := repositorydb.NewDB(fix.Pool).Create(ctx, &registryv1.Repository{
+		Metadata: metav1.ObjectMeta{Name: "mc-fabric-mods"},
+		Spec:     registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatModrinthAddon, UpstreamName: "up-fabric"},
+	}); err != nil {
+		t.Fatalf("Create repo: %v", err)
+	}
+	if _, err := pkgdb.NewDB(fix.Pool).Create(ctx, &registryv1.Package{
+		Metadata:      metav1.ObjectMeta{Name: "mc-fabric-mods.ferrite-core"},
+		Repository:    "mc-fabric-mods",
+		Package:       "ferrite-core",
+		Title:         "FerriteCore",
+		LatestVersion: "9.0.0-fabric",
+		ModIDs:        []string{"ferritecore"},
+	}); err != nil {
+		t.Fatalf("Create package: %v", err)
+	}
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	testpg.Stop()
+	os.Exit(code)
 }

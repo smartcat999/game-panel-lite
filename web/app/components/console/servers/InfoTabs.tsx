@@ -2,7 +2,7 @@
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ImagePlus, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, ImagePlus, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, CopyButton, Field, IconButton, Input, Meter, Modal, Mono, Segmented, Select, buttonClass } from "../ui";
 import { useConsole } from "../../../console/ConsoleProvider";
 import { endpointOf, formatCpu, formatGB, formatRateBytes, parseNumericQuantity, phaseOf, relativeTime, resourceOf } from "../../../console/lib/format";
@@ -23,6 +23,7 @@ import {
   INSTANCE_APP_VERSION_ANNOTATION,
   INSTANCE_COVER_ANNOTATION,
   INSTANCE_RESTART_REQUESTED_AT_ANNOTATION,
+  addonBindingMeta,
   gameOf,
 } from "./shared";
 
@@ -597,6 +598,11 @@ export function SettingsTab({
   const gameDirty =
     hasGameSchema &&
     (JSON.stringify(gameValues) !== JSON.stringify(initialGameValues) || appVersion !== initialAppVersion);
+  const bindingMeta = matchedApp?.addonBinding ? addonBindingMeta(matchedApp.addonBinding) : null;
+  const addonVersionChangeCount =
+    appVersion !== initialAppVersion && bindingMeta && !bindingMeta.isSteam
+      ? (inst.spec.addons?.length || 0)
+      : 0;
 
   const coverDirty = customCover.trim() !== initialCover;
   const dirty =
@@ -676,11 +682,13 @@ export function SettingsTab({
           limits: { cpu: cpuVal, memory: memVal, storage: diskVal },
         },
       },
-      appVersion !== initialAppVersion
-        ? "已更新游戏版本与参数，服务器正在平滑升级重启"
-        : onlyCoverChanged
-          ? "已更新服务器封面"
-          : "已保存配置，服务器正在自动应用新配置",
+      addonVersionChangeCount > 0 && bindingMeta
+        ? `已更新游戏版本至 ${appVersion}，请前往「${bindingMeta.noun}」页签同步兼容版本`
+        : appVersion !== initialAppVersion
+          ? "已更新游戏版本与参数，服务器正在平滑升级重启"
+          : onlyCoverChanged
+            ? "已更新服务器封面"
+            : "已保存配置，服务器正在自动应用新配置",
       Object.keys(annotationsPatch).length > 0 ? annotationsPatch : undefined,
     );
   }
@@ -731,7 +739,20 @@ export function SettingsTab({
         </div>
       </div>
       {hasGameSchema && subTab === "game" && matchedApp ? (
-        <div className="px-6 py-5">
+        <div className="space-y-4 px-6 py-5">
+          {addonVersionChangeCount > 0 && bindingMeta && (
+            <div
+              role="status"
+              className="flex items-center gap-2 rounded-2xl border border-[#FDE6B6] bg-[#FFFBEB] px-4 py-3 text-xs text-[#92400E]"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 text-[#D97706]" aria-hidden />
+              <span>
+                切换游戏版本至 <Mono className="font-semibold text-[#92400E]">{appVersion}</Mono> 后，
+                已安装的 {addonVersionChangeCount} 项{bindingMeta.noun}可能与新版本不兼容，
+                保存后请前往「{bindingMeta.noun}」页签一键切换适配版本。
+              </span>
+            </div>
+          )}
           <GameConfigEditor
             app={matchedApp}
             values={gameValues}

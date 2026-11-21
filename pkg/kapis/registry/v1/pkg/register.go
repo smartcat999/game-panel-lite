@@ -31,7 +31,9 @@ func AddToContainer(deps apiruntime.Dependencies, c *apiruntime.Container) {
 		Returns(http.StatusCreated, "Created", registryv1.Package{}))
 
 	ws.Route(ws.GET("/packages/{name}").To(h.GetPackage).Doc("Get a Registry Package by <repository>.<package>").
-		Param(ws.PathParameter("name", "Package coordinate")).Writes(registryv1.Package{}).
+		Param(ws.PathParameter("name", "Package coordinate")).
+		Param(ws.QueryParameter("gameVersion", "Target game version filter").DataType("string")).
+		Writes(registryv1.Package{}).
 		Returns(http.StatusOK, "OK", registryv1.Package{}))
 
 	ws.Route(ws.PUT("/packages/{name}").To(h.UpdatePackage).Doc("Replace a Registry Package").

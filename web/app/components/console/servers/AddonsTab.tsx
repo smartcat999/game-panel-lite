@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowUpCircle,
   Check,
@@ -229,6 +230,7 @@ function AddonDetailBody({
   installedIds,
   pinnedVersion,
   versionOptions,
+  compatibilityWarning,
   onSelectVersion,
 }: {
   item: RegistryPackage | null;
@@ -239,6 +241,7 @@ function AddonDetailBody({
   installedIds?: ReadonlySet<string>;
   pinnedVersion?: string;
   versionOptions?: Array<{ value: string; label: string }>;
+  compatibilityWarning?: string;
   onSelectVersion?: (nextVersion: string) => void;
 }) {
   if (loading && !item) {
@@ -285,6 +288,16 @@ function AddonDetailBody({
           )}
         </div>
       </div>
+
+      {compatibilityWarning && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-2xl border border-[#FDE6B6] bg-[#FFFBEB] px-4 py-3 text-xs text-[#92400E]"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0 text-[#D97706]" aria-hidden />
+          <span>{compatibilityWarning}</span>
+        </div>
+      )}
 
       {pinnedVersion && versionOptions && versionOptions.length > 0 && onSelectVersion && (
         <div className="flex flex-col gap-2 rounded-2xl bg-[#F7F8FC] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -456,6 +469,12 @@ export function AddonsTab({
   const hydratedMapRef = useRef<Record<string, RegistryPackage>>({});
   hydratedMapRef.current = hydratedMap;
 
+  // Package IDs whose latestVersion/availableVersions/dependencies were explicitly resolved for the active displayVersion
+  const [versionHydratedIds, setVersionHydratedIds] = useState<Set<string>>(() => new Set());
+  const versionHydratedIdsRef = useRef<Set<string>>(new Set());
+  versionHydratedIdsRef.current = versionHydratedIds;
+  const [stagingIds, setStagingIds] = useState<Set<string>>(() => new Set());
+
   // Artifacts in repository keyed by `${package}@${version}` and grouped by package
   const [repoArtifacts, setRepoArtifacts] = useState<RegistryArtifact[]>([]);
   const [retryingCoord, setRetryingCoord] = useState<string | null>(null);
@@ -510,19 +529,48 @@ export function AddonsTab({
   );
 
   const mergeHydratedPackages = useCallback(
-    (items?: RegistryPackage[]) => {
+    (items?: RegistryPackage[], versionResolved = false) => {
       if (!items || items.length === 0) return;
-      setHydratedMap((prev) => {
-        const next = { ...prev };
-        for (const item of items) {
-          const id = normalizePackageId(item.package, isSteam);
-          if (id) next[id] = item;
+      const nextMap = { ...hydratedMapRef.current };
+      const nextResolved = new Set(versionHydratedIdsRef.current);
+      for (const item of items) {
+        const id = normalizePackageId(item.package, isSteam);
+        if (!id) continue;
+        const existing = nextMap[id];
+        if (!versionResolved && existing && nextResolved.has(id)) {
+          nextMap[id] = {
+            ...item,
+            latestVersion: existing.latestVersion,
+            availableVersions: existing.availableVersions,
+            dependencies: existing.dependencies,
+            sizeBytes: existing.sizeBytes || item.sizeBytes,
+            description: existing.description || item.description,
+          };
+        } else {
+          nextMap[id] = item;
         }
-        return next;
-      });
+        if (versionResolved) {
+          nextResolved.add(id);
+        }
+      }
+      hydratedMapRef.current = nextMap;
+      setHydratedMap(nextMap);
+      if (versionResolved) {
+        versionHydratedIdsRef.current = nextResolved;
+        setVersionHydratedIds(nextResolved);
+      }
     },
     [isSteam],
   );
+
+  // Reset version-sensitive metadata when repository or active game version changes
+  useEffect(() => {
+    hydratedMapRef.current = {};
+    versionHydratedIdsRef.current = new Set();
+    setHydratedMap({});
+    setVersionHydratedIds(new Set());
+    setCatalogItems(null);
+  }, [displayVersion, repoName]);
 
   // Hydrate installed package metadata via registry packages resolve
   const stagedPackageKey = useMemo(
@@ -534,7 +582,7 @@ export function AddonsTab({
     if (!repoName || stagedAddons.length === 0) return;
     const missing = stagedAddons
       .map((a) => a.package)
-      .filter((pkg) => pkg && !hydratedMapRef.current[pkg]);
+      .filter((pkg) => pkg && !versionHydratedIdsRef.current.has(pkg));
     if (missing.length === 0) return;
 
     let cancelled = false;
@@ -550,7 +598,7 @@ export function AddonsTab({
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as ListResponse<RegistryPackage>;
         if (!cancelled && data.items) {
-          mergeHydratedPackages(data.items);
+          mergeHydratedPackages(data.items, true);
         }
       })
       .catch(() => {
@@ -699,7 +747,7 @@ export function AddonsTab({
         setCatalogError(null);
         setCatalogItems(items);
         setCatalogTotal(data.metadata?.totalCount ?? items.length);
-        mergeHydratedPackages(items);
+        mergeHydratedPackages(items, isResolve);
       })
       .catch((err) => {
         if (
@@ -739,14 +787,19 @@ export function AddonsTab({
       return;
     }
     const cached = hydratedMapRef.current[detailTargetId];
-    if (cached) setDetailItem(cached);
+    setDetailItem(cached ?? null);
 
     let cancelled = false;
     setDetailLoading(true);
     const coord = `${repoName}.${detailTargetId}`;
+    const detailParams = new URLSearchParams();
+    if (displayVersion) detailParams.set("gameVersion", displayVersion);
+    const detailQuery = detailParams.toString();
 
     void Promise.all([
-      apiFetch(`/apis/registry.gamepanel.io/v1/packages/${encodeURIComponent(coord)}`),
+      apiFetch(
+        `/apis/registry.gamepanel.io/v1/packages/${encodeURIComponent(coord)}${detailQuery ? `?${detailQuery}` : ""}`,
+      ),
       apiFetch(
         `/apis/registry.gamepanel.io/v1/artifacts?fieldSelector=${encodeURIComponent(
           `repository=${repoName},package=${detailTargetId}`,
@@ -758,7 +811,7 @@ export function AddonsTab({
         if (pkgRes.ok) {
           const pkg = (await pkgRes.json()) as RegistryPackage;
           setDetailItem(pkg);
-          mergeHydratedPackages([pkg]);
+          mergeHydratedPackages([pkg], true);
         }
         if (artRes.ok) {
           const artList = (await artRes.json()) as ListResponse<RegistryArtifact>;
@@ -775,93 +828,189 @@ export function AddonsTab({
     return () => {
       cancelled = true;
     };
-  }, [apiFetch, detailTargetId, mergeHydratedPackages, repoName]);
+  }, [apiFetch, detailTargetId, displayVersion, mergeHydratedPackages, repoName]);
 
   const stagePackages = useCallback(
-    async (incoming: RegistryPackage[]) => {
-      if (!binding || !repoName || incoming.length === 0) return;
-      mergeHydratedPackages(incoming);
+    async (incoming: RegistryPackage[]): Promise<number> => {
+      if (!binding || !repoName || incoming.length === 0) return 0;
+      const incomingIds = Array.from(
+        new Set(incoming.map((p) => normalizePackageId(p.package, isSteam)).filter(Boolean)),
+      );
+      if (incomingIds.length === 0) return 0;
 
-      // Resolve any missing dependency versions best-effort
-      const depIds: string[] = [];
-      for (const pkg of incoming) {
-        for (const dep of pkg.dependencies || []) {
-          const cleanDep = normalizePackageId(dep.package, isSteam);
-          if (
-            cleanDep &&
-            !hydratedMapRef.current[cleanDep] &&
-            !incoming.some((i) => normalizePackageId(i.package, isSteam) === cleanDep)
-          ) {
-            depIds.push(cleanDep);
-          }
-        }
-      }
-      let resolvedDeps: Record<string, RegistryPackage> = {};
-      if (depIds.length > 0) {
-        try {
-          const params = new URLSearchParams({
-            repository: repoName,
-            resolve: Array.from(new Set(depIds)).join(","),
-          });
-          if (displayVersion) params.set("gameVersion", displayVersion);
-          const res = await apiFetch(`/apis/registry.gamepanel.io/v1/packages?${params.toString()}`);
-          if (res.ok) {
-            const list = (await res.json()) as ListResponse<RegistryPackage>;
-            if (list.items) {
-              mergeHydratedPackages(list.items);
-              resolvedDeps = Object.fromEntries(
-                list.items.map((it) => [normalizePackageId(it.package, isSteam), it]),
-              );
-            }
-          }
-        } catch {
-          /* fallback to "1" / "latest" if dependency lookup fails */
-        }
-      }
-
-      let autoAddedDeps = 0;
-      setStagedAddons((prev) => {
-        const next = [...prev];
-        const existing = new Set(next.map((a) => a.package));
-
-        for (const item of incoming) {
-          for (const dep of item.dependencies || []) {
-            const depId = normalizePackageId(dep.package, isSteam);
-            if (depId && !existing.has(depId)) {
-              const depMeta = resolvedDeps[depId] || hydratedMapRef.current[depId];
-              existing.add(depId);
-              next.push({
-                repository: repoName,
-                package: depId,
-                version: depMeta?.latestVersion || (isSteam ? "1" : "latest"),
-                title: depMeta?.title || dep.title || depId,
-                installMode: binding.installMode,
-                targetDir: binding.targetDir,
-              });
-              autoAddedDeps++;
-            }
-          }
-          const cleanId = normalizePackageId(item.package, isSteam);
-          if (cleanId && !existing.has(cleanId)) {
-            existing.add(cleanId);
-            next.push({
-              repository: repoName,
-              package: cleanId,
-              version: item.latestVersion || (isSteam ? "1" : "latest"),
-              title: item.title || cleanId,
-              installMode: binding.installMode,
-              targetDir: binding.targetDir,
-            });
-          }
-        }
+      setStagingIds((prev) => {
+        const next = new Set(prev);
+        for (const id of incomingIds) next.add(id);
         return next;
       });
 
-      if (autoAddedDeps > 0) {
-        toast("info", `已自动补齐 ${autoAddedDeps} 项前置依赖${noun}`);
+      try {
+        mergeHydratedPackages(incoming);
+
+        // Search cards carry bare metadata without version lists/dependencies; resolve exact compatible version first.
+        let resolvedIncomingMap: Record<string, RegistryPackage> = {};
+        const needPreResolveIds = !isSteam
+          ? incomingIds.filter((id) => !versionHydratedIdsRef.current.has(id))
+          : [];
+        if (needPreResolveIds.length > 0) {
+          try {
+            const params = new URLSearchParams({
+              repository: repoName,
+              resolve: needPreResolveIds.join(","),
+            });
+            if (displayVersion) params.set("gameVersion", displayVersion);
+            const res = await apiFetch(`/apis/registry.gamepanel.io/v1/packages?${params.toString()}`);
+            if (!res.ok) {
+              throw new Error(await errorMessage(res, `解析${noun}版本失败`));
+            }
+            const list = (await res.json()) as ListResponse<RegistryPackage>;
+            if (list.items) {
+              mergeHydratedPackages(list.items, true);
+              resolvedIncomingMap = Object.fromEntries(
+                list.items.map((it) => [normalizePackageId(it.package, isSteam), it]),
+              );
+            }
+          } catch (err) {
+            toast("error", err instanceof Error ? err.message : `解析${noun}适配版本失败`);
+            return 0;
+          }
+        }
+
+        const resolvedItems = incoming.map((item) => {
+          const cleanId = normalizePackageId(item.package, isSteam);
+          return resolvedIncomingMap[cleanId] || hydratedMapRef.current[cleanId] || item;
+        });
+
+        const compatibleItems: RegistryPackage[] = [];
+        for (const item of resolvedItems) {
+          const cleanId = normalizePackageId(item.package, isSteam);
+          if (!isSteam && displayVersion && !item.latestVersion?.trim()) {
+            toast("error", `「${item.title || cleanId}」暂无适配 ${displayVersion} 的版本`);
+            continue;
+          }
+          compatibleItems.push(item);
+        }
+        if (compatibleItems.length === 0) return 0;
+
+        // Resolve any missing dependency versions for the active gameVersion
+        const depIds: string[] = [];
+        for (const pkg of compatibleItems) {
+          for (const dep of pkg.dependencies || []) {
+            const cleanDep = normalizePackageId(dep.package, isSteam);
+            if (
+              cleanDep &&
+              !versionHydratedIdsRef.current.has(cleanDep) &&
+              !compatibleItems.some((i) => normalizePackageId(i.package, isSteam) === cleanDep)
+            ) {
+              depIds.push(cleanDep);
+            }
+          }
+        }
+        let resolvedDeps: Record<string, RegistryPackage> = {};
+        let depsFetchFailed = false;
+        if (depIds.length > 0) {
+          try {
+            const params = new URLSearchParams({
+              repository: repoName,
+              resolve: Array.from(new Set(depIds)).join(","),
+            });
+            if (displayVersion) params.set("gameVersion", displayVersion);
+            const res = await apiFetch(`/apis/registry.gamepanel.io/v1/packages?${params.toString()}`);
+            if (res.ok) {
+              const list = (await res.json()) as ListResponse<RegistryPackage>;
+              if (list.items) {
+                mergeHydratedPackages(list.items, true);
+                resolvedDeps = Object.fromEntries(
+                  list.items.map((it) => [normalizePackageId(it.package, isSteam), it]),
+                );
+              }
+            } else {
+              depsFetchFailed = true;
+            }
+          } catch {
+            depsFetchFailed = true;
+          }
+        }
+
+        let autoAddedDeps = 0;
+        let stagedMainCount = 0;
+        const skippedDeps: string[] = [];
+        const existingNow = new Set(stagedMap.keys());
+        for (const item of compatibleItems) {
+          const cleanId = normalizePackageId(item.package, isSteam);
+          for (const dep of item.dependencies || []) {
+            const depId = normalizePackageId(dep.package, isSteam);
+            if (!depId || existingNow.has(depId)) continue;
+            const depMeta = resolvedDeps[depId] || hydratedMapRef.current[depId];
+            if (!isSteam && displayVersion && !depMeta?.latestVersion?.trim() && !depsFetchFailed) {
+              skippedDeps.push(depMeta?.title || dep.title || depId);
+              continue;
+            }
+            existingNow.add(depId);
+            autoAddedDeps++;
+          }
+          if (cleanId && !existingNow.has(cleanId)) {
+            existingNow.add(cleanId);
+            stagedMainCount++;
+          }
+        }
+
+        setStagedAddons((prev) => {
+          const next = [...prev];
+          const existing = new Set(next.map((a) => a.package));
+
+          for (const item of compatibleItems) {
+            for (const dep of item.dependencies || []) {
+              const depId = normalizePackageId(dep.package, isSteam);
+              if (depId && !existing.has(depId)) {
+                const depMeta = resolvedDeps[depId] || hydratedMapRef.current[depId];
+                const depVer = depMeta?.latestVersion?.trim();
+                if (!isSteam && displayVersion && !depVer && !depsFetchFailed) {
+                  continue;
+                }
+                existing.add(depId);
+                next.push({
+                  repository: repoName,
+                  package: depId,
+                  version: depVer || (isSteam ? "1" : "latest"),
+                  title: depMeta?.title || dep.title || depId,
+                  installMode: binding.installMode,
+                  targetDir: binding.targetDir,
+                });
+              }
+            }
+            const cleanId = normalizePackageId(item.package, isSteam);
+            if (cleanId && !existing.has(cleanId)) {
+              existing.add(cleanId);
+              next.push({
+                repository: repoName,
+                package: cleanId,
+                version: item.latestVersion?.trim() || (isSteam ? "1" : "latest"),
+                title: item.title || cleanId,
+                installMode: binding.installMode,
+                targetDir: binding.targetDir,
+              });
+            }
+          }
+          return next;
+        });
+
+        if (autoAddedDeps > 0) {
+          toast("info", `已自动补齐 ${autoAddedDeps} 项前置依赖${noun}`);
+        }
+        if (skippedDeps.length > 0 && displayVersion) {
+          toast("error", `前置依赖「${skippedDeps[0]}」暂无适配 ${displayVersion} 的版本`);
+        }
+        return stagedMainCount + autoAddedDeps;
+      } finally {
+        setStagingIds((prev) => {
+          const next = new Set(prev);
+          for (const id of incomingIds) next.delete(id);
+          return next;
+        });
       }
     },
-    [apiFetch, binding, displayVersion, isSteam, mergeHydratedPackages, noun, repoName, toast],
+    [apiFetch, binding, displayVersion, isSteam, mergeHydratedPackages, noun, repoName, stagedMap, toast],
   );
 
   const updateAddonVersion = useCallback((pkgId: string, nextVersion: string) => {
@@ -902,7 +1051,11 @@ export function AddonsTab({
           toast("error", `未找到对应的${noun}，请检查链接或编号是否正确`);
           return false;
         }
-        await stagePackages(items);
+        mergeHydratedPackages(items, true);
+        const added = await stagePackages(items);
+        if (added <= 0) {
+          return false;
+        }
         toast(
           "success",
           items.length > 1
@@ -917,7 +1070,7 @@ export function AddonsTab({
         setResolvingInput(false);
       }
     },
-    [apiFetch, displayVersion, noun, repoName, resolvingInput, stagePackages, toast],
+    [apiFetch, displayVersion, mergeHydratedPackages, noun, repoName, resolvingInput, stagePackages, toast],
   );
 
   const handleSave = useCallback(async () => {
@@ -1007,6 +1160,13 @@ export function AddonsTab({
     const staged = stagedMap.get(detailTargetId);
     const seen = new Set<string>();
     const opts: Array<{ value: string; label: string }> = [];
+    const availList = detailItem?.availableVersions || [];
+    const availSet = new Set(availList);
+    const versionChecked = Boolean(
+      !isSteam && displayVersion && versionHydratedIds.has(detailTargetId),
+    );
+    const isConcreteVersion = (v?: string) =>
+      Boolean(v && v !== "1" && v.toLowerCase() !== "latest");
 
     const pushOpt = (v: string | undefined, suffix: string) => {
       const clean = (v || "").trim();
@@ -1021,23 +1181,90 @@ export function AddonsTab({
     };
 
     if (staged?.version) {
-      pushOpt(
-        staged.version,
-        detailItem?.latestVersion && detailItem.latestVersion === staged.version
+      const isIncompatible =
+        versionChecked && isConcreteVersion(staged.version) && !availSet.has(staged.version);
+      const suffix = isIncompatible
+        ? `当前 · 不兼容 ${displayVersion}`
+        : detailItem?.latestVersion && detailItem.latestVersion === staged.version
           ? "当前 · 最新"
-          : "当前",
-      );
+          : "当前";
+      pushOpt(staged.version, suffix);
     }
     if (detailItem?.latestVersion) {
       pushOpt(detailItem.latestVersion, "最新");
     }
+    for (const ver of availList) {
+      pushOpt(ver, !isSteam && displayVersion ? `适配 ${displayVersion}` : "");
+    }
     for (const art of detailArtifacts) {
-      if (art.status?.phase === "Ready") {
-        pushOpt(art.spec.version, "历史版本");
+      if (art.status?.phase !== "Ready") continue;
+      const gvs = art.spec.gameVersions || [];
+      if (!isSteam && displayVersion && gvs.length > 0 && !gvs.includes(displayVersion)) {
+        continue;
       }
+      pushOpt(art.spec.version, "已缓存");
     }
     return opts;
-  }, [detailArtifacts, detailItem?.latestVersion, detailTargetId, stagedMap]);
+  }, [
+    detailArtifacts,
+    detailItem?.availableVersions,
+    detailItem?.latestVersion,
+    detailTargetId,
+    displayVersion,
+    isSteam,
+    stagedMap,
+    versionHydratedIds,
+  ]);
+
+  const addonCompatibility = useCallback(
+    (addon: InstanceAddon) => {
+      const meta = hydratedMap[addon.package];
+      const ready =
+        !isSteam && Boolean(displayVersion) && versionHydratedIds.has(addon.package) && Boolean(meta);
+      if (!ready) {
+        return { incompatible: false, fixVersion: undefined as string | undefined };
+      }
+      const v = (addon.version || "").trim();
+      if (!v || v === "1" || v.toLowerCase() === "latest") {
+        return { incompatible: false, fixVersion: undefined };
+      }
+      const avail = meta?.availableVersions || [];
+      if (avail.includes(v)) {
+        return { incompatible: false, fixVersion: undefined };
+      }
+      const fixVersion = meta?.latestVersion?.trim() || undefined;
+      return { incompatible: true, fixVersion };
+    },
+    [displayVersion, hydratedMap, isSteam, versionHydratedIds],
+  );
+
+  const { incompatibleCount, fixableUpdates } = useMemo(() => {
+    let count = 0;
+    const updates = new Map<string, string>();
+    for (const addon of stagedAddons) {
+      const { incompatible, fixVersion } = addonCompatibility(addon);
+      if (!incompatible) continue;
+      count++;
+      if (fixVersion) {
+        updates.set(addon.package, fixVersion);
+      }
+    }
+    return { incompatibleCount: count, fixableUpdates: updates };
+  }, [addonCompatibility, stagedAddons]);
+
+  const switchAllToCompatible = useCallback(() => {
+    if (fixableUpdates.size === 0) return;
+    setStagedAddons((prev) =>
+      prev.map((a) => {
+        const nextVer = fixableUpdates.get(a.package);
+        return nextVer ? { ...a, version: nextVer } : a;
+      }),
+    );
+    toast(
+      "success",
+      `已切换 ${fixableUpdates.size} 项${noun}至适配 ${displayVersion} 的版本，点击「保存更改」生效`,
+    );
+  }, [displayVersion, fixableUpdates, noun, toast]);
 
   if (!binding || !repoName) return null;
 
@@ -1052,6 +1279,27 @@ export function AddonsTab({
     catalogItems.length === 0;
   const isResolveDraft = looksLikeResolveInput(browseQuery, isSteam);
   const detailStaged = detailTargetId ? stagedMap.get(detailTargetId) : undefined;
+  const detailVersionChecked = Boolean(
+    !detailLoading &&
+      !isSteam &&
+      displayVersion &&
+      detailTargetId &&
+      versionHydratedIds.has(detailTargetId) &&
+      detailItem,
+  );
+  const detailNoCompatibleVersion = Boolean(detailVersionChecked && !detailItem?.latestVersion?.trim());
+  const detailIncompatiblePinned = Boolean(
+    detailVersionChecked &&
+      detailStaged?.version &&
+      detailStaged.version !== "1" &&
+      detailStaged.version.toLowerCase() !== "latest" &&
+      !(detailItem?.availableVersions || []).includes(detailStaged.version),
+  );
+  const detailCompatWarning = detailNoCompatibleVersion
+    ? `该${noun}暂无适配游戏版本 ${displayVersion} 的发布包。`
+    : detailIncompatiblePinned
+      ? `当前固定版本 ${formatAddonVersion(detailStaged?.version)} 不兼容游戏版本 ${displayVersion}，请在上方下拉列表切换兼容版本。`
+      : undefined;
 
   const detailMetaLine = detailItem
     ? [
@@ -1175,6 +1423,34 @@ export function AddonsTab({
           </div>
         </div>
 
+        {incompatibleCount > 0 && displayVersion && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center justify-between gap-3 border-b border-[#FDE6B6] bg-[#FFFBEB] px-6 py-3 text-xs text-[#92400E]"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-[#D97706]" aria-hidden />
+              <span>
+                检测到 {incompatibleCount} 项{noun}当前固定版本不适配游戏版本{" "}
+                <Mono className="font-semibold text-[#92400E]">{displayVersion}</Mono>
+                {fixableUpdates.size < incompatibleCount
+                  ? `（其中 ${incompatibleCount - fixableUpdates.size} 项暂无 ${displayVersion} 适配版本）`
+                  : "，建议切换至适配版本后保存。"}
+              </span>
+            </div>
+            {fixableUpdates.size > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={isUpdating}
+                onClick={switchAllToCompatible}
+              >
+                一键切换适配版本 ({fixableUpdates.size})
+              </Button>
+            )}
+          </div>
+        )}
+
         {stagedAddons.length === 0 ? (
           <EmptyState
             title={`暂未安装${noun}`}
@@ -1262,6 +1538,7 @@ export function AddonsTab({
                       meta.latestVersion !== "1" &&
                       meta.latestVersion !== addon.version,
                   );
+                  const compat = addonCompatibility(addon);
 
                   const subtitle = [
                     meta?.author?.trim(),
@@ -1350,16 +1627,36 @@ export function AddonsTab({
                           <span className="tabular-nums text-[13px] text-[#14161F]">
                             {formatAddonVersion(addon.version)}
                           </span>
-                          {hasNewerUpstream && meta?.latestVersion && (
-                            <button
-                              type="button"
-                              onClick={() => updateAddonVersion(addon.package, meta.latestVersion!)}
-                              title={`更新至新版本 ${formatAddonVersion(meta.latestVersion)}`}
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-[#2B3AE8] transition-colors hover:bg-[#EEF1FF] ${focusRing}`}
-                            >
-                              <ArrowUpCircle className="h-3.5 w-3.5" />
-                              更新
-                            </button>
+                          {compat.incompatible && displayVersion ? (
+                            compat.fixVersion ? (
+                              <>
+                                <Badge tone="warning">不兼容 {displayVersion}</Badge>
+                                <button
+                                  type="button"
+                                  onClick={() => updateAddonVersion(addon.package, compat.fixVersion!)}
+                                  title={`切换至适配 ${displayVersion} 的版本 ${formatAddonVersion(compat.fixVersion)}`}
+                                  className={`inline-flex items-center gap-1 rounded-full bg-[#FEF3C7] px-2.5 py-0.5 text-xs font-medium text-[#92400E] transition-colors hover:bg-[#FDE68A] ${focusRing}`}
+                                >
+                                  <ArrowUpCircle className="h-3.5 w-3.5" />
+                                  切换适配版本
+                                </button>
+                              </>
+                            ) : (
+                              <Badge tone="danger">不兼容 {displayVersion}</Badge>
+                            )
+                          ) : (
+                            hasNewerUpstream &&
+                            meta?.latestVersion && (
+                              <button
+                                type="button"
+                                onClick={() => updateAddonVersion(addon.package, meta.latestVersion!)}
+                                title={`更新至新版本 ${formatAddonVersion(meta.latestVersion)}`}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-[#2B3AE8] transition-colors hover:bg-[#EEF1FF] ${focusRing}`}
+                              >
+                                <ArrowUpCircle className="h-3.5 w-3.5" />
+                                更新
+                              </button>
+                            )
                           )}
                         </div>
                       </td>
@@ -1537,6 +1834,12 @@ export function AddonsTab({
                   <Button
                     variant={dirty ? "secondary" : "primary"}
                     icon={<Plus className="h-4 w-4" />}
+                    loading={stagingIds.has(detailTargetId)}
+                    disabled={
+                      detailLoading ||
+                      stagingIds.has(detailTargetId) ||
+                      detailNoCompatibleVersion
+                    }
                     onClick={() => {
                       if (detailItem) {
                         void stagePackages([detailItem]);
@@ -1611,6 +1914,7 @@ export function AddonsTab({
             installedIds={new Set(stagedAddons.map((a) => a.package))}
             pinnedVersion={detailStaged?.version}
             versionOptions={detailVersionOptions}
+            compatibilityWarning={detailCompatWarning}
             onSelectVersion={
               detailTargetId ? (v) => updateAddonVersion(detailTargetId, v) : undefined
             }
@@ -1799,6 +2103,8 @@ export function AddonsTab({
                           size="sm"
                           variant="secondary"
                           icon={<Plus className="h-3.5 w-3.5" />}
+                          loading={stagingIds.has(cleanId)}
+                          disabled={stagingIds.has(cleanId)}
                           onClick={() => void stagePackages([item])}
                         >
                           添加
@@ -1854,11 +2160,18 @@ export function AddonsTab({
                   <Button
                     variant="primary"
                     icon={<Plus className="h-4 w-4" />}
+                    loading={stagingIds.has(detailTargetId)}
+                    disabled={
+                      detailLoading ||
+                      stagingIds.has(detailTargetId) ||
+                      detailNoCompatibleVersion
+                    }
                     onClick={() => {
                       if (detailItem) {
-                        void stagePackages([detailItem]);
+                        void stagePackages([detailItem]).then((n) => {
+                          if (n > 0) setDetailTargetId(null);
+                        });
                       }
-                      setDetailTargetId(null);
                     }}
                   >
                     添加
@@ -1887,6 +2200,7 @@ export function AddonsTab({
           installedIds={new Set(stagedAddons.map((a) => a.package))}
           pinnedVersion={detailStaged?.version}
           versionOptions={detailVersionOptions}
+          compatibilityWarning={detailCompatWarning}
           onSelectVersion={
             detailTargetId ? (v) => updateAddonVersion(detailTargetId, v) : undefined
           }
