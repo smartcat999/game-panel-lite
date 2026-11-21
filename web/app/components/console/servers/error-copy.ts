@@ -1,4 +1,5 @@
 import type { AppItem, InstanceItem } from "../../../console/lib/types";
+import { addonBindingMeta } from "./shared";
 
 export type InstanceBannerKind =
   | "suspended"
@@ -42,7 +43,7 @@ function humanizeArtifactSyncError(
         kind: "artifact",
         isError: true,
         title: `${addonTabLabel}${displayTitle}下载未完成，服务器暂未启动`,
-        desc: `连接${addonTabLabel === "插件" ? "插件市场" : "创意工坊"}超时或网络受限，可前往「${addonTabLabel}」列表点击重新下载，或移除该${addonTabLabel}后重新启动服务器。`,
+        desc: `连接${addonBindingMeta(matchedApp?.addonBinding).marketLabel}超时或网络受限，可前往「${addonTabLabel}」列表点击重新下载，或移除该${addonTabLabel}后重新启动服务器。`,
       };
     }
     return {

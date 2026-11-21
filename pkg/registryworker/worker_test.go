@@ -129,6 +129,7 @@ func TestLookupSyncDriverMatrix(t *testing.T) {
 		{name: "steam-workshop-with-ugc-url", provider: registryv1.UpstreamProviderSteam, format: registryv1.FormatWorkshopMod, sourceURL: "https://steamusercontent.com/ugc/1", want: "steam-workshop"},
 		{name: "modrinth", provider: registryv1.UpstreamProviderModrinth, format: "mod", want: "http-release"},
 		{name: "papermc", provider: registryv1.UpstreamProviderPaperMC, format: "jar", want: "http-release"},
+		{name: "fabricmc", provider: registryv1.UpstreamProviderFabricMC, format: registryv1.FormatServerPackage, want: "fabricmc-bundle"},
 		{name: "http-upstream", provider: registryv1.UpstreamProviderHTTP, format: registryv1.FormatServerPackage, want: "http-release"},
 		{name: "hosted-https-no-upstream", sourceURL: "https://example.com/mod.jar", want: "http-release"},
 		{name: "missing-source-and-upstream", wantErr: true},

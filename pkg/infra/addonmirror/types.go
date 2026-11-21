@@ -11,6 +11,7 @@ const (
 	ProviderPaperMC       = driver.ProviderPaperMC
 	ProviderPurpur        = driver.ProviderPurpur
 	ProviderVanilla       = driver.ProviderVanilla
+	ProviderFabricMC      = driver.ProviderFabricMC
 	ProviderSteam         = driver.ProviderSteam
 	ProviderHTTP          = driver.ProviderHTTP
 	ProviderTerraria      = driver.ProviderTerraria
@@ -51,9 +52,10 @@ const (
 	SteamServerAppSevenDaysToDie     = driver.SteamServerAppSevenDaysToDie
 	SteamServerAppLeft4Dead2         = driver.SteamServerAppLeft4Dead2
 
-	defaultUserAgent        = driver.DefaultUserAgent
-	maxProxiedImageBytes    = 8 << 20 // 8 MiB
-	maxCachedThumbnailBytes = 256 << 10
+	defaultUserAgent             = driver.DefaultUserAgent
+	DefaultFabricServerMainClass = driver.DefaultFabricServerMainClass
+	maxProxiedImageBytes         = 8 << 20 // 8 MiB
+	maxCachedThumbnailBytes      = 256 << 10
 )
 
 var (

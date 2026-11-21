@@ -235,6 +235,9 @@ func buildFacets(src driver.Source, gameVersion string) string {
 	default:
 		groups = append(groups, []string{"categories:" + strings.ToLower(strings.TrimSpace(src.ModrinthLoader))})
 	}
+	if pType == driver.ProjectTypeMod {
+		groups = append(groups, []string{"server_side:required", "server_side:optional"})
+	}
 	if v := strings.TrimSpace(gameVersion); v != "" && !strings.EqualFold(v, "latest") {
 		groups = append(groups, []string{"versions:" + v})
 	}

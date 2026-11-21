@@ -338,7 +338,7 @@ func TestSteamNewsURLMapsDedicatedServerToBaseGame(t *testing.T) {
 func TestRegisteredDriversAndCapabilities(t *testing.T) {
 	registered := Drivers()
 	for _, want := range []string{
-		ProviderPaperMC, ProviderPurpur, ProviderVanilla, ProviderHTTP,
+		ProviderPaperMC, ProviderPurpur, ProviderVanilla, ProviderFabricMC, ProviderHTTP,
 		ProviderModrinth, ProviderSteam, ProviderSteamWorkshop,
 		ProviderTerraria, ProviderTModLoader,
 	} {
@@ -458,5 +458,72 @@ func TestDoGetJSONRetriesUpToThreeAttempts(t *testing.T) {
 	}
 	if !out.OK || hits.Load() != 3 {
 		t.Fatalf("expected 3 attempts and ok=true, got hits=%d out=%+v", hits.Load(), out)
+	}
+}
+
+func TestFabricMCListVersionsAndResolveRelease(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v2/versions/game", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"version":"26.4-snapshot-1","stable":false},{"version":"26.3","stable":true},{"version":"1.21.11","stable":true}]`))
+	})
+	mux.HandleFunc("/v2/versions/loader", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"version":"0.20.2","stable":false},{"version":"0.20.1","stable":true}]`))
+	})
+	mux.HandleFunc("/v2/versions/loader/26.3/0.20.1/server/json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"fabric-loader-0.20.1-26.3","releaseTime":"2026-11-20T19:08:25+0000","mainClass":"net.fabricmc.loader.impl.launch.knot.KnotServer"}`))
+	})
+	mux.HandleFunc("/v2/versions/loader/1.21.11/0.20.1/server/json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"fabric-loader-0.20.1-1.21.11","releaseTime":"2025-12-09T12:00:00Z","mainClass":"net.fabricmc.loader.impl.launch.knot.KnotServer"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	svc := New(nil)
+	vers, err := svc.ListServerVersions(context.Background(), ProviderFabricMC, srv.URL, "fabric")
+	if err != nil || len(vers) != 2 || vers[0] != "26.3" || vers[1] != "1.21.11" {
+		t.Fatalf("unexpected fabric game versions: %#v, err=%v", vers, err)
+	}
+	latestRel, err := svc.ResolveFabricMC(context.Background(), srv.URL, "latest")
+	if err != nil || latestRel.Version != "26.3" || latestRel.Build != "26.3+0.20.1" ||
+		latestRel.ArchiveFormat != ArchiveFormatTarGz || latestRel.PublishedAt == nil ||
+		!strings.HasSuffix(latestRel.DownloadURL, "/v2/versions/loader/26.3/0.20.1/server/json") {
+		t.Fatalf("unexpected latest fabric release: %#v, err=%v", latestRel, err)
+	}
+	pinnedRel, err := svc.ResolveRelease(context.Background(), Source{
+		Provider: ProviderFabricMC, Endpoint: srv.URL, Format: FormatServerPackage,
+	}, ResolveReleaseRequest{Package: "fabric", Version: "1.21.11"})
+	if err != nil || pinnedRel.Version != "1.21.11" || pinnedRel.FileName != "fabric-server-1.21.11-0.20.1.tar.gz" {
+		t.Fatalf("unexpected pinned fabric release: %#v, err=%v", pinnedRel, err)
+	}
+}
+
+func TestModrinthModSearchIncludesServerSideFacetAndPluginExcludesIt(t *testing.T) {
+	var seenFacets []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search" {
+			http.NotFound(w, r)
+			return
+		}
+		seenFacets = append(seenFacets, r.URL.Query().Get("facets"))
+		_, _ = w.Write([]byte(`{"total_hits":1,"hits":[{"project_id":"P7dR8mSH","slug":"fabric-api","title":"Fabric API"}]}`))
+	}))
+	defer srv.Close()
+
+	svc := New(nil, Options{ModrinthBaseURL: srv.URL})
+	if _, err := svc.Search(context.Background(), Source{
+		Provider: ProviderModrinth, ModrinthLoader: "fabric", ModrinthProjectType: ProjectTypeMod,
+	}, SearchParams{GameVersion: "26.3"}); err != nil {
+		t.Fatalf("mod search failed: %v", err)
+	}
+	if _, err := svc.Search(context.Background(), Source{
+		Provider: ProviderModrinth, ModrinthLoader: "paper", ModrinthProjectType: ProjectTypePlugin,
+	}, SearchParams{GameVersion: "26.3"}); err != nil {
+		t.Fatalf("plugin search failed: %v", err)
+	}
+	if len(seenFacets) != 2 || !strings.Contains(seenFacets[0], `"categories:fabric"`) || !strings.Contains(seenFacets[0], `"server_side:required"`) {
+		t.Fatalf("expected server_side facet on fabric mod search, got %#v", seenFacets)
+	}
+	if strings.Contains(seenFacets[1], "server_side") {
+		t.Fatalf("did not expect server_side facet on plugin search, got %q", seenFacets[1])
 	}
 }

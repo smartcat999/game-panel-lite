@@ -15,7 +15,7 @@ func isLatestAlias(v string) bool {
 // isIndexUpstreamApp reports whether an App resolves concrete upstream version tags rather than floating "latest".
 func isIndexUpstreamApp(appName string) bool {
 	switch appName {
-	case corev1.AppMinecraftPaper, corev1.AppTerrariaVanilla,
+	case corev1.AppMinecraftPaper, corev1.AppMinecraftFabric, corev1.AppTerrariaVanilla,
 		corev1.AppTerrariaTModLoader:
 		return true
 	default:

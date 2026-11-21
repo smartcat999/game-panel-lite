@@ -6,6 +6,7 @@ import { ConfirmDialog, focusRing, MoreMenu, type MenuItem } from "../ui";
 import { useConsole } from "../../../console/ConsoleProvider";
 import { DEFAULT_GAME_COVER, gameCover, resolveRichApp } from "../../../console/lib/presets";
 import type {
+  AppAddonBinding,
   AppConfigOption,
   AppItem,
   InstanceAddon,
@@ -13,6 +14,35 @@ import type {
   RegistryArtifact,
 } from "../../../console/lib/types";
 import { subscribeResourceWatch } from "../../../console/lib/ws";
+
+export interface AddonBindingMeta {
+  isSteam: boolean;
+  isPlugin: boolean;
+  noun: "插件" | "模组";
+  idLabel: string;
+  marketLabel: string;
+  browseActionLabel: string;
+}
+
+/** Derive UI labels uniformly from an App's addonBinding metadata rather than hardcoding app names. */
+export function addonBindingMeta(binding?: AppAddonBinding): AddonBindingMeta {
+  const repo = (binding?.repository || "").trim().toLowerCase();
+  const mode = (binding?.installMode || "").trim().toLowerCase();
+  const targetParts = (binding?.targetDir || "").trim().toLowerCase().split("/").filter(Boolean);
+  const targetLeaf = targetParts[targetParts.length - 1] || "";
+  const isSteam = repo.includes("workshop") || (mode !== "" && mode !== "flat_dir");
+  const isPlugin = !isSteam && targetLeaf !== "mods";
+  const noun = isPlugin ? "插件" : "模组";
+  const marketLabel = isSteam ? "创意工坊" : isPlugin ? "插件市场" : "模组市场";
+  return {
+    isSteam,
+    isPlugin,
+    noun,
+    idLabel: isSteam ? "工坊编号" : `${noun}标识`,
+    marketLabel,
+    browseActionLabel: isSteam ? "浏览创意工坊" : `添加${noun}`,
+  };
+}
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(" ");
 

@@ -195,7 +195,7 @@ func TestRegistryV1LifecycleAndRBAC(t *testing.T) {
 func verifyRegistryCatalogAndRBAC(t *testing.T, ctx context.Context, env *registryTestEnv) {
 	t.Helper()
 	up, err := env.adminCli.RegistryV1().Upstreams().Create(ctx, &registryv1.Upstream{
-		Metadata:            metav1.ObjectMeta{Name: "modrinth-fabric"},
+		Metadata:            metav1.ObjectMeta{Name: "modrinth-fabric-e2e"},
 		Provider:            registryv1.UpstreamProviderModrinth,
 		Endpoint:            env.modrinthSrv.URL,
 		ModrinthLoader:      "fabric",

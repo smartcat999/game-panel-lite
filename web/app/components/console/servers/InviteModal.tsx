@@ -24,6 +24,8 @@ function joinStepsForGame(gameId: string, endpoint: string | null): string[] {
   switch (gameId) {
     case "minecraft-paper":
       return ["打开 Minecraft，进入「多人游戏」", "点击「添加服务器」，粘贴上方地址", "选中服务器，点击「加入服务器」"];
+    case "minecraft-fabric":
+      return ["使用对应版本的 Minecraft Fabric 客户端并安装所需模组后，进入「多人游戏」", "点击「添加服务器」，粘贴上方地址", "选中服务器，点击「加入服务器」"];
     case "palworld-dedicated":
       return ["打开幻兽帕鲁，选择「加入多人游戏」", "在底部输入框粘贴上方地址", "点击「连接」即可进入"];
     case "project-zomboid":

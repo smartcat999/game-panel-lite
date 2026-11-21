@@ -31,6 +31,7 @@ import {
   type MenuItem,
 } from "../ui";
 import { TaskLogModal, formatTaskByteValue } from "../shared/TaskLogModal";
+import { addonBindingMeta } from "./shared";
 import { formatBytes, relativeTime } from "../../../console/lib/format";
 import type { AppItem, InstanceBackupRecord, InstanceItem } from "../../../console/lib/types";
 import { type RestoreArchiveOptions, useServerActions, useServerFiles } from "./api";
@@ -324,11 +325,7 @@ export function BackupTab({
     }
   }
 
-  const addonNoun =
-    app?.addonBinding?.installMode === "flat_dir" &&
-    !app?.addonBinding?.repository?.includes("workshop")
-      ? "插件"
-      : "模组";
+  const addonNoun = addonBindingMeta(app?.addonBinding).noun;
   const subtreeSummary =
     splitSubtreeDirs(inst.spec.backupPolicy?.subtree || app?.storagePolicy?.backupSubtree).join(", ") || "工作区目录";
   const configFieldCount = app?.configSchema?.length || 0;

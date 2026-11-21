@@ -124,7 +124,7 @@ const ERROR_PATTERNS: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
   [/^resource version conflict$/i, () => "服务器状态刚刚更新，请重试"],
   [/invalid credentials/i, () => "用户名或密码错误"],
   [/bad gateway:.*(?:api\.steampowered\.com|steamcommunity\.com)/i, () => "连接 Steam 创意工坊失败，请检查节点网络或代理配置后重试"],
-  [/bad gateway:.*modrinth/i, () => "连接 Modrinth 插件源失败，请稍后重试"],
+  [/bad gateway:.*modrinth/i, () => "连接 Modrinth 模组/插件源失败，请稍后重试"],
   [/bad gateway:.*(?:upstream .* request failed|upstream status \d+|EOF|timeout|deadline exceeded|connection refused|tls)/i, () => "上游软件源连接中断或响应超时，请稍后重试"],
 ];
 

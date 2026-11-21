@@ -308,6 +308,14 @@ func TestExtractArchiveAddonsGenericModes(t *testing.T) {
 		t.Fatalf("unexpected Paper extracted plugins: %+v", mcAddons)
 	}
 
+	fabApp := findBuiltInApp(t, "minecraft-fabric")
+	fabAddons := ExtractArchiveAddons(fabApp, []string{"mods/fabric-api-0.119.0.jar"}, nil)
+	if len(fabAddons) != 1 || fabAddons[0].Package != "fabric-api" || fabAddons[0].Version != "0.119.0" ||
+		fabAddons[0].Repository != "mc-fabric-mods" || fabAddons[0].InstallMode != corev1.AddonInstallModeFlatDir ||
+		fabAddons[0].TargetDir != "mods" {
+		t.Fatalf("unexpected Fabric extracted mods: %+v", fabAddons)
+	}
+
 	l4d2App := findBuiltInApp(t, "left-4-dead-2")
 	l4d2Addons := ExtractArchiveAddons(l4d2App, []string{"left4dead2/addons/121339498-1358581160.vpk"}, nil)
 	if len(l4d2Addons) != 1 || l4d2Addons[0].Package != "121339498" || l4d2Addons[0].Version != "1358581160" ||

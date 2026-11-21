@@ -17,6 +17,7 @@ import (
 
 	"github.com/smartcat999/game-panel-cloud/pkg/config"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
+	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/fabricmc"
 	httpdrv "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/http"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/modrinth"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/papermc"
@@ -414,6 +415,11 @@ func (s *Service) ResolvePurpur(ctx context.Context, endpoint, version string) (
 // ResolveVanillaMC resolves an official Mojang Minecraft server jar via piston-meta.
 func (s *Service) ResolveVanillaMC(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
 	return vanilla.Resolve(ctx, s, endpoint, version)
+}
+
+// ResolveFabricMC resolves a FabricMC server release and its loader launch profile URL.
+func (s *Service) ResolveFabricMC(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
+	return fabricmc.Resolve(ctx, s, endpoint, version)
 }
 
 // ResolveHTTPServerRelease resolves specialized HTTP upstreams or generic URL/template releases.

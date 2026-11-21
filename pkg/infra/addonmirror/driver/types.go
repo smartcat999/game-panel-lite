@@ -11,6 +11,7 @@ const (
 	ProviderPaperMC       = "papermc"
 	ProviderPurpur        = "purpur"
 	ProviderVanilla       = "vanilla"
+	ProviderFabricMC      = "fabricmc"
 	ProviderSteam         = "steam"
 	ProviderHTTP          = "http"
 	ProviderTerraria      = "terraria"
@@ -51,9 +52,11 @@ const (
 	SteamServerAppSevenDaysToDie     = 294420
 	SteamServerAppLeft4Dead2         = 222860
 
-	DefaultSteamAPIBaseURL = "https://api.steampowered.com"
-	DefaultModrinthBaseURL = "https://api.modrinth.com/v2"
-	DefaultUserAgent       = "GamePanel-AddonMirror/1.0 (+https://github.com/smartcat999/game-panel-cloud)"
+	DefaultSteamAPIBaseURL       = "https://api.steampowered.com"
+	DefaultModrinthBaseURL       = "https://api.modrinth.com/v2"
+	DefaultFabricMetaBaseURL     = "https://meta.fabricmc.net"
+	DefaultFabricServerMainClass = "net.fabricmc.loader.impl.launch.server.FabricServerLauncher"
+	DefaultUserAgent             = "GamePanel-AddonMirror/1.0 (+https://github.com/smartcat999/game-panel-cloud)"
 )
 
 var (

@@ -7,6 +7,7 @@ import (
 
 	// Self-register built-in artifact sync drivers, SteamCMD executor, and workshop content inspectors.
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/dst"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/fabricmc"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/http"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/l4d2"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/steam"

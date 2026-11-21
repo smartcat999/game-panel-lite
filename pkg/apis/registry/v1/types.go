@@ -10,7 +10,7 @@ import (
 type Upstream struct {
 	metav1.TypeMeta     `json:",inline"`
 	Metadata            metav1.ObjectMeta `json:"metadata"`
-	Provider            string            `json:"provider"` // papermc | purpur | vanilla | modrinth | steam | http
+	Provider            string            `json:"provider"` // papermc | purpur | vanilla | fabricmc | modrinth | steam | http
 	Endpoint            string            `json:"endpoint,omitempty"`
 	ProxyURL            string            `json:"proxyURL,omitempty"`
 	SteamAppID          int               `json:"steamAppId,omitempty"`

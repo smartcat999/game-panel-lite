@@ -66,7 +66,7 @@ func (u *Upstream) Validate() error {
 	}
 	switch u.Provider {
 	case UpstreamProviderPaperMC, UpstreamProviderPurpur, UpstreamProviderVanilla,
-		UpstreamProviderModrinth, UpstreamProviderSteam, UpstreamProviderHTTP:
+		UpstreamProviderFabricMC, UpstreamProviderModrinth, UpstreamProviderSteam, UpstreamProviderHTTP:
 	default:
 		return fmt.Errorf("unsupported upstream provider %q", u.Provider)
 	}

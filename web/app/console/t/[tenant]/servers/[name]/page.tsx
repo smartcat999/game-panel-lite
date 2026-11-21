@@ -25,7 +25,7 @@ import { DEFAULT_GAME_COVER, resolveRichApp } from "../../../../lib/presets";
 import { ArtifactLogModal } from "../../../../../components/console/admin/ArtifactLogModal";
 import { useServerActions } from "../../../../../components/console/servers/api";
 import { resolveInstanceAlertBanner } from "../../../../../components/console/servers/error-copy";
-import { DeleteServerDialog, gameOf, MoreMenu } from "../../../../../components/console/servers/shared";
+import { addonBindingMeta, DeleteServerDialog, gameOf, MoreMenu } from "../../../../../components/console/servers/shared";
 import { NetworkTab, OverviewTab, SettingsTab } from "../../../../../components/console/servers/InfoTabs";
 import { ConsoleTab } from "../../../../../components/console/servers/ConsoleTab";
 import { FloatingTerminal, type WorkbenchMode } from "../../../../../components/console/servers/FloatingTerminal";
@@ -254,11 +254,7 @@ function ServerDetail() {
     apps,
   );
   const hasAddonBinding = Boolean(matchedApp?.addonBinding);
-  const addonTabLabel =
-    matchedApp?.addonBinding?.installMode === "flat_dir" &&
-    !matchedApp?.addonBinding?.repository?.includes("workshop")
-      ? "插件"
-      : "模组";
+  const addonTabLabel = addonBindingMeta(matchedApp?.addonBinding).noun;
   const phase = phaseOf(inst);
   const stopped = inst.spec.state === "Stopped";
   const running = phase === "Running";

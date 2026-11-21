@@ -116,8 +116,8 @@ func TestLocalBackupArchiveImportLifecycle(t *testing.T) {
 		t.Fatalf("Bootstrap: %v", err)
 	}
 	polList, err := policydb.NewDB(reg.Pool()).List(ctx, db.ListOptions{})
-	if err != nil || len(polList.Items) != 5 {
-		t.Fatalf("expected 5 built-in ReplicationPolicies, got %+v err=%v", polList, err)
+	if err != nil || len(polList.Items) != 6 {
+		t.Fatalf("expected 6 built-in ReplicationPolicies, got %+v err=%v", polList, err)
 	}
 	for _, pol := range polList.Items {
 		if pol.Enabled {
@@ -311,8 +311,8 @@ func TestSessionDeviceDeduplicationCLIFilterAndRevocation(t *testing.T) {
 		t.Fatalf("Bootstrap: %v", err)
 	}
 	polList, err := policydb.NewDB(reg.Pool()).List(ctx, db.ListOptions{})
-	if err != nil || len(polList.Items) != 5 {
-		t.Fatalf("expected 5 built-in ReplicationPolicies, got %+v err=%v", polList, err)
+	if err != nil || len(polList.Items) != 6 {
+		t.Fatalf("expected 6 built-in ReplicationPolicies, got %+v err=%v", polList, err)
 	}
 	for _, pol := range polList.Items {
 		if pol.Enabled {
@@ -525,8 +525,8 @@ func TestBuiltInRegistryBootstrap(t *testing.T) {
 		t.Fatalf("Bootstrap: %v", err)
 	}
 	polList, err := policydb.NewDB(reg.Pool()).List(ctx, db.ListOptions{})
-	if err != nil || len(polList.Items) != 5 {
-		t.Fatalf("expected 5 built-in ReplicationPolicies, got %+v err=%v", polList, err)
+	if err != nil || len(polList.Items) != 6 {
+		t.Fatalf("expected 6 built-in ReplicationPolicies, got %+v err=%v", polList, err)
 	}
 	for _, pol := range polList.Items {
 		if pol.Enabled {

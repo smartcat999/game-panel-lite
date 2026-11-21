@@ -7,6 +7,7 @@ import { formatBytes, relativeTime } from "../../../console/lib/format";
 import type { AppItem, InstanceBackupRecord, InstanceItem, RegistryPackage } from "../../../console/lib/types";
 import { Badge, Button, Modal, Mono, Segmented, Select, Skeleton, focusRing } from "../ui";
 import { useServerFiles, type BackupInspectResult } from "./api";
+import { addonBindingMeta } from "./shared";
 import {
   formatAddonScopeLabel,
   formatArchiveFormatLabel,
@@ -122,11 +123,7 @@ export function BackupDetailModal({
   const pickedTabRef = useRef(Boolean(initialCached));
   const userPickedDirRef = useRef(false);
 
-  const addonNoun =
-    app?.addonBinding?.installMode === "flat_dir" &&
-    !app?.addonBinding?.repository?.includes("workshop")
-      ? "插件"
-      : "模组";
+  const addonNoun = addonBindingMeta(app?.addonBinding).noun;
 
   useEffect(() => {
     if (!inspectPending) {

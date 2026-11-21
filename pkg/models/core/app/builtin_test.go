@@ -15,6 +15,7 @@ func TestBuiltInAppsRenderAllTemplatesCleanly(t *testing.T) {
 	apps := BuiltInApps()
 	wantOrder := []string{
 		"minecraft-paper",
+		"minecraft-fabric",
 		"palworld-dedicated",
 		"terraria-vanilla",
 		"terraria-tmodloader",
@@ -131,6 +132,11 @@ func assertRenderedFilesValid(t *testing.T, appName string, files []corev1.Insta
 	case "minecraft-paper":
 		if !strings.Contains(byPath["server.properties"], "allow-nether=true") {
 			t.Fatalf("minecraft server.properties missing allow-nether")
+		}
+	case "minecraft-fabric":
+		if !strings.Contains(byPath["server.properties"], "allow-nether=true") ||
+			!strings.Contains(byPath["server.properties"], "server-name=Minecraft Fabric Server") {
+			t.Fatalf("minecraft-fabric server.properties incomplete:\n%s", byPath["server.properties"])
 		}
 	case "palworld-dedicated":
 		ini := byPath["Pal/Saved/Config/LinuxServer/PalWorldSettings.ini"]
@@ -296,8 +302,40 @@ func TestBuiltInAppsServerAndAddonBindingsRender(t *testing.T) {
 	if len(inst.Spec.Addons) != 1 || inst.Spec.Addons[0].Coordinate() != "mc-paper-plugins.essentialsx.2.21.0" || inst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeFlatDir || inst.Spec.Addons[0].TargetDir != "plugins" {
 		t.Fatalf("unexpected normalized Addons: %+v", inst.Spec.Addons)
 	}
+	assertL4D2WorkshopMapRender(t, byName["left-4-dead-2"])
+}
 
-	l4d2 := byName["left-4-dead-2"]
+func TestBuiltInMinecraftFabricBindingRender(t *testing.T) {
+	byName := make(map[string]*corev1.App)
+	for _, a := range BuiltInApps() {
+		byName[a.Metadata.Name] = a
+	}
+	fabric := byName["minecraft-fabric"]
+	if fabric == nil || fabric.ServerBinding == nil || fabric.AddonBinding == nil {
+		t.Fatalf("expected minecraft-fabric to declare ServerBinding and AddonBinding, got %+v", fabric)
+	}
+	fabInst := &corev1.Instance{
+		Metadata: metav1.ObjectMeta{
+			Name:        "fabric-binding-test",
+			Annotations: map[string]string{AnnotationAppConfig: `{}`},
+		},
+		Spec: corev1.InstanceSpec{
+			Addons: []corev1.InstanceAddon{{Package: "fabric-api", Version: "0.119.0"}},
+		},
+	}
+	if err := RenderInstanceSpec(fabric, fabInst); err != nil {
+		t.Fatalf("RenderInstanceSpec(minecraft-fabric): %v", err)
+	}
+	if fabInst.Spec.ServerArtifact == nil || fabInst.Spec.ServerArtifact.Coordinate() != "mc-fabric.fabric.26.3" || fabInst.Spec.ServerArtifact.TargetPath != "." {
+		t.Fatalf("unexpected Fabric ServerArtifact: %+v", fabInst.Spec.ServerArtifact)
+	}
+	if len(fabInst.Spec.Addons) != 1 || fabInst.Spec.Addons[0].Coordinate() != "mc-fabric-mods.fabric-api.0.119.0" || fabInst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeFlatDir || fabInst.Spec.Addons[0].TargetDir != "mods" {
+		t.Fatalf("unexpected Fabric normalized Addons: %+v", fabInst.Spec.Addons)
+	}
+}
+
+func assertL4D2WorkshopMapRender(t *testing.T, l4d2 *corev1.App) {
+	t.Helper()
 	if l4d2 == nil {
 		t.Fatalf("expected left-4-dead-2 built-in app")
 	}

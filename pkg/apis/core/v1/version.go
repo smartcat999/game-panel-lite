@@ -8,6 +8,7 @@ import (
 
 const (
 	AppMinecraftPaper        = "minecraft-paper"
+	AppMinecraftFabric       = "minecraft-fabric"
 	AppPalworldDedicated     = "palworld-dedicated"
 	AppTerrariaVanilla       = "terraria-vanilla"
 	AppTerrariaTModLoader    = "terraria-tmodloader"

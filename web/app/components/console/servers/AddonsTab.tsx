@@ -63,6 +63,7 @@ import { DownloadProxyModal } from "../admin/DownloadProxyModal";
 import { AddonRichDescription } from "./AddonMarkdown";
 import { useServerActions } from "./api";
 import {
+  addonBindingMeta,
   INSTANCE_APP_VERSION_ANNOTATION,
   INSTANCE_RESTART_REQUESTED_AT_ANNOTATION,
 } from "./shared";
@@ -373,11 +374,7 @@ export function AddonsTab({
 
   const binding: AppAddonBinding | undefined = app.addonBinding;
   const repoName = binding?.repository || "";
-  const isSteam = repoName.includes("workshop") || binding?.installMode !== "flat_dir";
-  const isPlugin = !isSteam;
-  const noun = isPlugin ? "插件" : "模组";
-  const idLabel = isPlugin ? "插件标识" : "工坊编号";
-  const marketLabel = isPlugin ? "插件市场" : "创意工坊";
+  const { isSteam, noun, idLabel, marketLabel, browseActionLabel } = addonBindingMeta(binding);
 
   const instanceEnvMap = useMemo(() => parseEnvMap(inst.spec.env), [inst.spec.env]);
   const appVersion =
@@ -1173,7 +1170,7 @@ export function AddonsTab({
                 setBrowseOpen(true);
               }}
             >
-              {isPlugin ? "添加插件" : "浏览创意工坊"}
+              {browseActionLabel}
             </Button>
           </div>
         </div>
@@ -1191,7 +1188,7 @@ export function AddonsTab({
                   setBrowseOpen(true);
                 }}
               >
-                {isPlugin ? "添加插件" : "浏览创意工坊"}
+                {browseActionLabel}
               </Button>
             }
           />
@@ -1404,7 +1401,7 @@ export function AddonsTab({
         open={browseOpen}
         onClose={closeBrowseModal}
         width={isSteamUnconfigured && !inBrowseDetail ? "max-w-xl" : "max-w-4xl h-[min(700px,85dvh)]"}
-        title={isSteam ? "浏览创意工坊" : "添加插件"}
+        title={browseActionLabel}
         description={
           displayVersion ? `${app.displayName} · 适配版本 ${displayVersion}` : app.displayName
         }
@@ -1448,7 +1445,7 @@ export function AddonsTab({
                   className="flex h-10 w-full items-center gap-1.5 rounded-full border border-[#DDE2F2] bg-[#F7F8FC] pl-3.5 pr-1 transition-[border-color,background-color,box-shadow] hover:border-[#B8C0E6] focus-within:border-[#2B3AE8] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#2B3AE8]/15"
                 >
                   <label htmlFor={browseSearchId} className="sr-only">
-                    {isSteam ? "搜索模组名称，或粘贴工坊单品与合集链接" : "搜索插件名称，或粘贴插件链接"}
+                    {isSteam ? "搜索模组名称，或粘贴工坊单品与合集链接" : `搜索${noun}名称，或粘贴${noun}链接`}
                   </label>
                   {isResolveDraft ? (
                     <Link2 className="h-4 w-4 shrink-0 text-[#2B3AE8]" aria-hidden />
@@ -1474,7 +1471,7 @@ export function AddonsTab({
                     placeholder={
                       isSteam
                         ? "搜索名称，或粘贴单品 / 合集链接…"
-                        : "搜索插件名称，或粘贴链接…"
+                        : `搜索${noun}名称，或粘贴链接…`
                     }
                     className="flex-1 text-[13px] [&::-webkit-search-cancel-button]:hidden"
                   />
@@ -1524,7 +1521,7 @@ export function AddonsTab({
                     className={`inline-flex items-center gap-1.5 text-xs font-medium text-[#5B6075] hover:text-[#2B3AE8] ${focusRing}`}
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    查看{isSteam ? "工坊主页" : "插件主页"}
+                    查看{isSteam ? "工坊主页" : `${noun}主页`}
                   </a>
                 )}
               </div>
@@ -1627,7 +1624,7 @@ export function AddonsTab({
         ) : catalogError ? (
           <div className="flex min-h-full flex-col items-center justify-center px-6 py-12 text-center">
             <p className="text-sm font-medium text-[#14161F]">
-              {isSteam ? "暂时无法加载创意工坊列表" : "暂时无法加载插件列表"}
+              {isSteam ? "暂时无法加载创意工坊列表" : `暂时无法加载${noun}列表`}
             </p>
             <p className="mt-1 max-w-[36ch] break-words text-xs leading-relaxed text-[#5B6075]">
               {catalogError}
@@ -1835,7 +1832,7 @@ export function AddonsTab({
                     className={`inline-flex items-center gap-1.5 text-xs font-medium text-[#5B6075] hover:text-[#2B3AE8] ${focusRing}`}
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    查看{isSteam ? "工坊主页" : "插件主页"}
+                    查看{isSteam ? "工坊主页" : `${noun}主页`}
                   </a>
                 )}
               </div>
