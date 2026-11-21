@@ -10,6 +10,7 @@ import (
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/fabricmc"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/http"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/l4d2"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/neoforge"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/steam"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/steamcmd"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/registryworker/providers/tmod"

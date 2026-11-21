@@ -43,6 +43,7 @@ const (
 	UpstreamProviderPurpur   = "purpur"
 	UpstreamProviderVanilla  = "vanilla"
 	UpstreamProviderFabricMC = "fabricmc"
+	UpstreamProviderNeoForge = "neoforge"
 	UpstreamProviderModrinth = "modrinth"
 	UpstreamProviderSteam    = "steam"
 	UpstreamProviderHTTP     = "http"
@@ -65,8 +66,9 @@ const (
 	ModrinthProjectPlugin = "plugin"
 	ModrinthProjectMod    = "mod"
 
-	ModrinthLoaderPaper  = "paper"
-	ModrinthLoaderFabric = "fabric"
+	ModrinthLoaderPaper    = "paper"
+	ModrinthLoaderFabric   = "fabric"
+	ModrinthLoaderNeoForge = "neoforge"
 
 	CatalogSortPopular   = "popular"
 	CatalogSortDownloads = "downloads"

@@ -5,6 +5,7 @@ import (
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/fabricmc"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/http"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/modrinth"
+	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/neoforge"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/papermc"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/purpur"
 	_ "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/steam"

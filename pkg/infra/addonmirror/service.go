@@ -20,6 +20,7 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/fabricmc"
 	httpdrv "github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/http"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/modrinth"
+	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/neoforge"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/papermc"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/purpur"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/providers/steam"
@@ -209,44 +210,64 @@ func (s *Service) imageHTTPClient() *http.Client {
 
 // DoGetJSON performs a GET request expecting JSON, retrying up to 3 attempts on transient network or 5xx failure.
 func (s *Service) DoGetJSON(ctx context.Context, endpoint string, dst any) error {
-	var err error
+	body, err := s.doGetWithRetry(ctx, endpoint, "application/json")
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(body, dst)
+}
+
+// DoGetBytes performs a GET request returning raw bytes, retrying up to 3 attempts on transient network or 5xx failure.
+func (s *Service) DoGetBytes(ctx context.Context, endpoint string) ([]byte, error) {
+	return s.doGetWithRetry(ctx, endpoint, "*/*")
+}
+
+func (s *Service) doGetWithRetry(ctx context.Context, endpoint, accept string) ([]byte, error) {
+	var (
+		body []byte
+		err  error
+	)
 	for attempt := range maxJSONGetAttempts {
 		var retry bool
-		retry, err = s.doGetJSONOnce(ctx, endpoint, dst)
+		body, retry, err = s.doGetOnce(ctx, endpoint, accept)
 		if err == nil || !retry || attempt+1 >= maxJSONGetAttempts || ctx.Err() != nil {
-			return err
+			return body, err
 		}
 		s.httpClient().CloseIdleConnections()
 		timer := time.NewTimer(120 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return err
+			return nil, err
 		case <-timer.C:
 		}
 	}
-	return err
+	return body, err
 }
 
-func (s *Service) doGetJSONOnce(ctx context.Context, endpoint string, dst any) (bool, error) {
+func (s *Service) doGetOnce(ctx context.Context, endpoint, accept string) ([]byte, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	req.Header.Set("User-Agent", defaultUserAgent)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 	resp, err := s.httpClient().Do(req)
 	if err != nil {
-		return true, sanitizeUpstreamHTTPError(endpoint, err)
+		return nil, true, sanitizeUpstreamHTTPError(endpoint, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
-		return false, ErrNotFound
+		return nil, false, ErrNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp.StatusCode >= 500, fmt.Errorf("upstream status %d", resp.StatusCode)
+		return nil, resp.StatusCode >= 500, fmt.Errorf("upstream status %d", resp.StatusCode)
 	}
-	return false, json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(dst)
+	body, rErr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if rErr != nil {
+		return nil, true, rErr
+	}
+	return body, false, nil
 }
 
 func sanitizeUpstreamHTTPError(endpoint string, err error) error {
@@ -417,9 +438,19 @@ func (s *Service) ResolveVanillaMC(ctx context.Context, endpoint, version string
 	return vanilla.Resolve(ctx, s, endpoint, version)
 }
 
+// ResolveVanillaMappings resolves official Mojang ProGuard server mappings (server.txt).
+func (s *Service) ResolveVanillaMappings(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
+	return vanilla.ResolveServerMappings(ctx, s, endpoint, version)
+}
+
 // ResolveFabricMC resolves a FabricMC server release and its loader launch profile URL.
 func (s *Service) ResolveFabricMC(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
 	return fabricmc.Resolve(ctx, s, endpoint, version)
+}
+
+// ResolveNeoForge resolves a NeoForge installer release for the target Minecraft version.
+func (s *Service) ResolveNeoForge(ctx context.Context, endpoint, version string) (*ResolvedRelease, error) {
+	return neoforge.Resolve(ctx, s, endpoint, version)
 }
 
 // ResolveHTTPServerRelease resolves specialized HTTP upstreams or generic URL/template releases.

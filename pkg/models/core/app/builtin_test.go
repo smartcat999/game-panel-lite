@@ -16,6 +16,7 @@ func TestBuiltInAppsRenderAllTemplatesCleanly(t *testing.T) {
 	wantOrder := []string{
 		"minecraft-paper",
 		"minecraft-fabric",
+		"minecraft-neoforge",
 		"palworld-dedicated",
 		"terraria-vanilla",
 		"terraria-tmodloader",
@@ -137,6 +138,11 @@ func assertRenderedFilesValid(t *testing.T, appName string, files []corev1.Insta
 		if !strings.Contains(byPath["server.properties"], "allow-nether=true") ||
 			!strings.Contains(byPath["server.properties"], "server-name=Minecraft Fabric Server") {
 			t.Fatalf("minecraft-fabric server.properties incomplete:\n%s", byPath["server.properties"])
+		}
+	case "minecraft-neoforge":
+		if !strings.Contains(byPath["server.properties"], "allow-nether=true") ||
+			!strings.Contains(byPath["server.properties"], "server-name=Minecraft NeoForge Server") {
+			t.Fatalf("minecraft-neoforge server.properties incomplete:\n%s", byPath["server.properties"])
 		}
 	case "palworld-dedicated":
 		ini := byPath["Pal/Saved/Config/LinuxServer/PalWorldSettings.ini"]
@@ -331,6 +337,32 @@ func TestBuiltInMinecraftFabricBindingRender(t *testing.T) {
 	}
 	if len(fabInst.Spec.Addons) != 1 || fabInst.Spec.Addons[0].Coordinate() != "mc-fabric-mods.fabric-api.0.119.0" || fabInst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeFlatDir || fabInst.Spec.Addons[0].TargetDir != "mods" {
 		t.Fatalf("unexpected Fabric normalized Addons: %+v", fabInst.Spec.Addons)
+	}
+	assertBuiltInMinecraftNeoForgeBindingRender(t, byName["minecraft-neoforge"])
+}
+
+func assertBuiltInMinecraftNeoForgeBindingRender(t *testing.T, neo *corev1.App) {
+	t.Helper()
+	if neo == nil || neo.ServerBinding == nil || neo.AddonBinding == nil {
+		t.Fatalf("expected minecraft-neoforge to declare ServerBinding and AddonBinding, got %+v", neo)
+	}
+	inst := &corev1.Instance{
+		Metadata: metav1.ObjectMeta{
+			Name:        "neoforge-binding-test",
+			Annotations: map[string]string{AnnotationAppConfig: `{}`},
+		},
+		Spec: corev1.InstanceSpec{
+			Addons: []corev1.InstanceAddon{{Package: "ferrite-core", Version: "7.1.3-neoforge"}},
+		},
+	}
+	if err := RenderInstanceSpec(neo, inst); err != nil {
+		t.Fatalf("RenderInstanceSpec(minecraft-neoforge): %v", err)
+	}
+	if inst.Spec.ServerArtifact == nil || inst.Spec.ServerArtifact.Coordinate() != "mc-neoforge.neoforge.26.3" || inst.Spec.ServerArtifact.TargetPath != "." {
+		t.Fatalf("unexpected NeoForge ServerArtifact: %+v", inst.Spec.ServerArtifact)
+	}
+	if len(inst.Spec.Addons) != 1 || inst.Spec.Addons[0].Coordinate() != "mc-neoforge-mods.ferrite-core.7.1.3-neoforge" || inst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeFlatDir || inst.Spec.Addons[0].TargetDir != "mods" {
+		t.Fatalf("unexpected NeoForge normalized Addons: %+v", inst.Spec.Addons)
 	}
 }
 

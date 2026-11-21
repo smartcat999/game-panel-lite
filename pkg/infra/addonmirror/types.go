@@ -12,6 +12,7 @@ const (
 	ProviderPurpur        = driver.ProviderPurpur
 	ProviderVanilla       = driver.ProviderVanilla
 	ProviderFabricMC      = driver.ProviderFabricMC
+	ProviderNeoForge      = driver.ProviderNeoForge
 	ProviderSteam         = driver.ProviderSteam
 	ProviderHTTP          = driver.ProviderHTTP
 	ProviderTerraria      = driver.ProviderTerraria
@@ -56,6 +57,8 @@ const (
 	DefaultMojangManifestURL           = driver.DefaultMojangManifestURL
 	DefaultMojangMirrorBase            = driver.DefaultMojangMirrorBase
 	DefaultFastMirrorBase              = driver.DefaultFastMirrorBase
+	DefaultNeoForgeMavenBaseURL        = driver.DefaultNeoForgeMavenBaseURL
+	DefaultNeoForgeMirrorBase          = driver.DefaultNeoForgeMirrorBase
 	DefaultMinecraftLibrariesBaseURL   = driver.DefaultMinecraftLibrariesBaseURL
 	DefaultMinecraftLibrariesMirrorURL = driver.DefaultMinecraftLibrariesMirrorURL
 	DefaultFabricServerMainClass       = driver.DefaultFabricServerMainClass

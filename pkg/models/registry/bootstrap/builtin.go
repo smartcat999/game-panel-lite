@@ -70,6 +70,7 @@ func defaultBuiltInUpstreams() []*registryv1.Upstream {
 	return []*registryv1.Upstream{
 		{Metadata: metav1.ObjectMeta{Name: "papermc-official"}, Provider: registryv1.UpstreamProviderPaperMC, Endpoint: "https://fill.papermc.io"},
 		{Metadata: metav1.ObjectMeta{Name: "fabricmc-official"}, Provider: registryv1.UpstreamProviderFabricMC, Endpoint: "https://meta.fabricmc.net"},
+		{Metadata: metav1.ObjectMeta{Name: "neoforge-official"}, Provider: registryv1.UpstreamProviderNeoForge, Endpoint: "https://maven.neoforged.net"},
 		{Metadata: metav1.ObjectMeta{Name: "terraria-official"}, Provider: registryv1.UpstreamProviderHTTP, Endpoint: "https://terraria.org"},
 		{Metadata: metav1.ObjectMeta{Name: "tmodloader-github"}, Provider: registryv1.UpstreamProviderHTTP, Endpoint: "https://api.github.com"},
 		{Metadata: metav1.ObjectMeta{Name: "steam-palworld"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 2394010},
@@ -84,6 +85,7 @@ func defaultBuiltInUpstreams() []*registryv1.Upstream {
 		{Metadata: metav1.ObjectMeta{Name: "steam-rust-server"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 258550},
 		{Metadata: metav1.ObjectMeta{Name: "modrinth-paper"}, Provider: registryv1.UpstreamProviderModrinth, Endpoint: "https://api.modrinth.com/v2", ModrinthLoader: registryv1.ModrinthLoaderPaper, ModrinthProjectType: registryv1.ModrinthProjectPlugin},
 		{Metadata: metav1.ObjectMeta{Name: "modrinth-fabric"}, Provider: registryv1.UpstreamProviderModrinth, Endpoint: "https://api.modrinth.com/v2", ModrinthLoader: registryv1.ModrinthLoaderFabric, ModrinthProjectType: registryv1.ModrinthProjectMod},
+		{Metadata: metav1.ObjectMeta{Name: "modrinth-neoforge"}, Provider: registryv1.UpstreamProviderModrinth, Endpoint: "https://api.modrinth.com/v2", ModrinthLoader: registryv1.ModrinthLoaderNeoForge, ModrinthProjectType: registryv1.ModrinthProjectMod},
 		{Metadata: metav1.ObjectMeta{Name: "steam-tmodloader-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 1281930},
 		{Metadata: metav1.ObjectMeta{Name: "steam-pz-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 108600},
 		{Metadata: metav1.ObjectMeta{Name: "steam-dst-workshop"}, Provider: registryv1.UpstreamProviderSteam, SteamAppID: 322330},
@@ -95,6 +97,7 @@ func defaultBuiltInRepositories() []*registryv1.Repository {
 	return []*registryv1.Repository{
 		proxyRepo("mc-paper", "Minecraft Paper 服务端", registryv1.FormatServerPackage, "papermc-official"),
 		proxyRepo("mc-fabric", "Minecraft Fabric 服务端", registryv1.FormatServerPackage, "fabricmc-official"),
+		proxyRepo("mc-neoforge", "Minecraft NeoForge 服务端", registryv1.FormatServerPackage, "neoforge-official"),
 		proxyRepo("terraria-vanilla", "泰拉瑞亚原版服务端", registryv1.FormatServerPackage, "terraria-official"),
 		proxyRepo("terraria-tmodloader", "泰拉瑞亚 tModLoader 服务端", registryv1.FormatServerPackage, "tmodloader-github"),
 		proxyRepo("palworld-server", "幻兽帕鲁服务端", registryv1.FormatServerPackage, "steam-palworld"),
@@ -109,6 +112,7 @@ func defaultBuiltInRepositories() []*registryv1.Repository {
 		proxyRepo("rust-server", "腐蚀服务端", registryv1.FormatServerPackage, "steam-rust-server"),
 		proxyRepo("mc-paper-plugins", "Minecraft Paper 插件镜像", registryv1.FormatModrinthAddon, "modrinth-paper"),
 		proxyRepo("mc-fabric-mods", "Minecraft Fabric 模组镜像", registryv1.FormatModrinthAddon, "modrinth-fabric"),
+		proxyRepo("mc-neoforge-mods", "Minecraft NeoForge 模组镜像", registryv1.FormatModrinthAddon, "modrinth-neoforge"),
 		proxyRepo("tmodloader-workshop", "泰拉瑞亚 tModLoader 创意工坊", registryv1.FormatWorkshopMod, "steam-tmodloader-workshop"),
 		proxyRepo("pz-workshop", "僵尸毁灭工程创意工坊", registryv1.FormatWorkshopMod, "steam-pz-workshop"),
 		proxyRepo("dst-workshop", "饥荒联机版创意工坊", registryv1.FormatWorkshopMod, "steam-dst-workshop"),
@@ -133,6 +137,7 @@ func defaultBuiltInPolicies() []*registryv1.ReplicationPolicy {
 	return []*registryv1.ReplicationPolicy{
 		{Metadata: metav1.ObjectMeta{Name: "sync-mc-paper"}, Repository: "mc-paper", Enabled: false, Mode: registryv1.ReplicationModeTrackReleases, Packages: []string{"paper"}, IntervalMinutes: 360},
 		{Metadata: metav1.ObjectMeta{Name: "sync-mc-fabric"}, Repository: "mc-fabric", Enabled: false, Mode: registryv1.ReplicationModeTrackReleases, Packages: []string{"fabric"}, IntervalMinutes: 360},
+		{Metadata: metav1.ObjectMeta{Name: "sync-mc-neoforge"}, Repository: "mc-neoforge", Enabled: false, Mode: registryv1.ReplicationModeTrackReleases, Packages: []string{"neoforge"}, IntervalMinutes: 360},
 		{Metadata: metav1.ObjectMeta{Name: "sync-terraria-vanilla"}, Repository: "terraria-vanilla", Enabled: false, Mode: registryv1.ReplicationModeTrackReleases, Packages: []string{"terraria-vanilla"}, IntervalMinutes: 720},
 		{Metadata: metav1.ObjectMeta{Name: "sync-terraria-tmodloader"}, Repository: "terraria-tmodloader", Enabled: false, Mode: registryv1.ReplicationModeTrackReleases, Packages: []string{"terraria-tmodloader"}, IntervalMinutes: 720},
 		{Metadata: metav1.ObjectMeta{Name: "sync-popular-tmodloader"}, Repository: "tmodloader-workshop", Enabled: false, Mode: registryv1.ReplicationModeTopPopular, TopN: 10, IntervalMinutes: 1440},

@@ -340,7 +340,7 @@ func TestSteamNewsURLMapsDedicatedServerToBaseGame(t *testing.T) {
 func TestRegisteredDriversAndCapabilities(t *testing.T) {
 	registered := Drivers()
 	for _, want := range []string{
-		ProviderPaperMC, ProviderPurpur, ProviderVanilla, ProviderFabricMC, ProviderHTTP,
+		ProviderPaperMC, ProviderPurpur, ProviderVanilla, ProviderFabricMC, ProviderNeoForge, ProviderHTTP,
 		ProviderModrinth, ProviderSteam, ProviderSteamWorkshop,
 		ProviderTerraria, ProviderTModLoader,
 	} {
@@ -677,5 +677,64 @@ func TestModrinthStrictModFallbackPlusAndSanitizedCoords(t *testing.T) {
 	pluginSrc := Source{Provider: ProviderModrinth, ModrinthLoader: "paper", ModrinthProjectType: ProjectTypePlugin}
 	if ess, err := svc.ResolveRelease(ctx, pluginSrc, ResolveReleaseRequest{Package: "essentialsx", GameVersion: "1.21.11"}); err != nil || ess.Version != "2.21.0" {
 		t.Fatalf("expected graceful fallback for untagged plugin release, got %#v err=%v", ess, err)
+	}
+}
+
+func TestNeoForgeListVersionsAndResolveRelease(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/maven/versions/releases/net/neoforged/neoforge" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"isSnapshot":false,"versions":["0.25w14craftmine.3-beta","21.1.260","21.1.267","21.4.156","21.4.161","21.4.162-beta","26.1.0.19-beta","26.3.0.114","26.3.0.115"]}`))
+	}))
+	defer srv.Close()
+
+	svc := New(nil)
+	vers, err := svc.ListServerVersions(context.Background(), ProviderNeoForge, srv.URL, "neoforge")
+	if err != nil || !slices.Equal(vers, []string{"26.3", "1.21.4", "1.21.1"}) {
+		t.Fatalf("unexpected NeoForge MC versions: %#v err=%v", vers, err)
+	}
+	latestRel, err := svc.ResolveNeoForge(context.Background(), srv.URL, "latest")
+	if err != nil || latestRel.Version != "26.3" || latestRel.Build != "26.3+26.3.0.115" ||
+		latestRel.ArchiveFormat != ArchiveFormatTarGz ||
+		!strings.HasSuffix(latestRel.DownloadURL, "/releases/net/neoforged/neoforge/26.3.0.115/neoforge-26.3.0.115-installer.jar") {
+		t.Fatalf("unexpected latest NeoForge release: %#v err=%v", latestRel, err)
+	}
+	pinnedRel, err := svc.ResolveRelease(context.Background(), Source{
+		Provider: ProviderNeoForge, Endpoint: srv.URL, Format: FormatServerPackage,
+	}, ResolveReleaseRequest{Package: "neoforge", Version: "1.21.4"})
+	if err != nil || pinnedRel.Version != "1.21.4" || pinnedRel.Build != "1.21.4+21.4.161" {
+		t.Fatalf("expected 1.21.4 to pick latest non-beta 21.4.161, got %#v err=%v", pinnedRel, err)
+	}
+	betaRel, err := svc.ResolveNeoForge(context.Background(), srv.URL, "26.1")
+	if err != nil || betaRel.Build != "26.1+26.1.0.19-beta" {
+		t.Fatalf("expected beta fallback when no stable build exists for 26.1, got %#v err=%v", betaRel, err)
+	}
+}
+
+func TestVanillaResolveServerMappings(t *testing.T) {
+	mux := http.NewServeMux()
+	var baseURL string
+	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"latest":{"release":"26.3"},"versions":[{"id":"26.3","type":"release","url":"` + baseURL + `/26.3.json"},{"id":"1.21.4","type":"release","url":"` + baseURL + `/1.21.4.json"}]}`))
+	})
+	mux.HandleFunc("/1.21.4.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"releaseTime":"2024-12-03T10:12:57Z","downloads":{"server":{"url":"` + baseURL + `/s1214.jar","sha1":"aaa"},"server_mappings":{"url":"` + baseURL + `/m1214.txt","sha1":"0b1e60cc509cfb0172573ae56b436c29febbc187"}}}`))
+	})
+	mux.HandleFunc("/26.3.json", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"releaseTime":"2026-11-18T12:00:00Z","downloads":{"server":{"url":"` + baseURL + `/s263.jar","sha1":"bbb"}}}`))
+	})
+	srv := httptest.NewServer(mux)
+	baseURL = srv.URL
+	defer srv.Close()
+
+	svc := New(nil)
+	maps, err := svc.ResolveVanillaMappings(context.Background(), srv.URL+"/manifest.json", "1.21.4")
+	if err != nil || maps.Build != "0b1e60cc509cfb0172573ae56b436c29febbc187" || !strings.HasSuffix(maps.DownloadURL, "/m1214.txt") {
+		t.Fatalf("unexpected 1.21.4 mappings: %#v err=%v", maps, err)
+	}
+	if _, err := svc.ResolveVanillaMappings(context.Background(), srv.URL+"/manifest.json", "26.3"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for unobfuscated 26.3 mappings, got %v", err)
 	}
 }

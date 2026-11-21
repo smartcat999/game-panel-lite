@@ -10,10 +10,18 @@ import (
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror/driver"
 )
 
-var mojangOfficialOrigins = []string{
-	"https://piston-meta.mojang.com",
-	"https://launchermeta.mojang.com",
-}
+var (
+	mojangOfficialOrigins = []string{
+		"https://piston-meta.mojang.com",
+		"https://launchermeta.mojang.com",
+	}
+	mojangDataOrigins = []string{
+		"https://piston-data.mojang.com",
+		"https://launcher.mojang.com",
+		"https://piston-meta.mojang.com",
+		"https://launchermeta.mojang.com",
+	}
+)
 
 type mojangManifest struct {
 	Latest struct {
@@ -26,13 +34,16 @@ type mojangManifest struct {
 	} `json:"versions"`
 }
 
+type mojangDownloadEntry struct {
+	URL  string `json:"url"`
+	SHA1 string `json:"sha1"`
+}
+
 type mojangVersionMeta struct {
 	ReleaseTime string `json:"releaseTime"`
 	Downloads   struct {
-		Server struct {
-			URL  string `json:"url"`
-			SHA1 string `json:"sha1"`
-		} `json:"server"`
+		Server         mojangDownloadEntry `json:"server"`
+		ServerMappings mojangDownloadEntry `json:"server_mappings"`
 	} `json:"downloads"`
 }
 
@@ -61,6 +72,42 @@ func (d *vanillaDriver) ResolveRelease(ctx context.Context, rt driver.Runtime, s
 // Resolve resolves an official Mojang Minecraft server jar via piston-meta, falling back to mirror bases when endpoint is empty.
 func Resolve(ctx context.Context, rt driver.Runtime, endpoint, version string) (*driver.ResolvedRelease, error) {
 	return resolveWithBases(ctx, rt, endpoint, version, driver.DefaultMojangManifestURL, driver.DefaultMojangMirrorBase, driver.DefaultFastMirrorBase)
+}
+
+// ResolveServerMappings resolves official Mojang ProGuard server mappings (server.txt) with mirror fallback when available.
+func ResolveServerMappings(ctx context.Context, rt driver.Runtime, endpoint, version string) (*driver.ResolvedRelease, error) {
+	return resolveMappingsWithBases(ctx, rt, endpoint, version, driver.DefaultMojangManifestURL, driver.DefaultMojangMirrorBase)
+}
+
+func resolveMappingsWithBases(ctx context.Context, rt driver.Runtime, endpoint, version, primaryManifestURL, mirrorBase string) (*driver.ResolvedRelease, error) {
+	manifest, usedMirror, customOrigin, err := fetchManifest(ctx, rt, endpoint, primaryManifestURL, mirrorBase)
+	if err != nil {
+		return nil, err
+	}
+	resolved, metaURL, err := lookupManifestVersion(manifest, version)
+	if err != nil {
+		return nil, err
+	}
+	verMeta, metaUsedMirror, err := fetchVersionMeta(ctx, rt, metaURL, usedMirror, mirrorBase, customOrigin)
+	if err != nil {
+		return nil, fmt.Errorf("query Mojang mappings %q: %w", resolved, err)
+	}
+	officialURL := strings.TrimSpace(verMeta.Downloads.ServerMappings.URL)
+	if officialURL == "" {
+		return nil, driver.ErrNotFound
+	}
+	downloadURL, fallbacks := buildMappingsDownloadCandidates(officialURL, endpoint != "", metaUsedMirror || usedMirror, mirrorBase)
+	return &driver.ResolvedRelease{
+		Package:              "server_mappings",
+		Version:              resolved,
+		Build:                strings.TrimSpace(verMeta.Downloads.ServerMappings.SHA1),
+		DownloadURL:          downloadURL,
+		FallbackDownloadURLs: fallbacks,
+		FileName:             "server-" + resolved + ".txt",
+		ArchiveFormat:        driver.ArchiveFormatRaw,
+		TargetPath:           "server.txt",
+		PublishedAt:          driver.ParseRFC3339Ptr(verMeta.ReleaseTime),
+	}, nil
 }
 
 func resolveWithBases(ctx context.Context, rt driver.Runtime, endpoint, version, primaryManifestURL, mirrorBase, fastMirrorBase string) (*driver.ResolvedRelease, error) {
@@ -210,6 +257,26 @@ func buildServerDownloadCandidates(version, officialURL string, hasExplicitEndpo
 	if usedMirror {
 		rawOrder = []string{fastJar, bmclJar, official}
 	}
+	return splitUniqueCandidates(rawOrder)
+}
+
+func buildMappingsDownloadCandidates(officialURL string, hasExplicitEndpoint, usedMirror bool, mirrorBase string) (string, []string) {
+	official := strings.TrimSpace(officialURL)
+	if hasExplicitEndpoint {
+		return official, nil
+	}
+	var bmclURL string
+	if mb := strings.TrimRight(strings.TrimSpace(mirrorBase), "/"); mb != "" {
+		bmclURL = rewriteOrigin(official, mb, mojangDataOrigins)
+	}
+	rawOrder := []string{official, bmclURL}
+	if usedMirror {
+		rawOrder = []string{bmclURL, official}
+	}
+	return splitUniqueCandidates(rawOrder)
+}
+
+func splitUniqueCandidates(rawOrder []string) (string, []string) {
 	seen := make(map[string]struct{}, len(rawOrder))
 	candidates := make([]string, 0, len(rawOrder))
 	for _, raw := range rawOrder {
@@ -245,11 +312,15 @@ func nonOfficialOrigin(rawURL string) string {
 }
 
 func rewriteMojangOrigin(rawURL, targetOrigin string) string {
+	return rewriteOrigin(rawURL, targetOrigin, mojangOfficialOrigins)
+}
+
+func rewriteOrigin(rawURL, targetOrigin string, origins []string) string {
 	trimmedTarget := strings.TrimRight(strings.TrimSpace(targetOrigin), "/")
 	if trimmedTarget == "" {
 		return rawURL
 	}
-	for _, official := range mojangOfficialOrigins {
+	for _, official := range origins {
 		if strings.HasPrefix(strings.ToLower(rawURL), official) {
 			return trimmedTarget + rawURL[len(official):]
 		}

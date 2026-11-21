@@ -28,6 +28,7 @@ type ResolveReleaseRequest struct {
 // Runtime provides HTTP transport, caching, and endpoint configuration to upstream Driver implementations.
 type Runtime interface {
 	DoGetJSON(ctx context.Context, endpoint string, dst any) error
+	DoGetBytes(ctx context.Context, endpoint string) ([]byte, error)
 	DoPostFormJSON(ctx context.Context, endpoint string, form url.Values, dst any) error
 	GetCachedJSON(ctx context.Context, key string, dst any) bool
 	SetCachedJSON(ctx context.Context, key string, val any)

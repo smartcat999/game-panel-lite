@@ -13,7 +13,7 @@ FROM registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/palworld-server:v2.7.1
 
 USER 0:0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libcurl3t64-gnutls tini wget \
+    && apt-get install -y --no-install-recommends ca-certificates libcurl3t64-gnutls openjdk-25-jre-headless tini wget \
     && rm -rf /var/lib/apt/lists/* \
     && chmod 0755 /home/steam \
     && mv /home/steam/steamcmd /opt/steamcmd \

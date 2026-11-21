@@ -316,6 +316,14 @@ func TestExtractArchiveAddonsGenericModes(t *testing.T) {
 		t.Fatalf("unexpected Fabric extracted mods: %+v", fabAddons)
 	}
 
+	neoApp := findBuiltInApp(t, "minecraft-neoforge")
+	neoAddons := ExtractArchiveAddons(neoApp, []string{"mods/ferritecore-7.1.3.jar"}, nil)
+	if len(neoAddons) != 1 || neoAddons[0].Package != "ferritecore" || neoAddons[0].Version != "7.1.3" ||
+		neoAddons[0].Repository != "mc-neoforge-mods" || neoAddons[0].InstallMode != corev1.AddonInstallModeFlatDir ||
+		neoAddons[0].TargetDir != "mods" {
+		t.Fatalf("unexpected NeoForge extracted mods: %+v", neoAddons)
+	}
+
 	l4d2App := findBuiltInApp(t, "left-4-dead-2")
 	l4d2Addons := ExtractArchiveAddons(l4d2App, []string{"left4dead2/addons/121339498-1358581160.vpk"}, nil)
 	if len(l4d2Addons) != 1 || l4d2Addons[0].Package != "121339498" || l4d2Addons[0].Version != "1358581160" ||

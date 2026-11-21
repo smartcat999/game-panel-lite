@@ -531,7 +531,7 @@ export interface PrewarmJobItem {
 
 export interface RegistryUpstream {
   metadata: ObjectMeta;
-  provider: "papermc" | "purpur" | "vanilla" | "fabricmc" | "modrinth" | "steam" | "http" | string;
+  provider: "papermc" | "purpur" | "vanilla" | "fabricmc" | "neoforge" | "modrinth" | "steam" | "http" | string;
   endpoint?: string;
   proxyURL?: string;
   steamAppId?: number;
