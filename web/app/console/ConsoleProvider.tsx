@@ -300,7 +300,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         setTenantState((cur) => {
           if (items.some((x) => x.metadata.name === cur)) return cur;
           const own =
-            (currentName && items.find((x) => x.metadata.name === currentName || x.spec?.owner === currentName)?.metadata.name) ||
+            (currentName &&
+              (items.find((x) => x.metadata.name === currentName) ||
+                items.find((x) => x.spec?.type === "Personal" && x.spec?.owner === currentName) ||
+                items.find((x) => x.spec?.owner === currentName))?.metadata.name) ||
             items[0]?.metadata.name ||
             "";
           if (own) localStorage.setItem(TENANT_STORAGE_KEY, own);
