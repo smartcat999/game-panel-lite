@@ -131,9 +131,9 @@ func (o *operator) enrichPersistedPackage(ctx context.Context, persisted *regist
 	if repoObj.Spec.Format == registryv1.FormatServerPackage {
 		return o.enrichServerProxyPackage(ctx, repoObj, persisted)
 	}
-	if gameVersion != "" {
+	if gameVersion != "" || repoObj.Spec.Format == registryv1.FormatThunderstoreMod {
 		if live := o.overlayGameVersionProxyPackage(ctx, repoObj, persisted, gameVersion); live != nil {
-			return live
+			return o.signPackageIcon(ctx, repoObj, live)
 		}
 	}
 	if isStubPackage(persisted) {

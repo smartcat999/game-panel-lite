@@ -248,6 +248,68 @@ func seedVersionedProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fix
 	}
 }
 
+func TestGetThunderstorePersistedPackageEnrichesAvailableVersions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/experimental/package/ValheimModding/Jotunn/":
+			_, _ = w.Write([]byte(`{"namespace":"ValheimModding","name":"Jotunn","package_url":"https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/","date_updated":"2026-09-21T17:19:02Z","total_downloads":1000,"latest":{"namespace":"ValheimModding","name":"Jotunn","version_number":"2.30.2","description":"API mod","icon":"https://gcdn.thunderstore.io/icon.png","dependencies":["denikson-BepInExPack_Valheim-5.4.2360"],"file_size":4096},"community_listings":[{"community":"valheim","categories":["Mods"]}]}`))
+		case "/api/cyberstorm/package/ValheimModding/Jotunn/versions/":
+			_, _ = w.Write([]byte(`[{"version_number":"2.30.2"},{"version_number":"2.30.1"}]`))
+		case "/api/experimental/package/ValheimModding/Jotunn/2.30.2/readme/":
+			_, _ = w.Write([]byte(`{"markdown":"# Jotunn"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	seedThunderstoreProxyPackage(t, ctx, fix, srv.URL+"/c/valheim")
+
+	got, err := NewOperator(fix.Registry, nil).Get(ctx, "valheim-thunderstore.ValheimModding-Jotunn")
+	if err != nil {
+		t.Fatalf("Get persisted Thunderstore package: %v", err)
+	}
+	if !slices.Equal(got.AvailableVersions, []string{"2.30.2", "2.30.1"}) || got.LatestVersion != "2.30.2" {
+		t.Fatalf("expected live versions, got latest=%q available=%v", got.LatestVersion, got.AvailableVersions)
+	}
+	if len(got.Dependencies) != 1 || got.Dependencies[0].Package != "denikson-BepInExPack_Valheim" {
+		t.Fatalf("expected BepInExPack_Valheim dep, got %#v", got.Dependencies)
+	}
+	if got.Metadata.ResourceVersion == "" || !strings.Contains(got.IconURL, "/icon?u=") {
+		t.Fatalf("expected persisted metadata & signed icon, got rv=%q icon=%q", got.Metadata.ResourceVersion, got.IconURL)
+	}
+}
+
+func seedThunderstoreProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
+	t.Helper()
+	if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, &registryv1.Upstream{
+		Metadata: metav1.ObjectMeta{Name: "up-valheim-ts"},
+		Provider: registryv1.UpstreamProviderThunderstore,
+		Endpoint: endpoint,
+	}); err != nil {
+		t.Fatalf("Create upstream: %v", err)
+	}
+	if _, err := repositorydb.NewDB(fix.Pool).Create(ctx, &registryv1.Repository{
+		Metadata: metav1.ObjectMeta{Name: "valheim-thunderstore"},
+		Spec:     registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatThunderstoreMod, UpstreamName: "up-valheim-ts"},
+	}); err != nil {
+		t.Fatalf("Create repo: %v", err)
+	}
+	if _, err := pkgdb.NewDB(fix.Pool).Create(ctx, &registryv1.Package{
+		Metadata:      metav1.ObjectMeta{Name: "valheim-thunderstore.ValheimModding-Jotunn"},
+		Repository:    "valheim-thunderstore",
+		Package:       "ValheimModding-Jotunn",
+		Title:         "Jotunn",
+		Description:   "cached",
+		IconURL:       "https://gcdn.thunderstore.io/icon.png",
+		LatestVersion: "2.30.1",
+	}); err != nil {
+		t.Fatalf("Create package: %v", err)
+	}
+}
+
 func TestMain(m *testing.M) {
 	code := m.Run()
 	testpg.Stop()
