@@ -13,7 +13,7 @@ FROM registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/palworld-server:v2.7.1
 
 USER 0:0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libcurl3t64-gnutls wget \
+    && apt-get install -y --no-install-recommends ca-certificates libcurl3t64-gnutls tini wget \
     && rm -rf /var/lib/apt/lists/* \
     && chmod 0755 /home/steam \
     && mv /home/steam/steamcmd /opt/steamcmd \
@@ -27,4 +27,4 @@ COPY --from=build /out/registry-worker /usr/local/bin/registry-worker
 
 USER 1000:1000
 WORKDIR /var/lib/gamepanel/registry-worker
-ENTRYPOINT ["/usr/local/bin/registry-worker"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/registry-worker"]
