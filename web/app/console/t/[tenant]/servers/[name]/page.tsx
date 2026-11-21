@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Play, RotateCw, Square, Trash2, UserPlus } from "lucide-react";
-import { useConsole } from "../../ConsoleProvider";
+import { useConsole } from "../../../../ConsoleProvider";
 import {
   Button,
   Card,
@@ -16,23 +16,24 @@ import {
   Skeleton,
   StatusPill,
   focusRing,
-} from "../../../components/console/ui";
-import { endpointOf, phaseOf } from "../../lib/format";
-import type { RegistryArtifact } from "../../lib/types";
-import { subscribeResourceWatch } from "../../lib/ws";
-import { DEFAULT_GAME_COVER, resolveRichApp } from "../../lib/presets";
-import { ArtifactLogModal } from "../../../components/console/admin/ArtifactLogModal";
-import { useServerActions } from "../../../components/console/servers/api";
-import { resolveInstanceAlertBanner } from "../../../components/console/servers/error-copy";
-import { DeleteServerDialog, gameOf, MoreMenu } from "../../../components/console/servers/shared";
-import { NetworkTab, OverviewTab, SettingsTab } from "../../../components/console/servers/InfoTabs";
-import { ConsoleTab } from "../../../components/console/servers/ConsoleTab";
-import { FloatingTerminal, type WorkbenchMode } from "../../../components/console/servers/FloatingTerminal";
-import { FilesTab } from "../../../components/console/servers/FilesTab";
-import { AddonsTab } from "../../../components/console/servers/AddonsTab";
-import { BackupTab } from "../../../components/console/servers/BackupTab";
-import { ScheduleTab } from "../../../components/console/servers/ScheduleTab";
-import { InviteModal } from "../../../components/console/servers/InviteModal";
+} from "../../../../../components/console/ui";
+import { endpointOf, phaseOf } from "../../../../lib/format";
+import { tenantRoute } from "../../../../lib/routes";
+import type { RegistryArtifact } from "../../../../lib/types";
+import { subscribeResourceWatch } from "../../../../lib/ws";
+import { DEFAULT_GAME_COVER, resolveRichApp } from "../../../../lib/presets";
+import { ArtifactLogModal } from "../../../../../components/console/admin/ArtifactLogModal";
+import { useServerActions } from "../../../../../components/console/servers/api";
+import { resolveInstanceAlertBanner } from "../../../../../components/console/servers/error-copy";
+import { DeleteServerDialog, gameOf, MoreMenu } from "../../../../../components/console/servers/shared";
+import { NetworkTab, OverviewTab, SettingsTab } from "../../../../../components/console/servers/InfoTabs";
+import { ConsoleTab } from "../../../../../components/console/servers/ConsoleTab";
+import { FloatingTerminal, type WorkbenchMode } from "../../../../../components/console/servers/FloatingTerminal";
+import { FilesTab } from "../../../../../components/console/servers/FilesTab";
+import { AddonsTab } from "../../../../../components/console/servers/AddonsTab";
+import { BackupTab } from "../../../../../components/console/servers/BackupTab";
+import { ScheduleTab } from "../../../../../components/console/servers/ScheduleTab";
+import { InviteModal } from "../../../../../components/console/servers/InviteModal";
 
 const TABS = [
   { value: "overview", label: "概览" },
@@ -48,9 +49,10 @@ type Tab = (typeof TABS)[number]["value"];
 const isTab = (v: string | null): v is Tab => TABS.some((t) => t.value === v);
 
 function BackLink() {
+  const { tenant } = useConsole();
   return (
     <Link
-      href="/console"
+      href={tenantRoute(tenant)}
       className={`mb-5 inline-flex items-center gap-1.5 rounded-full text-sm font-medium text-[#5B6075] hover:text-[#2B3AE8] ${focusRing}`}
     >
       <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -83,7 +85,6 @@ function ServerDetail() {
     apiFetch,
     token,
     tenant,
-    setTenant,
     tenantObj,
     instances,
     instancesLoading,
@@ -112,26 +113,6 @@ function ServerDetail() {
     typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : searchParams.get("tab");
   const urlTab: Tab = isTab(tabParam) ? tabParam : "overview";
   const [tab, setTab] = useState<Tab>(urlTab);
-
-  const tenantParam = searchParams.get("tenant")?.trim() || "";
-  const handledTenantParamRef = useRef("");
-  useEffect(() => {
-    if (!tenantParam) {
-      handledTenantParamRef.current = "";
-      return;
-    }
-    if (handledTenantParamRef.current === tenantParam) return;
-    handledTenantParamRef.current = tenantParam;
-    if (tenantParam !== tenant) {
-      setTenant(tenantParam);
-    }
-    if (typeof window !== "undefined") {
-      const sp = new URLSearchParams(window.location.search);
-      sp.delete("tenant");
-      const qs = sp.toString();
-      window.history.replaceState(window.history.state, "", qs ? `${pathname}?${qs}` : pathname);
-    }
-  }, [tenantParam, tenant, setTenant, pathname]);
 
   useEffect(() => {
     const syncTabFromLocation = () => {
@@ -239,11 +220,8 @@ function ServerDetail() {
     };
   }, [apiFetch, inst, instRunning, instStopped, requiredArtifactKeySig, token]);
 
-  const pendingUrlTenant = Boolean(
-    tenantParam && handledTenantParamRef.current !== tenantParam && tenantParam !== tenant,
-  );
   if (!inst) {
-    if (loading || instancesLoading || pendingUrlTenant) return <DetailSkeleton />;
+    if (loading || instancesLoading) return <DetailSkeleton />;
     return (
       <>
         <BackLink />
@@ -256,7 +234,7 @@ function ServerDetail() {
               </>
             }
             action={
-              <LinkButton href="/console" variant="primary">
+              <LinkButton href={tenantRoute(tenant)} variant="primary">
                 返回我的服务器
               </LinkButton>
             }
@@ -316,7 +294,7 @@ function ServerDetail() {
     const ok = await remove(inst);
     if (ok) {
       setConfirmDelete(false);
-      router.push("/console");
+      router.push(tenantRoute(tenant));
     }
   };
 

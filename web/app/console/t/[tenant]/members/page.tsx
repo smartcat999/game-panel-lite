@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
-import { useConsole } from "../ConsoleProvider";
-import { errorMessage } from "../lib/session";
-import { Avatar } from "../../components/console/TopBar";
-import { InviteModal } from "../../components/console/servers/InviteModal";
+import { useConsole } from "../../../ConsoleProvider";
+import { errorMessage } from "../../../lib/session";
+import { Avatar } from "../../../../components/console/TopBar";
+import { InviteModal } from "../../../../components/console/servers/InviteModal";
 import {
   Badge,
   Button,
@@ -17,7 +17,7 @@ import {
   Segmented,
   Select,
   Skeleton,
-} from "../../components/console/ui";
+} from "../../../../components/console/ui";
 
 interface RoleBinding {
   metadata: { name: string; tenant?: string; creationTimestamp?: string };

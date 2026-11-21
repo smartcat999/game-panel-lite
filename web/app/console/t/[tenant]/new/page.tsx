@@ -3,9 +3,10 @@
 import { ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, ChevronDown, Info, Plus, Search, Trash2 } from "lucide-react";
-import { useConsole } from "../ConsoleProvider";
-import { formatCpu, formatGB } from "../lib/format";
-import { localizeApiError } from "../lib/session";
+import { useConsole } from "../../../ConsoleProvider";
+import { formatCpu, formatGB } from "../../../lib/format";
+import { tenantRoute, tenantServerRoute } from "../../../lib/routes";
+import { localizeApiError } from "../../../lib/session";
 import {
   DEFAULT_GAME_COVER,
   RESOURCE_PLANS,
@@ -18,7 +19,7 @@ import {
   resolveServerArtifact,
   sortAppCategories,
   type GamePreset,
-} from "../lib/presets";
+} from "../../../lib/presets";
 import {
   Badge,
   Button,
@@ -33,9 +34,9 @@ import {
   Select,
   Skeleton,
   focusRing,
-} from "../../components/console/ui";
-import { GameConfigEditor } from "../../components/console/servers/GameConfigEditor";
-import { Stepper } from "../../components/console/wizard/Stepper";
+} from "../../../../components/console/ui";
+import { GameConfigEditor } from "../../../../components/console/servers/GameConfigEditor";
+import { Stepper } from "../../../../components/console/wizard/Stepper";
 import {
   advancedFromPreset,
   belowRecommended,
@@ -47,7 +48,7 @@ import {
   validateName,
   validatePort,
   type AdvancedSettings,
-} from "../../components/console/wizard/helpers";
+} from "../../../../components/console/wizard/helpers";
 
 const STEPS = ["选游戏", "选配置", "命名与设置", "确认"];
 
@@ -353,7 +354,7 @@ function NewServerWizard() {
       }
       toast("success", `服务器 ${serverName} 已创建，正在启动`);
       void reloadInstances().catch(() => undefined);
-      router.push(`/console/servers/${encodeURIComponent(serverName)}`);
+      router.push(tenantServerRoute(tenant, serverName));
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "创建服务器失败，请稍后重试");
       setSubmitting(false);
@@ -801,7 +802,7 @@ function NewServerWizard() {
 
       <div className="sticky bottom-4 z-10 mt-8 flex items-center justify-between gap-3 rounded-full border border-[#E3E6F2] bg-white/90 p-2 shadow-[0_16px_40px_-24px_rgba(20,22,31,0.45)] backdrop-blur">
         {step === 0 ? (
-          <LinkButton href="/console" variant="ghost">
+          <LinkButton href={tenantRoute(tenant)} variant="ghost">
             取消
           </LinkButton>
         ) : (

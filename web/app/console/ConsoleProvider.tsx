@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { parseNumericQuantity, resourceOf } from "./lib/format";
+import { parseTenantFromPathname, tenantRoute } from "./lib/routes";
 import { subscribeResourceWatch } from "./lib/ws";
 import {
   clearSession,
@@ -107,6 +108,17 @@ function isStaleInstanceVersion(existing: InstanceItem, incoming: InstanceItem):
   return curSV > 0 && nextSV > 0 && nextSV < curSV;
 }
 
+function resolvePreferredTenant(items: Tenant[], currentName: string): string {
+  return (
+    (currentName &&
+      (items.find((x) => x.metadata.name === currentName) ||
+        items.find((x) => x.spec?.type === "Personal" && x.spec?.owner === currentName) ||
+        items.find((x) => x.spec?.owner === currentName))?.metadata.name) ||
+    items[0]?.metadata.name ||
+    ""
+  );
+}
+
 export function ConsoleProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -118,9 +130,13 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenant, setTenantState] = useState("");
+  const routeTenant = useMemo(() => parseTenantFromPathname(pathname), [pathname]);
+  const [storedTenant, setStoredTenant] = useState<string>(() => parseTenantFromPathname(pathname));
+  const tenant = routeTenant || storedTenant;
+  const tenantRef = useRef(tenant);
   const [tenantRole, setTenantRole] = useState<string>("tenant-admin");
   const [instances, setInstances] = useState<InstanceItem[]>([]);
+  const [instancesTenant, setInstancesTenant] = useState("");
   const [instancesLoading, setInstancesLoading] = useState(true);
   const [live, setLive] = useState(false);
   const [nodes, setNodes] = useState<NodeItem[]>([]);
@@ -134,13 +150,15 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const toastId = useRef(0);
   const refreshedMissingTenantRef = useRef("");
 
+  useEffect(() => {
+    tenantRef.current = tenant;
+  }, [tenant]);
+
   // ---------------------------------------------------------------- session
   useEffect(() => {
     const t = readToken();
     const urlTenant =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("tenant")?.trim() || ""
-        : "";
+      typeof window !== "undefined" ? parseTenantFromPathname(window.location.pathname) : "";
     if (!t) {
       const nextTarget =
         typeof window !== "undefined"
@@ -155,11 +173,19 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     if (urlTenant) {
       localStorage.setItem(TENANT_STORAGE_KEY, urlTenant);
     }
-    setTenantState(initialTenant);
+    setStoredTenant(initialTenant);
     setReady(true);
     // pathname intentionally excluded: only evaluated once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  useEffect(() => {
+    if (!routeTenant) return;
+    setStoredTenant(routeTenant);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(TENANT_STORAGE_KEY, routeTenant);
+    }
+  }, [routeTenant]);
 
   const toast = useCallback((kind: ToastKind, text: string) => {
     const id = ++toastId.current;
@@ -191,27 +217,25 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   const setTenant = useCallback((name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    setTenantState((prev) => {
-      if (prev !== trimmed) {
-        setInstances([]);
-        setInstancesLoading(true);
-      }
-      return trimmed;
-    });
+    setStoredTenant(trimmed);
     localStorage.setItem(TENANT_STORAGE_KEY, trimmed);
   }, []);
 
   // ------------------------------------------------------------------ loads
   const reloadInstances = useCallback(async () => {
-    if (!tenant) {
+    const targetTenant = tenant;
+    if (!targetTenant) {
       setInstancesLoading(false);
+      setInstancesTenant("");
       return;
     }
     setInstancesLoading(true);
     try {
-      const res = await apiFetch(`${tenantPath(tenant)}/instances`);
+      const res = await apiFetch(`${tenantPath(targetTenant)}/instances`);
+      if (tenantRef.current !== targetTenant) return;
       if (res.ok) {
         const items: InstanceItem[] = (await res.json())?.items || [];
+        if (tenantRef.current !== targetTenant) return;
         setInstances((prev) => {
           if (prev.length === 0) return items;
           const prevByName = new Map(prev.map((p) => [p.metadata.name, p]));
@@ -222,7 +246,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
         });
       }
     } finally {
-      setInstancesLoading(false);
+      if (tenantRef.current === targetTenant) {
+        setInstancesLoading(false);
+        setInstancesTenant(targetTenant);
+      }
     }
   }, [apiFetch, tenant]);
 
@@ -297,18 +324,30 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       if (tRes.ok) {
         const items: Tenant[] = (await tRes.json())?.items || [];
         setTenants(items);
-        setTenantState((cur) => {
-          if (items.some((x) => x.metadata.name === cur)) return cur;
-          const own =
-            (currentName &&
-              (items.find((x) => x.metadata.name === currentName) ||
-                items.find((x) => x.spec?.type === "Personal" && x.spec?.owner === currentName) ||
-                items.find((x) => x.spec?.owner === currentName))?.metadata.name) ||
-            items[0]?.metadata.name ||
-            "";
-          if (own) localStorage.setItem(TENANT_STORAGE_KEY, own);
-          return own;
-        });
+        const activeRouteTenant =
+          typeof window !== "undefined" ? parseTenantFromPathname(window.location.pathname) : "";
+        const currentCandidate =
+          activeRouteTenant ||
+          tenantRef.current ||
+          (typeof window !== "undefined" ? localStorage.getItem(TENANT_STORAGE_KEY) || "" : "");
+        const fallbackTenant = resolvePreferredTenant(items, currentName);
+        const resolved = items.some((x) => x.metadata.name === currentCandidate)
+          ? currentCandidate
+          : fallbackTenant;
+        if (resolved) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(TENANT_STORAGE_KEY, resolved);
+          }
+          setStoredTenant(resolved);
+          if (activeRouteTenant && activeRouteTenant !== resolved) {
+            router.replace(tenantRoute(resolved));
+          }
+        } else {
+          setStoredTenant("");
+          if (activeRouteTenant) {
+            router.replace("/console");
+          }
+        }
       }
       if (rcRes.ok) setRuntimeClasses((await rcRes.json())?.items || []);
       if (appsRes.ok) setApps((await appsRes.json())?.items || []);
@@ -332,7 +371,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, resolveCurrentSession, toast]);
+  }, [apiFetch, resolveCurrentSession, router, toast]);
 
   useEffect(() => {
     if (ready) void reload();
@@ -381,19 +420,24 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token || !tenant) return;
+    const subscribedTenant = tenant;
     setInstances([]);
+    setInstancesTenant("");
     setInstancesLoading(true);
     setLive(false);
     void reloadInstances().catch(() => undefined);
 
     const stopWatch = subscribeResourceWatch<InstanceItem>({
-      path: `${tenantPath(tenant)}/instances`,
+      path: `${tenantPath(subscribedTenant)}/instances`,
       token,
-      onConnectionChange: (connected) => setLive(connected),
+      onConnectionChange: (connected) => {
+        if (tenantRef.current === subscribedTenant) setLive(connected);
+      },
       onReconnect: () => {
         void reloadInstances().catch(() => undefined);
       },
       onEvent: (ev) => {
+        if (tenantRef.current !== subscribedTenant) return;
         const obj = ev?.object;
         const name = obj?.metadata?.name;
         if (!name) return;
@@ -417,6 +461,12 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       setLive(false);
     };
   }, [token, tenant, reloadInstances]);
+
+  const scopedInstances = useMemo(
+    () => (instancesTenant === tenant ? instances : []),
+    [instances, instancesTenant, tenant],
+  );
+  const scopedInstancesLoading = instancesLoading || (Boolean(tenant) && instancesTenant !== tenant);
 
   // ------------------------------------------------------------------ quota & tenant role
   const tenantObj = useMemo(() => tenants.find((t) => t.metadata.name === tenant), [tenants, tenant]);
@@ -473,25 +523,25 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
     const q = tenantObj?.spec?.quota || {};
     const u = tenantObj?.status?.usage || {};
     const r = tenantObj?.status?.reserved || {};
-    const activeInsts = instances.filter((i) => !i.metadata.deletionTimestamp && i.status?.phase !== "Terminating");
+    const activeInsts = scopedInstances.filter((i) => !i.metadata.deletionTimestamp && i.status?.phase !== "Terminating");
     const sumActive = (key: "cpu" | "memory" | "storage") =>
       activeInsts.reduce((acc, i) => acc + parseNumericQuantity(resourceOf(i, key) || "0"), 0);
     const sumAll = (key: "cpu" | "memory" | "storage") =>
-      instances.reduce((acc, i) => acc + parseNumericQuantity(resourceOf(i, key) || "0"), 0);
+      scopedInstances.reduce((acc, i) => acc + parseNumericQuantity(resourceOf(i, key) || "0"), 0);
     let liveBackups = 0;
     let liveBackupBytes = 0;
-    for (const inst of instances) {
+    for (const inst of scopedInstances) {
       for (const b of inst.status?.backups || []) {
         liveBackups += 1;
         liveBackupBytes += b.sizeBytes || 0;
       }
     }
-    const usedBackups = instances.length > 0 ? liveBackups : parseInt(u.backups || "0", 10) || 0;
+    const usedBackups = scopedInstances.length > 0 ? liveBackups : parseInt(u.backups || "0", 10) || 0;
     const usedBackupGB =
-      instances.length > 0
+      scopedInstances.length > 0
         ? Math.round((liveBackupBytes / (1024 * 1024 * 1024)) * 100) / 100
         : Math.round(parseNumericQuantity(u.backupStorage || "0") * 100) / 100;
-    const reservedInsts = Math.max(instances.length, parseInt(r.instances || "0", 10) || 0);
+    const reservedInsts = Math.max(scopedInstances.length, parseInt(r.instances || "0", 10) || 0);
     const reservedCpu = Math.max(sumAll("cpu"), parseNumericQuantity(r.cpu || "0") || 0);
     const reservedMem = Math.max(sumAll("memory"), parseNumericQuantity(r.memory || "0") || 0);
     const reservedDisk = Math.max(sumAll("storage"), parseNumericQuantity(r.storage || "0") || 0);
@@ -519,7 +569,7 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       backups: { used: usedBackups, max: parseInt(q.backups || "10", 10) || 10 },
       backupStorage: { used: usedBackupGB, max: parseNumericQuantity(q.backupStorage || "50Gi") || 50 },
     };
-  }, [tenantObj, instances]);
+  }, [tenantObj, scopedInstances]);
 
   const logout = useCallback(async () => {
     try {
@@ -548,8 +598,8 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       tenant,
       tenantObj,
       setTenant,
-      instances,
-      instancesLoading,
+      instances: scopedInstances,
+      instancesLoading: scopedInstancesLoading,
       live,
       nodes,
       runtimeClasses,
@@ -578,8 +628,8 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       tenant,
       tenantObj,
       setTenant,
-      instances,
-      instancesLoading,
+      scopedInstances,
+      scopedInstancesLoading,
       live,
       nodes,
       runtimeClasses,

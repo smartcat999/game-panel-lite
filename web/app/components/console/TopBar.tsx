@@ -22,6 +22,7 @@ import {
 import LogoMark from "../landing/LogoMark";
 import { useConsole } from "../../console/ConsoleProvider";
 import { phaseLabel, phaseOf } from "../../console/lib/format";
+import { parseTenantSubpath, tenantRoute, tenantServerRoute } from "../../console/lib/routes";
 import type { Tenant } from "../../console/lib/types";
 import { Badge, IconButton, Input, Mono, buttonClass, focusRing } from "./ui";
 
@@ -131,10 +132,10 @@ function CommandMenu({
   const commands = useMemo<Command[]>(() => {
     const ws = cleanWorkspaceName(tenantObj, tenant);
     const list: Command[] = [
-      { id: "servers", group: `工作区 ${ws}`, label: "我的服务器", icon: <Server className="h-4 w-4" />, href: "/console" },
-      { id: "members", group: `工作区 ${ws}`, label: "成员", icon: <Users className="h-4 w-4" />, href: "/console/members" },
+      { id: "servers", group: `工作区 ${ws}`, label: "我的服务器", icon: <Server className="h-4 w-4" />, href: tenantRoute(tenant) },
+      { id: "members", group: `工作区 ${ws}`, label: "成员", icon: <Users className="h-4 w-4" />, href: tenantRoute(tenant, "/members") },
       ...(canManageTenant
-        ? [{ id: "new", group: "快捷操作", label: "新建服务器", icon: <Plus className="h-4 w-4" />, href: "/console/new" }]
+        ? [{ id: "new", group: "快捷操作", label: "新建服务器", icon: <Plus className="h-4 w-4" />, href: tenantRoute(tenant, "/new") }]
         : []),
       { id: "settings", group: "快捷操作", label: "个人设置", icon: <Settings className="h-4 w-4" />, href: "/console/settings" },
       {
@@ -151,7 +152,7 @@ function CommandMenu({
         label: i.metadata.name,
         hint: phaseLabel(phaseOf(i)),
         icon: <Box className="h-4 w-4" />,
-        href: `/console/servers/${encodeURIComponent(i.metadata.name)}`,
+        href: tenantServerRoute(i.metadata.tenant || tenant, i.metadata.name),
       })),
     ];
     if (isAdmin) {
@@ -354,7 +355,7 @@ function AboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 // --------------------------------------------------------------- user menu
 function UserMenu({ onOpenAbout }: { onOpenAbout: () => void }) {
-  const { userName, me, isAdmin, logout } = useConsole();
+  const { userName, me, isAdmin, tenant, logout } = useConsole();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -393,7 +394,7 @@ function UserMenu({ onOpenAbout }: { onOpenAbout: () => void }) {
             个人设置
           </Link>
           {isAdmin && (
-            <Link role="menuitem" href={inAdmin ? "/console" : "/console/admin/nodes"} onClick={close} className={item}>
+            <Link role="menuitem" href={inAdmin ? tenantRoute(tenant) : "/console/admin/nodes"} onClick={close} className={item}>
               <Shield className="h-4 w-4 text-[#5B6075]" />
               {inAdmin ? "返回工作区" : "平台管理"}
             </Link>
@@ -428,6 +429,7 @@ function UserMenu({ onOpenAbout }: { onOpenAbout: () => void }) {
 // ------------------------------------------------------------------ topbar
 export default function TopBar() {
   const pathname = usePathname() || "";
+  const { tenant } = useConsole();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const inAdmin = pathname.startsWith("/console/admin");
@@ -435,17 +437,20 @@ export default function TopBar() {
   const workspaceSections = useMemo(
     () => [
       {
-        href: "/console",
+        href: tenantRoute(tenant),
         label: "服务器",
-        match: (p: string) => p === "/console" || p.startsWith("/console/servers/") || p.startsWith("/console/new"),
+        match: (p: string) => {
+          const s = parseTenantSubpath(p);
+          return s === "" || Boolean(s?.startsWith("/servers/")) || Boolean(s?.startsWith("/new"));
+        },
       },
       {
-        href: "/console/members",
+        href: tenantRoute(tenant, "/members"),
         label: "成员",
-        match: (p: string) => p.startsWith("/console/members"),
+        match: (p: string) => Boolean(parseTenantSubpath(p)?.startsWith("/members")),
       },
     ],
-    [],
+    [tenant],
   );
 
   useEffect(() => {
@@ -464,7 +469,7 @@ export default function TopBar() {
       <header className="sticky top-0 z-40 border-b border-[#E3E6F2] bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-[1320px] items-center gap-1.5 px-3 sm:gap-2 sm:px-6">
           {/* Left: Brand + Admin Pill */}
-          <Link href="/console" className={cx("flex shrink-0 items-center gap-2.5 rounded-full pr-1", focusRing)}>
+          <Link href={tenantRoute(tenant)} className={cx("flex shrink-0 items-center gap-2.5 rounded-full pr-1", focusRing)}>
             <LogoMark />
             <span className="hidden text-[15px] font-semibold tracking-tight text-[#14161F] sm:inline">
               GamePanel Lite

@@ -33,11 +33,10 @@ export default function HomePage() {
   }, []);
 
   const deployHref = (gameId?: string, planId?: string) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ to: "new" });
     if (gameId) params.set("game", gameId);
     if (planId) params.set("plan", planId);
-    const qs = params.toString();
-    return `/console/new${qs ? `?${qs}` : ""}`;
+    return `/console?${params.toString()}`;
   };
 
   return (

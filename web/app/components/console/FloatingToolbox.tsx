@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useConsole } from "../../console/ConsoleProvider";
+import { isTenantServerDetailPath } from "../../console/lib/routes";
 import {
   InteractiveTerminal,
   type InteractiveTerminalHandle,
@@ -141,7 +142,7 @@ export default function FloatingToolbox() {
   const { isAdmin, tenant, nodes } = useConsole();
 
   const isPlatformMode = Boolean(pathname?.startsWith("/console/admin")) && isAdmin;
-  const hideDock = Boolean(pathname?.startsWith("/console/servers/"));
+  const hideDock = isTenantServerDetailPath(pathname);
 
   const [open, setOpen] = useState(false);
   const [stage, setStage] = useState<"menu" | "panel">("menu");

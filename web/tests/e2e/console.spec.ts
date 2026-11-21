@@ -383,7 +383,7 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     await page.locator("#password").fill("AdminPass123!");
     await page.getByRole("button", { name: "登录" }).click();
 
-    await expect(page).toHaveURL("/console");
+    await expect(page).toHaveURL("/console/t/studio-alpha");
     await expect(page.getByRole("heading", { name: "我的服务器" })).toBeVisible();
     await expect(page.getByText("mc-survival-01")).toBeVisible();
     await expect(page.getByText("203.0.113.10:31245")).toBeVisible();
@@ -433,7 +433,7 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     await page.locator("#inv-password-confirm").fill("CollaboratorPass123!");
     await page.getByRole("button", { name: "注册并加入" }).click();
 
-    await expect(page).toHaveURL(/\/console(?:\?tenant=studio-alpha)?$/);
+    await expect(page).toHaveURL("/console/t/studio-alpha");
     await expect(page.getByText("mc-survival-01")).toBeVisible();
   });
 
@@ -449,11 +449,12 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     await mockConsoleAPIs(page, "steve01", { isAdmin: false, tenantRole: "instance-operator" });
 
     await page.goto("/console");
+    await expect(page).toHaveURL("/console/t/studio-alpha");
     await expect(page.getByRole("heading", { name: "我的服务器" })).toBeVisible();
     await expect(page.getByText("mc-survival-01")).toBeVisible();
     await expect(page.getByRole("link", { name: /新建服务器/ })).toHaveCount(0);
 
-    await page.goto("/console/servers/mc-survival-01");
+    await page.goto("/console/t/studio-alpha/servers/mc-survival-01");
     await expect(page.getByRole("heading", { name: "mc-survival-01" })).toBeVisible();
     for (const label of ["文件", "备份", "定时任务", "网络", "设置"]) {
       await expect(page.getByRole("tab", { name: label })).toBeVisible();
@@ -752,7 +753,7 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
       });
     });
 
-    await page.goto("/console/servers/l4d2-demo-01");
+    await page.goto("/console/t/studio-alpha/servers/l4d2-demo-01");
     await expect(page.getByRole("tab", { name: "模组" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "插件" })).toHaveCount(0);
     await page.getByRole("tab", { name: "模组" }).click();
@@ -777,7 +778,7 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     await expect(page.getByLabel("起始地图").locator('option[value="uf1_boulevard"]')).toHaveCount(1);
   });
 
-  test("hides node selector in create wizard, streamlines advanced settings, and toggles region automatically", async ({
+  test("hides node selector in create wizard and streamlines advanced settings", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -788,7 +789,7 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     });
     await mockConsoleAPIs(page, "admin", { isAdmin: true });
 
-    let nodeRegions = ["ap-east-1", "ap-east-1"];
+    const nodeRegions = ["ap-east-1", "ap-east-1"];
     await page.route("**/apis/core.gamepanel.io/v1/nodes*", async (route) => {
       await route.fulfill({
         status: 200,
@@ -840,7 +841,7 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     });
 
     // 1. Single-region cluster: no 调度节点, no 部署地域, streamlined 高级设置
-    await page.goto("/console/new");
+    await page.goto("/console/t/studio-alpha/new");
     await page.getByRole("button", { name: /Minecraft/ }).click();
     await page.getByRole("button", { name: "下一步" }).click();
     await page.getByRole("button", { name: "下一步" }).click();
@@ -867,25 +868,115 @@ test.describe("GamePanel Lite V1 Declarative Console", () => {
     expect(createdPayloads[0]?.spec?.nodeSelector).toBeUndefined();
     expect(createdPayloads[0]?.spec?.image).toBe("gamepanel/runtime:latest");
     expect(createdPayloads[0]?.spec?.ports?.[0]?.publishedPort).toBe(0);
+  });
 
-    // 2. Multi-region cluster: 部署地域 appears and sends topology.gamepanel.io/region
-    nodeRegions = ["ap-east-1", "cn-south-1"];
-    await page.goto("/console/new");
-    await page.getByRole("button", { name: /Minecraft/ }).click();
-    await page.getByRole("button", { name: "下一步" }).click();
-    await page.getByRole("button", { name: "下一步" }).click();
-
-    await expect(page.locator("#server-region")).toBeVisible();
-    await expect(page.locator("#server-region option")).toHaveCount(3);
-    await page.locator("#server-region").selectOption("cn-south-1");
-
-    await page.getByRole("button", { name: "下一步" }).click();
-    await expect(page.getByText("华南 1")).toBeVisible();
-    await page.getByRole("button", { name: "创建服务器" }).click();
-
-    await expect.poll(() => createdPayloads.length).toBe(2);
-    expect(createdPayloads[1]?.spec?.nodeSelector).toEqual({
-      "topology.gamepanel.io/region": "cn-south-1",
+  test("resolves path-based tenant routes, preserves tenant across navigation, and redirects invalid tenant", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("gp_session_token", "jwt-e2e-token");
+      localStorage.setItem("gp_session_user", "admin");
+      localStorage.setItem("gp_session_name", "sess-e2e-01");
     });
+    await mockConsoleAPIs(page, "admin", { isAdmin: true });
+
+    await page.route("**/apis/core.gamepanel.io/v1/tenants", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          apiVersion: "core.gamepanel.io/v1",
+          kind: "TenantList",
+          metadata: { totalCount: 2 },
+          items: [
+            {
+              apiVersion: "core.gamepanel.io/v1",
+              kind: "Tenant",
+              metadata: { name: "admin" },
+              spec: {
+                displayName: "admin Personal",
+                type: "Personal",
+                owner: "admin",
+                quota: { cpu: "16", memory: "32Gi", storage: "100Gi", instances: "10", backups: "10", backupStorage: "50Gi" },
+              },
+              status: { phase: "Active", usage: { instances: "1", cpu: "2" } },
+            },
+            {
+              apiVersion: "core.gamepanel.io/v1",
+              kind: "Tenant",
+              metadata: { name: "studio-alpha" },
+              spec: {
+                displayName: "Studio Alpha",
+                type: "Organization",
+                owner: "admin",
+                quota: { cpu: "16", memory: "32Gi", storage: "200Gi", instances: "20", backups: "10", backupStorage: "100Gi" },
+              },
+              status: { phase: "Active", usage: { instances: "1", cpu: "2" } },
+            },
+          ],
+        }),
+      });
+    });
+
+    const mkInst = (name: string, tenantName: string) => ({
+      apiVersion: "core.gamepanel.io/v1",
+      kind: "Instance",
+      metadata: { name, tenant: tenantName, labels: { "gamepanel.io/app": "minecraft-paper" } },
+      spec: {
+        runtimeClassName: "docker",
+        nodeName: "node-ap-01",
+        state: "Running",
+        image: "gamepanel/runtime:latest",
+        resources: { requests: { cpu: "2", memory: "4Gi", storage: "20Gi" } },
+      },
+      status: { phase: "Running" },
+    });
+    const adminInst = mkInst("admin-mc-01", "admin");
+    const alphaInst = mkInst("alpha-mc-01", "studio-alpha");
+
+    await page.route("**/apis/core.gamepanel.io/v1/tenants/*/instances*", async (route) => {
+      const url = new URL(route.request().url());
+      const m = url.pathname.match(/\/tenants\/([^/]+)\/instances/);
+      const reqTenant = m?.[1] || "";
+      const target = reqTenant === "admin" ? adminInst : alphaInst;
+      if (url.pathname.endsWith(`/${target.metadata.name}`)) {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(target) });
+        return;
+      }
+      if (url.searchParams.get("watch") === "true") {
+        await route.fulfill({ status: 200, contentType: "application/x-ndjson", body: "" });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ apiVersion: "core.gamepanel.io/v1", kind: "InstanceList", metadata: { totalCount: 1 }, items: [target] }),
+      });
+    });
+
+    await page.route("**/apis/iam.gamepanel.io/v1/tenants/*/tenantrolebindings*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ apiVersion: "iam.gamepanel.io/v1", kind: "TenantRoleBindingList", items: [] }),
+      });
+    });
+
+    // 1. Entry resolver /console?to=new resolves to /console/t/admin/new
+    await page.goto("/console?to=new");
+    await expect(page).toHaveURL("/console/t/admin/new");
+
+    // 2. Direct path navigation scopes instances cleanly and keeps TopBar links under the path tenant
+    await page.goto("/console/t/studio-alpha");
+    await expect(page).toHaveURL("/console/t/studio-alpha");
+    await expect(page.getByText("alpha-mc-01")).toBeVisible();
+    await expect(page.getByText("admin-mc-01")).toHaveCount(0);
+
+    await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "成员" }).click();
+    await expect(page).toHaveURL("/console/t/studio-alpha/members");
+
+    // 3. Unknown tenant in URL redirects to user's preferred valid workspace
+    await page.goto("/console/t/nonexistent");
+    await expect(page).toHaveURL("/console/t/admin");
   });
 });

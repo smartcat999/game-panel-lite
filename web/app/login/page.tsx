@@ -62,7 +62,7 @@ export default function LoginPage() {
           (typeof body?.user === "string" ? body.user : "") ||
           username.trim(),
       });
-      // Only allow same-origin relative redirects (e.g. /console/new?game=...).
+      // Only allow same-origin relative redirects (e.g. /console?to=new&game=...).
       const next = new URLSearchParams(window.location.search).get("next");
       router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/console");
     } catch (err) {

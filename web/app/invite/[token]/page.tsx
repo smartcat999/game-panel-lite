@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import LogoMark from "../../components/landing/LogoMark";
 import VoxelIsland from "../../components/landing/VoxelIsland";
 import { Badge, Segmented } from "../../components/console/ui";
+import { tenantRoute, tenantServerRoute } from "../../console/lib/routes";
 import {
   clearSession,
   localizeApiError,
@@ -189,9 +190,8 @@ export default function InviteAcceptPage() {
       }
       localStorage.setItem(TENANT_STORAGE_KEY, tenantName);
       const targetServer = body?.serverName || invite?.serverName;
-      const tenantQuery = `?tenant=${encodeURIComponent(tenantName)}`;
       router.replace(
-        targetServer ? `/console/servers/${encodeURIComponent(targetServer)}${tenantQuery}` : `/console${tenantQuery}`,
+        targetServer ? tenantServerRoute(tenantName, targetServer) : tenantRoute(tenantName),
       );
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "加入工作区失败，请稍后重试");

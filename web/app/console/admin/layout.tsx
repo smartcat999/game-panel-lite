@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useConsole } from "../ConsoleProvider";
+import { tenantRoute } from "../lib/routes";
 import { Card, EmptyState, focusRing, LinkButton, Skeleton } from "../../components/console/ui";
 
 const SECTIONS: Array<{
@@ -18,7 +19,7 @@ const SECTIONS: Array<{
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { isAdmin, loading } = useConsole();
+  const { isAdmin, loading, tenant } = useConsole();
   const pathname = usePathname() || "";
 
   if (!isAdmin && loading) {
@@ -38,7 +39,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           title="需要平台管理员权限"
           body="这里是平台管理区域，只有平台管理员可以访问。如需权限，请联系管理员为你的账号绑定平台管理员角色。"
           action={
-            <LinkButton href="/console" variant="primary">
+            <LinkButton href={tenantRoute(tenant)} variant="primary">
               返回控制台
             </LinkButton>
           }

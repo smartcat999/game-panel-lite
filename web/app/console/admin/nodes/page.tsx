@@ -34,6 +34,7 @@ import {
   phaseOf,
   relativeTime,
 } from "../../lib/format";
+import { tenantServerRoute } from "../../lib/routes";
 import { errorMessage } from "../../lib/session";
 import { subscribeResourceWatch } from "../../lib/ws";
 import type {
@@ -2706,8 +2707,8 @@ export default function AdminNodesPage() {
                                   <Link
                                     href={
                                       inst.metadata.tenant
-                                        ? `/console/servers/${encodeURIComponent(inst.metadata.name)}?tenant=${encodeURIComponent(inst.metadata.tenant)}`
-                                        : `/console/servers/${encodeURIComponent(inst.metadata.name)}`
+                                        ? tenantServerRoute(inst.metadata.tenant, inst.metadata.name)
+                                        : "/console"
                                     }
                                     onClick={() => {
                                       if (inst.metadata.tenant) setTenant(inst.metadata.tenant);

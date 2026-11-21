@@ -6,6 +6,7 @@ import { Card, CopyButton, IconButton, Meter, Mono, Skeleton, StatusPill, focusR
 import { useConsole } from "../../../console/ConsoleProvider";
 import { endpointOf, formatCpu, formatGB, parseNumericQuantity, phaseOf, resourceOf } from "../../../console/lib/format";
 import { DEFAULT_GAME_COVER } from "../../../console/lib/presets";
+import { tenantRoute, tenantServerRoute } from "../../../console/lib/routes";
 import type { InstanceItem, NodeItem } from "../../../console/lib/types";
 import type { ServerBusy } from "./api";
 import { formatBytesCompact } from "./InfoTabs";
@@ -21,7 +22,7 @@ export interface ServerRowProps {
   onDelete?: (inst: InstanceItem) => void;
 }
 
-export const serverHref = (name: string) => `/console/servers/${encodeURIComponent(name)}`;
+export const serverHref = (tenant: string, name: string) => tenantServerRoute(tenant, name);
 
 function Address({ inst, nodes }: { inst: InstanceItem; nodes: NodeItem[] }) {
   const { apps } = useConsole();
@@ -134,12 +135,13 @@ function ToggleButton({
 }
 
 export function ServerCard({ inst, nodes, busy, onToggle, onDelete }: ServerRowProps) {
-  const { apps } = useConsole();
+  const { apps, tenant } = useConsole();
   const game = gameOf(inst, apps);
   const name = inst.metadata.name;
+  const href = serverHref(inst.metadata.tenant || tenant, name);
   return (
     <Card className="flex flex-col transition-shadow hover:shadow-[0_20px_40px_-24px_rgba(43,58,232,0.45)]">
-      <Link href={serverHref(name)} className={cx("relative block rounded-t-[19px]", focusRing)} tabIndex={-1}>
+      <Link href={href} className={cx("relative block rounded-t-[19px]", focusRing)} tabIndex={-1}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={game.cover}
@@ -159,7 +161,7 @@ export function ServerCard({ inst, nodes, busy, onToggle, onDelete }: ServerRowP
       <div className="flex flex-1 flex-col gap-3 p-5">
         <div className="flex items-start justify-between gap-3">
           <Link
-            href={serverHref(name)}
+            href={href}
             className={cx("min-w-0 truncate text-base font-semibold text-[#14161F] hover:text-[#2B3AE8]", focusRing, "rounded")}
           >
             {name}
@@ -172,7 +174,7 @@ export function ServerCard({ inst, nodes, busy, onToggle, onDelete }: ServerRowP
         <LiveSpecMeters inst={inst} />
         <div className="mt-auto flex items-center gap-2 pt-2">
           {onToggle && <ToggleButton inst={inst} busy={busy} onToggle={onToggle} />}
-          <IconLink href={`${serverHref(name)}?tab=console`} label="打开控制台">
+          <IconLink href={`${href}?tab=console`} label="打开控制台">
             <SquareTerminal className="h-4 w-4" />
           </IconLink>
           {onDelete && (
@@ -196,9 +198,10 @@ export function ServerCard({ inst, nodes, busy, onToggle, onDelete }: ServerRowP
 }
 
 export function NewServerCard() {
+  const { tenant } = useConsole();
   return (
     <Link
-      href="/console/new"
+      href={tenantRoute(tenant, "/new")}
       className={cx(
         "flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-[20px] border-2 border-dashed border-[#D5DAEE] bg-white/50 text-[#5B6075] transition-colors hover:border-[#2B3AE8] hover:bg-white hover:text-[#2B3AE8]",
         focusRing,
@@ -242,7 +245,7 @@ export function ServerTable({
   onToggle?: (inst: InstanceItem) => void;
   onDelete?: (inst: InstanceItem) => void;
 }) {
-  const { apps } = useConsole();
+  const { apps, tenant } = useConsole();
   return (
     <Card className="overflow-visible">
       <div className="overflow-x-auto">
@@ -259,6 +262,7 @@ export function ServerTable({
           <tbody>
             {items.map((inst) => {
               const name = inst.metadata.name;
+              const href = serverHref(inst.metadata.tenant || tenant, name);
               const game = gameOf(inst, apps);
               return (
                 <tr
@@ -267,7 +271,7 @@ export function ServerTable({
                 >
                   <td className="px-6 py-4">
                     <Link
-                      href={serverHref(name)}
+                      href={href}
                       className={cx("font-semibold text-[#14161F] hover:text-[#2B3AE8]", focusRing, "rounded")}
                     >
                       {name}
@@ -286,7 +290,7 @@ export function ServerTable({
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
                       {onToggle && <ToggleButton inst={inst} busy={busy[name]} onToggle={onToggle} />}
-                      <IconLink href={`${serverHref(name)}?tab=console`} label="打开控制台">
+                      <IconLink href={`${href}?tab=console`} label="打开控制台">
                         <SquareTerminal className="h-4 w-4" />
                       </IconLink>
                       {onDelete && (
