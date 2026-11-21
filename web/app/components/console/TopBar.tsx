@@ -437,6 +437,7 @@ export default function TopBar() {
   const workspaceSections = useMemo(
     () => [
       {
+        id: "servers",
         href: tenantRoute(tenant),
         label: "服务器",
         match: (p: string) => {
@@ -445,6 +446,7 @@ export default function TopBar() {
         },
       },
       {
+        id: "members",
         href: tenantRoute(tenant, "/members"),
         label: "成员",
         match: (p: string) => Boolean(parseTenantSubpath(p)?.startsWith("/members")),
@@ -514,7 +516,7 @@ export default function TopBar() {
                   const active = s.match(pathname);
                   return (
                     <Link
-                      key={s.href}
+                      key={s.id}
                       href={s.href}
                       aria-current={active ? "page" : undefined}
                       className={cx(
