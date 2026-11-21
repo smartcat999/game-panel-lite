@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	registryv1 "github.com/smartcat999/game-panel-cloud/pkg/apis/registry/v1"
 	"github.com/smartcat999/game-panel-cloud/pkg/infra/addonmirror"
@@ -21,9 +23,11 @@ import (
 )
 
 const (
-	defaultLibrariesRepoURL = "https://libraries.minecraft.net/"
-	manifestMaxLineBytes    = 72
+	manifestMaxLineBytes = 72
+	maxDownloadAttempts  = 3
 )
+
+var errPermanentHTTPStatus = errors.New("non-retriable HTTP status")
 
 func stageBundleFiles(
 	ctx context.Context,
@@ -70,7 +74,8 @@ func downloadServerJar(
 	if len(strings.TrimSpace(vanillaRel.Build)) == 40 {
 		expectedSHA1 = strings.TrimSpace(vanillaRel.Build)
 	}
-	return downloadVerifiedFile(ctx, client, vanillaRel.DownloadURL, dstPath, "sha1", expectedSHA1, rep, 8, 50)
+	urls := driver.CollectCandidateURLs(vanillaRel.DownloadURL, vanillaRel.FallbackDownloadURLs)
+	return downloadVerifiedWithFallback(ctx, client, urls, dstPath, "sha1", expectedSHA1, rep, 8, 50)
 }
 
 func downloadLibraries(
@@ -87,11 +92,7 @@ func downloadLibraries(
 		if err != nil {
 			return nil, err
 		}
-		repoBase := strings.TrimRight(strings.TrimSpace(lib.URL), "/")
-		if repoBase == "" {
-			repoBase = strings.TrimRight(defaultLibrariesRepoURL, "/")
-		}
-		libURL := repoBase + "/" + relMaven
+		libURLs := libraryCandidateURLs(lib.URL, relMaven)
 		relInBundle := "libraries/" + relMaven
 		dstPath := filepath.Join(stagingDir, filepath.FromSlash(relInBundle))
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
@@ -102,12 +103,26 @@ func downloadLibraries(
 		if rep != nil {
 			rep.Stage(registryv1.ArtifactStageDownloading, pct, fmt.Sprintf("正在下载依赖库 (%d/%d): %s", idx+1, total, path.Base(relMaven)))
 		}
-		if err := downloadVerifiedFile(ctx, client, libURL, dstPath, algo, expected, nil, 0, 0); err != nil {
+		if err := downloadVerifiedWithFallback(ctx, client, libURLs, dstPath, algo, expected, nil, 0, 0); err != nil {
 			return nil, fmt.Errorf("download library %q: %w", lib.Name, err)
 		}
 		classPath = append(classPath, relInBundle)
 	}
 	return classPath, nil
+}
+
+func libraryCandidateURLs(rawRepoURL, relMaven string) []string {
+	repoBase := strings.TrimRight(strings.TrimSpace(rawRepoURL), "/")
+	defaultBase := strings.TrimRight(addonmirror.DefaultMinecraftLibrariesBaseURL, "/")
+	if repoBase == "" {
+		repoBase = defaultBase
+	}
+	primary := repoBase + "/" + relMaven
+	var fallbacks []string
+	if strings.EqualFold(repoBase, defaultBase) {
+		fallbacks = append(fallbacks, strings.TrimRight(addonmirror.DefaultMinecraftLibrariesMirrorURL, "/")+"/"+relMaven)
+	}
+	return driver.CollectCandidateURLs(primary, fallbacks)
 }
 
 func pickLibraryChecksum(lib fabricLibrary) (string, string) {
@@ -144,6 +159,62 @@ func mavenCoordinateToPath(coord string) (string, error) {
 	return path.Join(groupPath, artifact, version, fname), nil
 }
 
+func downloadVerifiedWithFallback(
+	ctx context.Context,
+	client *http.Client,
+	urls []string,
+	dstPath, hashAlgo, expectedHex string,
+	rep driver.Reporter,
+	pctFrom, pctTo int32,
+) error {
+	if len(urls) == 0 {
+		return errors.New("no download URL provided")
+	}
+	var lastErr error
+	for idx, rawURL := range urls {
+		lastErr = downloadVerifiedWithRetries(ctx, client, rawURL, dstPath, hashAlgo, expectedHex, rep, pctFrom, pctTo)
+		if lastErr == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return lastErr
+		}
+		if idx+1 < len(urls) && rep != nil {
+			rep.Logf("下载源 %s 失败 (%v)，正在切换备用镜像", rawURL, lastErr)
+		}
+	}
+	return lastErr
+}
+
+func downloadVerifiedWithRetries(
+	ctx context.Context,
+	client *http.Client,
+	rawURL, dstPath, hashAlgo, expectedHex string,
+	rep driver.Reporter,
+	pctFrom, pctTo int32,
+) error {
+	var err error
+	for attempt := range maxDownloadAttempts {
+		err = downloadVerifiedFile(ctx, client, rawURL, dstPath, hashAlgo, expectedHex, rep, pctFrom, pctTo)
+		if err == nil {
+			return nil
+		}
+		_ = os.Remove(dstPath)
+		if ctx.Err() != nil || errors.Is(err, errPermanentHTTPStatus) || attempt+1 >= maxDownloadAttempts {
+			return err
+		}
+		client.CloseIdleConnections()
+		timer := time.NewTimer(time.Duration(attempt+1) * 150 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return err
+}
+
 func downloadVerifiedFile(
 	ctx context.Context,
 	client *http.Client,
@@ -153,7 +224,7 @@ func downloadVerifiedFile(
 ) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", errPermanentHTTPStatus, err)
 	}
 	req.Header.Set("User-Agent", "GamePanel-RegistryWorker/1.0")
 	resp, err := client.Do(req)
@@ -162,6 +233,9 @@ func downloadVerifiedFile(
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusRequestTimeout && resp.StatusCode != http.StatusTooManyRequests {
+			return fmt.Errorf("%w: HTTP %d from %q", errPermanentHTTPStatus, resp.StatusCode, rawURL)
+		}
 		return fmt.Errorf("HTTP %d from %q", resp.StatusCode, rawURL)
 	}
 	return writeAndVerifyStream(resp, dstPath, hashAlgo, expectedHex, rep, pctFrom, pctTo)

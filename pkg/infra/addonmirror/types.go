@@ -52,10 +52,15 @@ const (
 	SteamServerAppSevenDaysToDie     = driver.SteamServerAppSevenDaysToDie
 	SteamServerAppLeft4Dead2         = driver.SteamServerAppLeft4Dead2
 
-	defaultUserAgent             = driver.DefaultUserAgent
-	DefaultFabricServerMainClass = driver.DefaultFabricServerMainClass
-	maxProxiedImageBytes         = 8 << 20 // 8 MiB
-	maxCachedThumbnailBytes      = 256 << 10
+	defaultUserAgent                   = driver.DefaultUserAgent
+	DefaultMojangManifestURL           = driver.DefaultMojangManifestURL
+	DefaultMojangMirrorBase            = driver.DefaultMojangMirrorBase
+	DefaultFastMirrorBase              = driver.DefaultFastMirrorBase
+	DefaultMinecraftLibrariesBaseURL   = driver.DefaultMinecraftLibrariesBaseURL
+	DefaultMinecraftLibrariesMirrorURL = driver.DefaultMinecraftLibrariesMirrorURL
+	DefaultFabricServerMainClass       = driver.DefaultFabricServerMainClass
+	maxProxiedImageBytes               = 8 << 20 // 8 MiB
+	maxCachedThumbnailBytes            = 256 << 10
 )
 
 var (

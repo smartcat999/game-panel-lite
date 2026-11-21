@@ -231,3 +231,45 @@ func TestMavenCoordinateToPathVariants(t *testing.T) {
 		t.Fatal("expected error for invalid maven coordinate")
 	}
 }
+
+func TestDownloadServerJarFallsBackAndVerifiesSHA1(t *testing.T) {
+	wantJar := []byte("verified-server-jar-bytes")
+	primarySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "upstream eof", http.StatusBadGateway)
+	}))
+	defer primarySrv.Close()
+
+	fallbackSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/good.jar" {
+			_, _ = w.Write(wantJar)
+			return
+		}
+		_, _ = w.Write([]byte("corrupted-bytes"))
+	}))
+	defer fallbackSrv.Close()
+
+	tmpDir := t.TempDir()
+	rel := &addonmirror.ResolvedRelease{
+		Version:              "26.3",
+		Build:                sha1Hex(wantJar),
+		DownloadURL:          primarySrv.URL + "/bad.jar",
+		FallbackDownloadURLs: []string{fallbackSrv.URL + "/good.jar"},
+	}
+	if err := downloadServerJar(context.Background(), nil, http.DefaultClient, rel, tmpDir); err != nil {
+		t.Fatalf("expected fallback server.jar download to succeed, got %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(tmpDir, "server.jar"))
+	if err != nil || string(got) != string(wantJar) {
+		t.Fatalf("server.jar mismatch after fallback: err=%v len=%d", err, len(got))
+	}
+
+	badRel := &addonmirror.ResolvedRelease{
+		Version:              "26.3",
+		Build:                sha1Hex(wantJar),
+		DownloadURL:          primarySrv.URL + "/bad.jar",
+		FallbackDownloadURLs: []string{fallbackSrv.URL + "/corrupted.jar"},
+	}
+	if err := downloadServerJar(context.Background(), nil, http.DefaultClient, badRel, t.TempDir()); err == nil {
+		t.Fatal("expected SHA-1 mismatch error on corrupted fallback")
+	}
+}

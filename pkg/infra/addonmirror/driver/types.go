@@ -52,11 +52,16 @@ const (
 	SteamServerAppSevenDaysToDie     = 294420
 	SteamServerAppLeft4Dead2         = 222860
 
-	DefaultSteamAPIBaseURL       = "https://api.steampowered.com"
-	DefaultModrinthBaseURL       = "https://api.modrinth.com/v2"
-	DefaultFabricMetaBaseURL     = "https://meta.fabricmc.net"
-	DefaultFabricServerMainClass = "net.fabricmc.loader.impl.launch.server.FabricServerLauncher"
-	DefaultUserAgent             = "GamePanel-AddonMirror/1.0 (+https://github.com/smartcat999/game-panel-cloud)"
+	DefaultSteamAPIBaseURL             = "https://api.steampowered.com"
+	DefaultModrinthBaseURL             = "https://api.modrinth.com/v2"
+	DefaultFabricMetaBaseURL           = "https://meta.fabricmc.net"
+	DefaultMojangManifestURL           = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+	DefaultMojangMirrorBase            = "https://bmclapi2.bangbang93.com"
+	DefaultFastMirrorBase              = "https://download.fastmirror.net"
+	DefaultMinecraftLibrariesBaseURL   = "https://libraries.minecraft.net"
+	DefaultMinecraftLibrariesMirrorURL = "https://bmclapi2.bangbang93.com/maven"
+	DefaultFabricServerMainClass       = "net.fabricmc.loader.impl.launch.server.FabricServerLauncher"
+	DefaultUserAgent                   = "GamePanel-AddonMirror/1.0 (+https://github.com/smartcat999/game-panel-cloud)"
 )
 
 var (
@@ -134,24 +139,25 @@ type Item struct {
 
 // ResolvedRelease describes a concrete upstream artifact version and its download payload metadata.
 type ResolvedRelease struct {
-	Package         string
-	Version         string
-	Build           string
-	DownloadURL     string
-	FileName        string
-	ArchiveFormat   string
-	TargetPath      string
-	SizeBytes       int64
-	GameVersions    []string
-	Loaders         []string
-	ModIDs          []string
-	MapFolders      []string
-	Dependencies    []Dependency
-	PublishedAt     *time.Time
-	Changelog       string
-	UpstreamURL     string
-	Item            *Item
-	VersionMismatch bool // true when StrictVersion=false resolved metadata whose upstream latest version differs
+	Package              string
+	Version              string
+	Build                string
+	DownloadURL          string
+	FallbackDownloadURLs []string
+	FileName             string
+	ArchiveFormat        string
+	TargetPath           string
+	SizeBytes            int64
+	GameVersions         []string
+	Loaders              []string
+	ModIDs               []string
+	MapFolders           []string
+	Dependencies         []Dependency
+	PublishedAt          *time.Time
+	Changelog            string
+	UpstreamURL          string
+	Item                 *Item
+	VersionMismatch      bool // true when StrictVersion=false resolved metadata whose upstream latest version differs
 }
 
 // Result wraps a list/search or batch-resolve response.

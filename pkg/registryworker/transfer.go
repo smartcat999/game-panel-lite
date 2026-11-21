@@ -125,40 +125,74 @@ func (w *Worker) ReusableArtifactPayload(ctx context.Context, rep driver.Reporte
 func (w *Worker) DownloadHTTPPayload(ctx context.Context, rep driver.Reporter, svc *addonmirror.Service, art *registryv1.Artifact, rel *addonmirror.ResolvedRelease, tmpDir string) (*driver.BuiltPayload, error) {
 	if rep != nil {
 		rep.Stage(registryv1.ArtifactStageDownloading, 5, "正在连接上游下载")
-		rep.Logf("HTTP GET %s", rel.DownloadURL)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rel.DownloadURL, nil)
+	resp, usedURL, err := openDownloadResponse(ctx, rep, svc.DownloadHTTPClient(), rel)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "GamePanel-RegistryWorker/1.0")
-	resp, err := svc.DownloadHTTPClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download %q: %w", rel.DownloadURL, err)
-	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("download %q returned HTTP %d", rel.DownloadURL, resp.StatusCode)
-	}
 	fname := driver.FirstStr(filepath.Base(rel.FileName), "artifact.bin")
 	if rep != nil {
 		rep.Logf("HTTP %d，文件 %s，总大小 %d 字节", resp.StatusCode, fname, resp.ContentLength)
 	}
 	dstPath := filepath.Join(tmpDir, fname)
-	n, shaHex, err := streamHTTPBodyToFile(dstPath, rel.DownloadURL, resp, newHTTPProgressWriter(rep, resp.ContentLength))
+	n, shaHex, err := streamHTTPBodyToFile(dstPath, usedURL, resp, newHTTPProgressWriter(rep, resp.ContentLength))
 	if err != nil {
 		return nil, err
 	}
 	if rep != nil {
 		rep.Logf("下载完成: 共 %d 字节", n)
 	}
+	return buildDownloadedPayload(art, rel, dstPath, fname, resp.Header.Get("Content-Type"), n, shaHex), nil
+}
+
+func openDownloadResponse(ctx context.Context, rep driver.Reporter, client *http.Client, rel *addonmirror.ResolvedRelease) (*http.Response, string, error) {
+	urls := driver.CollectCandidateURLs(rel.DownloadURL, rel.FallbackDownloadURLs)
+	if len(urls) == 0 {
+		return nil, "", fmt.Errorf("download: empty release URL")
+	}
+	var lastErr error
+	for idx, rawURL := range urls {
+		if rep != nil {
+			rep.Logf("HTTP GET %s", rawURL)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, "", err
+		}
+		req.Header.Set("User-Agent", "GamePanel-RegistryWorker/1.0")
+		resp, err := client.Do(req)
+		if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return resp, rawURL, nil
+		}
+		if err == nil {
+			_ = resp.Body.Close()
+			lastErr = fmt.Errorf("download %q returned HTTP %d", rawURL, resp.StatusCode)
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 && idx+1 >= len(urls) {
+				return nil, "", lastErr
+			}
+		} else {
+			lastErr = fmt.Errorf("download %q: %w", rawURL, err)
+		}
+		if ctx.Err() != nil {
+			return nil, "", lastErr
+		}
+		client.CloseIdleConnections()
+		if idx+1 < len(urls) && rep != nil {
+			rep.Logf("下载源 %s 不可用 (%v)，切换备用源", rawURL, lastErr)
+		}
+	}
+	return nil, "", lastErr
+}
+
+func buildDownloadedPayload(art *registryv1.Artifact, rel *addonmirror.ResolvedRelease, dstPath, fname, contentType string, size int64, shaHex string) *driver.BuiltPayload {
 	return &driver.BuiltPayload{
 		LocalPath:     dstPath,
 		FileName:      fname,
-		MediaType:     driver.FirstStr(resp.Header.Get("Content-Type"), "application/octet-stream"),
+		MediaType:     driver.FirstStr(contentType, "application/octet-stream"),
 		ArchiveFormat: driver.FirstStr(rel.ArchiveFormat, art.Spec.ArchiveFormat, registryv1.ArchiveFormatRaw),
 		TargetPath:    driver.FirstStr(rel.TargetPath, art.Spec.TargetPath),
-		SizeBytes:     n,
+		SizeBytes:     size,
 		SHA256Hex:     shaHex,
 		Build:         rel.Build,
 		GameVersions:  rel.GameVersions,
@@ -170,7 +204,7 @@ func (w *Worker) DownloadHTTPPayload(ctx context.Context, rep driver.Reporter, s
 		PublishedAt:   driver.FirstTimePtr(rel.PublishedAt, art.Status.PublishedAt),
 		Changelog:     driver.FirstStr(rel.Changelog, art.Status.Changelog),
 		UpstreamURL:   driver.FirstStr(addonmirror.NormalizeSteamNewsURL(rel.UpstreamURL), addonmirror.NormalizeSteamNewsURL(art.Status.UpstreamURL)),
-	}, nil
+	}
 }
 
 func streamHTTPBodyToFile(dstPath, rawURL string, resp *http.Response, pw io.Writer) (int64, string, error) {

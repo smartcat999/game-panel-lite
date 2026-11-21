@@ -299,3 +299,20 @@ func CleanupStagingDir(stagingDir string) {
 		_ = os.Remove(parent)
 	}
 }
+
+// CollectCandidateURLs returns deduplicated non-empty download URLs ordered primary-first.
+func CollectCandidateURLs(primary string, fallbacks []string) []string {
+	seen := make(map[string]struct{}, 1+len(fallbacks))
+	var out []string
+	for _, raw := range append([]string{primary}, fallbacks...) {
+		clean := strings.TrimSpace(raw)
+		if clean == "" {
+			continue
+		}
+		if _, ok := seen[clean]; !ok {
+			seen[clean] = struct{}{}
+			out = append(out, clean)
+		}
+	}
+	return out
+}
