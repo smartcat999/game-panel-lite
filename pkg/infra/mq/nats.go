@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,10 @@ import (
 
 const (
 	natsJetStreamName       = "GAMEPANEL_EVENTS"
+	natsJetStreamMaxAge     = 72 * time.Hour
+	natsJetStreamMaxMsgs    = 100_000
+	natsJetStreamMaxBytes   = 256 * 1024 * 1024
+	natsJetStreamDuplicates = 2 * time.Minute
 	natsJetStreamMaxDeliver = 10
 	natsJetStreamAckWait    = 30 * time.Second
 	natsHandlerAttempts     = 4
@@ -52,6 +57,20 @@ type natsQueue struct {
 	jsEnabled bool
 }
 
+func defaultJetStreamConfig(storage nats.StorageType) *nats.StreamConfig {
+	return &nats.StreamConfig{
+		Name:       natsJetStreamName,
+		Subjects:   slices.Clone(natsStreamSubjects),
+		Retention:  nats.LimitsPolicy,
+		Discard:    nats.DiscardOld,
+		Storage:    storage,
+		MaxAge:     natsJetStreamMaxAge,
+		MaxMsgs:    natsJetStreamMaxMsgs,
+		MaxBytes:   natsJetStreamMaxBytes,
+		Duplicates: natsJetStreamDuplicates,
+	}
+}
+
 func (n *natsQueue) initJetStream() {
 	if n.nc == nil {
 		return
@@ -61,25 +80,17 @@ func (n *natsQueue) initJetStream() {
 		log.Warn("nats: failed to initialize JetStream context; falling back to Core NATS", "error", err)
 		return
 	}
-	streamCfg := &nats.StreamConfig{
-		Name:       natsJetStreamName,
-		Subjects:   natsStreamSubjects,
-		Retention:  nats.LimitsPolicy,
-		Storage:    nats.FileStorage,
-		MaxAge:     72 * time.Hour,
-		Duplicates: 2 * time.Minute,
-	}
-	if _, err := js.StreamInfo(natsJetStreamName); err != nil {
-		if _, addErr := js.AddStream(streamCfg); addErr != nil {
+	info, err := js.StreamInfo(natsJetStreamName)
+	if err != nil {
+		if _, addErr := js.AddStream(defaultJetStreamConfig(nats.FileStorage)); addErr != nil {
 			// Try memory storage if file storage is disallowed on the server
-			streamCfg.Storage = nats.MemoryStorage
-			if _, memErr := js.AddStream(streamCfg); memErr != nil {
+			if _, memErr := js.AddStream(defaultJetStreamConfig(nats.MemoryStorage)); memErr != nil {
 				log.Warn("nats: JetStream not available on server; falling back to Core NATS + Resync", "error", addErr)
 				return
 			}
 		}
-	} else {
-		_, _ = js.UpdateStream(streamCfg)
+	} else if _, upErr := js.UpdateStream(defaultJetStreamConfig(info.Config.Storage)); upErr != nil {
+		log.Warn("nats: failed to update JetStream stream config", "stream", natsJetStreamName, "error", upErr)
 	}
 	n.js = js
 	n.jsEnabled = true
