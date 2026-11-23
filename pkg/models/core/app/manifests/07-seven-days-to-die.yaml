@@ -14,8 +14,13 @@ serverBinding:
   repository: seven-days-server
   package: seven-days-server
   targetPath: .
+addonBinding:
+  repository: seven-days-mods
+  installMode: 7dtd_mod
+  targetDir: Mods
 capabilities:
 - console
+- addons
 - versions
 - files
 - backups
@@ -586,7 +591,7 @@ env:
 image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
 preStartCommand: |
   chmod +x ./7DaysToDieServer.x86_64 ./startserver.sh 2>/dev/null || true
-  mkdir -p /data/userdata/Saves
+  mkdir -p /data/userdata/Saves /data/Mods
 startupCommand: export LD_LIBRARY_PATH=.; exec ./7DaysToDieServer.x86_64 -logfile /dev/stdout -quit -batchmode -nographics -dedicated -configfile=serverconfig.xml
 preStopCommand: |
   7dtd-send-to-console saveworld >/dev/null 2>&1 || true
@@ -610,7 +615,7 @@ resources:
   cpu: '4'
   memory: 8Gi
   storage: 40Gi
-summary: 支持 Navezgane / 预生成 / RWG 随机地图、V 3.4 官方沙盒预设与自定义 SandboxCode、领地石保护及本地控制台管理。
+summary: 支持 Navezgane / 预生成 / RWG 随机地图、V 3.4 官方沙盒预设与自定义 SandboxCode、领地石保护、Mods 模组扩展及本地控制台管理。
 tagline: 末日塔防建造 · 血月尸潮与 RWG 随机地图
 versions:
 - latest

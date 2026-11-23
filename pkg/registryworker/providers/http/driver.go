@@ -23,6 +23,8 @@ func init() {
 		registryv1.UpstreamProviderUMod,
 		registryv1.UpstreamProviderFicsit,
 		registryv1.UpstreamProviderCS2Plugins,
+		registryv1.UpstreamProviderSevenDaysMods,
+		registryv1.UpstreamProviderModIO,
 		addonmirror.ProviderTerraria,
 		addonmirror.ProviderTModLoader,
 	} {

@@ -80,6 +80,8 @@ function parseAddonInput(raw: string): string {
   if (umodGameMatch) return `oxide-${umodGameMatch[1].replace(/\.json$/i, "").toLowerCase()}`;
   const ficsitMatch = trimmed.match(/ficsit\.app\/mod\/([^\s,;/?#"<>]+)/i);
   if (ficsitMatch) return ficsitMatch[1];
+  const modioMatch = trimmed.match(/mod\.io\/g\/[^/?#]+\/m\/([^\s,;/?#"<>]+)/i);
+  if (modioMatch) return modioMatch[1];
   const ghMatch = trimmed.match(/github\.com\/([A-Za-z0-9._-]+)\/([A-Za-z0-9._-]+)/i);
   if (ghMatch) {
     const owner = ghMatch[1];
@@ -1567,7 +1569,7 @@ export default function AdminRegistryPage() {
                   <Field
                     label="模组 / 插件编号或链接"
                     htmlFor="prepull-addon-id"
-                    hint="支持 Steam 创意工坊、Modrinth、ficsit.app 或 GitHub 插件仓库链接"
+                    hint="支持 Steam 创意工坊、Thunderstore、Modrinth、ficsit.app、mod.io 或 GitHub 模组/插件链接"
                   >
                     <Input
                       id="prepull-addon-id"

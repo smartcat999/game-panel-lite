@@ -974,3 +974,85 @@ func TestCS2PluginsAndWorkshopMapTags(t *testing.T) {
 		t.Fatalf("expected CS2 Steam Workshop query to filter Map tag, got %v", q)
 	}
 }
+
+func TestSevenDaysModsProvider(t *testing.T) {
+	toks := ParseInputTokens(ProviderSevenDaysMods, "https://github.com/ZehMatt/7dtd-WalkerSim2, OCB7D2D/OcbStopFuelWaste")
+	if !slices.Equal(toks, []string{"ZehMatt--7dtd-WalkerSim2", "OCB7D2D--OcbStopFuelWaste"}) {
+		t.Fatalf("unexpected sevendaysmods tokens: %#v", toks)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/ZehMatt/7dtd-WalkerSim2/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"2.0.5","assets":[{"name":"WalkerSim2-Editor-Windows-x64-2.0.5.zip","browser_download_url":"https://dl/win.zip","size":10},{"name":"WalkerSim2-2.0.5.zip","browser_download_url":"https://dl/ws2.zip","size":1066}]}]`))
+		case "/repos/OCB7D2D/OcbStopFuelWaste/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"1.1.0","assets":[{"name":"OcbStopFuelWaste-1.1.0.zip","browser_download_url":"https://dl/ocb.zip","size":5042}]}]`))
+		default:
+			_, _ = w.Write([]byte(`{"items":[]}`))
+		}
+	}))
+	defer srv.Close()
+
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{SigningSecret: "sec"})
+	src := Source{Provider: ProviderSevenDaysMods, Endpoint: srv.URL, Format: FormatSevenDaysMod}
+	res, err := svc.Search(context.Background(), src, SearchParams{Page: 1, Limit: 10})
+	if err != nil || !res.Configured || len(res.Items) == 0 {
+		t.Fatalf("unexpected sevendaysmods search: %#v err=%v", res, err)
+	}
+	rel, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "ZehMatt--7dtd-WalkerSim2", Version: "latest"})
+	if err != nil || rel.FileName != "WalkerSim2-2.0.5.zip" || rel.Version != "2.0.5" {
+		t.Fatalf("expected non-Editor mod zip for WalkerSim2, got %#v err=%v", rel, err)
+	}
+}
+
+func TestModIOProvider(t *testing.T) {
+	toks := ParseInputTokens(ProviderModIO, "https://mod.io/g/corekeeper/m/corelib, 123456")
+	if !slices.Equal(toks, []string{"corelib", "123456"}) {
+		t.Fatalf("unexpected modio tokens: %#v", toks)
+	}
+	srv := newMockModIOServer()
+	defer srv.Close()
+
+	src := Source{Provider: ProviderModIO, Endpoint: srv.URL + "/v1/games/5289", Format: FormatModIOMod, ImageProxyPrefix: "/proxy"}
+	unconfSvc := New(nil, Options{})
+	if unconfRes, err := unconfSvc.Search(context.Background(), src, SearchParams{}); err != nil || unconfRes.Configured {
+		t.Fatalf("expected unconfigured response when key missing, got %#v err=%v", unconfRes, err)
+	}
+	svc := New(&unitTestCache{data: make(map[string]string)}, Options{ModIOAPIKey: "test-modio-key", SigningSecret: "sec"})
+	res, err := svc.Search(context.Background(), src, SearchParams{Page: 1, Limit: 10})
+	if err != nil || !res.Configured || len(res.Items) != 1 || res.Items[0].ID != "55001" {
+		t.Fatalf("unexpected modio search: %#v err=%v", res, err)
+	}
+	det, err := svc.Detail(context.Background(), src, "55001", "")
+	if err != nil || len(det.Dependencies) != 1 || det.Dependencies[0].ID != "55000" {
+		t.Fatalf("expected modio dependencies, got %#v err=%v", det, err)
+	}
+	rel, err := svc.ResolveRelease(context.Background(), src, ResolveReleaseRequest{Package: "corelib", Version: "1.0.0"})
+	if err != nil || rel.Package != "55001" || rel.FileName != "placement-1.0.0.zip" || rel.ArchiveFormat != ArchiveFormatZip {
+		t.Fatalf("unexpected modio resolved release: %#v err=%v", rel, err)
+	}
+}
+
+func newMockModIOServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("api_key") != "test-modio-key" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/v1/games/5289/mods":
+			if r.URL.Query().Get("name_id") == "corelib" {
+				_, _ = w.Write([]byte(`{"data":[{"id":55001,"name_id":"corelib","name":"Placement Mod","modfile":{"id":901,"version":"1.0.0","filename":"placement-1.0.0.zip","download":{"binary_url":"https://dl/placement.zip"}}}],"result_total":1}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":[{"id":55001,"name_id":"corelib","name":"Placement Mod","summary":"s","profile_url":"https://mod.io/g/corekeeper/m/corelib","stats":{"downloads_total":42},"modfile":{"id":901,"version":"1.0.0","filename":"placement-1.0.0.zip","download":{"binary_url":"https://dl/placement.zip"}}}],"result_total":1}`))
+		case "/v1/games/5289/mods/55001":
+			_, _ = w.Write([]byte(`{"id":55001,"name_id":"corelib","name":"Placement Mod","profile_url":"https://mod.io/g/corekeeper/m/corelib","modfile":{"id":901,"version":"1.0.0","filename":"placement-1.0.0.zip","download":{"binary_url":"https://dl/placement.zip"}}}`))
+		case "/v1/games/5289/mods/55001/files":
+			_, _ = w.Write([]byte(`{"data":[{"id":901,"version":"1.0.0","filename":"placement-1.0.0.zip","download":{"binary_url":"https://dl/placement.zip"}}]}`))
+		case "/v1/games/5289/mods/55001/dependencies":
+			_, _ = w.Write([]byte(`{"data":[{"mod_id":55000,"name":"CoreLib"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+}

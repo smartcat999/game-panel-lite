@@ -398,6 +398,66 @@ func seedFicsitAndCS2ProxyPackages(t *testing.T, ctx context.Context, fix testpg
 	}
 }
 
+func TestGetPersistedSevenDaysAndModIOProxyPackageOverlaysLiveVersions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/OCB7D2D/OcbStopFuelWaste/releases":
+			_, _ = w.Write([]byte(`[{"tag_name":"1.2.0","assets":[{"name":"OcbStopFuelWaste-1.2.0.zip","browser_download_url":"https://dl/ocb.zip","size":5042}]}]`))
+		case "/v1/games/5289/mods/55001":
+			_, _ = w.Write([]byte(`{"id":55001,"name_id":"placement","name":"Placement Mod","modfile":{"id":902,"version":"1.2.0","filename":"placement.zip","download":{"binary_url":"https://dl/p.zip"}}}`))
+		case "/v1/games/5289/mods/55001/files":
+			_, _ = w.Write([]byte(`{"data":[{"id":902,"version":"1.2.0","filename":"placement.zip","download":{"binary_url":"https://dl/p.zip"}}]}`))
+		case "/v1/games/5289/mods/55001/dependencies":
+			_, _ = w.Write([]byte(`{"data":[{"mod_id":55000,"name":"CoreLib"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	fix := testpg.New(t, nil)
+	ctx := context.Background()
+	seedSevenDaysAndModIOProxyPackages(t, ctx, fix, srv.URL)
+	op := NewOperator(fix.Registry, nil)
+	sdPkg, err := op.Get(ctx, "seven-days-mods.OCB7D2D--OcbStopFuelWaste")
+	if err != nil || sdPkg.LatestVersion != "1.2.0" {
+		t.Fatalf("unexpected live 7dtd mod overlay: %+v err=%v", sdPkg, err)
+	}
+	ckPkg, err := op.Get(ctx, "core-keeper-modio.55001")
+	if err != nil || ckPkg.LatestVersion != "1.2.0" || len(ckPkg.Dependencies) != 1 || ckPkg.Dependencies[0].Package != "55000" {
+		t.Fatalf("unexpected live mod.io overlay: %+v err=%v", ckPkg, err)
+	}
+}
+
+func seedSevenDaysAndModIOProxyPackages(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
+	t.Helper()
+	for _, up := range []*registryv1.Upstream{
+		{Metadata: metav1.ObjectMeta{Name: "up-7dtd"}, Provider: registryv1.UpstreamProviderSevenDaysMods, Endpoint: endpoint},
+		{Metadata: metav1.ObjectMeta{Name: "up-modio"}, Provider: registryv1.UpstreamProviderModIO, Endpoint: endpoint + "/v1/games/5289", APIKey: "k-modio"},
+	} {
+		if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, up); err != nil {
+			t.Fatalf("Create upstream: %v", err)
+		}
+	}
+	for _, repo := range []*registryv1.Repository{
+		{Metadata: metav1.ObjectMeta{Name: "seven-days-mods"}, Spec: registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatSevenDaysMod, UpstreamName: "up-7dtd"}},
+		{Metadata: metav1.ObjectMeta{Name: "core-keeper-modio"}, Spec: registryv1.RepositorySpec{Mode: registryv1.RepositoryModeProxy, Format: registryv1.FormatModIOMod, UpstreamName: "up-modio"}},
+	} {
+		if _, err := repositorydb.NewDB(fix.Pool).Create(ctx, repo); err != nil {
+			t.Fatalf("Create repo: %v", err)
+		}
+	}
+	for _, pkg := range []*registryv1.Package{
+		{Metadata: metav1.ObjectMeta{Name: "seven-days-mods.OCB7D2D--OcbStopFuelWaste"}, Repository: "seven-days-mods", Package: "OCB7D2D--OcbStopFuelWaste", Title: "OCB Stop Fuel Waste", LatestVersion: "1.0.0"},
+		{Metadata: metav1.ObjectMeta{Name: "core-keeper-modio.55001"}, Repository: "core-keeper-modio", Package: "55001", Title: "Placement Mod", LatestVersion: "1.0.0"},
+	} {
+		if _, err := pkgdb.NewDB(fix.Pool).Create(ctx, pkg); err != nil {
+			t.Fatalf("Create pkg: %v", err)
+		}
+	}
+}
+
 func seedUModProxyPackage(t *testing.T, ctx context.Context, fix testpg.Fixture, endpoint string) {
 	t.Helper()
 	if _, err := upstreamdb.NewDB(fix.Pool).Create(ctx, &registryv1.Upstream{

@@ -757,6 +757,7 @@ func (c *ObservabilityConfig) Validate() error {
 // AddonMirrorConfig configures the pull-through game mod & plugin mirror catalog (Steam Workshop & Modrinth).
 type AddonMirrorConfig struct {
 	SteamWebAPIKey    string        `yaml:"steamWebAPIKey" mapstructure:"steamWebAPIKey" env:"GP_ADDON_MIRROR_STEAM_WEB_API_KEY"`
+	ModIOAPIKey       string        `yaml:"modioApiKey" mapstructure:"modioApiKey" env:"GP_ADDON_MIRROR_MODIO_API_KEY"`
 	UpstreamProxyURL  string        `yaml:"upstreamProxyURL" mapstructure:"upstreamProxyURL" env:"GP_ADDON_MIRROR_UPSTREAM_PROXY_URL"`
 	ExternalEndpoint  string        `yaml:"externalEndpoint" mapstructure:"externalEndpoint" env:"GP_ADDON_MIRROR_EXTERNAL_ENDPOINT"`
 	ImageHostMirrors  []string      `yaml:"imageHostMirrors" mapstructure:"imageHostMirrors" env:"GP_ADDON_MIRROR_IMAGE_HOST_MIRRORS" envSeparator:","`
@@ -768,6 +769,9 @@ type AddonMirrorConfig struct {
 func (c *AddonMirrorConfig) Default() {
 	if strings.TrimSpace(c.SteamWebAPIKey) == "" {
 		c.SteamWebAPIKey = strings.TrimSpace(os.Getenv("STEAM_WEB_API_KEY"))
+	}
+	if strings.TrimSpace(c.ModIOAPIKey) == "" {
+		c.ModIOAPIKey = strings.TrimSpace(os.Getenv("MODIO_API_KEY"))
 	}
 	if c.CacheTTL <= 0 {
 		c.CacheTTL = 15 * time.Minute
@@ -852,6 +856,7 @@ type RegistryConfig struct {
 	WorkerConcurrency  int           `yaml:"workerConcurrency" mapstructure:"workerConcurrency" env:"GP_REGISTRY_WORKER_CONCURRENCY"`
 	SteamCMDBin        string        `yaml:"steamcmdBin" mapstructure:"steamcmdBin" env:"GP_REGISTRY_STEAMCMD_BIN"`
 	SteamWebAPIKey     string        `yaml:"steamWebAPIKey" mapstructure:"steamWebAPIKey" env:"GP_REGISTRY_STEAM_WEB_API_KEY"`
+	ModIOAPIKey        string        `yaml:"modioApiKey" mapstructure:"modioApiKey" env:"GP_REGISTRY_MODIO_API_KEY"`
 	UpstreamProxyURL   string        `yaml:"upstreamProxyURL" mapstructure:"upstreamProxyURL" env:"GP_REGISTRY_UPSTREAM_PROXY_URL"`
 	CatalogCacheTTL    time.Duration `yaml:"catalogCacheTTL" mapstructure:"catalogCacheTTL" env:"GP_REGISTRY_CATALOG_CACHE_TTL"`
 	BlobPresignTTL     time.Duration `yaml:"blobPresignTTL" mapstructure:"blobPresignTTL" env:"GP_REGISTRY_BLOB_PRESIGN_TTL"`
@@ -882,6 +887,9 @@ func (c *RegistryConfig) Default() {
 	}
 	if strings.TrimSpace(c.SteamWebAPIKey) == "" {
 		c.SteamWebAPIKey = strings.TrimSpace(os.Getenv("STEAM_WEB_API_KEY"))
+	}
+	if strings.TrimSpace(c.ModIOAPIKey) == "" {
+		c.ModIOAPIKey = strings.TrimSpace(os.Getenv("MODIO_API_KEY"))
 	}
 	if c.CatalogCacheTTL <= 0 {
 		c.CatalogCacheTTL = 15 * time.Minute

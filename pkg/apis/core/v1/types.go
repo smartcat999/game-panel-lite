@@ -495,15 +495,18 @@ const (
 	ResourceTenantQuota = "tenants/quota"
 	SubresourceState    = "state"
 
-	AddonInstallModeFlatDir      = "flat_dir"
-	AddonInstallModeTModLatest   = "tmod_latest"
-	AddonInstallModeDSTLocalMods = "dst_local_mods"
-	AddonInstallModeWorkshopTree = "workshop_tree"
-	AddonInstallModeBepInEx      = "bepinex"
-	AddonInstallModeOxide        = "oxide"
-	AddonInstallModeSML          = "sml"
-	AddonInstallModeCS2Plugin    = "cs2_plugin"
-	AddonInstallModeCS2Workshop  = "cs2_workshop"
+	AddonInstallModeFlatDir       = "flat_dir"
+	AddonInstallModeTModLatest    = "tmod_latest"
+	AddonInstallModeDSTLocalMods  = "dst_local_mods"
+	AddonInstallModeWorkshopTree  = "workshop_tree"
+	AddonInstallModeBepInEx       = "bepinex"
+	AddonInstallModeOxide         = "oxide"
+	AddonInstallModeSML           = "sml"
+	AddonInstallModeCS2Plugin     = "cs2_plugin"
+	AddonInstallModeCS2Workshop   = "cs2_workshop"
+	AddonInstallModeSevenDaysMod  = "7dtd_mod"
+	AddonInstallModePalworldMod   = "palworld_mod"
+	AddonInstallModeCoreKeeperMod = "corekeeper_mod"
 
 	// Instance → App identity (used by instance rendering and cache-affinity scheduling).
 	LabelInstanceApp             = "gamepanel.io/app"
@@ -750,7 +753,7 @@ func validateAddonConfig(prefix string, cfg map[string]string) error {
 
 func validAddonInstallMode(mode string) bool {
 	switch mode {
-	case AddonInstallModeFlatDir, AddonInstallModeTModLatest, AddonInstallModeDSTLocalMods, AddonInstallModeWorkshopTree, AddonInstallModeBepInEx, AddonInstallModeOxide, AddonInstallModeSML, AddonInstallModeCS2Plugin, AddonInstallModeCS2Workshop:
+	case AddonInstallModeFlatDir, AddonInstallModeTModLatest, AddonInstallModeDSTLocalMods, AddonInstallModeWorkshopTree, AddonInstallModeBepInEx, AddonInstallModeOxide, AddonInstallModeSML, AddonInstallModeCS2Plugin, AddonInstallModeCS2Workshop, AddonInstallModeSevenDaysMod, AddonInstallModePalworldMod, AddonInstallModeCoreKeeperMod:
 		return true
 	default:
 		return false

@@ -367,6 +367,21 @@ func TestExtractArchiveAddonsOxideSMLAndCS2Modes(t *testing.T) {
 	if len(cs2Addons) != 2 || cs2Addons[0].Package != "metamod" || cs2Addons[1].Package != "MatchZy" || cs2Addons[1].InstallMode != corev1.AddonInstallModeCS2Plugin {
 		t.Fatalf("unexpected CS2 extracted plugins: %+v", cs2Addons)
 	}
+	sdApp := findBuiltInApp(t, "seven-days-to-die")
+	sdAddons := ExtractArchiveAddons(sdApp, []string{"Mods/0_TFP_Harmony/harmony.dll", "Mods/OcbStopFuelWaste/ModInfo.xml"}, nil)
+	if len(sdAddons) != 1 || sdAddons[0].Package != "OcbStopFuelWaste" || sdAddons[0].InstallMode != corev1.AddonInstallModeSevenDaysMod {
+		t.Fatalf("unexpected 7DTD extracted mods: %+v", sdAddons)
+	}
+	pwApp := findBuiltInApp(t, "palworld-dedicated")
+	pwAddons := ExtractArchiveAddons(pwApp, []string{"Pal/Content/Paks/~mods/ElementalRebalance_P.pak", "Pal/Binaries/Linux/Mods/BasesPlus/scripts/main.lua"}, nil)
+	if len(pwAddons) != 2 || pwAddons[0].InstallMode != corev1.AddonInstallModePalworldMod {
+		t.Fatalf("unexpected Palworld extracted mods: %+v", pwAddons)
+	}
+	ckApp := findBuiltInApp(t, "core-keeper")
+	ckAddons := ExtractArchiveAddons(ckApp, []string{"CoreKeeperServer_Data/StreamingAssets/Mods/CoolMod/ModManifest.json", "BepInEx/plugins/PlacementPlus/PlacementPlus.dll"}, nil)
+	if len(ckAddons) != 2 || ckAddons[0].Repository != "core-keeper-modio" || ckAddons[1].Repository != "core-keeper-thunderstore" {
+		t.Fatalf("unexpected Core Keeper extracted mods: %+v", ckAddons)
+	}
 }
 
 func TestExtractArchiveAddonsFallbackAndNonDSTMerge(t *testing.T) {

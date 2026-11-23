@@ -150,7 +150,20 @@ export interface InstanceAddon {
   package: string;
   version: string;
   title?: string;
-  installMode?: "flat_dir" | "tmod_latest" | "dst_local_mods" | "workshop_tree" | "bepinex" | "oxide" | string;
+  installMode?:
+    | "flat_dir"
+    | "tmod_latest"
+    | "dst_local_mods"
+    | "workshop_tree"
+    | "bepinex"
+    | "oxide"
+    | "sml"
+    | "cs2_plugin"
+    | "cs2_workshop"
+    | "7dtd_mod"
+    | "palworld_mod"
+    | "corekeeper_mod"
+    | string;
   targetDir?: string;
   disabled?: boolean;
   config?: Record<string, string>;
@@ -463,6 +476,9 @@ export interface AppAddonBinding {
     | "sml"
     | "cs2_plugin"
     | "cs2_workshop"
+    | "7dtd_mod"
+    | "palworld_mod"
+    | "corekeeper_mod"
     | string;
   targetDir: string;
   label?: string;
@@ -554,6 +570,8 @@ export interface RegistryUpstream {
     | "umod"
     | "ficsit"
     | "cs2plugins"
+    | "sevendaysmods"
+    | "modio"
     | "steam"
     | "http"
     | string;
@@ -585,6 +603,8 @@ export interface RegistryRepository {
       | "umod_plugin"
       | "ficsit_mod"
       | "cs2_plugin"
+      | "sevendays_mod"
+      | "modio_mod"
       | "generic"
       | string;
     upstreamName?: string;

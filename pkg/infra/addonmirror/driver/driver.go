@@ -35,6 +35,7 @@ type Runtime interface {
 	GetCachedJSON(ctx context.Context, key string, dst any) bool
 	SetCachedJSON(ctx context.Context, key string, val any)
 	SteamAPIKey() string
+	ModIOAPIKey() string
 	SteamEndpoint(src Source) string
 	ModrinthEndpoint(src Source) string
 }

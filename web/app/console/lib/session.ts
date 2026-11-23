@@ -123,12 +123,14 @@ const ERROR_PATTERNS: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
   [/source file not found/i, () => "原文件或文件夹不存在，请刷新后重试"],
   [/^resource version conflict$/i, () => "服务器状态刚刚更新，请重试"],
   [/invalid credentials/i, () => "用户名或密码错误"],
+  [/mod\.io api key is not configured/i, () => "尚未配置 mod.io API 密钥，请联系管理员在镜像设置中填写或使用 Thunderstore 模组源"],
   [/bad gateway:.*(?:api\.steampowered\.com|steamcommunity\.com)/i, () => "连接 Steam 创意工坊失败，请检查节点网络或代理配置后重试"],
   [/bad gateway:.*modrinth/i, () => "连接 Modrinth 模组/插件源失败，请稍后重试"],
   [/bad gateway:.*thunderstore/i, () => "连接 Thunderstore 模组源失败，请稍后重试"],
   [/bad gateway:.*umod/i, () => "连接 uMod 插件源失败，请稍后重试"],
   [/bad gateway:.*ficsit/i, () => "连接 ficsit.app 模组源失败，请稍后重试"],
-  [/bad gateway:.*(?:github|sourcemm|alliedmods|cs2plugins)/i, () => "连接 CS2 插件源失败，请稍后重试"],
+  [/bad gateway:.*(?:api\.mod\.io|modio)/i, () => "连接 mod.io 模组源失败，请稍后重试"],
+  [/bad gateway:.*(?:github|sourcemm|alliedmods|cs2plugins|sevendaysmods)/i, () => "连接 GitHub 模组/插件源失败，请稍后重试"],
   [/bad gateway:.*(?:upstream .* request failed|upstream status \d+|EOF|timeout|deadline exceeded|connection refused|tls)/i, () => "上游软件源连接中断或响应超时，请稍后重试"],
 ];
 

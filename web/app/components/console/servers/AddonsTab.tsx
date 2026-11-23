@@ -100,6 +100,7 @@ function looksLikeResolveInput(input: string, isSteam: boolean): boolean {
     trimmed.includes("thunderstore.io/") ||
     trimmed.includes("umod.org/") ||
     trimmed.includes("ficsit.app/") ||
+    trimmed.includes("mod.io/") ||
     trimmed.includes("github.com/") ||
     /^workshop-\d+$/i.test(trimmed)
   ) {
@@ -1339,6 +1340,14 @@ export function AddonsTab({
     !catalogError &&
     catalogItems !== null &&
     catalogItems.length === 0;
+  const isModIO = repoName.toLowerCase().includes("modio");
+  const isModIOUnconfigured =
+    isModIO &&
+    !submittedQuery &&
+    !catalogLoading &&
+    !catalogError &&
+    catalogItems !== null &&
+    catalogItems.length === 0;
   const isResolveDraft = looksLikeResolveInput(browseQuery, isSteam);
   const detailStaged = detailTargetId ? stagedMap.get(detailTargetId) : undefined;
   const detailVersionChecked = Boolean(
@@ -1781,7 +1790,7 @@ export function AddonsTab({
       <Modal
         open={browseOpen}
         onClose={closeBrowseModal}
-        width={isSteamUnconfigured && !inBrowseDetail ? "max-w-xl" : "max-w-4xl h-[min(700px,85dvh)]"}
+        width={(isSteamUnconfigured || isModIOUnconfigured) && !inBrowseDetail ? "max-w-xl" : "max-w-4xl h-[min(700px,85dvh)]"}
         title={browseActionLabel}
         description={
           displayVersion ? `${app.displayName} · 适配版本 ${displayVersion}` : app.displayName
@@ -1801,7 +1810,7 @@ export function AddonsTab({
                 <span className="text-xs tabular-nums text-[#8A90A6]">{detailMetaLine}</span>
               )}
             </div>
-          ) : isSteamUnconfigured ? undefined : (
+          ) : (isSteamUnconfigured || isModIOUnconfigured) ? undefined : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Segmented<SortMode>
                 label="排序方式"
@@ -2077,6 +2086,32 @@ export function AddonsTab({
 
                 <div className="flex flex-col gap-2.5 rounded-2xl border border-[#E3E6F2] bg-white px-4 py-3 text-xs text-[#5B6075] sm:flex-row sm:items-center sm:justify-between">
                   <span>未配置 Steam Web API 密钥时暂不支持关键词搜索与热门榜单浏览。</span>
+                  {isAdmin && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="shrink-0 self-start sm:self-auto"
+                      onClick={() => setProxyModalOpen(true)}
+                    >
+                      立即配置密钥
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : isModIOUnconfigured ? (
+              <div className="space-y-4 py-1 text-left">
+                <div className="rounded-2xl bg-[#F7F8FC] p-4 sm:p-5">
+                  <div className="text-sm font-semibold text-[#14161F]">
+                    尚未配置 mod.io API 密钥
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[#5B6075]">
+                    浏览与下载 mod.io 官方模组需要配置 API 密钥（服务端环境变量{" "}
+                    <Mono>GP_ADDON_MIRROR_MODIO_API_KEY</Mono> / 上游凭证）。在此之前，你可以先切换使用无需密钥的「Thunderstore 模组」源。
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2.5 rounded-2xl border border-[#E3E6F2] bg-white px-4 py-3 text-xs text-[#5B6075] sm:flex-row sm:items-center sm:justify-between">
+                  <span>管理员可在「镜像设置」中为 mod.io 上游填写 API 密钥。</span>
                   {isAdmin && (
                     <Button
                       type="button"

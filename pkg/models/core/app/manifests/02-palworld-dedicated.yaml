@@ -14,8 +14,13 @@ serverBinding:
   repository: palworld-server
   package: palworld
   targetPath: .
+addonBinding:
+  repository: palworld-thunderstore
+  installMode: palworld_mod
+  targetDir: Pal/Content/Paks/~mods
 capabilities:
 - console
+- addons
 - players
 - versions
 - files
@@ -544,8 +549,14 @@ preStartCommand: |
     fi
   fi
   chown 1000:1000 /data /data/Pal /data/Pal/Binaries /data/Pal/Binaries/Linux
-  chown -R 1000:1000 /data/Pal/Saved /data/.steam
-startupCommand: exec runuser -u steam -- env HOME=/data /data/Pal/Binaries/Linux/PalServer-Linux-Shipping Pal -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS
+  mkdir -p /data/Pal/Content/Paks/~mods /data/Pal/Content/Paks/LogicMods /data/Pal/Binaries/Linux/Mods
+  chown -R 1000:1000 /data/Pal/Saved /data/.steam /data/Pal/Content/Paks/~mods /data/Pal/Content/Paks/LogicMods /data/Pal/Binaries/Linux/Mods
+startupCommand: |
+  UE4SS_PRELOAD=""
+  if [ -f /data/Pal/Binaries/Linux/libUE4SS.so ]; then
+    UE4SS_PRELOAD="/data/Pal/Binaries/Linux/libUE4SS.so"
+  fi
+  exec runuser -u steam -- env HOME=/data ${UE4SS_PRELOAD:+LD_PRELOAD=$UE4SS_PRELOAD} /data/Pal/Binaries/Linux/PalServer-Linux-Shipping Pal -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS
 preStopCommand: |
   palworld-send-to-console Save >/dev/null 2>&1 || rcon-cli Save >/dev/null 2>&1 || true
   palworld-send-to-console DoExit >/dev/null 2>&1 || rcon-cli DoExit >/dev/null 2>&1 || true
@@ -565,7 +576,7 @@ resources:
   cpu: '4'
   memory: 8Gi
   storage: 40Gi
-summary: 支持经验倍率、捕获率、巨大蛋孵化时间、据点上限、死亡惩罚等全量 PalWorldSettings.ini 可视化调节。
+summary: 支持经验倍率、捕获率、巨大蛋孵化时间、据点上限、死亡惩罚等全量 PalWorldSettings.ini 可视化调节及 Thunderstore 模组扩展。
 tagline: 开放世界生存制作 · 32 人专用联机服
 versions:
 - latest

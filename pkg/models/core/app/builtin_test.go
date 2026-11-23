@@ -342,6 +342,7 @@ func TestBuiltInMinecraftFabricBindingRender(t *testing.T) {
 	assertBuiltInValheimBepInExBindingRender(t, byName["valheim-dedicated"])
 	assertBuiltInRustOxideBindingRender(t, byName["rust-dedicated"])
 	assertBuiltInSatisfactoryAndCS2Bindings(t, byName["satisfactory-dedicated"], byName["counter-strike-2"])
+	assertBuiltInSevenDaysPalworldAndCoreKeeperBindings(t, byName["seven-days-to-die"], byName["palworld-dedicated"], byName["core-keeper"])
 }
 
 func assertBuiltInSatisfactoryAndCS2Bindings(t *testing.T, sf, cs2 *corev1.App) {
@@ -459,5 +460,35 @@ func assertL4D2WorkshopMapRender(t *testing.T, l4d2 *corev1.App) {
 	}
 	if l4d2Inst.Spec.Env["START_MAP"] != "uf1_boulevard" {
 		t.Fatalf("expected START_MAP=uf1_boulevard, got %q", l4d2Inst.Spec.Env["START_MAP"])
+	}
+}
+
+func assertBuiltInSevenDaysPalworldAndCoreKeeperBindings(t *testing.T, s7, pw, ck *corev1.App) {
+	t.Helper()
+	if s7 == nil || s7.AddonBinding == nil || s7.AddonBinding.Repository != "seven-days-mods" || s7.AddonBinding.InstallMode != corev1.AddonInstallModeSevenDaysMod {
+		t.Fatalf("unexpected seven-days-to-die AddonBinding: %+v", s7)
+	}
+	if pw == nil || pw.AddonBinding == nil || pw.AddonBinding.Repository != "palworld-thunderstore" || pw.AddonBinding.InstallMode != corev1.AddonInstallModePalworldMod {
+		t.Fatalf("unexpected palworld-dedicated AddonBinding: %+v", pw)
+	}
+	if ck == nil || ck.AddonBinding == nil || ck.AddonBinding.Repository != "core-keeper-thunderstore" ||
+		ck.AddonBinding.InstallMode != corev1.AddonInstallModeCoreKeeperMod || len(ck.AddonBinding.Additional) != 1 ||
+		ck.AddonBinding.Additional[0].Repository != "core-keeper-modio" {
+		t.Fatalf("unexpected core-keeper dual AddonBinding: %+v", ck)
+	}
+	ckInst := &corev1.Instance{
+		Metadata: metav1.ObjectMeta{Name: "ck-dual-binding", Annotations: map[string]string{AnnotationAppConfig: `{}`}},
+		Spec: corev1.InstanceSpec{
+			Addons: []corev1.InstanceAddon{
+				{Repository: "core-keeper-thunderstore", Package: "CoreMods-CoreLib", Version: "2.1.3"},
+				{Repository: "core-keeper-modio", Package: "55001", Version: "1.0.0"},
+			},
+		},
+	}
+	if err := RenderInstanceSpec(ck, ckInst); err != nil {
+		t.Fatalf("RenderInstanceSpec(core-keeper dual-binding): %v", err)
+	}
+	if ckInst.Spec.Addons[0].InstallMode != corev1.AddonInstallModeCoreKeeperMod || ckInst.Spec.Addons[1].InstallMode != corev1.AddonInstallModeCoreKeeperMod {
+		t.Fatalf("unexpected normalized core-keeper addons: %+v", ckInst.Spec.Addons)
 	}
 }

@@ -27,7 +27,7 @@ import {
 } from "../ui";
 import { useServerFiles } from "./api";
 
-const CONFIG_EXT_RE = /\.(ya?ml|json|toml|properties|conf|cfg|ini)$/i;
+const CONFIG_EXT_RE = /\.(ya?ml|json|toml|properties|conf|cfg|ini|xml)$/i;
 
 function sanitizeStem(raw: string): string {
   return raw.replace(/[^A-Za-z0-9._-]+/g, "").replace(/^[._-]+|[._-]+$/g, "");
@@ -50,6 +50,8 @@ function defaultTModFilename(modIds: string[], title: string): string {
 }
 
 function isEditablePluginConfig(name: string): boolean {
+  const low = name.toLowerCase();
+  if (low === "modinfo.xml" || low === "modmanifest.json") return false;
   return CONFIG_EXT_RE.test(name);
 }
 
@@ -152,8 +154,13 @@ export function AddonConfigModal({
   const isOxide = installMode === "oxide";
   const isSML = installMode === "sml";
   const isCS2Plugin = installMode === "cs2_plugin";
+  const isSevenDays = installMode === "7dtd_mod";
+  const isPalworld = installMode === "palworld_mod";
+  const isCoreKeeper = installMode === "corekeeper_mod";
   const isFlatDir = installMode === "flat_dir" || installMode === "";
-  const isFileMode = schema.length === 0 && (isTMod || isBepInEx || isOxide || isSML || isCS2Plugin || isFlatDir);
+  const isFileMode =
+    schema.length === 0 &&
+    (isTMod || isBepInEx || isOxide || isSML || isCS2Plugin || isSevenDays || isPalworld || isCoreKeeper || isFlatDir);
 
   // ----------------------------- Schema Form State -----------------------------
   const [schemaDraft, setSchemaDraft] = useState<Record<string, string>>({});
@@ -287,73 +294,7 @@ export function AddonConfigModal({
             const low = name.toLowerCase();
             return lowerIds.some((id) => low === `${id}.json` || low.startsWith(`${id}_`));
           });
-        } else if (isSML) {
-        const configDir = "FactoryGame/Configs";
-        const res = await listDirIfPresent(listFiles, configDir);
-        const allCfgs = res.entries
-          .filter((e) => !e.isDir && isEditablePluginConfig(e.name))
-          .map((e) => e.name)
-          .sort((a, b) => a.localeCompare(b));
-        const pkgTok = normalizeToken(addon.package);
-        const titleTok = normalizeToken(displayTitle);
-        let hits = allCfgs.filter((name) => {
-          const tok = normalizeToken(name.replace(CONFIG_EXT_RE, ""));
-          if (!tok) return false;
-          if (pkgTok.length >= 2 && (tok === pkgTok || tok.includes(pkgTok) || pkgTok.includes(tok))) return true;
-          return titleTok.length >= 3 && (tok === titleTok || tok.includes(titleTok));
-        });
-        if (hits.length === 0 && allCfgs.length > 0) {
-          hits = allCfgs;
-          setFuzzyNotice(`未精确匹配到单一配置文件，已列出 ${configDir} 目录中的全部配置文件。`);
-        }
-        const paths = hits.map((name) => `${configDir}/${name}`);
-        setMatchedFiles(paths);
-        setSelectedFile((prev) => (prev && paths.includes(prev) ? prev : (paths[0] || "")));
-      } else if (isCS2Plugin) {
-        const baseDir = (addon.targetDir || "game/csgo/addons").replace(/^\/+|\/+$/g, "") || "game/csgo/addons";
-        const csgoRoot = baseDir.endsWith("/addons") ? baseDir.slice(0, -"/addons".length) : "game/csgo";
-        const cssConfigDir = `${baseDir}/counterstrikesharp/configs`;
-        const shortPkg = addon.package.includes("--") ? addon.package.split("--").slice(1).join("--") : addon.package;
-        const tokens = [normalizeToken(shortPkg), normalizeToken(addon.package), normalizeToken(displayTitle)].filter(
-          (tok) => tok.length >= 3,
-        );
-        const collected: string[] = [];
-        if (addon.package.toLowerCase() === "counterstrikesharp") {
-          const rootCfgs = await listDirIfPresent(listFiles, cssConfigDir);
-          for (const e of rootCfgs.entries) {
-            if (!e.isDir && !e.name.toLowerCase().includes(".example.") && isEditablePluginConfig(e.name)) {
-              collected.push(`${cssConfigDir}/${e.name}`);
-            }
-          }
-        }
-        const pluginsCfgRes = await listDirIfPresent(listFiles, `${cssConfigDir}/plugins`);
-        for (const d of pluginsCfgRes.entries.filter((e) => e.isDir)) {
-          const tok = normalizeToken(d.name);
-          if (tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) {
-            const sub = await listFiles(`${cssConfigDir}/plugins/${d.name}`);
-            for (const f of sub) {
-              if (!f.isDir && isEditablePluginConfig(f.name)) {
-                collected.push(`${cssConfigDir}/plugins/${d.name}/${f.name}`);
-              }
-            }
-          }
-        }
-        const csgoCfgRes = await listDirIfPresent(listFiles, `${csgoRoot}/cfg`);
-        for (const d of csgoCfgRes.entries.filter((e) => e.isDir)) {
-          const tok = normalizeToken(d.name);
-          if (tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) {
-            const sub = await listFiles(`${csgoRoot}/cfg/${d.name}`);
-            for (const f of sub) {
-              if (!f.isDir && isEditablePluginConfig(f.name)) {
-                collected.push(`${csgoRoot}/cfg/${d.name}/${f.name}`);
-              }
-            }
-          }
-        }
-        collected.sort((a, b) => a.localeCompare(b));
-        setMatchedFiles(collected);
-        setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
-      } else {
+        } else {
           const titleTok = normalizeToken(displayTitle);
           if (titleTok.length >= 3) {
             hits = allJson.filter((name) => normalizeToken(name).includes(titleTok));
@@ -482,6 +423,100 @@ export function AddonConfigModal({
         collected.sort((a, b) => a.localeCompare(b));
         setMatchedFiles(collected);
         setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
+      } else if (isSevenDays) {
+        const baseDir = (addon.targetDir || "Mods").replace(/^\/+|\/+$/g, "") || "Mods";
+        const modsRes = await listDirIfPresent(listFiles, baseDir);
+        const shortPkg = addon.package.includes("--") ? addon.package.split("--").slice(1).join("--") : addon.package;
+        const tokens = [normalizeToken(shortPkg), normalizeToken(addon.package), normalizeToken(displayTitle)].filter(
+          (tok) => tok.length >= 3,
+        );
+        const collected: string[] = [];
+        for (const d of modsRes.entries.filter((e) => e.isDir && e.name !== "0_TFP_Harmony")) {
+          const tok = normalizeToken(d.name);
+          if (!tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) continue;
+          const modRoot = `${baseDir}/${d.name}`;
+          const rootEntries = await listFiles(modRoot);
+          for (const f of rootEntries) {
+            if (!f.isDir && isEditablePluginConfig(f.name)) {
+              collected.push(`${modRoot}/${f.name}`);
+            }
+          }
+          const cfgSub = await listDirIfPresent(listFiles, `${modRoot}/Config`);
+          for (const f of cfgSub.entries) {
+            if (!f.isDir && isEditablePluginConfig(f.name)) {
+              collected.push(`${modRoot}/Config/${f.name}`);
+            }
+          }
+        }
+        collected.sort((a, b) => a.localeCompare(b));
+        setMatchedFiles(collected);
+        setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
+      } else if (isPalworld) {
+        const shortPkg = addon.package.includes("-") ? addon.package.split("-").slice(1).join("-") : addon.package;
+        const tokens = [normalizeToken(shortPkg), normalizeToken(addon.package), normalizeToken(displayTitle)].filter(
+          (tok) => tok.length >= 3,
+        );
+        const collected: string[] = [];
+        for (const pakDir of ["Pal/Content/Paks/LogicMods", "Pal/Content/Paks/~mods"]) {
+          const res = await listDirIfPresent(listFiles, pakDir);
+          for (const f of res.entries) {
+            if (!f.isDir && isEditablePluginConfig(f.name)) {
+              const fTok = normalizeToken(f.name.replace(CONFIG_EXT_RE, ""));
+              if (tokens.some((cand) => fTok === cand || fTok.includes(cand) || cand.includes(fTok))) {
+                collected.push(`${pakDir}/${f.name}`);
+              }
+            }
+          }
+        }
+        const luaRes = await listDirIfPresent(listFiles, "Pal/Binaries/Linux/Mods");
+        for (const d of luaRes.entries.filter((e) => e.isDir && e.name.toLowerCase() !== "shared")) {
+          const tok = normalizeToken(d.name);
+          if (!tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) continue;
+          const sub = await listFiles(`Pal/Binaries/Linux/Mods/${d.name}`);
+          for (const f of sub) {
+            if (!f.isDir && isEditablePluginConfig(f.name)) {
+              collected.push(`Pal/Binaries/Linux/Mods/${d.name}/${f.name}`);
+            }
+          }
+        }
+        if (addon.package.toLowerCase().includes("ue4ss")) {
+          const binRes = await listDirIfPresent(listFiles, "Pal/Binaries/Linux");
+          if (binRes.entries.some((e) => !e.isDir && e.name === "UE4SS-settings.ini")) {
+            collected.push("Pal/Binaries/Linux/UE4SS-settings.ini");
+          }
+        }
+        collected.sort((a, b) => a.localeCompare(b));
+        setMatchedFiles(collected);
+        setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
+      } else if (isCoreKeeper) {
+        const shortPkg = addon.package.includes("-") ? addon.package.split("-").slice(1).join("-") : addon.package;
+        const tokens = [normalizeToken(shortPkg), normalizeToken(addon.package), normalizeToken(displayTitle)].filter(
+          (tok) => tok.length >= 3,
+        );
+        const collected: string[] = [];
+        const nativeRes = await listDirIfPresent(listFiles, "CoreKeeperServer_Data/StreamingAssets/Mods");
+        for (const d of nativeRes.entries.filter((e) => e.isDir)) {
+          const tok = normalizeToken(d.name);
+          if (!tokens.some((cand) => tok === cand || tok.includes(cand) || cand.includes(tok))) continue;
+          const sub = await listFiles(`CoreKeeperServer_Data/StreamingAssets/Mods/${d.name}`);
+          for (const f of sub) {
+            if (!f.isDir && isEditablePluginConfig(f.name)) {
+              collected.push(`CoreKeeperServer_Data/StreamingAssets/Mods/${d.name}/${f.name}`);
+            }
+          }
+        }
+        const bepCfg = await listDirIfPresent(listFiles, "BepInEx/config");
+        for (const f of bepCfg.entries) {
+          if (!f.isDir && isEditablePluginConfig(f.name)) {
+            const fTok = normalizeToken(f.name.replace(CONFIG_EXT_RE, ""));
+            if (tokens.some((cand) => fTok.includes(cand) || cand.includes(fTok))) {
+              collected.push(`BepInEx/config/${f.name}`);
+            }
+          }
+        }
+        collected.sort((a, b) => a.localeCompare(b));
+        setMatchedFiles(collected);
+        setSelectedFile((prev) => (prev && collected.includes(prev) ? prev : (collected[0] || "")));
       } else {
         const baseDir = (addon.targetDir || "plugins").replace(/^\/+|\/+$/g, "") || "plugins";
         const res = await listDirIfPresent(listFiles, baseDir);
@@ -518,7 +553,7 @@ export function AddonConfigModal({
     } finally {
       setFilesLoading(false);
     }
-  }, [open, addon, isFileMode, isTMod, isBepInEx, isOxide, isSML, isCS2Plugin, listFiles, modIds, displayTitle, artifact?.status?.descriptor?.fileName]);
+  }, [open, addon, isFileMode, isTMod, isBepInEx, isOxide, isSML, isCS2Plugin, isSevenDays, isPalworld, isCoreKeeper, listFiles, modIds, displayTitle, artifact?.status?.descriptor?.fileName]);
 
   useEffect(() => {
     void scanWorkspaceConfigs();
@@ -527,11 +562,12 @@ export function AddonConfigModal({
   const isJsonFormTarget = useMemo(
     () =>
       isTMod ||
-      ((isOxide || isCS2Plugin) && selectedFile.toLowerCase().endsWith(".json")) ||
+      ((isOxide || isCS2Plugin || isSevenDays || isPalworld || isCoreKeeper) &&
+        selectedFile.toLowerCase().endsWith(".json")) ||
       (isSML &&
         (selectedFile.toLowerCase().endsWith(".json") ||
           (fileSavedContent !== "" && parsePlainJsonObject(fileSavedContent) !== null))),
-    [fileSavedContent, isCS2Plugin, isOxide, isSML, isTMod, selectedFile],
+    [fileSavedContent, isCS2Plugin, isCoreKeeper, isOxide, isPalworld, isSML, isSevenDays, isTMod, selectedFile],
   );
 
   useEffect(() => {

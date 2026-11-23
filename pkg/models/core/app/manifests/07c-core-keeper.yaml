@@ -7,7 +7,7 @@ metadata:
     gamepanel.io/category: sandbox
 displayName: 护核纪元 Core Keeper
 tagline: 地下像素沙盒探险 · 多人合作挖掘与基地建造
-summary: 支持世界难度模式、随机种子、存档槽位与季节节日主题切换，内置 Xvfb 无头图形环境与优雅停服存盘。
+summary: 支持世界难度模式、随机种子、存档槽位、季节节日主题切换与 Thunderstore / mod.io 双源模组管理，内置 Xvfb 无头图形环境与优雅停服存盘。
 category: sandbox
 coverImage: /landing/games/core-keeper.jpg
 image: registry.cn-hangzhou.aliyuncs.com/gamepanel-lite/runtime:latest
@@ -27,6 +27,16 @@ serverBinding:
   repository: core-keeper-server
   package: core-keeper
   targetPath: .
+addonBinding:
+  repository: core-keeper-thunderstore
+  installMode: corekeeper_mod
+  targetDir: CoreKeeperServer_Data/StreamingAssets/Mods
+  label: Thunderstore 模组
+  additional:
+  - repository: core-keeper-modio
+    installMode: corekeeper_mod
+    targetDir: CoreKeeperServer_Data/StreamingAssets/Mods
+    label: mod.io 官方模组
 env:
   WORLD_NAME: CoreKeeperWorld
   MAX_PLAYERS: '8'
@@ -154,7 +164,7 @@ fileTemplates:
     }
 preStartCommand: |
   chmod +x /data/CoreKeeperServer /data/_launch.sh 2>/dev/null || true
-  mkdir -p /data/saves /data/saves/worlds
+  mkdir -p /data/saves /data/saves/worlds /data/CoreKeeperServer_Data/StreamingAssets/Mods /data/BepInEx/plugins /data/BepInEx/config
   if [ -f /data/linux64/steamclient.so ]; then
     mkdir -p /data/.steam/sdk64
     ln -sf /data/linux64/steamclient.so /data/.steam/sdk64/steamclient.so
@@ -176,6 +186,25 @@ startupCommand: |
     sleep 1
   fi
   export LD_LIBRARY_PATH="/data:/data/linux64:/data/CoreKeeperServer_Data/Plugins/x86_64:${LD_LIBRARY_PATH:-}"
+  PRELOADER=""
+  if [ -f /data/BepInEx/core/BepInEx.Preloader.Core.dll ]; then
+    PRELOADER="/data/BepInEx/core/BepInEx.Preloader.Core.dll"
+  elif [ -f /data/BepInEx/core/BepInEx.Preloader.dll ]; then
+    PRELOADER="/data/BepInEx/core/BepInEx.Preloader.dll"
+  fi
+  if [ -n "$PRELOADER" ]; then
+    export DOORSTOP_ENABLED=1
+    export DOORSTOP_ENABLE=TRUE
+    export DOORSTOP_TARGET_ASSEMBLY="$PRELOADER"
+    export DOORSTOP_INVOKE_DLL_PATH="$PRELOADER"
+    if [ -f /data/doorstop_libs/libdoorstop_x64.so ]; then
+      export LD_LIBRARY_PATH="/data/doorstop_libs:${LD_LIBRARY_PATH}"
+      export LD_PRELOAD="libdoorstop_x64.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    elif [ -f /data/libdoorstop.so ]; then
+      export LD_LIBRARY_PATH="/data:${LD_LIBRARY_PATH}"
+      export LD_PRELOAD="libdoorstop.so${LD_PRELOAD:+:$LD_PRELOAD}"
+    fi
+  fi
   set -- /data/CoreKeeperServer -batchmode -logfile /dev/stdout -datapath /data/saves -ip 0.0.0.0 -port 27015 -world "$CK_INDEX" -worldname "$CK_NAME" -maxplayers "$CK_MAXP" -worldmode "$CK_MODE" -season "$CK_SEASON"
   [ -n "$CK_SEED" ] && [ "$CK_SEED" != "0" ] && set -- "$@" -worldseed "$CK_SEED"
   exec "$@"

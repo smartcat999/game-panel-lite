@@ -17,6 +17,8 @@ const (
 	ProviderUMod          = "umod"
 	ProviderFicsit        = "ficsit"
 	ProviderCS2Plugins    = "cs2plugins"
+	ProviderSevenDaysMods = "sevendaysmods"
+	ProviderModIO         = "modio"
 	ProviderSteam         = "steam"
 	ProviderHTTP          = "http"
 	ProviderTerraria      = "terraria"
@@ -29,6 +31,8 @@ const (
 	FormatUModPlugin      = "umod_plugin"
 	FormatFicsitMod       = "ficsit_mod"
 	FormatCS2Plugin       = "cs2_plugin"
+	FormatSevenDaysMod    = "sevendays_mod"
+	FormatModIOMod        = "modio_mod"
 	FormatGeneric         = "generic"
 
 	ArchiveFormatRaw   = "raw"
@@ -69,6 +73,7 @@ const (
 	DefaultFicsitBaseURL               = "https://api.ficsit.app"
 	DefaultMetamodBaseURL              = "https://mms.alliedmods.net/mmsdrop/2.0"
 	DefaultGitHubAPIBaseURL            = "https://api.github.com"
+	DefaultModIOBaseURL                = "https://api.mod.io/v1"
 	DefaultFabricMetaBaseURL           = "https://meta.fabricmc.net"
 	DefaultMojangManifestURL           = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 	DefaultMojangMirrorBase            = "https://bmclapi2.bangbang93.com"
@@ -83,6 +88,7 @@ const (
 
 var (
 	ErrSteamKeyMissing    = errors.New("steam web api key is not configured")
+	ErrModIOKeyMissing    = errors.New("mod.io api key is not configured")
 	ErrUnsupportedSource  = errors.New("unsupported addon mirror provider")
 	ErrInvalidRequest     = errors.New("invalid addon mirror request")
 	ErrInvalidSignature   = errors.New("invalid addon image signature")
@@ -192,6 +198,7 @@ type Options struct {
 	SteamAPIBaseURL   string
 	ModrinthBaseURL   string
 	SteamWebAPIKey    string
+	ModIOAPIKey       string
 	UpstreamProxyURL  string
 	SigningSecret     string
 	ImageHostMirrors  []string

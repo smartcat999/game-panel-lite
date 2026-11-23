@@ -58,6 +58,7 @@ func New(c cache.Interface, opts ...Options) *Service {
 func NewForRegistry(c cache.Interface, regCfg config.RegistryConfig, p RegistryParams) (*Service, Source) {
 	opts := Options{
 		SteamWebAPIKey:   driver.FirstNonEmpty(p.APIKey, regCfg.SteamWebAPIKey),
+		ModIOAPIKey:      driver.FirstNonEmpty(p.APIKey, regCfg.ModIOAPIKey),
 		UpstreamProxyURL: driver.FirstNonEmpty(p.ProxyURL, regCfg.UpstreamProxyURL),
 		CacheTTL:         regCfg.CatalogCacheTTL,
 		Timeout:          regCfg.Timeout,
@@ -103,6 +104,14 @@ func (s *Service) SteamAPIKey() string {
 		return strings.TrimSpace(s.opts.SteamWebAPIKey)
 	}
 	return strings.TrimSpace(config.Get().AddonMirror.SteamWebAPIKey)
+}
+
+// ModIOAPIKey returns the configured mod.io API key.
+func (s *Service) ModIOAPIKey() string {
+	if strings.TrimSpace(s.opts.ModIOAPIKey) != "" {
+		return strings.TrimSpace(s.opts.ModIOAPIKey)
+	}
+	return strings.TrimSpace(config.Get().AddonMirror.ModIOAPIKey)
 }
 
 func (s *Service) signingSecret() string {

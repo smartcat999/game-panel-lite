@@ -17,6 +17,8 @@ const (
 	ProviderUMod          = driver.ProviderUMod
 	ProviderFicsit        = driver.ProviderFicsit
 	ProviderCS2Plugins    = driver.ProviderCS2Plugins
+	ProviderSevenDaysMods = driver.ProviderSevenDaysMods
+	ProviderModIO         = driver.ProviderModIO
 	ProviderSteam         = driver.ProviderSteam
 	ProviderHTTP          = driver.ProviderHTTP
 	ProviderTerraria      = driver.ProviderTerraria
@@ -29,6 +31,8 @@ const (
 	FormatUModPlugin      = driver.FormatUModPlugin
 	FormatFicsitMod       = driver.FormatFicsitMod
 	FormatCS2Plugin       = driver.FormatCS2Plugin
+	FormatSevenDaysMod    = driver.FormatSevenDaysMod
+	FormatModIOMod        = driver.FormatModIOMod
 	FormatGeneric         = driver.FormatGeneric
 
 	ArchiveFormatRaw   = driver.ArchiveFormatRaw
@@ -76,12 +80,14 @@ const (
 	DefaultFicsitBaseURL               = driver.DefaultFicsitBaseURL
 	DefaultMetamodBaseURL              = driver.DefaultMetamodBaseURL
 	DefaultGitHubAPIBaseURL            = driver.DefaultGitHubAPIBaseURL
+	DefaultModIOBaseURL                = driver.DefaultModIOBaseURL
 	maxProxiedImageBytes               = 8 << 20 // 8 MiB
 	maxCachedThumbnailBytes            = 256 << 10
 )
 
 var (
 	ErrSteamKeyMissing    = driver.ErrSteamKeyMissing
+	ErrModIOKeyMissing    = driver.ErrModIOKeyMissing
 	ErrUnsupportedSource  = driver.ErrUnsupportedSource
 	ErrInvalidRequest     = driver.ErrInvalidRequest
 	ErrInvalidSignature   = driver.ErrInvalidSignature

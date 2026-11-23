@@ -21,6 +21,7 @@ export function DownloadProxyModal({
   const [upstreams, setUpstreams] = useState<RegistryUpstream[]>([]);
   const [proxyURL, setProxyURL] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [modioApiKey, setModioApiKey] = useState("");
   const [autoPrewarm, setAutoPrewarm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -30,6 +31,7 @@ export function DownloadProxyModal({
     let cancelled = false;
     setLoading(true);
     setApiKey("");
+    setModioApiKey("");
     void (async () => {
       try {
         const [upRes, adminRes] = await Promise.all([
@@ -72,11 +74,14 @@ export function DownloadProxyModal({
     setSaving(true);
     try {
       const trimmedKey = apiKey.trim();
+      const trimmedModIO = modioApiKey.trim();
       await Promise.all(
         upstreams.map(async (u) => {
           const patch: Record<string, unknown> = { proxyURL: trimmedProxy };
           if (u.provider === "steam" && trimmedKey) {
             patch.apiKey = trimmedKey;
+          } else if (u.provider === "modio" && trimmedModIO) {
+            patch.apiKey = trimmedModIO;
           }
           const res = await apiFetch(
             `/apis/registry.gamepanel.io/v1/upstreams/${encodeURIComponent(u.metadata.name)}`,
@@ -155,6 +160,21 @@ export function DownloadProxyModal({
             onChange={(e) => setApiKey(e.target.value)}
             disabled={loading}
             placeholder="留空保持当前配置不变"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        </Field>
+        <Field label="mod.io API 密钥（选填）" htmlFor="dl-modio-key">
+          <Input
+            id="dl-modio-key"
+            name="modioApiKey"
+            type="password"
+            value={modioApiKey}
+            onChange={(e) => setModioApiKey(e.target.value)}
+            disabled={loading}
+            placeholder="用于护核纪元等 mod.io 官方模组源，留空保持不变"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
