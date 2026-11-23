@@ -30,6 +30,7 @@ const (
 	AttemptClosed             = corev1.AttemptPhaseClosed
 	ChangeBudgeting           = corev1.ResourceChangePhaseBudgeting
 	ChangeApplying            = corev1.ResourceChangePhaseApplying
+	ChangeCancelling          = corev1.ResourceChangePhaseCancelling
 )
 
 func AddFinalizer(m *metav1.ObjectMeta, f string) {
@@ -266,8 +267,8 @@ func validateTransition(old, next *corev1.Instance) error {
 }
 
 func validateControlIdentityAndStage(old, next *corev1.Instance, a, b *corev1.InstanceResourceControl) error {
-	if a.TenantUID != b.TenantUID || a.AllocationID != b.AllocationID || !reflect.DeepEqual(a.InitialResources, b.InitialResources) {
-		return conflict("creation identity and initial budget are immutable")
+	if a.TenantUID != b.TenantUID {
+		return conflict("creation identity is immutable")
 	}
 	for name, value := range map[string]string{"tenantUID": b.TenantUID, "allocationID": b.AllocationID} {
 		if err := corev1.ValidateIdentifier(name, value); err != nil {
@@ -280,19 +281,10 @@ func validateControlIdentityAndStage(old, next *corev1.Instance, a, b *corev1.In
 	if old.Metadata.DeletionTimestamp != nil && (next.Metadata.DeletionTimestamp == nil || !old.Metadata.DeletionTimestamp.Equal(*next.Metadata.DeletionTimestamp)) {
 		return conflict("deletion intent is immutable")
 	}
-	from, to := GetStage(old), GetStage(next)
-	valid := from == to || (from == StagePendingQuota && to == StageScheduling) || (from == StageScheduling && to == StageActive) || (from != StageReleasingQuota && to == StageDeleting) || (from == StageDeleting && to == StageReleasingQuota)
-	if !valid {
-		return conflict("invalid lifecycle stage transition")
+	if err := validateRebudgetAndStage(next, a, b, GetStage(old), GetStage(next)); err != nil {
+		return err
 	}
-	if to == StageDeleting || to == StageReleasingQuota {
-		if next.Metadata.DeletionTimestamp == nil {
-			return conflict("closing lifecycle needs deletion intent")
-		}
-	} else if next.Metadata.DeletionTimestamp != nil {
-		return conflict("deleted object cannot reopen lifecycle")
-	}
-	if HasFinalizer(&old.Metadata, FinalizerResources) && !HasFinalizer(&next.Metadata, FinalizerResources) && to != StageReleasingQuota {
+	if HasFinalizer(&old.Metadata, FinalizerResources) && !HasFinalizer(&next.Metadata, FinalizerResources) && GetStage(next) != StageReleasingQuota {
 		return conflict("inventory finalizer cannot be removed before release")
 	}
 	if HasFinalizer(&old.Metadata, corev1.FinalizerInstanceCleanup) && !HasFinalizer(&next.Metadata, corev1.FinalizerInstanceCleanup) && next.Metadata.DeletionTimestamp == nil {
@@ -300,6 +292,63 @@ func validateControlIdentityAndStage(old, next *corev1.Instance, a, b *corev1.In
 	}
 	if !reflect.DeepEqual(old.Spec.Ports, next.Spec.Ports) {
 		return conflict("port changes require a dedicated placement plan")
+	}
+	return nil
+}
+
+func validateRebudgetAndStage(next *corev1.Instance, a, b *corev1.InstanceResourceControl, from, to Stage) error {
+	rebudgetRotating := a.Rebudgeting && !b.Rebudgeting && next.Metadata.DeletionTimestamp == nil
+	if rebudgetRotating {
+		if (from != StagePendingQuota && from != StageScheduling) || to != StagePendingQuota || a.ApprovedRevision != 0 || b.ApprovedRevision != 0 {
+			return conflict("rebudget rotation requires unbound PendingQuota or Scheduling stage")
+		}
+		if (b.CurrentAttempt != nil && b.CurrentAttempt.Phase != AttemptClosed) || b.AllocationID == a.AllocationID {
+			return conflict("rebudget rotation requires closed candidate and fresh allocation")
+		}
+		desired, err := corev1.NormalizeInstanceResources(next.Spec.Resources, nil)
+		if err != nil {
+			return err
+		}
+		initial, err := snapshot(b.InitialResources)
+		if err != nil || initial != desired {
+			return conflict("rebudget rotation must freeze normalized desired resources")
+		}
+	} else {
+		if a.AllocationID != b.AllocationID || !reflect.DeepEqual(a.InitialResources, b.InitialResources) {
+			return conflict("creation identity and initial budget are immutable")
+		}
+		if err := validateRebudgetFlag(next, a, b, from, to); err != nil {
+			return err
+		}
+	}
+	return validateStageTransition(next, rebudgetRotating, a.Rebudgeting && !rebudgetRotating, from, to)
+}
+
+func validateRebudgetFlag(next *corev1.Instance, a, b *corev1.InstanceResourceControl, from, to Stage) error {
+	if !a.Rebudgeting && b.Rebudgeting {
+		if next.Metadata.DeletionTimestamp != nil || from != to || (from != StagePendingQuota && from != StageScheduling) || a.ApprovedRevision != 0 || b.ApprovedRevision != 0 {
+			return conflict("rebudgeting only applies to live unbound instances")
+		}
+	} else if a.Rebudgeting != b.Rebudgeting {
+		return conflict("rebudgeting flag cannot change in this transition")
+	}
+	return nil
+}
+
+func validateStageTransition(next *corev1.Instance, rebudgetRotating, blockedForward bool, from, to Stage) error {
+	valid := from == to || rebudgetRotating || (from == StagePendingQuota && to == StageScheduling) || (from == StageScheduling && to == StageActive) || (from != StageReleasingQuota && to == StageDeleting) || (from == StageDeleting && to == StageReleasingQuota)
+	if !valid {
+		return conflict("invalid lifecycle stage transition")
+	}
+	if blockedForward && next.Metadata.DeletionTimestamp == nil && from != to {
+		return conflict("cannot advance lifecycle while rebudgeting is pending")
+	}
+	if to == StageDeleting || to == StageReleasingQuota {
+		if next.Metadata.DeletionTimestamp == nil {
+			return conflict("closing lifecycle needs deletion intent")
+		}
+	} else if next.Metadata.DeletionTimestamp != nil {
+		return conflict("deleted object cannot reopen lifecycle")
 	}
 	return nil
 }
@@ -403,6 +452,9 @@ func validateAttempt(a, b *corev1.InstanceResourceControl, stage Stage, nodeName
 		return err
 	}
 	if old == nil || old.ID != next.ID {
+		if a.Rebudgeting || b.Rebudgeting {
+			return conflict("cannot start candidate placement while rebudgeting")
+		}
 		if stage != StageScheduling || next.Phase != AttemptPending || b.ApprovedRevision != 0 {
 			return conflict("new attempts start Pending during Scheduling")
 		}
@@ -443,8 +495,12 @@ func validateChange(a, b *corev1.InstanceResourceControl, old, next *corev1.Inst
 	if y != nil {
 		return validateActiveChangePayload(b, next, y)
 	}
-	if b.DesiredRevision != a.DesiredRevision || (b.ApprovedRevision != a.ApprovedRevision && (a.ApprovedRevision != 0 || b.ApprovedRevision != 1 || GetStage(next) != StageActive)) {
+	cancelledBack := a.Change != nil && a.Change.Phase == ChangeCancelling && b.DesiredRevision == b.ApprovedRevision && b.ApprovedRevision == a.ApprovedRevision
+	if !cancelledBack && (b.DesiredRevision != a.DesiredRevision || (b.ApprovedRevision != a.ApprovedRevision && (a.ApprovedRevision != 0 || b.ApprovedRevision != 1 || GetStage(next) != StageActive))) {
 		return conflict("revision changed without a frozen plan")
+	}
+	if b.Rebudgeting && b.ApprovedRevision == 0 {
+		return nil
 	}
 	desired, err := corev1.NormalizeInstanceResources(next.Spec.Resources, nil)
 	if err != nil {
@@ -466,28 +522,44 @@ func validateChange(a, b *corev1.InstanceResourceControl, old, next *corev1.Inst
 
 func validateChangeTransition(a, b *corev1.InstanceResourceControl, old, next *corev1.Instance) error {
 	x, y := a.Change, b.Change
-	if x != nil && y == nil {
-		if x.Phase != ChangeApplying || b.ApprovedRevision != x.ToRevision || b.ObservedRevision != x.ToRevision || b.CurrentAttempt == nil || b.ObservedAttemptID != b.CurrentAttempt.ID || b.ObservedEpoch != b.CurrentAttempt.Epoch {
+	switch {
+	case x != nil && y == nil:
+		settled := x.Phase == ChangeApplying && b.ApprovedRevision == x.ToRevision && b.ObservedRevision == x.ToRevision && b.CurrentAttempt != nil && b.ObservedAttemptID == b.CurrentAttempt.ID && b.ObservedEpoch == b.CurrentAttempt.Epoch
+		cancelled := x.Phase == ChangeCancelling && b.ApprovedRevision == x.FromRevision && b.DesiredRevision == x.FromRevision && reflect.DeepEqual(b.ApprovedResources, x.OldResources)
+		if !settled && !cancelled {
 			return conflict("change cannot clear before matching execution observation")
 		}
-	} else if x != nil && y != nil {
-		p, q := *x, *y
-		p.Phase, q.Phase = "", ""
-		if !reflect.DeepEqual(p, q) {
-			return conflict("resource change identity and complete plan are immutable")
-		}
-		if x.Phase != y.Phase && (x.Phase != ChangeBudgeting || y.Phase != ChangeApplying) {
-			return conflict("invalid resource change phase")
-		}
-	} else if x == nil && y != nil {
-		if GetStage(old) != StageActive || GetStage(next) != StageActive || a.ApprovedRevision == math.MaxInt64 || y.FromRevision != a.ApprovedRevision || y.ToRevision != a.ApprovedRevision+1 || y.Phase != ChangeBudgeting || !reflect.DeepEqual(y.OldResources, a.ApprovedResources) {
-			return conflict("new change must freeze current approved budget")
-		}
-		if err := corev1.ValidateIdentifier("changeID", y.ID); err != nil {
-			return err
-		}
+	case x != nil && y != nil:
+		return validateExistingChangeTransition(a, x, y, old, next)
+	case x == nil && y != nil:
+		return validateNewChangePlan(a, y, old, next)
 	}
 	return nil
+}
+
+func validateExistingChangeTransition(a *corev1.InstanceResourceControl, x, y *corev1.InstanceResourceChange, old, next *corev1.Instance) error {
+	if x.ID != y.ID {
+		if x.Phase != ChangeCancelling {
+			return conflict("resource change identity and complete plan are immutable")
+		}
+		return validateNewChangePlan(a, y, old, next)
+	}
+	p, q := *x, *y
+	p.Phase, q.Phase = "", ""
+	if !reflect.DeepEqual(p, q) {
+		return conflict("resource change identity and complete plan are immutable")
+	}
+	if x.Phase != y.Phase && (x.Phase != ChangeBudgeting || (y.Phase != ChangeApplying && y.Phase != ChangeCancelling)) {
+		return conflict("invalid resource change phase")
+	}
+	return nil
+}
+
+func validateNewChangePlan(a *corev1.InstanceResourceControl, y *corev1.InstanceResourceChange, old, next *corev1.Instance) error {
+	if GetStage(old) != StageActive || GetStage(next) != StageActive || a.ApprovedRevision == math.MaxInt64 || y.FromRevision != a.ApprovedRevision || y.ToRevision != a.ApprovedRevision+1 || y.Phase != ChangeBudgeting || !reflect.DeepEqual(y.OldResources, a.ApprovedResources) {
+		return conflict("new change must freeze current approved budget")
+	}
+	return corev1.ValidateIdentifier("changeID", y.ID)
 }
 
 func validateActiveChangePayload(b *corev1.InstanceResourceControl, next *corev1.Instance, y *corev1.InstanceResourceChange) error {
@@ -503,7 +575,7 @@ func validateActiveChangePayload(b *corev1.InstanceResourceControl, next *corev1
 	if err != nil {
 		return err
 	}
-	if before == target || target != desired || b.DesiredRevision != y.ToRevision {
+	if before == target || b.DesiredRevision != y.ToRevision || (y.Phase != ChangeCancelling && target != desired) {
 		return conflict("change target differs from declared resources or revision")
 	}
 	switch y.Phase {
@@ -511,7 +583,7 @@ func validateActiveChangePayload(b *corev1.InstanceResourceControl, next *corev1
 		if b.ApprovedRevision != y.ToRevision || !reflect.DeepEqual(b.ApprovedResources, y.TargetResources) {
 			return conflict("Applying must publish the complete target budget")
 		}
-	case ChangeBudgeting:
+	case ChangeBudgeting, ChangeCancelling:
 		if b.ApprovedRevision != y.FromRevision || !reflect.DeepEqual(b.ApprovedResources, y.OldResources) {
 			return conflict("Budgeting cannot publish executable resources")
 		}

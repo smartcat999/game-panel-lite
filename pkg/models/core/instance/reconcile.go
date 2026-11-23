@@ -73,9 +73,40 @@ func quotaCommand(i *corev1.Instance, kind corev1.Kind) pgutil.Command {
 	c := pgutil.Command{Domain: corev1.QuotaDomain, AccountID: i.Status.ResourceControl.TenantUID, AllocationID: i.Status.ResourceControl.AllocationID, Owner: owner(i), Kind: kind}
 	c.OperationID = "quota:" + string(kind) + ":" + c.AllocationID
 	if kind == corev1.RequestClose || kind == corev1.FinalizeClose {
-		c.CloseIntentID = "delete:" + i.Metadata.UID
+		if i.Status.ResourceControl.Rebudgeting {
+			c.CloseIntentID = "rebudget:" + c.AllocationID
+		} else {
+			c.CloseIntentID = "delete:" + i.Metadata.UID
+		}
 	}
 	return c
+}
+
+func cancelChangeCommand(i *corev1.Instance, plan pgutil.ResourceChange, node bool) pgutil.Command {
+	c := quotaCommand(i, corev1.CancelChange)
+	if node {
+		c = nodeCommand(i, corev1.CancelChange)
+	}
+	c.OperationID = string(c.Domain) + ":" + string(corev1.CancelChange) + ":" + plan.ChangeID
+	c.ChangePlanID = plan.ChangeID
+	return c
+}
+
+func removeConditionsByType(list *[]metav1.Condition, types ...string) {
+	if list == nil || len(*list) == 0 {
+		return
+	}
+	kept := (*list)[:0]
+	for _, c := range *list {
+		if !slices.Contains(types, c.Type) {
+			kept = append(kept, c)
+		}
+	}
+	if len(kept) == 0 {
+		*list = nil
+		return
+	}
+	*list = kept
 }
 func nodeCommand(i *corev1.Instance, kind corev1.Kind) pgutil.Command {
 	a := i.Status.ResourceControl.CurrentAttempt
@@ -182,7 +213,7 @@ func (r *StageReconciler) reconcileActive(ctx context.Context, i *corev1.Instanc
 		i.Status.ResourceControl.Suspended = wantSuspended
 		return CommitControl(ctx, r.db, i)
 	}
-	if i.Status.ResourceControl.Change != nil && (!wantSuspended || i.Status.ResourceControl.Change.Phase == ChangeApplying) {
+	if i.Status.ResourceControl.Change != nil && (!wantSuspended || i.Status.ResourceControl.Change.Phase == ChangeApplying || i.Status.ResourceControl.Change.Phase == ChangeCancelling) {
 		return r.resize(ctx, i)
 	}
 	return i, nil
@@ -210,6 +241,9 @@ func (r *StageReconciler) syncQuota(ctx context.Context, i *corev1.Instance) err
 	return err
 }
 func (r *StageReconciler) pendingQuota(ctx context.Context, i *corev1.Instance) (*corev1.Instance, error) {
+	if i.Status.ResourceControl.Rebudgeting {
+		return r.rebudgetUnbound(ctx, i)
+	}
 	class, err := r.runtimeClass(ctx, i)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) || errors.Is(err, corev1.AdmissionDenied) {
@@ -399,6 +433,9 @@ func (r *StageReconciler) choose(ctx context.Context, i *corev1.Instance) (*core
 }
 func (r *StageReconciler) scheduling(ctx context.Context, i *corev1.Instance) (*corev1.Instance, error) {
 	control := i.Status.ResourceControl
+	if control.Rebudgeting {
+		return r.rebudgetUnbound(ctx, i)
+	}
 	if control.CurrentAttempt != nil && control.CurrentAttempt.Phase == AttemptClosing {
 		return r.closeCandidate(ctx, i)
 	}
@@ -571,6 +608,44 @@ func changeCommand(i *corev1.Instance, plan pgutil.ResourceChange, source int64,
 	}
 	return c, nil
 }
+func (r *StageReconciler) rebudgetUnbound(ctx context.Context, i *corev1.Instance) (*corev1.Instance, error) {
+	control := i.Status.ResourceControl
+	if a := control.CurrentAttempt; a != nil && a.Phase != AttemptClosed {
+		if a.Phase == AttemptPending {
+			a.Phase = AttemptClosing
+			return CommitControl(ctx, r.db, i)
+		}
+		if a.Phase == AttemptClosing {
+			var err error
+			i, err = r.closeCandidate(ctx, i)
+			if err != nil {
+				return i, err
+			}
+			control = i.Status.ResourceControl
+		}
+	}
+	if _, err := r.quotaDB.RequestClose(ctx, quotaCommand(i, corev1.RequestClose)); err != nil {
+		return i, err
+	}
+	result, err := r.quotaDB.FinalizeClose(ctx, quotaCommand(i, corev1.FinalizeClose))
+	if err != nil {
+		return i, err
+	}
+	if result.Allocation.State != corev1.AllocationClosed {
+		return i, controlError(corev1.InvariantViolation, "rebudget quota close is not confirmed")
+	}
+	desired, err := normalizedIntentResources(i)
+	if err != nil {
+		return i, err
+	}
+	control.AllocationID = db.NewUID()
+	control.InitialResources = corev1.CanonicalResources(desired)
+	control.Stage = string(StagePendingQuota)
+	control.Rebudgeting = false
+	removeConditionsByType(&i.Status.Conditions, metav1.ConditionTypeQuotaReserved, metav1.ConditionTypeScheduled)
+	return CommitControl(ctx, r.db, i)
+}
+
 func (r *StageReconciler) resize(ctx context.Context, i *corev1.Instance) (*corev1.Instance, error) {
 	control := i.Status.ResourceControl
 	if control.CurrentAttempt == nil || control.CurrentAttempt.Phase != AttemptBound {
@@ -587,11 +662,43 @@ func (r *StageReconciler) resize(ctx context.Context, i *corev1.Instance) (*core
 	switch control.Change.Phase {
 	case ChangeBudgeting:
 		return r.budgetResize(ctx, i, qp, np)
+	case ChangeCancelling:
+		return r.cancelResize(ctx, i, qp, np)
 	case ChangeApplying:
 		return r.settleResize(ctx, i, qp, np)
 	default:
 		return i, controlError(corev1.IdentityConflict, "unknown resource change phase")
 	}
+}
+
+func (r *StageReconciler) cancelResize(ctx context.Context, i *corev1.Instance, qp, np pgutil.ResourceChange) (*corev1.Instance, error) {
+	if _, err := r.nodeDB.CancelChange(ctx, cancelChangeCommand(i, np, true)); err != nil {
+		return i, err
+	}
+	if _, err := r.quotaDB.CancelChange(ctx, cancelChangeCommand(i, qp, false)); err != nil {
+		return i, err
+	}
+	control := i.Status.ResourceControl
+	desired, err := normalizedIntentResources(i)
+	if err != nil {
+		return i, err
+	}
+	approved, err := budget(control.ApprovedResources)
+	if err != nil {
+		return i, err
+	}
+	if desired == approved {
+		control.Change = nil
+		control.DesiredRevision = control.ApprovedRevision
+		return r.condition(ctx, i, metav1.ConditionTypeResourcesApproved, metav1.ConditionTrue, "ChangeCancelled", "Pending resource resize was cancelled and reserved budget difference was released")
+	}
+	control.DesiredRevision = control.ApprovedRevision + 1
+	control.Change = &corev1.InstanceResourceChange{
+		ID: "change:" + db.NewUID(), FromRevision: control.ApprovedRevision, ToRevision: control.DesiredRevision,
+		OldResources: control.ApprovedResources, TargetResources: corev1.CanonicalResources(desired), Phase: ChangeBudgeting,
+	}
+	removeConditionsByType(&i.Status.Conditions, metav1.ConditionTypeResourcesApproved)
+	return CommitControl(ctx, r.db, i)
 }
 
 func (r *StageReconciler) budgetResize(ctx context.Context, i *corev1.Instance, qp, np pgutil.ResourceChange) (*corev1.Instance, error) {

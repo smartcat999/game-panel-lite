@@ -137,6 +137,56 @@ func (s *DB) RegisterChange(ctx context.Context, p pgutil.ResourceChange) (Chang
 	return Change{Plan: p, SourceVersion: rec.SourceVersion}, nil
 }
 
+func hasCancelledChange(tx *gorm.DB, allocationID, changePlanID string) (bool, error) {
+	if changePlanID == "" {
+		return false, nil
+	}
+	var count int64
+	err := tx.Model(&NodeOperationRecord{}).
+		Where("allocation_id = ? AND kind = ? AND change_plan_id = ? AND state = ?", allocationID, corev1.CancelChange, changePlanID, corev1.Committed).
+		Limit(1).Count(&count).Error
+	if err != nil {
+		return false, pgutil.Error(err, "")
+	}
+	return count > 0, nil
+}
+
+func cancelProposal(tx *gorm.DB, h pgutil.Holding, c pgutil.Command) (pgutil.Mutation, error) {
+	if h.Allocation.State == corev1.AllocationClosing || h.Allocation.State == corev1.AllocationClosed || h.ChangePlanID == "" {
+		return pgutil.Mutation{Holding: h, Changed: false}, nil
+	}
+	if h.ChangePlanID != c.ChangePlanID {
+		return pgutil.Mutation{}, failure(corev1.RevisionChanged, c.OperationID, "reservation holds another active resource plan", nil)
+	}
+	change, err := getChange(tx, c.ChangePlanID)
+	if err != nil {
+		return pgutil.Mutation{}, err
+	}
+	p := change.Plan
+	if h.Allocation.ResourceRevision != p.FromRevision || h.ChangeRevision != p.ToRevision {
+		return pgutil.Mutation{}, failure(corev1.RevisionChanged, c.OperationID, "change plan revision does not match reservation", nil)
+	}
+	grow, _, err := corev1.GrowthAndShrink(p.Old, p.Target)
+	if err != nil {
+		return pgutil.Mutation{}, err
+	}
+	expected, err := p.Old.Add(grow)
+	if err != nil {
+		return pgutil.Mutation{}, err
+	}
+	if h.Allocation.Current != expected {
+		return pgutil.Mutation{}, failure(corev1.RevisionChanged, c.OperationID, "holding does not match reversible growth", nil)
+	}
+	if h.Allocation.Version == math.MaxInt64 {
+		return pgutil.Mutation{}, failure(corev1.InvariantViolation, c.OperationID, "reservation version overflow", nil)
+	}
+	next := h
+	next.Allocation.Current = p.Old
+	next.Allocation.Version++
+	next.ChangePlanID, next.ChangeRevision = "", 0
+	return pgutil.Mutation{Holding: next, Decrease: grow, Changed: true}, nil
+}
+
 func getChange(tx *gorm.DB, id string) (Change, error) {
 	var rec NodeChangeRecord
 	if err := tx.Where("change_id = ?", id).Take(&rec).Error; err != nil {

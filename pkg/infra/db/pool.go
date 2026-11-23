@@ -539,7 +539,7 @@ CREATE INDEX IF NOT EXISTS idx_quota_changes_allocation ON quota_changes(allocat
 CREATE TABLE IF NOT EXISTS quota_operations (
     operation_id TEXT PRIMARY KEY,
     allocation_id TEXT NOT NULL REFERENCES quota_allocations(allocation_id),
-    kind TEXT NOT NULL CHECK (kind IN ('Grant', 'Increase', 'SettleDecrease', 'RequestClose', 'FinalizeClose')),
+    kind TEXT NOT NULL CHECK (kind IN ('Grant', 'Increase', 'SettleDecrease', 'CancelChange', 'RequestClose', 'FinalizeClose')),
     request_hash TEXT NOT NULL CHECK (length(request_hash) = 64),
     command JSONB NOT NULL,
     change_plan_id TEXT NOT NULL DEFAULT '',
@@ -549,8 +549,29 @@ CREATE TABLE IF NOT EXISTS quota_operations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+DO $$
+DECLARE c RECORD;
+BEGIN
+    FOR c IN
+        SELECT conname, pg_get_constraintdef(oid) AS def
+        FROM pg_constraint
+        WHERE conrelid = 'quota_operations'::regclass AND contype = 'c'
+    LOOP
+        IF c.def LIKE '%SettleDecrease%' AND c.def NOT LIKE '%CancelChange%' THEN
+            EXECUTE format('ALTER TABLE quota_operations DROP CONSTRAINT %I', c.conname);
+        END IF;
+    END LOOP;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'quota_operations'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%CancelChange%'
+    ) THEN
+        ALTER TABLE quota_operations ADD CONSTRAINT quota_operations_kind_check
+            CHECK (kind IN ('Grant', 'Increase', 'SettleDecrease', 'CancelChange', 'RequestClose', 'FinalizeClose'));
+    END IF;
+END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quota_operations_grant ON quota_operations(allocation_id) WHERE kind = 'Grant';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quota_operations_change ON quota_operations(allocation_id, kind, change_plan_id) WHERE kind IN ('Increase', 'SettleDecrease');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_quota_operations_cancel_change ON quota_operations(allocation_id, change_plan_id) WHERE kind = 'CancelChange';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quota_operations_close ON quota_operations(allocation_id, kind, close_intent_id) WHERE kind IN ('RequestClose', 'FinalizeClose');
 CREATE INDEX IF NOT EXISTS idx_quota_operations_accepted ON quota_operations(state, updated_at, operation_id) WHERE state = 'Accepted';
 
@@ -628,7 +649,7 @@ CREATE INDEX IF NOT EXISTS idx_node_changes_allocation ON node_changes(allocatio
 CREATE TABLE IF NOT EXISTS node_operations (
     operation_id TEXT PRIMARY KEY,
     allocation_id TEXT NOT NULL REFERENCES node_reservations(allocation_id),
-    kind TEXT NOT NULL CHECK(kind IN ('Grant','Increase','SettleDecrease','RequestClose','FinalizeClose')),
+    kind TEXT NOT NULL CHECK(kind IN ('Grant','Increase','SettleDecrease','CancelChange','RequestClose','FinalizeClose')),
     request_hash TEXT NOT NULL CHECK(length(request_hash)=64),
     command JSONB NOT NULL,
     change_plan_id TEXT NOT NULL DEFAULT '',
@@ -638,8 +659,29 @@ CREATE TABLE IF NOT EXISTS node_operations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+DO $$
+DECLARE c RECORD;
+BEGIN
+    FOR c IN
+        SELECT conname, pg_get_constraintdef(oid) AS def
+        FROM pg_constraint
+        WHERE conrelid = 'node_operations'::regclass AND contype = 'c'
+    LOOP
+        IF c.def LIKE '%SettleDecrease%' AND c.def NOT LIKE '%CancelChange%' THEN
+            EXECUTE format('ALTER TABLE node_operations DROP CONSTRAINT %I', c.conname);
+        END IF;
+    END LOOP;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'node_operations'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%CancelChange%'
+    ) THEN
+        ALTER TABLE node_operations ADD CONSTRAINT node_operations_kind_check
+            CHECK (kind IN ('Grant','Increase','SettleDecrease','CancelChange','RequestClose','FinalizeClose'));
+    END IF;
+END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_node_operations_grant ON node_operations(allocation_id) WHERE kind='Grant';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_node_operations_change ON node_operations(allocation_id,kind,change_plan_id) WHERE kind IN ('Increase','SettleDecrease');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_node_operations_cancel_change ON node_operations(allocation_id,change_plan_id) WHERE kind='CancelChange';
 CREATE UNIQUE INDEX IF NOT EXISTS uq_node_operations_close ON node_operations(allocation_id,kind,close_intent_id) WHERE kind IN ('RequestClose','FinalizeClose');
 CREATE INDEX IF NOT EXISTS idx_node_operations_accepted ON node_operations(state,updated_at,operation_id) WHERE state='Accepted';
 

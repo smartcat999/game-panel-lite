@@ -64,6 +64,11 @@ func NextState(state corev1.AllocationState, kind corev1.Kind) (corev1.Allocatio
 			return corev1.AllocationActive, nil
 		}
 		return "", &corev1.Error{Code: corev1.RevisionChanged, Detail: "command does not match allocation lifecycle"}
+	case corev1.CancelChange:
+		if state == corev1.AllocationPending {
+			return "", &corev1.Error{Code: corev1.RevisionChanged, Detail: "cancel change requires an Active or Closing allocation"}
+		}
+		return state, nil
 	default:
 		return "", invalid("command kind", string(kind), "unknown resource command")
 	}
@@ -292,6 +297,11 @@ func (c Command) validateKind() error {
 			return corev1.ValidateIdentifier("changePlanId", c.ChangePlanID)
 		}
 		return nil
+	case corev1.CancelChange:
+		if !c.Quantity.IsZero() || c.ExpectedVersion != 0 || c.ResourceRevision != 0 || c.CloseIntentID != "" {
+			return invalid("cancelChange command", "", "cancel change uses persisted plan; caller must not supply quantity, version, or close intent")
+		}
+		return corev1.ValidateIdentifier("changePlanId", c.ChangePlanID)
 	case corev1.RequestClose, corev1.FinalizeClose:
 		if !c.Quantity.IsZero() || c.ExpectedVersion != 0 || c.ResourceRevision != 0 || c.ChangePlanID != "" {
 			return invalid("close command", "", "store reads the current holding; caller must not supply a refund amount or stale version")

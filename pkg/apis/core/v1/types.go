@@ -1523,8 +1523,9 @@ const (
 	AttemptPhaseClosing = "Closing"
 	AttemptPhaseClosed  = "Closed"
 
-	ResourceChangePhaseBudgeting = "Budgeting"
-	ResourceChangePhaseApplying  = "Applying"
+	ResourceChangePhaseBudgeting  = "Budgeting"
+	ResourceChangePhaseApplying   = "Applying"
+	ResourceChangePhaseCancelling = "Cancelling"
 )
 
 func (s TenantSpec) ValidateQuota() error {
@@ -1576,6 +1577,7 @@ type InstanceResourceControl struct {
 	ApprovedPorts     []InstancePort            `json:"approvedPorts,omitempty"`
 	CurrentAttempt    *InstancePlacementAttempt `json:"currentAttempt,omitempty"`
 	Change            *InstanceResourceChange   `json:"change,omitempty"`
+	Rebudgeting       bool                      `json:"rebudgeting,omitempty"`
 	Suspended         bool                      `json:"suspended,omitempty"`
 }
 
@@ -1654,6 +1656,7 @@ const (
 	Grant          Kind = "Grant"
 	Increase       Kind = "Increase"
 	SettleDecrease Kind = "SettleDecrease"
+	CancelChange   Kind = "CancelChange"
 	RequestClose   Kind = "RequestClose"
 	FinalizeClose  Kind = "FinalizeClose"
 )

@@ -661,20 +661,44 @@ func planResourceChangeIfNeeded(current, incoming *corev1.Instance) error {
 		return err
 	}
 	if target != previous {
-		if current.Metadata.DeletionTimestamp != nil || control.Stage != string(StageActive) || control.Change != nil || control.CurrentAttempt == nil || control.CurrentAttempt.Phase != AttemptBound {
-			return fmt.Errorf("%w: wait for the current resource intent to settle", models.ErrConflict)
-		}
-		if control.ApprovedRevision == math.MaxInt64 {
-			return fmt.Errorf("%w: resource revision overflow", corev1.InvariantViolation)
-		}
-		control.DesiredRevision = control.ApprovedRevision + 1
-		control.Change = &corev1.InstanceResourceChange{
-			ID: "change:" + db.NewUID(), FromRevision: control.ApprovedRevision, ToRevision: control.DesiredRevision,
-			OldResources: control.ApprovedResources, TargetResources: corev1.CanonicalResources(target), Phase: ChangeBudgeting,
+		if err := applyResourceIntentDelta(current, control, target); err != nil {
+			return err
 		}
 	}
 	if current.Metadata.DeletionTimestamp != nil && !reflect.DeepEqual(incoming.Spec, current.Spec) {
 		return fmt.Errorf("%w: deleting instance spec is frozen", models.ErrConflict)
+	}
+	return nil
+}
+
+func applyResourceIntentDelta(current *corev1.Instance, control *corev1.InstanceResourceControl, target corev1.Resources) error {
+	if current.Metadata.DeletionTimestamp != nil {
+		return fmt.Errorf("%w: wait for the current resource intent to settle", models.ErrConflict)
+	}
+	if control.ApprovedRevision == 0 && (control.Stage == string(StagePendingQuota) || control.Stage == string(StageScheduling)) {
+		control.Rebudgeting = true
+		if control.CurrentAttempt != nil && control.CurrentAttempt.Phase == AttemptPending {
+			control.CurrentAttempt.Phase = AttemptClosing
+		}
+		return nil
+	}
+	if control.Stage != string(StageActive) || control.CurrentAttempt == nil || control.CurrentAttempt.Phase != AttemptBound {
+		return fmt.Errorf("%w: wait for the current resource intent to settle", models.ErrConflict)
+	}
+	if control.Change != nil {
+		if control.Change.Phase == ChangeBudgeting || control.Change.Phase == ChangeCancelling {
+			control.Change.Phase = ChangeCancelling
+			return nil
+		}
+		return fmt.Errorf("%w: wait for the current resource intent to settle", models.ErrConflict)
+	}
+	if control.ApprovedRevision == math.MaxInt64 {
+		return fmt.Errorf("%w: resource revision overflow", corev1.InvariantViolation)
+	}
+	control.DesiredRevision = control.ApprovedRevision + 1
+	control.Change = &corev1.InstanceResourceChange{
+		ID: "change:" + db.NewUID(), FromRevision: control.ApprovedRevision, ToRevision: control.DesiredRevision,
+		OldResources: control.ApprovedResources, TargetResources: corev1.CanonicalResources(target), Phase: ChangeBudgeting,
 	}
 	return nil
 }

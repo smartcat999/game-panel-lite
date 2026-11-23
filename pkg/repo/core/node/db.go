@@ -170,6 +170,15 @@ func (s *DB) RegisterCommand(ctx context.Context, c pgutil.Command) (Operation, 
 	if err != nil {
 		return Operation{}, err
 	}
+	if h.AccountID == c.AccountID && h.Allocation.Owner == c.Owner && (c.Kind == corev1.Increase || c.Kind == corev1.SettleDecrease) {
+		cancelled, err := hasCancelledChange(s.orm.WithContext(ctx), c.AllocationID, c.ChangePlanID)
+		if err != nil {
+			return Operation{}, err
+		}
+		if cancelled {
+			return Operation{}, failure(corev1.Closed, c.OperationID, "resource change has been cancelled", nil)
+		}
+	}
 	if err := checkRegistration(h, c); err != nil {
 		return Operation{}, err
 	}
@@ -270,6 +279,80 @@ func (s *DB) FinalizeClose(ctx context.Context, c pgutil.Command) (Result, error
 	return s.close(ctx, c, corev1.FinalizeClose)
 }
 
+// CancelChange atomically cancels an unapproved resize plan on a node reservation.
+func (s *DB) CancelChange(ctx context.Context, c pgutil.Command) (Result, error) {
+	if err := validateCommand(c, corev1.CancelChange); err != nil {
+		return Result{}, err
+	}
+	if err := checkContext(ctx, c.OperationID); err != nil {
+		return Result{}, err
+	}
+	tx := s.orm.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return Result{}, pgutil.Error(tx.Error, c.OperationID)
+	}
+	defer tx.Rollback()
+	result, err := s.mutateCancelNode(tx, c)
+	if err != nil || result.Replayed {
+		return result, err
+	}
+	return commitResult(ctx, tx, result)
+}
+
+func (s *DB) mutateCancelNode(tx *gorm.DB, c pgutil.Command) (Result, error) {
+	touch := tx.Model(&NodeReservationRecord{}).Where("allocation_id = ?", c.AllocationID).UpdateColumn("updated_at", gorm.Expr("updated_at"))
+	if touch.Error != nil {
+		return Result{}, pgutil.Error(touch.Error, c.OperationID)
+	}
+	if touch.RowsAffected == 0 {
+		return Result{}, notFound("reservation", c.AllocationID)
+	}
+	h, err := getHolding(tx, c.AllocationID)
+	if err != nil {
+		return Result{}, err
+	}
+	if h.AccountID != c.AccountID || h.Allocation.Owner != c.Owner {
+		return Result{}, failure(corev1.IdentityConflict, c.OperationID, "command owner or account does not match reservation", nil)
+	}
+	op, err := insertOperation(tx, c, false)
+	if err != nil {
+		return Result{}, err
+	}
+	claim := tx.Model(&NodeOperationRecord{}).Where("operation_id = ? AND state = ?", c.OperationID, corev1.Accepted).
+		Updates(map[string]any{"state": corev1.Committed, "updated_at": gorm.Expr("NOW()")})
+	if claim.Error != nil {
+		return Result{}, pgutil.Error(claim.Error, c.OperationID)
+	}
+	if claim.RowsAffected == 0 {
+		current, err := getOperation(tx, c.OperationID)
+		if err != nil {
+			return Result{}, err
+		}
+		return replay(current, h)
+	}
+	if h.Allocation.State == corev1.AllocationPending {
+		return Result{}, failure(corev1.RevisionChanged, c.OperationID, "cancel change requires an Active or Closing reservation", nil)
+	}
+	return s.applyCancelNode(tx, h, op)
+}
+
+func (s *DB) applyCancelNode(tx *gorm.DB, h Reservation, op Operation) (Result, error) {
+	c := op.Command
+	if err := tx.Model(&NodeOperationRecord{}).
+		Where("allocation_id = ? AND change_plan_id = ? AND kind IN ? AND state = ?", c.AllocationID, c.ChangePlanID, []corev1.Kind{corev1.Increase, corev1.SettleDecrease}, corev1.Accepted).
+		Updates(map[string]any{"state": corev1.Cancelled, "updated_at": gorm.Expr("NOW()")}).Error; err != nil {
+		return Result{}, pgutil.Error(err, c.OperationID)
+	}
+	proposal, err := cancelProposal(tx, h.Holding, c)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := applyNodeHoldingProposal(tx, h, c, proposal); err != nil {
+		return Result{}, err
+	}
+	return s.finalizeNodeMutation(tx, h, op, proposal)
+}
+
 func (s *DB) close(ctx context.Context, c pgutil.Command, kind corev1.Kind) (Result, error) {
 	if err := validateCommand(c, kind); err != nil {
 		return Result{}, err
@@ -355,6 +438,15 @@ func (s *DB) mutate(tx *gorm.DB, op Operation) (Result, error) {
 	}
 	if err := applyNodeHoldingProposal(tx, h, c, proposal); err != nil {
 		return Result{}, err
+	}
+	if c.Kind == corev1.Increase || c.Kind == corev1.SettleDecrease {
+		cancelled, err := hasCancelledChange(tx, c.AllocationID, c.ChangePlanID)
+		if err != nil {
+			return Result{}, err
+		}
+		if cancelled {
+			return Result{}, failure(corev1.Closed, c.OperationID, "resource change has been cancelled", nil)
+		}
 	}
 	return s.finalizeNodeMutation(tx, h, op, proposal)
 }

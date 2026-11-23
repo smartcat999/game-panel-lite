@@ -92,6 +92,15 @@ func (s *DB) RegisterCommand(ctx context.Context, c pgutil.Command) (Operation, 
 	if err != nil {
 		return Operation{}, err
 	}
+	if h.AccountID == c.AccountID && h.Allocation.Owner == c.Owner && (c.Kind == corev1.Increase || c.Kind == corev1.SettleDecrease) {
+		cancelled, err := hasCancelledChange(s.orm.WithContext(ctx), c.AllocationID, c.ChangePlanID)
+		if err != nil {
+			return Operation{}, err
+		}
+		if cancelled {
+			return Operation{}, failure(corev1.Closed, c.OperationID, "resource change has been cancelled", nil)
+		}
+	}
 	if err := checkRegistration(h, c); err != nil {
 		return Operation{}, err
 	}
@@ -191,6 +200,87 @@ func (s *DB) FinalizeClose(ctx context.Context, c pgutil.Command) (pgutil.Mutati
 	return s.close(ctx, c, corev1.FinalizeClose)
 }
 
+// CancelChange atomically cancels an unapproved resize plan and refunds any granted growth.
+func (s *DB) CancelChange(ctx context.Context, c pgutil.Command) (pgutil.MutationResult, error) {
+	if err := validateCommand(c, corev1.CancelChange); err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	if err := checkContext(ctx, c.OperationID); err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	tx := s.orm.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return pgutil.MutationResult{}, pgutil.Error(tx.Error, c.OperationID)
+	}
+	defer tx.Rollback()
+	result, err := mutateCancelQuota(tx, c)
+	if err != nil || result.Replayed {
+		return result, err
+	}
+	return commitMutation(ctx, tx, result)
+}
+
+func mutateCancelQuota(tx *gorm.DB, c pgutil.Command) (pgutil.MutationResult, error) {
+	touch := tx.Model(&QuotaAllocationRecord{}).Where("allocation_id = ?", c.AllocationID).UpdateColumn("updated_at", gorm.Expr("updated_at"))
+	if touch.Error != nil {
+		return pgutil.MutationResult{}, pgutil.Error(touch.Error, c.OperationID)
+	}
+	if touch.RowsAffected == 0 {
+		return pgutil.MutationResult{}, notFound("allocation", c.AllocationID)
+	}
+	h, err := getHolding(tx, c.AllocationID)
+	if err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	if h.AccountID != c.AccountID || h.Allocation.Owner != c.Owner {
+		return pgutil.MutationResult{}, failure(corev1.IdentityConflict, c.OperationID, "command owner or account does not match allocation", nil)
+	}
+	op, err := insertOperation(tx, c, false)
+	if err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	claim := tx.Model(&QuotaOperationRecord{}).Where("operation_id = ? AND state = ?", c.OperationID, corev1.Accepted).
+		Updates(map[string]any{"state": corev1.Committed, "updated_at": gorm.Expr("NOW()")})
+	if claim.Error != nil {
+		return pgutil.MutationResult{}, pgutil.Error(claim.Error, c.OperationID)
+	}
+	if claim.RowsAffected == 0 {
+		current, err := getOperation(tx, c.OperationID)
+		if err != nil {
+			return pgutil.MutationResult{}, err
+		}
+		return replay(current, h)
+	}
+	if h.Allocation.State == corev1.AllocationPending {
+		return pgutil.MutationResult{}, failure(corev1.RevisionChanged, c.OperationID, "cancel change requires an Active or Closing allocation", nil)
+	}
+	return applyCancelQuota(tx, h, op.Command)
+}
+
+func applyCancelQuota(tx *gorm.DB, h pgutil.Holding, c pgutil.Command) (pgutil.MutationResult, error) {
+	if err := tx.Model(&QuotaOperationRecord{}).
+		Where("allocation_id = ? AND change_plan_id = ? AND kind IN ? AND state = ?", c.AllocationID, c.ChangePlanID, []corev1.Kind{corev1.Increase, corev1.SettleDecrease}, corev1.Accepted).
+		Updates(map[string]any{"state": corev1.Cancelled, "updated_at": gorm.Expr("NOW()")}).Error; err != nil {
+		return pgutil.MutationResult{}, pgutil.Error(err, c.OperationID)
+	}
+	proposal, err := cancelProposal(tx, h, c)
+	if err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	if err := applyQuotaHoldingProposal(tx, h, c, proposal); err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	raw, err := json.Marshal(proposal.Holding.Allocation)
+	if err != nil {
+		return pgutil.MutationResult{}, err
+	}
+	if err := tx.Model(&QuotaOperationRecord{}).Where("operation_id = ?", c.OperationID).
+		Updates(map[string]any{"result": raw, "updated_at": gorm.Expr("NOW()")}).Error; err != nil {
+		return pgutil.MutationResult{}, pgutil.Error(err, c.OperationID)
+	}
+	return pgutil.MutationResult{OperationID: c.OperationID, State: corev1.Committed, Allocation: proposal.Holding.Allocation}, nil
+}
+
 func (s *DB) close(ctx context.Context, c pgutil.Command, kind corev1.Kind) (pgutil.MutationResult, error) {
 	if err := validateCommand(c, kind); err != nil {
 		return pgutil.MutationResult{}, err
@@ -268,6 +358,15 @@ func mutate(tx *gorm.DB, op Operation) (pgutil.MutationResult, error) {
 	}
 	if err := applyQuotaHoldingProposal(tx, h, c, proposal); err != nil {
 		return pgutil.MutationResult{}, err
+	}
+	if c.Kind == corev1.Increase || c.Kind == corev1.SettleDecrease {
+		cancelled, err := hasCancelledChange(tx, c.AllocationID, c.ChangePlanID)
+		if err != nil {
+			return pgutil.MutationResult{}, err
+		}
+		if cancelled {
+			return pgutil.MutationResult{}, failure(corev1.Closed, c.OperationID, "resource change has been cancelled", nil)
+		}
 	}
 	raw, err := json.Marshal(proposal.Holding.Allocation)
 	if err != nil {

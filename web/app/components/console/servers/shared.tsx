@@ -18,7 +18,7 @@ import { subscribeResourceWatch } from "../../../console/lib/ws";
 export interface AddonBindingMeta {
   isSteam: boolean;
   isPlugin: boolean;
-  noun: "插件" | "模组";
+  noun: "插件" | "模组" | "地图";
   idLabel: string;
   marketLabel: string;
   browseActionLabel: string;
@@ -46,7 +46,8 @@ export function addonBindingMeta(binding?: AppAddonBinding): AddonBindingMeta {
     !isSteam &&
     (mode === "" || mode === "flat_dir" || mode === "oxide" || mode === "cs2_plugin") &&
     targetLeaf !== "mods";
-  const noun = isPlugin ? "插件" : "模组";
+  const noun: "插件" | "模组" | "地图" =
+    mode === "cs2_workshop" ? "地图" : isPlugin ? "插件" : "模组";
   const marketLabel = isSteam ? "创意工坊" : isPlugin ? "插件市场" : "模组市场";
   return {
     isSteam,
